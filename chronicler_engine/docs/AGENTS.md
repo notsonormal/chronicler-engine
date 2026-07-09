@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-09 11:38 UTC*
+*Index last generated: 2026-07-09 11:57 UTC*
 
 ### `docs/adr/`
 
@@ -82,6 +82,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
+- [Fix run_branches.rs port allocation race](./plans/fix-run-branches-rs-port-allocation-race.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Title](./plans/opcontext-kill-plan.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)

@@ -1,20 +1,11 @@
 //! Smoke tests covering uncovered startup branches in `bootstrap::run()`.
 
-use std::sync::atomic::{AtomicU16, Ordering};
-
 use chronicler_engine::adapters::driving::cli::{
     list_available_worlds, resolve_engine_data_path, scan_worlds, Args,
 };
 use chronicler_engine::bootstrap::run;
 use chronicler_engine::error::EngineError;
-
-static NEXT_PORT: AtomicU16 = AtomicU16::new(19001);
-
-fn unique_port() -> u16 {
-    // Skip well-known ports; 19001+ range avoids collisions with
-    // tests/test_utils/server.rs (which uses 8080-range ports).
-    NEXT_PORT.fetch_add(1, Ordering::SeqCst)
-}
+use crate::test_utils::server::get_available_port;
 
 fn cleanup_db_for_port(port: u16) {
     // `bootstrap::run` opens `<exe_parent>/chronicler_{port}.db` plus SQLite
@@ -58,7 +49,8 @@ fn test_run_world_not_found_falls_back_or_errors() {
     // `get_world`. The function then either returns Err (no worlds in db)
     // or falls back to `all_worlds[0]` and proceeds to persona lookup.
     // In the latter case, with a bogus persona it then hits branch (d).
-    let port = unique_port();
+    let port =
+        get_available_port(3010, 3050).expect("port allocation failed for run_branches test");
     cleanup_db_for_port(port);
     let args = Args {
         world: "__nonexistent_world__".to_string(),
@@ -102,7 +94,8 @@ fn test_run_persona_not_found_errors_cleanly() {
             );
         }
     };
-    let port = unique_port();
+    let port =
+        get_available_port(3010, 3050).expect("port allocation failed for run_branches test");
     cleanup_db_for_port(port);
     let args = Args {
         world: world_key,

@@ -18,6 +18,7 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 pub use test_utils::settings_guard::SettingsTestGuard;
 pub use test_utils::make_test_recorder;
 pub use test_utils::make_test_recorder_with_storage;
+pub use test_utils::server::get_available_port;
 
 pub fn failing_service() -> GameService {
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
