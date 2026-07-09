@@ -1,5 +1,5 @@
 ---
-description: Software architect for implementation planning (read-only, M3)
+description: Software architect for implementation planning (read-only)
 model: minimax/MiniMax-M3
 tools: read, bash, grep, find, ls
 ---

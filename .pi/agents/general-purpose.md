@@ -1,4 +1,4 @@
 ---
-description: General-purpose agent for complex, multi-step implementation tasks (worker-style: M3)
+description: General-purpose agent for complex, multi-step implementation tasks
 model: minimax/MiniMax-M3
 ---
