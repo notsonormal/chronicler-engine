@@ -62,8 +62,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
         )),
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings,
-        cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        shutdown_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
     };
 
     let recovered = app_state.settings();
@@ -76,9 +75,9 @@ fn test_settings_recover_from_poisoned_rwlock() {
 #[test]
 fn test_cancel_token_recover_from_poisoned_rwlock() {
     let token = CancellationToken::new();
-    let cancel_token = Arc::new(std::sync::RwLock::new(token.clone()));
+    let shutdown_token = Arc::new(std::sync::RwLock::new(token.clone()));
 
-    let cancel_clone = Arc::clone(&cancel_token);
+    let cancel_clone = Arc::clone(&shutdown_token);
     let _ = std::thread::spawn(move || {
         let _guard = cancel_clone.write().unwrap();
         panic!("intentional panic to poison lock");
@@ -107,13 +106,12 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
         )),
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        cancel_token,
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        shutdown_token,
     };
 
-    let recovered = app_state.current_cancel_token();
+    let recovered = app_state.current_shutdown_token();
     assert!(
         !recovered.is_cancelled(),
-        "current_cancel_token() should recover the actual token from poisoned RwLock"
+        "current_shutdown_token() should recover the actual token from poisoned RwLock"
     );
 }

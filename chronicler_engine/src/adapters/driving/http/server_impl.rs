@@ -16,12 +16,10 @@ pub async fn run_server_with_config(
     resources: ServerResources,
     config: ServerConfig,
 ) -> Result<(SocketAddr, JoinHandle<std::io::Result<()>>)> {
-    let is_generating = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let cancel_token = tokio_util::sync::CancellationToken::new();
+    let shutdown_token = tokio_util::sync::CancellationToken::new();
     let app_state = AppState {
         storage: Arc::clone(&resources.storage),
         preset_storage: Arc::clone(&resources.preset_storage),
-        is_generating: Arc::clone(&is_generating),
         settings: Arc::clone(&resources.settings),
         game_service: Arc::clone(&resources.game_service),
         application_service: Arc::new(
@@ -29,15 +27,15 @@ pub async fn run_server_with_config(
                 Arc::clone(&resources.storage),
                 Arc::clone(&resources.preset_storage),
                 Arc::clone(&resources.settings),
-                cancel_token.clone(),
-                Arc::clone(&is_generating),
+                shutdown_token.clone(),
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 Arc::clone(&resources.game_service),
             ),
         ),
         text_check_service: Arc::clone(&resources.text_check_service),
-        cancel_token: Arc::new(std::sync::RwLock::new(cancel_token)),
+        shutdown_token: Arc::new(std::sync::RwLock::new(shutdown_token)),
     };
-    let cancel_token_arc = Arc::clone(&app_state.cancel_token);
+    let shutdown_token_arc = Arc::clone(&app_state.shutdown_token);
 
     let app = build_router(app_state);
 
@@ -57,11 +55,11 @@ pub async fn run_server_with_config(
     let shutdown_signal = async move {
         let _ = tokio::signal::ctrl_c().await;
         tracing::info!("Shutdown signal received, cancelling in-flight tasks...");
-        let token = cancel_token_arc
+        let token = shutdown_token_arc
             .read()
             .map(|g| g.clone())
             .unwrap_or_else(|p| {
-                tracing::warn!("Poisoned cancel_token read lock recovered during shutdown");
+                tracing::warn!("Poisoned shutdown_token read lock recovered during shutdown");
                 p.into_inner().clone()
             });
         token.cancel();

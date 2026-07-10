@@ -42,7 +42,7 @@ All `Arc<...>` fields in `PipelineInputs` are cheap to clone (refcount bump). `V
 Each phase method is a method on `PipelineRun<'a>`, not a free function. This contract is enforced by every phase signature: dropping the `app: &DefaultApplicationService` parameter and routing phase calls through the `PipelineRun` borrowed pair. The borrow supports three properties:
 
 1. `ActionPipeline` is held by `Arc`; `GameService` keeps one `Arc<ActionPipeline>` for the process lifetime, so the borrow covers every pipeline call.
-2. `DefaultApplicationService` is held by `Arc` and is expensive to clone (storage backend, preset storage, settings `Arc<RwLock>`, cancel token, is_generating atomic). Threading `app: &DefaultApplicationService` through every phase signature would either duplicate the borrow or require an explicit wrapper.
+2. `DefaultApplicationService` is held by `Arc` and is expensive to clone (storage backend, preset storage, settings `Arc<RwLock>`, shutdown token, is_generating atomic). Threading `app: &DefaultApplicationService` through every phase signature would either duplicate the borrow or require an explicit wrapper.
 3. `PipelineRun::new(self, app)` is constructed once per call. After construction, no phase signature takes `app` again — the run carries it for every subsequent method.
 
 ```rust
@@ -141,7 +141,7 @@ Three callers use this helper:
 
 `ArrivalTaskContext::run` (background arrival narration) does NOT use this helper -- it owns its own `Arc<DefaultApplicationService>` so it spawns `spawn_blocking` directly from `bootstrap::init_game::spawn_arrival_task_if_needed` and does not need the helper's per-call shared-state plumbing.
 
-The helper is a thin wrapper: it moves the `Arc<DefaultApplicationService>` into the spawn_blocking closure and hands a `&DefaultApplicationService` to the caller's `f`. Cancellation check + `GenerationGuard` RAII lifetime stay inside each caller's closure -- zero behaviour change from inlining the helper.
+The helper is a thin wrapper: it moves the `Arc<DefaultApplicationService>` into the spawn_blocking closure and hands a `&DefaultApplicationService` to the caller's `f`. Shutdown check (`is_shutting_down()`) + `GenerationGuard` RAII lifetime stay inside each caller's closure -- zero behaviour change from inlining the helper. The guard's `Drop` only releases the registry slot if the caller still owns it (no-op if superseded by a younger generation).
 
 ## External Callers
 
@@ -158,7 +158,7 @@ Test paths use direct calls because they hold the spawn_blocking machinery thems
 
 ## Cancellation
 
-`CancellationToken::is_cancelled()` is checked at 4 sites:
+`app.is_shutting_down()` (reading `AppState.shutdown_token`) is checked at 4 sites:
 
 1. **Pre-main** (pipeline.rs `phase_pre_main_snapshot`): before persisting pre-main snapshot.
 2. **Mid-narrate** (phases.rs `phase_narrate`): after the LLM narrator call returns, before `add_message`.
@@ -166,6 +166,16 @@ Test paths use direct calls because they hold the spawn_blocking machinery thems
 4. **Mid-trigger** (phases.rs `phase_trigger_continuation_llm_call`): after the trigger LLM call returns, before commit.
 
 On cancel: `handle_cancellation` loads fresh state via `app.load_or_fresh()`, sets `status = Idle`, clears `phase`, persists, returns `Err(ActionOutcome::Cancelled)`. The retry path (`retry.rs`) replicates this cleanup inline because it does not return through `map_cancelled`.
+
+## Game-Identity Guard (α-check)
+
+Reset / `switch_game` / `delete_game` may run while a generation is in flight. The pipeline rejects stale results at 3 phase boundaries via `PipelineRun::check_game_unchanged(started_for)`:
+
+1. **Post-narrate** (phases.rs `phase_narrate`): after the main LLM call returns, before `add_message`.
+2. **Pre-trigger** (phases.rs `phase_trigger_continuation_llm_call`): at function start, before persisting pre-event snapshot.
+3. **Post-trigger** (phases.rs `phase_trigger_continuation_llm_call`): after the trigger LLM call returns.
+
+If `app.current_game_id() != started_for`, the pipeline logs `"Pipeline aborting: game changed — discarding in-flight generation"` and returns `Err(ActionOutcome::Cancelled)`. The stale generation's `GenerationGuard::Drop` is a no-op (the registry slot has already been taken over by the younger generation).
 
 ## Retry and Trigger Continuation
 

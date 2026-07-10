@@ -43,8 +43,7 @@ fn make_test_app_state() -> AppState {
         )),
         text_check_service,
         settings,
-        cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        shutdown_token: Arc::new(RwLock::new(CancellationToken::new())),
     }
 }
 
@@ -76,8 +75,7 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
         )),
         text_check_service,
         settings,
-        cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        shutdown_token: Arc::new(RwLock::new(CancellationToken::new())),
     }
 }
 

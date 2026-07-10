@@ -1,7 +1,6 @@
 //! [DOC: docs/system/game_flow.md]
-//! GameCatalogue — game-lifecycle storage orchestration (T2 ticket 04 — façade-first carve-out from DefaultApplicationService).
+//! GameCatalogue — game-lifecycle storage orchestration.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
@@ -12,22 +11,14 @@ use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 #[derive(Clone)]
 pub struct GameCatalogue {
     persistence_gate: Arc<PersistenceGate>,
-    is_generating: Arc<AtomicBool>,
 }
 
 impl GameCatalogue {
-    pub fn new(persistence_gate: Arc<PersistenceGate>, is_generating: Arc<AtomicBool>) -> Self {
-        Self {
-            persistence_gate,
-            is_generating,
-        }
+    pub fn new(persistence_gate: Arc<PersistenceGate>) -> Self {
+        Self { persistence_gate }
     }
 
     pub fn create_game(&self, world_key: &str, persona_key: &str) -> Result<u64, ApplicationError> {
-        if self.is_generating.load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
         let storage = self.persistence_gate.storage();
         let world_with_map = storage
             .get_world(world_key)?
@@ -62,10 +53,6 @@ impl GameCatalogue {
     }
 
     pub fn switch_game(&self, id: u64) -> Result<(), ApplicationError> {
-        if self.is_generating.load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
         if self.persistence_gate.storage().get_game(id)?.is_none() {
             return Err(ApplicationError::validation("Game not found"));
         }
@@ -75,10 +62,6 @@ impl GameCatalogue {
     }
 
     pub fn delete_game(&self, id: u64) -> Result<(), ApplicationError> {
-        if self.is_generating.load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
         if id == self.persistence_gate.storage().current_game_id() {
             return Err(ApplicationError::validation(
                 "Cannot delete the active game",

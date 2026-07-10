@@ -2,10 +2,9 @@
 
 Uses cargo-nextest for parallel test execution.
 
-Output policy: cargo command output goes ONLY to ``logs/build_*.log``.
-Stdout carries status lines (step labels, banners, Step Timing Summary with
-per-step log line ranges) so an agent caller can decide whether to read a
-targeted slice of the log. Full cargo output is never printed to stdout.
+Stdout carries the agent-facing decision signal + tailable progress (banner,
+step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
+banner with log path). Full output is written to ``logs/build_*.log``.
 """
 
 import argparse
@@ -29,34 +28,48 @@ if sys.platform == "win32":
 
 
 class _LogState:
-    """Module-level log handle + running line counter.
-
-    Line numbers are 1-indexed for direct use with ``read offset=N limit=M``.
-    """
+    """Module-level log handle for the current build run."""
 
     fh = None
-    line_no = 0
 
 
 def _set_log_fh(fh):
-    """Register the log file handle and reset the line counter."""
+    """Register the log file handle for the current build run."""
     _LogState.fh = fh
-    _LogState.line_no = 0
 
 
 def _log_write(text):
-    """Write text to the log file, bumping the line counter by newline count."""
+    """Write text to the log file. No newline is added."""
     fh = _LogState.fh
     if fh is None:
         return
     fh.write(text)
     fh.flush()
-    _LogState.line_no += text.count("\n")
 
 
-def _log_line_no():
-    """Current line number in the log file (1-indexed for next write)."""
-    return _LogState.line_no
+def log_status(msg: str = "") -> None:
+    """Write a status line to the build log only (not stdout).
+
+    Use for internal bookkeeping, warnings, and notices the agent doesn't need
+    to see on stdout. The newline is appended automatically. Safe to call before
+    ``_set_log_fh`` is called — the log write is skipped silently in that case.
+    """
+    if _LogState.fh is not None:
+        _LogState.fh.write(msg + "\n")
+        _LogState.fh.flush()
+
+
+def both_print(msg: str = "") -> None:
+    """Write a line to both stdout and the build log.
+
+    Use for the agent-facing decision signal + tailable progress (header
+    banner, step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary,
+    closing banner). Newlines embedded in ``msg`` are preserved.
+    """
+    print(msg)
+    if _LogState.fh is not None:
+        _LogState.fh.write(msg + "\n")
+        _LogState.fh.flush()
 
 
 # Cargo progress lines are pure noise for an agent caller — every incremental
@@ -78,7 +91,7 @@ class StepCounter:
 
     def next(self, label: str):
         self.current += 1
-        print(f"[{self.current}/{self.total}] {label}")
+        both_print(f"[{self.current}/{self.total}] {label}")
 
 
 def check_rust_version():
@@ -89,17 +102,17 @@ def check_rust_version():
         text=True,
     )
     if result.returncode != 0:
-        print("ERROR: Could not determine Rust version.")
+        both_print("ERROR: Could not determine Rust version.")
         sys.exit(1)
     match = re.search(r"rustc (\d+)\.(\d+)", result.stdout)
     if not match:
-        print("ERROR: Could not parse Rust version.")
+        both_print("ERROR: Could not parse Rust version.")
         sys.exit(1)
     major, minor = int(match.group(1)), int(match.group(2))
     if major < 1 or (major == 1 and minor < 85):
-        print(f"ERROR: Rust {major}.{minor} found, but >= 1.85 is required.")
+        both_print(f"ERROR: Rust {major}.{minor} found, but >= 1.85 is required.")
         sys.exit(1)
-    print(f"Rust version: {major}.{minor} (OK)")
+    log_status(f"Rust version: {major}.{minor} (OK)")
 
 
 def require_nextest():
@@ -110,7 +123,7 @@ def require_nextest():
         text=True,
     )
     if result.returncode != 0:
-        print(
+        both_print(
             "ERROR: The nextest library is required. Install it with: cargo install cargo-nextest --locked"
         )
         sys.exit(1)
@@ -144,13 +157,13 @@ def kill_port(port: int):
                     parts = line.split()
                     if len(parts) >= 5:
                         pid = int(parts[-1])
-                        print(f"Killing process {pid} on port {port}...")
+                        log_status(f"Killing process {pid} on port {port}...")
                         try:
                             os.kill(pid, signal.SIGTERM)
                         except (ProcessLookupError, PermissionError):
                             subprocess.run(f"taskkill /F /PID {pid}", shell=True)
     except Exception as e:
-        print(f"Note: Could not check port {port}: {e}")
+        log_status(f"Note: Could not check port {port}: {e}")
 
 
 def kill_by_name(name: str):
@@ -169,7 +182,7 @@ def kill_by_name(name: str):
                 if len(parts) >= 2:
                     pid = parts[1]
                     if pid.isdigit():
-                        print(f"Killing process {parts[0]} (PID {pid})...")
+                        log_status(f"Killing process {parts[0]} (PID {pid})...")
                         try:
                             subprocess.run(
                                 f"taskkill /F /PID {pid}",
@@ -177,9 +190,9 @@ def kill_by_name(name: str):
                                 capture_output=True,
                             )
                         except Exception as e:
-                            print(f"Failed to kill PID {pid}: {e}")
+                            log_status(f"Failed to kill PID {pid}: {e}")
     except Exception as e:
-        print(f"Note: Could not search for processes: {e}")
+        log_status(f"Note: Could not search for processes: {e}")
 
 
 def clean_sqlite_dbs(data_dir: Path):
@@ -192,7 +205,7 @@ def clean_sqlite_dbs(data_dir: Path):
             f.unlink()
             removed.append(f.name)
     if removed:
-        print(f"  Removed stale SQLite DBs: {', '.join(removed)}")
+        log_status(f"  Removed stale SQLite DBs: {', '.join(removed)}")
 
 
 def clean_old_logs(log_dir: Path, max_age_days: int = 3):
@@ -212,7 +225,7 @@ def clean_old_logs(log_dir: Path, max_age_days: int = 3):
             f.unlink()
             removed.append(f.name)
     if removed:
-        print(f"  Removed old build logs (> {max_age_days} days): {', '.join(removed)}")
+        log_status(f"  Removed old build logs (> {max_age_days} days): {', '.join(removed)}")
 
 
 def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 3):
@@ -233,9 +246,9 @@ def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 3):
                     p.unlink()
                     removed.append(str(p))
                 except Exception as e:
-                    print(f"  Warning: Could not remove {p}: {e}")
+                    log_status(f"  Warning: Could not remove {p}: {e}")
         if removed:
-            print(f"  Removed stale entries (> {max_age_days} days) in {tmp_dir}: {', '.join(removed)}")
+            log_status(f"  Removed stale entries (> {max_age_days} days) in {tmp_dir}: {', '.join(removed)}")
 
 
 def dump_sqlite_to_jsonl(db_path: Path, output_dir: Path):
@@ -273,11 +286,11 @@ def dump_sqlite_to_jsonl(db_path: Path, output_dir: Path):
 
         conn.close()
         if dumped:
-            print(f"  Dumped tables to {output_dir}/: {', '.join(dumped)}")
+            log_status(f"  Dumped tables to {output_dir}/: {', '.join(dumped)}")
         else:
-            print(f"  No data to dump in {db_path}")
+            log_status(f"  No data to dump in {db_path}")
     except Exception as e:
-        print(f"  Warning: Could not dump SQLite DB: {e}")
+        log_status(f"  Warning: Could not dump SQLite DB: {e}")
 
 
 def run(cmd, cwd=None, check=True, show_output=True, env=None):
@@ -285,17 +298,18 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
 
     Returns the exit code. When ``check`` is True and the command fails, calls
     ``sys.exit`` with the return code. Status messages (the ``$ {cmd}`` echo and
-    any ``FAILED`` notice) still go to stdout and the log.
+    any ``FAILED`` notice) go to both stdout and the log.
     """
-    print(f"$ {cmd}")
-    _log_write(f"$ {cmd}\n")
+    both_print(f"$ {cmd}")
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
 
     if show_output:
-        # Stream output in real-time to the log so a live tail of the log file
-        # shows progress; nothing is emitted to stdout.
+        # Use communicate() rather than manual line iteration: the line-by-line
+        # loop loses the final lines of stdout when the child process closes its
+        # pipe before the kernel has flushed its output buffer. communicate()
+        # waits for EOF and returns the full output deterministically.
         process = subprocess.Popen(
             cmd,
             shell=True,
@@ -307,18 +321,18 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
             encoding="utf-8",
             errors="replace",
         )
-        for line in process.stdout:
-            # Filter out noisy cargo-llvm-cov info messages from the log too.
-            if line.strip().startswith("info: cargo-llvm-cov"):
-                continue
-            # Skip cargo progress spam; the log retains everything else.
-            if _CARGO_PROGRESS_RE.match(line):
-                continue
-            _log_write(line)
-        process.wait()
+        out, _ = process.communicate()
+        if out:
+            for line in out.splitlines(keepends=True):
+                # Filter out noisy cargo-llvm-cov info messages from the log too.
+                if line.strip().startswith("info: cargo-llvm-cov"):
+                    continue
+                # Skip cargo progress spam; the log retains everything else.
+                if _CARGO_PROGRESS_RE.match(line):
+                    continue
+                _log_write(line)
         if check and process.returncode != 0:
-            print(f"FAILED with code {process.returncode}")
-            _log_write(f"FAILED with code {process.returncode}\n")
+            both_print(f"FAILED with code {process.returncode}")
             sys.exit(process.returncode)
         return process.returncode
     else:
@@ -343,8 +357,7 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                     continue
                 _log_write(line)
         if check and result.returncode != 0:
-            print(f"FAILED with code {result.returncode}")
-            _log_write(f"FAILED with code {result.returncode}\n")
+            both_print(f"FAILED with code {result.returncode}")
             sys.exit(result.returncode)
         return result.returncode
 
@@ -380,24 +393,20 @@ def is_target_locked(target_dir: Path) -> bool:
 
 
 def _print_step_summary(step_timings, step_failures, log_path):
-    """Print the Step Timing Summary with per-step log line ranges."""
+    """Print the Step Timing Summary with per-step status and elapsed time."""
     if not step_timings:
         return
-    log_name = Path(log_path).name
-    print("\n--- Step Timing Summary ---")
+    both_print("")
+    both_print("--- Step Timing Summary ---")
     total = sum(t["elapsed_sec"] for t in step_timings)
     for t in step_timings:
         status = "FAILED" if t["failed"] else "OK"
-        start, end = t["log_range"]
-        if end >= start:
-            range_str = f"({log_name}:{start}-{end})"
-        else:
-            range_str = f"({log_name}:{start}-)"
-        print(f"  {t['elapsed_sec']:>6.2f}s  [{status}]  {t['step']}  {range_str}")
-    print(f"  {'':>6}   Total: {total:.2f}s")
+        both_print(f"  {t['elapsed_sec']:>6.2f}s  [{status}]  {t['step']}")
+    both_print(f"  {'':>6}   Total: {total:.2f}s")
     if step_failures:
-        print(f"\n  Failed steps: {', '.join(step_failures)}")
-    print("---")
+        both_print(f"\n  Failed steps: {', '.join(step_failures)}")
+    both_print(f"\n  Full log: {log_path}")
+    both_print("---")
 
 
 def main():
@@ -477,7 +486,6 @@ def main():
 
     def timed_step(label, cmd, check=True, env=None):
         steps.next(label)
-        start_line = _log_line_no() + 1
         start = time.time()
         try:
             rc = run(cmd, check=check, env=env)
@@ -488,7 +496,6 @@ def main():
                     "step": label,
                     "elapsed_sec": round(elapsed, 2),
                     "failed": failed,
-                    "log_range": (start_line, _log_line_no()),
                 }
             )
             if failed:
@@ -500,7 +507,6 @@ def main():
                     "step": label,
                     "elapsed_sec": round(elapsed, 2),
                     "failed": True,
-                    "log_range": (start_line, _log_line_no()),
                 }
             )
             step_failures.append(label)
@@ -508,44 +514,44 @@ def main():
 
     exit_code = 0
     try:
-        print("=" * 60)
-        print("=== Chronicler Engine Build ===")
-        print(f"Full build log: {log_path}")
-        print("=" * 60)
+        both_print("=" * 60)
+        both_print("=== Chronicler Engine Build ===")
+        both_print(f"Full build log: {log_path}")
+        both_print("=" * 60)
 
         cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
         build_profile = "release" if args.release else "debug"
         target_dir = cargo_target_dir / build_profile
 
         if args.diagnostic_benchmark:
-            print("=== Diagnostic Benchmark Mode ===")
+            both_print("=== Diagnostic Benchmark Mode ===")
             benchmark_script = Path(__file__).parent / "scripts" / "diagnostic_benchmark.py"
             if benchmark_script.exists():
                 run(f'python "{benchmark_script}"')
             else:
-                print(f"ERROR: Benchmark script not found: {benchmark_script}")
+                both_print(f"ERROR: Benchmark script not found: {benchmark_script}")
                 exit_code = 1
                 return
-            print("=== Diagnostic Benchmark Complete ===")
+            both_print("=== Diagnostic Benchmark Complete ===")
             return
 
         if args.cleanup:
-            print("=== Cleanup Mode ===")
-            print("Killing lingering chronicler processes...")
+            both_print("=== Cleanup Mode ===")
+            log_status("Killing lingering chronicler processes...")
             kill_by_name("chronicler")
 
             lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
             if lock_dir.exists():
-                print(f"Cleaning stale port locks from {lock_dir}...")
+                log_status(f"Cleaning stale port locks from {lock_dir}...")
                 shutil.rmtree(lock_dir)
 
             if cargo_target_dir.exists():
-                print(f"Removing build directory: {cargo_target_dir}")
+                log_status(f"Removing build directory: {cargo_target_dir}")
                 shutil.rmtree(cargo_target_dir)
             else:
-                print(f"Build directory does not exist: {cargo_target_dir}")
+                log_status(f"Build directory does not exist: {cargo_target_dir}")
 
-            print("=== Cleanup Complete ===")
+            both_print("=== Cleanup Complete ===")
             return
 
         check_rust_version()
@@ -553,31 +559,31 @@ def main():
 
         if args.strict:
             os.environ["RUSTFLAGS"] = "-D warnings"
-            print("Strict mode enabled: warnings treated as errors.")
+            both_print("Strict mode enabled: warnings treated as errors.")
 
         # Always kill manual runs on the default port first — this may release
         # the target directory lock if a manual `cargo run` was holding it.
-        print("Checking for processes on port 3000...")
+        log_status("Checking for processes on port 3000...")
         kill_port(3000)
 
         cargo_env = {"NEXTEST_STATUS_LEVEL": "fail"}
         if args.target_dir:
             cargo_env["CARGO_TARGET_DIR"] = str(cargo_target_dir.resolve())
-            print(f"Using custom target directory: {cargo_target_dir}")
+            log_status(f"Using custom target directory: {cargo_target_dir}")
             if is_target_locked(cargo_target_dir):
-                print(
+                both_print(
                     f"WARNING: Target directory {cargo_target_dir} appears to be "
                     "locked by another cargo process."
                 )
-                print("         Another agent may be building in this directory.")
+                both_print("         Another agent may be building in this directory.")
         else:
             if is_target_locked(cargo_target_dir):
-                print(
+                both_print(
                     "WARNING: Default target directory (target/) appears to be "
                     "locked by another cargo process."
                 )
-                print("         Use --target-dir to build in a unique folder and avoid conflicts:")
-                print("         python build.py --target-dir target/<unique-name>")
+                both_print("         Use --target-dir to build in a unique folder and avoid conflicts:")
+                both_print("         python build.py --target-dir target/<unique-name>")
 
         if args.llm_only:
             steps = StepCounter(3)
@@ -588,11 +594,11 @@ def main():
             )
 
             steps.next("Running LLM tests only...")
-            print("=" * 60)
-            print("NOTE: LLM tests contact the real OpenRouter API.")
-            print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
-            print("      Do not interrupt. Set your tool timeout to >= 600s.")
-            print("=" * 60)
+            both_print("=" * 60)
+            both_print("NOTE: LLM tests contact the real OpenRouter API.")
+            both_print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
+            both_print("      Do not interrupt. Set your tool timeout to >= 600s.")
+            both_print("=" * 60)
             llm_cmd = get_test_cmd(include_llm=True)
             if "nextest" in llm_cmd:
                 llm_cmd += " --test flow_llm_tests"
@@ -601,7 +607,7 @@ def main():
             run(llm_cmd, check=False, env=cargo_env)
 
             steps.next("Done")
-            print("=== Build Complete ===")
+            both_print("=== Build Complete ===")
             return
 
         total_steps = (
@@ -615,12 +621,12 @@ def main():
 
         if args.validate_data:
             timed_step("Validating JSON data...", "python scripts/validate_data.py")
-            print("Data validation successful.")
+            both_print("Data validation successful.")
 
         if not args.no_fmt:
             timed_step("Formatting...", "cargo fmt", env=cargo_env)
         else:
-            print("Skipping formatting (--no-fmt set).")
+            both_print("Skipping formatting (--no-fmt set).")
 
         timed_step(
             "Running clippy...",
@@ -648,20 +654,20 @@ def main():
             if dest_data.exists():
                 shutil.rmtree(dest_data)
             shutil.copytree("data", dest_data)
-            print(f"  Copied data/ -> {dest_data}")
+            log_status(f"  Copied data/ -> {dest_data}")
 
         if Path("assets").exists():
             dest_assets = target_dir / "assets"
             if dest_assets.exists():
                 shutil.rmtree(dest_assets)
             shutil.copytree("assets", dest_assets)
-            print(f"  Copied assets/ -> {dest_assets}")
+            log_status(f"  Copied assets/ -> {dest_assets}")
 
         (target_dir / "logs").mkdir(exist_ok=True)
-        print("  Created logs/")
+        log_status("  Created logs/")
 
-        print(f"  Package ready in {target_dir}/")
-        print(f"  Deployment: copy {target_dir}/ folder to your target machine")
+        log_status(f"  Package ready in {target_dir}/")
+        log_status(f"  Deployment: copy {target_dir}/ folder to your target machine")
 
         # DB lives inside the target folder so each build profile has its own instance.
         target_data_dir = target_dir / "data"
@@ -688,7 +694,7 @@ def main():
                     check=False,
                 )
             else:
-                print("Warning: Could not generate coverage JSON.")
+                both_print("Warning: Could not generate coverage JSON.")
         else:
             timed_step(
                 "Running all tests...",
@@ -697,13 +703,13 @@ def main():
                 env=cargo_env,
             )
             if not args.include_llm:
-                print(
+                both_print(
                     "    NOTE: 2 LLM tests were skipped. "
                     "Run 'python build.py --llm-only' to execute them."
                 )
             steps.next("Skipping coverage report (use --coverage to enable)")
 
-        print("=== Build Complete ===")
+        both_print("=== Build Complete ===")
 
         project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
         engine_tmp = Path("tmp")
@@ -729,10 +735,10 @@ def main():
 
         _print_step_summary(step_timings, step_failures, log_path)
 
-        print("=" * 60)
-        print("=== Build Complete ===")
-        print(f"Full build log: {log_path}")
-        print("=" * 60)
+        both_print("=" * 60)
+        both_print("=== Build Complete ===")
+        both_print(f"Full build log: {log_path}")
+        both_print("=" * 60)
 
     return exit_code
 

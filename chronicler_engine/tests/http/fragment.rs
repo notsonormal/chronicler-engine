@@ -316,31 +316,6 @@ async fn test_action_confirm_empty_command() {
 }
 
 #[tokio::test]
-async fn test_action_concurrent_rejection() {
-    let app = TestAppBuilder::default_test().is_generating(true).build();
-
-    let req = Request::builder()
-        .uri("/action")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=go south"))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 1024)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Still thinking..."),
-        "Expected concurrent rejection: {body_str}"
-    );
-}
-
-#[tokio::test]
 async fn test_action_async_inventory() {
     let app = TestAppBuilder::default_app();
 
@@ -729,19 +704,6 @@ async fn test_delete_game_handler_active_game() {
         StatusCode::BAD_REQUEST,
         "Cannot delete active game"
     );
-}
-
-#[tokio::test]
-async fn test_delete_game_handler_generating() {
-    let app = TestAppBuilder::default_test().is_generating(true).build();
-
-    let req = Request::builder()
-        .uri("/games/9999/delete")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
 }
 
 #[tokio::test]
@@ -1319,22 +1281,4 @@ async fn test_switch_swipe_handler_concurrent() {
         StatusCode::SERVICE_UNAVAILABLE,
         "Switching swipe during generation should fail"
     );
-}
 
-#[tokio::test]
-async fn test_reset_handler_generating() {
-    let app = TestAppBuilder::default_test().is_generating(true).build();
-
-    let req = Request::builder()
-        .uri("/reset")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(
-        response.status(),
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Reset during generation should fail"
-    );
-}

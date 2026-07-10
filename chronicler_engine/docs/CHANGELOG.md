@@ -8,6 +8,15 @@ NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when y
 
 - **`docs/architecture/system.md` rewrite to minimal spec** (90 lines / 376 words). Reduced from ~210 lines to 7 sections covering only cross-cutting contracts: tier map (8 tiers), hex arch + verbatim mermaid, dependency invariant, port inventory, storage direct-access list, settings flow + verbatim mermaid, default settings table. Removed per-module field/type dumps, helper listings, view-model struct lists, fragment subdirectory maps, past-tense rename history. Corrected 5 errors from prior audit (ghost `context.rs`, ghost `game_catalogue`/`world_catalogue` fields, ghost `ctx_or_error`, ghost `create_app_for_testing`, wrong `LlmMessageRepository` impl count) and 8 warnings. Storage direct-access count reconciled to **3 files** (post-T2 refactor in commit `e5fa8ce`). Settings section now specifies `impl Default for AppSettings` as runtime source of truth (`data/settings.json` not consulted at startup). No `src/` changes; `//! [DOC: ...]` anchors on 5 src files remain valid. Follow-ups recorded at `.scratch/fix-architecture-system-md/followups.md` (stale `:line` refs in 4 plans, ADR-027 `context.rs` mention, `application_service.rs` marker drift).
 
+### Changed
+
+- **Ticket 07 docs sync: per-game generation tracking (P4)** — Doc-only follow-up to `simpler-hexagon-pre-merge-superplan` ticket 07 (07a registry plumb, 07c CAS removal + α-check, 07d ownership-checked Drop). ADR-030 already amended by 07f; standard docs updated to match new behavior:
+  - `docs/architecture/system.md` §Tier Map — `generation_gate` bullet rewritten: registry (`Arc<RwLock<HashMap<GameId, GenerationSlot>>>`) is write-side truth, `is_generating` atomic is a read-only projection of "any slot Generating", shutdown token lives on `DefaultApplicationService` via `AppState.shutdown_token`.
+  - `docs/system/action_pipeline.md` §PipelineRun + §Cancellation — `CancellationToken::is_cancelled()` reframed as `app.is_shutting_down()`; new **Game-Identity Guard (α-check)** section documents the 3 `PipelineRun::check_game_unchanged(started_for)` phase boundaries (post-narrate, pre-trigger, post-trigger) and the `"Pipeline aborting: game changed"` log line. §spawn_pipeline_task notes guard `Drop` is a no-op if the slot has been superseded.
+  - `docs/system/game_flow.md` §Error Model — `phase_finalize` reset path reframed around `GenerationGuard::Drop` releasing the registry slot + projection atomic only when no other game is generating. §Stale-Generating recovery expanded with the registry self-heal branch.
+  - `docs/system/narration_engine.md` §Continuation Narration — `is_generating stays true` reframed as per-game `GenerationSlot` (atomic is now a cross-game projection).
+  - `docs/reference/test_support.md` §Test App Factories — accessor list adds `app.is_shutting_down()` and clarifies `app.cancel_token()` now returns the shutdown token.
+
 ## 2026-07-06
 
 ### Changed

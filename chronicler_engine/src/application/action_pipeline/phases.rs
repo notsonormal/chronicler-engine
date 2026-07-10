@@ -35,11 +35,33 @@ pub struct PipelineInputs {
 pub(super) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
     pub(super) app: &'a DefaultApplicationService,
+    pub(super) started_for: u64,
 }
 
 impl<'a> PipelineRun<'a> {
-    pub(super) fn new(pipeline: &'a ActionPipeline, app: &'a DefaultApplicationService) -> Self {
-        Self { pipeline, app }
+    pub(super) fn new(
+        pipeline: &'a ActionPipeline,
+        app: &'a DefaultApplicationService,
+        started_for: u64,
+    ) -> Self {
+        Self {
+            pipeline,
+            app,
+            started_for,
+        }
+    }
+
+    fn check_game_unchanged(&self, started_for: u64) -> Result<(), ActionOutcome> {
+        let current = self.app.current_game_id();
+        if current != started_for {
+            tracing::info!(
+                started = started_for,
+                current = current,
+                "Pipeline aborting: game changed — discarding in-flight generation"
+            );
+            return Err(ActionOutcome::Cancelled);
+        }
+        Ok(())
     }
 
     pub(super) fn persist(&self, state: &GameState) {
@@ -122,9 +144,7 @@ impl<'a> PipelineRun<'a> {
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;
 
-        if self.app.cancel_token().is_cancelled() {
-            return Err(ActionOutcome::Cancelled);
-        }
+        self.check_game_unchanged(self.started_for)?;
 
         if narration_text.trim().is_empty() {
             return self.error_return(state, "LLM Error: empty response".to_string());
@@ -195,9 +215,7 @@ impl<'a> PipelineRun<'a> {
             trigger.trigger_name
         );
 
-        if self.app.cancel_token().is_cancelled() {
-            return Err(ActionOutcome::Cancelled);
-        }
+        self.check_game_unchanged(self.started_for)?;
 
         if self.persist_snapshot_failed(&mut state, "pre-event snapshot") {
             return Ok((state, String::new()));
@@ -229,9 +247,7 @@ impl<'a> PipelineRun<'a> {
         tracing::info!("Pipeline ✓ Trigger complete");
         let continuation_text = continuation_result.text;
 
-        if self.app.cancel_token().is_cancelled() {
-            return Err(ActionOutcome::Cancelled);
-        }
+        self.check_game_unchanged(self.started_for)?;
 
         if continuation_text.trim().is_empty() {
             state.narrative.input_buffer.status =

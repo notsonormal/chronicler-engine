@@ -82,7 +82,9 @@ The third option is the lightest-weight mitigation that closes the divergence ri
 
 ## Access Pattern
 
-The `pub(crate)` widening on `DefaultApplicationService` storage/generation fields was deliberate and expected to be re-tightened by the T2 god-class split (completed 2026-07-09, tickets 00–04). After T2, generation-related access now flows through `application/generation_gate/` and storage access through `application/persistence_gate/`. The single-writer invariant on `is_generating` documented in this ADR is preserved — `GenerationGate` holds the `Arc<AtomicBool>` and reads on `GameCatalogue` are read-only.
+The `pub(crate)` widening on `DefaultApplicationService` storage/generation fields was deliberate and expected to be re-tightened by the T2 god-class split (completed 2026-07-09, tickets 00–04). After T2, generation-related access now flows through `application/generation_gate/` and storage access through `application/persistence_gate/`.
+
+Ticket 07 refines, but does not discard, the single-writer invariant on `is_generating`. `GenerationGate` owns the per-game `Arc<RwLock<HashMap<GameId, GenerationSlot>>>` registry and the `Arc<AtomicBool>` projection. The registry claim/release path is the single writer. `GameCatalogue` lifecycle operations do not write the projection and no longer guard on it.
 
 ## Related ADRs
 
@@ -93,3 +95,34 @@ The `pub(crate)` widening on `DefaultApplicationService` storage/generation fiel
 
 - **2026-07-06**: Initial decision. Locks the dual-source roles, the single-writer rule, the read-only-everywhere-else rule, and the property-test verification strategy.
 - **2026-07-06**: Acknowledged `GenerationGuard::Drop` as second writer for the AtomicBool (RAII panic-safety, writes `false` only). Tightened verification strategy to fail-fast on injected `(cached=false, persisted=Generating)` divergence.
+- **2026-07-10**: Amended for Ticket 07 per-game generation tracking. The registry is now the write-side truth and `is_generating` is a projection.
+
+## Amendment: Ticket 07 (2026-07-10)
+
+Ticket 07 preserves ADR-030's invariant while refining the live generation gate from a global `AtomicBool` claim to per-game tracking. Earlier wording that describes `ApplicationService` as the writer of the global CAS is historical for the pre-07 model. Current live concurrency tracking is owned by `GenerationGate`.
+
+### Per-game tracking and projection
+
+`GenerationGate` now owns an `Arc<RwLock<HashMap<GameId, GenerationSlot>>>` registry. That registry is the write-side truth for live generation claims and releases. `is_generating: Arc<AtomicBool>` remains, but it is a read-only projection for callers: `true` means at least one registry slot is `GenerationSlot::Generating`.
+
+The single-writer rule is still preserved. The writer is now the registry claim/release path, not a standalone global CAS on the `AtomicBool`. The same path that mutates the per-game registry also updates the `AtomicBool` projection: claim stores `true`; release stores `false` only after the registry has no remaining generating slots. No other code path may mutate the projection.
+
+The persisted `GenerationStatus` still records durable phase/status for recovery and debugging. It is no longer the live concurrency gate; the per-game registry is the live gate, and the atomic is only its hot-path projection.
+
+### Game lifecycle guard removal
+
+`GameCatalogue::create_game`, `GameCatalogue::switch_game`, and `GameCatalogue::delete_game` no longer guard against `is_generating`. Ticket 05 explicitly authorized `reset()` to proceed while generation is in flight, and Ticket 07 extends the same mechanical safety to create/switch/delete.
+
+Guards are removed because the α-check at phase boundaries handles in-flight generations mechanically: an old generation's `game_id` no longer matches the current game, so it aborts at the next boundary without further persistence after the mismatch is observed. This keeps lifecycle operations consistent with reset and avoids reintroducing a global generation lock.
+
+### α-check race boundary
+
+The α-check samples `current_game_id()` at three phase boundaries in `phases.rs`. The pipeline records the `started_for` game id when the run begins, then compares it with storage's current game id at those boundaries.
+
+`save_snapshot` still keys by storage's current `game_id` (the storage atomic), not by the pipeline's `started_for` value. A race between an α-check pass and a later save can therefore persist up to one phase of stale work under the new current game. This is bounded by design per ticket 05: the next α-check sees the game mismatch and aborts. It is not a defect.
+
+### GenerationGuard drop ownership check
+
+`GenerationGuard` now carries both `game_id` and `generation_id`. On `Drop`, it verifies that it still owns the active generation slot for that game before mutating the registry or the `AtomicBool` projection.
+
+If old generation A is superseded by generation B — for example, reset creates a new game and B claims the slot — A's `Drop` is a no-op. It must not clear B's registry entry or lower the projection while B is still active. This closes the P4-serialize race where stale cleanup from an older generation could clobber a newer generation.

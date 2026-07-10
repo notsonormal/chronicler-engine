@@ -1,8 +1,8 @@
 //! [DOC: docs/system/game_flow.md]
-//! GenerationGate — owns the per-process cancellation token + `is_generating`
-//! cache (ADR-030) + slot-orchestration around `process_action`.
-//! (T2 ticket 03 — façade-first carve-out from DefaultApplicationService.)
+//! GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
 
 pub mod gate;
+pub mod slot;
 
 pub use gate::GenerationGate;
+pub use slot::{GenerationSlot, release_owned_slot};

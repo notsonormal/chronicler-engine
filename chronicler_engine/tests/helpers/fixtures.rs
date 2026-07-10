@@ -116,10 +116,20 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
 }
 
 pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
+    use chronicler_engine::domain::model::scenario::StartingScenario;
     let world = Arc::new(WorldCard {
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
+        scenarios: vec![StartingScenario {
+            id: "default".into(),
+            name: "Default".into(),
+            description: "Test scenario".into(),
+            starting_room_id: "room1".into(),
+            text: String::new(),
+            npcs: vec![],
+        }],
+        default_scenario_id: Some("default".into()),
         ..Default::default()
     });
 
@@ -368,7 +378,7 @@ pub fn create_test_storage_arc(game_id: u64) -> Arc<Storage> {
     Arc::new(create_test_storage(game_id))
 }
 
-// Build a DefaultApplicationService backed by the given storage (with the
+/// Build a DefaultApplicationService backed by the given storage (with the
 /// supplied `state` world/player pre-loaded into the snapshot) and a custom
 /// `game_service`. Replaces the old `make_test_ctx` + `make_test_app_service_from_ctx`
 /// idiom for tests that need shared storage.
@@ -421,7 +431,7 @@ pub fn app_with_storage_from(
     ))
 }
 
-// B3 fixture folded into A6 per Issue 10: seeds system_default + quantifier_default presets.
+// Seeds system_default + quantifier_default presets.
 #[doc(hidden)]
 #[allow(dead_code)]
 pub fn make_test_app_with_default_preset(

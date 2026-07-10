@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
@@ -45,17 +44,16 @@ pub struct AppState {
     pub application_service: Arc<DefaultApplicationService>,
     pub text_check_service: Arc<TextCheckService>,
     pub settings: Arc<RwLock<AppSettings>>,
-    pub cancel_token: Arc<std::sync::RwLock<CancellationToken>>,
-    pub is_generating: Arc<AtomicBool>,
+    pub shutdown_token: Arc<std::sync::RwLock<CancellationToken>>,
 }
 
 impl AppState {
-    pub fn current_cancel_token(&self) -> CancellationToken {
-        read_lock_or_recover(&self.cancel_token, "cancel_token")
+    pub fn current_shutdown_token(&self) -> CancellationToken {
+        read_lock_or_recover(&self.shutdown_token, "shutdown_token")
     }
 
-    pub fn replace_cancel_token(&self) {
-        let mut token = write_lock_or_recover(&self.cancel_token, "cancel_token");
+    pub fn replace_shutdown_token(&self) {
+        let mut token = write_lock_or_recover(&self.shutdown_token, "shutdown_token");
         *token = CancellationToken::new();
     }
 

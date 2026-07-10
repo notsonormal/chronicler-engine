@@ -1,5 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
-//! DefaultApplicationService — thin façade over 4 cohesive modules plus 2 collaborator fields (T2 ticket 04 — final façade shrink).
+//! DefaultApplicationService — façade over application collaborators.
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -57,6 +57,7 @@ pub struct DefaultApplicationService {
     pub(crate) world_catalogue: WorldCatalogue,
     pub(crate) settings: Arc<RwLock<AppSettings>>,
     pub(crate) game_service: Arc<GameService>,
+    pub(crate) shutdown_token: CancellationToken,
 }
 
 impl DefaultApplicationService {
@@ -73,9 +74,9 @@ impl DefaultApplicationService {
             Arc::clone(&storage),
             Arc::clone(&preset_store),
         ));
-        let generation_gate = GenerationGate::new(cancel_token, Arc::clone(&is_generating));
-        // is_generating: Arc<AtomicBool> direct per ADR-030 hot-path; not behind GenerationGate::is_generating() accessor.
-        let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate), is_generating);
+        let generation_gate = GenerationGate::new(Arc::clone(&is_generating));
+        // Direct Arc<AtomicBool> access per ADR-030 hot-path; no accessor wrapper.
+        let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
         // raw storage: WorldCatalogue owns worlds persistence directly; deliberate asymmetry vs GameCatalogue (which borrows Arc<PersistenceGate>) to keep the game/world seams independent.
         let world_catalogue = WorldCatalogue::new(storage);
         Self {
@@ -85,6 +86,7 @@ impl DefaultApplicationService {
             world_catalogue,
             settings,
             game_service,
+            shutdown_token: cancel_token,
         }
     }
 
@@ -101,7 +103,11 @@ impl DefaultApplicationService {
     }
 
     pub fn cancel_token(&self) -> &CancellationToken {
-        self.generation_gate.cancel_token()
+        &self.shutdown_token
+    }
+
+    pub fn is_shutting_down(&self) -> bool {
+        self.shutdown_token.is_cancelled()
     }
 
     pub fn settings(&self) -> &Arc<RwLock<AppSettings>> {
@@ -200,18 +206,21 @@ impl DefaultApplicationService {
         self.generation_gate.heal_stale_generating(self, state)
     }
 
-    // On save failure after CAS wins, the AtomicBool is rolled back inside the gate.
+    // On save failure post-claim, registry slot + projection atomic roll back
+    // inside the gate. Keyed by claimed game_id + generation_id to survive a
+    // concurrent reset.
     #[allow(dead_code)]
     pub(crate) fn claim_generation_slot(
         &self,
         state: &mut GameState,
-    ) -> Result<ProcessActionResult, EngineError> {
+    ) -> Result<(u64, u64, ProcessActionResult), EngineError> {
         self.generation_gate.claim_generation_slot(self, state)
     }
 
     #[allow(dead_code)]
-    pub(crate) fn release_generation_slot(&self) {
-        self.generation_gate.release_generation_slot()
+    pub(crate) fn release_generation_slot(&self, game_id: u64, generation_id: u64) {
+        self.generation_gate
+            .release_generation_slot(game_id, generation_id)
     }
 
     pub fn continue_narration(&self) -> Result<ProcessActionResult, EngineError> {

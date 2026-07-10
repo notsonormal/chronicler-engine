@@ -8,7 +8,7 @@ Eight tiers organize the codebase:
 - `crate::domain::engine` — Pure simulation logic.
 - `crate::application` — Orchestration layer; owns port traits under `application/ports/`. Sub-modules from the T2 land package:
   - `crate::application::persistence_gate` — application persistence boundary; owns `Arc<Storage>` + `Arc<PresetStore>`.
-  - `crate::application::generation_gate` — cancel token + atomic generation slot orchestration (ADR-030 hot path).
+  - `crate::application::generation_gate` — per-game registry (write-side truth, `Arc<RwLock<HashMap<GameId, GenerationSlot>>>`) + atomic projection (`Arc<AtomicBool>`, read-only cache of "any slot Generating"); `is_shutting_down` lives on `DefaultApplicationService` reading `AppState.shutdown_token`. ADR-030 hot path.
   - `crate::application::game_catalogue` — game-lifecycle orchestration; borrows `Arc<PersistenceGate>`.
   - `crate::application::world_catalogue` — worlds/presets persistence; takes raw `Arc<Storage>` (deliberate asymmetry vs GameCatalogue — independent seams).
 - `crate::adapters::driven` — Outbound adapters (storage, LLM providers, text check).

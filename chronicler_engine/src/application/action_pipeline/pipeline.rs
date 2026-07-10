@@ -51,7 +51,8 @@ impl ActionPipeline {
         input: String,
     ) -> PipelineResult<()> {
         tracing::debug!("run_from_input: called");
-        let run = PipelineRun::new(self, app);
+        let started_for = app.current_game_id();
+        let run = PipelineRun::new(self, app, started_for);
 
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
@@ -148,7 +149,8 @@ impl ActionPipeline {
         trigger: &StoredTriggerContext,
         app: &DefaultApplicationService,
     ) -> PipelineResult<(GameState, String)> {
-        let run = PipelineRun::new(self, app);
+        let started_for = app.current_game_id();
+        let run = PipelineRun::new(self, app, started_for);
         run.phase_trigger_continuation_with_cancel_handling(state, trigger)
     }
 

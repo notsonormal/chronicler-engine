@@ -23,7 +23,8 @@ pub async fn debug_state_handler(
 
 pub async fn debug_is_generating_handler(State(state): State<AppState>) -> String {
     state
-        .is_generating
+        .application_service
+        .is_generating()
         .load(std::sync::atomic::Ordering::SeqCst)
         .to_string()
 }

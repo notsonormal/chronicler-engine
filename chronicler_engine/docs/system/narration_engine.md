@@ -33,7 +33,7 @@ The Game Master responds to three primary events:
 
 ## Continuation Narration (Auto-Trigger)
 
-After main narration, the engine evaluates NPC triggers and may generate a continuation narration. This uses the same [7-layer prompt (with post-history splice)](prompt_system.md) with the trigger's `narration_prompt` in Layer 6 (User Input). Only the first matching trigger fires per action; `is_generating` stays true through both narrations. For the full trigger evaluation flow, `times_met` timing, NPC event semantics, and mutation order invariant, see [`triggers.md`](triggers.md).
+After main narration, the engine evaluates NPC triggers and may generate a continuation narration. This uses the same [7-layer prompt (with post-history splice)](prompt_system.md) with the trigger's `narration_prompt` in Layer 6 (User Input). Only the first matching trigger fires per action; this game's `GenerationSlot` stays `Generating` through both narrations. For the full trigger evaluation flow, `times_met` timing, NPC event semantics, and mutation order invariant, see [`triggers.md`](triggers.md).
 
 ## LLM Prompts & Guidance
 The Game Master must:

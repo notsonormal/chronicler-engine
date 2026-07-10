@@ -66,7 +66,8 @@ async fn test_generating_status_idle() {
 async fn test_generating_status_generating() {
     let state = TestAppBuilder::default_test().build_app_state();
     state
-        .is_generating
+        .application_service
+        .is_generating()
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
     let result = generating_status_handler(axum::extract::State(state)).await;

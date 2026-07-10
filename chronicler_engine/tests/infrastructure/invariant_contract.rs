@@ -1,7 +1,9 @@
 //! [DOC: docs/architecture/invariants.md]
 //! Runtime invariant contract tests — fast regression guards.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chronicler_engine::application::action_pipeline::ActionOutcome;
@@ -19,6 +21,7 @@ use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
+use chronicler_engine::application::generation_gate::slot::GenerationSlot;
 use chronicler_engine::test_support::{make_test_app_with_game_service, make_test_recorder};
 
 #[path = "../helpers/fixtures.rs"]
@@ -32,8 +35,12 @@ use fixtures::create_test_state;
 #[test]
 fn test_inv001_generation_guard_resets_on_drop() {
     let flag = Arc::new(AtomicBool::new(true));
+    let registry = Arc::new(RwLock::new(HashMap::from([(
+        1u64,
+        GenerationSlot::Generating { generation_id: 1 },
+    )])));
     {
-        let _guard = GenerationGuard(Arc::clone(&flag));
+        let _guard = GenerationGuard::new(1, 1, Arc::clone(&registry), Arc::clone(&flag));
         assert!(
             flag.load(Ordering::SeqCst),
             "flag should be true while guard lives"
@@ -49,9 +56,14 @@ fn test_inv001_generation_guard_resets_on_drop() {
 fn test_inv001_generation_guard_resets_on_panic() {
     let flag = Arc::new(AtomicBool::new(true));
     let flag_clone = Arc::clone(&flag);
+    let registry = Arc::new(RwLock::new(HashMap::from([(
+        1u64,
+        GenerationSlot::Generating { generation_id: 1 },
+    )])));
+    let registry_clone = Arc::clone(&registry);
 
     let result = std::panic::catch_unwind(move || {
-        let _guard = GenerationGuard(flag_clone);
+        let _guard = GenerationGuard::new(1, 1, registry_clone, flag_clone);
         panic!("intentional panic to test guard drop");
     });
 
@@ -156,7 +168,11 @@ fn test_inv004_cancellable_at_boundaries() {
         ))
     })
     .unwrap();
-    let cancel_token = app.cancel_token().clone();
+    // Phase boundaries abort on game_id mismatch (α-check), not on token
+    // cancellation. Simulate the reset by switching the active game mid-pipeline;
+    // the next phase boundary sees the mismatch and aborts.
+    let started_for = app.current_game_id();
+    let switched_to = started_for.wrapping_add(99);
     let pipeline = app.game_service().pipeline();
     let state_for_thread = latest_state(&app);
 
@@ -175,14 +191,14 @@ fn test_inv004_cancellable_at_boundaries() {
             ),
             "narration should start within timeout"
         );
-        cancel_token.cancel();
+        app.set_game_id(switched_to);
 
         handle.join().expect("pipeline thread should not panic")
     });
 
     assert!(
         matches!(outcome, Err(ActionOutcome::Cancelled)),
-        "INV-004: pipeline should return Cancelled when token is cancelled, got {outcome:?}"
+        "INV-004: pipeline should return Cancelled on game_id mismatch at boundary, got {outcome:?}"
     );
 
     let final_state = latest_state(&app);
@@ -207,7 +223,11 @@ fn test_inv004b_no_concurrent_async_actions() {
     );
 
     {
-        let _guard = GenerationGuard(Arc::clone(&flag));
+        let registry = Arc::new(RwLock::new(HashMap::from([(
+            1u64,
+            GenerationSlot::Generating { generation_id: 1 },
+        )])));
+        let _guard = GenerationGuard::new(1, 1, registry, Arc::clone(&flag));
         assert!(flag.load(Ordering::SeqCst));
     }
 
@@ -377,4 +397,256 @@ fn test_inv002_mutation_order_property() {
             );
         }
     });
+}
+
+// P4-concurrent per-game generation tracking regression tests. Verifies
+// α-check at phase boundaries discards in-flight generations whose game_id
+// no longer matches `started_for`, and that the per-game registry slot is
+// cleaned up so the next claim on the same or a different game succeeds.
+
+#[tokio::test]
+async fn test_p4_concurrent_happy_path() {
+    use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+    use chronicler_engine::application::agents::registry::AgentRegistry;
+    use chronicler_engine::application::errors::ProcessActionResult;
+    use chronicler_engine::application::game_service::GameService;
+
+    let state = create_test_state();
+
+    let mock_backend_raw = Arc::new(
+        MockBackend::default()
+            .with_delay(300)
+            .with_narrations(vec!["GEN_A_OUTPUT".to_string(), "GEN_B_OUTPUT".to_string()]),
+    );
+    let app = make_test_app_with_game_service(state, |_storage| {
+        let recorder = make_test_recorder(mock_backend_raw.clone());
+        Arc::new(GameService::with_backends(
+            recorder,
+            AgentRegistry::default(),
+        ))
+    })
+    .unwrap();
+    let game1 = app.current_game_id();
+
+    let result_a = app
+        .process_action("look".to_string())
+        .expect("process_action should not error");
+    assert!(
+        matches!(result_a, ProcessActionResult::Started),
+        "gen A claim should return Started, got {result_a:?}"
+    );
+
+    assert!(
+        pipeline_helpers::wait_for_condition(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_millis(50),
+            || mock_backend_raw.narration_started.load(Ordering::SeqCst),
+        ),
+        "gen A's narration call should start within timeout"
+    );
+
+    let game2 = app
+        .create_game("test", "test_player")
+        .expect("create_game(game2) should succeed");
+    assert_ne!(game2, game1, "reset must produce a distinct game id");
+
+    assert!(
+        pipeline_helpers::wait_for_condition(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_millis(50),
+            || !app.is_generating().load(Ordering::SeqCst),
+        ),
+        "gen A's pipeline must complete (slot released) within timeout"
+    );
+
+    let state_after_a = latest_state(&app);
+    let a_present = state_after_a
+        .narrative
+        .history
+        .iter()
+        .any(|e| e.text().contains("GEN_A_OUTPUT"));
+    assert!(
+        !a_present,
+        "game 2 state must NOT contain gen A's narration; history: {:?}",
+        state_after_a
+            .narrative
+            .history
+            .iter()
+            .map(|e| e.text().to_string())
+            .collect::<Vec<_>>()
+    );
+
+    let result_b = app
+        .process_action("go north".to_string())
+        .expect("process_action should not error");
+    assert!(
+        matches!(result_b, ProcessActionResult::Started),
+        "gen B claim must succeed after gen A aborts (slot available), got {result_b:?}"
+    );
+
+    assert!(
+        pipeline_helpers::wait_for_condition(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_millis(50),
+            || !app.is_generating().load(Ordering::SeqCst),
+        ),
+        "gen B's pipeline must complete within timeout"
+    );
+
+    let state_after_b = latest_state(&app);
+    let b_present = state_after_b
+        .narrative
+        .history
+        .iter()
+        .any(|e| e.text().contains("GEN_B_OUTPUT"));
+    let a_still_absent = !state_after_b
+        .narrative
+        .history
+        .iter()
+        .any(|e| e.text().contains("GEN_A_OUTPUT"));
+    assert!(
+        b_present,
+        "game 2 state MUST contain gen B's narration; history: {:?}",
+        state_after_b
+            .narrative
+            .history
+            .iter()
+            .map(|e| e.text().to_string())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        a_still_absent,
+        "gen A's narration must remain absent from game 2 after gen B completes"
+    );
+
+    assert!(
+        !app.is_generating().load(Ordering::SeqCst),
+        "is_generating projection must be false after both pipelines complete (registry clean)"
+    );
+
+    app.cancel_token().cancel();
+}
+
+#[tokio::test]
+async fn test_p4_concurrent_triple_overlap() {
+    use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+    use chronicler_engine::application::agents::registry::AgentRegistry;
+    use chronicler_engine::application::errors::ProcessActionResult;
+    use chronicler_engine::application::game_service::GameService;
+
+    let state = create_test_state();
+
+    let mock_backend_raw = Arc::new(MockBackend::default().with_delay(300).with_narrations(vec![
+        "GEN_A_OUTPUT".to_string(),
+        "GEN_B_OUTPUT".to_string(),
+        "GEN_C_OUTPUT".to_string(),
+    ]));
+    let app = make_test_app_with_game_service(state, |_storage| {
+        let recorder = make_test_recorder(mock_backend_raw.clone());
+        Arc::new(GameService::with_backends(
+            recorder,
+            AgentRegistry::default(),
+        ))
+    })
+    .unwrap();
+    let game1 = app.current_game_id();
+
+    let result_a = app
+        .process_action("look".to_string())
+        .expect("process_action should not error");
+    assert!(
+        matches!(result_a, ProcessActionResult::Started),
+        "gen A claim should return Started, got {result_a:?}"
+    );
+
+    assert!(
+        pipeline_helpers::wait_for_condition(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_millis(50),
+            || mock_backend_raw.narration_started.load(Ordering::SeqCst),
+        ),
+        "gen A's narration call should start within timeout"
+    );
+
+    let game2 = app
+        .create_game("test", "test_player")
+        .expect("create_game(game2) should succeed");
+    assert_ne!(game2, game1, "reset must produce a distinct game id");
+
+    let result_b = app
+        .process_action("go north".to_string())
+        .expect("process_action should not error");
+    assert!(
+        matches!(result_b, ProcessActionResult::Started),
+        "gen B claim should succeed for game 2, got {result_b:?}"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    let game3 = app
+        .create_game("test", "test_player")
+        .expect("create_game(game3) should succeed");
+    assert_ne!(game3, game2, "second reset must produce a distinct game id");
+
+    let result_c = app
+        .process_action("look around".to_string())
+        .expect("process_action should not error");
+    assert!(
+        matches!(result_c, ProcessActionResult::Started),
+        "gen C claim should succeed for game 3, got {result_c:?}"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    assert!(
+        pipeline_helpers::wait_for_condition(
+            std::time::Duration::from_secs(10),
+            std::time::Duration::from_millis(100),
+            || !app.is_generating().load(Ordering::SeqCst),
+        ),
+        "all three pipelines must complete within timeout"
+    );
+
+    assert_eq!(
+        app.current_game_id(),
+        game3,
+        "active game must be game 3 at end of test"
+    );
+
+    let state3 = latest_state(&app);
+    let history_texts: Vec<String> = state3
+        .narrative
+        .history
+        .iter()
+        .map(|e| e.text().to_string())
+        .collect();
+    let has_a = history_texts.iter().any(|t| t.contains("GEN_A_OUTPUT"));
+    let has_b = history_texts.iter().any(|t| t.contains("GEN_B_OUTPUT"));
+    let has_c = history_texts.iter().any(|t| t.contains("GEN_C_OUTPUT"));
+
+    assert!(
+        !has_a,
+        "game 3 state must NOT contain gen A's narration; history: {history_texts:?}"
+    );
+    assert!(
+        !has_b,
+        "game 3 state must NOT contain gen B's narration; history: {history_texts:?}"
+    );
+    assert!(
+        has_c,
+        "game 3 state MUST contain gen C's narration; history: {history_texts:?}"
+    );
+
+    assert!(
+        !app.is_generating().load(Ordering::SeqCst),
+        "is_generating projection must be false (no stale slots for games 1/2/3)"
+    );
+
+    let result_after = app
+        .process_action("examine".to_string())
+        .expect("process_action should not error after all gens complete");
+    assert!(
+        matches!(result_after, ProcessActionResult::Started),
+        "fresh claim after triple-overlap must succeed (slot registry clean), got {result_after:?}"
+    );
+
+    app.cancel_token().cancel();
 }

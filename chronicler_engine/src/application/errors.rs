@@ -1,5 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
-//! ApplicationError + ProcessActionResult — error envelope and action-result tri-state (T2 ticket 04 — extracted from DefaultApplicationService).
+//! ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
 
 use crate::error::EngineError;
 
@@ -55,6 +55,7 @@ impl From<EngineError> for ApplicationError {
     }
 }
 
+#[derive(Debug)]
 pub enum ProcessActionResult {
     Started,
     ConcurrentGeneration,

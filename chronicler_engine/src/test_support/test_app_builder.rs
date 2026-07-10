@@ -325,7 +325,7 @@ impl TestAppBuilder {
         };
         let text_check_service = Arc::new(create_text_check_service(&self.settings));
         let is_generating = Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating));
-        let cancel_token = CancellationToken::new();
+        let shutdown_token = CancellationToken::new();
         AppState {
             storage: Arc::clone(&storage),
             preset_storage: Arc::clone(&preset_storage),
@@ -334,14 +334,13 @@ impl TestAppBuilder {
                 Arc::clone(&storage),
                 Arc::clone(&preset_storage),
                 Arc::clone(&settings_arc),
-                cancel_token.clone(),
+                shutdown_token.clone(),
                 Arc::clone(&is_generating),
                 game_service,
             )),
             text_check_service,
             settings: Arc::clone(&settings_arc),
-            cancel_token: Arc::new(RwLock::new(cancel_token)),
-            is_generating,
+            shutdown_token: Arc::new(RwLock::new(shutdown_token)),
         }
     }
 }

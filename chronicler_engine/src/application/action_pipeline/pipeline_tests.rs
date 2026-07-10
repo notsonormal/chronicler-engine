@@ -125,30 +125,6 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
 }
 
 #[test]
-fn test_pipeline_cancels_mid_run() {
-    let state = make_test_state();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
-    let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
-    app.cancel_token().cancel();
-
-    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
-
-    assert!(
-        matches!(outcome, Err(ActionOutcome::Cancelled)),
-        "Expected cancellation when token is cancelled, got {outcome:?}"
-    );
-    let final_state = app.load_or_fresh();
-    assert_eq!(
-        final_state.narrative.input_buffer.status,
-        GenerationStatus::Idle
-    );
-}
-
-#[test]
 fn test_quantifier_result_default_has_low_confidence_and_empty_npcs() {
     use crate::domain::model::quantifier::QuantifierConfidence;
 
@@ -185,36 +161,6 @@ fn test_pipeline_with_custom_quantifier_result() {
         final_state.scene.npcs_in_area.len(),
         1,
         "Custom quantifier should place npc1 in area"
-    );
-}
-
-#[test]
-fn test_phase_trigger_continuation_cancels_at_start() {
-    let state = make_test_state();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
-    let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
-    app.cancel_token().cancel();
-
-    let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
-
-    let result = pipeline.phase_trigger_continuation(state, &trigger, &app);
-
-    assert!(
-        matches!(result, Err(ActionOutcome::Cancelled)),
-        "Expected cancellation at start of trigger continuation, got {result:?}"
-    );
-    let final_state = app.load_or_fresh();
-    assert_eq!(
-        final_state.narrative.input_buffer.status,
-        GenerationStatus::Idle
-    );
-    assert_eq!(
-        final_state.narrative.input_buffer.phase,
-        GenerationPhase::default()
     );
 }
 

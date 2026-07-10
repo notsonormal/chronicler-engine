@@ -97,10 +97,10 @@ Pipeline errors (LLM failures, empty responses, room-not-found, etc.) follow a u
 The caller checks `state.narrative.input_buffer.status.error_message()` to decide whether to continue to later phases or skip straight to `phase_finalize`. This ensures:
 - State is always persisted (never lost to an `Err` that skips `save_state`)
 - The UI shows the error via the existing `GenerationStatus::Error` polling path
-- `phase_finalize` always runs, resetting `is_generating`
+- `phase_finalize` always runs; the `is_generating` projection is cleared by `GenerationGuard::Drop` on the registry path (only if no other game's slot is still `Generating`)
 
 **Cancellation** is the only path that uses `Err(ActionOutcome::Cancelled)`. `ActionOutcome` has exactly two variants — `Completed` and `Cancelled`; no `Error` variant exists.
 
-**Stale-Generating recovery**: If `is_generating` is `false` but persisted status is still `Generating` (e.g., after a panic), `process_action` resets status to `Idle` before proceeding. Panics in `spawn_blocking` propagate naturally; `GenerationGuard::Drop` clears `is_generating`.
+**Stale-Generating recovery**: If `is_generating` is `false` but persisted status is still `Generating` (e.g., after a panic), `process_action` resets status to `Idle` before proceeding. The per-game registry is also self-healed on the same path: a `Generating` slot for `current_game_id()` whose projection atomic is false is cleared to `Idle`. Panics in `spawn_blocking` propagate naturally; `GenerationGuard::Drop` releases the registry slot if it still owns it (no-op if superseded by a younger generation) and stores the projection atomic to `false` only when no other game's slot is generating.
 
 

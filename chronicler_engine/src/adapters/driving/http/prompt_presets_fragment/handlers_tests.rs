@@ -51,8 +51,7 @@ fn make_test_app_state_with_storage(
         ),
         text_check_service,
         settings,
-        cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        shutdown_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
     }
 }
 
@@ -317,8 +316,7 @@ fn make_test_app_state_with_failing_storage(
         application_service,
         text_check_service,
         settings,
-        cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        shutdown_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
     }
 }
 

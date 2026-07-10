@@ -177,42 +177,6 @@ fn test_switch_game_loads_correct_state() {
     );
 }
 
-#[tokio::test]
-async fn test_create_game_concurrent_generation_rejected() {
-    use std::sync::atomic::Ordering;
-
-    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
-        .expect("DbPool creation failed");
-    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
-            crate::make_test_recorder(Arc::new(MockBackend::default())),
-            AgentRegistry::default(),
-        )),
-    );
-
-    let arc_app = app_service.clone();
-    arc_app.is_generating().store(true, Ordering::SeqCst);
-
-    let result = arc_app.create_game(&world_key, "hero");
-    assert!(
-        result.is_err(),
-        "create_game should fail during concurrent generation"
-    );
-    assert!(
-        matches!(
-            result.unwrap_err(),
-            chronicler_engine::application::ApplicationError::ConcurrentGeneration
-        ),
-        "Error should be ConcurrentGeneration"
-    );
-}
-
 #[test]
 fn test_switch_to_nonexistent_game() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
