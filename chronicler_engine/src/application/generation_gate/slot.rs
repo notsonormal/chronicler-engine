@@ -36,28 +36,28 @@ pub fn release_owned_slot(
     game_id: u64,
     generation_id: u64,
 ) {
-    let any_other_generating = {
-        let mut registry = registry.write().unwrap_or_else(|p| {
-            tracing::warn!(
-                "Generation registry write lock poisoned during release_owned_slot; recovering"
-            );
-            p.into_inner()
-        });
-        let still_owner = matches!(
-            registry.get(&game_id),
-            Some(GenerationSlot::Generating { generation_id: slot_gen }) if *slot_gen == generation_id
+    // Slot clear + projection store share the write lock so the two mutations
+    // are atomic w.r.t. concurrent claims on other games.
+    let mut registry = registry.write().unwrap_or_else(|p| {
+        tracing::warn!(
+            "Generation registry write lock poisoned during release_owned_slot; recovering"
         );
-        if still_owner {
-            registry.insert(game_id, GenerationSlot::Idle);
-        } else {
-            tracing::debug!(
-                game_id,
-                generation_id,
-                "release_owned_slot: registry slot not owned by caller; no-op"
-            );
-        }
-        registry.values().any(|slot| slot.is_generating())
-    };
+        p.into_inner()
+    });
+    let still_owner = matches!(
+        registry.get(&game_id),
+        Some(GenerationSlot::Generating { generation_id: slot_gen }) if *slot_gen == generation_id
+    );
+    if still_owner {
+        registry.insert(game_id, GenerationSlot::Idle);
+    } else {
+        tracing::debug!(
+            game_id,
+            generation_id,
+            "release_owned_slot: registry slot not owned by caller; no-op"
+        );
+    }
+    let any_other_generating = registry.values().any(|slot| slot.is_generating());
     if !any_other_generating {
         is_generating.store(false, Ordering::SeqCst);
     }

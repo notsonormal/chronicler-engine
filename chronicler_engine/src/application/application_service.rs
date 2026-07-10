@@ -206,23 +206,6 @@ impl DefaultApplicationService {
         self.generation_gate.heal_stale_generating(self, state)
     }
 
-    // On save failure post-claim, registry slot + projection atomic roll back
-    // inside the gate. Keyed by claimed game_id + generation_id to survive a
-    // concurrent reset.
-    #[allow(dead_code)]
-    pub(crate) fn claim_generation_slot(
-        &self,
-        state: &mut GameState,
-    ) -> Result<(u64, u64, ProcessActionResult), EngineError> {
-        self.generation_gate.claim_generation_slot(self, state)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn release_generation_slot(&self, game_id: u64, generation_id: u64) {
-        self.generation_gate
-            .release_generation_slot(game_id, generation_id)
-    }
-
     pub fn continue_narration(&self) -> Result<ProcessActionResult, EngineError> {
         self.process_action(String::new())
     }

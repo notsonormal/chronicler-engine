@@ -10,7 +10,7 @@ use crate::application::GameService;
 use crate::application::text_check_service::TextCheckService;
 use crate::domain::model::settings::AppSettings;
 
-use super::locks::{read_lock_or_recover, write_lock_or_recover};
+use super::locks::read_lock_or_recover;
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
@@ -50,11 +50,6 @@ pub struct AppState {
 impl AppState {
     pub fn current_shutdown_token(&self) -> CancellationToken {
         read_lock_or_recover(&self.shutdown_token, "shutdown_token")
-    }
-
-    pub fn replace_shutdown_token(&self) {
-        let mut token = write_lock_or_recover(&self.shutdown_token, "shutdown_token");
-        *token = CancellationToken::new();
     }
 
     pub fn settings(&self) -> AppSettings {

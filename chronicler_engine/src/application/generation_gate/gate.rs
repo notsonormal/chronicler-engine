@@ -91,10 +91,18 @@ impl GenerationGate {
     }
 
     pub fn heal_stale_generating(&self, app: &DefaultApplicationService, state: &mut GameState) {
-        // Existing projection-driven heal: atomic=false but state says generating.
-        if !self.is_generating.load(Ordering::SeqCst)
-            && state.narrative.input_buffer.status.is_generating()
-        {
+        // Single optimization gate: skip the heal block entirely when the
+        // projection says we're generating. The pre-lock atomic read is an
+        // optimization, not authoritative — slot state inside the write lock
+        // is the source of truth (see below).
+        if self.is_generating.load(Ordering::SeqCst) {
+            return;
+        }
+
+        // Heal #1 — persisted status: atomic=false but state says generating.
+        // Touches `GameState`, unrelated to the registry lock; runs outside
+        // the write lock to keep lock hold time minimal.
+        if state.narrative.input_buffer.status.is_generating() {
             tracing::warn!(
                 "Found stale Generating status without active generation, resetting to Idle"
             );
@@ -102,23 +110,26 @@ impl GenerationGate {
             state.narrative.input_buffer.phase = GenerationPhase::default();
         }
 
-        // Self-heal: if projection atomic is false but registry still claims
-        // Generating for the current game, the GenerationGuard's atomic-only
-        // drop left a stale slot entry. Clear it so the next claim sees a
-        // clean Idle.
-        if !self.is_generating.load(Ordering::SeqCst) {
-            let game_id = app.current_game_id();
-            let mut registry = self.registry.write().unwrap_or_else(|p| {
-                tracing::warn!("Generation registry write lock poisoned during heal; recovering");
-                p.into_inner()
-            });
-            if let Some(slot) = registry.get(&game_id) {
-                if slot.is_generating() {
-                    tracing::debug!(
-                        "heal_stale_generating: clearing stale registry slot for game_id={game_id}"
-                    );
-                    registry.insert(game_id, GenerationSlot::Idle);
-                }
+        // Heal #2 — registry slot may still claim Generating even though the
+        // projection atomic said false. Re-check `slot.is_generating()` under
+        // the write lock before clearing; the atomic is only a hint, not the
+        // source of truth.
+        let game_id = app.current_game_id();
+        let mut registry = self.registry.write().unwrap_or_else(|p| {
+            tracing::warn!("Generation registry write lock poisoned during heal; recovering");
+            p.into_inner()
+        });
+        if self.is_generating.load(Ordering::SeqCst) {
+            // A claim raced in between the outer load and the lock; the
+            // current slot is a real active claim, not stale. Do not clear.
+            return;
+        }
+        if let Some(slot) = registry.get(&game_id) {
+            if slot.is_generating() {
+                tracing::debug!(
+                    "heal_stale_generating: clearing stale registry slot for game_id={game_id}"
+                );
+                registry.insert(game_id, GenerationSlot::Idle);
             }
         }
     }
@@ -131,7 +142,8 @@ impl GenerationGate {
         let game_id = app.current_game_id();
         let generation_id = self.next_generation_id();
 
-        // Registry is write-side truth: per-game slot is the gate.
+        // Slot insert + projection flip share the write lock so a concurrent
+        // release cannot clobber the projection between them.
         {
             let mut registry = self.registry.write().unwrap_or_else(|p| {
                 tracing::warn!("Generation registry write lock poisoned during claim; recovering");
@@ -147,12 +159,13 @@ impl GenerationGate {
                 }
             }
             registry.insert(game_id, GenerationSlot::Generating { generation_id });
-        }
 
-        // Atomic is a derived projection of "any game generating": unconditional
-        // store — at least one game (this one) is now generating. No CAS:
-        // concurrent generations across different games are allowed.
-        self.is_generating.store(true, Ordering::SeqCst);
+            // Atomic is a derived projection of "any game generating":
+            // unconditional store — at least one game (this one) is now
+            // generating. No CAS: concurrent generations across different
+            // games are allowed.
+            self.is_generating.store(true, Ordering::SeqCst);
+        }
 
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;

@@ -1282,4 +1282,3 @@ async fn test_switch_swipe_handler_concurrent() {
         "Switching swipe during generation should fail"
     );
 }
-
