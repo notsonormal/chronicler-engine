@@ -3,6 +3,6 @@
 
 use crate::domain::engine::action::Action;
 
-pub fn parse_command(input: &str) -> Action {
+pub fn parse_action(input: &str) -> Action {
     Action::FreeAction(input.to_string())
 }

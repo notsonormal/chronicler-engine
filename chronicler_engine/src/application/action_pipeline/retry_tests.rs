@@ -52,7 +52,7 @@ fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
     let mut state = app
         .load_or_fresh()
         .expect("freshly seeded state should always load");
-    let player_name = state.player.sheet.name.clone();
+    let player_name = state.persona.sheet.name.clone();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -406,7 +406,7 @@ fn test_retry_main_no_pre_main_snapshot() {
     let mut state = app
         .load_or_fresh()
         .expect("freshly seeded state should always load");
-    let player_name = state.player.sheet.name.clone();
+    let player_name = state.persona.sheet.name.clone();
     state.add_message(
         "test input".to_string(),
         Some(player_name),

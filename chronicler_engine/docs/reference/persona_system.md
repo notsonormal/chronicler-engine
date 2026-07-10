@@ -8,7 +8,7 @@ Decouple the player character from the hardcoded "Hero" placeholder. Implement a
 
 ### 1. The Persona Structural Model
 
-The player character requires the same depth as an NPC for the LLM Game Master to narrate accurately. The current `PlayerCard` is too simple.
+The player character requires the same depth as an NPC for the LLM Game Master to narrate accurately. The current `PersonaCard` is too simple.
 
 **Persona fields:**
 
@@ -20,7 +20,7 @@ The player character requires the same depth as an NPC for the LLM Game Master t
 
 ### 2. Unified Character Logic
 
-To avoid code duplication, `PlayerCard` and `NpcCard` share a common data structure — see [`data_schemas.md`](../reference/data_schemas.md) for the unified `CharacterSheet` schema.
+To avoid code duplication, `PersonaCard` and `NpcCard` share a common data structure — see [`data_schemas.md`](../reference/data_schemas.md) for the unified `CharacterSheet` schema.
 
 ### 3. Persona Management
 

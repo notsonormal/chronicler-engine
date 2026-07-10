@@ -272,7 +272,7 @@ fn test_pipeline_trigger_happy_path() {
 
     let npc = NpcCard {
         id: "npc1".to_string(),
-        sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
+        sheet: crate::test_support::fixtures::TestPersona::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
             requirement: TriggerRequirement {
@@ -291,7 +291,7 @@ fn test_pipeline_trigger_happy_path() {
 
     let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
     let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
-    let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
+    let player = Arc::new(crate::test_support::fixtures::TestPersona::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
@@ -342,7 +342,7 @@ fn test_pipeline_trigger_empty_continuation() {
 
     let npc = NpcCard {
         id: "npc1".to_string(),
-        sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
+        sheet: crate::test_support::fixtures::TestPersona::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
             requirement: TriggerRequirement {
@@ -361,7 +361,7 @@ fn test_pipeline_trigger_empty_continuation() {
 
     let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
     let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
-    let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
+    let player = Arc::new(crate::test_support::fixtures::TestPersona::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
@@ -408,7 +408,7 @@ fn test_pipeline_trigger_complete_failure() {
 
     let npc = NpcCard {
         id: "npc1".to_string(),
-        sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
+        sheet: crate::test_support::fixtures::TestPersona::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
             requirement: TriggerRequirement {
@@ -427,7 +427,7 @@ fn test_pipeline_trigger_complete_failure() {
 
     let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
     let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
-    let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
+    let player = Arc::new(crate::test_support::fixtures::TestPersona::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();

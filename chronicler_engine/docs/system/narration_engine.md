@@ -16,7 +16,7 @@ The LLM operates as a Game Master / Narrator for the text adventure. Its context
 - **World Lore**: The `WorldCard.global_rules` provide persistent setting and lore context, injected into the **system prompt** (Layer 0) alongside the base rules. They no longer appear in the `<WorldLore>` user data layer.
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.
 - **Present NPCs**: All `NpcCard`s located in the current room, including their `personality`, `scenario`, and `description`.
-- **Player Identity**: The `PlayerCard.name` and `PlayerCard.description` for reference.
+- **Player Identity**: The `PersonaCard.name` and `PersonaCard.description` for reference.
 - **Conversation History**: Full narrative history (up to `MAX_MESSAGES` = 1000 entries) is sent to maintain continuity.
 
 ### Narrative Modes

@@ -33,7 +33,7 @@ pub fn default_test_preset_storage() -> Arc<Storage> {
 
 pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
     let world_id = storage.seed_world(&state.world, &state.map).unwrap_or(1);
-    let _ = storage.seed_persona(&state.player.key, &state.player);
+    let _ = storage.seed_persona(&state.persona.key, &state.persona);
     for (_, npc) in state.npcs.iter() {
         let _ = storage.seed_character(world_id, npc);
     }
@@ -41,8 +41,8 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
         .create_game(
             &state.world.name,
             &state.world.key,
-            &state.player.key,
-            &state.player.sheet.name,
+            &state.persona.key,
+            &state.persona.sheet.name,
             "Test Game",
         )
         .unwrap_or(1);

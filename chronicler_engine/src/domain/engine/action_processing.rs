@@ -24,7 +24,7 @@ pub struct TriggerMatch {
     pub trigger_repeat: bool,
     pub trigger_narration_prompt: String,
 }
-pub struct TurnResult {
+pub struct ActionResult {
     pub next_state: GameState,
     pub narration: String,
     pub trigger_match: Option<TriggerMatch>,
@@ -140,7 +140,7 @@ pub fn commit_trigger_narration(
 pub fn execute_freeaction_impl(
     state: &GameState,
     ctx: &FreeActionContext<'_>,
-) -> Result<TurnResult, EngineError> {
+) -> Result<ActionResult, EngineError> {
     // Mutation order: 1.handle_movement 2.resolve NPCs 3.add_message 4.evaluate_triggers 5.apply_npc_events
     // Swapping 3&4 or 4&5 breaks trigger firing.
     let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
@@ -173,7 +173,7 @@ pub fn execute_freeaction_impl(
                 trigger_repeat: trigger.repeat,
                 trigger_narration_prompt: render_template(
                     &trigger.narration.narration_prompt,
-                    &TemplateVars::new(&state.player.sheet.name),
+                    &TemplateVars::new(&state.persona.sheet.name),
                 ),
             });
 
@@ -181,7 +181,7 @@ pub fn execute_freeaction_impl(
     next_state = apply_npc_events(next_state, &events.events)?;
     assert_state_consistency(&next_state)?;
 
-    Ok(TurnResult {
+    Ok(ActionResult {
         next_state,
         narration: ctx.narration_text.to_string(),
         trigger_match,

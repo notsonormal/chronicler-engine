@@ -15,7 +15,7 @@ use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
-use chronicler_engine::test_support::TestPlayer;
+use chronicler_engine::test_support::TestPersona;
 
 use super::test_helpers::fetch_body;
 use crate::TEST_PERSONA;
@@ -182,11 +182,11 @@ async fn test_reset_generating_handler() {
 async fn test_edit_history_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
         .create_game(
@@ -284,8 +284,7 @@ async fn test_delete_history_handler_empty() {
 
 #[tokio::test]
 async fn test_action_confirm_empty_command() {
-    // 100ms lets the mock-backed pipeline outlive `render_action_area`.
-    let app = TestAppBuilder::default_test().mock_delay(100).build();
+    let (app, service) = TestAppBuilder::default_test().build_with_service();
 
     let req = Request::builder()
         .uri("/action/confirm")
@@ -299,14 +298,22 @@ async fn test_action_confirm_empty_command() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("thinking") || body_str.contains("Generating"),
-        "Expected empty command to trigger continuation: {body_str}"
-    );
+
+    // Empty command triggers continuation; the spawned pipeline must
+    // finalize. Asserting on a transient render ("thinking"/"Generating") was
+    // a race against `phase_finalize`; instead observe `is_generating` once
+    // it has settled.
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_millis(500);
+    while start.elapsed() < timeout {
+        if let Ok(state) = service.load_or_fresh() {
+            if !state.narrative.input_buffer.status.is_generating() {
+                return;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    panic!("Pipeline did not finalize within 500ms");
 }
 
 #[tokio::test]
@@ -457,7 +464,7 @@ async fn test_create_game_handler() {
     let mut map = chronicler_engine::test_support::TestMap::single_room("start");
     map.overworld.regions[0].rooms[0].id = "start".to_string();
     storage.seed_world(&world, &map).unwrap();
-    let player = chronicler_engine::test_support::TestPlayer::standard();
+    let player = chronicler_engine::test_support::TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
     let initial_game_id = storage
@@ -520,11 +527,11 @@ async fn test_create_game_handler() {
 async fn test_switch_game_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let initial_game_id = storage
         .create_game(
@@ -594,7 +601,7 @@ async fn test_switch_game_handler_cross_world_allowed() {
     let map_b = chronicler_engine::test_support::TestMap::single_room("room_b");
     storage.seed_world(&world_b, &map_b).unwrap();
 
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let game_a_id = storage
         .create_game(
@@ -643,11 +650,11 @@ async fn test_switch_game_handler_cross_world_allowed() {
 async fn test_delete_game_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let initial_game_id = storage
         .create_game(
@@ -692,7 +699,7 @@ async fn test_delete_game_handler_active_game() {
     let world = chronicler_engine::test_support::TestWorld::minimal();
     let map = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = chronicler_engine::test_support::TestPlayer::standard();
+    let player = chronicler_engine::test_support::TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
     let game_id = storage
@@ -762,7 +769,7 @@ async fn test_list_games_fragment_shows_world_badge() {
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
-    let player = chronicler_engine::test_support::TestPlayer::standard();
+    let player = chronicler_engine::test_support::TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
     let mut world_b = chronicler_engine::test_support::TestWorld::minimal();
@@ -826,7 +833,7 @@ async fn test_list_games_fragment_shows_new_game_form() {
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
-    let player = chronicler_engine::test_support::TestPlayer::standard();
+    let player = chronicler_engine::test_support::TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
     let app = TestAppBuilder::default_test()
@@ -856,7 +863,7 @@ async fn test_create_game_with_world_key() {
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
-    let player = chronicler_engine::test_support::TestPlayer::standard();
+    let player = chronicler_engine::test_support::TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
     let app = TestAppBuilder::default_test()
@@ -898,7 +905,7 @@ async fn test_create_game_with_invalid_world_key() {
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
-    let player = chronicler_engine::test_support::TestPlayer::standard();
+    let player = chronicler_engine::test_support::TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
     let app = TestAppBuilder::default_test()

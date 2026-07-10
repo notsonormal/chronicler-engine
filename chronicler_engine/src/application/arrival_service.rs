@@ -67,8 +67,8 @@ impl ArrivalTaskContext {
 
         if state.narrative.history.is_empty() {
             let world = Arc::clone(&state.world);
-            let player = Arc::clone(&state.player);
-            inject_scenario_logs(&mut state, &world, &player);
+            let persona = Arc::clone(&state.persona);
+            inject_scenario_logs(&mut state, &world, &persona);
         }
         state.narrative.input_buffer.status = GenerationStatus::Generating;
 
@@ -85,7 +85,7 @@ impl ArrivalTaskContext {
         };
 
         let world_ref = Arc::clone(&state.world);
-        let player_ref = Arc::clone(&state.player);
+        let persona_ref = Arc::clone(&state.persona);
         let prompt_context = make_prompt_context(
             &world_ref,
             room,
@@ -93,7 +93,7 @@ impl ArrivalTaskContext {
                 all_npcs: &self.all_npcs,
                 npcs_in_area: &self.nearby_npcs,
             },
-            &player_ref,
+            &persona_ref,
             "",
             &[],
         );

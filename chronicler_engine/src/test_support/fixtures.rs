@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
+use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
@@ -39,11 +39,11 @@ impl TestWorld {
     }
 }
 
-pub struct TestPlayer;
+pub struct TestPersona;
 
-impl TestPlayer {
-    pub fn named(name: &str) -> PlayerCard {
-        PlayerCard {
+impl TestPersona {
+    pub fn named(name: &str) -> PersonaCard {
+        PersonaCard {
             key: name.to_lowercase().replace(' ', "-"),
             sheet: CharacterSheet {
                 name: name.to_string(),
@@ -59,7 +59,7 @@ impl TestPlayer {
         }
     }
 
-    pub fn standard() -> PlayerCard {
+    pub fn standard() -> PersonaCard {
         Self::named("Hero")
     }
 }
@@ -207,7 +207,7 @@ impl TestGameState {
         GameState::new(
             Arc::new(TestWorld::minimal()),
             Arc::new(TestMap::single_room(room_id)),
-            Arc::new(TestPlayer::standard()),
+            Arc::new(TestPersona::standard()),
             vec![],
             room_id.to_string(),
         )
@@ -218,7 +218,7 @@ impl TestGameState {
         GameState::new(
             Arc::new(TestWorld::minimal()),
             Arc::new(TestMap::single_room(room_id)),
-            Arc::new(TestPlayer::standard()),
+            Arc::new(TestPersona::standard()),
             vec![npc],
             room_id.to_string(),
         )
@@ -240,7 +240,7 @@ impl TestGameState {
         GameState::new(
             Arc::new(TestWorld::minimal()),
             Arc::new(map),
-            Arc::new(TestPlayer::standard()),
+            Arc::new(TestPersona::standard()),
             npcs,
             room_id.to_string(),
         )
@@ -250,7 +250,7 @@ impl TestGameState {
         GameStateBuilder::new(
             Arc::new(TestWorld::minimal()),
             Arc::new(TestMap::single_room(room_id)),
-            Arc::new(TestPlayer::standard()),
+            Arc::new(TestPersona::standard()),
             room_id,
         )
         .with_npcs(vec![npc])
@@ -273,7 +273,7 @@ impl TestGameState {
         GameStateBuilder::new(
             Arc::new(TestWorld::minimal()),
             Arc::new(map),
-            Arc::new(TestPlayer::standard()),
+            Arc::new(TestPersona::standard()),
             room_id,
         )
         .with_npcs(vec![npc])

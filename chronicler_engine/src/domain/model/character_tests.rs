@@ -1,4 +1,4 @@
-use crate::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
+use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 
 #[test]
 fn test_npc_card_serde() {
@@ -28,7 +28,7 @@ fn test_player_card_serde() {
         "scenario": "Estate",
         "inventory": ["key"]
     }"#;
-    let player: PlayerCard = serde_json::from_str(json).unwrap();
+    let player: PersonaCard = serde_json::from_str(json).unwrap();
     assert_eq!(player.sheet.name, "Julian");
     assert_eq!(player.inventory.len(), 1);
     assert_eq!(player.sheet.profile_image, None);
@@ -80,7 +80,7 @@ fn test_player_card_headshot_image() {
         "profile_image": "data/images/julian_profile.png",
         "headshot_image": "data/images/julian_headshot.png"
     }"#;
-    let player: PlayerCard = serde_json::from_str(json).unwrap();
+    let player: PersonaCard = serde_json::from_str(json).unwrap();
     assert_eq!(
         player.sheet.headshot_image,
         Some("data/images/julian_headshot.png".to_string())

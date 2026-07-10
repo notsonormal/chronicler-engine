@@ -16,7 +16,7 @@ use crate::application::generation_gate::GenerationGate;
 pub use crate::application::mappers::map_llm_error;
 use crate::application::persistence_gate::{PersistenceGate, WorldSnapshot};
 use crate::application::world_catalogue::WorldCatalogue;
-use crate::domain::model::character::PlayerCard;
+use crate::domain::model::character::PersonaCard;
 use crate::domain::model::game::Game;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::Message;
@@ -269,7 +269,7 @@ impl DefaultApplicationService {
         self.world_catalogue.delete_world(key)
     }
 
-    pub fn list_personas(&self) -> Result<Vec<PlayerCard>, ApplicationError> {
+    pub fn list_personas(&self) -> Result<Vec<PersonaCard>, ApplicationError> {
         self.world_catalogue.list_personas()
     }
 }

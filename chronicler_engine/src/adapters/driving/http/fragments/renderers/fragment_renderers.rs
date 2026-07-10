@@ -6,7 +6,7 @@ use crate::application::query_handlers;
 use crate::error::{EngineError, Result};
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::{
-    ActionAreaTemplate, HeaderTemplate, LlmMessagesTemplate, StoryLogTemplate,
+    ActionAreaTemplate, HeaderTemplate, LlmMessagesTemplate, NarrativeLogTemplate,
     VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
@@ -42,7 +42,7 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
             .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let entries: Vec<_> = entries.into_iter().take(MAX_LOG_DISPLAY).collect();
-    let template = StoryLogTemplate::new(&entries, has_last_trigger);
+    let template = NarrativeLogTemplate::new(&entries, has_last_trigger);
     template
         .render()
         .map_err(|e| EngineError::Template(e.to_string()))

@@ -167,7 +167,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
             regions: vec![],
         },
     };
-    let player = crate::domain::model::character::PlayerCard {
+    let player = crate::domain::model::character::PersonaCard {
         key: "alice".to_string(),
         sheet: crate::domain::model::character::CharacterSheet {
             name: "Alice".to_string(),

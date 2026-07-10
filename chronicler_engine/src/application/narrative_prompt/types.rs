@@ -1,7 +1,7 @@
 //! [DOC: docs/system/prompt_system.md]
 //! Prompt type definitions
 
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::Room;
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::domain::model::template::TemplateVars;
@@ -12,7 +12,7 @@ pub enum PromptLayer {
     System,
     GameState,
     NpcCards,
-    Player,
+    Persona,
     WorldInfo,
     History,
     User,
@@ -29,7 +29,7 @@ pub struct PromptContext<'a> {
     pub world: &'a WorldCard,
     pub room: &'a Room,
     pub npcs: NpcContext<'a>,
-    pub player: &'a PlayerCard,
+    pub persona: &'a PersonaCard,
     pub user_message: &'a str,
     pub history: &'a [MessageEntry],
     pub template_vars: TemplateVars,

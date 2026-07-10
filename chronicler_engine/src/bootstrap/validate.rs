@@ -1,14 +1,14 @@
 //! [DOC: docs/system/startup.md]
 //! Data validation utilities
 
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
 
 pub fn validate_loaded_data(
     world: &WorldCard,
     map: &MapDef,
-    _player: &PlayerCard,
+    _player: &PersonaCard,
     npcs: &[NpcCard],
 ) -> Result<(), String> {
     let mut errors = Vec::new();

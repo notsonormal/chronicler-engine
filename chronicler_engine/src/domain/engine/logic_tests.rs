@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::domain::engine::logic::{attempt_semantic_walk, create_dynamic_room, find_room_in_world_map};
-use crate::domain::model::character::{CharacterSheet, PlayerCard};
+use crate::domain::model::character::{CharacterSheet, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::world::WorldCard;
@@ -67,7 +67,7 @@ fn setup_test_state() -> GameState {
         global_rules: vec![],
         ..Default::default()
     };
-    let player = PlayerCard {
+    let player = PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "P".into(),
@@ -151,7 +151,7 @@ fn test_get_current_room_failure() {
     let state = GameState::new(
         world,
         Arc::new(map),
-        Arc::new(PlayerCard {
+        Arc::new(PersonaCard {
             key: "test_player".to_string(),
             sheet: CharacterSheet {
                 name: "P".into(),

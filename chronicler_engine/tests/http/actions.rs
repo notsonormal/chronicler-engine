@@ -17,11 +17,11 @@ async fn test_action_handler_load_state_failure_graceful_degradation() {
         TestOverride::internal("simulated load failure"),
     ));
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
         .create_game(
@@ -73,11 +73,11 @@ async fn test_action_confirm_handler_load_state_failure_graceful_degradation() {
         TestOverride::internal("simulated load failure"),
     ));
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
         .create_game(
@@ -109,11 +109,11 @@ async fn test_action_handler_message_insert_failure() {
         TestOverride::internal("simulated insert failure"),
     ));
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
         .create_game(
@@ -145,11 +145,11 @@ async fn test_action_handler_load_messages_failure() {
         TestOverride::internal("simulated load messages failure"),
     ));
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
         .create_game(

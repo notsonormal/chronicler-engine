@@ -16,7 +16,7 @@ let state = TestAppBuilder::default_test().build_app_state();
 | Fixture | Methods | Use For |
 |---------|---------|---------|
 | `TestWorld` | `minimal()`, `with_rule(rule)` | `WorldCard` |
-| `TestPlayer` | `standard()`, `named(name)` | `PlayerCard` |
+| `TestPersona` | `standard()`, `named(name)` | `PersonaCard` |
 | `TestNpc` | `named(id, name)`, `with_times_met_trigger(...)`, `with_room_scoped_trigger(...)` | `NpcCard` |
 | `TestMap` | `room(id)`, `room_named(id, name)`, `single_room(id)`, `two_rooms(a, b)` | `Room` / `MapDef` |
 | `TestGameState` | `in_room(id)`, `with_npc(...)`, `with_npcs(...)` | `GameState` |
@@ -30,7 +30,7 @@ let state = TestAppBuilder::default_test().build_app_state();
 
 ```rust
 use chronicler_engine::test_support::{
-    TestCharacterSheet, TestMap, TestNpc, TestPlayer,
+    TestCharacterSheet, TestMap, TestNpc, TestPersona,
     TestPromptPreset, TestStoredTriggerContext, TestWorld, TestWorldManifest,
 };
 
@@ -61,7 +61,7 @@ All three satisfy the `LlmMessageRepository` port; recorder wraps a provider + a
 | `create_test_world()`, `create_test_world_with_scenario()` | Canonical `WorldCard` (scenario variant carries `StartingScenario`) |
 | `create_test_player()`, `create_test_map()`, `create_test_npcs()` | Canonical character / map builders |
 | `create_test_state()`, `create_basic_test_state()`, `create_basic_test_state_no_scenario()` | Canonical `GameState` builders |
-| `seed_test_world(storage)` | Seeds `TestWorld::minimal()` + `TestPlayer::standard()` |
+| `seed_test_world(storage)` | Seeds `TestWorld::minimal()` + `TestPersona::standard()` |
 | `make_test_app(state)` | Builds `Arc<DefaultApplicationService>` (in-memory storage + mock backend); returns `Result` due to lib clippy context |
 | `create_test_storage(id)`, `create_test_storage_arc(id)` | Sqlite-backed `Storage` with `games` row pre-seeded (FK-safe) |
 

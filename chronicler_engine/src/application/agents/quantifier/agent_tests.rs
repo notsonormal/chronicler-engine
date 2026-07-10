@@ -5,7 +5,7 @@ use crate::domain::model::state::game_state::GameState;
 use crate::application::agents::Agent;
 use crate::application::agents::quantifier::agent::QuantifierAgent;
 use crate::adapters::driven::llm::providers::MockBackend;
-use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
+use crate::test_support::fixtures::{TestMap, TestPersona, TestWorld};
 
 #[test]
 fn test_from_config_creates_agent() {
@@ -71,7 +71,7 @@ fn test_execute_missing_main_response() {
     let state = GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
-        Arc::new(TestPlayer::standard()),
+        Arc::new(TestPersona::standard()),
         vec![],
         "start".to_string(),
     );

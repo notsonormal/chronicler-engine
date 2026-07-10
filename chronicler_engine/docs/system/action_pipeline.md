@@ -77,7 +77,7 @@ flowchart TD
     EmptyCheck -->|no| PostGen[phase_post_generation]
     PostGen -->|phase=Quantifying<br/>run agents| Commit[phase_engine_commit]
     Commit -->|Err| ErrEngine[status=Error, return Ok]
-    Commit -->|Ok TurnResult| TriggerReq{build_trigger_request?}
+    Commit -->|Ok ActionResult| TriggerReq{build_trigger_request?}
     TriggerReq -->|Some| TriggerCont[phase_trigger_continuation_llm_call]
     TriggerReq -->|None| Finalize
     TriggerCont -->|cancel?| CC2((cancel checkpoint))

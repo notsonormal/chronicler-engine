@@ -29,7 +29,7 @@ A semantic command issued by the player that enters the action pipeline for reso
 _Avoid_: Command, input, verb
 
 **Action Pipeline**:
-Ordered sequence of phases (snapshot, narration, post-generation agents, engine commit, trigger evaluation, trigger continuation, reconciliation, finalization) that validates and resolves an Action, mutating game state and producing narrative output. Normal play, main retry, and event retry all share these phases.
+Ordered sequence of phases (snapshot, narration, post-generation agents, engine commit, trigger continuation, reconciliation, finalization) that validates and resolves an Action, mutating game state and producing narrative output. Trigger evaluation runs **inside** engine commit — `execute_freeaction_impl` calls `evaluate_triggers` on the post-movement/post-NPC-resolution state, so trigger output flows back through the commit phase rather than a separate phase function. Normal play, main retry, and event retry all share these phases.
 _Avoid_: Pipeline, command processor
 
 **Trigger**:

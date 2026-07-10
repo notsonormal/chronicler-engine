@@ -71,7 +71,7 @@ fn make_state(
             regions: vec![],
         },
     });
-    let player = Arc::new(crate::domain::model::character::PlayerCard {
+    let player = Arc::new(crate::domain::model::character::PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Player".into(),
@@ -356,7 +356,7 @@ fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
     let state = GameState::new(
         world,
         map,
-        Arc::new(crate::domain::model::character::PlayerCard {
+        Arc::new(crate::domain::model::character::PersonaCard {
             key: "test_player".to_string(),
             sheet: crate::domain::model::character::CharacterSheet {
                 name: "Player".into(),

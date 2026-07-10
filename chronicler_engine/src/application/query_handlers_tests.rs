@@ -4,14 +4,14 @@ use super::*;
 use crate::application::application_service::DefaultApplicationService;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::test_support::fixtures::{TestWorld, TestMap, TestPlayer};
+use crate::test_support::fixtures::{TestWorld, TestMap, TestPersona};
 use crate::test_support::make_test_app;
 
 fn minimal_state() -> GameState {
     GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
-        Arc::new(TestPlayer::named("Test")),
+        Arc::new(TestPersona::named("Test")),
         vec![],
         "start".to_string(),
     )

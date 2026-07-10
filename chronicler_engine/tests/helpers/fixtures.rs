@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
+use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use chronicler_engine::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::domain::model::scenario::StartingScenario;
 use chronicler_engine::domain::model::settings::AppSettings;
@@ -24,8 +24,8 @@ pub fn create_test_world() -> WorldCard {
     }
 }
 
-pub fn create_test_player() -> PlayerCard {
-    PlayerCard {
+pub fn create_test_player() -> PersonaCard {
+    PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".to_string(),
@@ -147,7 +147,7 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         },
     });
 
-    let player = Arc::new(PlayerCard {
+    let player = Arc::new(PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),
@@ -335,11 +335,11 @@ pub fn create_basic_test_state_no_scenario() -> GameState {
 }
 
 pub fn seed_test_world(storage: &Storage) {
-    use chronicler_engine::test_support::{TestMap, TestPlayer, TestWorld};
+    use chronicler_engine::test_support::{TestMap, TestPersona, TestWorld};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).expect("seed world");
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage
         .seed_persona(&player.key, &player)
         .expect("seed persona");
@@ -351,7 +351,7 @@ pub fn seed_test_world_with_scenario(storage: &Storage) {
     storage
         .seed_world(&world, &map)
         .expect("seed world with scenario");
-    let player = chronicler_engine::test_support::TestPlayer::standard();
+    let player = chronicler_engine::test_support::TestPersona::standard();
     storage
         .seed_persona(&player.key, &player)
         .expect("seed persona");
@@ -382,7 +382,7 @@ pub fn make_test_app_with_storage(
     let world_snapshot = chronicler_engine::application::persistence_gate::WorldSnapshot {
         world: state.world.clone(),
         map: state.map.clone(),
-        player: state.player.clone(),
+        player: state.persona.clone(),
         npcs: std::sync::Arc::new(state.npcs.clone()),
     };
     // Best-effort: persist snapshot to storage so app.load_or_fresh() can read it back.
@@ -426,7 +426,7 @@ pub fn app_with_storage_from(
 #[allow(dead_code)]
 pub fn make_test_app_with_default_preset(
     _world: Arc<chronicler_engine::domain::model::world::WorldCard>,
-    _player: Arc<chronicler_engine::domain::model::character::PlayerCard>,
+    _player: Arc<chronicler_engine::domain::model::character::PersonaCard>,
     storage: Arc<chronicler_engine::adapters::driven::storage::Storage>,
 ) -> Arc<chronicler_engine::application::application_service::DefaultApplicationService> {
     use chronicler_engine::application::application_service::DefaultApplicationService;

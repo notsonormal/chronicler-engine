@@ -9,7 +9,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driving::http::{ServerConfig, ServerResources};
 use crate::bootstrap::wiring::{build_game_service, build_text_check_service};
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::world::WorldCard;
@@ -23,7 +23,7 @@ struct PreparedData {
     preset_storage: Arc<Storage>,
     world_card: WorldCard,
     map: Arc<MapDef>,
-    player: PlayerCard,
+    player: PersonaCard,
     npcs_map: HashMap<String, NpcCard>,
 }
 

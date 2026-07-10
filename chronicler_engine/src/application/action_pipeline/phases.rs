@@ -9,7 +9,7 @@ use crate::domain::engine::action_processing::{
     execute_freeaction_impl,
 };
 use crate::error::EngineError;
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::quantifier::{QuantifierConfidence, QuantifierResult, compute_npc_events};
@@ -28,7 +28,7 @@ pub struct PipelineInputs {
     pub input: String,
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
-    pub player: Arc<PlayerCard>,
+    pub persona: Arc<PersonaCard>,
     pub all_npcs: Vec<NpcCard>,
 }
 
@@ -92,7 +92,7 @@ impl<'a> PipelineRun<'a> {
                 all_npcs: &inputs.all_npcs,
                 npcs_in_area: &state.scene.npcs_in_area,
             },
-            &inputs.player,
+            &inputs.persona,
             &inputs.input,
             &history,
         );
@@ -328,7 +328,7 @@ impl<'a> PipelineRun<'a> {
                 all_npcs: &inputs.all_npcs,
                 npcs_in_area: &state.scene.npcs_in_area,
             },
-            &inputs.player,
+            &inputs.persona,
             &continuation_user_msg,
             &history,
         );
@@ -381,7 +381,7 @@ impl ActionPipeline {
         state: &GameState,
         narration_text: &str,
         quantifier_result: &QuantifierResult,
-    ) -> Result<crate::domain::engine::action_processing::TurnResult, EngineError> {
+    ) -> Result<crate::domain::engine::action_processing::ActionResult, EngineError> {
         execute_freeaction_impl(
             state,
             &FreeActionContext {

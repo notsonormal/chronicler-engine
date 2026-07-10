@@ -183,7 +183,7 @@ pub struct PromptContext<'a> {
     pub world: &'a WorldCard,
     pub room: &'a Room,
     pub npcs: NpcContext<'a>,         // Bundled NPC context
-    pub player: &'a PlayerCard,
+    pub persona: &'a PersonaCard,
     pub user_message: &'a str,
     pub history: &'a [MessageEntry],
     pub template_vars: TemplateVars,
@@ -212,7 +212,7 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 }
 ```
 
-- Stored in `NpcCard` and `PlayerCard` structures
+- Stored in `NpcCard` and `PersonaCard` structures
 - Stored as JSON in `data/characters/<world>/`
 
 ## Other Prompt Systems

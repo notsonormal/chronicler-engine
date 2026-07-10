@@ -215,7 +215,7 @@ pub fn determine_npcs_in_room(
         previous_room_npcs,
         all_known_npcs: &all_npcs,
         all_rooms: &all_rooms,
-        player_name: &state.player.sheet.name,
+        player_name: &state.persona.sheet.name,
         recent_history: &recent_history,
         player_action,
         quantifier_prompt_override,

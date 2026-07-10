@@ -4,7 +4,7 @@ use chrono::Utc;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::adapters::driving::http::templates::{
-    ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
+    ActionAreaTemplate, HeaderTemplate, NarrativeLogTemplate, VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
     ActionAreaViewModel, NpcPortraitView, VisualSidebarViewModel,
@@ -44,7 +44,7 @@ fn test_header_template_connection_status() {
 
 #[test]
 fn test_story_log_template_empty() {
-    let template = StoryLogTemplate::new(&[], false);
+    let template = NarrativeLogTemplate::new(&[], false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains(r#"id="story-log""#));
 }
@@ -59,7 +59,7 @@ fn test_story_log_template_with_entries() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Welcome to the adventure!"));
     assert!(rendered.contains("Game Master"));
@@ -76,7 +76,7 @@ fn test_story_log_template_escapes_html() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(!rendered.contains("<script>"));
 }
@@ -101,7 +101,7 @@ fn test_story_log_template_has_message_actions() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("message-header"));
     assert!(rendered.contains("message-actions"));
@@ -129,7 +129,7 @@ fn test_story_log_template_input_has_check_button() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("check-btn"));
     assert!(rendered.contains("delete-btn"));
@@ -156,7 +156,7 @@ fn test_story_log_template_renders_event_header() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("event-header"));
     assert!(rendered.contains("Gabriella Introduction"));
@@ -189,7 +189,7 @@ fn test_story_log_template_renders_location_header() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("location-header"));
     assert!(rendered.contains("Entrance Hall"));
@@ -218,7 +218,7 @@ fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries, true);
+    let template = NarrativeLogTemplate::new(&entries, true);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("retrigger-btn"));
     assert!(rendered.contains("submitRetrigger"));
@@ -245,7 +245,7 @@ fn test_story_log_template_retrigger_button_hidden_on_event_continuation() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries, true);
+    let template = NarrativeLogTemplate::new(&entries, true);
     let rendered = template.render().unwrap();
     // Last entry is an event continuation, so retrigger should NOT appear
     assert!(!rendered.contains("retrigger-btn"));
@@ -261,7 +261,7 @@ fn test_story_log_template_retrigger_button_hidden_without_last_trigger() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(!rendered.contains("retrigger-btn"));
 }
@@ -276,7 +276,7 @@ fn test_story_log_template_swipe_controls_on_last_narration_with_one_swipe() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("swipe-controls"),
@@ -301,7 +301,7 @@ fn test_story_log_template_swipe_controls_on_last_dialogue_with_one_swipe() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("swipe-controls"),
@@ -320,7 +320,7 @@ fn test_story_log_template_no_swipe_controls_on_input() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(
         !rendered.contains("swipe-controls"),
@@ -338,7 +338,7 @@ fn test_story_log_template_no_swipe_controls_on_system() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(
         !rendered.contains("swipe-controls"),
@@ -366,7 +366,7 @@ fn test_story_log_template_no_swipe_controls_on_non_last_narration() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(
         !rendered.contains("swipe-controls"),
@@ -387,7 +387,7 @@ fn test_story_log_template_swipe_navigation_between_existing_swipes() {
     entry.swipe_count = 3;
     entry.active_swipe_index = 1;
     let entries = vec![entry];
-    let template = StoryLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("swipe-controls"));
     assert!(rendered.contains("2 / 3"));

@@ -1,4 +1,4 @@
-use crate::domain::model::character::{CharacterSheet, PlayerCard};
+use crate::domain::model::character::{CharacterSheet, PersonaCard};
 use crate::adapters::driven::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
@@ -95,8 +95,8 @@ fn test_seed_persona_failure() {
     assert!(result.is_err());
 }
 
-fn test_persona_card(_id: &str, name: &str) -> PlayerCard {
-    PlayerCard {
+fn test_persona_card(_id: &str, name: &str) -> PersonaCard {
+    PersonaCard {
         key: format!("{}_key", name.to_lowercase()),
         sheet: CharacterSheet {
             name: name.to_string(),

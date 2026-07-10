@@ -1,13 +1,13 @@
 //! [DOC: docs/system/startup.md]
 //! Scenario log injection at game initialization
 
-use crate::domain::model::character::PlayerCard;
+use crate::domain::model::character::PersonaCard;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::template::{render_template, TemplateVars};
 use crate::domain::model::world::WorldCard;
 
-pub fn inject_scenario_logs(state: &mut GameState, world: &WorldCard, player: &PlayerCard) {
+pub fn inject_scenario_logs(state: &mut GameState, world: &WorldCard, player: &PersonaCard) {
     let Some(scenario) = world.default_scenario() else {
         return;
     };

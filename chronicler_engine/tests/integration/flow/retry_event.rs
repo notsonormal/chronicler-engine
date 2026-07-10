@@ -147,7 +147,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     let map = Arc::new(create_test_map());
 
-    let player = Arc::new(chronicler_engine::domain::model::character::PlayerCard {
+    let player = Arc::new(chronicler_engine::domain::model::character::PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),

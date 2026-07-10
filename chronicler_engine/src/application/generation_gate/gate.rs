@@ -48,7 +48,7 @@ impl GenerationGate {
 
         self.heal_stale_generating(app, &mut game_state);
 
-        let player_name = game_state.player.sheet.name.clone();
+        let player_name = game_state.persona.sheet.name.clone();
         if !input.is_empty() {
             game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);
         }

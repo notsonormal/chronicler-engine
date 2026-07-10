@@ -4,12 +4,12 @@
 use chrono::Utc;
 
 use crate::error::EngineError;
-use crate::domain::model::character::PlayerCard;
-use crate::adapters::driven::storage::backend::{Backend, PlayerCardWithKey, Storage};
+use crate::domain::model::character::PersonaCard;
+use crate::adapters::driven::storage::backend::{Backend, PersonaCardWithKey, Storage};
 use crate::adapters::driven::storage::models::persona::DbPersona;
 
 impl Storage {
-    pub fn list_personas(&self) -> Result<Vec<PlayerCard>, EngineError> {
+    pub fn list_personas(&self) -> Result<Vec<PersonaCard>, EngineError> {
         self.with_backend_mut("list_personas", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
@@ -24,7 +24,7 @@ impl Storage {
         })
     }
 
-    pub fn get_persona(&self, key: &str) -> Result<Option<PlayerCard>, EngineError> {
+    pub fn get_persona(&self, key: &str) -> Result<Option<PersonaCard>, EngineError> {
         self.with_backend_mut("get_persona", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
@@ -42,7 +42,7 @@ impl Storage {
         })
     }
 
-    pub fn seed_persona(&self, key: &str, card: &PlayerCard) -> Result<(), EngineError> {
+    pub fn seed_persona(&self, key: &str, card: &PersonaCard) -> Result<(), EngineError> {
         self.with_backend_mut("seed_persona", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
@@ -72,7 +72,7 @@ impl Storage {
             }
             Backend::InMemory(data) => {
                 if !data.personas.iter().any(|p| p.key == key) {
-                    data.personas.push(PlayerCardWithKey {
+                    data.personas.push(PersonaCardWithKey {
                         key: key.to_string(),
                         card: card.clone(),
                     });
@@ -83,12 +83,12 @@ impl Storage {
     }
 }
 
-fn persona_from_db(db: &DbPersona) -> Result<PlayerCard, EngineError> {
+fn persona_from_db(db: &DbPersona) -> Result<PersonaCard, EngineError> {
     use crate::domain::model::character::CharacterSheet;
     let inventory: Vec<String> = serde_json::from_str(&db.inventory)
         .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
 
-    Ok(PlayerCard {
+    Ok(PersonaCard {
         key: db.key.clone(),
         sheet: CharacterSheet {
             name: db.name.clone(),

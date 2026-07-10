@@ -1,7 +1,7 @@
 # Super-Plan: `simpler-hexagon` Pre-Merge Cleanup
 
 **Date:** 2026-07-09
-**Status:** In progress — T2 COMPLETE (tickets 00–04 resolved 2026-07-09); T1, T3–T8 pending
+**Status:** In progress — T2 COMPLETE (tickets 00–04 resolved 2026-07-09); T3 glossary renames COMPLETE 2026-07-10 (4 of 4 in-scope terms; glossary-2 carved to T9); T1, T4–T8, T9 pending
 **Scope:** `chronicler_engine/` on branch `simpler-hexagon` (HEAD `1eda563` at plan creation; T2 work landed post-HEAD)
 **Total estimated effort:** ~60 SP across 8 tracks
 
@@ -34,16 +34,17 @@ Consolidate findings from 4 prior reviews + 2 fresh antipattern passes + depth a
 |---|-------|-----------|----------|-------------------|-----------|--------|--------|
 | T1 | Tier 1 blockers (4 bugs) | ready | **P0** | High | High | T2-T5 | ~8 |
 | T2 | C1 god-class split (4 modules + PresetStore) | **COMPLETE** (2026-07-09, tickets 00–04) | P1 | High | Med-High | T4 | ~16 |
-| T3 | Glossary drift (5 terms + doc sweep) | ready | P1 | Med | High | none | ~5 |
+| T3 | Glossary drift (4 terms + doc sweep) | ready | P1 | Med | High | none | ~4 |
 | T4 | C2 PhaseError consolidation | needs grilling G3 | P2 | Med | Med | none | ~5 |
 | T5 | C3 TestApp builder collapse | ready | P2 | Med | Med | none | ~16 |
 | T6 | Plan/ADR honesty | ready | P0 | Med | High | none | ~1 |
 | T7 | Mechanical antipattern polish (~25 findings) | opportunistic | P3 | Low-Med | High | none | ~10 |
 | T8 | Workflow gates (D3/D4 prevention) | needs scope | P2 | Med | Med | none | ~3 |
+| T9 | WorldSnapshot removal (immutable-world-data out of GameState) | needs grilling | P2 | High | Med | none | ~13 |
 
 P0 = defects / required for merge; P1 = structural / load-bearing; P2 = debt prune; P3 = cosmetic.
 
-**Total**: ~64 SP. **Tasks 8+ SP must break down per AGENTS.md.** T2 and T5 each split into sub-plans; T7 splits per finding cluster.
+**Total**: ~77 SP. **Tasks 8+ SP must break down per AGENTS.md.** T2 and T5 each split into sub-plans; T7 splits per finding cluster. T9 will need its own sub-plan.
 
 ---
 
@@ -160,9 +161,9 @@ T2 was the load-bearing fix; façade-first (G1=A) was the right call. Real cost:
 
 ---
 
-## T3 — Glossary Drift (5 Terms)
+## T3 — Glossary Drift (4 Terms)
 
-**Findings owned:** `domain-reconciliation-2026-07-09.md` Persona + Snapshot + Turn + Action Pipeline + avoid-aliases.
+**Findings owned:** `domain-reconciliation-2026-07-09.md` Persona + Turn + Action Pipeline + avoid-aliases.
 
 **Practical Benefit: MED** — code matches docs; future agents don't trip on contradictions. Avoid-alias leakage is real but minor.
 
@@ -179,18 +180,13 @@ T2 was the load-bearing fix; façade-first (G1=A) was the right call. Real cost:
    - Update `domain/model/character.rs:51`, `adapters/driven/storage/backend/core.rs:51`, `adapters/driven/storage/models/persona.rs:5` (note: type alias already correct, fields are wrong)
    - ADR-026 already renamed bindings; this finishes the value type
 
-2. **`WorldSnapshot` → `WorldContext`** (~12 sites, ~1 SP)
-   - Rename struct, `load_world_snapshot` → `load_world_context`, `WorldSnapshot::empty` → `WorldContext::empty`
-   - Update `application_service.rs:35,223,253`, `query_handlers.rs`, `retry.rs`
-   - Plan §A6.4 gate finally passes (grep returns 0)
-
-3. **`TurnResult` → `ActionResult`** (~6 sites, ~0.5 SP)
+2. **`TurnResult` → `ActionResult`** (~6 sites, ~0.5 SP)
    - `domain/engine/action_processing.rs:27` + callers + `action_pipeline/pipeline.rs:90-100`
 
-4. **Action Pipeline phase split OR glossary amend** (~0.5 SP)
+3. **Action Pipeline phase split OR glossary amend** (~0.5 SP)
    - Either split `phase_trigger_evaluation` out of `phase_engine_commit` (glossary alignment) OR amend `CONTEXT.md` to document the merge. Pick one. Recommend amend glossary — code is working; docs should match.
 
-5. **Avoid-alias sweep** (~0.5 SP)
+4. **Avoid-alias sweep** (~0.5 SP)
    - `StoryLogTemplate` → `NarrativeLogTemplate` (`templates.rs:28`)
    - `parse_command` → `parse_action` (`engine/parser.rs:6`)
    - Doc comments using `session`/`command`/`text`/`output` → glossary terms
@@ -209,6 +205,8 @@ T2 was the load-bearing fix; façade-first (G1=A) was the right call. Real cost:
 ### Honest Tradeoff
 
 T3 is safe to land mechanically. Risk: test fixture naming has been around long enough that grep misses are likely. Sub-plan should run `grep -rn 'PlayerCard\|Player\b'` (word-boundary!) before declaring done. The Persona rename is the largest; can split T3.1 from T3.2-T3.5.
+
+**WorldSnapshot removed from T3 scope (2026-07-10 grilling).** Decision A-Deep locked: remove immutable world fields from `GameState` + add AppState Arc cache for world data (CONTEXT.md already claims this cache exists but it does not — `app_state.rs:41` has no world cache; `GameService` has no cache). `WorldSnapshot` dies naturally once `GameState::from_snapshot(snapshot)` takes 1 arg. This is architectural work adjacent to T2 arch-3 (AppState phantom-storage, Ticket 05) — same seam. Moved to new Track T9. The T3 plan's original D1 framing ("err path unreachable in practice") was factually wrong: `world_snapshot_or_empty()` runs on every `load_or_fresh` Err (corrupted/missing game, world, persona, or character rows) — see `gate.rs:76-80,88,149` + `retry.rs:67`.
 
 ---
 
@@ -473,6 +471,61 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 
 ---
 
+## T9 — WorldSnapshot Removal (Immutable World Data out of GameState)
+
+**Findings owned:** `domain-reconciliation-2026-07-09.md` Snapshot row (moved out of T3 on 2026-07-10) + `simpler-hexagon-review.md` R6 (re-interpreted) + CONTEXT.md `Snapshot` entry honesty gap.
+
+**Practical Benefit: HIGH** — removes a real architectural smell (intermediate load-bundle exists only because GameState ctor requires 4 immutable args), fixes CONTEXT.md lie (claims "immutable world data cached on AppState as Arcs" — actually loaded from storage every call), aligns with OpContext-kill principle (most call sites of a bundle should not be forced to take all bundled fields).
+
+**Certainty: MED** — touches every engine call reading `state.world` / `state.map` / `state.npcs` / `state.player`; needs own ADR; depends on AppState cache shape (interacts with T2 arch-3 / Ticket 05 phantom-storage).
+
+### Scope (decision A-Deep, locked 2026-07-10)
+
+1. **Remove immutable world fields from `GameState`** (`domain/model/state/game_state.rs:20-23`)
+   - Drop `pub world: Arc<WorldCard>`, `pub map: Arc<MapDef>`, `pub player: Arc<PlayerCard>`, `pub npcs: HashMap<String, NpcCard>`
+   - `GameState::from_snapshot(&GameStateSnapshot)` takes 1 arg (currently 5)
+   - All engine callsites reading `state.world.*` / `state.map.*` / `state.npcs.*` / `state.player.*` must be reworked to take world data from the AppState cache (threaded as parameter) or from a new `WorldContext` handle
+
+2. **Add AppState-level Arc cache for world data**
+   - CONTEXT.md `Snapshot` entry already claims this cache exists (`src/adapters/driving/http/app_state.rs:41` AppState does NOT have it). This step makes CONTEXT.md honest.
+   - Cache keyed by `world_key` + `persona_key` (mirrors storage layer keys; matches ADR-026 persona relocation)
+   - Cache populated at boot (seed-time) + invalidated on world/persona CRUD
+   - Concrete shape TBD in T9 sub-plan grilling: `Arc<RwLock<HashMap<WorldKey, CachedWorld>>>` vs dedicated `WorldCache` struct in its own module
+
+3. **Delete `WorldSnapshot` struct** (`src/application/persistence_gate/dto.rs:13`) AND `load_world_snapshot()` AND `world_snapshot_or_empty()` AND `WorldSnapshot::empty()`
+   - 4 call sites collapse: `gate.rs:76-80,88,149` + `retry.rs:67`
+   - File `src/application/persistence_gate/dto.rs` deleted entirely
+
+4. **Fallback decision (D1b) — SEPARATE, NOT YET LOCKED**
+   - Currently `world_snapshot_or_empty()` swallows `load_world_snapshot()` Err and returns `WorldSnapshot::empty()` (a Default-zeroed struct)
+   - After T9 removes the struct, the fallback must be re-decided: keep defensive empty-on-Err recovery (current behavior, masks corrupted DB rows) or propagate Err to caller (surfaces corruption loudly)
+   - This is a real defensive-code-vs-fail-loud tradeoff. Open question for T9 sub-plan grilling.
+
+5. **New ADR** (probably ADR-033, since ADR-031/ADR-032 are claimed by T6/T2 Ticket 06)
+   - Documents: GameState scope shrink (immutable vs mutable split); AppState world cache addition; CONTEXT.md honesty fix; fallback decision (D1b)
+
+### Out of scope
+
+- T3 glossary renames (PersonaCard, TurnResult, Action Pipeline phase, avoid-aliases) — stay in T3 (~4 SP mechanical)
+- T2 arch-3 AppState phantom-storage (Ticket 05) — T9 INTERACTS with it (same AppState cache seam) but is scoped to world-data not token/storage phantom; sub-plan grilling must decide merge order
+
+### Blast Radius
+
+- `domain/model/state/game_state.rs` — struct + ctor + builder
+- Every engine file reading `state.world` / `state.map` / `state.npcs` / `state.player` (grep needed for exact count — likely 30+ sites)
+- `src/application/persistence_gate/dto.rs` — deleted
+- `src/application/persistence_gate/gate.rs` — 3 sites refactored
+- `src/application/action_pipeline/retry.rs` — 1 site refactored
+- `src/adapters/driving/http/app_state.rs` — AppState gains world cache field(s)
+- 1 new ADR
+- 1 CONTEXT.md correction (Snapshot entry: cache is now real, not aspirational)
+
+### Honest Tradeoff
+
+T9 is the architecturally correct "delete WorldSnapshot" — applies the OpContext-kill principle to a struct that bundles 4 fields every consumer was forced to take even when only needing 1-2 (after the world-data access pattern is changed). NOT a T3-class mechanical rename. Risk: touches every engine read of world/map/npc/player fields; high blast radius. Must be its own sub-plan with its own grilling (D1b fallback, AppState cache shape, ADR number). Recommend: do NOT ship in Wave 2 with T3; ship in Wave 3 alongside or after T2 arch-3 (AppState phantom-storage Ticket 05) — same seam, should be coordinated.
+
+---
+
 ## Finding State
 
 | ID | Title | Owner Track | Status |
@@ -483,13 +536,14 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 | blocker-4 | `arrival_service::run` silent return | T1 | pending |
 | arch-1 | 49-method god-object + 2 phantom Arc<Storage> | T2 | **resolved** (tickets 02–04; 4 modules carved, god-object gone, `self.storage` grep = 0, `application_service.rs` 723→275 LOC) |
 | arch-2 | ProcessActionResult + ApplicationError dual enums | T2 | **resolved** (ticket 04; both enums moved to `application/errors.rs`) |
-| arch-3 | AppState + ServerResources parallel-field ghost seam | T2 (C4 free follow-up) | **deferred** (T2 wave confirmed AppState still owns phantom `Arc<Storage>`; sharp enough to ticket — map §Not-yet-specified) |
+| arch-3 | AppState + ServerResources parallel-field ghost seam | T2 (C4 free follow-up) | **ticketed** — [Ticket 05](../../../.scratch/t2-god-class-split/issues/05-appstate-token-phantom-storage.md) (grilling; covers phantom `Arc<Storage>` on AppState + dual cancel_token stale-on-replace) |
 | arch-4 | process_action 47 lines (plan said ≤30) | T6 (gate amend) + T2 (fix) | **partial** (T2 ticket 03 moved body to `GenerationGate::start_action`, preserved verbatim at 47 LOC; T6 gate amend pending to update ≤30 → ≤50, or split into 2 functions) |
-| glossary-1 | PlayerCard → PersonaCard (~60 sites) | T3 | pending |
-| glossary-2 | WorldSnapshot → WorldContext (~12 sites) | T3 | pending |
-| glossary-3 | TurnResult → ActionResult (~6 sites) | T3 | pending |
-| glossary-4 | Action Pipeline phase_trigger_evaluation merged | T3 (amend glossary) | pending |
-| glossary-5 | Avoid-alias leakage (10 sites) | T3 | pending |
+| arch-5 | AppState dual cancel_token stale-on-replace latent concern | T2 follow-up | **ticketed** — [Ticket 05](../../../.scratch/t2-god-class-split/issues/05-appstate-token-phantom-storage.md) (latent: after `replace_cancel_token`, `GenerationGate`'s field is the OLD cancelled clone — generation would be permanently shut down on same-service subsequent action; unexercised by current tests) |
+| glossary-1 | PlayerCard → PersonaCard (~60 sites) | T3 | **resolved** (2026-07-10; renames + GameState::player→persona + PromptContext::player→persona + LayerRenderer::player→persona, ~100+ sites, all 1241 tests green) |
+| glossary-2 | WorldSnapshot removal (immutable world data out of GameState) | T9 (moved from T3, 2026-07-10) | pending — A-Deep locked; D1b fallback open |
+| glossary-3 | TurnResult → ActionResult (~6 sites) | T3 | **resolved** (2026-07-10; 4 sites in action_processing.rs + phases.rs, all tests green) |
+| glossary-4 | Action Pipeline phase_trigger_evaluation merged | T3 (amend glossary) | **resolved** (2026-07-10; CONTEXT.md Action Pipeline entry corrected per D3, no code split) |
+| glossary-5 | Avoid-alias leakage (10 sites) | T3 | **resolved** (2026-07-10; StoryLogTemplate→NarrativeLogTemplate + parse_command→parse_action; doc-comment sweep on 5 flagged files = 0 general-English uses needed rename; `story-log` UI surface deferred — scope creep, separate track) |
 | polish-1 | SERVER TRACE debug noise in polled endpoint | T7.1 | pending |
 | polish-2 | Dead `_map`/`_player`/`_npcs` params | T7.2 | pending |
 | polish-3 | Dead `_player_name` param | T7.2 | pending |
@@ -524,8 +578,9 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 | plan-3 | §B1.3 validation gate failed silently | T6 (mark VOID) | pending |
 | plan-4 | No ADR-031 documenting OpContext absorption | T6 | pending |
 | plan-5 | ADR-030 access pattern not documented | T6 | pending |
+| plan-6 | No ADR documenting T2 modular split (ADR-032?) | T2 follow-up / T6 | **ticketed** — [Ticket 06](../../../.scratch/t2-god-class-split/issues/06-adr-032-t2-modular-split-record.md) (grilling; decide: new ADR-032 vs amend ADR-027 vs fold into ADR-031 vs arch-doc suffices) |
 
-**Total: 45 findings across 8 tracks.**
+**Total: 45 findings across 9 tracks.**
 
 ---
 
@@ -533,13 +588,15 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 
 **Wave 1 (P0, ship before merge):** T1 (4 bugs) + T6 (plan honesty). ~9 SP. ~1 week. These are non-negotiable defects + the doc anchors to make the rest tractable.
 
-**Wave 2 (P1, ship as cleanup branch):** T2 (god-class split, ~16 SP) + T3 (glossary drift, ~5 SP). ~21 SP. ~2-3 weeks. T2 is the load-bearing fix; T3 is mechanical and can land in parallel.
+**Wave 2 (P1, ship as cleanup branch):** T2 (god-class split, ~16 SP) + T3 (glossary drift, ~4 SP). ~20 SP. ~2-3 weeks. T2 is the load-bearing fix; T3 is mechanical and can land in parallel.
 
 **Wave 3 (P2, ship as separate PRs from clean main):** T4 (PhaseError, ~5 SP) + T5 (test builder collapse, ~16 SP). ~21 SP. ~2-3 weeks. T5 benefits from T2 being settled; T4 is independent.
 
 **Wave 4 (P3, opportunistic):** T7 (~10 SP across 4 sub-PRs) + T8 (~3 SP). Pick up during other refactors.
 
 **Total elapsed:** ~6-8 weeks if single-threaded; ~3-4 weeks if T2/T5 land in parallel via subagents.
+
+**T9 (WorldSnapshot removal, ~13 SP)** is P2 architecture work, not mechanical. Ship in Wave 3 alongside or after T2 arch-3 (AppState phantom-storage, Ticket 05) — same seam, must be coordinated. Has its own grilling (fallback behavior D1b, AppState cache shape, ADR number).
 
 ## Decision Required
 
@@ -715,7 +772,7 @@ Source priority: `/tmp/antipattern-fresh-2026-07-09.md` (30 findings, 19 files) 
 
 ---
 
-# Appendix B — Glossary Drift (5 Terms + 9 Gaps)
+# Appendix B — Glossary Drift (5 Drift Terms + 9 Gaps)
 
 Source: `/tmp/domain-reconciliation-2026-07-09.md`.
 

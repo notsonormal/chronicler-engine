@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
 
@@ -13,7 +13,7 @@ use crate::domain::model::world::WorldCard;
 pub struct WorldSnapshot {
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
-    pub player: Arc<PlayerCard>,
+    pub player: Arc<PersonaCard>,
     pub npcs: Arc<HashMap<String, NpcCard>>,
 }
 
@@ -22,7 +22,7 @@ impl WorldSnapshot {
         Self {
             world: Arc::new(WorldCard::default()),
             map: Arc::new(MapDef::default()),
-            player: Arc::new(PlayerCard::default()),
+            player: Arc::new(PersonaCard::default()),
             npcs: Arc::new(HashMap::new()),
         }
     }

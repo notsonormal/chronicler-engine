@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::application::application_service::load_messages_with_swipes;
 use crate::application::scenario::inject_scenario_logs;
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
@@ -46,7 +46,7 @@ pub(crate) fn load_game_state(
     storage: &crate::adapters::driven::storage::Storage,
     world_arc: &Arc<WorldCard>,
     map_arc: &Arc<MapDef>,
-    player_arc: &Arc<PlayerCard>,
+    player_arc: &Arc<PersonaCard>,
     npcs_map: &HashMap<String, NpcCard>,
 ) -> crate::error::Result<GameState> {
     match storage.load_latest_snapshot() {
@@ -105,7 +105,7 @@ pub fn spawn_arrival_task_if_needed(
     storage: &Arc<crate::adapters::driven::storage::Storage>,
     world: &Arc<WorldCard>,
     _map: &Arc<MapDef>,
-    _player: &Arc<PlayerCard>,
+    _player: &Arc<PersonaCard>,
     _npcs: &Arc<HashMap<String, NpcCard>>,
     room_id: &str,
     nearby_npcs: Vec<NpcCard>,

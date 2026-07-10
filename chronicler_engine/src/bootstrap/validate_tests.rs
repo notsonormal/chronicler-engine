@@ -3,7 +3,7 @@ use crate::domain::model::character::{CharacterSheet, NpcCard};
 use crate::domain::model::map::{MapDef, Overworld};
 use crate::domain::model::trigger::Trigger;
 use crate::domain::model::world::WorldCard;
-use crate::test_support::{TestMap, TestNpc, TestPlayer, TestWorld};
+use crate::test_support::{TestMap, TestNpc, TestPersona, TestWorld};
 
 #[test]
 fn test_validate_loaded_data_success() {
@@ -17,7 +17,7 @@ fn test_validate_loaded_data_success() {
         default_room_image: None,
     };
     let map = TestMap::single_room("start");
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     let npc = TestNpc::named("npc1", "NPC");
 
     let result = validate_loaded_data(&world, &map, &player, &[npc]);
@@ -44,7 +44,7 @@ fn test_validate_loaded_data_missing_starting_room() {
     };
 
     let map = TestMap::single_room("room_a");
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
 
     let result = validate_loaded_data(&world, &map, &player, &[]);
     assert!(
@@ -70,7 +70,7 @@ fn test_validate_loaded_data_basic_manifest_succeeds() {
         default_room_image: None,
     };
     let map = TestMap::single_room("start");
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
 
     let result = validate_loaded_data(&world, &map, &player, &[]);
     assert!(
@@ -83,7 +83,7 @@ fn test_validate_loaded_data_basic_manifest_succeeds() {
 fn test_validate_loaded_data_invalid_trigger_room() {
     let world = TestWorld::minimal();
     let map = TestMap::single_room("room_a");
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
 
     let npc = NpcCard {
         id: "npc1".to_string(),
@@ -152,7 +152,7 @@ fn test_validate_loaded_data_multiple_errors() {
         },
     };
 
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
 
     let result = validate_loaded_data(&world, &map, &player, &[]);
     assert!(result.is_err());

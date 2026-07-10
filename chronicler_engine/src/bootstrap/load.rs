@@ -4,7 +4,7 @@
 use std::{fs, path::Path};
 
 use crate::error::EngineError;
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::{WorldCard, WorldManifest};
 use crate::adapters::driven::storage::Storage;
@@ -131,7 +131,7 @@ fn seed_personas(storage: &Storage, personas_dir: &std::path::Path) -> crate::er
             continue;
         }
         if storage.get_persona(&key)?.is_none() {
-            let persona: PlayerCard = read_json_file(&path)?;
+            let persona: PersonaCard = read_json_file(&path)?;
             storage.seed_persona(&key, &persona)?;
             tracing::info!("Seeded persona: {key}");
         }

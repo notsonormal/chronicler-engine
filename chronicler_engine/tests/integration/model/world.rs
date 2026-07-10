@@ -35,7 +35,7 @@ async fn test_visual_sidebar_with_real_world_data() {
     let world: WorldCard = manifest.clone().into();
 
     let player_json = std::fs::read_to_string("data/personas/test_player.json").unwrap();
-    let player: chronicler_engine::domain::model::character::PlayerCard =
+    let player: chronicler_engine::domain::model::character::PersonaCard =
         serde_json::from_str(&player_json).unwrap();
 
     let chars_dir = std::path::Path::new("data/characters/test");

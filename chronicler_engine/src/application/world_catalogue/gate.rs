@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::worlds::WorldWithMap;
 use crate::application::errors::ApplicationError;
-use crate::domain::model::character::PlayerCard;
+use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
 
@@ -53,7 +53,7 @@ impl WorldCatalogue {
         self.storage.delete_world(key).map_err(Into::into)
     }
 
-    pub fn list_personas(&self) -> Result<Vec<PlayerCard>, ApplicationError> {
+    pub fn list_personas(&self) -> Result<Vec<PersonaCard>, ApplicationError> {
         self.storage.list_personas().map_err(Into::into)
     }
 }

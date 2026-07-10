@@ -2,7 +2,7 @@
 //! Prompt context building
 
 use crate::error::EngineError;
-use crate::domain::model::character::PlayerCard;
+use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::domain::model::template::TemplateVars;
@@ -110,7 +110,7 @@ pub fn make_prompt_context<'a>(
     world: &'a WorldCard,
     room: &'a Room,
     npcs: NpcContext<'a>,
-    player: &'a PlayerCard,
+    persona: &'a PersonaCard,
     user_message: &'a str,
     history: &'a [MessageEntry],
 ) -> PromptContext<'a> {
@@ -118,9 +118,9 @@ pub fn make_prompt_context<'a>(
         world,
         room,
         npcs,
-        player,
+        persona,
         user_message,
         history,
-        template_vars: TemplateVars::new(&player.sheet.name),
+        template_vars: TemplateVars::new(&persona.sheet.name),
     }
 }

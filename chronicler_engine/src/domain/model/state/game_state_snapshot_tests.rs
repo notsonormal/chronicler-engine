@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::domain::model::state::game_state::GameStateBuilder;
 use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::domain::model::state::game_state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
-use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
+use crate::test_support::fixtures::{TestMap, TestPersona, TestWorld};
 
 #[test]
 fn test_narrative_snapshot_default() {
@@ -19,7 +19,7 @@ fn test_from_game_state_sets_defaults() {
     let state = GameStateBuilder::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
-        Arc::new(TestPlayer::named("Test")),
+        Arc::new(TestPersona::named("Test")),
         "start",
     )
     .build();

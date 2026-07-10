@@ -1,4 +1,4 @@
-use crate::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
+use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
@@ -45,8 +45,8 @@ fn create_test_room() -> Room {
     }
 }
 
-fn create_test_player() -> PlayerCard {
-    PlayerCard {
+fn create_test_player() -> PersonaCard {
+    PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".to_string(),

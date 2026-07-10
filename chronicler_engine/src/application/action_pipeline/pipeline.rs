@@ -55,14 +55,14 @@ impl ActionPipeline {
 
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
-        let player = Arc::clone(&state.player);
+        let persona = Arc::clone(&state.persona);
         let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
         let inputs = PipelineInputs {
             input: input.clone(),
             world,
             map,
-            player,
+            persona,
             all_npcs,
         };
 

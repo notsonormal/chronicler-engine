@@ -133,11 +133,11 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     let db_pool = DbPool::new(db_path.to_str().unwrap()).unwrap();
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
-    let player = TestPlayer::standard();
+    let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
         .create_game(

@@ -434,12 +434,12 @@ fn test_commit_trigger_narration_stores_trigger_context() {
 use proptest::prelude::*;
 
 fn make_two_room_state() -> GameState {
-    use crate::test_support::{TestMap, TestPlayer, TestWorld};
+    use crate::test_support::{TestMap, TestPersona, TestWorld};
     use std::sync::Arc;
     GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::two_rooms("room1", "room2")),
-        Arc::new(TestPlayer::standard()),
+        Arc::new(TestPersona::standard()),
         vec![],
         "room1".to_string(),
     )

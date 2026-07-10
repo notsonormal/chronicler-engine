@@ -35,22 +35,22 @@ On first startup (or if DB is empty), `bootstrap::run()` calls seeding functions
    - Deserializes `WorldManifest` (file pointers: `map_file`, `characters_dir`)
    - Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `default_scenario_id`)
    - Calls `Storage::seed_world(world_card, map)` → returns `world_id: i64` (idempotent)
-   - Scans `data/personas/*.json` and seeds each as a `PlayerCard` via `Storage::seed_persona(key, player)` — idempotent (see ADR-026)
+   - Scans `data/personas/*.json` and seeds each as a `PersonaCard` via `Storage::seed_persona(key, player)` — idempotent (see ADR-026)
    - Loads `NpcCard`s from `data/characters/<characters_dir>/*.json` and seeds each via `seed_character(world_id, npc)` — skip if exists
 
 After seeding, runtime loading is 100% database-first:
 
 - `Storage::get_world(key)` → `WorldWithMap { world_id, world_card, map }` (uses `DbWorld::from_row()`)
-- `game.persona_key` → `Storage::get_persona(key)` → `PlayerCard` (the persona is bound on the game row, not the world)
+- `game.persona_key` → `Storage::get_persona(key)` → `PersonaCard` (the persona is bound on the game row, not the world)
 - `world_with_map.world_id` → `Storage::list_characters(world_id)` → `Vec<NpcCard>`
 
 **File I/O only during seeding**; runtime reads only from the database.
 
 **Pattern Consistency**: World storage uses `DbWorld::from_row()` + `world_card_from_db()` conversion function, matching persona and character storage.
 
-## Character Schema (PlayerCard and NpcCard)
+## Character Schema (PersonaCard and NpcCard)
 
-Both `PlayerCard` and `NpcCard` share this unified structure for narrative fields:
+Both `PersonaCard` and `NpcCard` share this unified structure for narrative fields:
 
 ```json
 {
@@ -59,7 +59,7 @@ Both `PlayerCard` and `NpcCard` share this unified structure for narrative field
   "personality": "string (e.g., 'Arrogant, brave, tech-savvy')",
   "scenario": "string (background or current motivation)",
   "example_dialogue": "string (optional example for LLM context)",
-  "inventory": ["item_id_1", "item_id_2"],  // Only on PlayerCard/NpcCard, NOT CharacterSheet
+  "inventory": ["item_id_1", "item_id_2"],  // Only on PersonaCard/NpcCard, NOT CharacterSheet
   "profile_image": "string (optional, preferred profile image)",
   "summary": "string (optional, brief character summary)",
   "headshot_image": "string (optional, headshot/portrait for sidebar grid)"

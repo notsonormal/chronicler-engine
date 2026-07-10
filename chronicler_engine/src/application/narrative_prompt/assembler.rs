@@ -108,7 +108,7 @@ impl PromptAssembler {
             world: context.world,
             room: context.room,
             npcs: context.npcs,
-            player: context.player,
+            persona: context.persona,
             user_message: context.user_message,
             history: context.history,
             system_prompt,
@@ -198,7 +198,7 @@ struct LayerRenderer<'a> {
     world: &'a WorldCard,
     room: &'a Room,
     npcs: NpcContext<'a>,
-    player: &'a crate::domain::model::character::PlayerCard,
+    persona: &'a crate::domain::model::character::PersonaCard,
     user_message: &'a str,
     history: &'a [MessageEntry],
     system_prompt: String,
@@ -217,7 +217,7 @@ impl<'a> LayerRenderer<'a> {
         let user = [
             self.render_game_state_layer(),
             self.render_npc_cards_layer(),
-            self.render_player_layer(),
+            self.render_persona_layer(),
             self.render_world_info_layer(),
             self.render_history_layer(),
             self.post_history_prompt.clone(),
@@ -346,26 +346,26 @@ impl<'a> LayerRenderer<'a> {
         output
     }
 
-    fn render_player_layer(&self) -> String {
+    fn render_persona_layer(&self) -> String {
         let mut output = String::from("<PlayerCharacter>\n");
         output.push_str("Name: ");
-        output.push_str(&self.player.sheet.name);
+        output.push_str(&self.persona.sheet.name);
         output.push_str("\n\n");
         output.push_str("Description: ");
         output.push_str(&render_template(
-            &self.player.sheet.description,
+            &self.persona.sheet.description,
             self.template_vars,
         ));
         output.push_str("\n\n");
         output.push_str("Personality: ");
         output.push_str(&render_template(
-            &self.player.sheet.personality,
+            &self.persona.sheet.personality,
             self.template_vars,
         ));
         output.push_str("\n\n");
         output.push_str("Background: ");
         output.push_str(&render_template(
-            &self.player.sheet.scenario,
+            &self.persona.sheet.scenario,
             self.template_vars,
         ));
         output.push('\n');

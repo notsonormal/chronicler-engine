@@ -48,7 +48,7 @@ impl CharacterSheet {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-pub struct PlayerCard {
+pub struct PersonaCard {
     #[serde(default)]
     pub key: String,
     #[serde(flatten)]

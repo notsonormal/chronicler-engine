@@ -97,7 +97,7 @@ fn test_context_fitting_post_trim_overflow() {
 fn test_make_prompt_context() {
     let world = crate::test_support::TestWorld::minimal();
     let room = crate::test_support::TestMap::room("test_room");
-    let player = crate::test_support::TestPlayer::standard();
+    let player = crate::test_support::TestPersona::standard();
     let npcs = vec![crate::test_support::TestNpc::named("npc1", "Npc")];
     let history = vec![];
 
@@ -115,7 +115,7 @@ fn test_make_prompt_context() {
 
     assert_eq!(context.world.name, "Test World");
     assert_eq!(context.room.id, "test_room");
-    assert_eq!(context.player.sheet.name, "Hero");
+    assert_eq!(context.persona.sheet.name, "Hero");
     assert_eq!(context.npcs.all_npcs.len(), 1);
     assert_eq!(context.user_message, "hello");
     assert!(context.history.is_empty());

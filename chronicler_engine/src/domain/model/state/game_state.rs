@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::trigger::NpcEncounterLog;
@@ -19,7 +19,7 @@ use super::scene_state::SceneState;
 pub struct GameState {
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
-    pub player: Arc<PlayerCard>,
+    pub persona: Arc<PersonaCard>,
     pub npcs: HashMap<String, NpcCard>,
     pub movement: MovementState,
     pub narrative: NarrativeState,
@@ -31,7 +31,7 @@ pub struct GameState {
 pub struct GameStateBuilder {
     world: Arc<WorldCard>,
     map: Arc<MapDef>,
-    player: Arc<PlayerCard>,
+    persona: Arc<PersonaCard>,
     starting_room: String,
     npcs: Vec<NpcCard>,
     narrative: Option<NarrativeState>,
@@ -43,13 +43,13 @@ impl GameStateBuilder {
     pub fn new(
         world: Arc<WorldCard>,
         map: Arc<MapDef>,
-        player: Arc<PlayerCard>,
+        persona: Arc<PersonaCard>,
         starting_room: impl Into<String>,
     ) -> Self {
         Self {
             world,
             map,
-            player,
+            persona,
             starting_room: starting_room.into(),
             npcs: Vec::new(),
             narrative: None,
@@ -87,7 +87,7 @@ impl GameStateBuilder {
         GameState {
             world: self.world,
             map: self.map,
-            player: self.player,
+            persona: self.persona,
             npcs: npcs_map,
             movement: MovementState {
                 current_room_id: self.starting_room,
@@ -105,13 +105,13 @@ impl GameState {
         snapshot: &crate::domain::model::state::game_state_snapshot::GameStateSnapshot,
         world: Arc<WorldCard>,
         map: Arc<MapDef>,
-        player: Arc<PlayerCard>,
+        persona: Arc<PersonaCard>,
         npcs: HashMap<String, NpcCard>,
     ) -> Self {
         Self {
             world,
             map,
-            player,
+            persona,
             npcs,
             movement: snapshot.movement.clone(),
             narrative: NarrativeState::from_snapshot(&snapshot.narrative),
@@ -123,11 +123,11 @@ impl GameState {
     pub fn new(
         world: Arc<WorldCard>,
         map: Arc<MapDef>,
-        player: Arc<PlayerCard>,
+        persona: Arc<PersonaCard>,
         npcs: Vec<NpcCard>,
         starting_room: String,
     ) -> Self {
-        GameStateBuilder::new(world, map, player, starting_room)
+        GameStateBuilder::new(world, map, persona, starting_room)
             .with_npcs(npcs)
             .build()
     }

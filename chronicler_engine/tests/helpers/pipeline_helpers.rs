@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
+use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::{
@@ -22,7 +22,7 @@ pub fn create_test_state_with_map() -> GameState {
 
     let map = Arc::new(crate::fixtures::create_test_map());
 
-    let player = Arc::new(PlayerCard {
+    let player = Arc::new(PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),
@@ -67,7 +67,7 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
 
     let map = Arc::new(crate::fixtures::create_test_map());
 
-    let player = Arc::new(PlayerCard {
+    let player = Arc::new(PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),
@@ -162,7 +162,7 @@ pub fn save_state(app: &DefaultApplicationService, state: &GameState) {
 
 pub fn add_input_and_save(app: &DefaultApplicationService, text: &str) {
     let mut state = latest_state(app);
-    let player_name = state.player.sheet.name.clone();
+    let player_name = state.persona.sheet.name.clone();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     save_state(app, &state);
 }

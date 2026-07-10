@@ -1,7 +1,7 @@
 //! [DOC: docs/system/storage.md]
 //! Persona database model
 
-/// Database row for `personas` table (PlayerCard).
+/// Database row for `personas` table (PersonaCard).
 pub struct DbPersona {
     pub id: i64,
     pub key: String,

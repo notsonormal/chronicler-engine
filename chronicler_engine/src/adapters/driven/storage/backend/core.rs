@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::sync::Arc;
 
 use crate::error::EngineError;
-use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::game::Game;
 use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::domain::model::map::MapDef;
@@ -37,7 +37,7 @@ pub struct InMemoryData {
     pub presets: Vec<PromptPreset>,
     pub llm_messages: Vec<LlmMessage>,
     pub worlds: Vec<InMemoryWorld>,
-    pub personas: Vec<PlayerCardWithKey>,
+    pub personas: Vec<PersonaCardWithKey>,
     pub characters: Vec<CharacterSeed>,
     pub settings: AppSettings,
 }
@@ -48,9 +48,9 @@ pub struct InMemoryWorld {
     pub map: MapDef,
 }
 
-pub struct PlayerCardWithKey {
+pub struct PersonaCardWithKey {
     pub key: String,
-    pub card: PlayerCard,
+    pub card: PersonaCard,
 }
 
 pub struct CharacterSeed {
