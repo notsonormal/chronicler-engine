@@ -1281,4 +1281,5 @@ async fn test_switch_swipe_handler_concurrent() {
         StatusCode::SERVICE_UNAVAILABLE,
         "Switching swipe during generation should fail"
     );
+}
 
