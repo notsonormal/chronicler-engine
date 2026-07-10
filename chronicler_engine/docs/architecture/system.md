@@ -6,8 +6,13 @@ Eight tiers organize the codebase:
 
 - `crate::domain::model` — Pure data structures; single source of truth for game state.
 - `crate::domain::engine` — Pure simulation logic.
-- `crate::application` — Orchestration layer; owns port traits under `application/ports/`.
+- `crate::application` — Orchestration layer; owns port traits under `application/ports/`. Sub-modules from the T2 land package:
+  - `crate::application::persistence_gate` — application persistence boundary; owns `Arc<Storage>` + `Arc<PresetStore>`.
+  - `crate::application::generation_gate` — cancel token + atomic generation slot orchestration (ADR-030 hot path).
+  - `crate::application::game_catalogue` — game-lifecycle orchestration; borrows `Arc<PersistenceGate>`.
+  - `crate::application::world_catalogue` — worlds/presets persistence; takes raw `Arc<Storage>` (deliberate asymmetry vs GameCatalogue — independent seams).
 - `crate::adapters::driven` — Outbound adapters (storage, LLM providers, text check).
+  - `crate::adapters::driven::storage::preset_store` — adapter around `Storage` for prompt preset CRUD (storage-backed).
 - `crate::adapters::driving` — Inbound adapters (HTTP server, CLI).
 - `crate::bootstrap` — Composition root.
 - `crate::settings` — Settings data model; DB-backed, loaded once at startup.

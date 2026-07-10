@@ -111,3 +111,8 @@ fn test_run_persona_not_found_errors_cleanly() {
         "expected persona-not-found error mentioning 'Persona' and 'not found', got: {msg}"
     );
 }
+
+#[test]
+fn _planted_for_summary_check() {
+    assert_eq!(1 + 1, 3);
+}

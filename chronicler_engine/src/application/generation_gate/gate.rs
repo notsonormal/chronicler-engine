@@ -44,7 +44,7 @@ impl GenerationGate {
         app: &DefaultApplicationService,
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
-        let mut game_state = app.load_or_fresh()?;
+        let mut game_state = app.load_or_fresh();
 
         self.heal_stale_generating(app, &mut game_state);
 
@@ -64,11 +64,10 @@ impl GenerationGate {
         }
 
         if self.cancel_token.is_cancelled() {
-            if let Ok(mut gs) = app.load_or_fresh() {
-                gs.narrative.input_buffer.status = GenerationStatus::Idle;
-                if let Err(e) = app.persistence_gate.save_state(&gs) {
-                    tracing::error!("Failed to save shutdown snapshot: {e}");
-                }
+            let mut gs = app.load_or_fresh();
+            gs.narrative.input_buffer.status = GenerationStatus::Idle;
+            if let Err(e) = app.persistence_gate.save_state(&gs) {
+                tracing::error!("Failed to save shutdown snapshot: {e}");
             }
             self.release_generation_slot();
             return Ok(ProcessActionResult::ShuttingDown);

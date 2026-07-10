@@ -10,9 +10,8 @@ use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::test_support::{
-    make_test_app_with_game_service, make_test_app_with_storage_and_service,
-};
+use crate::fixtures::app_with_storage_from;
+use chronicler_engine::test_support::{make_test_app_with_game_service};
 use crate::make_test_recorder_with_storage;
 
 use crate::pipeline_helpers::{
@@ -52,7 +51,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         ),
         quantifier,
     );
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
     assert!(
         wait_for_generation_complete(&app, 1000),
@@ -106,7 +105,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         ])));
 
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "approach the innkeeper".to_string());
     assert!(
         wait_for_generation_complete(&app, 1000),
@@ -177,20 +176,20 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         ),
         quantifier,
     );
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
     assert!(wait_for_generation_complete(&app, 1000));
-    let _snap = latest_snapshot(&app).expect("Should have snapshot");
+    let _snap = latest_snapshot(&app);
 
     retry_last_response_impl(&app);
     assert!(wait_for_generation_complete(&app, 1000));
-    let _snap = latest_snapshot(&app).expect("Should have snapshot");
+    let _snap = latest_snapshot(&app);
     let guard = latest_state(&app);
     assert_eq!(guard.movement.current_room_id, "room2");
 
     retry_last_response_impl(&app);
     assert!(wait_for_generation_complete(&app, 1000));
-    let _snap = latest_snapshot(&app).expect("Should have snapshot");
+    let _snap = latest_snapshot(&app);
 
     let guard = latest_state(&app);
     let history = guard.narrative.history();
@@ -224,7 +223,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         ),
         Arc::new(MockBackend::default()),
     );
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
     assert!(
         wait_for_generation_complete(&app, 1000),
@@ -275,7 +274,7 @@ fn test_retry_after_edited_input_uses_new_text() {
         ),
         Arc::new(MockBackend::default()),
     );
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
     assert!(wait_for_generation_complete(&app, 1000));
 
@@ -384,7 +383,7 @@ fn test_main_retry_reevaluates_triggers() {
         ),
         quantifier,
     );
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
     assert!(wait_for_generation_complete(&app, 1000));
     let guard = latest_state(&app);
@@ -444,7 +443,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
         ),
         quantifier,
     );
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
     assert!(wait_for_generation_complete(&app, 1000));
 
@@ -598,7 +597,7 @@ fn test_movement_with_arrival_narration_retry() {
         ),
         quantifier,
     );
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "walk to room2".to_string());
     assert!(wait_for_generation_complete(&app, 1000));
 
@@ -656,7 +655,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
         ])));
 
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-    let app = make_test_app_with_storage_and_service(Arc::clone(app.storage()), Arc::new(service));
+    let app = app_with_storage_from(&app, Arc::new(service));
     execute_action_impl(&app, "examine room".to_string());
     assert!(wait_for_generation_complete(&app, 1000));
 

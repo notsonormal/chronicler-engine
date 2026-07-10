@@ -3,7 +3,6 @@
 use crate::Violation;
 
 const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
-    "application/context.rs",
     "application/game_service.rs",
     "application/application_service.rs",
     "application/agents/registry.rs",
@@ -242,15 +241,6 @@ mod tests {
         );
         assert_eq!(violations.len(), 1);
         assert!(violations[0].message.contains("ADR-027"));
-    }
-
-    #[test]
-    fn test_check_application_storage_direct_allows_grandfathered() {
-        let violations = check_application_storage_direct(
-            "application/context.rs",
-            "use crate::adapters::driven::storage::Storage;\n",
-        );
-        assert_eq!(violations.len(), 0);
     }
 
     #[test]

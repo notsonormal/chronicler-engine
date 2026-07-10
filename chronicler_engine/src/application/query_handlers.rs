@@ -4,35 +4,15 @@
 use crate::application::ApplicationError;
 use crate::application::DebugStateView;
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::persistence_gate::WorldSnapshot;
 use crate::error::EngineError;
 use crate::application::ports::llm_message_repository::LlmMessage;
-use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageEntry;
-
-fn load_state_lossy(app: &DefaultApplicationService) -> GameState {
-    match app.load_or_fresh() {
-        Ok(state) => state,
-        Err(e) => {
-            tracing::warn!("load_state_lossy: falling back to empty world: {e}");
-            let snapshot = WorldSnapshot::empty();
-            let starting_room_id = snapshot.world.starting_room_id();
-            GameState::new(
-                snapshot.world,
-                snapshot.map,
-                snapshot.player,
-                snapshot.npcs.values().cloned().collect(),
-                starting_room_id,
-            )
-        }
-    }
-}
 
 pub fn get_generating_status(
     app: &DefaultApplicationService,
 ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-    let game_state = load_state_lossy(app);
+    let game_state = app.load_or_fresh();
     Ok((
         game_state.narrative.input_buffer.status.clone(),
         game_state.narrative.input_buffer.phase.clone(),
@@ -40,7 +20,7 @@ pub fn get_generating_status(
 }
 
 pub fn reset_generating_status(app: &DefaultApplicationService) -> Result<(), ApplicationError> {
-    let mut game_state = app.load_or_fresh()?;
+    let mut game_state = app.load_or_fresh();
     game_state.narrative.input_buffer.status = GenerationStatus::Idle;
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -69,7 +49,7 @@ pub fn list_latest_llm_messages(
 pub fn get_story_log_entries(
     app: &DefaultApplicationService,
 ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-    let game_state = load_state_lossy(app);
+    let game_state = app.load_or_fresh();
     let entries: Vec<_> = game_state.narrative.history().to_vec();
     let has_last_trigger = game_state.narrative.last_trigger.is_some();
     Ok((entries, has_last_trigger))
@@ -84,7 +64,7 @@ pub fn get_input_status(
 pub fn get_current_room_view(
     app: &DefaultApplicationService,
 ) -> Result<(String, Option<String>), ApplicationError> {
-    let game_state = load_state_lossy(app);
+    let game_state = app.load_or_fresh();
     let room = game_state
         .current_room()
         .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
@@ -101,7 +81,7 @@ pub fn get_npc_headshots(
     app: &DefaultApplicationService,
     scene_only: bool,
 ) -> Result<Vec<(String, String)>, ApplicationError> {
-    let game_state = load_state_lossy(app);
+    let game_state = app.load_or_fresh();
 
     let npc_ids: Vec<String> = if scene_only {
         game_state
@@ -130,7 +110,7 @@ pub fn get_npc_headshots(
 pub fn get_debug_state(
     app: &DefaultApplicationService,
 ) -> Result<DebugStateView, ApplicationError> {
-    let game_state = load_state_lossy(app);
+    let game_state = app.load_or_fresh();
 
     let history_tail: Vec<MessageEntry> = game_state
         .narrative

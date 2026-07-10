@@ -74,7 +74,9 @@ impl DefaultApplicationService {
             Arc::clone(&preset_store),
         ));
         let generation_gate = GenerationGate::new(cancel_token, Arc::clone(&is_generating));
+        // is_generating: Arc<AtomicBool> direct per ADR-030 hot-path; not behind GenerationGate::is_generating() accessor.
         let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate), is_generating);
+        // raw storage: WorldCatalogue owns worlds persistence directly; deliberate asymmetry vs GameCatalogue (which borrows Arc<PersistenceGate>) to keep the game/world seams independent.
         let world_catalogue = WorldCatalogue::new(storage);
         Self {
             persistence_gate,
@@ -114,7 +116,7 @@ impl DefaultApplicationService {
         self.persistence_gate.load_world_snapshot()
     }
 
-    pub fn load_or_fresh(&self) -> Result<GameState, EngineError> {
+    pub fn load_or_fresh(&self) -> GameState {
         self.persistence_gate.load_or_fresh()
     }
 

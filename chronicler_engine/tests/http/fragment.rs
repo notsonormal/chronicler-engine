@@ -306,10 +306,9 @@ async fn test_action_confirm_empty_command() {
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(500);
     while start.elapsed() < timeout {
-        if let Ok(state) = service.load_or_fresh() {
-            if !state.narrative.input_buffer.status.is_generating() {
-                return;
-            }
+        let state = service.load_or_fresh();
+        if !state.narrative.input_buffer.status.is_generating() {
+            return;
         }
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }

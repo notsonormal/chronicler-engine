@@ -17,8 +17,7 @@ use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_recorder;
 use crate::test_support::{
     make_test_app_with_game_service, make_test_app_with_separate_backends,
-    make_test_app_with_sqlite, make_test_app_with_storage_and_service,
-    make_test_app_without_snapshot,
+    make_test_app_with_sqlite, make_test_app_without_snapshot,
 };
 
 fn make_test_state() -> GameState {
@@ -49,9 +48,7 @@ fn insert_message_with_swipe(
 }
 
 fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     let player_name = state.persona.sheet.name.clone();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     let snapshot =
@@ -67,9 +64,7 @@ fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
 }
 
 fn add_narration_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     state.add_message(text.to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -84,9 +79,7 @@ fn add_narration_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
 }
 
 fn save_pre_main(app: &DefaultApplicationService) -> u64 {
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -95,9 +88,7 @@ fn save_pre_main(app: &DefaultApplicationService) -> u64 {
 }
 
 fn save_pre_event(app: &DefaultApplicationService) -> u64 {
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -111,9 +102,7 @@ fn test_retry_no_snapshot() {
     let app = make_test_app_without_snapshot(state).unwrap();
     retry_last_response_impl(&app);
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("Retry failed: no anchor message")),
         "Should record retry error when no anchor message exists, got {:?}",
@@ -131,7 +120,16 @@ fn test_retry_load_messages_error() {
         TestOverride::internal("simulated load_message_rows failure"),
     );
 
-    let app = make_test_app_with_storage_and_service(failing, Arc::new(make_service()));
+    let app = Arc::new(DefaultApplicationService::new(
+        failing,
+        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+        Arc::new(std::sync::RwLock::new(
+            crate::domain::model::settings::AppSettings::default(),
+        )),
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(make_service()),
+    ));
     retry_last_response_impl(&app);
 }
 
@@ -149,9 +147,7 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
 
     let _input_id = add_input_and_save(&app, "test input");
 
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     state.add_message("Event narration".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -173,9 +169,7 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
     let state = make_test_state();
     let app = make_test_app_with_sqlite(state).unwrap();
 
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     state.add_message("Event only".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -210,8 +204,16 @@ fn test_retry_event_storage_error_on_pre_event() {
         }
     }
 
-    let app =
-        make_test_app_with_storage_and_service(Arc::clone(&storage), Arc::new(make_service()));
+    let app = Arc::new(DefaultApplicationService::new(
+        Arc::clone(&storage),
+        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+        Arc::new(std::sync::RwLock::new(
+            crate::domain::model::settings::AppSettings::default(),
+        )),
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(make_service()),
+    ));
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
@@ -221,17 +223,13 @@ fn test_retry_event_storage_error_on_pre_event() {
         TestOverride::internal("simulated load_by_id failure"),
     );
 
-    let latest = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let latest = app.load_or_fresh();
 
     let _ = retry_event_continuation(&app, latest);
 
     handle.clear("load_snapshot_by_id");
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -249,9 +247,7 @@ fn test_retry_event_missing_trigger_context() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
 
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     state.add_message("Event narration".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -276,9 +272,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut pre_event_state = app.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -296,9 +290,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
     let _ = retry_event_continuation(&app, pre_event_state);
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Cancelled retry should reset status to Idle, got {:?}",
@@ -319,9 +311,7 @@ fn test_retry_event_trigger_narration_fails() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
 
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -349,9 +339,7 @@ fn test_retry_event_trigger_narration_fails() {
 
     retry_last_response_impl(&app);
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -371,9 +359,7 @@ fn test_retry_event_empty_continuation_text() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
 
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -403,9 +389,7 @@ fn test_retry_main_no_pre_main_snapshot() {
     let state = make_test_state();
     let app = make_test_app_with_sqlite(state).unwrap();
 
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     let player_name = state.persona.sheet.name.clone();
     state.add_message(
         "test input".to_string(),
@@ -416,9 +400,7 @@ fn test_retry_main_no_pre_main_snapshot() {
         insert_message_with_swipe(&app, last);
     }
 
-    let mut state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut state = app.load_or_fresh();
     state.add_message("Narration text".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -431,9 +413,7 @@ fn test_retry_main_no_pre_main_snapshot() {
 
     retry_last_response_impl(&app);
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -451,9 +431,7 @@ fn test_retry_event_continuation_happy_path() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut pre_event_state = app.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -487,9 +465,7 @@ fn test_retry_event_continuation_happy_path() {
 
     retry_last_response_impl(&app);
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Should finish with Idle status, got {:?}",
@@ -506,9 +482,7 @@ fn test_retry_main_narration_happy_path() {
     let _pre_main_id = save_pre_main(&app);
     let _final_id = add_narration_and_save(&app, "Narration text");
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     let _ = retry_main_narration(&app, state, "test input".to_string());
 }
 
@@ -530,8 +504,16 @@ fn test_retry_main_storage_error_on_pre_main() {
         }
     }
 
-    let app =
-        make_test_app_with_storage_and_service(Arc::clone(&storage), Arc::new(make_service()));
+    let app = Arc::new(DefaultApplicationService::new(
+        Arc::clone(&storage),
+        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+        Arc::new(std::sync::RwLock::new(
+            crate::domain::model::settings::AppSettings::default(),
+        )),
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(make_service()),
+    ));
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
@@ -546,9 +528,7 @@ fn test_retry_main_storage_error_on_pre_main() {
 
     handle.clear("load_snapshot_by_id");
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -565,9 +545,7 @@ fn test_save_retry_error() {
 
     super::retry::save_retry_error(&app, "test error");
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -587,7 +565,16 @@ fn test_save_retry_error_persist_fails() {
         TestOverride::internal("simulated save failure"),
     );
 
-    let app = make_test_app_with_storage_and_service(failing, Arc::new(make_service()));
+    let app = Arc::new(DefaultApplicationService::new(
+        failing,
+        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+        Arc::new(std::sync::RwLock::new(
+            crate::domain::model::settings::AppSettings::default(),
+        )),
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(make_service()),
+    ));
     super::retry::save_retry_error(&app, "persist failure");
 }
 
@@ -635,9 +622,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut pre_event_state = app.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -669,9 +654,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         insert_message_with_swipe(&app, last);
     }
     retry_last_response_impl(&app);
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
         "Should set error status when continuation text is empty, got {:?}",
@@ -735,9 +718,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let mut pre_event_state = app.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -773,9 +754,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
 
     crate::application::action_pipeline::retrigger_event_impl(&app);
 
-    let state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should always load");
+    let state = app.load_or_fresh();
     assert_eq!(
         state.narrative.input_buffer.status,
         GenerationStatus::Idle,

@@ -85,7 +85,7 @@ pub fn edit_history(
     text: String,
 ) -> Result<(), ApplicationError> {
     let latest = app.storage().load_latest_snapshot()?;
-    let mut guard = app.load_or_fresh()?;
+    let mut guard = app.load_or_fresh();
     guard.narrative.history.edit(id, text.clone())?;
 
     if latest.is_some() {
@@ -98,7 +98,7 @@ pub fn edit_history(
 }
 
 pub fn delete_last(app: &DefaultApplicationService) -> Result<(), ApplicationError> {
-    let mut guard = app.load_or_fresh()?;
+    let mut guard = app.load_or_fresh();
     let last_id = guard
         .narrative
         .history
@@ -117,7 +117,7 @@ pub fn delete_last(app: &DefaultApplicationService) -> Result<(), ApplicationErr
 }
 
 pub fn retry(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError> {
-    let game_state = app.load_or_fresh()?;
+    let game_state = app.load_or_fresh();
 
     if game_state.narrative.history.last_input_text().is_none() {
         return Err(ApplicationError::validation("No input to retry"));
@@ -144,7 +144,7 @@ pub fn retry(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError
 }
 
 pub fn retrigger(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError> {
-    let game_state = app.load_or_fresh()?;
+    let game_state = app.load_or_fresh();
 
     if game_state.narrative.last_trigger.is_none() {
         return Err(ApplicationError::validation("No trigger context available"));

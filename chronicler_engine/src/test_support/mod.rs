@@ -11,8 +11,7 @@ pub use context::{
     default_test_preset_storage, make_test_app, make_test_app_with_backends,
     make_test_app_with_game_service, make_test_app_with_mock_backend,
     make_test_app_with_separate_backends, make_test_app_with_sqlite,
-    make_test_app_with_storage_and_service, make_test_app_without_snapshot,
-    seed_test_world_into_storage,
+    make_test_app_without_snapshot, seed_test_world_into_storage,
 };
 pub use fixtures::*;
 pub use noop_forensics::{make_test_recorder, make_test_recorder_with_storage, NoopForensics};

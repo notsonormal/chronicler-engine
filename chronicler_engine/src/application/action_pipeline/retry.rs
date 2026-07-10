@@ -96,19 +96,15 @@ pub fn retry_last_response_impl(app: &DefaultApplicationService) {
     };
 
     if let ActionOutcome::Cancelled = outcome {
-        if let Ok(mut state) = app.load_or_fresh() {
-            state.narrative.input_buffer.status = GenerationStatus::Idle;
-            state.narrative.input_buffer.phase = GenerationPhase::default();
-            let _ = app.save_state(&state);
-        }
+        let mut state = app.load_or_fresh();
+        state.narrative.input_buffer.status = GenerationStatus::Idle;
+        state.narrative.input_buffer.phase = GenerationPhase::default();
+        let _ = app.save_state(&state);
     }
 }
 
 pub(crate) fn save_retry_error(app: &DefaultApplicationService, message: impl Into<String>) {
-    let Ok(mut state) = app.load_or_fresh() else {
-        tracing::error!("save_retry_error: load_or_fresh failed");
-        return;
-    };
+    let mut state = app.load_or_fresh();
     state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
     if let Err(e) = app.save_state(&state) {
         tracing::error!("Critical: failed to persist retry error state: {e}");
@@ -162,16 +158,12 @@ pub(crate) fn retry_main_narration(
 
 #[instrument(skip(app))]
 pub fn retrigger_event_impl(app: &DefaultApplicationService) {
-    let Ok(state) = app.load_or_fresh() else {
-        tracing::error!("retrigger_event: load_or_fresh failed");
-        return;
-    };
+    let state = app.load_or_fresh();
     let outcome = retry_event_continuation(app, state);
     if let ActionOutcome::Cancelled = outcome {
-        if let Ok(mut state) = app.load_or_fresh() {
-            state.narrative.input_buffer.status = GenerationStatus::Idle;
-            state.narrative.input_buffer.phase = GenerationPhase::default();
-            let _ = app.save_state(&state);
-        }
+        let mut state = app.load_or_fresh();
+        state.narrative.input_buffer.status = GenerationStatus::Idle;
+        state.narrative.input_buffer.phase = GenerationPhase::default();
+        let _ = app.save_state(&state);
     }
 }

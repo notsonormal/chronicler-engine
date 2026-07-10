@@ -54,12 +54,16 @@ Fix 8 findings from two reviews. Tier 1 (3 critical): ADR-030 GenerationGuard am
   - [ ] ##### Validate: `python build.py` passes. `grep -rn "HttpError\|HttpStatusCode\|ErrorResponse" src/` returns 0 hits outside ADR-029 (historical doc).
 
 - [ ] #### Task 2.2: OpContext axum `FromRequestParts` extractor (5 SP)
+
+  > **VOID (2026-07-10):** OpContext-kill commit 20cacf9 made the FromRequestParts extractor moot; handlers now use direct `state.application_service.X()` access. See ADR-031.
   - [ ] ##### SubTask 2.2.1: Implement `impl FromRequestParts<AppState> for OpContext` in `src/adapters/driving/http/op_context_loader.rs`. Body calls existing `load_op_context_for_active_game`. Maps `EngineError::Config` → `ApplicationError::Engine(EngineError::Config(...))` preserving fidelity (current Pattern 2 flattens to `EngineError::Render` — fix this regression). (2 SP)
   - [ ] ##### SubTask 2.2.2: Migrate 10+ handlers. Replace `State<AppState> + ctx_or_error(&state) / load_op_context_for_active_game(&state).map_err(...)` idioms with `ctx: OpContext` extractor parameter. Files: `debug.rs`, `fragments/endpoints.rs`, `fragments/history.rs`, `fragments/misc/game_control.rs`, `fragments/misc/swipe.rs`, `fragments/renderers/fragment_renderers.rs`, `fragments/renderers/response.rs`, `games_fragment/handlers.rs`, `worlds_fragment/handlers.rs`. (2 SP)
   - [ ] ##### SubTask 2.2.3: Delete `pub fn ctx_or_error` in `fragments/renderers/response.rs` (no remaining callers). Keep `load_op_context_for_active_game` + `load_op_context` as building blocks for the extractor (or inline if extractor becomes sole caller). (1 SP)
   - [ ] ##### Validate: `python build.py` passes. `grep -rn "ctx_or_error" src/adapters/driving/http/` returns 0 hits. `grep -rn "load_op_context_for_active_game" src/adapters/driving/http/` returns ≤2 hits.
 
 - [ ] #### Task 2.3: WorldSnapshot canonicalization (4 SP)
+
+  > **VOID (2026-07-10):** WorldSnapshot variant never wired; constructors still take 4-5 args. Superseded by T9 (WorldSnapshot removal) in simpler-hexagon-pre-merge-superplan.md. See ADR-031.
   - [ ] ##### SubTask 2.3.1: Change `GameState::new` + `GameState::from_snapshot` signatures in `src/domain/model/state/game_state.rs` to take `WorldSnapshot` (cloned, not 4 individual `Arc<>` + `HashMap`). GameState stores the 4 fields internally as today (no internal change to GameState struct). (1 SP)
   - [ ] ##### SubTask 2.3.2: Migrate 18+ callsites (including 9 test files): `context.rs` (3 sites: load_or_fresh, load_expecting_valid_state, build_initial_state variants), `arrival_service.rs::run`, `is_generating_invariant_tests.rs::persisted_flag`, `init_game.rs` (2 sites), `run_tests.rs`, `action_pipeline/retry.rs`, `action_pipeline/pipeline_tests.rs` (3 sites), `domain/engine/logic_tests.rs`, `domain/engine/trigger_eval_tests.rs`, `domain/engine/action_processing_tests.rs`, `test_support/fixtures.rs` (3 sites), `test_support/test_app_builder.rs`, `application/query_handlers_tests.rs`, `application/agents/quantifier/agent_tests.rs`. Each `Arc::clone(&ctx.world_snapshot.world) × 4` becomes `ctx.world_snapshot.clone()`. (3 SP)
   - [ ] ##### Validate: `python build.py` passes. `grep -rn "Arc::clone(&ctx.world_snapshot.world)" src/ tests/` returns 0 hits. `grep -rn "Arc::clone(&ctx.world_snapshot" src/ tests/` returns 0 hits.

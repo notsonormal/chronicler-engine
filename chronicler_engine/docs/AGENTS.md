@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-10 12:18 UTC*
+*Index last generated: 2026-07-10 14:41 UTC*
 
 ### `docs/adr/`
 
@@ -59,6 +59,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [ADR-027: Hexagonal Architecture Migration](./adr/adr-027-hexagonal-architecture-migration.md)
 - [ADR-028: Test Module Header Convention](./adr/adr-028-test-module-header-convention.md)
 - [ADR-030: is_generating Dual-Source Invariant — AtomicBool Is Cached View of Persisted Status](./adr/adr-030-is-generating-invariant.md)
+- [ADR-031: OpContext Absorption Trade-offs](./adr/adr-031-opcontext-absorption-tradeoffs.md)
 - [ADR Standards](./adr/README.md)
 
 ### `docs/architecture/`

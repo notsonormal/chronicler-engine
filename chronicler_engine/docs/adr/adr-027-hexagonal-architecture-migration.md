@@ -67,25 +67,28 @@ Without the port, core would import the adapter — violating the dependency inv
 
 ### Storage Direct Access Exemption
 
-Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in 5 grandfathered files, split by marker variant:
+Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in 8 grandfathered files, split by marker variant:
 
-**Intentional (3 files)** — form the **application persistence boundary**, marked `// arch-lint: storage-direct — intentional, see ADR-027`:
+**Intentional (6 files)** — form the **application persistence boundary**, marked `// arch-lint: storage-direct — intentional, see ADR-027`:
 
 1. `src/application/context.rs`
 2. `src/application/application_service.rs`
 3. `src/application/game_service.rs`
+4. `src/application/persistence_gate/gate.rs` — owns the persistence boundary; Storage import is the seam, not a leak. (T2 ticket 02.)
+5. `src/application/game_catalogue/gate.rs` — game-lifecycle orchestration; reaches Storage via `PersistenceGate::storage()` accessor (no direct import).
+6. `src/application/world_catalogue/gate.rs` — worlds/presets persistence; deliberate asymmetry vs `GameCatalogue` (raw `Arc<Storage>` vs `Arc<PersistenceGate>`) to keep game/world seams independent. (T2 ticket 04.)
 
-**Deferred to T2 (2 files)** — agent constructors that still take `Option<Arc<Storage>>` directly; will be replaced by recorder injection once the T2 land package lands. Marked `// arch-lint: storage-direct — deferred to T2, see ADR-027`:
+**Deferred to G1-B (2 files)** — agent constructors that still take `Option<Arc<Storage>>` directly; T2 carve-out has landed (see `persistence_gate`), but full caller-site migration is tracked by ticket G1-B. Marked `// arch-lint: storage-direct — deferred to G1-B, see ADR-027`:
 
-4. `src/application/agents/registry.rs`
-5. `src/application/agents/quantifier/agent.rs`
+7. `src/application/agents/registry.rs`
+8. `src/application/agents/quantifier/agent.rs`
 
 The exemption is intentional, not a leak:
 
 - `Storage` is a concrete adapter with no port trait.
 - Substitution happens via the `Backend` enum (SQLite/InMemory/Test), not trait swapping.
 - Wrapping `Storage`'s ~40 methods in a `StateRepository` trait would be YAGNI (one impl, no real substitution seam).
-- The 5 grandfathered files form the application persistence boundary — any other `application/` file importing `Storage` directly is blocked by the `check_application_storage_direct` arch-lint guardrail (arch-lint 0.4.x has no per-file allowlists, so all five sites must carry a marker comment). Test files (`*_tests.rs`) are excluded from the guardrail because arch-lint cannot distinguish test fakes from production leaks.
+- The 6 intentional grandfathered files form the application persistence boundary; the 2 deferred agent files still import `Storage` directly pending G1-B. Any other `application/` file importing `Storage` directly is blocked by the `check_application_storage_direct` arch-lint guardrail (arch-lint 0.4.x has no per-file allowlists, so all eight sites must carry a marker comment). Test files (`*_tests.rs`) are excluded from the guardrail because arch-lint cannot distinguish test fakes from production leaks.
 
 ### `domain/engine/` Subfolder Kept
 
@@ -110,7 +113,7 @@ The exemption is intentional, not a leak:
 
 ### Negative
 
-- ⚠️ Storage direct access is a documented exception, not a pure hexagonal implementation. Mitigated: exactly 3 files, marked with comments, ADR documents the tradeoff.
+- ⚠️ Storage direct access is a documented exception, not a pure hexagonal implementation. Mitigated: exactly 6 intentional files (plus 2 deferred to G1-B), marked with comments, ADR documents the tradeoff.
 - ⚠️ `LlmProviderConfig` infra fields (`api_key`, `base_url`, `provider`) remain in domain — rides along with persisted `AppSettings` JSON contract.
 - ⚠️ `Swipe::snapshot_id` DB FK remains on domain entity — YAGNI; full DTO split would force duplication across message aggregate.
 
@@ -133,3 +136,4 @@ The exemption is intentional, not a leak:
 - **2026-06-30**: Initial decision.
 - **2026-07-04**: Phase B (arch-lint scope split) landed — `model → application` and ports deny rules enforced in `arch-lint.toml`. Phase C (composition root cleanup) landed — `Bootstrap::wiring` is now the only module importing both port traits and adapter impls for LLM/agent construction. `Connection` renamed to `LlmProviderConfig` (Phase E.1). `Swipe::snapshot_id` kept on domain entity (Phase E.2 dropped as YAGNI — Deviation 3). Phase F.1 landed — `ArrivalTaskContext` extracted from `bootstrap/init_game.rs` to `application/arrival_service.rs`; `inject_scenario_logs` moved from `bootstrap/scenario.rs` to `application/scenario.rs`. Storage exemption reduced from 5 files to 3: `QuantifierAgent::from_config_with_storage` and `AgentRegistry::from_configs_with_storage` no longer take `Option<Arc<Storage>>` — recorder injected directly.
 - **2026-07-06**: Corrected — exemption is 5 files, not 3. The 2 "deferred to T2" sites (`src/application/agents/registry.rs`, `src/application/agents/quantifier/agent.rs`) still import `Storage` directly (T2 not yet landed). Current grandfathered list: `src/application/context.rs`, `src/application/game_service.rs`, `src/application/application_service.rs` (intentional) + `src/application/agents/registry.rs`, `src/application/agents/quantifier/agent.rs` (deferred to T2). Storage-direct access in any other `application/` file is now blocked by `check_application_storage_direct` guardrail in `tests/infrastructure/guardrails/layers.rs`, since arch-lint 0.4.x lacks per-file allowlists. Test files (`*_tests.rs`) are excluded because arch-lint cannot distinguish test fakes from production leaks.
+- **2026-07-09**: T2 land package landed. The 3 intentional-grandfathered carve-outs (`persistence_gate`, `game_catalogue`, `world_catalogue`) joined the boundary. `generation_gate` does not touch `Storage` (cancel token + atomic slot only — not on the list). Grandfathered list grew from 5 to 8; "Deferred to T2" relabeled "Deferred to G1-B" — T2 done, but the 2 agent constructors still take `Option<Arc<Storage>>` and will be migrated by ticket G1-B (separate effort). Marker comments in the 2 deferred files (`agents/registry.rs`, `agents/quantifier/agent.rs`) updated to point at the now-landed `persistence_gate` carve-out.

@@ -3,12 +3,16 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::arrival_service::ArrivalTaskContext;
+use chronicler_engine::application::application_service::DefaultApplicationService;
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::domain::model::character::NpcCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::domain::model::character::NpcCard;
+use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    make_test_app_with_game_service, make_test_recorder_with_storage,
+    make_test_app_with_game_service, make_test_recorder_with_storage, seed_test_world_into_storage,
 };
 
 use crate::pipeline_helpers::{create_test_state_with_map, latest_state};
@@ -115,5 +119,83 @@ fn test_arrival_narration_survives_reload() {
         reloaded_narration.text(),
         history_narration_text,
         "Reloaded narration should match the one produced by ArrivalTaskContext::run"
+    );
+}
+
+#[test]
+fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
+    let state = create_test_state_with_map();
+
+    let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
+    let failing_storage = Arc::new(failing_storage);
+    seed_test_world_into_storage(&failing_storage, &state);
+    handle.set(
+        "load_latest_snapshot",
+        TestOverride::internal("simulated load_latest_snapshot failure"),
+    );
+
+    let preset_storage = Storage::new_in_memory();
+    let _ = preset_storage.save_preset(
+        &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+            id: "system_default".to_string(),
+            name: "Default System".to_string(),
+            role: Some("You are a narrator.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            is_default: true,
+            preset_type: chronicler_engine::domain::model::prompt_preset::PresetType::System,
+        },
+    );
+    let arrival_preset = preset_storage
+        .get_preset("system_default")
+        .ok()
+        .flatten()
+        .expect("Should have system_default preset");
+
+    let llm: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default());
+    let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(&failing_storage));
+    let game_service = Arc::new(GameService::with_mock_quantifier(
+        Arc::clone(&recorder),
+        Arc::new(MockBackend::default()),
+    ));
+
+    let app = Arc::new(DefaultApplicationService::new(
+        Arc::clone(&failing_storage),
+        Arc::new(preset_storage),
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::clone(&game_service),
+    ));
+
+    let task_ctx = ArrivalTaskContext::new_for_test(
+        Arc::clone(&app),
+        "room1".to_string(),
+        Vec::<NpcCard>::new(),
+        Vec::<NpcCard>::new(),
+        Some(arrival_preset),
+        "short".to_string(),
+        1024,
+        None,
+        recorder,
+    );
+
+    task_ctx.run_sync();
+
+    handle.clear("load_latest_snapshot");
+
+    let guard = app.load_or_fresh();
+    let narrations: Vec<_> = guard
+        .narrative
+        .history()
+        .into_iter()
+        .filter(|e| e.message_type == MessageType::Narration)
+        .collect();
+    assert!(
+        !narrations.is_empty(),
+        "arrival_service should have run (fresh-state fallback); expected at least one narration message after load failure, got {} total messages",
+        guard.narrative.history().len(),
     );
 }

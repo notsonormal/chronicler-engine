@@ -21,8 +21,10 @@ fn persisted_flag(app: &DefaultApplicationService) -> bool {
         .flatten()
         .map(|_snap| {
             app.load_or_fresh()
-                .map(|s| s.narrative.input_buffer.status.is_generating())
-                .unwrap_or(false)
+                .narrative
+                .input_buffer
+                .status
+                .is_generating()
         })
         .unwrap_or(false)
 }
@@ -96,7 +98,7 @@ async fn test_wait_until_idle_fails_fast_on_cached_false_persisted_generating() 
         std::sync::Arc::new(make_test_app_with_sqlite(state).expect("make_test_app_with_sqlite"));
 
     // Bypass process_action: production CAS would forbid cached=false with status=Generating.
-    let mut gs = app.load_or_fresh().expect("load_or_fresh");
+    let mut gs = app.load_or_fresh();
     gs.narrative.input_buffer.status = GenerationStatus::Generating;
     let snapshot_id = app
         .save_state(&gs)

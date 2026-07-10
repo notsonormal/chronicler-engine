@@ -1,7 +1,7 @@
 # Super-Plan: `simpler-hexagon` Pre-Merge Cleanup
 
 **Date:** 2026-07-09
-**Status:** In progress — T2 COMPLETE (tickets 00–04 resolved 2026-07-09); T3 glossary renames COMPLETE 2026-07-10 (4 of 4 in-scope terms; glossary-2 carved to T9); T1, T4–T8, T9 pending
+**Status:** In progress — T1 COMPLETE 2026-07-10 (4 blockers fixed, build.py green: 1241 passed, 2 LLM skipped); T2 COMPLETE (tickets 00–04 resolved 2026-07-09); T3 glossary renames COMPLETE 2026-07-10 (4 of 4 in-scope terms; glossary-2 carved to T9); T6 COMPLETE 2026-07-10 (ADR-031 written, ADR-030 amended, §T2.2/§T2.3/§A6.4/§B1.3 marked VOID); T4, T5, T7–T9 pending
 **Scope:** `chronicler_engine/` on branch `simpler-hexagon` (HEAD `1eda563` at plan creation; T2 work landed post-HEAD)
 **Total estimated effort:** ~60 SP across 8 tracks
 
@@ -32,12 +32,12 @@ Consolidate findings from 4 prior reviews + 2 fresh antipattern passes + depth a
 
 | # | Track | Readiness | Priority | Practical Benefit | Certainty | Blocks | SP est |
 |---|-------|-----------|----------|-------------------|-----------|--------|--------|
-| T1 | Tier 1 blockers (4 bugs) | ready | **P0** | High | High | T2-T5 | ~8 |
+| T1 | Tier 1 blockers (4 bugs) | **COMPLETE** (2026-07-10) | **P0** | High | High | T2-T5 | ~8 |
 | T2 | C1 god-class split (4 modules + PresetStore) | **COMPLETE** (2026-07-09, tickets 00–04) | P1 | High | Med-High | T4 | ~16 |
 | T3 | Glossary drift (4 terms + doc sweep) | ready | P1 | Med | High | none | ~4 |
 | T4 | C2 PhaseError consolidation | needs grilling G3 | P2 | Med | Med | none | ~5 |
 | T5 | C3 TestApp builder collapse | ready | P2 | Med | Med | none | ~16 |
-| T6 | Plan/ADR honesty | ready | P0 | Med | High | none | ~1 |
+| T6 | Plan/ADR honesty | **COMPLETE** (2026-07-10) | P0 | Med | High | none | ~1 |
 | T7 | Mechanical antipattern polish (~25 findings) | opportunistic | P3 | Low-Med | High | none | ~10 |
 | T8 | Workflow gates (D3/D4 prevention) | needs scope | P2 | Med | Med | none | ~3 |
 | T9 | WorldSnapshot removal (immutable-world-data out of GameState) | needs grilling | P2 | High | Med | none | ~13 |
@@ -49,6 +49,8 @@ P0 = defects / required for merge; P1 = structural / load-bearing; P2 = debt pru
 ---
 
 ## T1 — Tier 1 Blockers (4 Bugs)
+
+**Status: COMPLETE (2026-07-10).** All 4 bugs fixed; `python build.py` green: 1241 tests passed, 2 LLM skipped, clippy `-D warnings` clean, fmt clean. Independent verification by primary confirmed all 4 grep gates pass. Files: `persistence_gate/gate.rs`, `application_service.rs`, `generation_gate/gate.rs`, `message_editing.rs`, `query_handlers.rs`, `action_pipeline/{retry,pipeline,actions}.rs`, `is_generating_invariant_tests.rs`, `test_support/context.rs`, `tests/integration/flow/retry_main.rs`, `tests/integration/flow/arrival_persistence.rs`, `tests/helpers/pipeline_helpers.rs`, `tests/http/fragment.rs`, `tests/infrastructure/guardrails/layers.rs`.
 
 **Findings owned:** `simpler-hexagon-review.md` blockers 2-4 + `antipattern-fresh-2026-07-09.md` #2, #14, #29 + `code-review-simpler-hexagon-2026-07-09.md` HARD on `layers.rs`.
 
@@ -315,6 +317,8 @@ T5 is the lowest-priority structural item — tests work today, just clumsily. P
 
 ## T6 — Plan/ADR Honesty
 
+**Status: COMPLETE (2026-07-10).** ADR-031 written (`docs/adr/adr-031-opcontext-absorption-tradeoffs.md`, validates clean); ADR-030 amended with Access Pattern section; `tier-1-2-fix-plan.md` §T2.2 + §T2.3 marked VOID; `opcontext-kill-plan.md` §A6.4 + §B1.3 marked VOID. Pure docs — no `.rs` changes.
+
 **Findings owned:** `code-review-simpler-hexagon-2026-07-09.md` "Spec (a) Missing / Partial" + `simpler-hexagon-review.md` "Plan validation gates silently failed" + doubt verdict D3.
 
 **Practical Benefit: MED** — future agents reading the plan won't be misled. Avoids the "the plan says X but the code does Y" loop.
@@ -530,10 +534,10 @@ T9 is the architecturally correct "delete WorldSnapshot" — applies the OpConte
 
 | ID | Title | Owner Track | Status |
 |----|-------|-------------|--------|
-| blocker-1 | cancel_token drop in `make_test_app_with_storage_and_service` | T1 | pending |
-| blocker-2 | `load_or_fresh` type lie | T1 | pending |
-| blocker-3 | stale guardrail lists deleted `application/context.rs` | T1 | pending |
-| blocker-4 | `arrival_service::run` silent return | T1 | pending |
+| blocker-1 | cancel_token drop in `make_test_app_with_storage_and_service` | T1 | **resolved** (2026-07-10) |
+| blocker-2 | `load_or_fresh` type lie | T1 | **resolved** (2026-07-10; infallible, `load_state_lossy` deleted) |
+| blocker-3 | stale guardrail lists deleted `application/context.rs` | T1 | **resolved** (2026-07-10) |
+| blocker-4 | `arrival_service::run` silent return | T1 | **resolved** (2026-07-10; fresh-state fallback restored, regression test added) |
 | arch-1 | 49-method god-object + 2 phantom Arc<Storage> | T2 | **resolved** (tickets 02–04; 4 modules carved, god-object gone, `self.storage` grep = 0, `application_service.rs` 723→275 LOC) |
 | arch-2 | ProcessActionResult + ApplicationError dual enums | T2 | **resolved** (ticket 04; both enums moved to `application/errors.rs`) |
 | arch-3 | AppState + ServerResources parallel-field ghost seam | T2 (C4 free follow-up) | **ticketed** — [Ticket 05](../../../.scratch/t2-god-class-split/issues/05-appstate-token-phantom-storage.md) (grilling; covers phantom `Arc<Storage>` on AppState + dual cancel_token stale-on-replace) |
@@ -573,11 +577,11 @@ T9 is the architecturally correct "delete WorldSnapshot" — applies the OpConte
 | workflow-2 | Plan-adherence audit not formalized | T8 | pending |
 | workflow-3 | Antipattern healthcheck not gated | T8 | pending |
 | workflow-4 | Plan validation gates not CI-runnable | T8 | pending |
-| plan-1 | §T2.2 / §T2.3 silently invalidated | T6 (mark VOID) | pending |
-| plan-2 | §A6.4 validation gate failed silently | T6 (mark VOID) | pending |
-| plan-3 | §B1.3 validation gate failed silently | T6 (mark VOID) | pending |
-| plan-4 | No ADR-031 documenting OpContext absorption | T6 | pending |
-| plan-5 | ADR-030 access pattern not documented | T6 | pending |
+| plan-1 | §T2.2 / §T2.3 silently invalidated | T6 (mark VOID) | **resolved** (2026-07-10; VOID markers added) |
+| plan-2 | §A6.4 validation gate failed silently | T6 (mark VOID) | **resolved** (2026-07-10; VOID marker added) |
+| plan-3 | §B1.3 validation gate failed silently | T6 (mark VOID) | **resolved** (2026-07-10; VOID marker added) |
+| plan-4 | No ADR-031 documenting OpContext absorption | T6 | **resolved** (2026-07-10; ADR-031 written) |
+| plan-5 | ADR-030 access pattern not documented | T6 | **resolved** (2026-07-10; Access Pattern section added) |
 | plan-6 | No ADR documenting T2 modular split (ADR-032?) | T2 follow-up / T6 | **ticketed** — [Ticket 06](../../../.scratch/t2-god-class-split/issues/06-adr-032-t2-modular-split-record.md) (grilling; decide: new ADR-032 vs amend ADR-027 vs fold into ADR-031 vs arch-doc suffices) |
 
 **Total: 45 findings across 9 tracks.**

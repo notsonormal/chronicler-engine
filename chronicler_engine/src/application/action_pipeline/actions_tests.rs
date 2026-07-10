@@ -75,9 +75,7 @@ fn test_execute_action_impl_completes_and_persists_state() {
     let service = make_test_service(narrator_recorder, quantifier_provider);
     let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
     execute_action_impl(&app, "look".to_string());
-    let final_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should load");
+    let final_state = app.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -110,9 +108,7 @@ fn test_execute_action_impl_clears_last_trigger() {
     let service = make_test_service(narrator_recorder, quantifier_provider);
     let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
     execute_action_impl(&app, "look".to_string());
-    let final_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should load");
+    let final_state = app.load_or_fresh();
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared before pipeline runs"
@@ -128,9 +124,7 @@ fn test_execute_action_impl_handles_narration_error() {
     let service = make_test_service(narrator_recorder, quantifier_provider);
     let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
     execute_action_impl(&app, "look".to_string());
-    let final_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should load");
+    let final_state = app.load_or_fresh();
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -150,9 +144,7 @@ fn test_execute_action_impl_handles_cancellation() {
     let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
     app.cancel_token().cancel();
     execute_action_impl(&app, "look".to_string());
-    let final_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should load");
+    let final_state = app.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -174,9 +166,7 @@ fn test_execute_action_impl_preserves_existing_input_log() {
     let service = make_test_service(narrator_recorder, quantifier_provider);
     let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
     execute_action_impl(&app, "examine room".to_string());
-    let final_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should load");
+    let final_state = app.load_or_fresh();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
@@ -219,9 +209,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     });
 
     entered.wait();
-    let mid_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should load");
+    let mid_state = app.load_or_fresh();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,
@@ -230,9 +218,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
 
     release.wait();
     handle.join().expect("Action thread should complete");
-    let final_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should load");
+    let final_state = app.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.phase,
         GenerationPhase::default(),
@@ -276,9 +262,7 @@ fn test_narration_saved_before_quantifying_phase() {
         narration_count >= 1,
         "Narration should be saved before quantifier completes"
     );
-    let mid_state = app
-        .load_or_fresh()
-        .expect("freshly seeded state should load");
+    let mid_state = app.load_or_fresh();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,

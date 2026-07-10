@@ -246,10 +246,7 @@ impl<'a> PipelineRun<'a> {
 
     pub(super) fn handle_cancellation(&self) -> ActionOutcome {
         tracing::warn!("Pipeline cancelled — aborting remaining stages");
-        let Ok(mut state) = self.app.load_or_fresh() else {
-            tracing::error!("handle_cancellation: load_or_fresh failed");
-            return ActionOutcome::Cancelled;
-        };
+        let mut state = self.app.load_or_fresh();
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();
         self.persist(&state);

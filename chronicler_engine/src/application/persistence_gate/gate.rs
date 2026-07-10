@@ -74,22 +74,22 @@ impl PersistenceGate {
         })
     }
 
-    pub fn load_or_fresh(&self) -> Result<GameState, EngineError> {
+    pub fn load_or_fresh(&self) -> GameState {
         match self.load_expecting_valid_state() {
-            Ok(state) => Ok(state),
+            Ok(state) => state,
             Err(e) => {
                 tracing::error!(
                     "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
                 );
                 let snap = self.world_snapshot_or_empty();
                 let starting_room_id = snap.world.starting_room_id();
-                Ok(GameState::new(
-                    snap.world,
-                    snap.map,
-                    snap.player,
+                GameState::new(
+                    Arc::clone(&snap.world),
+                    Arc::clone(&snap.map),
+                    Arc::clone(&snap.player),
                     (*snap.npcs).values().cloned().collect(),
                     starting_room_id,
-                ))
+                )
             }
         }
     }

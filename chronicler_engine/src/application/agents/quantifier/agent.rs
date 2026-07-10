@@ -1,6 +1,6 @@
 //! [DOC: docs/system/agent_system.md]
 //! Quantifier agent implementation
-//! arch-lint: storage-direct — deferred to T2, see ADR-027
+//! arch-lint: storage-direct — deferred to G1-B (T2 persistence_gate carve-out landed; this agent still takes `Option<Arc<Storage>>`), see ADR-027
 
 use std::sync::{Arc, RwLock};
 

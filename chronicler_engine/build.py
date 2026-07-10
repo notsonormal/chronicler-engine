@@ -1,6 +1,11 @@
 """Full build, validate, and test for Chronicler Engine.
 
 Uses cargo-nextest for parallel test execution.
+
+Output policy: cargo command output goes ONLY to ``logs/build_*.log``.
+Stdout carries status lines (step labels, banners, Step Timing Summary with
+per-step log line ranges) so an agent caller can decide whether to read a
+targeted slice of the log. Full cargo output is never printed to stdout.
 """
 
 import argparse
@@ -23,25 +28,45 @@ if sys.platform == "win32":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
-class TeeLogger:
-    """Write to both stdout and a log file simultaneously."""
+class _LogState:
+    """Module-level log handle + running line counter.
 
-    def __init__(self, log_path: Path, original_stdout):
-        self.log_file = open(log_path, "w", encoding="utf-8")
-        self.original_stdout = original_stdout
-        self.log_path = log_path
+    Line numbers are 1-indexed for direct use with ``read offset=N limit=M``.
+    """
 
-    def write(self, message):
-        self.original_stdout.write(message)
-        self.log_file.write(message)
-        self.log_file.flush()
+    fh = None
+    line_no = 0
 
-    def flush(self):
-        self.original_stdout.flush()
-        self.log_file.flush()
 
-    def close(self):
-        self.log_file.close()
+def _set_log_fh(fh):
+    """Register the log file handle and reset the line counter."""
+    _LogState.fh = fh
+    _LogState.line_no = 0
+
+
+def _log_write(text):
+    """Write text to the log file, bumping the line counter by newline count."""
+    fh = _LogState.fh
+    if fh is None:
+        return
+    fh.write(text)
+    fh.flush()
+    _LogState.line_no += text.count("\n")
+
+
+def _log_line_no():
+    """Current line number in the log file (1-indexed for next write)."""
+    return _LogState.line_no
+
+
+# Cargo progress lines are pure noise for an agent caller — every incremental
+# build emits hundreds of "   Compiling foo v1.0.X" / "    Checking foo" lines.
+# Strip them before writing to the log so the log carries only actionable content
+# (warnings, errors, test results, build summary). The line counter still advances
+# so existing log-range pointers stay accurate.
+_CARGO_PROGRESS_RE = re.compile(
+    r"^\s*(?:Compiling|Checking|Downloading|Updating|Adding|Building|Running `rustc`)\s+\S+"
+)
 
 
 class StepCounter:
@@ -203,7 +228,7 @@ def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 3):
             for name in files:
                 p = Path(root) / name
                 try:
-                    if (now - p.stat().st_mtime) <= max_age_sec:
+                    if (now - p.stat().st_mtime) <= max_age_days:
                         continue
                     p.unlink()
                     removed.append(str(p))
@@ -256,18 +281,21 @@ def dump_sqlite_to_jsonl(db_path: Path, output_dir: Path):
 
 
 def run(cmd, cwd=None, check=True, show_output=True, env=None):
-    """Run a command and handle output.
+    """Run a command, writing its output to the log file only (not stdout).
 
-    Captures both stdout and stderr to avoid PowerShell ErrorRecord wrapping,
-    then prints them to stdout so the user still sees everything.
+    Returns the exit code. When ``check`` is True and the command fails, calls
+    ``sys.exit`` with the return code. Status messages (the ``$ {cmd}`` echo and
+    any ``FAILED`` notice) still go to stdout and the log.
     """
     print(f"$ {cmd}")
+    _log_write(f"$ {cmd}\n")
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
 
     if show_output:
-        # Stream output in real-time to avoid looking "stuck" on long commands
+        # Stream output in real-time to the log so a live tail of the log file
+        # shows progress; nothing is emitted to stdout.
         process = subprocess.Popen(
             cmd,
             shell=True,
@@ -280,13 +308,17 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
             errors="replace",
         )
         for line in process.stdout:
-            # Filter out noisy cargo-llvm-cov info messages
+            # Filter out noisy cargo-llvm-cov info messages from the log too.
             if line.strip().startswith("info: cargo-llvm-cov"):
                 continue
-            print(line, end="")
+            # Skip cargo progress spam; the log retains everything else.
+            if _CARGO_PROGRESS_RE.match(line):
+                continue
+            _log_write(line)
         process.wait()
         if check and process.returncode != 0:
             print(f"FAILED with code {process.returncode}")
+            _log_write(f"FAILED with code {process.returncode}\n")
             sys.exit(process.returncode)
         return process.returncode
     else:
@@ -301,11 +333,18 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
             errors="replace",
         )
         if result.stdout:
-            print(result.stdout)
+            for line in result.stdout.splitlines(keepends=True):
+                if _CARGO_PROGRESS_RE.match(line):
+                    continue
+                _log_write(line)
         if result.stderr:
-            print(result.stderr)
+            for line in result.stderr.splitlines(keepends=True):
+                if _CARGO_PROGRESS_RE.match(line):
+                    continue
+                _log_write(line)
         if check and result.returncode != 0:
             print(f"FAILED with code {result.returncode}")
+            _log_write(f"FAILED with code {result.returncode}\n")
             sys.exit(result.returncode)
         return result.returncode
 
@@ -338,6 +377,27 @@ def is_target_locked(target_dir: Path) -> bool:
         except OSError:
             continue
     return False  # No lock file found, assume not locked
+
+
+def _print_step_summary(step_timings, step_failures, log_path):
+    """Print the Step Timing Summary with per-step log line ranges."""
+    if not step_timings:
+        return
+    log_name = Path(log_path).name
+    print("\n--- Step Timing Summary ---")
+    total = sum(t["elapsed_sec"] for t in step_timings)
+    for t in step_timings:
+        status = "FAILED" if t["failed"] else "OK"
+        start, end = t["log_range"]
+        if end >= start:
+            range_str = f"({log_name}:{start}-{end})"
+        else:
+            range_str = f"({log_name}:{start}-)"
+        print(f"  {t['elapsed_sec']:>6.2f}s  [{status}]  {t['step']}  {range_str}")
+    print(f"  {'':>6}   Total: {total:.2f}s")
+    if step_failures:
+        print(f"\n  Failed steps: {', '.join(step_failures)}")
+    print("---")
 
 
 def main():
@@ -408,247 +468,273 @@ def main():
     log_dir.mkdir(exist_ok=True)
     clean_old_logs(log_dir, max_age_days=3)
     log_path = log_dir / f"build_{time.strftime('%Y%m%d_%H%M%S')}.log"
-    tee = TeeLogger(log_path, sys.stdout)
-    sys.stdout = tee
+    log_fh = open(log_path, "w", encoding="utf-8")
+    _set_log_fh(log_fh)
 
-    print("=" * 60)
-    print("=== Chronicler Engine Build ===")
-    print(f"Full build log: {log_path}")
-    print("=" * 60)
-
-    cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
-    build_profile = "release" if args.release else "debug"
-    target_dir = cargo_target_dir / build_profile
-
-    if args.diagnostic_benchmark:
-        print("=== Diagnostic Benchmark Mode ===")
-        benchmark_script = Path(__file__).parent / "scripts" / "diagnostic_benchmark.py"
-        if benchmark_script.exists():
-            run(f'python "{benchmark_script}"')
-        else:
-            print(f"ERROR: Benchmark script not found: {benchmark_script}")
-            sys.exit(1)
-        print("=== Diagnostic Benchmark Complete ===")
-        return 0
-
-    if args.cleanup:
-        print("=== Cleanup Mode ===")
-        print("Killing lingering chronicler processes...")
-        kill_by_name("chronicler")
-
-        lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
-        if lock_dir.exists():
-            print(f"Cleaning stale port locks from {lock_dir}...")
-            shutil.rmtree(lock_dir)
-
-        if cargo_target_dir.exists():
-            print(f"Removing build directory: {cargo_target_dir}")
-            shutil.rmtree(cargo_target_dir)
-        else:
-            print(f"Build directory does not exist: {cargo_target_dir}")
-
-        print("=== Cleanup Complete ===")
-        return 0
-
-    check_rust_version()
-    require_nextest()
-
-    if args.strict:
-        os.environ["RUSTFLAGS"] = "-D warnings"
-        print("Strict mode enabled: warnings treated as errors.")
-
-    # Always kill manual runs on the default port first — this may release
-    # the target directory lock if a manual `cargo run` was holding it.
-    print("Checking for processes on port 3000...")
-    kill_port(3000)
-
-    cargo_env = {"NEXTEST_STATUS_LEVEL": "fail"}
-    if args.target_dir:
-        cargo_env["CARGO_TARGET_DIR"] = str(cargo_target_dir.resolve())
-        print(f"Using custom target directory: {cargo_target_dir}")
-        if is_target_locked(cargo_target_dir):
-            print(
-                f"WARNING: Target directory {cargo_target_dir} appears to be "
-                "locked by another cargo process."
-            )
-            print("         Another agent may be building in this directory.")
-    else:
-        if is_target_locked(cargo_target_dir):
-            print(
-                "WARNING: Default target directory (target/) appears to be "
-                "locked by another cargo process."
-            )
-            print("         Use --target-dir to build in a unique folder and avoid conflicts:")
-            print("         python build.py --target-dir target/<unique-name>")
-
-    if args.llm_only:
-        steps = StepCounter(3)
-        steps.next("Building...")
-        run(
-            f"cargo build {'--release' if args.release else ''} --features testing".strip(),
-            env=cargo_env,
-        )
-
-        steps.next("Running LLM tests only...")
-        print("=" * 60)
-        print("NOTE: LLM tests contact the real OpenRouter API.")
-        print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
-        print("      Do not interrupt. Set your tool timeout to >= 600s.")
-        print("=" * 60)
-        llm_cmd = get_test_cmd(include_llm=True)
-        if "nextest" in llm_cmd:
-            llm_cmd += " --test flow_llm_tests"
-        else:
-            llm_cmd += " flow_llm_tests -- --ignored"
-        run(llm_cmd, check=False, env=cargo_env)
-
-        steps.next("Done")
-        print("=== Build Complete ===")
-        return 0
-
-    total_steps = (
-        6  # clippy, test-structure, docstrings, copy assets, tests, report/skip
-    )
-    if not args.no_fmt:
-        total_steps += 1
-    if args.validate_data:
-        total_steps += 1
-    steps = StepCounter(total_steps)
-
+    # Defined before the try block so the finally can always reach them.
     step_timings = []
     step_failures = []
 
     def timed_step(label, cmd, check=True, env=None):
         steps.next(label)
+        start_line = _log_line_no() + 1
         start = time.time()
         try:
-            run(cmd, check=check, env=env)
+            rc = run(cmd, check=check, env=env)
             elapsed = time.time() - start
-            step_timings.append({"step": label, "elapsed_sec": round(elapsed, 2), "failed": False})
-        except SystemExit as e:
+            failed = rc != 0
+            step_timings.append(
+                {
+                    "step": label,
+                    "elapsed_sec": round(elapsed, 2),
+                    "failed": failed,
+                    "log_range": (start_line, _log_line_no()),
+                }
+            )
+            if failed:
+                step_failures.append(label)
+        except SystemExit:
             elapsed = time.time() - start
-            step_timings.append({"step": label, "elapsed_sec": round(elapsed, 2), "failed": True})
+            step_timings.append(
+                {
+                    "step": label,
+                    "elapsed_sec": round(elapsed, 2),
+                    "failed": True,
+                    "log_range": (start_line, _log_line_no()),
+                }
+            )
             step_failures.append(label)
             raise
 
-    if args.validate_data:
-        timed_step("Validating JSON data...", "python scripts/validate_data.py")
-        print("Data validation successful.")
+    exit_code = 0
+    try:
+        print("=" * 60)
+        print("=== Chronicler Engine Build ===")
+        print(f"Full build log: {log_path}")
+        print("=" * 60)
 
-    if not args.no_fmt:
-        timed_step("Formatting...", "cargo fmt", env=cargo_env)
-    else:
-        print("Skipping formatting (--no-fmt set).")
+        cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
+        build_profile = "release" if args.release else "debug"
+        target_dir = cargo_target_dir / build_profile
 
-    timed_step(
-        "Running clippy...",
-        "cargo clippy --all-targets --all-features -- -D warnings",
-        env=cargo_env,
-    )
+        if args.diagnostic_benchmark:
+            print("=== Diagnostic Benchmark Mode ===")
+            benchmark_script = Path(__file__).parent / "scripts" / "diagnostic_benchmark.py"
+            if benchmark_script.exists():
+                run(f'python "{benchmark_script}"')
+            else:
+                print(f"ERROR: Benchmark script not found: {benchmark_script}")
+                exit_code = 1
+                return
+            print("=== Diagnostic Benchmark Complete ===")
+            return
 
-    timed_step(
-        "Running test structure guardrail...",
-        "python scripts/check_test_structure.py",
-        env=cargo_env,
-    )
+        if args.cleanup:
+            print("=== Cleanup Mode ===")
+            print("Killing lingering chronicler processes...")
+            kill_by_name("chronicler")
 
-    timed_step(
-        "Running Python docstring guardrail...",
-        "python scripts/check_python_docstrings.py",
-        env=cargo_env,
-    )
+            lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
+            if lock_dir.exists():
+                print(f"Cleaning stale port locks from {lock_dir}...")
+                shutil.rmtree(lock_dir)
 
-    steps.next("Copying data and assets for deployment...")
-    target_dir.mkdir(parents=True, exist_ok=True)
+            if cargo_target_dir.exists():
+                print(f"Removing build directory: {cargo_target_dir}")
+                shutil.rmtree(cargo_target_dir)
+            else:
+                print(f"Build directory does not exist: {cargo_target_dir}")
 
-    if Path("data").exists():
-        dest_data = target_dir / "data"
-        if dest_data.exists():
-            shutil.rmtree(dest_data)
-        shutil.copytree("data", dest_data)
-        print(f"  Copied data/ -> {dest_data}")
+            print("=== Cleanup Complete ===")
+            return
 
-    if Path("assets").exists():
-        dest_assets = target_dir / "assets"
-        if dest_assets.exists():
-            shutil.rmtree(dest_assets)
-        shutil.copytree("assets", dest_assets)
-        print(f"  Copied assets/ -> {dest_assets}")
+        check_rust_version()
+        require_nextest()
 
-    (target_dir / "logs").mkdir(exist_ok=True)
-    print("  Created logs/")
+        if args.strict:
+            os.environ["RUSTFLAGS"] = "-D warnings"
+            print("Strict mode enabled: warnings treated as errors.")
 
-    print(f"  Package ready in {target_dir}/")
-    print(f"  Deployment: copy {target_dir}/ folder to your target machine")
+        # Always kill manual runs on the default port first — this may release
+        # the target directory lock if a manual `cargo run` was holding it.
+        print("Checking for processes on port 3000...")
+        kill_port(3000)
 
-    # DB lives inside the target folder so each build profile has its own instance.
-    target_data_dir = target_dir / "data"
-    clean_sqlite_dbs(target_data_dir)
-
-    if args.coverage:
-        timed_step(
-            "Running all tests with coverage...", get_coverage_cmd(), check=False, env=cargo_env
-        )
-
-        steps.next("Generating coverage report...")
-        json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
-        json_path.parent.mkdir(parents=True, exist_ok=True)
-        # Exclude: server infra (integration tests), test_support, bootstrap CLI, LLM backends (mock servers)
-        ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]init_game\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
-        run(
-            f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
-            check=False,
-            env=cargo_env,
-        )
-        if json_path.exists():
-            run(
-                f'python scripts/parse_coverage.py --json "{json_path}"',
-                check=False,
-            )
+        cargo_env = {"NEXTEST_STATUS_LEVEL": "fail"}
+        if args.target_dir:
+            cargo_env["CARGO_TARGET_DIR"] = str(cargo_target_dir.resolve())
+            print(f"Using custom target directory: {cargo_target_dir}")
+            if is_target_locked(cargo_target_dir):
+                print(
+                    f"WARNING: Target directory {cargo_target_dir} appears to be "
+                    "locked by another cargo process."
+                )
+                print("         Another agent may be building in this directory.")
         else:
-            print("Warning: Could not generate coverage JSON.")
-    else:
+            if is_target_locked(cargo_target_dir):
+                print(
+                    "WARNING: Default target directory (target/) appears to be "
+                    "locked by another cargo process."
+                )
+                print("         Use --target-dir to build in a unique folder and avoid conflicts:")
+                print("         python build.py --target-dir target/<unique-name>")
+
+        if args.llm_only:
+            steps = StepCounter(3)
+            steps.next("Building...")
+            run(
+                f"cargo build {'--release' if args.release else ''} --features testing".strip(),
+                env=cargo_env,
+            )
+
+            steps.next("Running LLM tests only...")
+            print("=" * 60)
+            print("NOTE: LLM tests contact the real OpenRouter API.")
+            print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
+            print("      Do not interrupt. Set your tool timeout to >= 600s.")
+            print("=" * 60)
+            llm_cmd = get_test_cmd(include_llm=True)
+            if "nextest" in llm_cmd:
+                llm_cmd += " --test flow_llm_tests"
+            else:
+                llm_cmd += " flow_llm_tests -- --ignored"
+            run(llm_cmd, check=False, env=cargo_env)
+
+            steps.next("Done")
+            print("=== Build Complete ===")
+            return
+
+        total_steps = (
+            6  # clippy, test-structure, docstrings, copy assets, tests, report/skip
+        )
+        if not args.no_fmt:
+            total_steps += 1
+        if args.validate_data:
+            total_steps += 1
+        steps = StepCounter(total_steps)
+
+        if args.validate_data:
+            timed_step("Validating JSON data...", "python scripts/validate_data.py")
+            print("Data validation successful.")
+
+        if not args.no_fmt:
+            timed_step("Formatting...", "cargo fmt", env=cargo_env)
+        else:
+            print("Skipping formatting (--no-fmt set).")
+
         timed_step(
-            "Running all tests...",
-            get_test_cmd(include_llm=args.include_llm),
-            check=False,
+            "Running clippy...",
+            "cargo clippy --all-targets --all-features -- -D warnings",
             env=cargo_env,
         )
-        if not args.include_llm:
-            print(
-                "    NOTE: 2 LLM tests were skipped. "
-                "Run 'python build.py --llm-only' to execute them."
+
+        timed_step(
+            "Running test structure guardrail...",
+            "python scripts/check_test_structure.py",
+            env=cargo_env,
+        )
+
+        timed_step(
+            "Running Python docstring guardrail...",
+            "python scripts/check_python_docstrings.py",
+            env=cargo_env,
+        )
+
+        steps.next("Copying data and assets for deployment...")
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        if Path("data").exists():
+            dest_data = target_dir / "data"
+            if dest_data.exists():
+                shutil.rmtree(dest_data)
+            shutil.copytree("data", dest_data)
+            print(f"  Copied data/ -> {dest_data}")
+
+        if Path("assets").exists():
+            dest_assets = target_dir / "assets"
+            if dest_assets.exists():
+                shutil.rmtree(dest_assets)
+            shutil.copytree("assets", dest_assets)
+            print(f"  Copied assets/ -> {dest_assets}")
+
+        (target_dir / "logs").mkdir(exist_ok=True)
+        print("  Created logs/")
+
+        print(f"  Package ready in {target_dir}/")
+        print(f"  Deployment: copy {target_dir}/ folder to your target machine")
+
+        # DB lives inside the target folder so each build profile has its own instance.
+        target_data_dir = target_dir / "data"
+        clean_sqlite_dbs(target_data_dir)
+
+        if args.coverage:
+            timed_step(
+                "Running all tests with coverage...", get_coverage_cmd(), check=False, env=cargo_env
             )
-        steps.next("Skipping coverage report (use --coverage to enable)")
 
-    print("=== Build Complete ===")
+            steps.next("Generating coverage report...")
+            json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+            # Exclude: server infra (integration tests), test_support, bootstrap CLI, LLM backends (mock servers)
+            ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]init_game\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
+            run(
+                f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
+                check=False,
+                env=cargo_env,
+            )
+            if json_path.exists():
+                run(
+                    f'python scripts/parse_coverage.py --json "{json_path}"',
+                    check=False,
+                )
+            else:
+                print("Warning: Could not generate coverage JSON.")
+        else:
+            timed_step(
+                "Running all tests...",
+                get_test_cmd(include_llm=args.include_llm),
+                check=False,
+                env=cargo_env,
+            )
+            if not args.include_llm:
+                print(
+                    "    NOTE: 2 LLM tests were skipped. "
+                    "Run 'python build.py --llm-only' to execute them."
+                )
+            steps.next("Skipping coverage report (use --coverage to enable)")
 
-    project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
-    engine_tmp = Path("tmp")
-    clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=3)
+        print("=== Build Complete ===")
 
-    db_path = target_dir / "data" / "chronicler.db"
-    if db_path.exists():
-        dump_dir = Path("tmp") / "db_dumps"
-        dump_sqlite_to_jsonl(db_path, dump_dir)
+        project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
+        engine_tmp = Path("tmp")
+        clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=3)
 
-    if step_timings:
-        print("\n--- Step Timing Summary ---")
-        total = sum(t["elapsed_sec"] for t in step_timings)
-        for t in step_timings:
-            status = "FAILED" if t["failed"] else "OK"
-            print(f"  {t['elapsed_sec']:>6.2f}s  [{status}]  {t['step']}")
-        print(f"  {'':>6}   Total: {total:.2f}s")
-        if step_failures:
-            print(f"\n  Failed steps: {', '.join(step_failures)}")
-        print("---")
+        db_path = target_dir / "data" / "chronicler.db"
+        if db_path.exists():
+            dump_dir = Path("tmp") / "db_dumps"
+            dump_sqlite_to_jsonl(db_path, dump_dir)
+    except SystemExit as e:
+        # Step failure (check=True) re-raises SystemExit. Capture the code so
+        # the finally can print the summary, then propagate.
+        exit_code = int(e.code) if e.code is not None else 1
+        raise
+    finally:
+        # Flush + close the log so an agent can read a targeted slice immediately.
+        try:
+            log_fh.flush()
+            log_fh.close()
+        except Exception:
+            pass
+        _LogState.fh = None
 
-    print("=" * 60)
-    print("=== Build Complete ===")
-    print(f"Full build log: {log_path}")
-    print("=" * 60)
+        _print_step_summary(step_timings, step_failures, log_path)
 
-    return 0
+        print("=" * 60)
+        print("=== Build Complete ===")
+        print(f"Full build log: {log_path}")
+        print("=" * 60)
+
+    return exit_code
 
 
 if __name__ == "__main__":

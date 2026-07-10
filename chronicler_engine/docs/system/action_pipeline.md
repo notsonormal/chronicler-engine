@@ -182,7 +182,7 @@ Trigger context: `state.narrative.last_trigger` carries the `StoredTriggerContex
 
 - [ADR-014: Action Pipeline Architecture](../adr/adr-014-action-pipeline.md) -- original decision
 - [ADR-027: Hexagonal Architecture Migration](../adr/adr-027-hexagonal-architecture-migration.md) -- pipeline lives in `application/`, ports/traits collapsed
-- [architecture/system.md §2.5](../architecture/system.md) -- 200-word summary of the action_pipeline bullet (this spec goes deeper)
+- [architecture/system.md](../architecture/system.md) -- 8-tier module organization (T2 application sub-modules included); this spec goes deeper on the pipeline itself.
 - [system/game_flow.md](./game_flow.md) -- phase table + status enum definitions
 - [system/llm_processing.md](./llm_processing.md) -- LLM recorder + agent registry contracts used by the pipeline
 - [diagnostics/error_catalog.md](../diagnostics/error_catalog.md) -- error variants the pipeline may surface (room-not-found, empty response, LLM transport failures)

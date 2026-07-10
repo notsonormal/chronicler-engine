@@ -75,6 +75,8 @@ Total: ~21 SP across 11 tasks in 2 phases. All sequential per AGENTS hard constr
   - [ ] ##### SubTask A6.4: Rewrite `is_generating_invariant_tests.rs`: helpers `cached_flag`, `persisted_flag`, `invariant_holds`, `wait_until_idle` switch from `ctx: &OpContext` to `app: &DefaultApplicationService`. `cached_flag(app)` reads `app.is_generating.load(...)`. `persisted_flag(app)` loads state via `app.load_or_fresh()`, reads status field. 3 existing tests adapt.
   - [ ] ##### Validate: `cargo check --all-targets` clean. `grep -rn "WorldSnapshot\|OpContext" src/ tests/` returns 0.
 
+  > **VOID (2026-07-10):** Gate failed silently — grep `WorldSnapshot` returns 13+ hits (struct still in use). Removal deferred to T9 in simpler-hexagon-pre-merge-superplan.md.
+
 - [ ] #### Task A7: Delete OpContext + WorldSnapshot + final cleanup (1 SP) [POINT OF NO RETURN — Issue 15]
   - [ ] ##### SubTask A7.1: Delete `OpContext` + `WorldSnapshot` struct definitions from `src/application/context.rs`. Delete remaining old free fns in context.rs (replaced by ApplicationService methods in A2). Delete file entirely if `map_llm_error` already moved (per A2.3).
   - [ ] ##### SubTask A7.2: Clean unused imports across `src/` + `tests/`. Drop `async-trait` from Cargo.toml if no other user. Run `cargo clippy --all-targets --all-features -- -D warnings` clean.
@@ -91,6 +93,8 @@ Total: ~21 SP across 11 tasks in 2 phases. All sequential per AGENTS hard constr
   - [ ] ##### SubTask B1.2: Extract `Self::claim_generation_slot(&self, state: &mut GameState, player_name: &str, input: &str) -> Result<ProcessActionResult, EngineError>`. Three outcomes: (a) CAS won + save ok → `Ok(Started)`, AtomicBool=true, persisted=Generating; (b) CAS lost → `Ok(ConcurrentGeneration)`, no rollback; (c) CAS won + save failed → `Err(EngineError)`, AtomicBool=true, caller MUST call `release_generation_slot` then propagate. Helper does NOT call release itself. (1 SP)
   - [ ] ##### SubTask B1.3: Extract `Self::release_generation_slot(&self)` — `self.is_generating.store(false, Ordering::SeqCst)`. Rewrite process_action body linearly: load_state → heal_stale → claim_generation_slot (match outcome) → cancel check → spawn pipeline. (1 SP)
   - [ ] ##### Validate: `python build.py` passes; process_action body ≤30 lines.
+
+  > **VOID (2026-07-10):** Gate failed — process_action body was 47 lines (not ≤30). Body has since moved to `GenerationGate::start_action` (T2 ticket 03, 2026-07-09), making this gate moot.
 
 - [ ] #### Task B2: arrival_service::run dedup (1 SP)
   - [ ] ##### SubTask B2.1: Replace state-construction lines (60-110 of `arrival_service.rs::run`) with `let mut state = self.app.load_expecting_valid_state()?;`. Preserve scenario-logs injection on fresh-state branch (`was_fresh` flag return, or `state.narrative.history.is_empty()` check).

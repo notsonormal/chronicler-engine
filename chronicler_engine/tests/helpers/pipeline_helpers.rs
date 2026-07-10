@@ -119,10 +119,9 @@ pub fn wait_for_generation_complete(app: &DefaultApplicationService, timeout_ms:
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(timeout_ms);
     while start.elapsed() < timeout {
-        if let Ok(state) = app.load_or_fresh() {
-            if !state.narrative.input_buffer.status.is_generating() {
-                return true;
-            }
+        let state = app.load_or_fresh();
+        if !state.narrative.input_buffer.status.is_generating() {
+            return true;
         }
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
@@ -130,9 +129,7 @@ pub fn wait_for_generation_complete(app: &DefaultApplicationService, timeout_ms:
 }
 
 pub fn latest_state(app: &DefaultApplicationService) -> GameState {
-    let mut state = app
-        .load_or_fresh()
-        .expect("latest_state: load_or_fresh should succeed (has lossy fallback)");
+    let mut state = app.load_or_fresh();
     app.load_messages_into_state(&mut state);
     state
 }
@@ -169,10 +166,11 @@ pub fn add_input_and_save(app: &DefaultApplicationService, text: &str) {
 
 pub fn latest_snapshot(
     app: &DefaultApplicationService,
-) -> Option<chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot> {
-    app.load_or_fresh()
-        .ok()
-        .map(|state| chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(&state))
+) -> chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot {
+    let state = app.load_or_fresh();
+    chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+        &state,
+    )
 }
 
 pub fn wait_for_condition<F>(

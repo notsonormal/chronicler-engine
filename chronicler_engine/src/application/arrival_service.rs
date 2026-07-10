@@ -60,8 +60,16 @@ impl ArrivalTaskContext {
         let mut state = match self.app.load_expecting_valid_state() {
             Ok(s) => s,
             Err(e) => {
-                tracing::error!("load_expecting_valid_state failed in arrival task: {e}");
-                return;
+                tracing::error!(
+                    "load_expecting_valid_state failed in arrival task: {e}; falling back to fresh initial state"
+                );
+                match self.app.build_fresh_initial_state() {
+                    Ok(s) => s,
+                    Err(e2) => {
+                        tracing::error!("build_fresh_initial_state also failed: {e2}");
+                        return;
+                    }
+                }
             }
         };
 

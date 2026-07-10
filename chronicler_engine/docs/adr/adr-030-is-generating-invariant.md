@@ -80,6 +80,10 @@ The third option is the lightest-weight mitigation that closes the divergence ri
 - Chose store-then-persist ordering over persist-then-store — the read path observes the new AtomicBool value first, which matches the "is generating right now?" semantics a poll reader expects (better to briefly report "generating" than to briefly report "idle" while a generation is mid-flight).
 - Accepted that the property test is the binding safety mechanism. If the test is ever deleted or weakened, the invariant degrades from "machine-checked" to "convention only".
 
+## Access Pattern
+
+The `pub(crate)` widening on `DefaultApplicationService` storage/generation fields was deliberate and expected to be re-tightened by the T2 god-class split (completed 2026-07-09, tickets 00–04). After T2, generation-related access now flows through `application/generation_gate/` and storage access through `application/persistence_gate/`. The single-writer invariant on `is_generating` documented in this ADR is preserved — `GenerationGate` holds the `Arc<AtomicBool>` and reads on `GameCatalogue` are read-only.
+
 ## Related ADRs
 
 - ADR-010: Concurrency and Generation Gate Model — established the original `AtomicBool` generation gate. ADR-030 extends that decision by adding the persisted-source-of-truth requirement and the single-writer rule.

@@ -181,13 +181,6 @@ where
 
 /// Rebuild an app over an EXISTING storage with a new GameService. No state
 /// seeding — storage contents are preserved.
-pub fn make_test_app_with_storage_and_service(
-    storage: Arc<Storage>,
-    game_service: Arc<GameService>,
-) -> Arc<DefaultApplicationService> {
-    finalize_app(storage, game_service)
-}
-
 fn build_seeded_sqlite_storage(state: &GameState) -> Result<Arc<Storage>> {
     let snapshot = GameStateSnapshot::from_game_state(state);
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:")?;
