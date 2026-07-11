@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-11 16:33 UTC*
+*Index last generated: 2026-07-11 20:53 UTC*
 
 ### `docs/adr/`
 
@@ -94,6 +94,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [T1: Error Model Unification](./plans/t1-error-model-unification.md)
 - [T10: Low-priority Cleanup Bundle](./plans/t10-low-priority-cleanup-bundle.md)
 - [T11: Documentation Hygiene Skill Hardening](./plans/t11-documentation-hygiene-skill-hardening.md)
+- [T12: Browser Test Server Flakiness Fix](./plans/t12-browser-test-server-flakiness.md)
 - [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
 - [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
