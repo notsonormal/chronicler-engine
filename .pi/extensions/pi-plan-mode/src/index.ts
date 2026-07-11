@@ -16,6 +16,7 @@ const PLAN_MODE_QUESTION_TOOL_NAME = "plan_mode_question";
 const PLAN_CONTEXT_MARKER = "[CODEX-LIKE PLAN MODE ACTIVE]";
 const SAFE_BUILTIN_PLAN_TOOLS = new Set(["read", "bash", "grep", "find", "ls"]);
 const BLOCKED_BUILTIN_TOOLS = new Set(["edit", "write"]);
+const WRITE_EDIT_TOOL_NAMES = ["write", "edit"] as const;
 const DEFAULT_TOOLS = ["read", "bash", "edit", "write"];
 const TOOL_SELECTOR_PAGE_SIZE = 10;
 const PROPOSED_PLAN_PATTERN =
@@ -741,31 +742,6 @@ export default function planMode(pi: ExtensionAPI) {
 		return resolveInitialPlanModeToolNames(tools, planModeDefaultsConfig);
 	}
 
-	function resolveInitialPlanModeToolNames(
-		tools: ToolInfo[],
-		config: PlanModeDefaultsConfig | undefined,
-	) {
-		const configured = config?.defaultTools;
-		if (configured && configured.length > 0) {
-			const byName = new Map(tools.map((tool) => [tool.name, tool]));
-			const allowed = [
-				...(config?.planFolder ? [config.planFolder] : []),
-				...(config?.scratchFolders ?? []),
-			];
-			return unique(
-				configured.filter((name) => {
-					const tool = byName.get(name);
-					return tool !== undefined && canSelectToolInPlanMode(tool, allowed);
-				}),
-			);
-		}
-		return tools
-			.filter(
-				(tool) => isBuiltinTool(tool) && SAFE_BUILTIN_PLAN_TOOLS.has(tool.name),
-			)
-			.map((tool) => tool.name);
-	}
-
 	function migrateSelectedToolKeys(tools: ToolInfo[]) {
 		if (state.selectedToolKeys === undefined) return undefined;
 		return state.selectedToolKeys
@@ -1052,6 +1028,68 @@ export function canSelectToolInPlanMode(
 		return SAFE_BUILTIN_PLAN_TOOLS.has(tool.name);
 	}
 	return true;
+}
+
+/**
+ * Resolve the initial tool set for a fresh Plan-mode session.
+ *
+ * When `planFolder` or any `scratchFolders` are configured, `write`/`edit` are
+ * auto-appended (unless already explicitly listed in `defaultTools`). This
+ * honours the README contract that writes are allowed inside those folders.
+ * Without allowed folders, write/edit are excluded so read-only planning stays
+ * strict.
+ */
+export function resolveInitialPlanModeToolNames(
+	tools: ToolInfo[],
+	config: PlanModeDefaultsConfig | undefined,
+): string[] {
+	const allowed = [
+		...(config?.planFolder ? [config.planFolder] : []),
+		...(config?.scratchFolders ?? []),
+	];
+	const byName = new Map(tools.map((tool) => [tool.name, tool]));
+
+	const applyWriteEditDefault = (names: Set<string>): void => {
+		if (allowed.length === 0) return;
+		for (const name of WRITE_EDIT_TOOL_NAMES) {
+			if (names.has(name)) continue;
+			const tool = byName.get(name);
+			if (tool !== undefined && canSelectToolInPlanMode(tool, allowed)) {
+				names.add(name);
+			}
+		}
+	};
+
+	const configured = config?.defaultTools;
+	if (configured && configured.length > 0) {
+		const explicit = new Set(
+			configured.filter((name) => {
+				const tool = byName.get(name);
+				return tool !== undefined && canSelectToolInPlanMode(tool, allowed);
+			}),
+		);
+		// When defaultTools lists neither write nor edit, treat that as
+		// "no opinion" and auto-add both. If the user mentions either by name
+		// we trust the explicit list and skip auto-add for both.
+		const userPickedWriteOrEdit = WRITE_EDIT_TOOL_NAMES.some((name) =>
+			explicit.has(name),
+		);
+		if (!userPickedWriteOrEdit) {
+			applyWriteEditDefault(explicit);
+		}
+		return [...explicit];
+	}
+
+	const names = new Set(
+		tools
+			.filter(
+				(tool) =>
+					isBuiltinTool(tool) && SAFE_BUILTIN_PLAN_TOOLS.has(tool.name),
+			)
+			.map((tool) => tool.name),
+	);
+	applyWriteEditDefault(names);
+	return [...names];
 }
 
 function toolNameFromLegacyKey(key: string, tools: ToolInfo[]) {

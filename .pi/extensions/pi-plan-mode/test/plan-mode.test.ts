@@ -16,6 +16,7 @@ import {
 	loadDefaultToolsConfigFromPath,
 	normalizePlanModeQuestionParams,
 	normalizeRelativePath,
+	resolveInitialPlanModeToolNames,
 	resolvePlanFilePath,
 	stripProposedPlanBlocks,
 	stripProposedPlanBlocksFromMessage,
@@ -398,4 +399,101 @@ test("loadDefaultToolsConfigFromPath returns undefined for non-object root", () 
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
+});
+
+function allBuiltins(names: string[]): ToolInfo[] {
+	return names.map((name) => builtinTool(name));
+}
+
+test("resolveInitialPlanModeToolNames auto-includes write/edit when folders configured (with defaultTools)", () => {
+	const tools = allBuiltins([
+		"read",
+		"bash",
+		"grep",
+		"find",
+		"ls",
+		"write",
+		"edit",
+	]);
+	const config = {
+		defaultTools: ["read", "bash", "grep", "find", "ls"],
+		planFolder: "chronicler_engine/docs/plans",
+		scratchFolders: ["tmp", ".scratch"],
+	};
+	const names = resolveInitialPlanModeToolNames(tools, config);
+	assert.ok(names.includes("write"), `expected write in ${names.join(",")}`);
+	assert.ok(names.includes("edit"), `expected edit in ${names.join(",")}`);
+});
+
+test("resolveInitialPlanModeToolNames auto-includes write/edit when folders configured (no defaultTools)", () => {
+	const tools = allBuiltins([
+		"read",
+		"bash",
+		"grep",
+		"find",
+		"ls",
+		"write",
+		"edit",
+	]);
+	const config = {
+		planFolder: "chronicler_engine/docs/plans",
+		scratchFolders: ["tmp"],
+	};
+	const names = resolveInitialPlanModeToolNames(tools, config);
+	assert.ok(names.includes("write"));
+	assert.ok(names.includes("edit"));
+	assert.ok(names.includes("read"));
+});
+
+test("resolveInitialPlanModeToolNames omits write/edit when no folders configured", () => {
+	const tools = allBuiltins([
+		"read",
+		"bash",
+		"grep",
+		"find",
+		"ls",
+		"write",
+		"edit",
+	]);
+	const names = resolveInitialPlanModeToolNames(tools, undefined);
+	assert.ok(!names.includes("write"));
+	assert.ok(!names.includes("edit"));
+	assert.deepEqual(names.sort(), ["bash", "find", "grep", "ls", "read"]);
+});
+
+test("resolveInitialPlanModeToolNames omits write/edit when defaultTools set without folders", () => {
+	const tools = allBuiltins([
+		"read",
+		"bash",
+		"grep",
+		"find",
+		"ls",
+		"write",
+		"edit",
+	]);
+	const config = { defaultTools: ["read", "bash", "grep", "find", "ls"] };
+	const names = resolveInitialPlanModeToolNames(tools, config);
+	assert.ok(!names.includes("write"));
+	assert.ok(!names.includes("edit"));
+});
+
+test("resolveInitialPlanModeToolNames honours explicit omission of write/edit when folders configured", () => {
+	const tools = allBuiltins([
+		"read",
+		"bash",
+		"grep",
+		"find",
+		"ls",
+		"write",
+		"edit",
+	]);
+	// Explicit mention in defaultTools counts as user opt-in (no auto-add needed,
+	// and selection still flows through canSelectToolInPlanMode).
+	const config = {
+		defaultTools: ["read", "bash", "write"],
+		planFolder: "plans",
+	};
+	const names = resolveInitialPlanModeToolNames(tools, config);
+	assert.ok(names.includes("write"));
+	assert.ok(!names.includes("edit"));
 });
