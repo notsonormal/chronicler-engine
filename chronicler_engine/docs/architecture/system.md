@@ -16,7 +16,7 @@ Eight tiers organize the codebase:
 - `crate::adapters::driving` — Inbound adapters (HTTP server, CLI).
 - `crate::bootstrap` — Composition root.
 - `crate::settings` — Settings data model; DB-backed, loaded once at startup.
-- `crate::test_support` — Shared fixtures and the `TestAppBuilder` API.
+- `crate::test_support` — Shared fixtures, `TestDataBuilder`, and the `TestAppBuilder` API.
 
 ## Hexagonal Architecture (Ports & Adapters)
 

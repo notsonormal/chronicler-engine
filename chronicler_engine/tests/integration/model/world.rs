@@ -4,7 +4,7 @@ use chronicler_engine::domain::model::map::MapDef;
 use chronicler_engine::domain::model::world::WorldCard;
 use tower::util::ServiceExt;
 
-use chronicler_engine::TestAppBuilder;
+use chronicler_engine::{TestAppBuilder, TestDataBuilder};
 
 #[test]
 fn test_load_world_includes_room_image_path() {
@@ -67,10 +67,13 @@ async fn test_visual_sidebar_with_real_world_data() {
     );
     eprintln!("DEBUG: room.image_path = {:?}", room.image_path);
 
-    let app = TestAppBuilder::new(world, player)
+    let data = TestDataBuilder::default_test()
+        .world(world)
         .map(map)
+        .persona(player)
         .npcs(npcs)
         .build();
+    let app = TestAppBuilder::with_data(data).build();
 
     let req = axum::http::Request::builder()
         .uri("/fragment/visual-sidebar")

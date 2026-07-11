@@ -5,9 +5,7 @@ use std::sync::Arc;
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::test_support::{
-    make_test_app_with_game_service, make_test_app_with_mock_backend,
-};
+use chronicler_engine::TestDataBuilder;
 
 use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 
@@ -15,21 +13,31 @@ use crate::pipeline_helpers::{
     add_input_and_save, create_test_state_with_map, latest_state, save_state,
     wait_for_generation_complete,
 };
+use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 
 #[test]
 fn test_sequential_execute_retry_execute() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let app = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            crate::make_test_recorder_with_storage(
-                Arc::new(MockBackend::new()),
-                Arc::clone(storage),
-            ),
-            Arc::new(MockBackend::default()),
-        ))
-    })
-    .unwrap();
+    let data = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app = SqliteTestAppBuilder::with_data(data)
+        .state_mut(move |s| *s = state)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder_with_storage(
+                    Arc::new(MockBackend::new()),
+                    Arc::clone(storage),
+                ),
+                Arc::new(MockBackend::default()),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app, "examine room");
     execute_action_impl(&app, "examine room".to_string());
@@ -82,16 +90,25 @@ fn test_sequential_execute_retry_execute() {
 fn test_sequential_execute_delete_execute() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let app = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            crate::make_test_recorder_with_storage(
-                Arc::new(MockBackend::new()),
-                Arc::clone(storage),
-            ),
-            Arc::new(MockBackend::default()),
-        ))
-    })
-    .unwrap();
+    let data = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app = SqliteTestAppBuilder::with_data(data)
+        .state_mut(move |s| *s = state)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder_with_storage(
+                    Arc::new(MockBackend::new()),
+                    Arc::clone(storage),
+                ),
+                Arc::new(MockBackend::default()),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app, "examine room");
     execute_action_impl(&app, "examine room".to_string());
@@ -138,16 +155,25 @@ fn test_sequential_execute_delete_execute() {
 fn test_async_action_sequence_then_retry() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let app = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            crate::make_test_recorder_with_storage(
-                Arc::new(MockBackend::new()),
-                Arc::clone(storage),
-            ),
-            Arc::new(MockBackend::default()),
-        ))
-    })
-    .unwrap();
+    let data = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app = SqliteTestAppBuilder::with_data(data)
+        .state_mut(move |s| *s = state)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder_with_storage(
+                    Arc::new(MockBackend::new()),
+                    Arc::clone(storage),
+                ),
+                Arc::new(MockBackend::default()),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app, "hello");
     execute_action_impl(&app, "hello".to_string());
@@ -174,16 +200,25 @@ fn test_async_action_sequence_then_retry() {
 fn test_three_actions_in_sequence() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let app = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            crate::make_test_recorder_with_storage(
-                Arc::new(MockBackend::new()),
-                Arc::clone(storage),
-            ),
-            Arc::new(MockBackend::default()),
-        ))
-    })
-    .unwrap();
+    let data = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app = SqliteTestAppBuilder::with_data(data)
+        .state_mut(move |s| *s = state)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder_with_storage(
+                    Arc::new(MockBackend::new()),
+                    Arc::clone(storage),
+                ),
+                Arc::new(MockBackend::default()),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     for action in ["examine room", "look around", "check inventory"] {
         add_input_and_save(&app, action);
@@ -219,20 +254,40 @@ fn test_three_actions_in_sequence() {
 fn test_delete_input_then_retry_fails_gracefully() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
+    let state_for_app1 = state.clone();
+    let data1 = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app1 = SqliteTestAppBuilder::with_data(data1)
+        .state_mut(move |s| *s = state_for_app1)
+        .mock_backend(MockBackend::new)
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app1, "examine room");
 
-    let app2 = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            crate::make_test_recorder_with_storage(
-                Arc::new(MockBackend::new()),
-                Arc::clone(storage),
-            ),
-            Arc::new(MockBackend::default()),
-        ))
-    })
-    .unwrap();
+    let data2 = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app2 = SqliteTestAppBuilder::with_data(data2)
+        .state_mut(move |s| *s = state)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder_with_storage(
+                    Arc::new(MockBackend::new()),
+                    Arc::clone(storage),
+                ),
+                Arc::new(MockBackend::default()),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app2, "examine room".to_string());
     assert!(wait_for_generation_complete(&app2, 1000));
@@ -255,7 +310,18 @@ fn test_delete_input_then_retry_fails_gracefully() {
 fn test_reset_clears_history_and_state() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
+    let state_for_app1 = state.clone();
+    let data1 = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app1 = SqliteTestAppBuilder::with_data(data1)
+        .state_mut(move |s| *s = state_for_app1)
+        .mock_backend(MockBackend::new)
+        .build_service()
+        .unwrap();
     add_input_and_save(&app1, "walk to room2");
 
     let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -263,16 +329,25 @@ fn test_reset_clears_history_and_state() {
             .to_string(),
     ]));
 
-    let app2 = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            crate::make_test_recorder_with_storage(
-                Arc::new(MockBackend::new()),
-                Arc::clone(storage),
-            ),
-            quantifier.clone(),
-        ))
-    })
-    .unwrap();
+    let data2 = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app2 = SqliteTestAppBuilder::with_data(data2)
+        .state_mut(move |s| *s = state)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder_with_storage(
+                    Arc::new(MockBackend::new()),
+                    Arc::clone(storage),
+                ),
+                quantifier.clone(),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app2, "walk to room2".to_string());
     assert!(wait_for_generation_complete(&app2, 1000));
@@ -298,16 +373,25 @@ fn test_reset_clears_history_and_state() {
 fn test_reset_then_execute_works() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let app = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            crate::make_test_recorder_with_storage(
-                Arc::new(MockBackend::new()),
-                Arc::clone(storage),
-            ),
-            Arc::new(MockBackend::default()),
-        ))
-    })
-    .unwrap();
+    let data = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app = SqliteTestAppBuilder::with_data(data)
+        .state_mut(move |s| *s = state)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder_with_storage(
+                    Arc::new(MockBackend::new()),
+                    Arc::clone(storage),
+                ),
+                Arc::new(MockBackend::default()),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app, "examine room");
     execute_action_impl(&app, "examine room".to_string());
@@ -341,16 +425,25 @@ fn test_reset_then_execute_works() {
 fn test_delete_mid_sequence() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let app = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            crate::make_test_recorder_with_storage(
-                Arc::new(MockBackend::new()),
-                Arc::clone(storage),
-            ),
-            Arc::new(MockBackend::default()),
-        ))
-    })
-    .unwrap();
+    let data = TestDataBuilder::default_test()
+        .world((*state.world).clone())
+        .map((*state.map).clone())
+        .persona((*state.persona).clone())
+        .npcs(state.npcs.values().cloned().collect())
+        .build();
+    let app = SqliteTestAppBuilder::with_data(data)
+        .state_mut(move |s| *s = state)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder_with_storage(
+                    Arc::new(MockBackend::new()),
+                    Arc::clone(storage),
+                ),
+                Arc::new(MockBackend::default()),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app, "examine room");
     execute_action_impl(&app, "examine room".to_string());

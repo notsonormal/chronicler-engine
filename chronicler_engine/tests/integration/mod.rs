@@ -9,6 +9,11 @@ mod pipeline_helpers;
 #[path = "../helpers/fixtures.rs"]
 mod fixtures;
 
+#[path = "../helpers/sqlite_test_app_builder.rs"]
+mod sqlite_test_app_builder;
+
+pub use sqlite_test_app_builder::SqliteTestAppBuilder;
+
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;

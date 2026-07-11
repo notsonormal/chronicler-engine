@@ -12,15 +12,14 @@ use chronicler_engine::domain::model::character::NpcCard;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    make_test_app_with_game_service, make_test_recorder_with_storage, seed_test_world_into_storage,
+    make_test_recorder_with_storage, seed_test_world_into_storage, TestDataBuilder,
 };
 
 use crate::pipeline_helpers::{create_test_state_with_map, latest_state};
+use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 
 #[test]
 fn test_arrival_narration_survives_reload() {
-    let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
     let preset_storage = chronicler_engine::test_support::default_test_preset_storage();
     let arrival_preset = preset_storage
         .get_preset("system_default")
@@ -33,18 +32,27 @@ fn test_arrival_narration_survives_reload() {
 
     let llm: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
-    let app = make_test_app_with_game_service(state, |storage| {
-        let recorder = make_test_recorder_with_storage(
-            Arc::clone(&llm)
-                as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
-            Arc::clone(storage),
-        );
-        Arc::new(GameService::with_mock_quantifier(
-            Arc::clone(&recorder),
-            Arc::new(MockBackend::default()),
-        ))
-    })
-    .unwrap();
+    let data = TestDataBuilder::default_test()
+        .world(crate::fixtures::create_test_world())
+        .map(crate::fixtures::create_test_map())
+        .persona(crate::fixtures::create_test_player())
+        .npcs(crate::fixtures::create_test_npcs())
+        .build();
+    let llm_for_closure = Arc::clone(&llm);
+    let app = SqliteTestAppBuilder::with_data(data)
+        .game_service_fn(move |storage| {
+            let recorder = make_test_recorder_with_storage(
+                Arc::clone(&llm_for_closure)
+                    as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
+                Arc::clone(storage),
+            );
+            Arc::new(GameService::with_mock_quantifier(
+                Arc::clone(&recorder),
+                Arc::new(MockBackend::default()),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(app.storage()));
     let task_ctx = ArrivalTaskContext::new_for_test(

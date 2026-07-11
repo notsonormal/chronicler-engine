@@ -37,6 +37,8 @@ pub use adapters::driving::http::AppState;
 
 #[cfg(feature = "testing")]
 pub use test_support::test_app_builder::TestAppBuilder;
+#[cfg(feature = "testing")]
+pub use test_support::test_data_builder::{TestData, TestDataBuilder};
 
 #[cfg(feature = "testing")]
 pub mod test_support;

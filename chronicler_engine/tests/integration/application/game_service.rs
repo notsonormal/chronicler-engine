@@ -4,17 +4,16 @@ use std::sync::Arc;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::test_support::{
-    make_test_app_with_backends, make_test_app_with_mock_backend,
-    make_test_app_with_separate_backends, make_test_app_with_sqlite,
-};
-use crate::fixtures::create_test_state;
+
+use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 use crate::pipeline_helpers::{latest_state, add_input_and_save};
 
 #[test]
 fn test_with_storage_uses_external() {
-    let state = create_test_state();
-    let app = make_test_app_with_mock_backend(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .mock_backend(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
 
@@ -27,8 +26,10 @@ fn test_with_storage_uses_external() {
 
 #[test]
 fn test_with_backends_no_disk_read() {
-    let state = create_test_state();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     chronicler_engine::application::action_pipeline::execute_action_impl(
         &app,
@@ -44,9 +45,11 @@ fn test_with_backends_no_disk_read() {
 
 #[test]
 fn test_execute_action_saves_narration() {
-    let state = create_test_state();
-    let initial_history_len = state.narrative.history.len();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
+    let initial_history_len = 0_usize;
 
     chronicler_engine::application::action_pipeline::execute_action_impl(
         &app,
@@ -64,8 +67,10 @@ fn test_execute_action_saves_narration() {
 
 #[test]
 fn test_execute_action_empty_input() {
-    let state = create_test_state();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     chronicler_engine::application::action_pipeline::execute_action_impl(&app, "".to_string());
 
@@ -78,8 +83,10 @@ fn test_execute_action_empty_input() {
 
 #[test]
 fn test_execute_action_clears_last_trigger() {
-    let state = create_test_state();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     chronicler_engine::application::action_pipeline::execute_action_impl(
         &app,
@@ -99,13 +106,13 @@ fn test_execute_action_clears_last_trigger() {
 
 #[test]
 fn test_execute_action_cancellation() {
-    let state = create_test_state();
-    let app = make_test_app_with_separate_backends(
-        state,
-        || MockBackend::default().with_delay(100),
-        MockBackend::default,
-    )
-    .unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .separate_backends(
+            || MockBackend::default().with_delay(100),
+            MockBackend::default,
+        )
+        .build_service()
+        .unwrap();
 
     app.cancel_token().cancel();
 
@@ -120,8 +127,10 @@ fn test_execute_action_cancellation() {
 
 #[test]
 fn test_retry_finds_anchor() {
-    let state = create_test_state();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app, "Test input");
 
@@ -136,8 +145,10 @@ fn test_retry_finds_anchor() {
 
 #[test]
 fn test_retry_event_fallback() {
-    let state = create_test_state();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
@@ -150,9 +161,10 @@ fn test_retry_event_fallback() {
 
 #[test]
 fn test_retry_empty_history() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
@@ -165,12 +177,10 @@ fn test_retry_empty_history() {
 
 #[test]
 fn test_switch_swipe_out_of_bounds() {
-    use chronicler_engine::domain::model::message::{Message, Swipe};
-    use chronicler_engine::domain::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing;
     use chronicler_engine::application::ApplicationError;
+    use chronicler_engine::domain::model::message::{Message, Swipe};
 
-    let mut state = create_test_state();
     let mut msg = Message::new(None, "First narration", MessageType::Narration, None, None);
     msg.swipes.push(Swipe {
         text: "First narration".to_string(),
@@ -184,8 +194,12 @@ fn test_switch_swipe_out_of_bounds() {
         location_header: None,
         event_header: None,
     });
-    state.narrative.history.append(msg);
-    let app = make_test_app_with_sqlite(state).unwrap();
+
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .message(msg)
+        .build_service()
+        .unwrap();
 
     let messages = app.load_messages().unwrap();
     let last_message = messages.last().unwrap();
@@ -204,15 +218,18 @@ fn test_edit_history_updates_text() {
     use chronicler_engine::domain::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing;
 
-    let mut state = create_test_state();
-    state.narrative.history.append(Message::new(
+    let msg = Message::new(
         None,
         "Original narration",
         MessageType::Narration,
         None,
         None,
-    ));
-    let app = make_test_app_with_sqlite(state).unwrap();
+    );
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .message(msg)
+        .build_service()
+        .unwrap();
 
     let messages = app.load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
@@ -232,15 +249,12 @@ fn test_edit_history_no_snapshot() {
     use chronicler_engine::domain::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing;
 
-    let mut state = create_test_state();
-    state.narrative.history.append(Message::new(
-        None,
-        "Test message",
-        MessageType::Narration,
-        None,
-        None,
-    ));
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let msg = Message::new(None, "Test message", MessageType::Narration, None, None);
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .message(msg)
+        .build_service()
+        .unwrap();
 
     let messages = app.load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
@@ -254,16 +268,19 @@ fn test_delete_last_removes() {
     use chronicler_engine::application::message_editing;
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
-    let mut state = create_test_state();
-    state.narrative.history.append(Message::new(
+    let msg = Message::new(
         None,
         "Test message to delete",
         MessageType::Narration,
         None,
         None,
-    ));
-    let initial_len = state.narrative.history.len();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    );
+    let initial_len = 1_usize;
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .message(msg)
+        .build_service()
+        .unwrap();
 
     let result = message_editing::delete_last(&app);
     assert!(result.is_ok());
@@ -277,9 +294,10 @@ fn test_delete_last_empty_rejected() {
     use chronicler_engine::application::message_editing;
     use chronicler_engine::application::ApplicationError;
 
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     let result = message_editing::delete_last(&app);
     assert!(result.is_err());
@@ -296,15 +314,12 @@ fn test_edit_history_storage_failure() {
     use chronicler_engine::domain::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing;
 
-    let mut state = create_test_state();
-    state.narrative.history.append(Message::new(
-        None,
-        "Test",
-        MessageType::Narration,
-        None,
-        None,
-    ));
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let msg = Message::new(None, "Test", MessageType::Narration, None, None);
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .message(msg)
+        .build_service()
+        .unwrap();
 
     let messages = app.load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
@@ -320,25 +335,28 @@ async fn test_retrigger_happy_path() {
     use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
     use chronicler_engine::application::message_editing;
 
-    let mut state = create_test_state();
-    state.narrative.last_trigger = Some(StoredTriggerContext {
-        npc_id: "test_npc".to_string(),
-        trigger_idx: 0,
-        trigger_name: "test_trigger".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Test".to_string(),
-        system_prompt: "System".to_string(),
-        user_prompt: "User".to_string(),
-        max_tokens: None,
-    });
-    state.narrative.history.append(Message::new(
+    let msg = Message::new(
         None,
         "Previous narration",
         MessageType::Narration,
         None,
         None,
-    ));
-    let app = make_test_app_with_sqlite(state).unwrap();
+    );
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .last_trigger(StoredTriggerContext {
+            npc_id: "test_npc".to_string(),
+            trigger_idx: 0,
+            trigger_name: "test_trigger".to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: "Test".to_string(),
+            system_prompt: "System".to_string(),
+            user_prompt: "User".to_string(),
+            max_tokens: None,
+        })
+        .message(msg)
+        .build_service()
+        .unwrap();
 
     let result = message_editing::retrigger(Arc::clone(&app));
     assert!(result.is_ok());
@@ -351,25 +369,22 @@ async fn test_retrigger_storage_operations() {
     use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
     use chronicler_engine::application::message_editing;
 
-    let mut state = create_test_state();
-    state.narrative.last_trigger = Some(StoredTriggerContext {
-        npc_id: "test_npc".to_string(),
-        trigger_idx: 0,
-        trigger_name: "test_trigger".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Test".to_string(),
-        system_prompt: "System".to_string(),
-        user_prompt: "User".to_string(),
-        max_tokens: None,
-    });
-    state.narrative.history.append(Message::new(
-        None,
-        "Test narration",
-        MessageType::Narration,
-        None,
-        None,
-    ));
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let msg = Message::new(None, "Test narration", MessageType::Narration, None, None);
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .last_trigger(StoredTriggerContext {
+            npc_id: "test_npc".to_string(),
+            trigger_idx: 0,
+            trigger_name: "test_trigger".to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: "Test".to_string(),
+            system_prompt: "System".to_string(),
+            user_prompt: "User".to_string(),
+            max_tokens: None,
+        })
+        .message(msg)
+        .build_service()
+        .unwrap();
 
     let initial_snapshot = app.storage().load_latest_snapshot().unwrap();
     assert!(initial_snapshot.is_some());
@@ -389,15 +404,12 @@ fn test_delete_last_storage_failure() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing;
-    let mut state = create_test_state();
-    state.narrative.history.append(Message::new(
-        None,
-        "Test message",
-        MessageType::Narration,
-        None,
-        None,
-    ));
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let msg = Message::new(None, "Test message", MessageType::Narration, None, None);
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .message(msg)
+        .build_service()
+        .unwrap();
     let result = message_editing::delete_last(&app);
     assert!(result.is_ok() || result.is_err());
 }
@@ -407,15 +419,18 @@ async fn test_retry_cancellation() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing;
-    let mut state = create_test_state();
-    state.narrative.history.append(Message::new(
+    let msg = Message::new(
         Some("Player".to_string()),
         "Input to retry",
         MessageType::Input,
         None,
         None,
-    ));
-    let app = make_test_app_with_sqlite(state).unwrap();
+    );
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .message(msg)
+        .build_service()
+        .unwrap();
     app.cancel_token().cancel();
     let result = message_editing::retry(Arc::clone(&app));
     assert!(result.is_err());
@@ -423,9 +438,10 @@ async fn test_retry_cancellation() {
 
 #[test]
 fn test_continue_narration_fresh_game() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     let initial_history = latest_state(&app).narrative.history.len();
     chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
@@ -452,9 +468,10 @@ fn test_continue_narration_fresh_game() {
 
 #[test]
 fn test_continue_narration_with_stale_is_generating_flag() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
     app.is_generating()
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -477,9 +494,10 @@ fn test_whitespace_variations() {
     ];
 
     for whitespace in test_cases {
-        let mut state = create_test_state();
-        state.narrative.history.clear();
-        let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+        let app = SqliteTestAppBuilder::default_test()
+            .backends(MockBackend::default)
+            .build_service()
+            .unwrap();
         chronicler_engine::application::action_pipeline::execute_action_impl(
             &app,
             whitespace.to_string(),

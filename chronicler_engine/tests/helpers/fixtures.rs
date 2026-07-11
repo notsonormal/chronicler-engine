@@ -5,11 +5,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use chronicler_engine::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::domain::model::scenario::StartingScenario;
-use chronicler_engine::domain::model::settings::AppSettings;
+
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::storage::Storage;
@@ -376,114 +375,4 @@ pub fn create_test_storage(game_id: u64) -> Storage {
 
 pub fn create_test_storage_arc(game_id: u64) -> Arc<Storage> {
     Arc::new(create_test_storage(game_id))
-}
-
-/// Build a DefaultApplicationService backed by the given storage (with the
-/// supplied `state` world/player pre-loaded into the snapshot) and a custom
-/// `game_service`. Replaces the old `make_test_ctx` + `make_test_app_service_from_ctx`
-/// idiom for tests that need shared storage.
-#[allow(dead_code)]
-pub fn make_test_app_with_storage(
-    storage: Arc<Storage>,
-    state: GameState,
-    game_service: Arc<GameService>,
-) -> Arc<chronicler_engine::application::application_service::DefaultApplicationService> {
-    use chronicler_engine::application::application_service::DefaultApplicationService;
-    let world_snapshot = chronicler_engine::application::persistence_gate::WorldSnapshot {
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.persona.clone(),
-        npcs: std::sync::Arc::new(state.npcs.clone()),
-    };
-    // Best-effort: persist snapshot to storage so app.load_or_fresh() can read it back.
-    let _ = storage.save_snapshot(
-        &chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &state,
-        ),
-    );
-    let _ = world_snapshot; // suppress unused if save_snapshot path diverges
-    Arc::new(DefaultApplicationService::new(
-        storage,
-        Arc::new(Storage::new_in_memory()),
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        game_service,
-    ))
-}
-
-/// Build a sibling app that shares storage/settings/token/state-flags with
-/// `base` but installs a different `GameService`. Used by tests that need
-/// to seed an app, then build a second app with a storage-sharing recorder.
-#[allow(dead_code)]
-pub fn app_with_storage_from(
-    base: &chronicler_engine::application::application_service::DefaultApplicationService,
-    game_service: Arc<GameService>,
-) -> Arc<chronicler_engine::application::application_service::DefaultApplicationService> {
-    use chronicler_engine::application::application_service::DefaultApplicationService;
-    Arc::new(DefaultApplicationService::new(
-        Arc::clone(base.storage()),
-        Arc::clone(base.preset_storage().inner()),
-        Arc::clone(base.settings()),
-        base.cancel_token().clone(),
-        Arc::clone(base.is_generating()),
-        game_service,
-    ))
-}
-
-// Seeds system_default + quantifier_default presets.
-#[doc(hidden)]
-#[allow(dead_code)]
-pub fn make_test_app_with_default_preset(
-    _world: Arc<chronicler_engine::domain::model::world::WorldCard>,
-    _player: Arc<chronicler_engine::domain::model::character::PersonaCard>,
-    storage: Arc<chronicler_engine::adapters::driven::storage::Storage>,
-) -> Arc<chronicler_engine::application::application_service::DefaultApplicationService> {
-    use chronicler_engine::application::application_service::DefaultApplicationService;
-    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
-
-    let preset_storage = {
-        let ps = chronicler_engine::adapters::driven::storage::Storage::new_in_memory();
-        let _ = ps.save_preset(&PromptPreset {
-            id: "system_default".to_string(),
-            name: "Default System".to_string(),
-            role: Some("You are a narrator.".to_string()),
-            instructions: None,
-            writing_style: None,
-            output_format: None,
-            is_default: true,
-            preset_type: PresetType::System,
-        });
-        let _ = ps.save_preset(&PromptPreset {
-            id: "quantifier_default".to_string(),
-            name: "Default Quantifier".to_string(),
-            role: Some("You are a quantifier.".to_string()),
-            instructions: None,
-            writing_style: None,
-            output_format: None,
-            is_default: true,
-            preset_type: PresetType::Quantifier,
-        });
-        Arc::new(ps)
-    };
-
-    let settings = Arc::new(std::sync::RwLock::new(
-        chronicler_engine::domain::model::settings::AppSettings::default(),
-    ));
-
-    let game_service = chronicler_engine::bootstrap::wiring::build_game_service_for_tests(
-        Arc::clone(&settings),
-        Arc::clone(&storage),
-        Arc::clone(&preset_storage),
-    )
-    .expect("build_game_service_for_tests should succeed");
-
-    Arc::new(DefaultApplicationService::new(
-        storage,
-        preset_storage,
-        settings,
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        Arc::new(game_service),
-    ))
 }

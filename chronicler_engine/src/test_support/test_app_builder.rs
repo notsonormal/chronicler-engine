@@ -1,5 +1,5 @@
 //! [DOC: docs/reference/test_support.md — section "TestAppBuilder"]
-//! Test application builder for HTTP and integration tests
+//! Test application builder for HTTP and integration tests.
 #![allow(clippy::expect_used)]
 
 use std::sync::{Arc, RwLock};
@@ -10,176 +10,60 @@ use tokio_util::sync::CancellationToken;
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::game_service::GameService;
 use crate::bootstrap::text_check_factory::create_text_check_service;
-use crate::domain::model::character::{NpcCard, PersonaCard};
-use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::router::build_router;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
+use crate::test_support::test_data_builder::TestData;
 
 pub struct TestAppBuilder {
-    world: WorldCard,
-    player: PersonaCard,
-    map: MapDef,
-    npcs: Vec<NpcCard>,
-    room_npcs: Vec<String>,
+    test_data: Option<TestData>,
     logs: Vec<(String, Option<String>, MessageType)>,
     last_trigger: Option<StoredTriggerContext>,
-    generation_status: Option<GenerationStatus>,
-    generation_phase: Option<GenerationPhase>,
+    generation: Option<(GenerationStatus, GenerationPhase)>,
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
     game_service: Option<Arc<GameService>>,
+    skip_seeding: bool,
     is_generating: bool,
 }
 
 impl TestAppBuilder {
     pub fn default_test() -> Self {
-        let world = WorldCard {
-            key: "test".to_string(),
-            name: "Test World".to_string(),
-            description: "A test world".to_string(),
-            scenarios: vec![crate::domain::model::scenario::StartingScenario {
-                id: "test_intro".to_string(),
-                name: "Test World Introduction".to_string(),
-                description: "A simple test scenario for validation".to_string(),
-                starting_room_id: "room_1".to_string(),
-                text: "Welcome to the Test World, {{user}}! You find yourself in a cozy room with wooden beams and a warm fire. The smell of fresh bread fills the air. A friendly innkeeper behind the bar glances your way and smiles."
-                    .to_string(),
-                npcs: vec!["npc_1".to_string()],
-            }],
-            ..Default::default()
-        };
-
-        let test_room = Room {
-            id: "room_1".to_string(),
-            name: "Test Room".to_string(),
-            description: "A test room for component tests.".to_string(),
-            image_path: Some("data/images/test_room.png".to_string()),
-            exits: std::collections::HashMap::new(),
-            items: vec![],
-            navigation_description: None,
-        };
-
-        let map = MapDef {
-            overworld: Overworld {
-                id: "test_overworld".to_string(),
-                name: "Test Overworld".to_string(),
-                regions: vec![Region {
-                    id: "region_1".to_string(),
-                    name: "Test Region".to_string(),
-                    rooms: vec![test_room],
-                }],
-            },
-        };
-
-        let player = PersonaCard {
-            key: "test_player".to_string(),
-            sheet: crate::domain::model::character::CharacterSheet {
-                name: "Test Player".to_string(),
-                description: "A test player".to_string(),
-                personality: "Brave".to_string(),
-                scenario: "Test scenario.".to_string(),
-                example_dialogue: "Hello!".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        };
-
-        let npcs = vec![NpcCard {
-            id: "npc_1".to_string(),
-            sheet: crate::domain::model::character::CharacterSheet {
-                name: "Test NPC".to_string(),
-                description: "A test NPC".to_string(),
-                personality: "Friendly".to_string(),
-                scenario: "Test scenario.".to_string(),
-                example_dialogue: "Hello there!".to_string(),
-                summary: None,
-                profile_image: Some("data/images/npc.png".to_string()),
-                headshot_image: Some("data/images/npc_headshot.png".to_string()),
-            },
-            inventory: vec![],
-            triggers: vec![],
-            relationships: vec![],
-        }];
-
-        Self::with_world_map(world, player, map)
-            .npcs(npcs)
-            .room_npc("npc_1")
-    }
-
-    pub fn new(world: WorldCard, player: PersonaCard) -> Self {
-        let map = MapDef {
-            overworld: Overworld {
-                id: "test_overworld".to_string(),
-                name: "Test Overworld".to_string(),
-                regions: vec![Region {
-                    id: "test_region".to_string(),
-                    name: "Test Region".to_string(),
-                    rooms: vec![Room {
-                        id: world.starting_room_id(),
-                        name: format!("Room {}", world.starting_room_id()),
-                        description: "A plain test room.".to_string(),
-                        exits: std::collections::HashMap::new(),
-                        items: vec![],
-                        image_path: None,
-                        navigation_description: None,
-                    }],
-                }],
-            },
-        };
-
-        Self::with_world_map(world, player, map)
-    }
-
-    pub fn default_app() -> Router {
-        Self::default_test().build()
-    }
-
-    fn with_world_map(world: WorldCard, player: PersonaCard, map: MapDef) -> Self {
         Self {
-            world,
-            player,
-            map,
-            npcs: vec![],
-            room_npcs: vec![],
+            test_data: Some(
+                crate::test_support::test_data_builder::TestDataBuilder::default_test().build(),
+            ),
             logs: vec![],
             last_trigger: None,
-            generation_status: None,
-            generation_phase: None,
+            generation: None,
             settings: AppSettings::default(),
             storage: None,
             game_service: None,
+            skip_seeding: false,
             is_generating: false,
         }
     }
 
-    pub fn map(mut self, map: MapDef) -> Self {
-        self.map = map;
+    pub fn with_data(data: TestData) -> Self {
+        Self {
+            test_data: Some(data),
+            ..Self::default_test()
+        }
+    }
+
+    pub fn data(mut self, data: TestData) -> Self {
+        self.test_data = Some(data);
         self
     }
 
-    pub fn npc(mut self, npc: NpcCard) -> Self {
-        self.npcs.push(npc);
-        self
-    }
-
-    pub fn npcs(mut self, npcs: Vec<NpcCard>) -> Self {
-        self.npcs = npcs;
-        self
-    }
-
-    pub fn room_npc(mut self, npc_id: &str) -> Self {
-        self.room_npcs.push(npc_id.to_string());
-        self
+    pub fn default_app() -> Router {
+        Self::default_test().build()
     }
 
     pub fn last_trigger(mut self, trigger: StoredTriggerContext) -> Self {
@@ -194,8 +78,7 @@ impl TestAppBuilder {
     }
 
     pub fn generation_status(mut self, status: GenerationStatus, phase: GenerationPhase) -> Self {
-        self.generation_status = Some(status);
-        self.generation_phase = Some(phase);
+        self.generation = Some((status, phase));
         self
     }
 
@@ -219,6 +102,11 @@ impl TestAppBuilder {
         self
     }
 
+    pub fn skip_seeding(mut self, value: bool) -> Self {
+        self.skip_seeding = value;
+        self
+    }
+
     pub fn build(self) -> Router {
         let app_state = self.build_app_state();
         build_router(app_state)
@@ -233,40 +121,46 @@ impl TestAppBuilder {
         (build_router(app_state), service)
     }
 
+    /// Build without HTTP router. Returns the application service directly
+    /// for non-HTTP integration tests.
+    pub fn build_service(self) -> Arc<DefaultApplicationService> {
+        let app_state = self.build_app_state();
+        Arc::clone(&app_state.application_service)
+    }
+
+    /// Build a sibling application service that shares storage, settings,
+    /// shutdown token, and `is_generating` flag with `base`, but installs a
+    /// different `game_service`.
+    pub fn from_base(
+        base: &DefaultApplicationService,
+        game_service: Arc<GameService>,
+    ) -> Arc<DefaultApplicationService> {
+        Arc::new(DefaultApplicationService::new(
+            Arc::clone(base.storage()),
+            Arc::clone(base.preset_storage().inner()),
+            Arc::clone(base.settings()),
+            base.cancel_token().clone(),
+            Arc::clone(base.is_generating()),
+            game_service,
+        ))
+    }
+
     pub fn build_app_state(mut self) -> AppState {
-        let (storage, _created_storage) = match self.storage {
-            Some(s) => (s, false),
-            None => (Arc::new(Storage::new_in_memory()), true),
+        let test_data = self.test_data.expect(
+            "test setup: TestAppBuilder requires test_data (use default_test() or with_data())",
+        );
+
+        let storage = match self.storage.take() {
+            Some(s) => s,
+            None => Arc::new(Storage::new_in_memory()),
         };
 
-        let world_id = storage
-            .seed_world(&self.world, &self.map)
-            .expect("test setup: seed world");
-        storage
-            .seed_persona(&self.player.key, &self.player)
-            .expect("test setup: seed persona");
-
-        for npc in &self.npcs {
-            storage
-                .seed_character(world_id, npc)
-                .expect("test setup: seed character");
+        if !self.skip_seeding {
+            let _ = test_data.seed_into(&storage);
         }
 
-        let game_id = storage
-            .create_game(
-                &self.world.name,
-                &self.world.key,
-                &self.player.key,
-                &self.player.sheet.name,
-                "Test Game",
-            )
-            .expect("test setup: create game");
-        storage.set_game_id(game_id);
-
-        let world = Arc::new(self.world);
-        let map = Arc::new(self.map);
-        let player = Arc::new(self.player);
-        let starting_room = map
+        let starting_room = test_data
+            .map
             .overworld
             .regions
             .first()
@@ -275,14 +169,14 @@ impl TestAppBuilder {
             .unwrap_or_else(|| "room_1".to_string());
 
         let mut state = GameState::new(
-            Arc::clone(&world),
-            Arc::clone(&map),
-            Arc::clone(&player),
-            self.npcs,
+            Arc::clone(&test_data.world),
+            Arc::clone(&test_data.map),
+            Arc::clone(&test_data.persona),
+            test_data.npcs.clone(),
             starting_room,
         );
 
-        for npc_id in &self.room_npcs {
+        for npc_id in &test_data.room_npcs {
             if let Some(npc) = state.npcs.get(npc_id).cloned() {
                 state.scene.npcs_in_area.push(npc);
             }
@@ -292,10 +186,8 @@ impl TestAppBuilder {
             state.narrative.last_trigger = Some(trigger);
         }
 
-        if let Some(status) = self.generation_status {
+        if let Some((status, phase)) = self.generation {
             state.narrative.input_buffer.status = status;
-        }
-        if let Some(phase) = self.generation_phase {
             state.narrative.input_buffer.phase = phase;
         }
 
@@ -303,14 +195,16 @@ impl TestAppBuilder {
             state.add_message(text, sender, log_type);
         }
 
-        let snapshot = GameStateSnapshot::from_game_state(&state);
-        let _ = storage.save_snapshot(&snapshot);
-        for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-            let _ = storage.insert_message(&msg);
+        if !self.skip_seeding {
+            let snapshot = GameStateSnapshot::from_game_state(&state);
+            let _ = storage.save_snapshot(&snapshot);
+            for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+                let _ = storage.insert_message(&msg);
+            }
         }
 
         let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
-        let preset_storage = Arc::new(Storage::new_in_memory());
+        let preset_storage = crate::test_support::default_test_preset_storage();
         let game_service: Arc<GameService> = if let Some(service) = self.game_service.take() {
             service
         } else {

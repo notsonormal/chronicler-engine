@@ -8,11 +8,9 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::{TestAppBuilder, TestDataBuilder};
 
-use crate::fixtures::{
-    create_basic_test_state, create_test_world_with_scenario, make_test_app_with_storage,
-    seed_test_world, seed_test_world_with_scenario,
-};
+use crate::fixtures::{create_test_world_with_scenario, seed_test_world, seed_test_world_with_scenario};
 
 #[allow(dead_code)]
 fn create_app_service() -> Arc<DefaultApplicationService> {
@@ -24,7 +22,11 @@ fn create_app_service_with_storage(storage: Arc<Storage>) -> Arc<DefaultApplicat
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         AgentRegistry::default(),
     ));
-    make_test_app_with_storage(storage, create_basic_test_state(), game_service)
+    TestAppBuilder::default_test()
+        .storage(storage)
+        .game_service(game_service)
+        .skip_seeding(true)
+        .build_service()
 }
 
 #[test]
@@ -33,16 +35,16 @@ fn test_create_game_with_scenario() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world_with_scenario(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     let result = app_service.create_game(&world_key, "hero");
     assert!(
@@ -83,16 +85,16 @@ fn test_reset_creates_scenario_message() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world_with_scenario(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     app_service.create_game(&world_key, "hero").unwrap();
 
@@ -124,16 +126,16 @@ fn test_switch_game_loads_correct_state() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     app_service.create_game(&world_key, "hero").unwrap();
     let game1_id = app_service.storage().current_game_id();
@@ -183,15 +185,14 @@ fn test_switch_to_nonexistent_game() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let state = create_basic_test_state();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let app_service = TestAppBuilder::default_test()
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     let result = app_service.switch_game(99999);
     assert!(
@@ -206,16 +207,16 @@ fn test_reset_without_existing_game() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world_with_scenario(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     let _ = app_service.create_game(&world_key, "hero").unwrap();
 
@@ -233,16 +234,16 @@ fn test_create_game_name_uniqueness() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     let result1 = app_service.create_game(&world_key, "hero");
     assert!(result1.is_ok(), "First create_game should succeed");
@@ -278,16 +279,16 @@ fn test_switch_game_world_mismatch() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     let create_result = app_service.create_game(&world_key, "hero");
     assert!(create_result.is_ok(), "create_game should succeed");
@@ -295,20 +296,15 @@ fn test_switch_game_world_mismatch() {
 
     let mut world_b = create_test_world_with_scenario();
     world_b.name = "World B".to_string();
-    let _app2 = make_test_app_with_storage(
-        storage.clone(),
-        chronicler_engine::domain::model::state::game_state::GameState::new(
-            Arc::new(world_b),
-            Arc::new(crate::fixtures::create_test_map()),
-            Arc::new(crate::fixtures::create_test_player()),
-            Vec::new(),
-            "room1".to_string(),
-        ),
-        Arc::new(GameService::with_backends(
+    let data_b = TestDataBuilder::default_test().world(world_b).build();
+    let _app2 = TestAppBuilder::with_data(data_b)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     let result = app_service.switch_game(game_id);
     assert!(
@@ -323,16 +319,16 @@ fn test_delete_game_removes() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     app_service.create_game(&world_key, "hero").unwrap();
     let game_id_1 = app_service.storage().current_game_id();
@@ -363,16 +359,16 @@ fn test_delete_game_active_rejected() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     app_service.create_game(&world_key, "hero").unwrap();
     let active_game_id = app_service.storage().current_game_id();
@@ -396,15 +392,14 @@ fn test_delete_game_nonexistent() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    let state = create_basic_test_state();
-    let app_service = make_test_app_with_storage(
-        storage.clone(),
-        state,
-        Arc::new(GameService::with_backends(
+    let app_service = TestAppBuilder::default_test()
+        .storage(storage.clone())
+        .game_service(Arc::new(GameService::with_backends(
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )),
-    );
+        )))
+        .skip_seeding(true)
+        .build_service();
 
     let result = app_service.delete_game(99999);
     assert!(

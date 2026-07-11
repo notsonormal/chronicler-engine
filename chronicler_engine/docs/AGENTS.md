@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-10 21:34 UTC*
+*Index last generated: 2026-07-11 16:33 UTC*
 
 ### `docs/adr/`
 
@@ -85,6 +85,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [P4-Concurrent Cleanup — Fix TOCTOU + Simplify heal](./plans/p4-concurrent-cleanup-fix-toctou-simplify-heal.md)
+- [Plan: Eliminate Free-Function Smells (Final)](./plans/plan-eliminate-free-function-smells-final.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [Super-Plan: `simpler-hexagon` Pre-Merge Cleanup](./plans/simpler-hexagon-pre-merge-superplan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
@@ -96,6 +97,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
 - [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
+- [T9-00 Follow-up: 3 Apply-Now Review Fixes](./plans/t9-00-follow-up-3-apply-now-review-fixes.md)
 - [Title: Delete `LlmMessageRepository` Port, Closure-Substitute Recorder Save Seam, Update ADR-027](./plans/title-delete-llmmessagerepository-port-closure-substitute-re.md)
 
 ### `docs/reference/`

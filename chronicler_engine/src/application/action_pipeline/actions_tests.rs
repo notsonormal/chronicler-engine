@@ -2,15 +2,13 @@ use std::sync::{Arc, Barrier};
 
 use crate::application::action_pipeline::execute_action_impl;
 use crate::application::application_service::DefaultApplicationService;
-use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::Agent;
-use crate::test_support::fixtures::{TestGameState, TestNpc};
-use crate::test_support::make_test_app_with_game_service;
+use crate::test_support::{TestAppBuilder, TestDataBuilder};
 use crate::test_support::make_test_recorder;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
@@ -62,18 +60,16 @@ fn make_test_service_with_agent(
     crate::application::game_service::GameService::with_backends(narrator_recorder, registry)
 }
 
-fn make_test_state() -> GameState {
-    TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))
-}
-
 #[test]
 fn test_execute_action_impl_completes_and_persists_state() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service))
+        .build_service();
     execute_action_impl(&app, "look".to_string());
     let final_state = app.load_or_fresh();
     assert_eq!(
@@ -97,16 +93,17 @@ fn test_execute_action_impl_completes_and_persists_state() {
 
 #[test]
 fn test_execute_action_impl_clears_last_trigger() {
-    let mut state = make_test_state();
-    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::named(
-        "Old Trigger",
-        "npc1",
-    ));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
+    let app = TestAppBuilder::default_test()
+        .last_trigger(crate::test_support::TestStoredTriggerContext::named(
+            "Old Trigger",
+            "npc1",
+        ))
+        .game_service(Arc::new(service))
+        .build_service();
     execute_action_impl(&app, "look".to_string());
     let final_state = app.load_or_fresh();
     assert!(
@@ -117,12 +114,14 @@ fn test_execute_action_impl_clears_last_trigger() {
 
 #[test]
 fn test_execute_action_impl_handles_narration_error() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service))
+        .build_service();
     execute_action_impl(&app, "look".to_string());
     let final_state = app.load_or_fresh();
     assert!(
@@ -136,12 +135,14 @@ fn test_execute_action_impl_handles_narration_error() {
 
 #[test]
 fn test_execute_action_impl_handles_cancellation() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service))
+        .build_service();
     app.cancel_token().cancel();
     execute_action_impl(&app, "look".to_string());
     let final_state = app.load_or_fresh();
@@ -154,17 +155,14 @@ fn test_execute_action_impl_handles_cancellation() {
 
 #[test]
 fn test_execute_action_impl_preserves_existing_input_log() {
-    let mut state = make_test_state();
-    state.add_message(
-        "examine room".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    let app = make_test_app_with_game_service(state, |_| Arc::new(service)).unwrap();
+    let app = TestAppBuilder::default_test()
+        .log("examine room", Some("Player"), MessageType::Input)
+        .game_service(Arc::new(service))
+        .build_service();
     execute_action_impl(&app, "examine room".to_string());
     let final_state = app.load_or_fresh();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
@@ -186,7 +184,6 @@ fn test_execute_action_impl_preserves_existing_input_log() {
 fn test_phase_transitions_to_quantifying_during_post_generation() {
     use std::thread;
 
-    let state = make_test_state();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
@@ -200,8 +197,9 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
         release: release.clone(),
     });
     let service = Arc::new(make_test_service_with_agent(narrator_recorder, sync_agent));
-    let app: Arc<DefaultApplicationService> =
-        make_test_app_with_game_service(state, |_| Arc::clone(&service)).unwrap();
+    let app: Arc<DefaultApplicationService> = TestAppBuilder::default_test()
+        .game_service(Arc::clone(&service))
+        .build_service();
     let app_for_thread = Arc::clone(&app);
 
     let handle = thread::spawn(move || {
@@ -230,7 +228,6 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
 fn test_narration_saved_before_quantifying_phase() {
     use std::thread;
 
-    let state = make_test_state();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
@@ -244,8 +241,9 @@ fn test_narration_saved_before_quantifying_phase() {
         release: release.clone(),
     });
     let service = Arc::new(make_test_service_with_agent(narrator_recorder, sync_agent));
-    let app: Arc<DefaultApplicationService> =
-        make_test_app_with_game_service(state, |_| Arc::clone(&service)).unwrap();
+    let app: Arc<DefaultApplicationService> = TestAppBuilder::default_test()
+        .game_service(Arc::clone(&service))
+        .build_service();
     let app_for_thread = Arc::clone(&app);
 
     let handle = thread::spawn(move || {

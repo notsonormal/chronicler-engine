@@ -6,11 +6,10 @@ use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::{TestAppBuilder, TestDataBuilder};
 
-use crate::fixtures::{
-    create_basic_test_state, create_test_storage_arc as create_storage, make_test_app_with_storage,
-    seed_test_world,
-};
+use crate::fixtures::{create_test_storage_arc as create_storage, seed_test_world};
+use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 
 fn create_game_service() -> Arc<GameService> {
     Arc::new(crate::working_service())
@@ -21,9 +20,13 @@ fn test_create_game_integration() {
     let storage = create_storage(1);
     seed_test_world(&storage);
     let game_service = create_game_service();
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(storage.clone(), state, game_service);
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(game_service)
+        .skip_seeding(true)
+        .build_service();
 
     let game_id = app_service
         .create_game(&world_key, "hero")
@@ -39,9 +42,13 @@ fn test_switch_game_integration() {
     let storage = create_storage(1);
     seed_test_world(&storage);
     let game_service = create_game_service();
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(storage.clone(), state, game_service);
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(game_service)
+        .skip_seeding(true)
+        .build_service();
 
     let id1 = app_service
         .create_game(&world_key, "hero")
@@ -62,9 +69,13 @@ fn test_delete_game_integration() {
     let storage = create_storage(1);
     seed_test_world(&storage);
     let game_service = create_game_service();
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(storage.clone(), state, game_service);
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(game_service)
+        .skip_seeding(true)
+        .build_service();
 
     let id1 = app_service
         .create_game(&world_key, "hero")
@@ -84,9 +95,13 @@ fn test_list_games_integration() {
     let storage = create_storage(1);
     seed_test_world(&storage);
     let game_service = create_game_service();
-    let state = create_basic_test_state();
-    let world_key = state.world.key.clone();
-    let app_service = make_test_app_with_storage(storage.clone(), state, game_service);
+    let data = TestDataBuilder::default_test().build();
+    let world_key = data.world_key();
+    let app_service = TestAppBuilder::with_data(data)
+        .storage(storage.clone())
+        .game_service(game_service)
+        .skip_seeding(true)
+        .build_service();
 
     app_service.create_game(&world_key, "hero").unwrap();
     app_service.create_game(&world_key, "hero").unwrap();
@@ -98,8 +113,11 @@ fn test_list_games_integration() {
 #[test]
 fn test_get_generating_status() {
     let storage = create_storage(1);
-    let state = create_basic_test_state();
-    let app_service = make_test_app_with_storage(storage, state, create_game_service());
+    let app_service = TestAppBuilder::default_test()
+        .storage(storage)
+        .game_service(create_game_service())
+        .skip_seeding(true)
+        .build_service();
 
     let (status, phase) =
         chronicler_engine::application::query_handlers::get_generating_status(&app_service)
@@ -111,12 +129,10 @@ fn test_get_generating_status() {
 #[tokio::test]
 async fn test_process_action_persists_input_message() {
     let game_service = create_game_service();
-    let mut state = crate::fixtures::create_test_state();
-    state.narrative.history.clear();
-    let app_service =
-        chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
-            Arc::clone(&game_service)
-        })
+    let data = TestDataBuilder::default_test().build();
+    let app_service = SqliteTestAppBuilder::with_data(data)
+        .game_service_fn(move |_storage| Arc::clone(&game_service))
+        .build_service()
         .unwrap();
 
     let result = app_service.process_action("examine the room".to_string());
@@ -147,15 +163,11 @@ async fn test_process_action_persists_input_message() {
 #[tokio::test]
 async fn test_process_action_self_heals_stale_generating_status() {
     let game_service = create_game_service();
-    let mut state = crate::fixtures::create_test_state();
-    state.narrative.history.clear();
-
-    state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-    let app_service =
-        chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
-            Arc::clone(&game_service)
-        })
+    let data = TestDataBuilder::default_test().build();
+    let app_service = SqliteTestAppBuilder::with_data(data)
+        .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
+        .game_service_fn(move |_storage| Arc::clone(&game_service))
+        .build_service()
         .unwrap();
 
     assert!(

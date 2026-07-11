@@ -22,12 +22,14 @@ use chronicler_engine::domain::model::state::generation_status::GenerationStatus
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
 use chronicler_engine::application::generation_gate::slot::GenerationSlot;
-use chronicler_engine::test_support::{make_test_app_with_game_service, make_test_recorder};
+use chronicler_engine::test_support::make_test_recorder;
 
 #[path = "../helpers/fixtures.rs"]
 mod fixtures;
 #[path = "../helpers/pipeline_helpers.rs"]
 mod pipeline_helpers;
+#[path = "../helpers/sqlite_test_app_builder.rs"]
+mod sqlite_test_app_builder;
 
 use pipeline_helpers::{create_test_state_with_trigger_npc, latest_state};
 use fixtures::create_test_state;
@@ -156,18 +158,19 @@ fn test_inv002_violation_demo() {
 #[test]
 fn test_inv004_cancellable_at_boundaries() {
     use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-    let mut state = create_test_state();
-    state.narrative.history.clear();
 
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(100));
-    let app = make_test_app_with_game_service(state, |_storage| {
-        let recorder = make_test_recorder(mock_backend_raw.clone());
-        Arc::new(GameService::with_backends(
-            recorder,
-            AgentRegistry::default(),
-        ))
-    })
-    .unwrap();
+    let backend_for_closure = Arc::clone(&mock_backend_raw);
+    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .game_service_fn(move |_storage| {
+            let recorder = make_test_recorder(backend_for_closure.clone());
+            Arc::new(GameService::with_backends(
+                recorder,
+                AgentRegistry::default(),
+            ))
+        })
+        .build_service()
+        .unwrap();
     // Phase boundaries abort on game_id mismatch (α-check), not on token
     // cancellation. Simulate the reset by switching the active game mid-pipeline;
     // the next phase boundary sees the mismatch and aborts.
@@ -411,21 +414,22 @@ async fn test_p4_concurrent_happy_path() {
     use chronicler_engine::application::errors::ProcessActionResult;
     use chronicler_engine::application::game_service::GameService;
 
-    let state = create_test_state();
-
     let mock_backend_raw = Arc::new(
         MockBackend::default()
             .with_delay(300)
             .with_narrations(vec!["GEN_A_OUTPUT".to_string(), "GEN_B_OUTPUT".to_string()]),
     );
-    let app = make_test_app_with_game_service(state, |_storage| {
-        let recorder = make_test_recorder(mock_backend_raw.clone());
-        Arc::new(GameService::with_backends(
-            recorder,
-            AgentRegistry::default(),
-        ))
-    })
-    .unwrap();
+    let backend_for_closure = Arc::clone(&mock_backend_raw);
+    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .game_service_fn(move |_storage| {
+            let recorder = make_test_recorder(backend_for_closure.clone());
+            Arc::new(GameService::with_backends(
+                recorder,
+                AgentRegistry::default(),
+            ))
+        })
+        .build_service()
+        .unwrap();
     let game1 = app.current_game_id();
 
     let result_a = app
@@ -534,21 +538,22 @@ async fn test_p4_concurrent_triple_overlap() {
     use chronicler_engine::application::errors::ProcessActionResult;
     use chronicler_engine::application::game_service::GameService;
 
-    let state = create_test_state();
-
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(300).with_narrations(vec![
         "GEN_A_OUTPUT".to_string(),
         "GEN_B_OUTPUT".to_string(),
         "GEN_C_OUTPUT".to_string(),
     ]));
-    let app = make_test_app_with_game_service(state, |_storage| {
-        let recorder = make_test_recorder(mock_backend_raw.clone());
-        Arc::new(GameService::with_backends(
-            recorder,
-            AgentRegistry::default(),
-        ))
-    })
-    .unwrap();
+    let backend_for_closure = Arc::clone(&mock_backend_raw);
+    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .game_service_fn(move |_storage| {
+            let recorder = make_test_recorder(backend_for_closure.clone());
+            Arc::new(GameService::with_backends(
+                recorder,
+                AgentRegistry::default(),
+            ))
+        })
+        .build_service()
+        .unwrap();
     let game1 = app.current_game_id();
 
     let result_a = app

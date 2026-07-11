@@ -8,7 +8,7 @@ use tokio::time::sleep;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::test_support::make_test_app_with_sqlite;
+use crate::test_support::TestAppBuilder;
 
 fn cached_flag(app: &DefaultApplicationService) -> bool {
     app.is_generating().load(Ordering::SeqCst)
@@ -63,10 +63,7 @@ async fn wait_until_idle(app: &DefaultApplicationService, timeout: Duration) -> 
 
 #[test]
 fn test_is_generating_invariant_helper_detects_divergence() {
-    let mut state = crate::test_support::fixtures::TestGameState::in_room("start");
-    state.narrative.history.clear();
-    state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let app = make_test_app_with_sqlite(state).expect("make_test_app_with_sqlite");
+    let app = TestAppBuilder::default_test().build_service();
 
     assert!(
         invariant_holds(&app),
@@ -91,11 +88,7 @@ fn test_is_generating_invariant_helper_detects_divergence() {
 #[tokio::test(flavor = "current_thread")]
 #[should_panic(expected = "invariant violation during wait_until_idle")]
 async fn test_wait_until_idle_fails_fast_on_cached_false_persisted_generating() {
-    let mut state = crate::test_support::fixtures::TestGameState::in_room("start");
-    state.narrative.history.clear();
-    state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let app =
-        std::sync::Arc::new(make_test_app_with_sqlite(state).expect("make_test_app_with_sqlite"));
+    let app = std::sync::Arc::new(TestAppBuilder::default_test().build_service());
 
     // Bypass process_action: production CAS would forbid cached=false with status=Generating.
     let mut gs = app.load_or_fresh();
@@ -121,11 +114,7 @@ async fn test_projection_invariant_under_interleaved_release() {
     use crate::application::agents::registry::AgentRegistry;
     use crate::application::errors::ProcessActionResult;
     use crate::application::game_service::GameService;
-    use crate::test_support::{make_test_app_with_game_service, make_test_recorder};
-
-    let mut state = crate::test_support::fixtures::TestGameState::in_room("start");
-    state.narrative.history.clear();
-    state.narrative.input_buffer.status = GenerationStatus::Idle;
+    use crate::test_support::make_test_recorder;
 
     // 300ms LLM delay keeps A in-flight across the reset + drop window.
     // After reset, A's pipeline hits the α-check at the next phase
@@ -136,14 +125,16 @@ async fn test_projection_invariant_under_interleaved_release() {
             .with_delay(300)
             .with_narrations(vec!["GEN_A_OUTPUT".to_string(), "GEN_B_OUTPUT".to_string()]),
     );
-    let app = make_test_app_with_game_service(state, |_storage| {
+    let game_service = {
         let recorder = make_test_recorder(mock_backend_raw.clone());
         std::sync::Arc::new(GameService::with_backends(
             recorder,
             AgentRegistry::default(),
         ))
-    })
-    .expect("make_test_app_with_game_service");
+    };
+    let app = TestAppBuilder::default_test()
+        .game_service(game_service)
+        .build_service();
 
     let game_a_id = app.current_game_id();
 
@@ -175,7 +166,7 @@ async fn test_projection_invariant_under_interleaved_release() {
     // Reset → game B; A's pipeline will abort at the next phase boundary
     // when the α-check sees the game id mismatch.
     let game_b_id = app
-        .create_game("test", "hero")
+        .create_game("test", "test_player")
         .expect("create_game(B) should succeed");
     assert_ne!(game_b_id, game_a_id, "reset must produce distinct game id");
 

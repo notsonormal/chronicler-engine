@@ -15,10 +15,8 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_recorder;
-use crate::test_support::{
-    make_test_app_with_game_service, make_test_app_with_separate_backends,
-    make_test_app_with_sqlite, make_test_app_without_snapshot,
-};
+use crate::test_support::TestAppBuilder;
+use crate::test_support::make_test_app_without_snapshot;
 
 fn make_test_state() -> GameState {
     TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))
@@ -135,15 +133,13 @@ fn test_retry_load_messages_error() {
 
 #[test]
 fn test_retry_no_input() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
     retry_last_response_impl(&app);
 }
 
 #[test]
 fn test_retry_event_with_no_pre_event_fallback_to_main() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
 
@@ -166,8 +162,7 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
 
 #[test]
 fn test_retry_event_with_no_pre_event_and_no_input() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let mut state = app.load_or_fresh();
     state.add_message("Event only".to_string(), None, MessageType::Narration);
@@ -241,8 +236,7 @@ fn test_retry_event_storage_error_on_pre_event() {
 
 #[test]
 fn test_retry_event_missing_trigger_context() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
@@ -266,8 +260,7 @@ fn test_retry_event_missing_trigger_context() {
 
 #[test]
 fn test_retry_event_continuation_cancels_before_llm() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
@@ -300,13 +293,16 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
 #[test]
 fn test_retry_event_trigger_narration_fails() {
-    let state = make_test_state();
-    let app = make_test_app_with_separate_backends(
-        state,
-        || MockBackend::default().with_trigger_narration_fail(),
-        MockBackend::default,
-    )
-    .unwrap();
+    let game_service = Arc::new(GameService::with_mock_quantifier(
+        make_test_recorder(Arc::new(
+            MockBackend::default().with_trigger_narration_fail(),
+        )),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    ));
+    let app = TestAppBuilder::default_test()
+        .game_service(game_service)
+        .build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
@@ -352,9 +348,14 @@ fn test_retry_event_trigger_narration_fails() {
 
 #[test]
 fn test_retry_event_empty_continuation_text() {
-    let state = make_test_state();
-    let app = make_test_app_with_separate_backends(state, MockBackend::new, MockBackend::default)
-        .unwrap();
+    let game_service = Arc::new(GameService::with_mock_quantifier(
+        make_test_recorder(Arc::new(MockBackend::new())),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    ));
+    let app = TestAppBuilder::default_test()
+        .game_service(game_service)
+        .build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
@@ -386,8 +387,7 @@ fn test_retry_event_empty_continuation_text() {
 
 #[test]
 fn test_retry_main_no_pre_main_snapshot() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let mut state = app.load_or_fresh();
     let player_name = state.persona.sheet.name.clone();
@@ -425,8 +425,7 @@ fn test_retry_main_no_pre_main_snapshot() {
 
 #[test]
 fn test_retry_event_continuation_happy_path() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
@@ -475,8 +474,7 @@ fn test_retry_event_continuation_happy_path() {
 
 #[test]
 fn test_retry_main_narration_happy_path() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
@@ -540,8 +538,7 @@ fn test_retry_main_storage_error_on_pre_main() {
 
 #[test]
 fn test_save_retry_error() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     super::retry::save_retry_error(&app, "test error");
 
@@ -609,15 +606,14 @@ impl crate::application::ports::llm_provider::LlmProvider for EmptyTriggerBacken
 
 #[test]
 fn test_retry_event_empty_continuation_triggers_error() {
-    let state = make_test_state();
-    let app = make_test_app_with_game_service(state, |_storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            make_test_recorder(Arc::new(EmptyTriggerBackend)),
-            Arc::new(MockBackend::default())
-                as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-        ))
-    })
-    .unwrap();
+    let game_service = Arc::new(GameService::with_mock_quantifier(
+        make_test_recorder(Arc::new(EmptyTriggerBackend)),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    ));
+    let app = TestAppBuilder::default_test()
+        .game_service(game_service)
+        .build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
@@ -664,8 +660,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
 
 #[test]
 fn test_retry_appends_swipe_to_same_message() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
@@ -712,8 +707,7 @@ fn test_retry_appends_swipe_to_same_message() {
 
 #[test]
 fn test_retrigger_event_impl_cancels_cleanly() {
-    let state = make_test_state();
-    let app = make_test_app_with_sqlite(state).unwrap();
+    let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);

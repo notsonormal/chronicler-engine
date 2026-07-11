@@ -1,22 +1,21 @@
 //! Integration tests for the action pipeline: verifies that user actions are persisted to state, that narrations from the LLM are stored, and that error paths (room not found, LLM failure) are surfaced gracefully.
 
-use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
-use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
-use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
-use chronicler_engine::test_support::{
-    make_test_app_with_backends, make_test_app_with_separate_backends,
-};
-
-use crate::{fixtures::create_test_state, pipeline_helpers::latest_state};
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::application::action_pipeline::execute_action_impl;
+use chronicler_engine::domain::model::message::Message;
+use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
+use chronicler_engine::test_support::TestDataBuilder;
+
+use crate::{pipeline_helpers::latest_state, sqlite_test_app_builder::SqliteTestAppBuilder};
 
 #[test]
 fn test_pipeline_executes_and_persists_narration() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -38,14 +37,18 @@ fn test_pipeline_executes_and_persists_narration() {
 
 #[test]
 fn test_pipeline_persists_input_before_narration() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    state.add_message(
-        "examine the room".to_string(),
+    let msg = Message::new(
         Some("Player".to_string()),
+        "examine the room",
         MessageType::Input,
+        None,
+        None,
     );
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .message(msg)
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app, "examine the room".to_string());
 
@@ -67,10 +70,14 @@ fn test_pipeline_persists_input_before_narration() {
 
 #[test]
 fn test_pipeline_handles_room_not_found() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    state.movement.current_room_id = "non_existent_room".to_string();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let data = TestDataBuilder::default_test().build();
+    let app = SqliteTestAppBuilder::with_data(data)
+        .backends(MockBackend::default)
+        .state_mut(|state| {
+            state.movement.current_room_id = "non_existent_room".to_string();
+        })
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -83,14 +90,10 @@ fn test_pipeline_handles_room_not_found() {
 
 #[test]
 fn test_pipeline_handles_llm_failure() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    let app = make_test_app_with_separate_backends(
-        state,
-        || MockBackend::default().with_fail(),
-        MockBackend::default,
-    )
-    .unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .separate_backends(|| MockBackend::default().with_fail(), MockBackend::default)
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -108,19 +111,20 @@ fn test_pipeline_handles_llm_failure() {
 
 #[test]
 fn test_pipeline_clears_last_trigger() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    state.narrative.last_trigger = Some(StoredTriggerContext {
-        trigger_name: "Old".to_string(),
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_repeat: false,
-        trigger_narration_prompt: "The old trigger fires.".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    });
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .last_trigger(StoredTriggerContext {
+            trigger_name: "Old".to_string(),
+            npc_id: "npc1".to_string(),
+            trigger_idx: 0,
+            trigger_repeat: false,
+            trigger_narration_prompt: "The old trigger fires.".to_string(),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        })
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -133,10 +137,11 @@ fn test_pipeline_clears_last_trigger() {
 
 #[test]
 fn test_pipeline_phase_transitions() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .generation_status(GenerationStatus::Idle, GenerationPhase::default())
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -150,15 +155,11 @@ fn test_pipeline_phase_transitions() {
 
 #[test]
 fn test_pipeline_phase_stays_narrating_on_error() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let app = make_test_app_with_separate_backends(
-        state,
-        || MockBackend::default().with_fail(),
-        MockBackend::default,
-    )
-    .unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .generation_status(GenerationStatus::Idle, GenerationPhase::default())
+        .separate_backends(|| MockBackend::default().with_fail(), MockBackend::default)
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -172,9 +173,10 @@ fn test_pipeline_phase_stays_narrating_on_error() {
 
 #[test]
 fn test_pipeline_empty_input() {
-    let mut state = create_test_state();
-    state.narrative.history.clear();
-    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    let app = SqliteTestAppBuilder::default_test()
+        .backends(MockBackend::default)
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app, String::new());
 

@@ -12,19 +12,41 @@ Cross-module and end-to-end tests live in `tests/`, organised by fixture weight 
 
 No component outside `main.rs` hardcodes an external LLM API. Use `MockBackend` (implements `LlmProvider`) and the `make_test_recorder` / `make_test_recorder_with_storage` helpers at [`src/test_support/noop_forensics.rs`](../../src/test_support/noop_forensics.rs) to wrap `MockBackend` in `LlmCallRecorder` for `with_backends` / `with_mock_quantifier`.
 
-## Backend Selection
+## App Construction
+
+Three builders cover app construction across in-memory lib tests, in-memory integration tests, and sqlite-backed integration tests. All return `Arc<DefaultApplicationService>` via `build_service()`.
+
+**Lib tests (`src/*_tests.rs`) — in-memory is sufficient; no sqlite needed:**
 
 ```rust
-let service = GameService::with_mock_quantifier(
-    make_test_recorder(Arc::new(MockBackend::new())),
-    Arc::new(MockBackend::new()),
-);
+use chronicler_engine::test_support::{TestDataBuilder, TestAppBuilder};
 
-let app = make_test_app_with_storage_and_service(storage, Arc::new(service))?;
+let data = TestDataBuilder::default_test().build();
+let app = TestAppBuilder::with_data(data)
+    .game_service(Arc::new(service))
+    .build_service()?;
 app.process_action("look around".to_string());
 ```
 
-Factory selection: `make_test_app(state)` (default in-memory + mock backend), `make_test_app_with_sqlite(state)`, `make_test_app_with_mock_backend(state, factory)`, `make_test_app_with_backends(state, narrator)`, `make_test_app_with_separate_backends(state, n, q)`, `make_test_app_with_game_service(state, |storage| { ... })`, `make_test_app_with_storage_and_service(storage, gs)`. All `Result`-returning factories must be `?`'d (lib clippy denies unwrap/expect/panic). For tests that need to invoke pipeline phases through a `GameService`, build the `DefaultApplicationService` via `make_test_app_with_storage_and_service` and call `app.process_action(input)` (the `DefaultApplicationService::process_action` entry point).
+**Integration tests needing sqlite-backed storage + custom `GameService` wiring:**
+
+```rust
+use chronicler_engine::test_support::TestDataBuilder;
+use crate::helpers::SqliteTestAppBuilder;
+
+let data = TestDataBuilder::default_test().build();
+let app = SqliteTestAppBuilder::with_data(data)
+    .game_service_fn(move |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .build_service()?;
+app.process_action("look around".to_string());
+```
+
+Builder selection: `TestAppBuilder` (in-memory, `src/test_support/`) for lib tests + in-memory integration tests; `SqliteTestAppBuilder` (integration-only, `tests/helpers/`) replaces the deleted `make_test_app_with_sqlite` / `_mock_backend` / `_backends` / `_separate_backends` / `_game_service` helpers. Three survivors remain in `src/test_support/context.rs` for narrow cases: `make_test_app`, `make_test_app_without_snapshot` (snapshot-skip semantics), `seed_test_world_into_storage` (failing-storage test). All `Result`-returning builders must be `?`'d (lib clippy denies unwrap/expect/panic). For tests that need to invoke pipeline phases through a `GameService`, use `.game_service(...)` (in-memory) or `.game_service_fn(|storage| { ... })` (sqlite) and call `app.process_action(input)` (the `DefaultApplicationService::process_action` entry point). See [`docs/reference/test_support.md`](test_support.md) for the full builder API.
 
 `ActionPipeline` is non-generic; `run_post_generation_agents` is an inline phase method. See `tests/integration/application/action_pipeline/pipeline.rs` for working examples.
 

@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::application::action_pipeline::pipeline::{ActionOutcome, ActionPipeline};
 use crate::application::application_service::DefaultApplicationService;
-use crate::test_support::make_test_app_with_game_service;
 use crate::test_support::make_test_recorder;
 use crate::application::game_service::GameService;
 use crate::application::agents::registry::AgentRegistry;
@@ -12,6 +11,7 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
+use crate::test_support::{TestAppBuilder, TestDataBuilder};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 
 fn make_test_pipeline(service: &crate::application::game_service::GameService) -> ActionPipeline {
@@ -24,14 +24,16 @@ fn make_test_state() -> GameState {
 
 #[test]
 fn test_pipeline_runs_to_completion() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
@@ -48,14 +50,16 @@ fn test_pipeline_runs_to_completion() {
 
 #[test]
 fn test_pipeline_saves_narration_to_history() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     let final_state = app.load_or_fresh();
@@ -69,14 +73,16 @@ fn test_pipeline_saves_narration_to_history() {
 
 #[test]
 fn test_pipeline_returns_error_on_narration_failure() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
@@ -97,15 +103,17 @@ fn test_pipeline_returns_error_on_narration_failure() {
 
 #[test]
 fn test_pipeline_returns_error_on_empty_narration_text() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
@@ -138,9 +146,9 @@ fn test_quantifier_result_default_has_low_confidence_and_empty_npcs() {
 fn test_pipeline_with_custom_quantifier_result() {
     use crate::application::agents::quantifier::QuantifierAgent;
 
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
 
-    let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
+    let custom_quantifier_result = r#"{"npcs_in_room": ["npc_1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
     let quantifier_provider =
@@ -150,9 +158,11 @@ fn test_pipeline_with_custom_quantifier_result() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
@@ -230,10 +240,7 @@ fn test_pipeline_trigger_happy_path() {
         relationships: vec![],
     };
 
-    let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
-    let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
-    let player = Arc::new(crate::test_support::fixtures::TestPersona::standard());
-    let state = GameState::new(world, map, player, vec![npc], "start".to_string());
+    let data = TestDataBuilder::default_test().npc(npc).build();
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
@@ -247,9 +254,11 @@ fn test_pipeline_trigger_happy_path() {
     ));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
@@ -298,10 +307,7 @@ fn test_pipeline_trigger_empty_continuation() {
         relationships: vec![],
     };
 
-    let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
-    let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
-    let player = Arc::new(crate::test_support::fixtures::TestPersona::standard());
-    let state = GameState::new(world, map, player, vec![npc], "start".to_string());
+    let data = TestDataBuilder::default_test().npc(npc).build();
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
@@ -314,9 +320,11 @@ fn test_pipeline_trigger_empty_continuation() {
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
     assert!(
         outcome.is_ok(),
@@ -362,10 +370,7 @@ fn test_pipeline_trigger_complete_failure() {
         relationships: vec![],
     };
 
-    let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
-    let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
-    let player = Arc::new(crate::test_support::fixtures::TestPersona::standard());
-    let state = GameState::new(world, map, player, vec![npc], "start".to_string());
+    let data = TestDataBuilder::default_test().npc(npc).build();
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
@@ -377,9 +382,11 @@ fn test_pipeline_trigger_complete_failure() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
     assert!(
         outcome.is_ok(),
@@ -400,14 +407,16 @@ fn test_pipeline_trigger_complete_failure() {
 
 #[test]
 fn test_pipeline_saves_narration_before_quantifier() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     let messages = app.load_messages().unwrap();
@@ -432,16 +441,18 @@ fn test_pipeline_saves_narration_before_quantifier() {
 
 #[test]
 fn test_pipeline_no_duplicate_narration() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let _outcome = pipeline.run_from_input(&app, state, "test input".to_string());
 
     let final_state = app.load_or_fresh();
@@ -465,14 +476,16 @@ fn test_pipeline_no_duplicate_narration() {
 
 #[test]
 fn test_pipeline_quantifier_runs_on_saved_state() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     let messages = app.load_messages().unwrap();
@@ -489,9 +502,9 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
 
 #[test]
 fn test_pipeline_continues_if_quantifier_save_fails() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
 
-    let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
+    let custom_quantifier_result = r#"{"npcs_in_room": ["npc_1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
     let quantifier_provider =
@@ -502,9 +515,11 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
@@ -515,9 +530,9 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
 
 #[test]
 fn test_narration_persisted_even_if_quantifier_changes_state() {
-    let state = make_test_state();
+    let data = TestDataBuilder::default_test().build();
 
-    let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
+    let custom_quantifier_result = r#"{"npcs_in_room": ["npc_1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
     let quantifier_provider =
@@ -530,9 +545,11 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
     ));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app =
-        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    let app = TestAppBuilder::with_data(data)
+        .game_service(Arc::new(service.clone()))
+        .build_service();
 
+    let state = app.load_or_fresh();
     let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     let messages = app.load_messages().unwrap();

@@ -11,23 +11,61 @@ use chronicler_engine::domain::model::trigger::{
 };
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::test_support::{
-    make_test_app_with_game_service, make_test_app_with_mock_backend, make_test_recorder,
-};
+use chronicler_engine::test_support::make_test_recorder;
+use chronicler_engine::test_support::TestData;
+use chronicler_engine::TestDataBuilder;
 use crate::make_test_recorder_with_storage;
 use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 
-use crate::pipeline_helpers::{
-    add_input_and_save, create_test_state_with_trigger_npc, latest_state,
-    wait_for_generation_complete,
-};
+use crate::pipeline_helpers::{add_input_and_save, latest_state, wait_for_generation_complete};
 use crate::fixtures::create_test_map;
+use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
+
+fn trigger_npc_test_data() -> TestData {
+    let shopkeeper = NpcCard {
+        id: "shopkeeper".into(),
+        sheet: CharacterSheet {
+            name: "Shopkeeper Sarah".into(),
+            description: "A shrewd shopkeeper".into(),
+            personality: "Business-minded".into(),
+            scenario: "Runs the shop".into(),
+            example_dialogue: "Welcome!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![Trigger {
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
+            narration: TriggerNarration {
+                name: "Greeting".into(),
+                narration_prompt: "The shopkeeper greets you.".into(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    };
+
+    TestDataBuilder::default_test()
+        .world(crate::fixtures::create_test_world())
+        .map(crate::fixtures::create_test_map())
+        .persona(crate::fixtures::create_test_player())
+        .npcs(vec![shopkeeper])
+        .build()
+}
 
 #[test]
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {
-    let mut state = create_test_state_with_trigger_npc();
-    state.narrative.history.clear();
-    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
+    let data = trigger_npc_test_data();
+
+    let app1 = SqliteTestAppBuilder::with_data(data.clone())
+        .mock_backend(MockBackend::new)
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app1, "enter shop");
 
@@ -37,13 +75,15 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
                 .to_string(),
         ]));
 
-    let app2 = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-            quantifier.clone(),
-        ))
-    })
-    .unwrap();
+    let app2 = SqliteTestAppBuilder::with_data(data)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                quantifier.clone(),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app2, "enter shop".to_string());
     assert!(
@@ -77,9 +117,12 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 
 #[test]
 fn test_retry_event_continuation_preserves_quantifier_result() {
-    let mut state = create_test_state_with_trigger_npc();
-    state.narrative.history.clear();
-    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
+    let data = trigger_npc_test_data();
+
+    let app1 = SqliteTestAppBuilder::with_data(data.clone())
+        .mock_backend(MockBackend::new)
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app1, "enter shop");
 
@@ -89,13 +132,15 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
                 .to_string(),
         ]));
 
-    let app2 = make_test_app_with_game_service(state, |storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-            quantifier.clone(),
-        ))
-    })
-    .unwrap();
+    let app2 = SqliteTestAppBuilder::with_data(data)
+        .game_service_fn(move |storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                quantifier.clone(),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app2, "enter shop".to_string());
     assert!(
@@ -208,9 +253,20 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
     };
 
     let npcs = vec![shopkeeper, gabriella];
-    let mut state = GameState::new(world, map, player, npcs, "room1".to_string());
-    state.narrative.history.clear();
-    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
+    let state = GameState::new(world, map, player, npcs, "room1".to_string());
+
+    let data = TestData {
+        world: Arc::clone(&state.world),
+        map: Arc::clone(&state.map),
+        persona: Arc::clone(&state.persona),
+        npcs: state.npcs.values().cloned().collect(),
+        room_npcs: vec!["gabriella".to_string()],
+    };
+
+    let app1 = SqliteTestAppBuilder::with_data(data.clone())
+        .mock_backend(MockBackend::new)
+        .build_service()
+        .unwrap();
 
     add_input_and_save(&app1, "enter shop");
 
@@ -225,13 +281,15 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         "Gabriella emerges from the shadows behind the counter.".to_string(),
     ])));
 
-    let app2 = make_test_app_with_game_service(state, |_storage| {
-        Arc::new(GameService::with_mock_quantifier(
-            llm_backend.clone(),
-            quantifier.clone(),
-        ))
-    })
-    .unwrap();
+    let app2 = SqliteTestAppBuilder::with_data(data)
+        .game_service_fn(move |_storage| {
+            Arc::new(GameService::with_mock_quantifier(
+                llm_backend.clone(),
+                quantifier.clone(),
+            ))
+        })
+        .build_service()
+        .unwrap();
 
     execute_action_impl(&app2, "enter shop".to_string());
     assert!(

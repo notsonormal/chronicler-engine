@@ -2,9 +2,11 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -34,13 +36,23 @@ pub fn kill_existing_server(port: u16) {
 /// When use_mock is true, writes a temporary settings file with Mock
 /// connections and passes it via `--settings-path` CLI flag.
 /// Returns the spawned child process, temp dir (if mock settings were written),
-/// and the path to the SQLite database file the server will create.
+/// the path to the SQLite database file the server will create, and the
+/// stdout/stderr drain buffers (so the caller can dump them on startup timeout).
+type ChildOutputBuffer = Arc<Mutex<Vec<u8>>>;
+type StartServerResult = (
+    Child,
+    Option<std::path::PathBuf>,
+    std::path::PathBuf,
+    ChildOutputBuffer,
+    ChildOutputBuffer,
+);
+
 pub fn start_server_with_env(
     port: u16,
     world: &str,
     persona: &str,
     use_mock: bool,
-) -> (Child, Option<std::path::PathBuf>, std::path::PathBuf) {
+) -> StartServerResult {
     // Prefer pre-built binary to avoid per-test compilation overhead.
     // Fall back to cargo run for fresh clones or after cargo clean.
     // Respect CARGO_TARGET_DIR for concurrent builds with custom target directories.
@@ -124,13 +136,37 @@ pub fn start_server_with_env(
     cmd.current_dir(".")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    let child = cmd.spawn().expect("Failed to start server");
+    let mut child = cmd.spawn().expect("Failed to start server");
+
+    let stdout_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let stderr_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+
+    if let Some(mut out) = child.stdout.take() {
+        let buf = Arc::clone(&stdout_buf);
+        std::thread::spawn(move || {
+            let mut local = Vec::new();
+            let _ = out.read_to_end(&mut local);
+            if let Ok(mut g) = buf.lock() {
+                g.extend_from_slice(&local);
+            }
+        });
+    }
+    if let Some(mut err) = child.stderr.take() {
+        let buf = Arc::clone(&stderr_buf);
+        std::thread::spawn(move || {
+            let mut local = Vec::new();
+            let _ = err.read_to_end(&mut local);
+            if let Ok(mut g) = buf.lock() {
+                g.extend_from_slice(&local);
+            }
+        });
+    }
 
     let db_path = std::path::PathBuf::from(&target_dir)
         .join("debug")
         .join(format!("chronicler_{port}.db"));
 
-    (child, tmp_dir, db_path)
+    (child, tmp_dir, db_path, stdout_buf, stderr_buf)
 }
 
 pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
@@ -328,9 +364,41 @@ impl TestServer {
             .join(format!("chronicler_{port}.db"));
         // Remove stale database BEFORE starting server so we don't inherit old state.
         Self::cleanup_stale_db(port, &db_path);
-        let (child, temp_dir, _db_path) = start_server_with_env(port, world, persona, use_mock);
+        let (mut child, temp_dir, _db_path, stdout_buf, stderr_buf) =
+            start_server_with_env(port, world, persona, use_mock);
         let started = wait_for_server(port, 300).await; // 300 * 100ms = 30s total — CI under load can take >10s
-        assert!(started, "Server failed to start on port {port}");
+        if !started {
+            eprintln!(
+                "🛑 Server failed to start on port {port} within 30s. Draining child output for diagnostics:"
+            );
+            if let Ok(g) = stdout_buf.lock() {
+                if !g.is_empty() {
+                    eprintln!("--- child stdout ({} bytes) ---", g.len());
+                    if let Ok(s) = std::str::from_utf8(&g) {
+                        eprintln!("{s}");
+                    } else {
+                        eprintln!("{:?}", &g[..g.len().min(4096)]);
+                    }
+                }
+            }
+            if let Ok(g) = stderr_buf.lock() {
+                if !g.is_empty() {
+                    eprintln!("--- child stderr ({} bytes) ---", g.len());
+                    if let Ok(s) = std::str::from_utf8(&g) {
+                        eprintln!("{s}");
+                    } else {
+                        eprintln!("{:?}", &g[..g.len().min(4096)]);
+                    }
+                } else {
+                    eprintln!(
+                        "--- child stderr empty (binary may not have written anything yet) ---"
+                    );
+                }
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("Server failed to start on port {port}");
+        }
         SERVER_MANAGED.store(true, Ordering::SeqCst);
         TestServer {
             child,
