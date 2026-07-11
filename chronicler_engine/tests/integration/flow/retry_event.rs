@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
-use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
@@ -253,13 +252,12 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
     };
 
     let npcs = vec![shopkeeper, gabriella];
-    let state = GameState::new(world, map, player, npcs, "room1".to_string());
 
     let data = TestData {
-        world: Arc::clone(&state.world),
-        map: Arc::clone(&state.map),
-        persona: Arc::clone(&state.persona),
-        npcs: state.npcs.values().cloned().collect(),
+        world: Arc::clone(&world),
+        map: Arc::clone(&map),
+        persona: Arc::clone(&player),
+        npcs,
         room_npcs: vec!["gabriella".to_string()],
     };
 

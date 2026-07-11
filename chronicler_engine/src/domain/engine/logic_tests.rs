@@ -2,12 +2,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::domain::engine::logic::{attempt_semantic_walk, create_dynamic_room, find_room_in_world_map};
-use crate::domain::model::character::{CharacterSheet, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::world::WorldCard;
 
-fn setup_test_state() -> GameState {
+fn setup_test_state() -> (GameState, Arc<MapDef>) {
     let mut exits1 = HashMap::new();
     exits1.insert(Direction::North, "room2".to_string());
     exits1.insert(Direction::East, "room3".to_string());
@@ -61,73 +59,42 @@ fn setup_test_state() -> GameState {
     };
 
     let map = MapDef { overworld };
-    let world = WorldCard {
-        name: "W".into(),
-        description: "D".into(),
-        global_rules: vec![],
-        ..Default::default()
-    };
-    let player = PersonaCard {
-        key: "test_player".to_string(),
-        sheet: CharacterSheet {
-            name: "P".into(),
-            description: "P".into(),
-            personality: "P".into(),
-            scenario: "S".into(),
-            example_dialogue: "E".into(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    };
 
-    GameState::new(
-        Arc::new(world),
-        Arc::new(map),
-        Arc::new(player),
-        vec![],
-        "room1".to_string(),
-    )
+    let state = GameState::new("room1".to_string());
+    (state, Arc::new(map))
 }
 
 #[test]
 fn test_get_room_by_id_missing() {
-    let state = setup_test_state();
-    let res = find_room_in_world_map(&state, "phantom_room");
+    let (_state, map) = setup_test_state();
+    let res = find_room_in_world_map(&map, "phantom_room");
     assert!(res.is_none());
 }
 
 #[test]
 fn test_attempt_walk_dangling_exit() {
-    let state = setup_test_state();
-    let mut room = state.map.overworld.regions[0].rooms[0].clone();
-    room.exits
-        .insert(Direction::South, "non_existent_id".to_string());
-
-    // [DOC: docs/architecture/system.md]
-    // NOTE: Map is behind Arc, so we clone the reference for the guard.
-    let res = find_room_in_world_map(&state, "non_existent_id");
+    let (_state, map) = setup_test_state();
+    let res = find_room_in_world_map(&map, "non_existent_id");
     assert!(res.is_none());
 }
 
 #[test]
 fn test_current_room_success() {
-    let state = setup_test_state();
-    let result = state.current_room();
+    let (state, map) = setup_test_state();
+    let result = map
+        .get_room_by_id(&state.movement.current_room_id)
+        .or_else(|| {
+            state
+                .movement
+                .dynamic_rooms
+                .get(&state.movement.current_room_id)
+        });
     assert!(result.is_some());
     assert_eq!(result.unwrap().name, "Grand Hall");
 }
 
 #[test]
 fn test_get_current_room_failure() {
-    let world = Arc::new(WorldCard {
-        name: "W".into(),
-        description: "D".into(),
-        global_rules: vec![],
-        ..Default::default()
-    });
-
     let map = MapDef {
         overworld: Overworld {
             id: "o".into(),
@@ -148,43 +115,31 @@ fn test_get_current_room_failure() {
         },
     };
 
-    let state = GameState::new(
-        world,
-        Arc::new(map),
-        Arc::new(PersonaCard {
-            key: "test_player".to_string(),
-            sheet: CharacterSheet {
-                name: "P".into(),
-                description: "P".into(),
-                personality: "P".into(),
-                scenario: "S".into(),
-                example_dialogue: "".into(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        }),
-        vec![],
-        "non_existent_room".to_string(),
-    );
+    let state = GameState::new("non_existent_room");
 
-    let result = state.current_room();
+    let result = map
+        .get_room_by_id(&state.movement.current_room_id)
+        .or_else(|| {
+            state
+                .movement
+                .dynamic_rooms
+                .get(&state.movement.current_room_id)
+        });
     assert!(result.is_none());
 }
 
 #[test]
 fn test_get_room_by_id_existing() {
-    let state = setup_test_state();
-    let room = find_room_in_world_map(&state, "room1");
+    let (_state, map) = setup_test_state();
+    let room = find_room_in_world_map(&map, "room1");
     assert!(room.is_some());
     assert_eq!(room.unwrap().name, "Grand Hall");
 }
 
 #[test]
 fn test_attempt_semantic_walk_valid() {
-    let mut state = setup_test_state();
-    let result = attempt_semantic_walk(&mut state, "room2");
+    let (mut state, map) = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, &map, "room2");
     assert!(result.is_ok());
     assert!(result.unwrap().contains("Dusty Kitchen"));
     assert_eq!(state.movement.current_room_id, "room2");
@@ -192,23 +147,22 @@ fn test_attempt_semantic_walk_valid() {
 
 #[test]
 fn test_attempt_semantic_walk_invalid() {
-    let mut state = setup_test_state();
-    let result = attempt_semantic_walk(&mut state, "nonexistent_room");
+    let (mut state, map) = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, &map, "nonexistent_room");
     assert!(result.is_err());
-    // Room ID should not change
     assert_eq!(state.movement.current_room_id, "room1");
 }
 
 #[test]
 fn test_attempt_semantic_walk_empty() {
-    let mut state = setup_test_state();
-    let result = attempt_semantic_walk(&mut state, "");
+    let (mut state, map) = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, &map, "");
     assert!(result.is_err(), "Empty room id should return error");
 }
 
 #[test]
 fn test_attempt_semantic_walk_dynamic_room() {
-    let mut state = setup_test_state();
+    let (mut state, map) = setup_test_state();
     let dynamic = create_dynamic_room("Secret Cave", "Dark and damp.");
     let dynamic_id = dynamic.id.clone();
     state
@@ -216,7 +170,7 @@ fn test_attempt_semantic_walk_dynamic_room() {
         .dynamic_rooms
         .insert(dynamic_id.clone(), dynamic);
 
-    let result = attempt_semantic_walk(&mut state, &dynamic_id);
+    let result = attempt_semantic_walk(&mut state, &map, &dynamic_id);
     assert!(result.is_ok());
     assert!(result.unwrap().contains("Secret Cave"));
     assert_eq!(state.movement.current_room_id, dynamic_id);

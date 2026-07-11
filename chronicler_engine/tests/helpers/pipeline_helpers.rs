@@ -2,115 +2,15 @@
 
 #![allow(dead_code)]
 
-use std::sync::Arc;
-
-use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::domain::model::trigger::{
-    ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
-};
-use chronicler_engine::domain::model::world::WorldCard;
 
 pub fn create_test_state_with_map() -> GameState {
-    let world = Arc::new(WorldCard {
-        key: "test".into(),
-        name: "Test World".into(),
-        description: "A test world".into(),
-        ..Default::default()
-    });
-
-    let map = Arc::new(crate::fixtures::create_test_map());
-
-    let player = Arc::new(PersonaCard {
-        key: "test_player".to_string(),
-        sheet: CharacterSheet {
-            name: "Test Player".into(),
-            description: "A test player".into(),
-            personality: "Brave".into(),
-            scenario: "Test scenario".into(),
-            example_dialogue: "Hello!".into(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    });
-
-    let npcs = vec![NpcCard {
-        id: "test_npc".into(),
-        sheet: CharacterSheet {
-            name: "Innkeeper".into(),
-            description: "A friendly innkeeper".into(),
-            personality: "Helpful".into(),
-            scenario: "Runs the tavern".into(),
-            example_dialogue: "Welcome!".into(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-        triggers: vec![],
-        relationships: vec![],
-    }];
-
-    GameState::new(world, map, player, npcs, "room1".to_string())
+    GameState::new("room1".to_string())
 }
 
 pub fn create_test_state_with_trigger_npc() -> GameState {
-    let world = Arc::new(WorldCard {
-        key: "test".into(),
-        name: "Test World".into(),
-        description: "A test world".into(),
-        ..Default::default()
-    });
-
-    let map = Arc::new(crate::fixtures::create_test_map());
-
-    let player = Arc::new(PersonaCard {
-        key: "test_player".to_string(),
-        sheet: CharacterSheet {
-            name: "Test Player".into(),
-            description: "A test player".into(),
-            personality: "Brave".into(),
-            scenario: "Test scenario".into(),
-            example_dialogue: "Hello!".into(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    });
-
-    let npcs = vec![NpcCard {
-        id: "shopkeeper".into(),
-        sheet: CharacterSheet {
-            name: "Shopkeeper Sarah".into(),
-            description: "A shrewd shopkeeper".into(),
-            personality: "Business-minded".into(),
-            scenario: "Runs the shop".into(),
-            example_dialogue: "Welcome!".into(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-        triggers: vec![Trigger {
-            requirement: TriggerRequirement {
-                operator: ComparisonOperator::Eq,
-                threshold: 0,
-            },
-            narration: TriggerNarration {
-                name: "Greeting".into(),
-                narration_prompt: "The shopkeeper greets you.".into(),
-            },
-            repeat: false,
-            room_id: None,
-        }],
-        relationships: vec![],
-    }];
-
-    GameState::new(world, map, player, npcs, "room1".to_string())
+    GameState::new("room1".to_string())
 }
 
 use chronicler_engine::application::application_service::DefaultApplicationService;
@@ -157,9 +57,19 @@ pub fn save_state(app: &DefaultApplicationService, state: &GameState) {
     }
 }
 
+fn player_name(app: &DefaultApplicationService) -> String {
+    app.storage()
+        .get_game(app.current_game_id())
+        .ok()
+        .flatten()
+        .and_then(|game| app.storage().get_persona(&game.persona_key).ok().flatten())
+        .map(|persona| persona.sheet.name)
+        .unwrap_or_else(|| "Player".to_string())
+}
+
 pub fn add_input_and_save(app: &DefaultApplicationService, text: &str) {
     let mut state = latest_state(app);
-    let player_name = state.persona.sheet.name.clone();
+    let player_name = player_name(app);
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     save_state(app, &state);
 }

@@ -4,17 +4,11 @@ use super::*;
 use crate::application::application_service::DefaultApplicationService;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::test_support::fixtures::{TestWorld, TestMap, TestPersona};
+use crate::test_support::fixtures::{TestWorld, TestMap};
 use crate::test_support::make_test_app;
 
 fn minimal_state() -> GameState {
-    GameState::new(
-        Arc::new(TestWorld::minimal()),
-        Arc::new(TestMap::single_room("start")),
-        Arc::new(TestPersona::named("Test")),
-        vec![],
-        "start".to_string(),
-    )
+    GameState::new("start")
 }
 
 fn minimal_app() -> Arc<DefaultApplicationService> {
@@ -30,8 +24,10 @@ fn minimal_app_no_game() -> Arc<DefaultApplicationService> {
     use crate::adapters::driven::llm::providers::MockBackend;
 
     let state = minimal_state();
+    let world_arc = Arc::new(TestWorld::minimal());
+    let map_arc = Arc::new(TestMap::single_room("start"));
     let storage = Arc::new(Storage::new_in_memory());
-    storage.seed_world(&state.world, &state.map).unwrap();
+    storage.seed_world(&world_arc, &map_arc).unwrap();
     let _ = storage.save_snapshot(&GameStateSnapshot::from_game_state(&state));
     let mock: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());

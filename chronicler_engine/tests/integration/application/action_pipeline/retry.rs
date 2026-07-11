@@ -20,6 +20,23 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::make_test_app_without_snapshot;
 use chronicler_engine::TestAppBuilder;
 
+fn trigger_data() -> TestData {
+    TestData {
+        world: Arc::new(crate::fixtures::create_test_world()),
+        map: Arc::new(crate::fixtures::create_test_map()),
+        persona: Arc::new(crate::fixtures::create_test_player()),
+        npcs: vec![
+            chronicler_engine::test_support::TestNpc::with_times_met_trigger(
+                "shopkeeper",
+                "Shopkeeper Sarah",
+                chronicler_engine::domain::model::trigger::ComparisonOperator::Eq,
+                0,
+            ),
+        ],
+        room_npcs: vec!["shopkeeper".to_string()],
+    }
+}
+
 #[test]
 fn test_retry_finds_last_input_and_runs_pipeline() {
     let msg = Message::new(
@@ -271,20 +288,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
 
 #[test]
 fn test_retry_event_continuation_uses_pre_event_snapshot() {
-    let state_for_data = create_test_state_with_trigger_npc();
-    let data = TestData {
-        world: Arc::clone(&state_for_data.world),
-        map: Arc::clone(&state_for_data.map),
-        persona: Arc::clone(&state_for_data.persona),
-        npcs: state_for_data.npcs.values().cloned().collect(),
-        room_npcs: state_for_data
-            .scene
-            .npcs_in_area
-            .iter()
-            .map(|n| n.id.clone())
-            .collect(),
-    };
-    drop(state_for_data);
+    let data = trigger_data();
 
     let state_for_closure = {
         let mut s = create_test_state_with_trigger_npc();

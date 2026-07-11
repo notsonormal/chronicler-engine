@@ -67,7 +67,7 @@ Methods: `with_data(data)`, `default_test()`, `data()`, `last_trigger(...)`, `lo
 | `TestPersona` | `standard()`, `named(name)` | `PersonaCard` |
 | `TestNpc` | `named(id, name)`, `with_times_met_trigger(...)`, `with_room_scoped_trigger(...)` | `NpcCard` |
 | `TestMap` | `room(id)`, `room_named(id, name)`, `single_room(id)`, `two_rooms(a, b)` | `Room` / `MapDef` |
-| `TestGameState` | `in_room(id)`, `with_npc(...)`, `with_npcs(...)` | `GameState` |
+| `TestGameState` | `in_room(id)` | `GameState` |
 | `TestStoredTriggerContext` | `standard()`, `for_npc(...)`, `named(...)`, `with_max_tokens(...)` | `StoredTriggerContext` |
 | `TestPromptPreset` | `system(id, name)`, `system_default(id, name)` | `PromptPreset` |
 | `TestWorldManifest` | `minimal()` | `WorldManifest` |

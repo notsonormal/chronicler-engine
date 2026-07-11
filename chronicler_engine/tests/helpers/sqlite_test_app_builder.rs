@@ -1,10 +1,5 @@
 //! [DOC: docs/reference/testing.md — section "SqliteTestAppBuilder"]
 //! Integration-only SQLite-backed application builder for integration tests.
-//
-// Replaces the deleted `make_test_app_with_*` helpers in `src/test_support/context.rs` that
-// compose a `DefaultApplicationService` from a `GameState` plus a seeded SQLite storage.
-// Lives under `tests/helpers/` (NOT in `src/test_support/` so production code cannot import it).
-// Pairs with `chronicler_engine::test_support::TestDataBuilder` for the world-data side.
 #![allow(clippy::expect_used)]
 #![allow(dead_code)]
 
@@ -32,32 +27,25 @@ use chronicler_engine::test_support::{
     TestDataBuilder,
 };
 
-/// Backend wiring for the resulting `GameService`. Variants are mutually
-/// exclusive; `build_service` consumes whichever was last set.
+/// Backend wiring for the resulting `GameService`. Mutually exclusive variants; `build_service` consumes the last set one.
 type MockBackendFn = Box<dyn Fn() -> MockBackend>;
 type GameServiceBuilder = Box<dyn FnOnce(&Arc<Storage>) -> Arc<GameService>>;
 
 enum BackendSpec {
-    /// `GameService::with_mock_quantifier(make_recorder(backend()), backend())`.
-    /// Closure is invoked twice (once for narrator, once for quantifier).
+    /// `with_mock_quantifier(make_recorder(backend()), backend())`. Closure invoked twice.
     MockBackend(MockBackendFn),
-    /// `GameService::with_backends(make_recorder(backend()), AgentRegistry::default())`.
+    /// `with_backends(make_recorder(backend()), AgentRegistry::default())`.
     Backends(MockBackendFn),
-    /// `GameService::with_mock_quantifier(make_recorder(narrator()), quantifier())`
-    /// with two separate factories.
+    /// `with_mock_quantifier(make_recorder(narrator()), quantifier())` with two factories.
     SeparateBackends {
         narrator: MockBackendFn,
         quantifier: MockBackendFn,
     },
-    /// Caller builds the full `GameService` given the seeded `Storage`.
+    /// Caller builds the full `GameService` from the seeded `Storage`.
     GameServiceFn(GameServiceBuilder),
 }
 
-/// Builder for a SQLite-backed `DefaultApplicationService` for integration
-/// tests. Mirrors [`chronicler_engine::test_support::TestAppBuilder`] for the
-/// state-construction half, but emits a `DefaultApplicationService` directly
-/// (no HTTP router) backed by an in-memory SQLite database with full snapshot
-/// + message persistence.
+/// SQLite-backed `DefaultApplicationService` builder for integration tests. Emits the service directly (no HTTP router), backed by in-memory SQLite with full snapshot + message persistence.
 type StateMut = Box<dyn FnOnce(&mut GameState)>;
 
 pub struct SqliteTestAppBuilder {
@@ -108,16 +96,13 @@ impl SqliteTestAppBuilder {
         self
     }
 
-    /// Append a pre-built [`Message`] (with arbitrary swipes) to the
-    /// builder's pending history. Persisted with `snapshot_id` set on
-    /// `Input`-type messages, mirroring the original sqlite-backed helper.
+    /// Append a pre-built `Message` to the builder's pending history. Persists `snapshot_id` on `Input` messages.
     pub fn message(mut self, msg: Message) -> Self {
         self.messages.push(msg);
         self
     }
 
-    /// Append a `Vec` of pre-built [`Message`]s to the builder's pending
-    /// history. Same persistence semantics as [`Self::message`].
+    /// Append a `Vec` of pre-built `Message`s. Same persistence semantics as `Self::message`.
     pub fn messages(mut self, msgs: Vec<Message>) -> Self {
         self.messages.extend(msgs);
         self
@@ -175,12 +160,7 @@ impl SqliteTestAppBuilder {
         self
     }
 
-    /// Escape hatch for state mutations that have no dedicated builder
-    /// method (e.g. `state.movement.current_room_id = "..."`,
-    /// `state.npc_encounter_log.npcs["shopkeeper"].times_met = 0`). Applied
-    /// after world-data seeding + `last_trigger`/`generation`/`logs`/`messages`
-    /// setup and before the snapshot save + message persistence loop in
-    /// [`Self::build_service`].
+    /// Escape hatch for state mutations with no dedicated builder method. Applied after world-data seeding, before snapshot save + message persistence.
     pub fn state_mut<F>(mut self, f: F) -> Self
     where
         F: FnOnce(&mut GameState) + 'static,
@@ -189,11 +169,8 @@ impl SqliteTestAppBuilder {
         self
     }
 
-    /// Build the `DefaultApplicationService`. Seeds sqlite storage, persists
-    /// snapshot + messages, then dispatches to the configured `BackendSpec`.
+    /// Build the `DefaultApplicationService`: seed sqlite storage, persist snapshot + messages, dispatch to `BackendSpec`.
     pub fn build_service(mut self) -> Result<Arc<DefaultApplicationService>> {
-        // 1. Build transient GameState from test_data (same code path as
-        //    TestAppBuilder::build_app_state).
         let starting_room = self
             .test_data
             .map
@@ -204,18 +181,15 @@ impl SqliteTestAppBuilder {
             .map(|r| r.id.clone())
             .unwrap_or_else(|| "room_1".to_string());
 
-        let mut state = GameState::new(
-            Arc::clone(&self.test_data.world),
-            Arc::clone(&self.test_data.map),
-            Arc::clone(&self.test_data.persona),
-            self.test_data.npcs.clone(),
-            starting_room,
-        );
+        let mut state = GameState::new(starting_room);
 
-        for npc_id in &self.test_data.room_npcs {
-            if let Some(npc) = state.npcs.get(npc_id).cloned() {
-                state.scene.npcs_in_area.push(npc);
-            }
+        for npc in self
+            .test_data
+            .npcs
+            .iter()
+            .filter(|n| self.test_data.room_npcs.contains(&n.id))
+        {
+            state.scene.npcs_in_area.push(npc.clone());
         }
 
         if let Some(trigger) = self.last_trigger {
@@ -235,24 +209,19 @@ impl SqliteTestAppBuilder {
             state.narrative.history.append(msg);
         }
 
-        // 2. Build sqlite storage + seed.
         let db_pool = DbPool::new(":memory:")?;
         seed_default_game_row(&db_pool, 1)?;
         let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
 
-        // 3. Seed world/persona/npcs/game into storage.
         let _world_id = self.test_data.seed_into(&storage);
 
-        // 3b. Apply test-author state-mutation escape hatch.
         if let Some(state_mut) = self.state_mut.take() {
             state_mut(&mut state);
         }
 
-        // 4. Save snapshot to get pre_main_id.
         let snapshot = GameStateSnapshot::from_game_state(&state);
         let pre_main_id = storage.save_snapshot(&snapshot).unwrap_or(0);
 
-        // 5. For each message: set snapshot_id on Input messages, then persist.
         let mut messages: Vec<_> = state.narrative.history.iter().cloned().collect();
         for msg in messages.iter_mut() {
             if msg.message_type == MessageType::Input {
@@ -270,10 +239,8 @@ impl SqliteTestAppBuilder {
             }
         }
 
-        // 6. Save snapshot again.
         let _ = storage.save_snapshot(&snapshot);
 
-        // 7. Build GameService per BackendSpec.
         let game_service = match self.backend {
             None => panic!(
                 "SqliteTestAppBuilder: no backend set; call .game_service_fn(...) or .mock_backend(...) before .build_service()"
@@ -296,7 +263,6 @@ impl SqliteTestAppBuilder {
             Some(BackendSpec::GameServiceFn(f)) => f(&storage),
         };
 
-        // 8. Finalize app.
         Ok(finalize_app(
             storage,
             game_service,

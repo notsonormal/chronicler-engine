@@ -7,7 +7,12 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::template::{render_template, TemplateVars};
 use crate::domain::model::world::WorldCard;
 
-pub fn inject_scenario_logs(state: &mut GameState, world: &WorldCard, player: &PersonaCard) {
+pub fn inject_scenario_logs(
+    state: &mut GameState,
+    world: &WorldCard,
+    player: &PersonaCard,
+    map: &crate::domain::model::map::MapDef,
+) {
     let Some(scenario) = world.default_scenario() else {
         return;
     };
@@ -16,7 +21,7 @@ pub fn inject_scenario_logs(state: &mut GameState, world: &WorldCard, player: &P
     }
 
     let room_name =
-        crate::domain::engine::logic::find_room_in_world_map(state, &scenario.starting_room_id)
+        crate::domain::engine::logic::find_room_in_world_map(map, &scenario.starting_room_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| scenario.starting_room_id.clone());
 

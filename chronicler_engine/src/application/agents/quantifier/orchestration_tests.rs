@@ -1,21 +1,20 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::error::EngineError;
+use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageEntry;
-use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
-use crate::test_support::fixtures::{TestGameState, TestNpc};
+use crate::error::EngineError;
+use crate::test_support::fixtures::{TestGameState, TestNpc, TestPersona};
 use crate::test_support::noop_forensics::make_test_recorder;
 
 use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result};
 use super::test_support::{make_npc, make_room};
 use super::types::{MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext};
 
-// Test helper: wrap an owned test backend in an `LlmCallRecorder` paired with
-// noop forensics. Lets orchestration tests exercise the production
-// recorder-routed code path without setting up real forensics storage.
 fn recorder_with(backend: impl LlmProvider + 'static) -> Arc<LlmCallRecorder> {
     make_test_recorder(Arc::new(backend))
 }
@@ -182,29 +181,71 @@ impl LlmProvider for ErrBackend {
     }
 }
 
+fn display_name_for_id(id: &str) -> String {
+    match id {
+        "carla" => "Carla".to_string(),
+        "gabriella" => "Gabriella".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn npc_map_from_ids(ids: &[String]) -> HashMap<String, NpcCard> {
+    ids.iter()
+        .map(|id| TestNpc::named(id, &display_name_for_id(id)))
+        .map(|npc| (npc.id.clone(), npc))
+        .collect()
+}
+
+fn npc_map(npcs: Vec<NpcCard>) -> HashMap<String, NpcCard> {
+    npcs.into_iter().map(|npc| (npc.id.clone(), npc)).collect()
+}
+
+fn map_with_room(room: &Room) -> MapDef {
+    MapDef {
+        overworld: Overworld {
+            id: "test_overworld".to_string(),
+            name: "Test Overworld".to_string(),
+            regions: vec![Region {
+                id: "test_region".to_string(),
+                name: "Test Region".to_string(),
+                rooms: vec![room.clone()],
+            }],
+        },
+    }
+}
+
 fn determine_npcs_with_room(
     state: &GameState,
+    current_room: &Room,
     room_npc_ids: &[String],
     previous_room_npcs: &[crate::domain::model::character::NpcCard],
     player_action: &str,
     recorder: &LlmCallRecorder,
 ) -> crate::domain::model::quantifier::QuantifierResult {
+    let map = map_with_room(current_room);
+    let persona = TestPersona::standard();
+    let mut npcs = npc_map_from_ids(room_npc_ids);
+    for npc in previous_room_npcs {
+        npcs.insert(npc.id.clone(), npc.clone());
+    }
     determine_npcs_in_room(
         state,
-        state.current_room().unwrap(),
+        current_room,
         room_npc_ids,
         previous_room_npcs,
         player_action,
         recorder,
         None,
+        &map,
+        &persona,
+        &npcs,
     )
 }
 
 #[test]
 fn test_determine_npcs_high_confidence() {
-    let carla = TestNpc::named("carla", "Carla");
-    let gabriella = TestNpc::named("gabriella", "Gabriella");
-    let state = TestGameState::with_npcs("hall", vec![carla.clone(), gabriella.clone()]);
+    let state = TestGameState::in_room("hall");
+    let room = make_room();
 
     let backend = HighConfidenceBackend {
         npc_ids: vec!["carla".to_string()],
@@ -212,6 +253,7 @@ fn test_determine_npcs_high_confidence() {
     let recorder = recorder_with(backend);
     let result = determine_npcs_with_room(
         &state,
+        &room,
         &["carla".to_string(), "gabriella".to_string()],
         &[],
         "test",
@@ -226,13 +268,14 @@ fn test_determine_npcs_high_confidence() {
 
 #[test]
 fn test_determine_npcs_medium_confidence() {
-    let carla = TestNpc::named("carla", "Carla");
-    let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
+    let state = TestGameState::in_room("hall");
+    let room = make_room();
 
     let backend = MediumConfidenceBackend;
     let recorder = recorder_with(backend);
     let result = determine_npcs_with_room(
         &state,
+        &room,
         &["carla".to_string()],
         &[],
         "test",
@@ -245,14 +288,14 @@ fn test_determine_npcs_medium_confidence() {
 
 #[test]
 fn test_determine_npcs_low_confidence_fallback() {
-    let carla = TestNpc::named("carla", "Carla");
-    let gabriella = TestNpc::named("gabriella", "Gabriella");
-    let state = TestGameState::with_npcs("hall", vec![carla.clone(), gabriella.clone()]);
+    let state = TestGameState::in_room("hall");
+    let room = make_room();
 
     let backend = LowConfidenceBackend;
     let recorder = recorder_with(backend);
     let result = determine_npcs_with_room(
         &state,
+        &room,
         &["carla".to_string(), "gabriella".to_string()],
         &[],
         "test",
@@ -265,13 +308,14 @@ fn test_determine_npcs_low_confidence_fallback() {
 
 #[test]
 fn test_determine_npcs_backend_error_fallback() {
-    let carla = TestNpc::named("carla", "Carla");
-    let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
+    let state = TestGameState::in_room("hall");
+    let room = make_room();
 
     let backend = ErrBackend;
     let recorder = recorder_with(backend);
     let result = determine_npcs_with_room(
         &state,
+        &room,
         &["carla".to_string()],
         &[],
         "test",
@@ -284,8 +328,8 @@ fn test_determine_npcs_backend_error_fallback() {
 
 #[test]
 fn test_determine_npcs_filters_unknown_backend_ids() {
-    let carla = TestNpc::named("carla", "Carla");
-    let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
+    let state = TestGameState::in_room("hall");
+    let room = make_room();
 
     let backend = HighConfidenceBackend {
         npc_ids: vec!["carla".to_string(), "unknown".to_string()],
@@ -293,6 +337,7 @@ fn test_determine_npcs_filters_unknown_backend_ids() {
     let recorder = recorder_with(backend);
     let result = determine_npcs_with_room(
         &state,
+        &room,
         &["carla".to_string()],
         &[],
         "test",
@@ -421,14 +466,15 @@ fn test_quantifier_low_confidence_then_error_fallback() {
 #[test]
 fn test_static_npc_result_valid_ids() {
     let carla = TestNpc::named("carla", "Carla");
-    let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
+    let npcs = npc_map(vec![carla]);
+    let state = TestGameState::in_room("hall");
     let movement = MovementParseResult {
         movement_type: Some(MovementType::Entering),
         destination: Some("kitchen".to_string()),
         confidence: QuantifierConfidence::High,
     };
 
-    let result = static_npc_result(&state, &["carla".to_string()], movement.clone());
+    let result = static_npc_result(&state, &["carla".to_string()], movement.clone(), &npcs);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.movement.movement_type, Some(MovementType::Entering));
@@ -437,12 +483,13 @@ fn test_static_npc_result_valid_ids() {
 
 #[test]
 fn test_static_npc_result_filters_unknown_ids() {
-    let carla = TestNpc::named("carla", "Carla");
-    let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
+    let state = TestGameState::in_room("hall");
+    let npcs = npc_map(vec![TestNpc::named("carla", "Carla")]);
     let result = static_npc_result(
         &state,
         &["carla".to_string(), "unknown".to_string()],
         MovementParseResult::default(),
+        &npcs,
     );
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
@@ -457,7 +504,7 @@ fn test_static_npc_result_preserves_movement() {
         confidence: QuantifierConfidence::Medium,
     };
 
-    let result = static_npc_result(&state, &[], movement.clone());
+    let result = static_npc_result(&state, &[], movement.clone(), &HashMap::new());
 
     assert!(result.npcs.npc_ids.is_empty());
     assert_eq!(result.movement.movement_type, Some(MovementType::Leaving));
@@ -467,20 +514,18 @@ fn test_static_npc_result_preserves_movement() {
 #[test]
 fn test_static_npc_result_fallback_to_scene_npcs() {
     let carla = TestNpc::named("carla", "Carla");
-    let mut state = TestGameState::with_npcs("hall", vec![carla.clone()]);
+    let npcs = npc_map(vec![carla.clone()]);
+    let mut state = TestGameState::in_room("hall");
     state.scene.npcs_in_area.push(carla.clone());
 
-    let result = static_npc_result(&state, &[], MovementParseResult::default());
+    let result = static_npc_result(&state, &[], MovementParseResult::default(), &npcs);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }
 
 #[test]
 fn test_quantifier_routes_through_recorder_for_forensics() {
-    // Regression guard for anomaly 1: confirm the production code path saves
-    // forensics exactly once per LLM call. If anyone reverts the fix and
-    // bypasses the recorder (e.g. flattening to `recorder.provider().clone()`),
-    // this test fails because `SpyForensics::save_count` stays at zero.
+    // Regression guard: bypassing the recorder (e.g. `recorder.provider().clone()`) makes `SpyForensics::save_count` stay at 0.
     use crate::test_support::noop_forensics::make_spy_recorder;
 
     let room = make_room();

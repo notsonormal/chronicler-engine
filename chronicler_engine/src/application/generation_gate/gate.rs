@@ -52,7 +52,18 @@ impl GenerationGate {
 
         self.heal_stale_generating(app, &mut game_state);
 
-        let player_name = game_state.persona.sheet.name.clone();
+        let game_id = app.storage().current_game_id();
+        let game = app
+            .storage()
+            .get_game(game_id)?
+            .ok_or_else(|| EngineError::Config(format!("game {game_id} not found")))?;
+        let persona = app
+            .storage()
+            .get_persona(&game.persona_key)?
+            .ok_or_else(|| {
+                EngineError::Config(format!("persona '{}' not found", game.persona_key))
+            })?;
+        let player_name = persona.sheet.name.clone();
         if !input.is_empty() {
             game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);
         }
@@ -91,17 +102,12 @@ impl GenerationGate {
     }
 
     pub fn heal_stale_generating(&self, app: &DefaultApplicationService, state: &mut GameState) {
-        // Single optimization gate: skip the heal block entirely when the
-        // projection says we're generating. The pre-lock atomic read is an
-        // optimization, not authoritative — slot state inside the write lock
-        // is the source of truth (see below).
+        // Atomic is a hint; lock-held slot state is authoritative.
         if self.is_generating.load(Ordering::SeqCst) {
             return;
         }
 
-        // Heal #1 — persisted status: atomic=false but state says generating.
-        // Touches `GameState`, unrelated to the registry lock; runs outside
-        // the write lock to keep lock hold time minimal.
+        // Persisted `Generating` with no active slot. Runs outside the write lock — hold time matters.
         if state.narrative.input_buffer.status.is_generating() {
             tracing::warn!(
                 "Found stale Generating status without active generation, resetting to Idle"
@@ -110,18 +116,14 @@ impl GenerationGate {
             state.narrative.input_buffer.phase = GenerationPhase::default();
         }
 
-        // Heal #2 — registry slot may still claim Generating even though the
-        // projection atomic said false. Re-check `slot.is_generating()` under
-        // the write lock before clearing; the atomic is only a hint, not the
-        // source of truth.
+        // Registry slot may still claim Generating. Re-check under write lock — atomic is only a hint.
         let game_id = app.current_game_id();
         let mut registry = self.registry.write().unwrap_or_else(|p| {
             tracing::warn!("Generation registry write lock poisoned during heal; recovering");
             p.into_inner()
         });
         if self.is_generating.load(Ordering::SeqCst) {
-            // A claim raced in between the outer load and the lock; the
-            // current slot is a real active claim, not stale. Do not clear.
+            // Real claim raced in, not stale — do not clear.
             return;
         }
         if let Some(slot) = registry.get(&game_id) {
@@ -142,8 +144,7 @@ impl GenerationGate {
         let game_id = app.current_game_id();
         let generation_id = self.next_generation_id();
 
-        // Slot insert + projection flip share the write lock so a concurrent
-        // release cannot clobber the projection between them.
+        // Slot insert + projection flip share the write lock to prevent clobber.
         {
             let mut registry = self.registry.write().unwrap_or_else(|p| {
                 tracing::warn!("Generation registry write lock poisoned during claim; recovering");
@@ -160,10 +161,7 @@ impl GenerationGate {
             }
             registry.insert(game_id, GenerationSlot::Generating { generation_id });
 
-            // Atomic is a derived projection of "any game generating":
-            // unconditional store — at least one game (this one) is now
-            // generating. No CAS: concurrent generations across different
-            // games are allowed.
+            // Atomic is a derived projection of "any game generating" — unconditional store, no CAS.
             self.is_generating.store(true, Ordering::SeqCst);
         }
 
@@ -172,8 +170,7 @@ impl GenerationGate {
 
         if let Err(e) = app.save_message_and_snapshot(state) {
             tracing::debug!("claim_generation_slot: save failed; releasing slot");
-            // Release using the game_id we claimed (not current_game_id(), which
-            // may have changed if a reset fired between claim and save).
+            // Release the claimed id (not current_game_id()) — a reset between claim and save may have changed it.
             release_owned_slot(&self.registry, &self.is_generating, game_id, generation_id);
             return Err(e);
         }
@@ -182,9 +179,7 @@ impl GenerationGate {
     }
 
     pub fn release_generation_slot(&self, game_id: u64, generation_id: u64) {
-        // Pass claimed game_id/generation_id (not current_game_id()) — a
-        // concurrent reset that changed current_game_id() cannot steer the
-        // release at the wrong slot.
+        // Use claimed id — concurrent reset cannot steer release at the wrong slot.
         release_owned_slot(&self.registry, &self.is_generating, game_id, generation_id);
     }
 }

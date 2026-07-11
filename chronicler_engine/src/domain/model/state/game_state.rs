@@ -2,25 +2,19 @@
 //! Main game state and builder
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use crate::domain::model::character::{NpcCard, PersonaCard};
-use crate::domain::model::map::{MapDef, Room};
+use crate::domain::model::character::NpcCard;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::trigger::NpcEncounterLog;
-use crate::domain::model::world::WorldCard;
 use super::message_types::MessageType;
 use super::movement::MovementState;
 use super::narrative_state::NarrativeState;
 use super::scene_state::SceneState;
 
+/// Mutable game state. World data lives on the orchestrator and threads through engine call sites as `&Arc<T>`/`&HashMap<_, _>` args.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct GameState {
-    pub world: Arc<WorldCard>,
-    pub map: Arc<MapDef>,
-    pub persona: Arc<PersonaCard>,
-    pub npcs: HashMap<String, NpcCard>,
     pub movement: MovementState,
     pub narrative: NarrativeState,
     pub scene: SceneState,
@@ -29,38 +23,20 @@ pub struct GameState {
 
 // Builder uses Option + Default so new GameState fields don't break callers.
 pub struct GameStateBuilder {
-    world: Arc<WorldCard>,
-    map: Arc<MapDef>,
-    persona: Arc<PersonaCard>,
     starting_room: String,
-    npcs: Vec<NpcCard>,
     narrative: Option<NarrativeState>,
     scene: Option<SceneState>,
     npc_encounter_log: Option<NpcEncounterLog>,
 }
 
 impl GameStateBuilder {
-    pub fn new(
-        world: Arc<WorldCard>,
-        map: Arc<MapDef>,
-        persona: Arc<PersonaCard>,
-        starting_room: impl Into<String>,
-    ) -> Self {
+    pub fn new(starting_room: impl Into<String>) -> Self {
         Self {
-            world,
-            map,
-            persona,
             starting_room: starting_room.into(),
-            npcs: Vec::new(),
             narrative: None,
             scene: None,
             npc_encounter_log: None,
         }
-    }
-
-    pub fn with_npcs(mut self, npcs: Vec<NpcCard>) -> Self {
-        self.npcs = npcs;
-        self
     }
 
     pub fn with_narrative(mut self, narrative: NarrativeState) -> Self {
@@ -79,16 +55,7 @@ impl GameStateBuilder {
     }
 
     pub fn build(self) -> GameState {
-        let mut npcs_map = HashMap::new();
-        for npc in self.npcs {
-            npcs_map.insert(npc.id.clone(), npc);
-        }
-
         GameState {
-            world: self.world,
-            map: self.map,
-            persona: self.persona,
-            npcs: npcs_map,
             movement: MovementState {
                 current_room_id: self.starting_room,
                 dynamic_rooms: HashMap::new(),
@@ -103,16 +70,8 @@ impl GameStateBuilder {
 impl GameState {
     pub fn from_snapshot(
         snapshot: &crate::domain::model::state::game_state_snapshot::GameStateSnapshot,
-        world: Arc<WorldCard>,
-        map: Arc<MapDef>,
-        persona: Arc<PersonaCard>,
-        npcs: HashMap<String, NpcCard>,
     ) -> Self {
         Self {
-            world,
-            map,
-            persona,
-            npcs,
             movement: snapshot.movement.clone(),
             narrative: NarrativeState::from_snapshot(&snapshot.narrative),
             scene: snapshot.scene.clone(),
@@ -120,24 +79,17 @@ impl GameState {
         }
     }
 
-    pub fn new(
-        world: Arc<WorldCard>,
-        map: Arc<MapDef>,
-        persona: Arc<PersonaCard>,
-        npcs: Vec<NpcCard>,
-        starting_room: String,
-    ) -> Self {
-        GameStateBuilder::new(world, map, persona, starting_room)
-            .with_npcs(npcs)
-            .build()
+    pub fn new(starting_room: impl Into<String>) -> Self {
+        GameStateBuilder::new(starting_room).build()
     }
 
     pub fn init_scenario_npcs(
         &mut self,
         scenario: &crate::domain::model::scenario::StartingScenario,
+        npcs: &HashMap<String, NpcCard>,
     ) {
         for npc_id in &scenario.npcs {
-            if let Some(npc) = self.npcs.get(npc_id).cloned() {
+            if let Some(npc) = npcs.get(npc_id).cloned() {
                 let encounter = self
                     .npc_encounter_log
                     .npcs
@@ -180,15 +132,5 @@ impl GameState {
 
     pub fn add_message(&mut self, text: String, sender: Option<String>, message_type: MessageType) {
         self.push_message(text, sender, message_type);
-    }
-
-    pub fn current_room(&self) -> Option<&Room> {
-        self.map
-            .get_room_by_id(&self.movement.current_room_id)
-            .or_else(|| {
-                self.movement
-                    .dynamic_rooms
-                    .get(&self.movement.current_room_id)
-            })
     }
 }

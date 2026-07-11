@@ -1,6 +1,7 @@
 //! [DOC: docs/system/game_flow.md]
 //! Phase implementations for the action pipeline
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::application::application_service::map_llm_error;
@@ -168,6 +169,9 @@ impl<'a> PipelineRun<'a> {
         state: &mut GameState,
         input: &str,
         narration_text: &str,
+        map: &Arc<MapDef>,
+        persona: &Arc<PersonaCard>,
+        npcs: &HashMap<String, NpcCard>,
     ) -> QuantifierResult {
         tracing::info!("Pipeline ▶ Quantifying");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
@@ -175,9 +179,14 @@ impl<'a> PipelineRun<'a> {
             tracing::warn!("Failed to save pre-quantifier phase update: {e}");
         }
 
-        let mut quantifier_result =
-            self.pipeline
-                .run_post_generation_agents(state, input, narration_text);
+        let mut quantifier_result = self.pipeline.run_post_generation_agents(
+            state,
+            input,
+            narration_text,
+            map,
+            persona,
+            npcs,
+        );
 
         state.scene.quantifier_confidence =
             Some(format!("{:?}", quantifier_result.npcs.confidence));
@@ -206,6 +215,8 @@ impl<'a> PipelineRun<'a> {
         &self,
         mut state: GameState,
         trigger: &StoredTriggerContext,
+        map: &Arc<MapDef>,
+        npcs: &HashMap<String, NpcCard>,
     ) -> PipelineResult<(GameState, String)> {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
@@ -256,16 +267,17 @@ impl<'a> PipelineRun<'a> {
             return Ok((state, String::new()));
         }
 
-        state = match commit_trigger_narration(state.clone(), trigger, &continuation_text) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::error!("Trigger commit failed: {e}");
-                state.narrative.input_buffer.status =
-                    GenerationStatus::Error(format!("Trigger error: {e}"));
-                self.persist(&state);
-                return Ok((state, String::new()));
-            }
-        };
+        state =
+            match commit_trigger_narration(state.clone(), trigger, &continuation_text, map, npcs) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!("Trigger commit failed: {e}");
+                    state.narrative.input_buffer.status =
+                        GenerationStatus::Error(format!("Trigger error: {e}"));
+                    self.persist(&state);
+                    return Ok((state, String::new()));
+                }
+            };
 
         if self.persist_snapshot_failed(&mut state, "post-trigger snapshot") {
             return Ok((state, String::new()));
@@ -279,6 +291,9 @@ impl<'a> PipelineRun<'a> {
         mut state: GameState,
         player_input: &str,
         continuation_text: &str,
+        map: &Arc<MapDef>,
+        persona: &Arc<PersonaCard>,
+        npcs: &HashMap<String, NpcCard>,
     ) -> GameState {
         tracing::info!("Pipeline ▶ Post-trigger reconcile");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
@@ -289,9 +304,14 @@ impl<'a> PipelineRun<'a> {
             .iter()
             .map(|n| n.id.clone())
             .collect();
-        let post_trigger_result =
-            self.pipeline
-                .run_post_generation_agents(&state, player_input, continuation_text);
+        let post_trigger_result = self.pipeline.run_post_generation_agents(
+            &state,
+            player_input,
+            continuation_text,
+            map,
+            persona,
+            npcs,
+        );
 
         state.scene.quantifier_confidence =
             Some(format!("{:?}", post_trigger_result.npcs.confidence));
@@ -300,14 +320,14 @@ impl<'a> PipelineRun<'a> {
             .npcs
             .npc_ids
             .iter()
-            .filter_map(|id| state.npcs.get(id).cloned())
+            .filter_map(|id| npcs.get(id).cloned())
             .collect();
         let new_ids: Vec<String> = npc_cards.iter().map(|n| n.id.clone()).collect();
 
         state.scene.npcs_in_area = npc_cards;
 
         let events = compute_npc_events(&previous_ids, &new_ids);
-        match apply_npc_events(state.clone(), &events.events) {
+        match apply_npc_events(state.clone(), &events.events, map, npcs) {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!("Post-trigger reconcile failed: {e}");
@@ -332,7 +352,15 @@ impl<'a> PipelineRun<'a> {
             narration_text, trigger_match.trigger_narration_prompt
         );
 
-        let room_data = state.current_room()?;
+        let room_data = inputs
+            .map
+            .get_room_by_id(&state.movement.current_room_id)
+            .or_else(|| {
+                state
+                    .movement
+                    .dynamic_rooms
+                    .get(&state.movement.current_room_id)
+            })?;
         let history = state.narrative.history();
 
         let (preset, response_length) = self.load_preset_and_response_length().ok()?;
@@ -397,6 +425,10 @@ impl ActionPipeline {
         state: &GameState,
         narration_text: &str,
         quantifier_result: &QuantifierResult,
+        world: &Arc<WorldCard>,
+        map: &Arc<MapDef>,
+        persona: &Arc<PersonaCard>,
+        npcs: &HashMap<String, NpcCard>,
     ) -> Result<crate::domain::engine::action_processing::ActionResult, EngineError> {
         execute_freeaction_impl(
             state,
@@ -404,6 +436,10 @@ impl ActionPipeline {
                 narration_text,
                 quantifier_result,
             },
+            world,
+            map,
+            persona,
+            npcs,
         )
     }
 }

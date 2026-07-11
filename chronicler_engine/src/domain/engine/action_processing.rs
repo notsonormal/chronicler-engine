@@ -1,10 +1,14 @@
 //! [DOC: docs/system/game_flow.md]
 //! Action execution pipeline and validation
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::domain::engine::logic::{attempt_semantic_walk, create_dynamic_room};
 use crate::domain::engine::state_diagnostics::assert_state_consistency;
 use crate::domain::engine::trigger_eval::evaluate_triggers;
 use crate::error::EngineError;
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::{
     NpcEvent, NpcTransitionType, QuantifierResult, compute_npc_events,
 };
@@ -12,6 +16,7 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::template::{render_template, TemplateVars};
+use crate::domain::model::world::WorldCard;
 pub struct FreeActionContext<'a> {
     pub narration_text: &'a str,
     pub quantifier_result: &'a QuantifierResult,
@@ -30,9 +35,13 @@ pub struct ActionResult {
     pub trigger_match: Option<TriggerMatch>,
 }
 
-pub fn attempt_movement(state: GameState, destination: &str) -> Result<GameState, EngineError> {
+pub fn attempt_movement(
+    state: GameState,
+    destination: &str,
+    map: &MapDef,
+) -> Result<GameState, EngineError> {
     let mut state = state;
-    match attempt_semantic_walk(&mut state, destination) {
+    match attempt_semantic_walk(&mut state, map, destination) {
         Ok(_) => Ok(state),
         Err(e) => {
             tracing::debug!("Semantic walk failed for '{destination}': {e}");
@@ -57,6 +66,7 @@ pub fn update_npc_encounters_on_room_change(
     mut state: GameState,
     previous_room_id: &str,
     new_npc_ids: &[String],
+    _map: &MapDef,
 ) -> GameState {
     if previous_room_id != state.movement.current_room_id {
         for npc_id in new_npc_ids {
@@ -66,9 +76,21 @@ pub fn update_npc_encounters_on_room_change(
     state
 }
 
-pub fn log_movement_completion(state: GameState) -> GameState {
+pub fn log_movement_completion(
+    state: GameState,
+    map: &MapDef,
+    _npcs: &HashMap<String, NpcCard>,
+) -> GameState {
     let mut state = state;
-    if let Some(current_room) = state.current_room() {
+    let room = map
+        .get_room_by_id(&state.movement.current_room_id)
+        .or_else(|| {
+            state
+                .movement
+                .dynamic_rooms
+                .get(&state.movement.current_room_id)
+        });
+    if let Some(current_room) = room {
         state.narrative.pending_location = Some(current_room.name.clone());
     }
     state
@@ -78,6 +100,8 @@ pub fn handle_movement(
     state: GameState,
     destination: Option<&str>,
     new_npc_ids: &[String],
+    map: &Arc<MapDef>,
+    npcs: &HashMap<String, NpcCard>,
 ) -> Result<GameState, EngineError> {
     let Some(destination) = destination else {
         return Ok(state);
@@ -85,15 +109,21 @@ pub fn handle_movement(
 
     let previous_room_id = state.movement.current_room_id.clone();
 
-    let state = attempt_movement(state, destination)?;
-    let state = update_npc_encounters_on_room_change(state, &previous_room_id, new_npc_ids);
-    let state = log_movement_completion(state);
+    let state = attempt_movement(state, destination, map.as_ref())?;
+    let state =
+        update_npc_encounters_on_room_change(state, &previous_room_id, new_npc_ids, map.as_ref());
+    let state = log_movement_completion(state, map.as_ref(), npcs);
 
-    assert_state_consistency(&state)?;
+    assert_state_consistency(&state, map, npcs)?;
     Ok(state)
 }
 
-pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameState, EngineError> {
+pub fn apply_npc_events(
+    state: GameState,
+    events: &[NpcEvent],
+    map: &Arc<MapDef>,
+    npcs: &HashMap<String, NpcCard>,
+) -> Result<GameState, EngineError> {
     let mut state = state;
     for event in events {
         match event.event_type {
@@ -111,7 +141,7 @@ pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameSta
         }
     }
 
-    assert_state_consistency(&state)?;
+    assert_state_consistency(&state, map, npcs)?;
     Ok(state)
 }
 
@@ -119,6 +149,8 @@ pub fn commit_trigger_narration(
     state: GameState,
     trigger: &StoredTriggerContext,
     continuation_text: &str,
+    map: &Arc<MapDef>,
+    npcs: &HashMap<String, NpcCard>,
 ) -> Result<GameState, EngineError> {
     if continuation_text.trim().is_empty() {
         return Ok(state);
@@ -133,16 +165,19 @@ pub fn commit_trigger_narration(
             .mark_trigger_fired(&trigger.npc_id, trigger.trigger_idx);
     }
 
-    assert_state_consistency(&state)?;
+    assert_state_consistency(&state, map, npcs)?;
     Ok(state)
 }
 
 pub fn execute_freeaction_impl(
     state: &GameState,
     ctx: &FreeActionContext<'_>,
+    _world: &Arc<WorldCard>,
+    map: &Arc<MapDef>,
+    persona: &Arc<PersonaCard>,
+    npcs: &HashMap<String, NpcCard>,
 ) -> Result<ActionResult, EngineError> {
-    // Mutation order: 1.handle_movement 2.resolve NPCs 3.add_message 4.evaluate_triggers 5.apply_npc_events
-    // Swapping 3&4 or 4&5 breaks trigger firing.
+    // Order: handle_movement → resolve_npcs → add_message → evaluate_triggers → apply_npc_events. Swapping 3&4 or 4&5 breaks trigger firing.
     let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
     let previous_npc_ids: Vec<String> = previous_room_npcs.iter().map(|n| n.id.clone()).collect();
 
@@ -150,20 +185,23 @@ pub fn execute_freeaction_impl(
         state.clone(),
         ctx.quantifier_result.movement.destination.as_deref(),
         &ctx.quantifier_result.npcs.npc_ids,
+        map,
+        npcs,
     )?;
-    assert_state_consistency(&next_state)?;
+
+    assert_state_consistency(&next_state, map, npcs)?;
 
     next_state.scene.npcs_in_area = ctx
         .quantifier_result
         .npcs
         .npc_ids
         .iter()
-        .filter_map(|id| next_state.npcs.get(id).cloned())
+        .filter_map(|id| npcs.get(id).cloned())
         .collect();
     let current_npc_ids = ctx.quantifier_result.npcs.npc_ids.clone();
 
     let trigger_match =
-        evaluate_triggers(&next_state)
+        evaluate_triggers(&next_state, npcs)
             .into_iter()
             .next()
             .map(|(npc, trigger, idx)| TriggerMatch {
@@ -173,13 +211,13 @@ pub fn execute_freeaction_impl(
                 trigger_repeat: trigger.repeat,
                 trigger_narration_prompt: render_template(
                     &trigger.narration.narration_prompt,
-                    &TemplateVars::new(&state.persona.sheet.name),
+                    &TemplateVars::new(&persona.sheet.name),
                 ),
             });
 
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
-    next_state = apply_npc_events(next_state, &events.events)?;
-    assert_state_consistency(&next_state)?;
+    next_state = apply_npc_events(next_state, &events.events, map, npcs)?;
+    assert_state_consistency(&next_state, map, npcs)?;
 
     Ok(ActionResult {
         next_state,

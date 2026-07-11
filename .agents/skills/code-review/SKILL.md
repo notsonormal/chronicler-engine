@@ -87,3 +87,12 @@ A change can pass one axis and fail the other:
 - Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
 
 Reporting them separately stops one axis from masking the other.
+
+## Extra lens
+
+Load in the following skills to verify the review, to ensure that the suggestions are a rank improvement.
+
+- `/code-simplification` (`.agents/skills/code-simplification/SKILL.md`)
+- `/antipattern-checker` (`.agents/skills/antipattern-checker/SKILL.md`)
+- `/chronicler-docs-hygiene` (`.agents/skills/chronicler-docs-hygiene/SKILL.md`)
+- `/improve-codebase-architecture` (`.agents/skills/improve-codebase-architecture/SKILL.md`)

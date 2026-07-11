@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::application::action_pipeline::pipeline::{ActionOutcome, ActionPipeline};
@@ -7,19 +8,20 @@ use crate::application::game_service::GameService;
 use crate::application::agents::registry::AgentRegistry;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::test_support::{TestAppBuilder, TestDataBuilder};
-use crate::test_support::fixtures::{TestGameState, TestNpc};
+use crate::test_support::fixtures::{TestGameState, TestMap, TestNpc};
 
 fn make_test_pipeline(service: &crate::application::game_service::GameService) -> ActionPipeline {
     service.pipeline()
 }
 
 fn make_test_state() -> GameState {
-    TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))
+    TestGameState::in_room("start")
 }
 
 #[test]
@@ -198,7 +200,9 @@ fn test_trigger_continuation_save_post_trigger_error() {
         Arc::new(service),
     ));
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
-    let result = pipeline.phase_trigger_continuation(state, &trigger, &app);
+    let map = Arc::new(TestMap::single_room("start"));
+    let npcs = HashMap::from([("npc1".to_string(), TestNpc::named("npc1", "Test NPC"))]);
+    let result = pipeline.phase_trigger_continuation(state, &trigger, &app, &map, &npcs);
 
     match result {
         Ok((_, text)) => {
@@ -565,4 +569,119 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
     );
 
     assert_eq!(narration_msgs[0].text(), "You look around.");
+}
+
+// B2 fail-loud: surface storage fetch failures as `GenerationStatus::Error`, see `fetch_world_bundle`.
+
+#[test]
+fn orchestrator_records_error_when_world_missing() {
+    let data = TestDataBuilder::default_test().build();
+    let (storage, handle) = {
+        let base = Storage::new_in_memory();
+        data.seed_into(&base);
+        base.with_test_failures()
+    };
+    handle.set(
+        "get_world",
+        TestOverride::internal("simulated get_world failure"),
+    );
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = service.pipeline();
+    let app = TestAppBuilder::with_data(data)
+        .storage(Arc::new(storage))
+        .skip_seeding(true)
+        .build_service();
+
+    let state = app.load_or_fresh();
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
+
+    assert!(
+        matches!(outcome, Ok(())),
+        "Pipeline must return Ok(()) on fetch failure (no panic, no Failed variant), got {outcome:?}"
+    );
+    let final_state = app.load_or_fresh();
+    match &final_state.narrative.input_buffer.status {
+        GenerationStatus::Error(msg) => {
+            assert!(
+                msg.contains("world"),
+                "Error message should mention the missing world, got: {msg}"
+            );
+        }
+        other => panic!("Expected GenerationStatus::Error mentioning world, got {other:?}"),
+    }
+}
+
+#[test]
+fn orchestrator_records_error_when_persona_missing() {
+    let data = TestDataBuilder::default_test().build();
+    let (storage, handle) = {
+        let base = Storage::new_in_memory();
+        data.seed_into(&base);
+        base.with_test_failures()
+    };
+    handle.set(
+        "get_persona",
+        TestOverride::internal("simulated get_persona failure"),
+    );
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = service.pipeline();
+    let app = TestAppBuilder::with_data(data)
+        .storage(Arc::new(storage))
+        .skip_seeding(true)
+        .build_service();
+
+    let state = app.load_or_fresh();
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
+
+    assert!(
+        matches!(outcome, Ok(())),
+        "Pipeline must return Ok(()) on fetch failure (no panic, no Failed variant), got {outcome:?}"
+    );
+    let final_state = app.load_or_fresh();
+    match &final_state.narrative.input_buffer.status {
+        GenerationStatus::Error(msg) => {
+            assert!(
+                msg.contains("persona"),
+                "Error message should mention the missing persona, got: {msg}"
+            );
+        }
+        other => panic!("Expected GenerationStatus::Error mentioning persona, got {other:?}"),
+    }
+}
+
+#[test]
+fn load_or_fresh_unchanged_on_world_data_missing() {
+    // Snapshot-only read; missing world rows must not panic. `build_fresh_initial_state` fetches world data only as fallback.
+    let storage = {
+        let base = Storage::new_in_memory();
+        let id = base
+            .create_game(
+                "Missing World",
+                "missing_world",
+                "missing_persona",
+                "Test Player",
+                "Test Game",
+            )
+            .expect("test setup: create game");
+        base.set_game_id(id);
+        let state = GameState::new("room_1");
+        let snapshot = GameStateSnapshot::from_game_state(&state);
+        base.save_snapshot(&snapshot)
+            .expect("test setup: save snapshot");
+        base
+    };
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(storage))
+        .skip_seeding(true)
+        .build_service();
+
+    let loaded = app.load_or_fresh();
+    assert_eq!(
+        loaded.movement.current_room_id, "room_1",
+        "load_or_fresh must return snapshot-derived GameState when world data is missing, got {loaded:?}"
+    );
 }

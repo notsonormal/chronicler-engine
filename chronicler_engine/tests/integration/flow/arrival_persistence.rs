@@ -207,3 +207,88 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
         guard.narrative.history().len(),
     );
 }
+
+// B2 fail-loud: `ArrivalTaskContext::run` must bail and emit no narration when `get_world` returns `Err`.
+
+#[test]
+fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
+    let state = create_test_state_with_map();
+
+    let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
+    let failing_storage = Arc::new(failing_storage);
+    seed_test_world_into_storage(&failing_storage, &state);
+    let _ = failing_storage.save_snapshot(
+        &chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        ),
+    );
+    handle.set(
+        "get_world",
+        TestOverride::internal("simulated get_world failure"),
+    );
+
+    let preset_storage = Storage::new_in_memory();
+    let _ = preset_storage.save_preset(
+        &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+            id: "system_default".to_string(),
+            name: "Default System".to_string(),
+            role: Some("You are a narrator.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            is_default: true,
+            preset_type: chronicler_engine::domain::model::prompt_preset::PresetType::System,
+        },
+    );
+    let arrival_preset = preset_storage
+        .get_preset("system_default")
+        .ok()
+        .flatten()
+        .expect("Should have system_default preset");
+
+    let llm: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default());
+    let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(&failing_storage));
+    let game_service = Arc::new(GameService::with_mock_quantifier(
+        Arc::clone(&recorder),
+        Arc::new(MockBackend::default()),
+    ));
+
+    let app = Arc::new(DefaultApplicationService::new(
+        Arc::clone(&failing_storage),
+        Arc::new(preset_storage),
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::clone(&game_service),
+    ));
+
+    let task_ctx = ArrivalTaskContext::new_for_test(
+        Arc::clone(&app),
+        "room1".to_string(),
+        Vec::<NpcCard>::new(),
+        Vec::<NpcCard>::new(),
+        Some(arrival_preset),
+        "short".to_string(),
+        1024,
+        None,
+        recorder,
+    );
+
+    task_ctx.run_sync();
+
+    handle.clear("get_world");
+
+    let guard = app.load_or_fresh();
+    let narrations: Vec<_> = guard
+        .narrative
+        .history()
+        .into_iter()
+        .filter(|e| e.message_type == MessageType::Narration)
+        .collect();
+    assert!(
+        narrations.is_empty(),
+        "ArrivalTaskContext must not add narration when get_world fails, got {} narrations",
+        narrations.len(),
+    );
+}

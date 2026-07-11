@@ -4,12 +4,15 @@
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerRequirement};
-pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
+pub fn evaluate_triggers(
+    state: &GameState,
+    npcs: &std::collections::HashMap<String, NpcCard>,
+) -> Vec<(NpcCard, Trigger, usize)> {
     let current_room_id = &state.movement.current_room_id;
 
     let mut results = Vec::new();
 
-    for npc in state.npcs.values() {
+    for npc in npcs.values() {
         for (index, trigger) in npc.triggers.iter().enumerate() {
             if let Some(room_id) = &trigger.room_id {
                 if room_id != current_room_id {

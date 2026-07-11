@@ -31,7 +31,6 @@ pub use application_service::{
 pub use game_catalogue::GameCatalogue;
 pub use world_catalogue::WorldCatalogue;
 pub use generation_gate::GenerationGate;
-pub use persistence_gate::WorldSnapshot;
 pub use game_service::GameService;
 pub use generation_guard::GenerationGuard;
 pub use message_editing::{delete_last, edit_history, retrigger, retry, switch_swipe};

@@ -14,7 +14,7 @@ use crate::application::game_catalogue::GameCatalogue;
 use crate::application::game_service::GameService;
 use crate::application::generation_gate::GenerationGate;
 pub use crate::application::mappers::map_llm_error;
-use crate::application::persistence_gate::{PersistenceGate, WorldSnapshot};
+use crate::application::persistence_gate::PersistenceGate;
 use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::game::Game;
@@ -75,9 +75,9 @@ impl DefaultApplicationService {
             Arc::clone(&preset_store),
         ));
         let generation_gate = GenerationGate::new(Arc::clone(&is_generating));
-        // Direct Arc<AtomicBool> access per ADR-030 hot-path; no accessor wrapper.
+        // Direct atomic access per ADR-030 hot-path.
         let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
-        // raw storage: WorldCatalogue owns worlds persistence directly; deliberate asymmetry vs GameCatalogue (which borrows Arc<PersistenceGate>) to keep the game/world seams independent.
+        // WorldCatalogue owns worlds persistence directly (asymmetric vs GameCatalogue) to keep seams independent.
         let world_catalogue = WorldCatalogue::new(storage);
         Self {
             persistence_gate,
@@ -116,10 +116,6 @@ impl DefaultApplicationService {
 
     pub fn preset_storage(&self) -> &Arc<PresetStore> {
         self.persistence_gate.preset_store()
-    }
-
-    pub(crate) fn load_world_snapshot(&self) -> Result<WorldSnapshot, EngineError> {
-        self.persistence_gate.load_world_snapshot()
     }
 
     pub fn load_or_fresh(&self) -> GameState {

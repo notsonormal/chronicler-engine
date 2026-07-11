@@ -3,10 +3,7 @@
 use std::sync::Arc;
 
 use crate::{
-    pipeline_helpers::{
-        create_test_state_with_trigger_npc, latest_state, wait_for_condition,
-        wait_for_generation_complete,
-    },
+    pipeline_helpers::{latest_state, wait_for_condition, wait_for_generation_complete},
     sqlite_test_app_builder::SqliteTestAppBuilder,
     test_utils::wait::wait_for_condition_async,
 };
@@ -17,6 +14,23 @@ use chronicler_engine::domain::model::state::generation_status::GenerationStatus
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::TestData;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+
+fn trigger_data() -> TestData {
+    TestData {
+        world: Arc::new(crate::fixtures::create_test_world()),
+        map: Arc::new(crate::fixtures::create_test_map()),
+        persona: Arc::new(crate::fixtures::create_test_player()),
+        npcs: vec![
+            chronicler_engine::test_support::TestNpc::with_times_met_trigger(
+                "shopkeeper",
+                "Shopkeeper Sarah",
+                chronicler_engine::domain::model::trigger::ComparisonOperator::Eq,
+                0,
+            ),
+        ],
+        room_npcs: vec!["shopkeeper".to_string()],
+    }
+}
 
 #[test]
 fn test_delayed_llm_completes_without_deadlock() {
@@ -84,19 +98,7 @@ fn test_quantifier_detects_movement() {
 
 #[test]
 fn test_quantifier_detects_npc_presence_and_fires_trigger() {
-    let state = create_test_state_with_trigger_npc();
-    let data = TestData {
-        world: Arc::clone(&state.world),
-        map: Arc::clone(&state.map),
-        persona: Arc::clone(&state.persona),
-        npcs: state.npcs.values().cloned().collect(),
-        room_npcs: state
-            .scene
-            .npcs_in_area
-            .iter()
-            .map(|n| n.id.clone())
-            .collect(),
-    };
+    let data = trigger_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(|state| {
             state.narrative.history.clear();
@@ -188,19 +190,7 @@ fn test_empty_llm_response_handled_gracefully() {
 
 #[test]
 fn test_failing_trigger_narration_does_not_crash() {
-    let state = create_test_state_with_trigger_npc();
-    let data = TestData {
-        world: Arc::clone(&state.world),
-        map: Arc::clone(&state.map),
-        persona: Arc::clone(&state.persona),
-        npcs: state.npcs.values().cloned().collect(),
-        room_npcs: state
-            .scene
-            .npcs_in_area
-            .iter()
-            .map(|n| n.id.clone())
-            .collect(),
-    };
+    let data = trigger_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(|state| {
             state.narrative.history.clear();
@@ -349,19 +339,7 @@ async fn test_pipeline_cancels_after_main_narration() {
 
 #[tokio::test]
 async fn test_pipeline_cancels_during_trigger_continuation() {
-    let state = create_test_state_with_trigger_npc();
-    let data = TestData {
-        world: Arc::clone(&state.world),
-        map: Arc::clone(&state.map),
-        persona: Arc::clone(&state.persona),
-        npcs: state.npcs.values().cloned().collect(),
-        room_npcs: state
-            .scene
-            .npcs_in_area
-            .iter()
-            .map(|n| n.id.clone())
-            .collect(),
-    };
+    let data = trigger_data();
     let mock_narrator_backend = Arc::new(MockBackend::default().with_trigger_delay(50));
     let mock_narrator_recorder = crate::make_test_recorder(Arc::clone(&mock_narrator_backend)
         as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>);
@@ -443,19 +421,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
 
 #[test]
 fn test_pre_event_snapshot_saved_before_continuation() {
-    let state = create_test_state_with_trigger_npc();
-    let data = TestData {
-        world: Arc::clone(&state.world),
-        map: Arc::clone(&state.map),
-        persona: Arc::clone(&state.persona),
-        npcs: state.npcs.values().cloned().collect(),
-        room_npcs: state
-            .scene
-            .npcs_in_area
-            .iter()
-            .map(|n| n.id.clone())
-            .collect(),
-    };
+    let data = trigger_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(|state| {
             state.narrative.history.clear();

@@ -15,16 +15,20 @@ use crate::pipeline_helpers::{
 };
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 
+fn base_data() -> chronicler_engine::test_support::TestData {
+    TestDataBuilder::default_test()
+        .world(crate::fixtures::create_test_world())
+        .map(crate::fixtures::create_test_map())
+        .persona(crate::fixtures::create_test_player())
+        .npcs(vec![])
+        .build()
+}
+
 #[test]
 fn test_sequential_execute_retry_execute() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -90,12 +94,7 @@ fn test_sequential_execute_retry_execute() {
 fn test_sequential_execute_delete_execute() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -155,12 +154,7 @@ fn test_sequential_execute_delete_execute() {
 fn test_async_action_sequence_then_retry() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -200,12 +194,7 @@ fn test_async_action_sequence_then_retry() {
 fn test_three_actions_in_sequence() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -255,12 +244,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let state_for_app1 = state.clone();
-    let data1 = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data1 = base_data();
     let app1 = SqliteTestAppBuilder::with_data(data1)
         .state_mut(move |s| *s = state_for_app1)
         .mock_backend(MockBackend::new)
@@ -269,12 +253,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
     add_input_and_save(&app1, "examine room");
 
-    let data2 = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data2 = base_data();
     let app2 = SqliteTestAppBuilder::with_data(data2)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -311,12 +290,7 @@ fn test_reset_clears_history_and_state() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let state_for_app1 = state.clone();
-    let data1 = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data1 = base_data();
     let app1 = SqliteTestAppBuilder::with_data(data1)
         .state_mut(move |s| *s = state_for_app1)
         .mock_backend(MockBackend::new)
@@ -329,12 +303,7 @@ fn test_reset_clears_history_and_state() {
             .to_string(),
     ]));
 
-    let data2 = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data2 = base_data();
     let app2 = SqliteTestAppBuilder::with_data(data2)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -373,12 +342,7 @@ fn test_reset_clears_history_and_state() {
 fn test_reset_then_execute_works() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -425,12 +389,7 @@ fn test_reset_then_execute_works() {
 fn test_delete_mid_sequence() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {

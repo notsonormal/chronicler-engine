@@ -182,14 +182,9 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         inventory: vec![],
     };
 
-    let mut state = GameState::new(
-        std::sync::Arc::new(world_card.clone()),
-        std::sync::Arc::new(map),
-        std::sync::Arc::new(player.clone()),
-        vec![],
-        world_card.starting_room_id(),
-    );
-    crate::application::scenario::inject_scenario_logs(&mut state, &world_card, &player);
+    let map_arc = std::sync::Arc::new(map);
+    let mut state = GameState::new(world_card.starting_room_id());
+    crate::application::scenario::inject_scenario_logs(&mut state, &world_card, &player, &map_arc);
 
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(

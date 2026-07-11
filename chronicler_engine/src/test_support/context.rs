@@ -7,6 +7,7 @@ use std::sync::RwLock;
 use crate::adapters::driven::storage::Storage;
 use crate::application::application_service::DefaultApplicationService;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::character::NpcCard;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::error::Result;
@@ -28,13 +29,13 @@ pub fn default_test_preset_storage() -> Arc<Storage> {
 }
 
 pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
-    // Delegate to TestData::seed_into — single source of truth for world
-    // data seeding (fail-loud .expect() lives there, not here).
     let data = TestData {
-        world: Arc::clone(&state.world),
-        map: Arc::clone(&state.map),
-        persona: Arc::clone(&state.persona),
-        npcs: state.npcs.values().cloned().collect(),
+        world: Arc::new(crate::test_support::fixtures::TestWorld::minimal()),
+        map: Arc::new(crate::test_support::fixtures::TestMap::single_room(
+            &state.movement.current_room_id,
+        )),
+        persona: Arc::new(crate::test_support::fixtures::TestPersona::standard()),
+        npcs: std::iter::empty::<NpcCard>().collect(),
         room_npcs: Vec::new(),
     };
     let _ = data.seed_into(storage);

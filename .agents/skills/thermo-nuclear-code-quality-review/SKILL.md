@@ -132,6 +132,16 @@ When you identify a code-quality problem, prefer suggestions like:
 Do not be satisfied with "maybe rename this" feedback when the real issue is structural.
 Do not be satisfied with a merely cleaner version of the same messy idea if there is a plausible path to a much simpler idea.
 
+## Extra lens
+
+Load in the following skills to add additional lens to your review. At times this review has introduced antipatterns or suggeted bad architecture.
+
+- `/code-simplification` (`.agents/skills/code-simplification/SKILL.md`)
+- `/antipattern-checker` (`.agents/skills/antipattern-checker/SKILL.md`)
+- `/chronicler-docs-hygiene` (`.agents/skills/chronicler-docs-hygiene/SKILL.md`)
+- `/improve-codebase-architecture` (`.agents/skills/improve-codebase-architecture/SKILL.md`)
+- `/doubt-driven-development` (`.agents/skills/doubt-driven-development/SKILL.md`)
+
 ## Review Tone
 
 Be direct, serious, and demanding about quality.

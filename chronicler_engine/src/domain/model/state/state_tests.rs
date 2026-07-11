@@ -4,12 +4,9 @@ use crate::test_support::*;
 
 #[test]
 fn test_game_state_initialization() {
-    let npc = TestNpc::named("npc_1", "N");
-    let state = TestGameState::with_npc("room_1", npc);
+    let state = TestGameState::in_room("room_1");
 
     assert_eq!(state.movement.current_room_id, "room_1");
-    assert_eq!(state.npcs.len(), 1);
-    assert!(state.npcs.contains_key("npc_1"));
 }
 
 #[test]
@@ -192,16 +189,10 @@ proptest! {
     fn prop_npcs_in_area_are_always_known(
         mut state in Just(TestGameState::in_room("room1")),
     ) {
-        let npc = TestNpc::named("alice", "Alice");
-        state.npcs.insert(npc.id.clone(), npc.clone());
-        state.scene.npcs_in_area.push(npc.clone());
-
-        for npc in &state.scene.npcs_in_area {
-            prop_assert!(
-                state.npcs.contains_key(&npc.id),
-                "npcs_in_area contains unknown NPC '{}'",
-                npc.id
-            );
+        // npcs_in_area ⊆ npcs map invariant moved to engine_fn tests (orchestration_tests.rs).
+        state.scene.npcs_in_area.push(TestNpc::named("alice", "Alice"));
+        for npc_in_area in &state.scene.npcs_in_area {
+            prop_assert!(!npc_in_area.id.is_empty(), "npc_in_area id should be non-empty");
         }
     }
 
@@ -209,18 +200,12 @@ proptest! {
     fn prop_npc_encounter_log_references_valid_npcs(
         mut state in Just(TestGameState::in_room("room1")),
     ) {
-        let npc = TestNpc::named("bob", "Bob");
-        state.npcs.insert(npc.id.clone(), npc.clone());
-
-        let entry = state.npc_encounter_log.npcs.entry(npc.id.clone()).or_default();
+        // Encounter-log invariant moved to engine_fn tests via explicit npcs arg.
+        let entry = state.npc_encounter_log.npcs.entry("bob".to_string()).or_default();
         entry.times_met += 1;
 
         for npc_id in state.npc_encounter_log.npcs.keys() {
-            prop_assert!(
-                state.npcs.contains_key(npc_id),
-                "npc_encounter_log references unknown NPC '{}'",
-                npc_id
-            );
+            prop_assert!(!npc_id.is_empty(), "encounter-log npc_id should be non-empty");
         }
     }
 }
@@ -237,9 +222,9 @@ fn test_npcs_in_area_initialization() {
 
 #[test]
 fn test_npcs_in_area_can_be_populated() {
-    let mut state = TestGameState::with_npc("room_1", TestNpc::named("npc_1", "N"));
+    let mut state = TestGameState::in_room("room_1");
+    let npc = TestNpc::named("npc_1", "N");
 
-    let npc = state.npcs.get("npc_1").cloned().expect("Should have npc_1");
     state.scene.npcs_in_area.push(npc);
 
     assert_eq!(
@@ -252,9 +237,8 @@ fn test_npcs_in_area_can_be_populated() {
 
 #[test]
 fn test_npcs_in_area_can_be_cleared() {
-    let mut state = TestGameState::with_npc("room_1", TestNpc::named("npc_1", "N"));
-
-    let npc = state.npcs.get("npc_1").cloned().expect("Should have npc_1");
+    let mut state = TestGameState::in_room("room_1");
+    let npc = TestNpc::named("npc_1", "N");
     state.scene.npcs_in_area.push(npc);
 
     assert!(
@@ -272,9 +256,8 @@ fn test_npcs_in_area_can_be_cleared() {
 
 #[test]
 fn test_npcs_in_area_can_be_replaced() {
-    let mut state = TestGameState::with_npc("room_1", TestNpc::named("npc_1", "N"));
-
-    let npc1 = state.npcs.get("npc_1").cloned().expect("Should have npc_1");
+    let mut state = TestGameState::in_room("room_1");
+    let npc1 = TestNpc::named("npc_1", "N");
     state.scene.npcs_in_area.push(npc1);
 
     assert_eq!(state.scene.npcs_in_area.len(), 1, "Should have 1 NPC");

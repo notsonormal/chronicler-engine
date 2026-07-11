@@ -65,14 +65,36 @@ pub fn get_current_room_view(
     app: &DefaultApplicationService,
 ) -> Result<(String, Option<String>), ApplicationError> {
     let game_state = app.load_or_fresh();
-    let room = game_state
-        .current_room()
-        .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
+    let game_id = app.storage().current_game_id();
+    let game = app.storage().get_game(game_id)?.ok_or_else(|| {
+        ApplicationError::from(EngineError::Config(format!("game {game_id} not found")))
+    })?;
+    let world_with_map = app.storage().get_world(&game.world_key)?.ok_or_else(|| {
+        ApplicationError::from(EngineError::Config(format!(
+            "world '{}' not found",
+            game.world_key
+        )))
+    })?;
+    let world = world_with_map.world_card;
+    let map = world_with_map.map;
+    let room = map
+        .get_room_by_id(&game_state.movement.current_room_id)
+        .or_else(|| {
+            game_state
+                .movement
+                .dynamic_rooms
+                .get(&game_state.movement.current_room_id)
+        })
+        .ok_or_else(|| {
+            ApplicationError::from(EngineError::RoomNotFound(
+                "current room not found".to_string(),
+            ))
+        })?;
 
     let image_path = room
         .image_path
         .clone()
-        .or_else(|| game_state.world.default_room_image.clone());
+        .or_else(|| world.default_room_image.clone());
 
     Ok((room.name.clone(), image_path))
 }
@@ -82,6 +104,24 @@ pub fn get_npc_headshots(
     scene_only: bool,
 ) -> Result<Vec<(String, String)>, ApplicationError> {
     let game_state = app.load_or_fresh();
+    let game_id = app.storage().current_game_id();
+    let game = app.storage().get_game(game_id)?.ok_or_else(|| {
+        ApplicationError::from(EngineError::Config(format!("game {game_id} not found")))
+    })?;
+    let world_with_map = app.storage().get_world(&game.world_key)?.ok_or_else(|| {
+        ApplicationError::from(EngineError::Config(format!(
+            "world '{}' not found",
+            game.world_key
+        )))
+    })?;
+    let npcs_list = app.storage().list_characters(world_with_map.world_id)?;
+    let npcs: std::collections::HashMap<String, _> = {
+        let mut m = std::collections::HashMap::new();
+        for n in npcs_list {
+            m.insert(n.id.clone(), n);
+        }
+        m
+    };
 
     let npc_ids: Vec<String> = if scene_only {
         game_state
@@ -91,13 +131,13 @@ pub fn get_npc_headshots(
             .map(|npc| npc.id.clone())
             .collect()
     } else {
-        game_state.npcs.keys().cloned().collect()
+        npcs.keys().cloned().collect()
     };
 
     let npc_data: Vec<(String, String)> = npc_ids
         .iter()
         .filter_map(|id| {
-            let npc = game_state.npcs.get(id)?;
+            let npc = npcs.get(id)?;
             let image_path = npc.sheet.preferred_image()?.to_string();
             let name = npc.sheet.name.clone();
             Some((image_path, name))

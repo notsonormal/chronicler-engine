@@ -116,7 +116,7 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
 
 pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
     use chronicler_engine::domain::model::scenario::StartingScenario;
-    let world = Arc::new(WorldCard {
+    let _world = Arc::new(WorldCard {
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
@@ -148,7 +148,7 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         rooms: vec![room1],
     };
 
-    let map = Arc::new(MapDef {
+    let _map = Arc::new(MapDef {
         overworld: Overworld {
             id: "test_overworld".into(),
             name: "Test World".into(),
@@ -156,7 +156,7 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         },
     });
 
-    let player = Arc::new(PersonaCard {
+    let _player = Arc::new(PersonaCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),
@@ -171,11 +171,9 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         inventory: vec![],
     });
 
-    let mut state = GameState::new(world, map, player, npcs, "room1".to_string());
-    for id in room_npcs {
-        if let Some(npc) = state.npcs.get(&id).cloned() {
-            state.scene.npcs_in_area.push(npc);
-        }
+    let mut state = GameState::new("room1");
+    for npc in npcs.iter().filter(|n| room_npcs.contains(&n.id)) {
+        state.scene.npcs_in_area.push(npc.clone());
     }
     state
 }
@@ -203,18 +201,7 @@ pub fn create_test_state() -> GameState {
 }
 
 pub fn create_test_game_state() -> Arc<std::sync::Mutex<GameState>> {
-    let world = Arc::new(create_test_world());
-    let map = Arc::new(create_test_map());
-    let player = Arc::new(create_test_player());
-    let npcs = create_test_npcs();
-
-    Arc::new(std::sync::Mutex::new(GameState::new(
-        world,
-        map,
-        player,
-        npcs,
-        "room1".to_string(),
-    )))
+    Arc::new(std::sync::Mutex::new(GameState::new("room1")))
 }
 
 pub fn create_navigation_test_map() -> MapDef {
@@ -328,19 +315,11 @@ pub fn create_test_world_with_scenario() -> WorldCard {
 }
 
 pub fn create_basic_test_state() -> GameState {
-    let world = Arc::new(create_test_world_with_scenario());
-    let map = Arc::new(create_test_map());
-    let player = Arc::new(create_test_player());
-    let npcs = Vec::new();
-    GameState::new(world, map, player, npcs, "room1".to_string())
+    GameState::new("room1")
 }
 
 pub fn create_basic_test_state_no_scenario() -> GameState {
-    let world = Arc::new(create_test_world());
-    let map = Arc::new(create_test_map());
-    let player = Arc::new(create_test_player());
-    let npcs = Vec::new();
-    GameState::new(world, map, player, npcs, "room1".to_string())
+    GameState::new("room1")
 }
 
 pub fn seed_test_world(storage: &Storage) {

@@ -51,13 +51,7 @@ pub(crate) fn load_game_state(
 ) -> crate::error::Result<GameState> {
     match storage.load_latest_snapshot() {
         Ok(Some(snap)) => {
-            let mut new_state = GameState::from_snapshot(
-                &snap,
-                Arc::clone(world_arc),
-                Arc::clone(map_arc),
-                Arc::clone(player_arc),
-                npcs_map.clone(),
-            );
+            let mut new_state = GameState::from_snapshot(&snap);
             if let Ok(msgs) = load_messages_with_swipes(storage) {
                 new_state.narrative.history.replace(msgs);
             }
@@ -65,16 +59,10 @@ pub(crate) fn load_game_state(
         }
         _ => {
             let starting_room_id = world_arc.starting_room_id();
-            let mut new_state = GameState::new(
-                Arc::clone(world_arc),
-                Arc::clone(map_arc),
-                Arc::clone(player_arc),
-                npcs_map.values().cloned().collect(),
-                starting_room_id,
-            );
-            inject_scenario_logs(&mut new_state, world_arc, player_arc);
+            let mut new_state = GameState::new(starting_room_id);
+            inject_scenario_logs(&mut new_state, world_arc, player_arc, map_arc);
             if let Some(scenario) = world_arc.default_scenario() {
-                new_state.init_scenario_npcs(scenario);
+                new_state.init_scenario_npcs(scenario, npcs_map);
             }
             let initial_snapshot = GameStateSnapshot::from_game_state(&new_state);
             let snapshot_id = storage.save_snapshot(&initial_snapshot)?;

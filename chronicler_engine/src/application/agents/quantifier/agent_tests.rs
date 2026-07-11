@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::model::agent::{AgentContext, BackendSelector, ExecutionPhase};
-use crate::domain::model::state::game_state::GameState;
+use crate::adapters::driven::llm::providers::MockBackend;
 use crate::application::agents::Agent;
 use crate::application::agents::quantifier::agent::QuantifierAgent;
-use crate::adapters::driven::llm::providers::MockBackend;
-use crate::test_support::fixtures::{TestMap, TestPersona, TestWorld};
+use crate::domain::model::agent::{AgentContext, BackendSelector, ExecutionPhase};
+use crate::domain::model::character::NpcCard;
+use crate::domain::model::state::game_state::GameState;
+use crate::test_support::fixtures::{TestMap, TestPersona};
 
 #[test]
 fn test_from_config_creates_agent() {
@@ -68,19 +70,19 @@ fn test_execute_missing_main_response() {
         Arc::new(MockBackend::default());
     let agent = QuantifierAgent::with_provider("q".to_string(), backend);
 
-    let state = GameState::new(
-        Arc::new(TestWorld::minimal()),
-        Arc::new(TestMap::single_room("start")),
-        Arc::new(TestPersona::standard()),
-        vec![],
-        "start".to_string(),
-    );
+    let state = GameState::new("start");
+    let map = TestMap::single_room("start");
+    let persona = TestPersona::standard();
+    let npcs: HashMap<String, NpcCard> = HashMap::new();
 
     let ctx = AgentContext {
         state: &state,
         main_response: None,
         player_input: "look",
         current_room: None,
+        map: &map,
+        persona: &persona,
+        npcs: &npcs,
     };
 
     let result = agent.execute(&ctx);

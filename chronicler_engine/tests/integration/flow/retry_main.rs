@@ -20,16 +20,20 @@ use crate::pipeline_helpers::{
 };
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 
+fn base_data(npcs: Vec<NpcCard>) -> chronicler_engine::test_support::TestData {
+    TestDataBuilder::default_test()
+        .world(crate::fixtures::create_test_world())
+        .map(crate::fixtures::create_test_map())
+        .persona(crate::fixtures::create_test_player())
+        .npcs(npcs)
+        .build()
+}
+
 #[test]
 fn test_retry_main_narration_applies_new_quantifier_result() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -91,12 +95,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
 fn test_retry_with_different_narration_text_reruns_quantifier() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -160,12 +159,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 fn test_double_retry_increments_swipe_and_reruns_quantifier() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -221,12 +215,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
 fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -278,12 +267,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
 fn test_retry_after_edited_input_uses_new_text() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -385,13 +369,7 @@ fn test_main_retry_reevaluates_triggers() {
         }],
         relationships: vec![],
     };
-    state.npcs = std::collections::HashMap::from([("shopkeeper".to_string(), shopkeeper)]);
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![shopkeeper]);
 
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
@@ -453,12 +431,7 @@ fn test_main_retry_reevaluates_triggers() {
 fn test_retry_completes_when_quantifier_returns_none() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -613,12 +586,7 @@ fn test_retry_no_pre_main_snapshot() {
 fn test_movement_with_arrival_narration_retry() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
@@ -683,12 +651,7 @@ fn test_movement_with_arrival_narration_retry() {
 fn test_retry_appends_swipe_to_existing_narration() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let data = TestDataBuilder::default_test()
-        .world((*state.world).clone())
-        .map((*state.map).clone())
-        .persona((*state.persona).clone())
-        .npcs(state.npcs.values().cloned().collect())
-        .build();
+    let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {

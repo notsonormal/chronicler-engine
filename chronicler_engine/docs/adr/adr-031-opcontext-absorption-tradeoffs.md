@@ -40,7 +40,7 @@ T2 has since landed (tickets 00–04, 2026-07-09): 4 cohesive modules carved out
 
 - Accept temporary god-class regression in exchange for preserved hexagonal boundary — corrected by T2 rather than reverted.
 - T2 modular split landed 2026-07-09 (facade now 275 LOC) rather than immediate re-tightening — the gap was tolerated for one branch.
-- T9 (WorldSnapshot removal) will supersede the §T2.3 WorldSnapshot variant entirely — deferred to its own sub-plan.
+- T9 (WorldSnapshot removal) will supersede the §T2.3 WorldSnapshot variant entirely — deferred to its own sub-plan. **[Resolved 2026-07-11]** T9-01 removed `WorldSnapshot` + `load_world_snapshot` + `world_snapshot_or_empty`; GameState no longer bundles world-data fields; orchestrators fetch directly from `app.storage()`.
 - T6 marks §T2.2, §T2.3, §A6.4, §B1.3 VOID in the stale plans with rationale pointing here, rather than rewriting or deleting those plans.
 
 ## Alternatives Considered

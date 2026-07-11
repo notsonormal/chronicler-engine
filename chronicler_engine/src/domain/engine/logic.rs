@@ -11,12 +11,12 @@ pub fn find_room_in_map<'a>(map: &'a MapDef, target_id: &str) -> Option<&'a Room
     map.get_room_by_id(target_id)
 }
 
-pub fn find_room_in_world_map<'a>(state: &'a GameState, target_id: &str) -> Option<&'a Room> {
-    state.map.get_room_by_id(target_id)
+pub fn find_room_in_world_map<'a>(map: &'a MapDef, target_id: &str) -> Option<&'a Room> {
+    map.get_room_by_id(target_id)
 }
 
-pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<String> {
-    let room_name = if let Some(room) = find_room_in_world_map(state, room_id) {
+pub fn attempt_semantic_walk(state: &mut GameState, map: &MapDef, room_id: &str) -> Result<String> {
+    let room_name = if let Some(room) = find_room_in_world_map(map, room_id) {
         room.name.clone()
     } else if let Some(room) = state.movement.dynamic_rooms.get(room_id) {
         room.name.clone()
@@ -30,12 +30,7 @@ pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<Str
     Ok(format!("You go to: {room_name}."))
 }
 
-/// Creates a dynamic (pseudo) room for invalid destinations.
-///
-/// When the quantifier detects movement intent but the destination doesn't exist in the
-/// static map, the engine creates a placeholder room so the player can still proceed.
-/// Dynamic rooms are stored in `state.movement.dynamic_rooms` and persist for the session.
-///
+/// Spawns a placeholder room when the quantifier detects movement to an unmapped destination. Persists for session in `state.movement.dynamic_rooms`.
 pub fn create_dynamic_room(name: &str, description: &str) -> Room {
     use std::time::SystemTime;
     let timestamp = SystemTime::now()

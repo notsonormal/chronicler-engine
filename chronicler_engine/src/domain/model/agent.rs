@@ -33,12 +33,7 @@ pub struct AgentConfig {
 }
 
 impl StatePatch {
-    /// Merge another StatePatch into this one.
-    ///
-    /// Merge semantics:
-    /// - `npc_ids`: union of unique IDs, preserving first-seen order
-    /// - `movement_destination`: keep first non-None, warn on conflict
-    /// - `confidence`: take minimum (most conservative)
+    /// Union `npc_ids`; keep first non-None `movement_destination` (warn on conflict); take minimum `confidence`.
     pub fn merge(self, other: StatePatch) -> StatePatch {
         let ids_b_unique: Vec<_> = other
             .npc_ids
@@ -100,4 +95,7 @@ pub struct AgentContext<'a> {
     pub main_response: Option<&'a str>,
     pub player_input: &'a str,
     pub current_room: Option<&'a crate::domain::model::map::Room>,
+    pub map: &'a crate::domain::model::map::MapDef,
+    pub persona: &'a crate::domain::model::character::PersonaCard,
+    pub npcs: &'a std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
 }

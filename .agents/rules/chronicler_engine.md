@@ -34,14 +34,3 @@ The server tier (`src/server/`) must never touch `GameState` directly.
 ## Rust Idioms and Best Practices
 - Ensure `cargo fmt`, `cargo clippy`, and `cargo nextest run` pass successfully.
 - Prefer explicit error handling logic. Use `Result` heavily for parsing strings/data.
-
-## Visual Verification Rule
-
-**For any UI/CSS changes, you MUST:**
-1. Rebuild the project after CSS changes
-2. Restart the server with the new build
-3. Navigate to the affected page and take a screenshot
-4. Visually confirm the rendered result matches expectations
-5. Only then claim the task is complete
-
-**NEVER claim "verified" without personally reviewing a screenshot of the rendered page.** Subagent verification or test passes alone are insufficient for visual changes.

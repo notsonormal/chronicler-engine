@@ -1,17 +1,15 @@
 //! [DOC: docs/reference/test_support.md — section "Fixtures"]
-//!
 //! Test fixtures shared between unit and integration tests.
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_used)]
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::state::game_state::{GameState, GameStateBuilder};
+use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
@@ -204,80 +202,7 @@ pub struct TestGameState;
 
 impl TestGameState {
     pub fn in_room(room_id: &str) -> GameState {
-        GameState::new(
-            Arc::new(TestWorld::minimal()),
-            Arc::new(TestMap::single_room(room_id)),
-            Arc::new(TestPersona::standard()),
-            vec![],
-            room_id.to_string(),
-        )
-    }
-
-    pub fn with_npc(room_id: &str, npc: NpcCard) -> GameState {
-        let _npc_id = npc.id.clone();
-        GameState::new(
-            Arc::new(TestWorld::minimal()),
-            Arc::new(TestMap::single_room(room_id)),
-            Arc::new(TestPersona::standard()),
-            vec![npc],
-            room_id.to_string(),
-        )
-    }
-
-    pub fn with_npcs(room_id: &str, npcs: Vec<NpcCard>) -> GameState {
-        let _npc_ids: Vec<String> = npcs.iter().map(|n| n.id.clone()).collect();
-        let map = MapDef {
-            overworld: Overworld {
-                id: "test_overworld".to_string(),
-                name: "Test Overworld".to_string(),
-                regions: vec![Region {
-                    id: "test_region".to_string(),
-                    name: "Test Region".to_string(),
-                    rooms: vec![TestMap::room(room_id)],
-                }],
-            },
-        };
-        GameState::new(
-            Arc::new(TestWorld::minimal()),
-            Arc::new(map),
-            Arc::new(TestPersona::standard()),
-            npcs,
-            room_id.to_string(),
-        )
-    }
-
-    pub fn with_npc_raw(room_id: &str, npc: NpcCard) -> GameState {
-        GameStateBuilder::new(
-            Arc::new(TestWorld::minimal()),
-            Arc::new(TestMap::single_room(room_id)),
-            Arc::new(TestPersona::standard()),
-            room_id,
-        )
-        .with_npcs(vec![npc])
-        .build()
-    }
-
-    pub fn with_npc_in_named_room_raw(room_id: &str, room_name: &str, npc: NpcCard) -> GameState {
-        let room = TestMap::room_named(room_id, room_name);
-        let map = MapDef {
-            overworld: Overworld {
-                id: "test_overworld".to_string(),
-                name: "Test Overworld".to_string(),
-                regions: vec![Region {
-                    id: "test_region".to_string(),
-                    name: "Test Region".to_string(),
-                    rooms: vec![room],
-                }],
-            },
-        };
-        GameStateBuilder::new(
-            Arc::new(TestWorld::minimal()),
-            Arc::new(map),
-            Arc::new(TestPersona::standard()),
-            room_id,
-        )
-        .with_npcs(vec![npc])
-        .build()
+        GameState::new(room_id)
     }
 }
 

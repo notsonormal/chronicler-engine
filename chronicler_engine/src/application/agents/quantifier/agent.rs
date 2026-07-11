@@ -1,6 +1,6 @@
 //! [DOC: docs/system/agent_system.md]
-//! Quantifier agent implementation
-//! arch-lint: storage-direct — deferred to G1-B (T2 persistence_gate carve-out landed; this agent still takes `Option<Arc<Storage>>`), see ADR-027
+//! Quantifier agent implementation.
+//! arch-lint: storage-direct — see ADR-027
 
 use std::sync::{Arc, RwLock};
 
@@ -106,6 +106,9 @@ impl Agent for QuantifierAgent {
             main_response,
             self.recorder.as_ref(),
             quantifier_prompt_override,
+            ctx.map,
+            ctx.persona,
+            ctx.npcs,
         );
 
         let confidence = Confidence::from(result.npcs.confidence);

@@ -8,9 +8,11 @@ use crate::application::narrative_prompt::{build_narration_prompt, make_prompt_c
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::world::WorldCard;
 
 pub struct ArrivalTaskContext {
     pub(crate) app: Arc<DefaultApplicationService>,
@@ -73,15 +75,49 @@ impl ArrivalTaskContext {
             }
         };
 
+        let game_id = self.app.current_game_id();
+        let game = match self.app.storage().get_game(game_id) {
+            Ok(Some(g)) => g,
+            Ok(None) => {
+                tracing::error!("arrival: game {game_id} not found");
+                return;
+            }
+            Err(e) => {
+                tracing::error!("arrival: failed to load game: {e}");
+                return;
+            }
+        };
+        let world_with_map = match self.app.storage().get_world(&game.world_key) {
+            Ok(Some(w)) => w,
+            Ok(None) => {
+                tracing::error!("arrival: world '{}' not found", game.world_key);
+                return;
+            }
+            Err(e) => {
+                tracing::error!("arrival: failed to load world: {e}");
+                return;
+            }
+        };
+        let persona: Arc<crate::domain::model::character::PersonaCard> =
+            match self.app.storage().get_persona(&game.persona_key) {
+                Ok(Some(p)) => Arc::new(p),
+                Ok(None) => {
+                    tracing::error!("arrival: persona '{}' not found", game.persona_key);
+                    return;
+                }
+                Err(e) => {
+                    tracing::error!("arrival: failed to load persona: {e}");
+                    return;
+                }
+            };
+        let world: Arc<WorldCard> = Arc::new(world_with_map.world_card);
+        let map: Arc<MapDef> = Arc::new(world_with_map.map);
         if state.narrative.history.is_empty() {
-            let world = Arc::clone(&state.world);
-            let persona = Arc::clone(&state.persona);
-            inject_scenario_logs(&mut state, &world, &persona);
+            inject_scenario_logs(&mut state, &world, &persona, &map);
         }
         state.narrative.input_buffer.status = GenerationStatus::Generating;
 
-        let room = match state
-            .map
+        let room = match map
             .overworld
             .regions
             .iter()
@@ -92,21 +128,19 @@ impl ArrivalTaskContext {
             None => return,
         };
 
-        let world_ref = Arc::clone(&state.world);
-        let persona_ref = Arc::clone(&state.persona);
         let prompt_context = make_prompt_context(
-            &world_ref,
+            &world,
             room,
             NpcContext {
                 all_npcs: &self.all_npcs,
                 npcs_in_area: &self.nearby_npcs,
             },
-            &persona_ref,
+            &persona,
             "",
             &[],
         );
 
-        let global_rules = &state.world.global_rules;
+        let global_rules = &world.global_rules;
         let narration = match self.arrival_preset.as_ref() {
             Some(preset) => build_narration_prompt(
                 &prompt_context,

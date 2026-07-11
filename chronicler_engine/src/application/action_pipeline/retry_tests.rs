@@ -13,13 +13,15 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
-use crate::test_support::fixtures::{TestGameState, TestNpc};
+use crate::application::agents::registry::AgentRegistry;
+use crate::test_support::fixtures::TestGameState;
 use crate::test_support::make_test_recorder;
 use crate::test_support::TestAppBuilder;
+use crate::test_support::TestDataBuilder;
 use crate::test_support::make_test_app_without_snapshot;
 
 fn make_test_state() -> GameState {
-    TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))
+    TestGameState::in_room("start")
 }
 
 fn make_service() -> GameService {
@@ -47,7 +49,7 @@ fn insert_message_with_swipe(
 
 fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
     let mut state = app.load_or_fresh();
-    let player_name = state.persona.sheet.name.clone();
+    let player_name = "Player".to_string();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -390,7 +392,7 @@ fn test_retry_main_no_pre_main_snapshot() {
     let app = TestAppBuilder::default_test().build_service();
 
     let mut state = app.load_or_fresh();
-    let player_name = state.persona.sheet.name.clone();
+    let player_name = "Player".to_string();
     state.add_message(
         "test input".to_string(),
         Some(player_name),
@@ -760,4 +762,90 @@ fn test_retrigger_event_impl_cancels_cleanly() {
         GenerationPhase::default(),
         "Cancelled retrigger should reset phase to default"
     );
+}
+
+// B2 fail-loud: `fetch_world_bundle_for_retry` must surface fetch failures as `GenerationStatus::Error`.
+
+#[test]
+fn test_fetch_world_bundle_for_retry_returns_none_on_world_fetch_error() {
+    let data = TestDataBuilder::default_test().build();
+    let (storage, handle) = {
+        let base = Storage::new_in_memory();
+        data.seed_into(&base);
+        base.with_test_failures()
+    };
+    handle.set(
+        "get_world",
+        TestOverride::internal("simulated get_world failure"),
+    );
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let app = TestAppBuilder::with_data(data)
+        .storage(Arc::new(storage))
+        .skip_seeding(true)
+        .game_service(Arc::new(service))
+        .build_service();
+
+    let result = super::retry::fetch_world_bundle_for_retry(&app);
+    assert!(
+        result.is_none(),
+        "fetch_world_bundle_for_retry must return None on get_world failure, got {result:?}"
+    );
+    let state = app.load_or_fresh();
+    match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(msg) => {
+            assert!(
+                msg.contains("world"),
+                "Error message should mention world, got: {msg}"
+            );
+        }
+        other => panic!("Expected GenerationStatus::Error mentioning world, got {other:?}"),
+    }
+}
+
+// B2 fail-loud: persona fetch block must return `ActionOutcome::Completed` and surface fetch failure as `GenerationStatus::Error`.
+
+#[test]
+fn test_retry_event_continuation_returns_completed_on_persona_fetch_failure() {
+    let data = TestDataBuilder::default_test().build();
+    let (storage, handle) = {
+        let base = Storage::new_in_memory();
+        data.seed_into(&base);
+        base.with_test_failures()
+    };
+    handle.set(
+        "get_persona",
+        TestOverride::internal("simulated get_persona failure"),
+    );
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let app = TestAppBuilder::with_data(data)
+        .storage(Arc::new(storage))
+        .skip_seeding(true)
+        .game_service(Arc::new(service))
+        .build_service();
+
+    let mut state = app.load_or_fresh();
+    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
+
+    let outcome = retry_event_continuation(&app, state);
+    assert!(
+        matches!(
+            outcome,
+            crate::application::action_pipeline::ActionOutcome::Completed
+        ),
+        "retry_event_continuation must return Completed on persona fetch failure, got {outcome:?}"
+    );
+    let state = app.load_or_fresh();
+    match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(msg) => {
+            assert!(
+                msg.contains("persona"),
+                "Error message should mention persona, got: {msg}"
+            );
+        }
+        other => panic!("Expected GenerationStatus::Error mentioning persona, got {other:?}"),
+    }
 }

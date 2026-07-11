@@ -12,13 +12,17 @@ use chronicler_engine::domain::engine::action_processing::{
     FreeActionContext, apply_npc_events, execute_freeaction_impl,
 };
 
+use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::domain::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
 };
-use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
+use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::trigger::{
+    ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+};
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
 use chronicler_engine::application::generation_gate::slot::GenerationSlot;
@@ -33,6 +37,40 @@ mod sqlite_test_app_builder;
 
 use pipeline_helpers::{create_test_state_with_trigger_npc, latest_state};
 use fixtures::create_test_state;
+
+fn shopkeeper_npc() -> NpcCard {
+    NpcCard {
+        id: "shopkeeper".into(),
+        sheet: CharacterSheet {
+            name: "Shopkeeper Sarah".into(),
+            description: "A shrewd shopkeeper".into(),
+            personality: "Business-minded".into(),
+            scenario: "Runs the shop".into(),
+            example_dialogue: "Welcome!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![Trigger {
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
+            narration: TriggerNarration {
+                name: "Greeting".into(),
+                narration_prompt: "The shopkeeper greets you.".into(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    }
+}
+
+fn npc_map(npcs: Vec<NpcCard>) -> HashMap<String, NpcCard> {
+    npcs.into_iter().map(|npc| (npc.id.clone(), npc)).collect()
+}
 
 #[test]
 fn test_inv001_generation_guard_resets_on_drop() {
@@ -100,12 +138,21 @@ fn test_inv002_state_mutation_order() {
         movement: MovementParseResult::default(),
     };
 
+    let world = Arc::new(fixtures::create_test_world());
+    let map = Arc::new(fixtures::create_test_map());
+    let player = Arc::new(fixtures::create_test_player());
+    let npcs = npc_map(vec![shopkeeper_npc()]);
+
     let result = execute_freeaction_impl(
         &state,
         &FreeActionContext {
             narration_text: "You look around the shop.",
             quantifier_result: &quantifier,
         },
+        &world,
+        &map,
+        &player,
+        &npcs,
     )
     .expect("execute_freeaction_impl should succeed");
     assert!(
@@ -140,16 +187,20 @@ fn test_inv002_violation_demo() {
         npc_id: npc_id.to_string(),
         event_type: NpcTransitionType::Entered,
     }];
-    let state_after_events =
-        apply_npc_events(state.clone(), &events).expect("apply_npc_events should succeed");
-    let triggers_after_swap =
-        chronicler_engine::domain::engine::trigger_eval::evaluate_triggers(&state_after_events);
+    let map = Arc::new(fixtures::create_test_map());
+    let npcs = npc_map(vec![shopkeeper_npc()]);
+    let state_after_events = apply_npc_events(state.clone(), &events, &map, &npcs)
+        .expect("apply_npc_events should succeed");
+    let triggers_after_swap = chronicler_engine::domain::engine::trigger_eval::evaluate_triggers(
+        &state_after_events,
+        &npcs,
+    );
     assert!(
         triggers_after_swap.is_empty(),
         "VIOLATION: trigger should NOT fire when apply_npc_events runs first (times_met == 1)"
     );
     let triggers_correct =
-        chronicler_engine::domain::engine::trigger_eval::evaluate_triggers(&state);
+        chronicler_engine::domain::engine::trigger_eval::evaluate_triggers(&state, &npcs);
     assert!(
         !triggers_correct.is_empty(),
         "Correct order: trigger SHOULD fire (times_met == 0)"
@@ -171,9 +222,7 @@ fn test_inv004_cancellable_at_boundaries() {
         })
         .build_service()
         .unwrap();
-    // Phase boundaries abort on game_id mismatch (α-check), not on token
-    // cancellation. Simulate the reset by switching the active game mid-pipeline;
-    // the next phase boundary sees the mismatch and aborts.
+    // Phase boundaries abort on game_id mismatch (α-check), not token cancellation — switch active game mid-pipeline so the next boundary sees the mismatch.
     let started_for = app.current_game_id();
     let switched_to = started_for.wrapping_add(99);
     let pipeline = app.game_service().pipeline();
@@ -281,8 +330,8 @@ fn test_inv005_handle_movement_runs_before_narration() {
     let world = Arc::new(fixtures::create_test_world());
     let map = Arc::new(fixtures::create_test_map());
     let player = Arc::new(fixtures::create_test_player());
-    let npcs = vec![];
-    let state = GameState::new(world, map, player, npcs, "room1".to_string());
+    let npcs = HashMap::new();
+    let state = GameState::new("room1".to_string());
     let original_room = state.movement.current_room_id.clone();
     let target_room = "room2";
 
@@ -304,6 +353,10 @@ fn test_inv005_handle_movement_runs_before_narration() {
             narration_text: "I walk north.",
             quantifier_result: &quantifier,
         },
+        &world,
+        &map,
+        &player,
+        &npcs,
     )
     .expect("execute_freeaction_impl should succeed");
 
@@ -323,10 +376,11 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
     let state = create_test_state();
     let invalid_destination = "nonexistent_place_xyz";
 
+    let map = Arc::new(fixtures::create_test_map());
+    let npcs = HashMap::new();
+
     assert!(
-        !state
-            .map
-            .overworld
+        !map.overworld
             .regions
             .iter()
             .flat_map(|r| r.rooms.iter())
@@ -334,7 +388,7 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
         "precondition: invalid_destination should not exist in map"
     );
 
-    let result = handle_movement(state, Some(invalid_destination), &[]).unwrap();
+    let result = handle_movement(state, Some(invalid_destination), &[], &map, &npcs).unwrap();
     assert!(
         !result.movement.dynamic_rooms.is_empty(),
         "INV-007: dynamic room should be created for invalid destination"
@@ -377,12 +431,20 @@ fn test_inv002_mutation_order_property() {
             movement: MovementParseResult::default(),
         };
 
+        let world = Arc::new(fixtures::create_test_world());
+        let map = Arc::new(fixtures::create_test_map());
+        let player = Arc::new(fixtures::create_test_player());
+        let npcs = npc_map(vec![shopkeeper_npc()]);
         let result = execute_freeaction_impl(
             &state,
             &FreeActionContext {
                 narration_text: &narration_text,
                 quantifier_result: &quantifier,
             },
+            &world,
+            &map,
+            &player,
+            &npcs,
         ).expect("execute_freeaction_impl should succeed");
         let history = &result.next_state.narrative.history;
         let search_len = 20.min(narration_text.chars().count());
@@ -402,10 +464,7 @@ fn test_inv002_mutation_order_property() {
     });
 }
 
-// P4-concurrent per-game generation tracking regression tests. Verifies
-// α-check at phase boundaries discards in-flight generations whose game_id
-// no longer matches `started_for`, and that the per-game registry slot is
-// cleaned up so the next claim on the same or a different game succeeds.
+// Per-game generation tracking: α-check at phase boundaries discards in-flight generations whose game_id no longer matches `started_for`; per-game registry slot is cleaned up so next claim succeeds.
 
 #[tokio::test]
 async fn test_p4_concurrent_happy_path() {

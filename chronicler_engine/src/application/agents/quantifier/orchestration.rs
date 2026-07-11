@@ -77,7 +77,6 @@ pub(crate) fn quantify_room_with_llm_call(
                     tracing::info!("[Quantifier] No movement detected");
                 }
 
-                // Retry on Low confidence (unless this was the last attempt)
                 if result.npcs.confidence.is_low() && attempt < max_attempts {
                     tracing::warn!("[Quantifier] Low confidence on attempt {attempt}, retrying...");
                     continue;
@@ -112,14 +111,11 @@ pub(crate) fn quantify_room_with_llm_call(
     }
 }
 
-/// Process quantifier result with confidence-based branching.
-///
-/// High/Medium confidence: use dynamically quantified NPCs
-/// Low confidence: fall back to static NPCs
 fn process_quantifier_result(
     result: QuantifierResult,
     state: &GameState,
     room_npc_ids: &[String],
+    npcs: &std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
 ) -> QuantifierResult {
     match result.npcs.confidence {
         QuantifierConfidence::High | QuantifierConfidence::Medium => {
@@ -128,7 +124,7 @@ fn process_quantifier_result(
                 .npcs
                 .npc_ids
                 .iter()
-                .filter_map(|id| state.npcs.get(id).cloned())
+                .filter_map(|id| npcs.get(id).cloned())
                 .collect();
             QuantifierResult {
                 npcs: QuantifierParseResult {
@@ -140,7 +136,7 @@ fn process_quantifier_result(
         }
         QuantifierConfidence::Low => {
             tracing::info!("[Quantifier] Low confidence, using static NPCs");
-            static_npc_result(state, room_npc_ids, result.movement)
+            static_npc_result(state, room_npc_ids, result.movement, npcs)
         }
     }
 }
@@ -149,9 +145,9 @@ pub(crate) fn static_npc_result(
     state: &GameState,
     room_npc_ids: &[String],
     movement: MovementParseResult,
+    npcs: &std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
 ) -> QuantifierResult {
     let npc_ids = if room_npc_ids.is_empty() {
-        // Fallback: preserve previous turn's NPCs when no static room NPCs are configured.
         state
             .scene
             .npcs_in_area
@@ -161,7 +157,7 @@ pub(crate) fn static_npc_result(
     } else {
         room_npc_ids
             .iter()
-            .filter_map(|id| state.npcs.get(id))
+            .filter_map(|id| npcs.get(id))
             .map(|n| n.id.clone())
             .collect()
     };
@@ -175,6 +171,7 @@ pub(crate) fn static_npc_result(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn determine_npcs_in_room(
     state: &GameState,
     current_room: &crate::domain::model::map::Room,
@@ -183,9 +180,11 @@ pub fn determine_npcs_in_room(
     player_action: &str,
     recorder: &LlmCallRecorder,
     quantifier_prompt_override: Option<String>,
+    map: &crate::domain::model::map::MapDef,
+    persona: &crate::domain::model::character::PersonaCard,
+    npcs: &std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
 ) -> QuantifierResult {
-    let all_npcs: Vec<crate::domain::model::character::NpcCard> =
-        state.npcs.values().cloned().collect();
+    let all_npcs: Vec<crate::domain::model::character::NpcCard> = npcs.values().cloned().collect();
 
     let recent_history: Vec<_> = state
         .narrative
@@ -197,8 +196,7 @@ pub fn determine_npcs_in_room(
         .cloned()
         .collect();
 
-    let all_rooms: Vec<RoomInfo> = state
-        .map
+    let all_rooms: Vec<RoomInfo> = map
         .overworld
         .regions
         .iter()
@@ -215,12 +213,12 @@ pub fn determine_npcs_in_room(
         previous_room_npcs,
         all_known_npcs: &all_npcs,
         all_rooms: &all_rooms,
-        player_name: &state.persona.sheet.name,
+        player_name: &persona.sheet.name,
         recent_history: &recent_history,
         player_action,
         quantifier_prompt_override,
     };
 
     let result = quantify_room_with_llm_call(&context, room_npc_ids, recorder);
-    process_quantifier_result(result, state, room_npc_ids)
+    process_quantifier_result(result, state, room_npc_ids, npcs)
 }

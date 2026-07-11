@@ -228,7 +228,7 @@ def clean_old_logs(log_dir: Path, max_age_days: int = 3):
         log_status(f"  Removed old build logs (> {max_age_days} days): {', '.join(removed)}")
 
 
-def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 3):
+def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 30):
     """Remove files older than max_age_days from the given tmp directories (recursing
     into subdirectories). Subdirectories themselves are left in place."""
     now = time.time()
@@ -241,7 +241,7 @@ def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 3):
             for name in files:
                 p = Path(root) / name
                 try:
-                    if (now - p.stat().st_mtime) <= max_age_days:
+                    if (now - p.stat().st_mtime) <= max_age_sec:
                         continue
                     p.unlink()
                     removed.append(str(p))
@@ -713,7 +713,7 @@ def main():
 
         project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
         engine_tmp = Path("tmp")
-        clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=3)
+        clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=30)
 
         db_path = target_dir / "data" / "chronicler.db"
         if db_path.exists():

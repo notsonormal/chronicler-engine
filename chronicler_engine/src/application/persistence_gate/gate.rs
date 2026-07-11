@@ -1,6 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
-//! PersistenceGate — owns game `Arc<Storage>` + `Arc<PresetStore>` + persistence helpers
-//! (T2 ticket 02 — façade-first carve-out from DefaultApplicationService).
+//! PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers (T2 façade-first carve-out).
 
 use std::sync::Arc;
 
@@ -13,8 +12,6 @@ use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::template::{render_template, TemplateVars};
 use crate::error::EngineError;
-
-use super::dto::WorldSnapshot;
 
 #[derive(Clone)]
 pub struct PersistenceGate {
@@ -38,84 +35,32 @@ impl PersistenceGate {
         &self.preset_store
     }
 
-    pub(crate) fn load_world_snapshot(&self) -> Result<WorldSnapshot, EngineError> {
-        let game_id = self.storage.current_game_id();
-        let game = self
-            .storage
-            .get_game(game_id)?
-            .ok_or_else(|| EngineError::Config(format!("current_game_id {game_id} not found")))?;
-        let world_with_map = self
-            .storage
-            .get_world(&game.world_key)?
-            .ok_or_else(|| EngineError::Config(format!("world '{}' not found", game.world_key)))?;
-        let player = self
-            .storage
-            .get_persona(&game.persona_key)?
-            .ok_or_else(|| {
-                EngineError::Config(format!("persona '{}' not found", game.persona_key))
-            })?;
-        let npcs_list = self.storage.list_characters(world_with_map.world_id)?;
-        let mut npcs: std::collections::HashMap<String, NpcCard> = std::collections::HashMap::new();
-        for n in npcs_list {
-            npcs.insert(n.id.clone(), n);
-        }
-        Ok(WorldSnapshot {
-            world: Arc::new(world_with_map.world_card),
-            map: Arc::new(world_with_map.map),
-            player: Arc::new(player),
-            npcs: Arc::new(npcs),
-        })
-    }
-
-    fn world_snapshot_or_empty(&self) -> WorldSnapshot {
-        self.load_world_snapshot().unwrap_or_else(|e| {
-            tracing::warn!("load_world_snapshot: falling back to empty world snapshot: {e}");
-            WorldSnapshot::empty()
-        })
-    }
-
     pub fn load_or_fresh(&self) -> GameState {
         match self.load_expecting_valid_state() {
             Ok(state) => state,
             Err(e) => {
                 tracing::error!(
-                    "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
+                    "Failed to load game state ({e}), building fresh initial state. This may indicate data corruption."
                 );
-                let snap = self.world_snapshot_or_empty();
-                let starting_room_id = snap.world.starting_room_id();
-                GameState::new(
-                    Arc::clone(&snap.world),
-                    Arc::clone(&snap.map),
-                    Arc::clone(&snap.player),
-                    (*snap.npcs).values().cloned().collect(),
-                    starting_room_id,
-                )
+                match self.build_fresh_initial_state() {
+                    Ok(state) => state,
+                    Err(e2) => {
+                        tracing::error!(
+                            "build_fresh_initial_state also failed: {e2}; returning empty GameState"
+                        );
+                        GameState::new("")
+                    }
+                }
             }
         }
     }
 
     pub fn load_expecting_valid_state(&self) -> Result<GameState, EngineError> {
-        let snap = self.world_snapshot_or_empty();
         let snapshot = self.storage.load_latest_snapshot()?;
-        let mut state = match snapshot {
-            Some(snap_data) => GameState::from_snapshot(
-                &snap_data,
-                Arc::clone(&snap.world),
-                Arc::clone(&snap.map),
-                Arc::clone(&snap.player),
-                (*snap.npcs).clone(),
-            ),
-            None => {
-                let starting_room_id = snap.world.starting_room_id();
-                GameState::new(
-                    Arc::clone(&snap.world),
-                    Arc::clone(&snap.map),
-                    Arc::clone(&snap.player),
-                    (*snap.npcs).values().cloned().collect(),
-                    starting_room_id,
-                )
-            }
-        };
+        let snap_data = snapshot.ok_or_else(|| {
+            EngineError::Config("no game state snapshot found for current game".to_string())
+        })?;
+        let mut state = GameState::from_snapshot(&snap_data);
         self.load_messages_into_state(&mut state);
         Ok(state)
     }
@@ -177,34 +122,65 @@ impl PersistenceGate {
     }
 
     pub fn build_fresh_initial_state(&self) -> Result<GameState, EngineError> {
-        let snap = self.world_snapshot_or_empty();
-        let starting_room_id = snap.world.starting_room_id();
-        let mut initial_state = GameState::new(
-            Arc::clone(&snap.world),
-            Arc::clone(&snap.map),
-            Arc::clone(&snap.player),
-            (*snap.npcs).values().cloned().collect(),
-            starting_room_id.clone(),
-        );
+        let (world, map, persona, npcs_map) = self.fetch_world_data_for_fresh_state()?;
+        let starting_room_id = world.starting_room_id();
+        let mut initial_state = GameState::new(starting_room_id.clone());
 
-        if let Some(scenario) = snap.world.default_scenario() {
-            let room_name = snap
-                .map
+        if let Some(scenario) = world.default_scenario() {
+            let room_name = map
                 .get_room_by_id(&starting_room_id)
                 .map(|r| r.name.clone())
                 .unwrap_or_else(|| starting_room_id.clone());
 
             initial_state.narrative.pending_location = Some(room_name);
 
-            let text = render_template(&scenario.text, &TemplateVars::new(&snap.player.sheet.name));
+            let text = render_template(&scenario.text, &TemplateVars::new(&persona.sheet.name));
             if !text.is_empty() {
                 initial_state.add_message(text, None, MessageType::Narration);
             }
 
-            initial_state.init_scenario_npcs(scenario);
+            initial_state.init_scenario_npcs(scenario, &npcs_map);
         }
 
         Ok(initial_state)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn fetch_world_data_for_fresh_state(
+        &self,
+    ) -> Result<
+        (
+            Arc<crate::domain::model::world::WorldCard>,
+            Arc<crate::domain::model::map::MapDef>,
+            Arc<crate::domain::model::character::PersonaCard>,
+            std::collections::HashMap<String, NpcCard>,
+        ),
+        EngineError,
+    > {
+        let game_id = self.storage.current_game_id();
+        let game = self
+            .storage
+            .get_game(game_id)?
+            .ok_or_else(|| EngineError::Config(format!("current_game_id {game_id} not found")))?;
+        let world_with_map = self
+            .storage
+            .get_world(&game.world_key)?
+            .ok_or_else(|| EngineError::Config(format!("world '{}' not found", game.world_key)))?;
+        let persona = self
+            .storage
+            .get_persona(&game.persona_key)?
+            .ok_or_else(|| {
+                EngineError::Config(format!("persona '{}' not found", game.persona_key))
+            })?;
+        let npcs_list = self.storage.list_characters(world_with_map.world_id)?;
+        let npcs_map: std::collections::HashMap<String, NpcCard> =
+            npcs_list.into_iter().map(|n| (n.id.clone(), n)).collect();
+        Ok((
+            Arc::new(world_with_map.world_card),
+            Arc::new(world_with_map.map),
+            Arc::new(persona),
+            npcs_map,
+        ))
     }
 
     pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {

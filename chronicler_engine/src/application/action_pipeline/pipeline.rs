@@ -1,16 +1,19 @@
 //! [DOC: docs/system/game_flow.md]
 //! Action pipeline orchestration and execution
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::application::action_pipeline::phases::{PipelineInputs, PipelineRun};
 use crate::application::application_service::DefaultApplicationService;
 
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::world::WorldCard;
 
 use crate::application::narrative_prompt::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
@@ -31,7 +34,49 @@ pub enum ActionOutcome {
 
 pub(super) type PipelineResult<T> = Result<T, ActionOutcome>;
 
+type WorldBundle = (
+    Arc<WorldCard>,
+    Arc<MapDef>,
+    Arc<PersonaCard>,
+    HashMap<String, NpcCard>,
+);
+
 impl ActionPipeline {
+    fn fetch_world_bundle(
+        app: &DefaultApplicationService,
+        game_id: u64,
+    ) -> Result<WorldBundle, String> {
+        let game = app
+            .storage()
+            .get_game(game_id)
+            .map_err(|e| format!("storage error loading game {game_id}: {e}"))?
+            .ok_or_else(|| format!("current_game_id {game_id} not found"))?;
+        let world_with_map = app
+            .storage()
+            .get_world(&game.world_key)
+            .map_err(|e| format!("storage error loading world '{}': {e}", game.world_key))?
+            .ok_or_else(|| format!("world key '{}' not found", game.world_key))?;
+        let persona_card = app
+            .storage()
+            .get_persona(&game.persona_key)
+            .map_err(|e| format!("storage error loading persona '{}': {e}", game.persona_key))?
+            .ok_or_else(|| format!("persona key '{}' not found", game.persona_key))?;
+        let world: Arc<WorldCard> = Arc::new(world_with_map.world_card);
+        let map: Arc<MapDef> = Arc::new(world_with_map.map);
+        let persona: Arc<PersonaCard> = Arc::new(persona_card);
+        let chars = app
+            .storage()
+            .list_characters(world_with_map.world_id)
+            .map_err(|e| {
+                format!(
+                    "storage error listing characters for world {}: {e}",
+                    world_with_map.world_id
+                )
+            })?;
+        let npcs: HashMap<String, NpcCard> = chars.into_iter().map(|n| (n.id.clone(), n)).collect();
+        Ok((world, map, persona, npcs))
+    }
+
     pub fn new(
         assembler: Arc<PromptAssembler>,
         recorder: Arc<LlmCallRecorder>,
@@ -54,16 +99,22 @@ impl ActionPipeline {
         let started_for = app.current_game_id();
         let run = PipelineRun::new(self, app, started_for);
 
-        let world = Arc::clone(&state.world);
-        let map = Arc::clone(&state.map);
-        let persona = Arc::clone(&state.persona);
-        let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
+        let (world, map, persona, npcs) = match Self::fetch_world_bundle(app, started_for) {
+            Ok(bundle) => bundle,
+            Err(msg) => {
+                tracing::error!("run_from_input: {msg}");
+                state.narrative.input_buffer.status = GenerationStatus::Error(msg);
+                run.phase_finalize(&mut state);
+                return Ok(());
+            }
+        };
+        let all_npcs: Vec<NpcCard> = npcs.values().cloned().collect();
 
         let inputs = PipelineInputs {
             input: input.clone(),
-            world,
-            map,
-            persona,
+            world: Arc::clone(&world),
+            map: Arc::clone(&map),
+            persona: Arc::clone(&persona),
             all_npcs,
         };
 
@@ -85,21 +136,29 @@ impl ActionPipeline {
         state.narrative.last_backend_name = Some(backend_name);
         state.narrative.last_model_name = Some(model_name);
 
-        let quantifier_result = run.phase_post_generation(&mut state, &input, &narration_text);
+        let quantifier_result =
+            run.phase_post_generation(&mut state, &input, &narration_text, &map, &persona, &npcs);
         if let Err(e) = run.app.save_message_and_snapshot(&mut state) {
             tracing::warn!("Failed to save post-quantifier metadata: {e}");
         }
 
-        let turn_result =
-            match Self::phase_engine_commit(&state, &narration_text, &quantifier_result) {
-                Ok(r) => r,
-                Err(e) => {
-                    state.narrative.input_buffer.status =
-                        GenerationStatus::Error(format!("Error: {e}"));
-                    run.phase_finalize(&mut state);
-                    return Ok(());
-                }
-            };
+        let turn_result = match Self::phase_engine_commit(
+            &state,
+            &narration_text,
+            &quantifier_result,
+            &world,
+            &map,
+            &persona,
+            &npcs,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                state.narrative.input_buffer.status =
+                    GenerationStatus::Error(format!("Error: {e}"));
+                run.phase_finalize(&mut state);
+                return Ok(());
+            }
+        };
         let mut next_state = turn_result.next_state;
 
         let trigger_request = turn_result
@@ -123,13 +182,21 @@ impl ActionPipeline {
         }
 
         if let Some(request) = trigger_request {
-            match run.phase_trigger_continuation_with_cancel_handling(next_state, &request) {
+            match run
+                .phase_trigger_continuation_with_cancel_handling(next_state, &request, &map, &npcs)
+            {
                 Ok((updated_state, continuation_text)) => {
                     next_state = updated_state;
 
                     if !continuation_text.is_empty() {
-                        next_state =
-                            run.reconcile_post_trigger_npcs(next_state, &input, &continuation_text);
+                        next_state = run.reconcile_post_trigger_npcs(
+                            next_state,
+                            &input,
+                            &continuation_text,
+                            &map,
+                            &persona,
+                            &npcs,
+                        );
                     }
                 }
                 Err(e) => {
@@ -148,10 +215,12 @@ impl ActionPipeline {
         state: GameState,
         trigger: &StoredTriggerContext,
         app: &DefaultApplicationService,
+        map: &Arc<MapDef>,
+        npcs: &HashMap<String, NpcCard>,
     ) -> PipelineResult<(GameState, String)> {
         let started_for = app.current_game_id();
         let run = PipelineRun::new(self, app, started_for);
-        run.phase_trigger_continuation_with_cancel_handling(state, trigger)
+        run.phase_trigger_continuation_with_cancel_handling(state, trigger, map, npcs)
     }
 
     pub(super) fn run_post_generation_agents(
@@ -159,14 +228,28 @@ impl ActionPipeline {
         state: &GameState,
         player_input: &str,
         main_response: &str,
+        map: &Arc<MapDef>,
+        persona: &Arc<PersonaCard>,
+        npcs: &HashMap<String, NpcCard>,
     ) -> QuantifierResult {
         let mut result = QuantifierResult::default();
 
+        let current_room = map
+            .get_room_by_id(&state.movement.current_room_id)
+            .or_else(|| {
+                state
+                    .movement
+                    .dynamic_rooms
+                    .get(&state.movement.current_room_id)
+            });
         let agent_ctx = AgentContext {
             state,
             main_response: Some(main_response),
             player_input,
-            current_room: state.current_room(),
+            current_room,
+            map,
+            persona,
+            npcs,
         };
 
         let patches: Vec<_> = self
@@ -216,8 +299,10 @@ impl<'a> PipelineRun<'a> {
         &self,
         state: GameState,
         trigger: &StoredTriggerContext,
+        map: &Arc<MapDef>,
+        npcs: &HashMap<String, NpcCard>,
     ) -> PipelineResult<(GameState, String)> {
-        self.map_cancelled(self.phase_trigger_continuation_llm_call(state, trigger))
+        self.map_cancelled(self.phase_trigger_continuation_llm_call(state, trigger, map, npcs))
     }
 
     pub(super) fn map_cancelled<T>(&self, result: PipelineResult<T>) -> PipelineResult<T> {

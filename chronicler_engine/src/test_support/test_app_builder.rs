@@ -112,25 +112,17 @@ impl TestAppBuilder {
         build_router(app_state)
     }
 
-    /// Build router and return the underlying service for tests that need to
-    /// observe post-handler state (e.g., wait for the spawned pipeline to
-    /// finalize via `is_generating`).
     pub fn build_with_service(self) -> (Router, Arc<DefaultApplicationService>) {
         let app_state = self.build_app_state();
         let service = Arc::clone(&app_state.application_service);
         (build_router(app_state), service)
     }
 
-    /// Build without HTTP router. Returns the application service directly
-    /// for non-HTTP integration tests.
     pub fn build_service(self) -> Arc<DefaultApplicationService> {
         let app_state = self.build_app_state();
         Arc::clone(&app_state.application_service)
     }
 
-    /// Build a sibling application service that shares storage, settings,
-    /// shutdown token, and `is_generating` flag with `base`, but installs a
-    /// different `game_service`.
     pub fn from_base(
         base: &DefaultApplicationService,
         game_service: Arc<GameService>,
@@ -168,18 +160,14 @@ impl TestAppBuilder {
             .map(|r| r.id.clone())
             .unwrap_or_else(|| "room_1".to_string());
 
-        let mut state = GameState::new(
-            Arc::clone(&test_data.world),
-            Arc::clone(&test_data.map),
-            Arc::clone(&test_data.persona),
-            test_data.npcs.clone(),
-            starting_room,
-        );
+        let mut state = GameState::new(starting_room);
 
-        for npc_id in &test_data.room_npcs {
-            if let Some(npc) = state.npcs.get(npc_id).cloned() {
-                state.scene.npcs_in_area.push(npc);
-            }
+        for npc in test_data
+            .npcs
+            .iter()
+            .filter(|n| test_data.room_npcs.contains(&n.id))
+        {
+            state.scene.npcs_in_area.push(npc.clone());
         }
 
         if let Some(trigger) = self.last_trigger {
