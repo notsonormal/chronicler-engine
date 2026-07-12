@@ -98,7 +98,16 @@ impl<'a> PipelineRun<'a> {
         mut state: GameState,
         inputs: &PipelineInputs,
     ) -> PipelineResult<(GameState, String, String, String)> {
-        let Some(room) = inputs.map.get_room_by_id(&state.movement.current_room_id) else {
+        let Some(room) = inputs
+            .map
+            .get_room_by_id(&state.movement.current_room_id)
+            .or_else(|| {
+                state
+                    .movement
+                    .dynamic_rooms
+                    .get(&state.movement.current_room_id)
+            })
+        else {
             return self.error_return(state, "Room not found".to_string());
         };
         let history = state.narrative.history();
@@ -425,7 +434,6 @@ impl ActionPipeline {
         state: &GameState,
         narration_text: &str,
         quantifier_result: &QuantifierResult,
-        world: &Arc<WorldCard>,
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
         npcs: &HashMap<String, NpcCard>,
@@ -436,7 +444,6 @@ impl ActionPipeline {
                 narration_text,
                 quantifier_result,
             },
-            world,
             map,
             persona,
             npcs,

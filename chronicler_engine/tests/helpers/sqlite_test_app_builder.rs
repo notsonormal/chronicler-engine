@@ -220,7 +220,9 @@ impl SqliteTestAppBuilder {
         }
 
         let snapshot = GameStateSnapshot::from_game_state(&state);
-        let pre_main_id = storage.save_snapshot(&snapshot).unwrap_or(0);
+        let pre_main_id = storage
+            .save_snapshot(&snapshot)
+            .expect("snapshot save must succeed in test builder");
 
         let mut messages: Vec<_> = state.narrative.history.iter().cloned().collect();
         for msg in messages.iter_mut() {

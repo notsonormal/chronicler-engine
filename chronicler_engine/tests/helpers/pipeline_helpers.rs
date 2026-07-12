@@ -5,11 +5,7 @@
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 
-pub fn create_test_state_with_map() -> GameState {
-    GameState::new("room1".to_string())
-}
-
-pub fn create_test_state_with_trigger_npc() -> GameState {
+pub fn create_minimal_test_state() -> GameState {
     GameState::new("room1".to_string())
 }
 

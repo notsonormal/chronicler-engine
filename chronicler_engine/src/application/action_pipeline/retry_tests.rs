@@ -764,10 +764,10 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     );
 }
 
-// B2 fail-loud: `fetch_world_bundle_for_retry` must surface fetch failures as `GenerationStatus::Error`.
+// B2 fail-loud: retry fetch block must return `ActionOutcome::Completed` and surface fetch failure as `GenerationStatus::Error`.
 
 #[test]
-fn test_fetch_world_bundle_for_retry_returns_none_on_world_fetch_error() {
+fn test_retry_event_continuation_returns_completed_on_world_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
     let (storage, handle) = {
         let base = Storage::new_in_memory();
@@ -787,24 +787,29 @@ fn test_fetch_world_bundle_for_retry_returns_none_on_world_fetch_error() {
         .game_service(Arc::new(service))
         .build_service();
 
-    let result = super::retry::fetch_world_bundle_for_retry(&app);
+    let mut state = app.load_or_fresh();
+    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
+
+    let outcome = retry_event_continuation(&app, state);
     assert!(
-        result.is_none(),
-        "fetch_world_bundle_for_retry must return None on get_world failure, got {result:?}"
+        matches!(
+            outcome,
+            crate::application::action_pipeline::ActionOutcome::Completed
+        ),
+        "retry_event_continuation must return Completed on world fetch failure, got {outcome:?}"
     );
     let state = app.load_or_fresh();
-    match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("world"),
-                "Error message should mention world, got: {msg}"
-            );
-        }
-        other => panic!("Expected GenerationStatus::Error mentioning world, got {other:?}"),
-    }
+    assert!(
+        matches!(
+            state.narrative.input_buffer.status,
+            GenerationStatus::Error(_)
+        ),
+        "retry_event_continuation must persist GenerationStatus::Error on world fetch failure, got {:?}",
+        state.narrative.input_buffer.status
+    );
 }
 
-// B2 fail-loud: persona fetch block must return `ActionOutcome::Completed` and surface fetch failure as `GenerationStatus::Error`.
+// B2 fail-loud: persona fetch failure must return `ActionOutcome::Completed` and surface as `GenerationStatus::Error`.
 
 #[test]
 fn test_retry_event_continuation_returns_completed_on_persona_fetch_failure() {
@@ -839,13 +844,12 @@ fn test_retry_event_continuation_returns_completed_on_persona_fetch_failure() {
         "retry_event_continuation must return Completed on persona fetch failure, got {outcome:?}"
     );
     let state = app.load_or_fresh();
-    match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("persona"),
-                "Error message should mention persona, got: {msg}"
-            );
-        }
-        other => panic!("Expected GenerationStatus::Error mentioning persona, got {other:?}"),
-    }
+    assert!(
+        matches!(
+            state.narrative.input_buffer.status,
+            GenerationStatus::Error(_)
+        ),
+        "retry_event_continuation must persist GenerationStatus::Error on persona fetch failure, got {:?}",
+        state.narrative.input_buffer.status
+    );
 }

@@ -15,7 +15,7 @@ use chronicler_engine::{TestAppBuilder, TestDataBuilder};
 
 use crate::make_test_recorder_with_storage;
 use crate::pipeline_helpers::{
-    add_input_and_save, create_test_state_with_map, latest_snapshot, latest_state, save_state,
+    add_input_and_save, create_minimal_test_state, latest_snapshot, latest_state, save_state,
     wait_for_generation_complete,
 };
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
@@ -31,7 +31,7 @@ fn base_data(npcs: Vec<NpcCard>) -> chronicler_engine::test_support::TestData {
 
 #[test]
 fn test_retry_main_narration_applies_new_quantifier_result() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
@@ -93,7 +93,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
 
 #[test]
 fn test_retry_with_different_narration_text_reruns_quantifier() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
@@ -157,7 +157,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 
 #[test]
 fn test_double_retry_increments_swipe_and_reruns_quantifier() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
@@ -213,7 +213,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
 
 #[test]
 fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
@@ -265,7 +265,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
 
 #[test]
 fn test_retry_after_edited_input_uses_new_text() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
@@ -340,7 +340,7 @@ fn test_retry_after_edited_input_uses_new_text() {
 
 #[test]
 fn test_main_retry_reevaluates_triggers() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let shopkeeper = NpcCard {
         id: "shopkeeper".into(),
@@ -429,7 +429,7 @@ fn test_main_retry_reevaluates_triggers() {
 
 #[test]
 fn test_retry_completes_when_quantifier_returns_none() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
@@ -473,7 +473,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
 
 #[test]
 fn test_retry_no_pre_main_snapshot() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
 
     let db_pool =
@@ -584,7 +584,7 @@ fn test_retry_no_pre_main_snapshot() {
 
 #[test]
 fn test_movement_with_arrival_narration_retry() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
@@ -649,7 +649,7 @@ fn test_movement_with_arrival_narration_retry() {
 
 #[test]
 fn test_retry_appends_swipe_to_existing_narration() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)

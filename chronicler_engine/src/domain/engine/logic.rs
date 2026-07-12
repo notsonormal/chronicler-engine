@@ -7,16 +7,8 @@ use crate::error::{EngineError, Result};
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::state::game_state::GameState;
 
-pub fn find_room_in_map<'a>(map: &'a MapDef, target_id: &str) -> Option<&'a Room> {
-    map.get_room_by_id(target_id)
-}
-
-pub fn find_room_in_world_map<'a>(map: &'a MapDef, target_id: &str) -> Option<&'a Room> {
-    map.get_room_by_id(target_id)
-}
-
 pub fn attempt_semantic_walk(state: &mut GameState, map: &MapDef, room_id: &str) -> Result<String> {
-    let room_name = if let Some(room) = find_room_in_world_map(map, room_id) {
+    let room_name = if let Some(room) = map.get_room_by_id(room_id) {
         room.name.clone()
     } else if let Some(room) = state.movement.dynamic_rooms.get(room_id) {
         room.name.clone()

@@ -20,10 +20,10 @@ pub fn inject_scenario_logs(
         return;
     }
 
-    let room_name =
-        crate::domain::engine::logic::find_room_in_world_map(map, &scenario.starting_room_id)
-            .map(|r| r.name.clone())
-            .unwrap_or_else(|| scenario.starting_room_id.clone());
+    let room_name = map
+        .get_room_by_id(&scenario.starting_room_id)
+        .map(|r| r.name.clone())
+        .unwrap_or_else(|| scenario.starting_room_id.clone());
 
     state.narrative.pending_location = Some(room_name);
     let text = render_template(&scenario.text, &TemplateVars::new(&player.sheet.name));

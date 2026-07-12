@@ -16,7 +16,6 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::template::{render_template, TemplateVars};
-use crate::domain::model::world::WorldCard;
 pub struct FreeActionContext<'a> {
     pub narration_text: &'a str,
     pub quantifier_result: &'a QuantifierResult,
@@ -66,7 +65,6 @@ pub fn update_npc_encounters_on_room_change(
     mut state: GameState,
     previous_room_id: &str,
     new_npc_ids: &[String],
-    _map: &MapDef,
 ) -> GameState {
     if previous_room_id != state.movement.current_room_id {
         for npc_id in new_npc_ids {
@@ -76,11 +74,7 @@ pub fn update_npc_encounters_on_room_change(
     state
 }
 
-pub fn log_movement_completion(
-    state: GameState,
-    map: &MapDef,
-    _npcs: &HashMap<String, NpcCard>,
-) -> GameState {
+pub fn log_movement_completion(state: GameState, map: &MapDef) -> GameState {
     let mut state = state;
     let room = map
         .get_room_by_id(&state.movement.current_room_id)
@@ -110,9 +104,8 @@ pub fn handle_movement(
     let previous_room_id = state.movement.current_room_id.clone();
 
     let state = attempt_movement(state, destination, map.as_ref())?;
-    let state =
-        update_npc_encounters_on_room_change(state, &previous_room_id, new_npc_ids, map.as_ref());
-    let state = log_movement_completion(state, map.as_ref(), npcs);
+    let state = update_npc_encounters_on_room_change(state, &previous_room_id, new_npc_ids);
+    let state = log_movement_completion(state, map.as_ref());
 
     assert_state_consistency(&state, map, npcs)?;
     Ok(state)
@@ -172,7 +165,6 @@ pub fn commit_trigger_narration(
 pub fn execute_freeaction_impl(
     state: &GameState,
     ctx: &FreeActionContext<'_>,
-    _world: &Arc<WorldCard>,
     map: &Arc<MapDef>,
     persona: &Arc<PersonaCard>,
     npcs: &HashMap<String, NpcCard>,

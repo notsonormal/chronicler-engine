@@ -7,11 +7,14 @@ use std::sync::Arc;
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::ActionOutcome;
 use crate::application::application_service::DefaultApplicationService;
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
+use crate::error::internal_error;
+
+use crate::EngineError;
 
 #[instrument(skip(app))]
 pub fn retry_last_response_impl(app: &DefaultApplicationService) {
@@ -103,53 +106,6 @@ pub(crate) fn save_retry_error(app: &DefaultApplicationService, message: impl In
     }
 }
 
-/// Side effect: persists error state on fetch failure (callers early-return `ActionOutcome::Completed`).
-pub(crate) fn fetch_world_bundle_for_retry(
-    app: &DefaultApplicationService,
-) -> Option<(Arc<MapDef>, HashMap<String, NpcCard>)> {
-    let game_id = app.storage().current_game_id();
-    let game = match app.storage().get_game(game_id) {
-        Ok(Some(g)) => g,
-        Ok(None) => {
-            tracing::error!("No game found for current_game_id {game_id}");
-            save_retry_error(app, format!("Retry failed: no game for id {game_id}"));
-            return None;
-        }
-        Err(e) => {
-            tracing::error!("Failed to load game: {e}");
-            save_retry_error(app, format!("Retry failed: {e}"));
-            return None;
-        }
-    };
-    let world_with_map = match app.storage().get_world(&game.world_key) {
-        Ok(Some(w)) => w,
-        Ok(None) => {
-            tracing::error!("World '{}' not found", game.world_key);
-            save_retry_error(
-                app,
-                format!("Retry failed: world '{}' not found", game.world_key),
-            );
-            return None;
-        }
-        Err(e) => {
-            tracing::error!("Failed to load world '{}': {e}", game.world_key);
-            save_retry_error(app, format!("Retry failed: {e}"));
-            return None;
-        }
-    };
-    let chars = match app.storage().list_characters(world_with_map.world_id) {
-        Ok(list) => list,
-        Err(e) => {
-            tracing::error!("Failed to list characters: {e}");
-            save_retry_error(app, format!("Retry failed: {e}"));
-            return None;
-        }
-    };
-    let npcs_map: HashMap<String, NpcCard> = chars.into_iter().map(|n| (n.id.clone(), n)).collect();
-    let map: Arc<MapDef> = Arc::new(world_with_map.map);
-    Some((map, npcs_map))
-}
-
 pub(crate) fn retry_event_continuation(
     app: &DefaultApplicationService,
     state: GameState,
@@ -163,40 +119,34 @@ pub(crate) fn retry_event_continuation(
         Some((_sender, text)) => text,
         None => String::new(),
     };
-    let (map, npcs_map) = match fetch_world_bundle_for_retry(app) {
-        Some(bundle) => bundle,
-        None => return ActionOutcome::Completed,
-    };
-    let persona: Arc<crate::domain::model::character::PersonaCard> = {
-        let game_id = app.current_game_id();
-        let game = match app.storage().get_game(game_id) {
-            Ok(Some(g)) => g,
-            Ok(None) => {
-                tracing::error!("No game found for current_game_id {game_id}");
-                save_retry_error(app, format!("Retry failed: no game for id {game_id}"));
-                return ActionOutcome::Completed;
-            }
-            Err(e) => {
-                tracing::error!("Failed to load game: {e}");
-                save_retry_error(app, format!("Retry failed: {e}"));
-                return ActionOutcome::Completed;
-            }
-        };
-        match app.storage().get_persona(&game.persona_key) {
-            Ok(Some(p)) => Arc::new(p),
-            Ok(None) => {
-                tracing::error!("Persona '{}' not found", game.persona_key);
-                save_retry_error(
-                    app,
-                    format!("Retry failed: persona '{}' not found", game.persona_key),
-                );
-                return ActionOutcome::Completed;
-            }
-            Err(e) => {
-                tracing::error!("Failed to load persona '{}': {e}", game.persona_key);
-                save_retry_error(app, format!("Retry failed: {e}"));
-                return ActionOutcome::Completed;
-            }
+    let (map, npcs_map, persona) = match (|| {
+        let game_id = app.storage().current_game_id();
+        let game = app.storage().get_game(game_id)?.ok_or_else(|| {
+            EngineError::Internal(internal_error(format!("no game for id {game_id}")))
+        })?;
+        let world_with_map = app
+            .storage()
+            .get_world(&game.world_key)?
+            .ok_or_else(|| EngineError::WorldNotFound(game.world_key.clone()))?;
+        let persona: Arc<PersonaCard> = app
+            .storage()
+            .get_persona(&game.persona_key)?
+            .ok_or_else(|| EngineError::NpcNotFound(game.persona_key.clone()))
+            .map(Arc::new)?;
+        let npcs_map: HashMap<String, NpcCard> = app
+            .storage()
+            .list_characters(world_with_map.world_id)?
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
+        let map: Arc<MapDef> = Arc::new(world_with_map.map);
+        Ok::<_, EngineError>((map, npcs_map, persona))
+    })() {
+        Ok(bundle) => bundle,
+        Err(e) => {
+            tracing::error!("Retry fetch failed: {e}");
+            save_retry_error(app, e.to_string());
+            return ActionOutcome::Completed;
         }
     };
     let pipeline = app.game_service().pipeline();

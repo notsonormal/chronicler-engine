@@ -15,7 +15,7 @@ use chronicler_engine::test_support::{
     make_test_recorder_with_storage, seed_test_world_into_storage, TestDataBuilder,
 };
 
-use crate::pipeline_helpers::{create_test_state_with_map, latest_state};
+use crate::pipeline_helpers::{create_minimal_test_state, latest_state};
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 
 #[test]
@@ -132,7 +132,7 @@ fn test_arrival_narration_survives_reload() {
 
 #[test]
 fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
-    let state = create_test_state_with_map();
+    let state = create_minimal_test_state();
 
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing_storage = Arc::new(failing_storage);
@@ -212,7 +212,7 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
 
 #[test]
 fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
-    let state = create_test_state_with_map();
+    let state = create_minimal_test_state();
 
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing_storage = Arc::new(failing_storage);

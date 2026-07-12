@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-11 20:53 UTC*
+*Index last generated: 2026-07-12 00:09 UTC*
 
 ### `docs/adr/`
 
@@ -89,6 +89,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [Super-Plan: `simpler-hexagon` Pre-Merge Cleanup](./plans/simpler-hexagon-pre-merge-superplan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
+- [Storage `require_*` Helpers](./plans/storage-require-helpers.md)
 - [Subplan B: Quantifier `destination` field split](./plans/subplan-b-quantifier-field-split.md)
 - [Subplan C: Atomic mapless enablement](./plans/subplan-c-mapless-enablement.md)
 - [T1: Error Model Unification](./plans/t1-error-model-unification.md)

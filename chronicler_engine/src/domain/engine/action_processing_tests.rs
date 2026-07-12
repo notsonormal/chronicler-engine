@@ -15,11 +15,9 @@ use crate::domain::model::quantifier::{
 };
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::world::WorldCard;
-use crate::test_support::{TestGameState, TestMap, TestNpc, TestPersona, TestWorld};
+use crate::test_support::{TestGameState, TestMap, TestNpc, TestPersona};
 
 struct EngineDeps {
-    world: Arc<WorldCard>,
     map: Arc<MapDef>,
     persona: Arc<PersonaCard>,
     npcs: HashMap<String, NpcCard>,
@@ -27,7 +25,6 @@ struct EngineDeps {
 
 fn engine_deps(map: MapDef, npcs: Vec<NpcCard>) -> EngineDeps {
     EngineDeps {
-        world: Arc::new(TestWorld::minimal()),
         map: Arc::new(map),
         persona: Arc::new(TestPersona::standard()),
         npcs: npcs.into_iter().map(|npc| (npc.id.clone(), npc)).collect(),
@@ -107,7 +104,6 @@ fn test_execute_freeaction_impl_no_movement() {
             narration_text: "You examine the room.",
             quantifier_result: &make_quantifier_result_no_movement(),
         },
-        &deps.world,
         &deps.map,
         &deps.persona,
         &deps.npcs,
@@ -139,7 +135,6 @@ fn test_execute_freeaction_impl_with_movement() {
             narration_text: "You walk to the tavern.",
             quantifier_result: &make_quantifier_result_with_movement("nonexistent_room"),
         },
-        &deps.world,
         &deps.map,
         &deps.persona,
         &deps.npcs,
@@ -174,7 +169,6 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
             narration_text: "You look around.",
             quantifier_result: &make_quantifier_result_no_movement(),
         },
-        &deps.world,
         &deps.map,
         &deps.persona,
         &deps.npcs,
@@ -198,7 +192,6 @@ fn test_execute_freeaction_impl_npc_events_entered() {
             narration_text: "You see Carla.",
             quantifier_result: &make_quantifier_result_no_movement(),
         },
-        &deps.world,
         &deps.map,
         &deps.persona,
         &deps.npcs,
@@ -374,7 +367,6 @@ fn test_trigger_split_architecture_produces_event_header() {
             narration_text: "You enter the room.",
             quantifier_result: &make_quantifier_result_no_movement(),
         },
-        &deps.world,
         &deps.map,
         &deps.persona,
         &deps.npcs,
@@ -611,7 +603,6 @@ proptest! {
                 narration_text: "You do something.",
                 quantifier_result: &quantifier_result,
             },
-            &deps.world,
             &deps.map,
             &deps.persona,
             &deps.npcs,

@@ -13,12 +13,14 @@ use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::domain::model::world::WorldCard;
 
 use crate::application::narrative_prompt::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::agents::registry::AgentRegistry;
 use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
+use crate::error::internal_error;
+
+use crate::EngineError;
 
 pub struct ActionPipeline {
     pub(super) assembler: Arc<PromptAssembler>,
@@ -34,49 +36,7 @@ pub enum ActionOutcome {
 
 pub(super) type PipelineResult<T> = Result<T, ActionOutcome>;
 
-type WorldBundle = (
-    Arc<WorldCard>,
-    Arc<MapDef>,
-    Arc<PersonaCard>,
-    HashMap<String, NpcCard>,
-);
-
 impl ActionPipeline {
-    fn fetch_world_bundle(
-        app: &DefaultApplicationService,
-        game_id: u64,
-    ) -> Result<WorldBundle, String> {
-        let game = app
-            .storage()
-            .get_game(game_id)
-            .map_err(|e| format!("storage error loading game {game_id}: {e}"))?
-            .ok_or_else(|| format!("current_game_id {game_id} not found"))?;
-        let world_with_map = app
-            .storage()
-            .get_world(&game.world_key)
-            .map_err(|e| format!("storage error loading world '{}': {e}", game.world_key))?
-            .ok_or_else(|| format!("world key '{}' not found", game.world_key))?;
-        let persona_card = app
-            .storage()
-            .get_persona(&game.persona_key)
-            .map_err(|e| format!("storage error loading persona '{}': {e}", game.persona_key))?
-            .ok_or_else(|| format!("persona key '{}' not found", game.persona_key))?;
-        let world: Arc<WorldCard> = Arc::new(world_with_map.world_card);
-        let map: Arc<MapDef> = Arc::new(world_with_map.map);
-        let persona: Arc<PersonaCard> = Arc::new(persona_card);
-        let chars = app
-            .storage()
-            .list_characters(world_with_map.world_id)
-            .map_err(|e| {
-                format!(
-                    "storage error listing characters for world {}: {e}",
-                    world_with_map.world_id
-                )
-            })?;
-        let npcs: HashMap<String, NpcCard> = chars.into_iter().map(|n| (n.id.clone(), n)).collect();
-        Ok((world, map, persona, npcs))
-    }
-
     pub fn new(
         assembler: Arc<PromptAssembler>,
         recorder: Arc<LlmCallRecorder>,
@@ -99,11 +59,37 @@ impl ActionPipeline {
         let started_for = app.current_game_id();
         let run = PipelineRun::new(self, app, started_for);
 
-        let (world, map, persona, npcs) = match Self::fetch_world_bundle(app, started_for) {
+        let (world, map, persona, npcs) = match (|| {
+            let game = app.storage().get_game(started_for)?.ok_or_else(|| {
+                EngineError::Internal(internal_error(format!(
+                    "current_game_id {started_for} not found"
+                )))
+            })?;
+            let world_with_map = app
+                .storage()
+                .get_world(&game.world_key)?
+                .ok_or_else(|| EngineError::WorldNotFound(game.world_key.clone()))?;
+            let persona_card = app
+                .storage()
+                .get_persona(&game.persona_key)?
+                .ok_or_else(|| EngineError::NpcNotFound(game.persona_key.clone()))?;
+            let npcs: HashMap<String, NpcCard> = app
+                .storage()
+                .list_characters(world_with_map.world_id)?
+                .into_iter()
+                .map(|n| (n.id.clone(), n))
+                .collect();
+            Ok::<_, EngineError>((
+                Arc::new(world_with_map.world_card),
+                Arc::new(world_with_map.map),
+                Arc::new(persona_card),
+                npcs,
+            ))
+        })() {
             Ok(bundle) => bundle,
-            Err(msg) => {
-                tracing::error!("run_from_input: {msg}");
-                state.narrative.input_buffer.status = GenerationStatus::Error(msg);
+            Err(e) => {
+                tracing::error!("run_from_input: {e}");
+                state.narrative.input_buffer.status = GenerationStatus::Error(e.to_string());
                 run.phase_finalize(&mut state);
                 return Ok(());
             }
@@ -146,7 +132,6 @@ impl ActionPipeline {
             &state,
             &narration_text,
             &quantifier_result,
-            &world,
             &map,
             &persona,
             &npcs,

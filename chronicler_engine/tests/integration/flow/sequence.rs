@@ -10,7 +10,7 @@ use chronicler_engine::TestDataBuilder;
 use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 
 use crate::pipeline_helpers::{
-    add_input_and_save, create_test_state_with_map, latest_state, save_state,
+    add_input_and_save, create_minimal_test_state, latest_state, save_state,
     wait_for_generation_complete,
 };
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
@@ -26,7 +26,7 @@ fn base_data() -> chronicler_engine::test_support::TestData {
 
 #[test]
 fn test_sequential_execute_retry_execute() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
@@ -92,7 +92,7 @@ fn test_sequential_execute_retry_execute() {
 
 #[test]
 fn test_sequential_execute_delete_execute() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
@@ -152,7 +152,7 @@ fn test_sequential_execute_delete_execute() {
 
 #[test]
 fn test_async_action_sequence_then_retry() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
@@ -192,7 +192,7 @@ fn test_async_action_sequence_then_retry() {
 
 #[test]
 fn test_three_actions_in_sequence() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
@@ -241,7 +241,7 @@ fn test_three_actions_in_sequence() {
 
 #[test]
 fn test_delete_input_then_retry_fails_gracefully() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let state_for_app1 = state.clone();
     let data1 = base_data();
@@ -287,7 +287,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
 #[test]
 fn test_reset_clears_history_and_state() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let state_for_app1 = state.clone();
     let data1 = base_data();
@@ -324,7 +324,7 @@ fn test_reset_clears_history_and_state() {
     assert_eq!(guard.movement.current_room_id, "room2");
     assert!(!guard.narrative.history().is_empty());
 
-    let fresh_state = create_test_state_with_map();
+    let fresh_state = create_minimal_test_state();
     save_state(&app2, &fresh_state);
 
     let guard = latest_state(&app2);
@@ -340,7 +340,7 @@ fn test_reset_clears_history_and_state() {
 
 #[test]
 fn test_reset_then_execute_works() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
@@ -361,7 +361,7 @@ fn test_reset_then_execute_works() {
     execute_action_impl(&app, "examine room".to_string());
     assert!(wait_for_generation_complete(&app, 1000));
 
-    let fresh_state = create_test_state_with_map();
+    let fresh_state = create_minimal_test_state();
     save_state(&app, &fresh_state);
 
     add_input_and_save(&app, "look around");
@@ -387,7 +387,7 @@ fn test_reset_then_execute_works() {
 
 #[test]
 fn test_delete_mid_sequence() {
-    let mut state = create_test_state_with_map();
+    let mut state = create_minimal_test_state();
     state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)

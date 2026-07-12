@@ -200,103 +200,6 @@ pub fn create_test_state() -> GameState {
     )
 }
 
-pub fn create_test_game_state() -> Arc<std::sync::Mutex<GameState>> {
-    Arc::new(std::sync::Mutex::new(GameState::new("room1")))
-}
-
-pub fn create_navigation_test_map() -> MapDef {
-    let mut entrance_exits = HashMap::new();
-    entrance_exits.insert(Direction::North, "hall".to_string());
-
-    let mut hall_exits = HashMap::new();
-    hall_exits.insert(Direction::South, "entrance".to_string());
-    hall_exits.insert(Direction::East, "kitchen".to_string());
-    hall_exits.insert(Direction::West, "library".to_string());
-
-    let kitchen_exits = HashMap::new();
-    let library_exits = HashMap::new();
-
-    let entrance = Room {
-        id: "entrance".to_string(),
-        name: "Mansion Entrance".to_string(),
-        description: "A grand entrance to the mansion.".to_string(),
-        exits: entrance_exits,
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
-
-    let hall = Room {
-        id: "hall".to_string(),
-        name: "Main Hall".to_string(),
-        description: "A spacious hall with marble floors.".to_string(),
-        exits: hall_exits,
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
-
-    let kitchen = Room {
-        id: "kitchen".to_string(),
-        name: "Kitchen".to_string(),
-        description: "A busy kitchen with delicious smells.".to_string(),
-        exits: kitchen_exits,
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
-
-    let library = Room {
-        id: "library".to_string(),
-        name: "Library".to_string(),
-        description: "Rows of ancient books line the walls.".to_string(),
-        exits: library_exits,
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
-
-    let region = Region {
-        id: "mansion".to_string(),
-        name: "Mansion".to_string(),
-        rooms: vec![entrance, hall, kitchen, library],
-    };
-
-    let overworld = Overworld {
-        id: "overworld".to_string(),
-        name: "Mansion".to_string(),
-        regions: vec![region],
-    };
-
-    MapDef { overworld }
-}
-
-pub fn create_simple_test_map() -> MapDef {
-    let room = Room {
-        id: "start".to_string(),
-        name: "Start Room".to_string(),
-        description: "A simple test room.".to_string(),
-        exits: HashMap::new(),
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
-
-    let region = Region {
-        id: "test".to_string(),
-        name: "Test Area".to_string(),
-        rooms: vec![room],
-    };
-
-    let overworld = Overworld {
-        id: "test_world".to_string(),
-        name: "Test World".to_string(),
-        regions: vec![region],
-    };
-
-    MapDef { overworld }
-}
-
 pub fn create_test_world_with_scenario() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
@@ -312,14 +215,6 @@ pub fn create_test_world_with_scenario() -> WorldCard {
         }],
         ..Default::default()
     }
-}
-
-pub fn create_basic_test_state() -> GameState {
-    GameState::new("room1")
-}
-
-pub fn create_basic_test_state_no_scenario() -> GameState {
-    GameState::new("room1")
 }
 
 pub fn seed_test_world(storage: &Storage) {

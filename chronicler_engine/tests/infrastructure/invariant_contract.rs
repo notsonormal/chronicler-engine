@@ -35,7 +35,7 @@ mod pipeline_helpers;
 #[path = "../helpers/sqlite_test_app_builder.rs"]
 mod sqlite_test_app_builder;
 
-use pipeline_helpers::{create_test_state_with_trigger_npc, latest_state};
+use pipeline_helpers::{create_minimal_test_state, latest_state};
 use fixtures::create_test_state;
 
 fn shopkeeper_npc() -> NpcCard {
@@ -115,7 +115,7 @@ fn test_inv001_generation_guard_resets_on_panic() {
 }
 #[test]
 fn test_inv002_state_mutation_order() {
-    let mut state = create_test_state_with_trigger_npc();
+    let mut state = create_minimal_test_state();
     let npc_id = "shopkeeper";
 
     state.add_message(
@@ -138,7 +138,6 @@ fn test_inv002_state_mutation_order() {
         movement: MovementParseResult::default(),
     };
 
-    let world = Arc::new(fixtures::create_test_world());
     let map = Arc::new(fixtures::create_test_map());
     let player = Arc::new(fixtures::create_test_player());
     let npcs = npc_map(vec![shopkeeper_npc()]);
@@ -149,7 +148,6 @@ fn test_inv002_state_mutation_order() {
             narration_text: "You look around the shop.",
             quantifier_result: &quantifier,
         },
-        &world,
         &map,
         &player,
         &npcs,
@@ -176,7 +174,7 @@ fn test_inv002_state_mutation_order() {
 }
 #[test]
 fn test_inv002_violation_demo() {
-    let state = create_test_state_with_trigger_npc();
+    let state = create_minimal_test_state();
     let npc_id = "shopkeeper";
     assert_eq!(
         state.npc_encounter_log.get_times_met(npc_id),
@@ -327,7 +325,6 @@ fn test_inv005_handle_movement_runs_before_narration() {
     };
     use std::sync::Arc;
 
-    let world = Arc::new(fixtures::create_test_world());
     let map = Arc::new(fixtures::create_test_map());
     let player = Arc::new(fixtures::create_test_player());
     let npcs = HashMap::new();
@@ -353,7 +350,6 @@ fn test_inv005_handle_movement_runs_before_narration() {
             narration_text: "I walk north.",
             quantifier_result: &quantifier,
         },
-        &world,
         &map,
         &player,
         &npcs,
@@ -418,7 +414,7 @@ fn test_inv002_mutation_order_property() {
     use proptest::prelude::*;
 
     proptest!(|(narration_text in r"[^\s]{10,100}", has_npc in any::<bool>())| {
-        let mut state = create_test_state_with_trigger_npc();
+        let mut state = create_minimal_test_state();
         let npc_id = "shopkeeper";
         state.add_message(narration_text.clone(), None, MessageType::Narration);
         let npc_ids = if has_npc { vec![npc_id.to_string()] } else { vec![] };
@@ -431,7 +427,6 @@ fn test_inv002_mutation_order_property() {
             movement: MovementParseResult::default(),
         };
 
-        let world = Arc::new(fixtures::create_test_world());
         let map = Arc::new(fixtures::create_test_map());
         let player = Arc::new(fixtures::create_test_player());
         let npcs = npc_map(vec![shopkeeper_npc()]);
@@ -441,7 +436,6 @@ fn test_inv002_mutation_order_property() {
                 narration_text: &narration_text,
                 quantifier_result: &quantifier,
             },
-            &world,
             &map,
             &player,
             &npcs,

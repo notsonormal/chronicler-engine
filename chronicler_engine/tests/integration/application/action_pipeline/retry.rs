@@ -4,9 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     fixtures::create_test_state,
-    pipeline_helpers::{
-        create_test_state_with_trigger_npc, latest_state, wait_for_generation_complete,
-    },
+    pipeline_helpers::{create_minimal_test_state, latest_state, wait_for_generation_complete},
     sqlite_test_app_builder::SqliteTestAppBuilder,
 };
 use chronicler_engine::test_support::TestData;
@@ -291,7 +289,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
     let data = trigger_data();
 
     let state_for_closure = {
-        let mut s = create_test_state_with_trigger_npc();
+        let mut s = create_minimal_test_state();
         s.narrative.history.clear();
         s.add_message(
             "look around".to_string(),

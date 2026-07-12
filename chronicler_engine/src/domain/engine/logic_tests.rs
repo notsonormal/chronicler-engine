@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::engine::logic::{attempt_semantic_walk, create_dynamic_room, find_room_in_world_map};
+use crate::domain::engine::logic::{attempt_semantic_walk, create_dynamic_room};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::state::game_state::GameState;
 
@@ -65,20 +65,6 @@ fn setup_test_state() -> (GameState, Arc<MapDef>) {
 }
 
 #[test]
-fn test_get_room_by_id_missing() {
-    let (_state, map) = setup_test_state();
-    let res = find_room_in_world_map(&map, "phantom_room");
-    assert!(res.is_none());
-}
-
-#[test]
-fn test_attempt_walk_dangling_exit() {
-    let (_state, map) = setup_test_state();
-    let res = find_room_in_world_map(&map, "non_existent_id");
-    assert!(res.is_none());
-}
-
-#[test]
 fn test_current_room_success() {
     let (state, map) = setup_test_state();
     let result = map
@@ -126,14 +112,6 @@ fn test_get_current_room_failure() {
                 .get(&state.movement.current_room_id)
         });
     assert!(result.is_none());
-}
-
-#[test]
-fn test_get_room_by_id_existing() {
-    let (_state, map) = setup_test_state();
-    let room = find_room_in_world_map(&map, "room1");
-    assert!(room.is_some());
-    assert_eq!(room.unwrap().name, "Grand Hall");
 }
 
 #[test]
