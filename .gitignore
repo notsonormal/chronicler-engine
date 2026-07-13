@@ -258,8 +258,4 @@ chronicler_engine/.pi/tasks/
 # Project-level plan-mode defaults (extension is generic; values live per-project).
 !.pi/plan-mode.json
 context.md
-graphify-out/cache/
-.gitignore
-graphify-out/cost.json
-graphify-out/.rebuild.lock
-graphify-out/2026*
+graphify-out/
