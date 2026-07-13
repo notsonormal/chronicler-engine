@@ -4,16 +4,16 @@
     "path": {
       "/mnt/*": "deny",
       "*.env": "deny",
-     "*.env.*": "deny",
-     "*.env.example": "allow"      
+      "*.env.*": "deny",
+      "*.env.example": "allow"      
     },
    "write": {
-     "*": "allow",
-     ".pi/extensions/pi-permission-system/config.json": "deny"
+      "*": "allow",
+      ".pi/extensions/pi-permission-system/config.json": "deny"
    },
    "edit": {
-     "*": "allow",
-     ".pi/extensions/pi-permission-system/config.json": "deny"
+      "*": "allow",
+      ".pi/extensions/pi-permission-system/config.json": "deny"
    },
     "bash": {
       "*": "allow",
