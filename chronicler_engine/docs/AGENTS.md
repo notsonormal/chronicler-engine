@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-13 22:17 UTC*
+*Index last generated: 2026-07-13 23:08 UTC*
 
 ### `docs/adr/`
 
@@ -88,6 +88,8 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [P4-Concurrent Cleanup — Fix TOCTOU + Simplify heal](./plans/p4-concurrent-cleanup-fix-toctou-simplify-heal.md)
 - [Plan: Eliminate Free-Function Smells (Final)](./plans/plan-eliminate-free-function-smells-final.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
+- [Remove Dev Container Infrastructure](./plans/remove-dev-container-infrastructure.md)
+- [Remove Dev Container Infrastructure](./plans/remove-devcontainers.md)
 - [Super-Plan: `simpler-hexagon` Pre-Merge Cleanup](./plans/simpler-hexagon-pre-merge-superplan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Subplan B: Quantifier `destination` field split](./plans/subplan-b-quantifier-field-split.md)

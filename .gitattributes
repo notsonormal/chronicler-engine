@@ -4,7 +4,6 @@
 # Force LF line endings for files that should always be LF (especially for Linux containers)
 *.sh text eol=lf
 *.bash text eol=lf
-.devcontainer/* text eol=lf
 Dockerfile text eol=lf
 docker-compose.yml text eol=lf
 .gitignore text eol=lf
