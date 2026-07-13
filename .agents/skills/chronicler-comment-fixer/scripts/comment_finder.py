@@ -31,8 +31,6 @@ class CommentMatch:
         return f"{self.file_path}:{self.line_number} - {self.content}"
 
 
-# Constants - use absolute path for reliable Windows operation
-# Path structure: .opencode/skills/chronicler-comment-fixer/scripts/comment_finder.py
 SCRIPT_DIR = Path(__file__).parent.resolve()
 WORKSPACE_ROOT = SCRIPT_DIR.parent.parent.parent.parent  # repo root (mrn-general)
 UNCOMMITTED_EXTENSIONS = {".rs", ".py"}

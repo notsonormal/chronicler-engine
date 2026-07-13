@@ -96,9 +96,7 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
             violations.push(Violation::error(
                 path,
                 1,
-                format!(
-                    "Module `{path}` DOC anchor `{anchor}` must start with `docs/`."
-                ),
+                format!("Module `{path}` DOC anchor `{anchor}` must start with `docs/`."),
             ));
         }
 

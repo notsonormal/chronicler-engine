@@ -1,10 +1,29 @@
 # T12: Browser Test Server Flakiness Fix
 
-**Status:** Planning — deferred from T9-01 after-plan-workflow (surfaced by test-police review 2)
-**Date:** 2026-07-11
+**Status:** Implementing — design confirmed 2026-07-13 via plan-grilling review
+**Original date:** 2026-07-11
 **Depends on:** none
 **Blocks:** none
 **Priority:** P2 (pre-existing flakiness masked by `--retries 2`; cost is ~10s wasted runtime + false signal)
+
+## Final design (amended from original)
+
+After plan-grilling review (2026-07-13), the following simplifications were applied:
+
+- **Phase 1 dropped entirely** — no diagnostic instrumentation. Empirical fix-and-measure only.
+- **Phase 2 ships as a single atomic commit** in `tests/test_utils/server.rs`, not three separate edits. Internal sequential test gates during dev work (H1 → H2 → H4), but commit history shows one change.
+- **H1 fix = PID registry** — static `OnceLock<Mutex<HashMap<u16, u32>>>` keyed by port. Spawn records `(port, pid)`; kill looks up by port + `libc::kill(pid, SIGTERM)`. Surgical, no collateral risk to unrelated dev servers.
+- **H2 fix = HTTP readiness probe** — `reqwest::get("/")` (already in dev-deps, no new dep) with per-attempt timeout, retries on non-200.
+- **H4 / Task 2.3 dropped** — no `CE_TEST_SERVER_TIMEOUT_SECS` env var. Literal 30s timeout retained (300 attempts × 100ms). If CI proves this too tight, future fix.
+- **Phase 3 / Task 3.1 replaced** — no parallel-10-server stress test (didn't match observed failure mode). Regression gate = `cargo test editing::test_delete_removes_message --retries 0 --test-threads=1` × 50 runs + `python build.py` × 3.
+- **No documentation update**, no production code changes. Pure test-infra fix.
+
+### Stop condition
+Plan closes when: 50 consecutive reruns of `test_delete_removes_message` all pass without retries, AND `python build.py` passes 3 times consecutively. If all three Phase-2 fixes are in place and flake rate still exceeds 5%, escalate to a fresh diagnostic round (this plan does not pre-commit).
+
+### Attribution caveat
+Single-commit deliverable means we cannot isolate which of H1/H2/H4 actually mattered. Acceptable tradeoff for cleaner history.
+
 
 ## Summary
 

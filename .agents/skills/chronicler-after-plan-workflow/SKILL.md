@@ -1,7 +1,6 @@
 ---
 name: chronicler-after-plan-workflow
 description: Chronicler skill used to update the chronicler tests and documentions after a successful plan
-compatibility: opencode
 metadata:
   language: rust
   workspace: chronicler_engine

@@ -2,8 +2,19 @@
   "permission": {
     "*": "allow",
     "path": {
-      "/mnt/*": "deny"
+      "/mnt/*": "deny",
+      "*.env": "deny",
+     "*.env.*": "deny",
+     "*.env.example": "allow"      
     },
+   "write": {
+     "*": "allow",
+     ".pi/extensions/pi-permission-system/config.json": "deny"
+   },
+   "edit": {
+     "*": "allow",
+     ".pi/extensions/pi-permission-system/config.json": "deny"
+   },
     "bash": {
       "*": "allow",
       "git tag": "deny",

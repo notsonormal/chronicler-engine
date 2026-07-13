@@ -6,11 +6,68 @@ use std::io::Read;
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
 static SERVER_MANAGED: AtomicBool = AtomicBool::new(false);
+
+/// Registry of `port -> spawned_child_pid` so `kill_existing_server` can terminate
+/// only the server we spawned (not other test instances or unrelated dev servers).
+static PORT_PIDS: OnceLock<Mutex<HashMap<u16, u32>>> = OnceLock::new();
+
+fn port_pids() -> &'static Mutex<HashMap<u16, u32>> {
+    PORT_PIDS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn register_port_pid(port: u16, pid: u32) {
+    if let Ok(mut g) = port_pids().lock() {
+        g.insert(port, pid);
+    }
+}
+
+fn take_port_pid(port: u16) -> Option<u32> {
+    port_pids().lock().ok().and_then(|mut g| g.remove(&port))
+}
+
+/// Shared HTTP probe client. `reqwest::Client` is internally Arc; one instance
+/// per process avoids rebuilding connection pools on every readiness attempt.
+static HTTP_PROBE: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn http_probe_client() -> &'static reqwest::Client {
+    HTTP_PROBE.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_millis(200))
+            .build()
+            .expect("reqwest client build")
+    })
+}
+
+async fn probe_http(port: u16) -> bool {
+    let client = http_probe_client();
+    match client.get(format!("http://127.0.0.1:{port}/")).send().await {
+        Ok(resp) => resp.status().is_success(),
+        Err(_) => false,
+    }
+}
+
+fn terminate_pid(pid: u32) {
+    #[cfg(not(target_os = "windows"))]
+    {
+        // SAFETY: SIGTERM is the standard graceful-termination signal. `pid`
+        // was inserted by `register_port_pid` from a `Child::id()` for a
+        // server we ourselves spawned.
+        unsafe {
+            libc::kill(pid as i32, libc::SIGTERM);
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/PID", &pid.to_string()])
+            .output();
+    }
+}
 
 pub fn port_in_use(port: u16) -> bool {
     std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok()
@@ -18,17 +75,18 @@ pub fn port_in_use(port: u16) -> bool {
 
 pub fn kill_existing_server(port: u16) {
     // Only kill if we manage the server (to avoid killing other test instances)
-    if SERVER_MANAGED.load(Ordering::SeqCst) {
-        let _ = Command::new("taskkill")
-            .args(["/F", "/IM", "chronicler_engine.exe"])
-            .output();
-        // Poll for port release instead of fixed 2s sleep
-        for _ in 0..40 {
-            if !port_in_use(port) {
-                return;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
+    if !SERVER_MANAGED.load(Ordering::SeqCst) {
+        return;
+    }
+    if let Some(pid) = take_port_pid(port) {
+        terminate_pid(pid);
+    }
+    // Poll for port release instead of fixed 2s sleep
+    for _ in 0..40 {
+        if !port_in_use(port) {
+            return;
         }
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
 
@@ -137,6 +195,7 @@ pub fn start_server_with_env(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     let mut child = cmd.spawn().expect("Failed to start server");
+    register_port_pid(port, child.id());
 
     let stdout_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let stderr_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
@@ -171,14 +230,8 @@ pub fn start_server_with_env(
 
 pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
     for _ in 0..max_attempts {
-        if port_in_use(port) {
-            // Port is open - give it more time to be fully ready
-            tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
-
-            if std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                return true;
-            }
+        if probe_http(port).await {
+            return true;
         }
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
@@ -421,6 +474,9 @@ impl Drop for TestServer {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        // Clear PID registry so kill_existing_server on a future test does not
+        // try to SIGTERM a process we just terminated.
+        let _ = take_port_pid(self.port);
         SERVER_MANAGED.store(false, Ordering::SeqCst);
         release_port_lock(self.port);
         if let Some(tmp) = &self.temp_dir {
