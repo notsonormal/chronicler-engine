@@ -1,6 +1,6 @@
 # Chronicler Engine
 
-Rust interactive fiction engine. Axum HTTP server with an HTMX dashboard, LLM-powered narrative generation, and game/playthrough state persisted in SQLite (seeded from JSON scenario files at startup).
+An interactive fiction engine that runs a player's narrative through an LLM-driven pipeline, persisting game state across sessions.
 
 ## Language
 
@@ -9,19 +9,19 @@ A concrete playthrough session bound to one World and one Persona, holding curre
 _Avoid_: Session, run, match, playthrough (use Game)
 
 **World**:
-A static, authored template — locations, NPCs, maps, scenarios, global rules. Many Games can share one World. Bound to a Game via `world_key` (denormalized `world_name` for display).
+A static, authored template — locations, NPCs, maps, scenarios, global rules. Many Games can share one World. Bound to a Game via a world identifier (a display name is denormalized for display).
 _Avoid_: Setting, environment, scenario (World is the template; Scenario is a World sub-concept)
 
 **Persona**:
-The player-controlled character for a Game, chosen at game creation. Bound to a Game via `persona_key` (denormalized `persona_name`). Immutable for the life of the Game row. World-independent — personas are global entities, not World properties.
+The player-controlled character for a Game, chosen at game creation. Bound to a Game via a persona identifier (a display name is denormalized for display). Immutable for the life of the Game row. World-independent — personas are global entities, not World properties.
 _Avoid_: Player character (ambiguous), character (reserved for NPCs), avatar
 
 **Character**:
-An NPC in a World, defined by an NpcCard and world-scoped. Triggers and relationships attached as JSON blobs. Distinct from Persona (player-controlled, game-scoped).
+An NPC in a World. Triggers and relationships attached as data blobs. Distinct from Persona (player-controlled, game-scoped).
 _Avoid_: Person, actor, avatar, NPC (use Character)
 
 **Scenario**:
-A World sub-concept — the bundled starting state for a fresh Game (starting room, starting logs, initial NPCs, default scenario id). Lives on the WorldCard, not a top-level entity.
+A World sub-concept — the bundled starting state for a fresh Game (starting room, starting logs, initial NPCs, default scenario id). Lives on the World card, not a top-level entity.
 _Avoid_: Campaign, story, module
 
 **Action**:
@@ -29,7 +29,7 @@ A semantic command issued by the player that enters the action pipeline for reso
 _Avoid_: Command, input, verb
 
 **Action Pipeline**:
-Ordered sequence of phases (snapshot, narration, post-generation agents, engine commit, trigger continuation, reconciliation, finalization) that validates and resolves an Action, mutating game state and producing narrative output. Trigger evaluation runs **inside** engine commit — `execute_freeaction_impl` calls `evaluate_triggers` on the post-movement/post-NPC-resolution state, so trigger output flows back through the commit phase rather than a separate phase function. Normal play, main retry, and event retry all share these phases.
+Ordered sequence of phases that validates and resolves an Action. Trigger evaluation runs **inside** engine commit. Phase methods signal success or one of several failure modes; see ADR-032 for the error vocabulary.
 _Avoid_: Pipeline, command processor
 
 **Trigger**:
@@ -45,7 +45,7 @@ Post-generation Agent that analyzes narration to detect NPCs in area, player mov
 _Avoid_: Scorer, evaluator
 
 **Agent**:
-A trait-object pipeline step with a phase (`PreGeneration` or `PostGeneration`) and a `BackendSelector` choosing its LLM connection. Quantifier is the first `PostGeneration` agent.
+A pipeline step that runs at a defined phase. Quantifier is one Agent.
 _Avoid_: Bot, assistant, operator
 
 **Message**:
@@ -53,21 +53,19 @@ A single entry in a Game's conversation history — player input, narration outp
 _Avoid_: Line, entry, chat
 
 **Swipe**:
-An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Each Swipe carries its own `snapshot_id` referencing the GameStateSnapshot that produced it. Switching swipes restores the corresponding snapshot.
+An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Switching swipes restores the corresponding state snapshot.
 _Avoid_: Variant, version, alternate
 
 **Snapshot**:
-A GameStateSnapshot — serialized mutable game sub-state (movement, narrative, scene, npc_encounter_log), message-aligned and persisted immediately with its corresponding Message. No `committed` flag; every snapshot is immediately valid for restore. Immutable world data (World, Map, Persona, Characters) lives in Storage only; the orchestrator (action pipeline, arrival service, retry) fetches each field it needs directly from Storage and threads it as an individual `Arc<T>` arg to the engine function that consumes it.
+A serialized mutable game sub-state, message-aligned and persisted immediately with its corresponding Message. Every snapshot is immediately valid for restore. Immutable world data lives in Storage only; the orchestrator fetches each field it needs and passes it to the engine function.
 _Avoid_: Save, checkpoint, dump
 
 ## Deprecated Terms
 
 **Turn**:
-Removed grouping concept. ADR-012 (deleted) introduced `Turn + Swipe` to group a player input with all its AI responses (narration, event continuation, dialogue). ADR-013 removed turns because coupling responses within a turn locked retries together. Messages are now independent units; swipes live per-Message, not per-Turn.
-_Don't use_ for current architecture. Use Message + Swipe.
+Don't use. Use Message + Swipe. (See ADR-012, ADR-013 for history.)
 
 ## Notes
 
-- Terms map to symbols in `src/domain/model/`, `src/application/`, and `src/adapters/` per the hexagonal layout (ADR-027).
-- Implementation decisions live in `docs/adr/`; this glossary is the single source of truth for term meanings.
+- Implementation decisions live in ADRs; this glossary is the single source of truth for term meanings.
 - ADRs may not redefine these terms — they may only use them. Contradictions belong here first.

@@ -80,7 +80,7 @@ flowchart TD
     Event --> EventAnchor --> EventDel --> EventPreserve --> EventRestore --> ReRunEvent --> Update
 ```
 
-**Retry semantics** (enforced by `tests/integration/flow/`):
+**Retry semantics**:
 - **Main retry** soft-deletes messages after the anchor input and re-runs phases 4 → 4.5 → 5 → 5.5 (full regeneration). Old narration preserved as a swipe. On success, prior swipes migrate to the new message and soft-deletes are purged; on failure, soft-deletes are restored.
 - **Event retry** regenerates only the continuation text from the anchor snapshot using stored `StoredTriggerContext` prompts — does not rerun main narration or quantification.
 - **Retrigger Event** (on a narration swipe with `last_trigger` and no following event messages) runs `ActionPipeline::phase_trigger_continuation()` → `reconcile_post_trigger_npcs()` → `phase_finalize()` from the restored snapshot state without rerunning the main narration.
@@ -99,7 +99,7 @@ The caller checks `state.narrative.input_buffer.status.error_message()` to decid
 - The UI shows the error via the existing `GenerationStatus::Error` polling path
 - `phase_finalize` always runs; the `is_generating` projection is cleared by `GenerationGuard::Drop` on the registry path (only if no other game's slot is still `Generating`)
 
-**Cancellation** is the only path that uses `Err(ActionOutcome::Cancelled)`. `ActionOutcome` has exactly two variants — `Completed` and `Cancelled`; no `Error` variant exists.
+**Cancellation** produces `Err(PhaseError::Cancelled)`. `PhaseError::PersistFailed` also propagates via `Err` from snapshot sites; both are visible to `spawn_blocking` callers, but only `Err(PhaseError::Cancelled)` is matched at that boundary — other variants rely on `GenerationStatus::Error` already written to state. `PhaseError` is errors-only; success is `Ok(())`.
 
 **Stale-Generating recovery**: If `is_generating` is `false` but persisted status is still `Generating` (e.g., after a panic), `process_action` resets status to `Idle` before proceeding. The per-game registry is also self-healed on the same path: a `Generating` slot for `current_game_id()` whose projection atomic is false is cleared to `Idle`. Panics in `spawn_blocking` propagate naturally; `GenerationGuard::Drop` releases the registry slot if it still owns it (no-op if superseded by a younger generation) and stores the projection atomic to `false` only when no other game's slot is generating.
 

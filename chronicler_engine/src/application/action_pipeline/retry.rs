@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use tracing::instrument;
-use crate::application::action_pipeline::pipeline::ActionOutcome;
+use crate::application::action_pipeline::phase_error::PhaseError;
 use crate::application::application_service::DefaultApplicationService;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
@@ -88,7 +88,7 @@ pub fn retry_last_response_impl(app: &DefaultApplicationService) {
         retry_main_narration(app, state, input_text)
     };
 
-    if let ActionOutcome::Cancelled = outcome {
+    if let Err(PhaseError::Cancelled) = outcome {
         let mut state = app.load_or_fresh();
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();
@@ -107,11 +107,11 @@ pub(crate) fn save_retry_error(app: &DefaultApplicationService, message: impl In
 pub(crate) fn retry_event_continuation(
     app: &DefaultApplicationService,
     state: GameState,
-) -> ActionOutcome {
+) -> Result<(), PhaseError> {
     let Some(trigger) = state.narrative.last_trigger.clone() else {
         tracing::error!("Missing trigger context for event retry");
         save_retry_error(app, "Retry failed: missing trigger context");
-        return ActionOutcome::Completed;
+        return Ok(());
     };
     let input_text = match state.narrative.history.last_input_text() {
         Some((_, text)) => text,
@@ -135,7 +135,7 @@ pub(crate) fn retry_event_continuation(
         Err(e) => {
             tracing::error!("Retry fetch failed: {e}");
             save_retry_error(app, e.to_string());
-            return ActionOutcome::Completed;
+            return Ok(());
         }
     };
     let pipeline = app.game_service().pipeline();
@@ -161,7 +161,7 @@ pub(crate) fn retry_event_continuation(
                 s
             }
         }
-        Err(outcome) => return outcome,
+        Err(outcome) => return Err(outcome),
     };
     if let Some(target) = state.narrative.retry_target.take() {
         state.narrative.history.append(target);
@@ -175,23 +175,23 @@ pub(crate) fn retry_event_continuation(
         );
         run.phase_finalize(&mut state);
     }
-    ActionOutcome::Completed
+    Ok(())
 }
 
 pub(crate) fn retry_main_narration(
     app: &DefaultApplicationService,
     state: GameState,
     input_text: String,
-) -> ActionOutcome {
+) -> Result<(), PhaseError> {
     let pipeline = app.game_service().pipeline();
-    ActionOutcome::from_pipeline_result(pipeline.run_from_input(app, state, input_text))
+    pipeline.run_from_input(app, state, input_text)
 }
 
 #[instrument(skip(app))]
 pub fn retrigger_event_impl(app: &DefaultApplicationService) {
     let state = app.load_or_fresh();
     let outcome = retry_event_continuation(app, state);
-    if let ActionOutcome::Cancelled = outcome {
+    if let Err(PhaseError::Cancelled) = outcome {
         let mut state = app.load_or_fresh();
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();

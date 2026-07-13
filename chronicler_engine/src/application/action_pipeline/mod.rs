@@ -2,6 +2,7 @@
 //! Action pipeline for processing game actions
 
 pub mod actions;
+pub mod phase_error;
 pub mod phases;
 pub mod pipeline;
 pub mod retry;
@@ -14,6 +15,7 @@ mod pipeline_tests;
 mod retry_tests;
 
 pub use actions::execute_action_impl;
-pub use pipeline::{ActionOutcome, ActionPipeline};
+pub use phase_error::PhaseError;
+pub use pipeline::ActionPipeline;
 pub use retry::retrigger_event_impl;
 pub use retry::retry_last_response_impl;

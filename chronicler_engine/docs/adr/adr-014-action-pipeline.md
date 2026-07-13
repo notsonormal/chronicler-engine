@@ -21,6 +21,7 @@ We extracted an `ActionPipeline` module that explicitly models the game flow pha
    - **Early Errors** (before engine commit): Loads the latest state from storage, sets error status, and saves.
    - **Late Errors** (after engine commit): Uses the current in-memory state, sets error status, and saves.
    - **Cancellation**: Checked at stage boundaries (post-narration, pre-trigger, post-trigger), resetting to idle and saving.
+6. **Borrow Structure** (added on update; survives the ADR-027 trait collapse): phase logic hangs off `PipelineRun<'a>`, a per-call borrow pair of `&ActionPipeline` + `&DefaultApplicationService`. `DefaultApplicationService` is held by `Arc`, is expensive to clone, and must outlive every phase call; threading `app: &DefaultApplicationService` through each phase signature would duplicate the borrow. `PipelineRun::new(self, app)` is constructed once per call, after which phase signatures take only `&self` (the run). Inputs that phases read across boundaries (`world`, `map`, `persona`, `all_npcs`) live in `PipelineInputs` as owned `Arc<...>` / `Vec<...>` rather than borrowing from `GameState`, because `GameState` is mutated across phase boundaries and a stable snapshot is needed while state evolves. The `'a` lifetime ties the run to its borrows; callers (`spawn_blocking` closure, retry continuation) hold the borrowed values for the duration.
 
 ## Consequences
 
@@ -33,9 +34,11 @@ We extracted an `ActionPipeline` module that explicitly models the game flow pha
 
 ### Negative
 
-- **Slight Indirection**: Understanding the pipeline requires looking at both the phase logic and the `ActionPipelineBackend` trait implementation.
+- **Slight Indirection**: Understanding the pipeline requires looking at both the phase logic and the `ActionPipelineBackend` trait implementation. (After ADR-027, this becomes “understand the phase logic and the direct fields on `ActionPipeline`”.)
+- **Borrow-Structure Reading Cost**: phase signatures reference `PipelineRun<'a>` rather than raw parameters; a reader must know the borrow pair exists. Offset by all phase logic living in `phases.rs`.
 
 ### Trade-offs
 
-- Chose trait extraction over monolithic function (testability won over locality)
+- Chose trait extraction over monolithic function (testability won over locality; partially reversed in ADR-027)
 - Chose phase-based design over event-driven composition (simpler control flow; retry and normal paths share phases)
+- Chose `PipelineRun<'a>` borrow pair over passing `app`/`pipeline` through each phase (avoids borrow duplication; cost is one indirection layer)

@@ -210,11 +210,7 @@ __marimo__/
 # Local Docker Data
 docker/*_data/
 logs/
-/.opencode/index
-/chronicler_engine/sillytavern
-/.opencode/share
-/.opencode/data
-/tmp
+tmp
 /chronicler_engine/.sisyphus
 /.sisyphus
 /node_modules

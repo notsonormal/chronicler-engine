@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::application::action_pipeline::retry::{
     retry_event_continuation, retry_last_response_impl, retry_main_narration,
 };
-use crate::application::action_pipeline::pipeline::ActionOutcome;
+
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
 use crate::adapters::driven::llm::providers::MockBackend;
@@ -765,10 +765,10 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     );
 }
 
-// B2 fail-loud: retry fetch block must return `ActionOutcome::Completed` and surface fetch failure as `GenerationStatus::Error`.
+// B2 fail-loud: retry fetch block must return `Ok(())` and surface fetch failure as `GenerationStatus::Error`.
 
 #[test]
-fn test_retry_event_continuation_returns_completed_on_world_fetch_failure() {
+fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
     let (storage, handle) = {
         let base = Storage::new_in_memory();
@@ -793,11 +793,8 @@ fn test_retry_event_continuation_returns_completed_on_world_fetch_failure() {
 
     let outcome = retry_event_continuation(&app, state);
     assert!(
-        matches!(
-            outcome,
-            crate::application::action_pipeline::ActionOutcome::Completed
-        ),
-        "retry_event_continuation must return Completed on world fetch failure, got {outcome:?}"
+        outcome.is_ok(),
+        "retry_event_continuation must return Ok(()) on world fetch failure, got {outcome:?}"
     );
     let state = app.load_or_fresh();
     assert!(
@@ -810,10 +807,10 @@ fn test_retry_event_continuation_returns_completed_on_world_fetch_failure() {
     );
 }
 
-// B2 fail-loud: persona fetch failure must return `ActionOutcome::Completed` and surface as `GenerationStatus::Error`.
+// B2 fail-loud: persona fetch failure must return `Ok(())` and surface as `GenerationStatus::Error`.
 
 #[test]
-fn test_retry_event_continuation_returns_completed_on_persona_fetch_failure() {
+fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
     let (storage, handle) = {
         let base = Storage::new_in_memory();
@@ -838,11 +835,8 @@ fn test_retry_event_continuation_returns_completed_on_persona_fetch_failure() {
 
     let outcome = retry_event_continuation(&app, state);
     assert!(
-        matches!(
-            outcome,
-            crate::application::action_pipeline::ActionOutcome::Completed
-        ),
-        "retry_event_continuation must return Completed on persona fetch failure, got {outcome:?}"
+        outcome.is_ok(),
+        "retry_event_continuation must return Ok(()) on persona fetch failure, got {outcome:?}"
     );
     let state = app.load_or_fresh();
     assert!(
@@ -887,8 +881,8 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
 
     let outcome = retry_event_continuation(&app, state);
     assert!(
-        matches!(outcome, ActionOutcome::Completed),
-        "retry_event_continuation must return Completed on missing game, got {outcome:?}"
+        outcome.is_ok(),
+        "retry_event_continuation must return Ok(()) on missing game, got {outcome:?}"
     );
     let state = app.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {

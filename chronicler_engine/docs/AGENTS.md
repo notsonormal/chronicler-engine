@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-13 11:58 UTC*
+*Index last generated: 2026-07-13 22:17 UTC*
 
 ### `docs/adr/`
 
@@ -60,6 +60,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [ADR-028: Test Module Header Convention](./adr/adr-028-test-module-header-convention.md)
 - [ADR-030: is_generating Dual-Source Invariant — AtomicBool Is Cached View of Persisted Status](./adr/adr-030-is-generating-invariant.md)
 - [ADR-031: OpContext Absorption Trade-offs](./adr/adr-031-opcontext-absorption-tradeoffs.md)
+- [ADR-032: PhaseError — replace `ActionOutcome` with errors-only enum](./adr/adr-032-phaseerror.md)
 - [ADR Standards](./adr/README.md)
 
 ### `docs/architecture/`
@@ -94,7 +95,6 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [T1: Error Model Unification](./plans/t1-error-model-unification.md)
 - [T10: Low-priority Cleanup Bundle](./plans/t10-low-priority-cleanup-bundle.md)
 - [T11: Documentation Hygiene Skill Hardening](./plans/t11-documentation-hygiene-skill-hardening.md)
-- [T12: Browser Test Server Flakiness Fix](./plans/t12-browser-test-server-flakiness.md)
 - [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
 - [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)

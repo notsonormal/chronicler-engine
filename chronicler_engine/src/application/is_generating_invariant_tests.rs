@@ -117,7 +117,7 @@ async fn test_projection_invariant_under_interleaved_release() {
 
     // 300ms LLM delay keeps A in-flight across the reset + drop window.
     // After reset, A's pipeline hits the α-check at the next phase
-    // boundary, sees the new game id, and aborts via `ActionOutcome::Cancelled`.
+    // boundary, sees the new game id, and aborts via `PhaseError::Cancelled`.
     // Two narrations queued: A (discarded by α-check) + B (persisted).
     let mock_backend_raw = std::sync::Arc::new(
         MockBackend::default()

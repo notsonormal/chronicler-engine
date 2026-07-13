@@ -23,7 +23,8 @@ use crate::application::narrative_prompt::{NpcContext, build_narration_prompt, m
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
-use super::pipeline::{ActionOutcome, ActionPipeline, PipelineResult};
+use super::phase_error::PhaseError;
+use super::pipeline::ActionPipeline;
 
 pub struct PipelineInputs {
     pub input: String,
@@ -52,7 +53,7 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    fn check_game_unchanged(&self, started_for: u64) -> Result<(), ActionOutcome> {
+    fn check_game_unchanged(&self, started_for: u64) -> Result<(), PhaseError> {
         let current = self.app.current_game_id();
         if current != started_for {
             tracing::info!(
@@ -60,7 +61,7 @@ impl<'a> PipelineRun<'a> {
                 current = current,
                 "Pipeline aborting: game changed — discarding in-flight generation"
             );
-            return Err(ActionOutcome::Cancelled);
+            return Err(PhaseError::Cancelled);
         }
         Ok(())
     }
@@ -71,15 +72,19 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    pub(super) fn persist_snapshot_failed(&self, state: &mut GameState, label: &str) -> bool {
-        if let Err(e) = self.app.save_message_and_snapshot(state) {
-            tracing::error!("Failed to save {label}: {e}");
+    pub(super) fn persist_snapshot_or_err(
+        &self,
+        state: &mut GameState,
+        label: &'static str,
+    ) -> Result<(), PhaseError> {
+        if let Err(source) = self.app.save_message_and_snapshot(state) {
+            tracing::error!("Failed to save {label}: {source}");
             state.narrative.input_buffer.status =
-                GenerationStatus::Error(format!("Failed to save {label}: {e}"));
+                GenerationStatus::Error(format!("Failed to save {label}: {source}"));
             self.persist(state);
-            true
+            Err(PhaseError::PersistFailed { label, source })
         } else {
-            false
+            Ok(())
         }
     }
 
@@ -87,7 +92,7 @@ impl<'a> PipelineRun<'a> {
         &self,
         mut state: GameState,
         msg: String,
-    ) -> PipelineResult<(GameState, String, String, String)> {
+    ) -> Result<(GameState, String, String, String), PhaseError> {
         state.narrative.input_buffer.status = GenerationStatus::Error(msg);
         self.persist(&state);
         Ok((state, String::new(), String::new(), String::new()))
@@ -97,7 +102,7 @@ impl<'a> PipelineRun<'a> {
         &self,
         mut state: GameState,
         inputs: &PipelineInputs,
-    ) -> PipelineResult<(GameState, String, String, String)> {
+    ) -> Result<(GameState, String, String, String), PhaseError> {
         let Some(room) = inputs
             .map
             .get_room_by_id(&state.movement.current_room_id)
@@ -226,7 +231,7 @@ impl<'a> PipelineRun<'a> {
         trigger: &StoredTriggerContext,
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> PipelineResult<(GameState, String)> {
+    ) -> Result<(GameState, String), PhaseError> {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
         state.narrative.last_trigger = Some(trigger.clone());
@@ -237,9 +242,7 @@ impl<'a> PipelineRun<'a> {
 
         self.check_game_unchanged(self.started_for)?;
 
-        if self.persist_snapshot_failed(&mut state, "pre-event snapshot") {
-            return Ok((state, String::new()));
-        }
+        self.persist_snapshot_or_err(&mut state, "pre-event snapshot")?;
 
         tracing::info!("Pipeline ▶ Trigger LLM call (agent=trigger)");
         let continuation_result = match self.pipeline.recorder.complete(
@@ -288,9 +291,7 @@ impl<'a> PipelineRun<'a> {
                 }
             };
 
-        if self.persist_snapshot_failed(&mut state, "post-trigger snapshot") {
-            return Ok((state, String::new()));
-        }
+        self.persist_snapshot_or_err(&mut state, "post-trigger snapshot")?;
 
         Ok((state, continuation_text))
     }

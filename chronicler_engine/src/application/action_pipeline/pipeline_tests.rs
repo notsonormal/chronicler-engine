@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::application::action_pipeline::pipeline::{ActionOutcome, ActionPipeline};
+use crate::application::action_pipeline::phase_error::PhaseError;
+use crate::application::action_pipeline::pipeline::ActionPipeline;
 use crate::application::application_service::DefaultApplicationService;
 use crate::test_support::make_test_recorder;
 use crate::application::game_service::GameService;
@@ -209,11 +210,12 @@ fn test_trigger_continuation_save_post_trigger_error() {
         Ok((_, text)) => {
             assert!(text.is_empty(), "Expected empty text on snapshot failure");
         }
-        Err(outcome) => {
-            assert!(
-                matches!(outcome, ActionOutcome::Cancelled),
-                "Expected Cancelled or Completed, got {outcome:?}"
-            );
+        Err(PhaseError::Cancelled) => {}
+        Err(PhaseError::PersistFailed { label, .. }) => {
+            assert_eq!(label, "pre-event snapshot");
+        }
+        Err(other) => {
+            panic!("Expected empty text or Cancelled/PersistFailed, got {other:?}");
         }
     }
 }

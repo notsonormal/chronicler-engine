@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use chronicler_engine::application::action_pipeline::ActionOutcome;
+use chronicler_engine::application::action_pipeline::PhaseError;
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::engine::action_processing::{
     FreeActionContext, apply_npc_events, execute_freeaction_impl,
@@ -246,7 +246,7 @@ fn test_inv004_cancellable_at_boundaries() {
     });
 
     assert!(
-        matches!(outcome, Err(ActionOutcome::Cancelled)),
+        matches!(outcome, Err(PhaseError::Cancelled)),
         "INV-004: pipeline should return Cancelled on game_id mismatch at boundary, got {outcome:?}"
     );
 

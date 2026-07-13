@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::application::action_pipeline::phase_error::PhaseError;
 use crate::application::action_pipeline::phases::{PipelineInputs, PipelineRun};
 use crate::application::application_service::DefaultApplicationService;
 
@@ -26,14 +27,6 @@ pub struct ActionPipeline {
     pub(super) agents: Arc<AgentRegistry>,
 }
 
-#[derive(Debug)]
-pub enum ActionOutcome {
-    Completed,
-    Cancelled,
-}
-
-pub(super) type PipelineResult<T> = Result<T, ActionOutcome>;
-
 impl ActionPipeline {
     pub fn new(
         assembler: Arc<PromptAssembler>,
@@ -52,7 +45,7 @@ impl ActionPipeline {
         app: &DefaultApplicationService,
         mut state: GameState,
         input: String,
-    ) -> PipelineResult<()> {
+    ) -> Result<(), PhaseError> {
         tracing::debug!("run_from_input: called");
         let started_for = app.current_game_id();
         let run = PipelineRun::new(self, app, started_for);
@@ -95,7 +88,10 @@ impl ActionPipeline {
         state = run.phase_pre_main_snapshot(state)?;
 
         let (mut state, narration_text, backend_name, model_name) =
-            run.map_cancelled(run.phase_narrate(state, &inputs))?;
+            match run.phase_narrate(state, &inputs) {
+                Err(PhaseError::Cancelled) => Err(run.handle_cancellation()),
+                other => other,
+            }?;
 
         if state
             .narrative
@@ -145,7 +141,10 @@ impl ActionPipeline {
             next_state.narrative.last_trigger = Some(trigger.clone());
         }
 
-        if run.persist_snapshot_failed(&mut next_state, "post-engine snapshot") {
+        if run
+            .persist_snapshot_or_err(&mut next_state, "post-engine snapshot")
+            .is_err()
+        {
             run.phase_finalize(&mut next_state);
             return Ok(());
         }
@@ -190,7 +189,7 @@ impl ActionPipeline {
         app: &DefaultApplicationService,
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> PipelineResult<(GameState, String)> {
+    ) -> Result<(GameState, String), PhaseError> {
         let started_for = app.current_game_id();
         let run = PipelineRun::new(self, app, started_for);
         run.phase_trigger_continuation_with_cancel_handling(state, trigger, map, npcs)
@@ -257,14 +256,11 @@ impl<'a> PipelineRun<'a> {
     pub(super) fn phase_pre_main_snapshot(
         &self,
         mut state: GameState,
-    ) -> PipelineResult<GameState> {
+    ) -> Result<GameState, PhaseError> {
         tracing::info!("Pipeline ▶ Narrating");
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        if self.persist_snapshot_failed(&mut state, "pre-main snapshot") {
-            self.phase_finalize(&mut state);
-            return Ok(state);
-        }
+        self.persist_snapshot_or_err(&mut state, "pre-main snapshot")?;
         Ok(state)
     }
 
@@ -274,13 +270,9 @@ impl<'a> PipelineRun<'a> {
         trigger: &StoredTriggerContext,
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> PipelineResult<(GameState, String)> {
-        self.map_cancelled(self.phase_trigger_continuation_llm_call(state, trigger, map, npcs))
-    }
-
-    pub(super) fn map_cancelled<T>(&self, result: PipelineResult<T>) -> PipelineResult<T> {
-        match result {
-            Err(ActionOutcome::Cancelled) => Err(self.handle_cancellation()),
+    ) -> Result<(GameState, String), PhaseError> {
+        match self.phase_trigger_continuation_llm_call(state, trigger, map, npcs) {
+            Err(PhaseError::Cancelled) => Err(self.handle_cancellation()),
             other => other,
         }
     }
@@ -304,21 +296,12 @@ impl<'a> PipelineRun<'a> {
         self.persist(state);
     }
 
-    pub(super) fn handle_cancellation(&self) -> ActionOutcome {
+    pub(super) fn handle_cancellation(&self) -> PhaseError {
         tracing::warn!("Pipeline cancelled — aborting remaining stages");
         let mut state = self.app.load_or_fresh();
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();
         self.persist(&state);
-        ActionOutcome::Cancelled
-    }
-}
-
-impl ActionOutcome {
-    pub(crate) fn from_pipeline_result(result: PipelineResult<()>) -> Self {
-        match result {
-            Ok(()) => ActionOutcome::Completed,
-            Err(outcome) => outcome,
-        }
+        PhaseError::Cancelled
     }
 }
