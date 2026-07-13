@@ -12,6 +12,10 @@ Both axes run as **parallel sub-agents** so they don't pollute each other's cont
 
 The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if `docs/agents/issue-tracker.md` is missing.
 
+## Do not build or run tests
+
+Ensure that the application is working is part of the implementation, assume the build is working. If is the build happening to be failing, that is not the responsibility of this skill and would be a distraction.
+
 ## Process
 
 ### 1. Pin the fixed point

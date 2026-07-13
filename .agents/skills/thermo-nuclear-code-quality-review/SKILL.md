@@ -10,6 +10,10 @@ Use this skill for an unusually strict review focused on implementation quality,
 
 Above all, this skill should push the reviewer to be **ambitious** about code structure. Do not merely identify local cleanup opportunities. Actively search for "code judo" moves: restructurings that preserve behavior while making the implementation dramatically simpler, smaller, more direct, and more elegant.
 
+## Do not build or run tests
+
+Ensure that the application is working is part of the implementation, assume the build is working. If is the build happening to be failing, that is not the responsibility of this skill and would be a distraction.
+
 ## Core Prompt
 
 Start from this baseline:
@@ -101,7 +105,7 @@ Escalate findings when you see:
 - Unnecessary casts, `any`, `unknown`, or optional params that muddy the real contract.
 - Copy-pasted logic instead of extracted helpers.
 - Narrow edge-case handling implemented in the middle of an already busy function.
-- Refactors that technically pass tests but make the code less modular or less readable.
+- Refactors that are technically correct but make the code less modular or less readable.
 - "Temporary" branching that is likely to become permanent debt.
 - Bespoke helpers where the codebase already has a canonical utility for the job.
 - Logic added in the wrong layer/package when it should live somewhere more central.
@@ -134,7 +138,7 @@ Do not be satisfied with a merely cleaner version of the same messy idea if ther
 
 ## Extra lens
 
-Load in the following skills to add additional lens to your review. At times this review has introduced antipatterns or suggeted bad architecture.
+Load in the following skills to add additional lens to your review. At times this review has introduced antipatterns or suggested bad architecture. So use these to ensure that the suggested improvements are productive and forward thinking.
 
 - `/code-simplification` (`.agents/skills/code-simplification/SKILL.md`)
 - `/antipattern-checker` (`.agents/skills/antipattern-checker/SKILL.md`)
@@ -158,7 +162,7 @@ Good phrases:
 - `this abstraction seems unnecessary. can we just keep the direct flow?`
 - `why does this need a cast / optional here? can we make the boundary more explicit instead?`
 - `this looks like a bespoke helper for something we already have elsewhere. can we reuse the canonical one?`
-- `i think there's a code-judo move here that makes this much simpler. can we reframe this so these branches disappear?`
+- `I think there's a code-judo move here that makes this much simpler. can we reframe this so these branches disappear?`
 - `this refactor moves complexity around, but doesn't really delete it. is there a way to make the model itself simpler?`
 
 ## Output Expectations
