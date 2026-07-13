@@ -8,9 +8,25 @@ use tracing;
 
 use crate::error::{EngineError, Result};
 
-use super::app_state::{AppState, ServerConfig, ServerResources};
+use super::app_state::{AppState, ServerResources};
 use super::router::build_router;
 use super::port_utils::bind_with_retry;
+
+#[derive(Clone, Debug)]
+pub struct ServerConfig {
+    pub port: u16,
+    pub bind_attempts: Option<u32>,
+}
+
+#[cfg(test)]
+impl Default for ServerConfig {
+    fn default() -> Self {
+        ServerConfig {
+            port: 3000,
+            bind_attempts: None,
+        }
+    }
+}
 
 pub async fn run_server_with_config(
     resources: ServerResources,

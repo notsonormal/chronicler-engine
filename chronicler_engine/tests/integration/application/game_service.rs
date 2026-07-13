@@ -1,4 +1,3 @@
-//! [DOC: docs/reference/testing.md]
 //! GameService integration tests
 use std::sync::Arc;
 

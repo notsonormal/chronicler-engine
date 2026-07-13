@@ -1,4 +1,3 @@
-//! [DOC: docs/architecture/guardrails.md]
 //! Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
 
 pub mod layers;
@@ -118,6 +117,18 @@ fn guardrails_import_ordering_tests() {
 #[test]
 fn guardrails_doc_standards() {
     check_src_files("doc standards", check_doc_standards);
+}
+
+#[test]
+fn guardrails_doc_standards_tests() {
+    let mut errors = Vec::new();
+    for file in discover_rs_files("tests") {
+        let content = std::fs::read_to_string(&file).unwrap();
+        // Preserve "tests/" prefix so check_doc_standards recognizes these as test files.
+        let rel = file.clone();
+        errors.extend(check_doc_standards(&rel, &content));
+    }
+    assert_violations(&errors, "doc standards (tests)");
 }
 
 #[test]

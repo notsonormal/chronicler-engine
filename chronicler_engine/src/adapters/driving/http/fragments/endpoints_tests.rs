@@ -49,8 +49,7 @@ async fn test_llm_messages_fragment() {
 
 #[tokio::test]
 async fn test_status_ready_handler() {
-    let state = TestAppBuilder::default_test().build_app_state();
-    let result = status_ready_handler(axum::extract::State(state)).await;
+    let result = status_ready_handler().await;
     assert!(result.0.contains("Ready"));
 }
 

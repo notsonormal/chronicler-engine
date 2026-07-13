@@ -12,21 +12,6 @@ use crate::domain::model::settings::AppSettings;
 
 use super::locks::read_lock_or_recover;
 
-#[derive(Clone, Debug)]
-pub struct ServerConfig {
-    pub port: u16,
-    pub bind_attempts: Option<u32>,
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        ServerConfig {
-            port: 3000,
-            bind_attempts: None,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct ServerResources {
     pub storage: Arc<crate::adapters::driven::storage::Storage>,

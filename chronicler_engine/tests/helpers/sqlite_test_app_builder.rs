@@ -1,4 +1,3 @@
-//! [DOC: docs/reference/testing.md — section "SqliteTestAppBuilder"]
 //! Integration-only SQLite-backed application builder for integration tests.
 #![allow(clippy::expect_used)]
 #![allow(dead_code)]

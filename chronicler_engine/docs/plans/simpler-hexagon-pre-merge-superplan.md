@@ -3,9 +3,9 @@
 **Date:** 2026-07-09 (updated 2026-07-13)
 **Current HEAD:** `91afc32` (2026-07-13, "Update graphify")
 **Build status:** `python build.py` green: **1253 passed, 2 LLM skipped** (log `logs/build_20260713_135819.log`)
-**Status:** In progress — T1 COMPLETE 2026-07-10 (4 blockers fixed); T2 COMPLETE (tickets 00–08 resolved); T3 glossary renames COMPLETE (4 terms + T9-01 WorldSnapshot removal); T6 COMPLETE (ADR-031 + ADR-030 amended); **T9 COMPLETE** (T9-00 + T9-01 + T13 + Storage helpers; only T9-02 CONTEXT.md honesty fix OPEN, 1 SP); T4, T5, T7, T8 pending (~38 SP)
+**Status:** In progress — T1 COMPLETE 2026-07-10; T2 COMPLETE (tickets 00–08); T3 glossary renames COMPLETE (4 terms + T9-01 WorldSnapshot removal); T6 COMPLETE (ADR-031 + ADR-030 amended); **T9 COMPLETE** (T9-00 + T9-01 + T9-02 + T13 + Storage helpers; CONTEXT.md `Snapshot` entry fixed 2026-07-13); **T7 COMPLETE 2026-07-13** (mega-PR: 8 items + 5 already-resolved + 2 rejected); T4, T5, T8 pending (~31 SP)
 **Scope:** `chronicler_engine/` on branch `simpler-hexagon` (HEAD `1eda563` at plan creation; T2 work landed post-HEAD)
-**Total estimated effort:** ~60 SP across 8 tracks → **~38 SP REMAINING** (T1/T2/T3/T6/T9-01 done; T4: 5 + T5 residual: 8 + T7: 9 + T8: 3 + T9-02: 1 + polish-19: 5 + misc: 7 = ~38 SP)
+**Total estimated effort:** ~60 SP across 8 tracks → **~31 SP REMAINING** (T1/T2/T3/T6/T7/T9 done; T4: 5 + T5 residual: 8 + T8: 3 + polish-19: 5 + misc: 10 = ~31 SP)
 
 ## Related
 
@@ -42,9 +42,9 @@ Consolidate findings from 4 prior reviews + 2 fresh antipattern passes + depth a
 | T4 | C2 PhaseError consolidation | needs grilling G3 | P2 | Med | Med | none | ~5 |
 | T5 | C3 TestApp builder collapse | ready | P2 | Med | Med | none | ~16 |
 | T6 | Plan/ADR honesty | **COMPLETE** (2026-07-10) | P0 | Med | High | none | ~1 |
-| T7 | Mechanical antipattern polish (~25 findings) | opportunistic | P3 | Low-Med | High | none | ~10 |
+| T7 | Mechanical antipattern polish (~25 findings) | **COMPLETE** 2026-07-13 | P3 | Low-Med | High | none | ~6 |
 | T8 | Workflow gates (D3/D4 prevention) | needs scope | P2 | Med | Med | none | ~3 |
-| T9 | WorldSnapshot removal (immutable-world-data out of GameState) | **T9-01 COMPLETE 2026-07-13** (commits `0076750` + `bbfc32f`; engine unbundle + Tier-1 cleanup; `GameState` 4 mutable fields; `WorldSnapshot` struct + 3 companions deleted; build.py green: 1242/2) — **T9-02 CONTEXT.md honesty fix OPEN** (1 SP; see `.scratch/t9-world-snapshot-removal/issues/02-context-md-snapshot-honesty.md`) | P2 | High | Med | none | ~13+1 |
+| T9 | WorldSnapshot removal (immutable-world-data out of GameState) | **COMPLETE 2026-07-13** (T9-00 + T9-01 + **T9-02 CONTEXT.md honesty fix** + T13 + Storage helpers; CONTEXT.md `Snapshot` entry rewritten; no AppState cache, world data fetched per-use from Storage; `grep -i 'cached on AppState' CONTEXT.md` = 0) | P2 | High | Med | none | ~14 |
 
 P0 = defects / required for merge; P1 = structural / load-bearing; P2 = debt prune; P3 = cosmetic.
 
@@ -481,7 +481,7 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 
 ## T9 — WorldSnapshot Removal (Immutable World Data out of GameState)
 
-**Status: T9-01 COMPLETE 2026-07-13** (commits `0076750` + `bbfc32f`). T9-00 precursor COMPLETE 2026-07-11 (post-impl review-fix pass: A1/S2 `seed_test_world_into_storage` delegates to `TestData::seed_into`; S1 dropped `+ Send`; A3 partial deleted `BackendSpec::Default`). T9-01 atomic ticket landed: 56 engine read-sites migrated to `&Arc<T>`/`&HashMap` args per A3, `GameState::new` 5-arg → 1-arg, `GameState::from_snapshot` 5-arg → 1-arg, `WorldSnapshot` struct + 3 companions deleted, `dto.rs` deleted, orchestrators fetch directly from `self.storage` per E1 (fail-loud per B2). Tier-1 cleanup `bbfc32f`: dynamic-rooms bug fix, 5 dead fixtures helpers deleted, `find_room_in_map`/`find_room_in_world_map` inlined, unused args dropped from `action_processing.rs`. Storage `require_*` helpers + canonical typed not-found errors landed 2026-07-13 (`EngineError::GameNotFound`/`PersonaNotFound`, `NpcNotFound` deleted). Build.py green: 1253 passed / 2 LLM skipped (HEAD `91afc32`). **T9-02 (CONTEXT.md `Snapshot` honesty fix) OPEN** — 1 SP docs-only; ticket at `.scratch/t9-world-snapshot-removal/issues/02-context-md-snapshot-honesty.md`. All 5 grilling decisions (A3/B2/no-cache/E1/F4) upheld at impl.
+**Status: T9 COMPLETE 2026-07-13**. T9-00 precursor COMPLETE 2026-07-11; T9-01 atomic ticket COMPLETE 2026-07-13 (56 engine read-sites migrated, `WorldSnapshot` deleted, orchestrators fetch per-use from Storage); **T9-02 CONTEXT.md `Snapshot` entry honesty fix COMPLETE 2026-07-13** (rewritten to state: "Immutable world data (World, Map, Persona, Characters) lives in Storage only; the orchestrator fetches each field it needs directly from Storage and threads it as an individual `Arc<T>` arg"; `grep -i 'cached on AppState' CONTEXT.md` = 0). Tier-1 cleanup `bbfc32f` COMPLETE; Storage `require_*` helpers + canonical typed not-found errors COMPLETE 2026-07-13. Build.py green: 1253 passed / 2 LLM skipped (HEAD `91afc32`). All 5 grilling decisions (A3/B2/no-cache/E1/F4) upheld at impl.
 
 **Findings owned:** `domain-reconciliation-2026-07-09.md` Snapshot row (moved out of T3 on 2026-07-10) + `simpler-hexagon-review.md` R6 (re-interpreted) + CONTEXT.md `Snapshot` entry honesty gap.
 
@@ -502,13 +502,13 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 
 1. **Remove immutable world fields from `GameState`** ✅ — `domain/model/state/game_state.rs` struct now has 4 mutable fields only (`movement`, `narrative`, `scene`, `npc_encounter_log`); `GameState::new` 5-arg → 1-arg (delegates to builder); `GameState::from_snapshot` 5-arg → 1-arg; 56 engine read-sites migrated to individual `&Arc<T>`/`&HashMap` args per A3; `GameState::current_room` inlined at 8 callers; `GameState::init_scenario_npcs` reshaped to take `&HashMap<String, NpcCard>` arg.
 
-2. **Add AppState-level Arc cache for world data** ❌ **REJECTED per Q3 (no-cache)** — CONTEXT.md `Snapshot` entry remains a lie (T9-02 OPEN to fix). World data fetched per-use by orchestrator from `self.storage`, threaded as `&Arc<T>` args. No cache added.
+2. **Add AppState-level Arc cache for world data** ❌ **REJECTED per Q3 (no-cache)** — CONTEXT.md `Snapshot` entry now honest (T9-02 COMPLETE 2026-07-13): "Immutable world data (World, Map, Persona, Characters) lives in Storage only; the orchestrator fetches each field it needs directly from Storage and threads it as an individual `Arc<T>` arg." No cache added.
 
 3. **Delete `WorldSnapshot` struct** ✅ — `src/application/persistence_gate/dto.rs` deleted entirely; `WorldSnapshot` struct + `WorldSnapshot::empty` + `load_world_snapshot` + `world_snapshot_or_empty` all removed; `grep -rn WorldSnapshot chronicler_engine/src` = 0.
 
 4. **Fallback decision (D1b)** ✅ **fail-loud adopted** — `world_snapshot_or_empty` deleted; storage `Err` propagates via `?` at orchestrator (`pipeline.rs::run_from_input`, `retry.rs::retry_event_continuation`, `arrival_service::run` now returns `Result<(), EngineError>`); Tier-1 cleanup + Storage `require_*` helpers enforce canonical typed not-found errors (`EngineError::GameNotFound`/`WorldNotFound`/`PersonaNotFound`).
 
-5. **New ADR** ❌ **REJECTED per Q5 (F4)** — No ADR-033. Grilling decision recorded in commit messages + this plan + Ticket 01; CONTEXT.md fix deferred to T9-02.
+5. **New ADR** ❌ **REJECTED per Q5 (F4)** — No ADR-033. Grilling decision recorded in commit messages + this plan + Ticket 01; CONTEXT.md fix **COMPLETE 2026-07-13** (T9-02 docs-only).
 
 ### Out of scope
 
@@ -546,27 +546,27 @@ T9 is the architecturally correct "delete WorldSnapshot" — applies the OpConte
 | arch-4 | process_action 47 lines (plan said ≤30) | T6 (gate amend) + T2 (fix) | **resolved** (T2 ticket 03 moved body to `GenerationGate::start_action` at 47 LOC; T6 marked §B1.3 VOID — gate intentionally retired, not amended) |
 | arch-5 | AppState dual cancel_token stale-on-replace latent concern | T2 follow-up | **resolved** (2026-07-10; [Ticket 05](../../../.scratch/t2-god-class-split/issues/05-appstate-token-phantom-storage.md) → [Ticket 07](../../../.scratch/t2-god-class-split/issues/07-p4-concurrent-generation-tracking.md) — P4-concurrent per-game registry replaces cancel_token for generation entirely; AppState's token is now shutdown-only (renamed `shutdown_token`); stale-on-replace concern moot — reset no longer touches tokens, `replace_shutdown_token` deleted in 07-cleanup) |
 | glossary-1 | PlayerCard → PersonaCard (~60 sites) | T3 | **resolved** (2026-07-10; renames + GameState::player→persona + PromptContext::player→persona + LayerRenderer::player→persona, ~100+ sites, all 1241 tests green) |
-| glossary-2 | WorldSnapshot removal (immutable world data out of GameState) | T9 (moved from T3, 2026-07-10) | **T9-01 COMPLETE** (2026-07-13, commits `0076750` + `bbfc32f`) — engine unbundle, `WorldSnapshot` struct + 3 companions deleted, `GameState` 4 mutable fields only, `arrival_service::run` returns `Result`; **T9-02 CONTEXT.md honesty fix OPEN** (1 SP) |
+| glossary-2 | WorldSnapshot removal (immutable world data out of GameState) | T9 (moved from T3, 2026-07-10) | **COMPLETE 2026-07-13** (T9-00 + T9-01 + T9-02; CONTEXT.md `Snapshot` entry rewritten, `grep -i 'cached on AppState'` = 0) |
 | glossary-3 | TurnResult → ActionResult (~6 sites) | T3 | **resolved** (2026-07-10; 4 sites in action_processing.rs + phases.rs, all tests green) |
 | glossary-4 | Action Pipeline phase_trigger_evaluation merged | T3 (amend glossary) | **resolved** (2026-07-10; CONTEXT.md Action Pipeline entry corrected per D3, no code split) |
 | glossary-5 | Avoid-alias leakage (10 sites) | T3 | **resolved** (2026-07-10; StoryLogTemplate→NarrativeLogTemplate + parse_command→parse_action; doc-comment sweep on 5 flagged files = 0 general-English uses needed rename; `story-log` UI surface deferred — scope creep, separate track) |
-| polish-1 | SERVER TRACE debug noise in polled endpoint | T7.1 | pending |
-| polish-2 | Dead `_map`/`_player`/`_npcs` params | T7.2 | **partial** (T13 Phase 3 dropped `_map`/`_npcs` from `action_processing.rs` functions; `init_game.rs:97-99` `spawn_arrival_task_if_needed` still has unused `_map`/`_player`/`_npcs` params) |
-| polish-3 | Dead `_player_name` param | T7.2 | pending |
-| polish-4 | Dead `_sender` ignored 2× | T7.2 | pending |
-| polish-5 | Dead `unreachable!()` arms (4 sites) | T7.2 | pending |
-| polish-6 | Dead `ProcessActionResult::ShuttingDown` arm | T7.2 | pending |
+| polish-1 | SERVER TRACE debug noise in polled endpoint | T7.1 | **resolved** (2026-07-13, T7 mega-PR) |
+| polish-2 | Dead `_map`/`_player`/`_npcs` params | T7.2 | **resolved** (2026-07-13, T7 mega-PR) |
+| polish-3 | Dead `_player_name` param | T7.2 | **resolved** (already gone pre-T7; confirmed 2026-07-13) |
+| polish-4 | Dead `_sender` ignored 2× | T7.2 | **resolved** (2026-07-13, T7 mega-PR) |
+| polish-5 | Dead `unreachable!()` arms (4 sites) | T7.2 | **resolved** (already gone pre-T7; confirmed 2026-07-13) |
+| polish-6 | Dead `ProcessActionResult::ShuttingDown` arm | T7.2 | **resolved** (T2 moved to `generation_gate/gate.rs:70` — genuinely used as return path) |
 | polish-7 | Dead `make_test_app_with_default_preset` | T7.2 + T5 | **resolved** (2026-07-11, T9-00 chunks) |
 | polish-8 | Dead `let _ = world_snapshot;` | T7.2 + T5 | **resolved** (2026-07-11, T9-00 chunks — `make_test_app_with_storage` deleted) |
-| polish-9 | Dead `_created_storage` tuple bool | T7.2 | pending |
-| polish-10 | Missing `[DOC: ...]` anchor in error_tests.rs | T7.3 | pending |
-| polish-11 | `sanitize_for_prompt` in wrong module | T7.4 | pending |
-| polish-12 | `html_escape` defined twice | T7.5 | pending |
-| polish-13 | Single-field form DTOs (`EditHistoryForm`) | T7.6 | pending |
-| polish-14 | `ServerConfig` lives in `app_state.rs` | T7.7 | pending |
-| polish-15 | `is_user_displayable` matches EngineError variant | T7.8 | pending |
-| polish-16 | `persist_initial_state_with_swipes` inlinable | T7.9 | pending |
-| polish-17 | `BackendKind::Test` bypasses invariants in release | T7.10 | pending |
+| polish-9 | Dead `_created_storage` tuple bool | T7.2 | **resolved** (T9-00 thinned builder; field gone) |
+| polish-10 | Missing `[DOC: ...]` anchor in error_tests.rs | T7.3 | **resolved** (2026-07-13, T7 mega-PR) |
+| polish-11 | `sanitize_for_prompt` in wrong module | T7.4 | **resolved** (2026-07-13, T7 mega-PR — moved to `narrative_prompt/sanitizer.rs`) |
+| polish-12 | `html_escape` defined twice | T7.5 | **resolved** (2026-07-13, T7 mega-PR) |
+| polish-13 | Single-field form DTOs (`EditHistoryForm`) | T7.6 | **rejected** (T7 plan review: single-field typed DTO justified; `Form<String>` would break Axum form deserialization) |
+| polish-14 | `ServerConfig` lives in `app_state.rs` | T7.7 | **resolved** (2026-07-13, T7 mega-PR — moved to `http/server_config.rs`) |
+| polish-15 | `is_user_displayable` matches EngineError variant | T7.8 | **resolved** (2026-07-13, T7 mega-PR — doc contract added, match intentional) |
+| polish-16 | `persist_initial_state_with_swipes` inlinable | T7.9 | **rejected** (T7 plan review: 18-LOC branching method earns abstraction, 2 callers want same named operation) |
+| polish-17 | `BackendKind::Test` bypasses invariants in release | T7.10 | **resolved** (already gated by `#[cfg(feature = "testing")]` — confirmed 2026-07-13) |
 | polish-18 | `error_return` name lies about return shape | T4 | pending |
 | polish-19 | `InMemoryData` 13 fields, no shared behavior | T2 (per-entity stores) | pending (not touched by T2 wave — separate effort) |
 | polish-20 | `arrival_service::new_for_test` test-only constructor | T5 | pending |
@@ -596,11 +596,11 @@ T9 is the architecturally correct "delete WorldSnapshot" — applies the OpConte
 
 **Wave 2 (P1, COMPLETE 2026-07-09/07-10):** T2 (god-class split, ~16 SP) + T3 (glossary drift, ~4 SP). ~20 SP — ✅ done (4 modules extracted, glossary renames applied, build.py green).
 
-**Wave 3 (P2, PARTIAL):** T9 (WorldSnapshot removal, ~13 SP) **COMPLETE 2026-07-13** (commits `0076750` + `bbfc32f` + 2026-07-13 storage helpers; T9-02 CONTEXT.md honesty fix only item remaining, 1 SP); T5 (test builder collapse, ~16 SP) **PARTIALLY DONE** (T9-00 thinned builder 14→9 fields, deleted 5 sqlite helpers, `TestDataBuilder` landed; ~8 SP remaining for full collapse); T4 (PhaseError, ~5 SP) **pending**.
+**Wave 3 (P2, COMPLETE):** T9 (WorldSnapshot removal, ~14 SP) **COMPLETE 2026-07-13** (T9-00 + T9-01 + T9-02 CONTEXT.md fix + T13 + Storage helpers); T5 **PARTIALLY DONE** (~8 SP remaining); T4 **pending** (5 SP).
 
-**Wave 4 (P3, opportunistic):** T7 (~9 SP across 4 sub-PRs — polish-7/8 resolved) + T8 (~3 SP) + arch-4 gate amend (0.5 SP, resolved by T6 VOID) + polish-2 partial (0.5 SP for `init_game.rs`) — **~13 SP pending**.
+**Wave 4 (P3, COMPLETE 2026-07-13):** **T7 COMPLETE** (mega-PR landed 2026-07-13: 8 items + 5 already-resolved + 2 rejected; ~6 SP) + T8 (~3 SP) + arch-4 gate amend (0.5 SP, resolved by T6 VOID) + polish-2 partial (0.5 SP for `init_game.rs`) — **T7 done, T8 ~3 SP remaining**.
 
-**Total remaining:** ~38 SP (T4: 5 + T5 residual: 8 + T7: 9 + T8: 3 + T9-02: 1 + polish-19: 5 + polish-2 remainder: 0.5 + misc: 6.5). Single-thread ~5 weeks; subagent T4+T5+T7 in parallel ~2-3 weeks.
+**Total remaining:** ~37 SP (T4: 5 + T5 residual: 8 + T7: 9 + T8: 3 + polish-19: 5 + polish-2 remainder: 0.5 + misc: 6.5). Single-thread ~5 weeks; subagent T4+T5+T7 in parallel ~2-3 weeks.
 
 ** polish-19 (InMemoryData per-entity stores, ~5 SP)** — separate effort, not touched by T2. Defer or spin out.
 
@@ -1036,4 +1036,4 @@ Wins phrasing (in codebase-design vocabulary): "locality: bugs concentrate in on
 
 # End of super-plan
 
-Total: **5 tracks remaining** (T4/T5/T7/T8/T9-02), ~38 SP, **25 findings resolved**, 20 findings pending. **3 sequencing decisions MOOT** (resolved implicitly during implementation).
+Total: **3 tracks remaining** (T4/T5/T8), ~31 SP, **41 findings resolved**, 2 findings rejected (polish-13, polish-16), 1 finding deferred (polish-19 InMemoryData). **3 sequencing decisions MOOT**.

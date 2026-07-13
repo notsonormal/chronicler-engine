@@ -75,7 +75,7 @@ pub fn retry_last_response_impl(app: &DefaultApplicationService) {
     state.narrative.retry_target = old_target;
 
     let input_text = match state.narrative.history.last_input_text() {
-        Some((_sender, text)) => text,
+        Some((_, text)) => text,
         None => {
             tracing::error!("No input to retry");
             return;
@@ -114,7 +114,7 @@ pub(crate) fn retry_event_continuation(
         return ActionOutcome::Completed;
     };
     let input_text = match state.narrative.history.last_input_text() {
-        Some((_sender, text)) => text,
+        Some((_, text)) => text,
         None => String::new(),
     };
     let (map, npcs_map, persona) = match (|| {

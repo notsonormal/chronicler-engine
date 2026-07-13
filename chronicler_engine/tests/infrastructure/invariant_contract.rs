@@ -1,4 +1,3 @@
-//! [DOC: docs/architecture/invariants.md]
 //! Runtime invariant contract tests — fast regression guards.
 
 use std::collections::HashMap;

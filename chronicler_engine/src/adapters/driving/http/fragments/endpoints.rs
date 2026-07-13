@@ -52,7 +52,7 @@ pub async fn llm_messages_fragment(State(state): State<AppState>) -> Html<String
     render_fragment(&state, render_llm_messages, "llm_messages_fragment")
 }
 
-pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String> {
+pub async fn status_ready_handler() -> Html<String> {
     Html("<span class=\"status ready\">Ready</span>".to_string())
 }
 
@@ -80,20 +80,11 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
     tracing::debug!(
         "generating_status_handler: is_generating={is_gen}, status={status:?}, phase={phase:?}",
     );
-    tracing::debug!(
-        "SERVER TRACE: status.is_generating()={is_gen}, status={status:?}, phase={phase:?}",
-    );
     if let Some(err) = status.error_message() {
-        tracing::debug!("SERVER TRACE: returning error span");
         Html(format!("<span class=\"status error\">Error: {err}</span>"))
     } else if is_gen {
-        tracing::debug!(
-            "SERVER TRACE: returning phase str: {}",
-            phase.as_endpoint_str()
-        );
         Html(phase.as_endpoint_str().to_string())
     } else {
-        tracing::debug!("SERVER TRACE: returning idle");
         Html("idle".to_string())
     }
 }

@@ -1,4 +1,3 @@
-//! [DOC: docs/reference/testing.md]
 //! Shared test utilities re-exported across all test binaries: `browser`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
 
 #![allow(dead_code)]

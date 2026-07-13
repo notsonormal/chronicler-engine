@@ -125,7 +125,6 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
     let nearby_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
     let all_npcs: Vec<NpcCard> = data.npcs_map.values().cloned().collect();
     let room_id = state.movement.current_room_id.clone();
-    let npcs_arc = Arc::new(std::collections::HashMap::<String, NpcCard>::new());
 
     let settings = if let Some(path) = &args.settings_path {
         let content = std::fs::read_to_string(path).map_err(|e| {
@@ -172,9 +171,6 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
         &settings,
         &data.storage,
         &world_arc,
-        &data.map,
-        &player_arc,
-        &npcs_arc,
         &room_id,
         nearby_npcs.clone(),
         all_npcs.clone(),

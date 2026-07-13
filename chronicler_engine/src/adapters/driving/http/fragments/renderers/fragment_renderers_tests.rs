@@ -1,4 +1,3 @@
-//! [DOC: docs/system/dashboard.md]
 //! Tests for `fragment_renderers.rs` (response helpers are in `response_tests.rs`).
 
 use std::sync::Arc;

@@ -1,4 +1,3 @@
-//! [DOC: docs/system/dashboard.md]
 //! Tests for `response.rs` HTTP response helpers
 
 use axum::body::to_bytes;

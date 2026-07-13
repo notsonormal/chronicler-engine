@@ -1,5 +1,4 @@
-//! [DOC: docs/adr/adr-030-is-generating-invariant.md]
-//! Tests for ADR-030: `is_generating` AtomicBool must agree with persisted `GenerationStatus`.
+//! Tests for the `is_generating` AtomicBool invariant: it must agree with persisted `GenerationStatus`.
 
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};

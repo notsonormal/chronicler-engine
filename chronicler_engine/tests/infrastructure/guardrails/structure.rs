@@ -42,10 +42,35 @@ fn extract_doc_anchor_path(line: &str) -> Option<&str> {
         .map(|s| s.trim())
 }
 
+fn is_forbidden_doc_path(doc_path: &str) -> bool {
+    doc_path == "docs/adr"
+        || doc_path.starts_with("docs/adr/")
+        || doc_path == "docs/plans"
+        || doc_path.starts_with("docs/plans/")
+}
+
+fn is_test_file(path: &str) -> bool {
+    path.ends_with("_tests.rs")
+        || path.ends_with("_test.rs")
+        || path.starts_with("tests/")
+        || path.starts_with("tests\\")
+}
+
 pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    if path.ends_with("_tests.rs") || path.ends_with("_test.rs") {
+    if is_test_file(path) {
+        if let Some(first_line) = content.lines().next() {
+            if first_line.trim().starts_with("//! [DOC:") {
+                violations.push(Violation::error(
+                    path,
+                    1,
+                    format!(
+                        "Test file `{path}` has a DOC anchor. Test files must use a plain `//! <summary>` line only (ADR-028)."
+                    ),
+                ));
+            }
+        }
         return violations;
     }
 
@@ -67,6 +92,26 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
     let anchor_path = extract_doc_anchor_path(lines[0]);
 
     if let Some(anchor) = anchor_path {
+        if !anchor.starts_with("docs/") {
+            violations.push(Violation::error(
+                path,
+                1,
+                format!(
+                    "Module `{path}` DOC anchor `{anchor}` must start with `docs/`."
+                ),
+            ));
+        }
+
+        if is_forbidden_doc_path(anchor) {
+            violations.push(Violation::error(
+                path,
+                1,
+                format!(
+                    "Module `{path}` DOC anchor `{anchor}` is not allowed. Anchors must point to domain docs, not decisions (`docs/adr/*`) or plans (`docs/plans/*`)."
+                ),
+            ));
+        }
+
         if points_to_system_md(anchor) && !is_system_md_exempt(path) {
             violations.push(Violation::warn(
                 path,

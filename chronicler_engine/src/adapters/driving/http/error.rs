@@ -1,18 +1,12 @@
-//! [DOC: docs/adr/adr-027-hexagonal-architecture-migration.md]
+//! [DOC: docs/architecture/system.md]
 //! HTTP driving adapter — maps application `ApplicationError` to axum `Response`.
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use crate::application::application_service::ApplicationError;
+use super::fragments::html_escape;
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
-}
+use crate::application::application_service::ApplicationError;
 
 fn error_div(message: &str) -> String {
     format!(

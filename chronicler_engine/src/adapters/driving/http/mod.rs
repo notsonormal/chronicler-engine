@@ -17,8 +17,8 @@ pub mod templates;
 pub mod view_models;
 pub mod worlds_fragment;
 
-pub use app_state::{AppState, ServerConfig, ServerResources};
-pub use server_impl::run_server_with_config;
+pub use app_state::{AppState, ServerResources};
+pub use server_impl::{run_server_with_config, ServerConfig};
 
 #[cfg(test)]
 mod locks_tests;
