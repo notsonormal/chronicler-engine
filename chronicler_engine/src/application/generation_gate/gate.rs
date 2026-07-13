@@ -53,16 +53,8 @@ impl GenerationGate {
         self.heal_stale_generating(app, &mut game_state);
 
         let game_id = app.storage().current_game_id();
-        let game = app
-            .storage()
-            .get_game(game_id)?
-            .ok_or_else(|| EngineError::Config(format!("game {game_id} not found")))?;
-        let persona = app
-            .storage()
-            .get_persona(&game.persona_key)?
-            .ok_or_else(|| {
-                EngineError::Config(format!("persona '{}' not found", game.persona_key))
-            })?;
+        let game = app.storage().require_game(game_id)?;
+        let persona = app.storage().require_persona(&game.persona_key)?;
         let player_name = persona.sheet.name.clone();
         if !input.is_empty() {
             game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);

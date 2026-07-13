@@ -41,7 +41,7 @@ fn test_list_available_worlds_lists_seeded_worlds() {
 }
 
 #[test]
-fn test_run_world_not_found_falls_back_or_errors() {
+fn test_run_persona_not_found_after_world_fallback() {
     let port =
         get_available_port(3010, 3050).expect("port allocation failed for run_branches test");
     cleanup_db_for_port(port);
@@ -59,18 +59,11 @@ fn test_run_world_not_found_falls_back_or_errors() {
     );
     let err = result.unwrap_err();
     assert!(
-        matches!(err, EngineError::Config(_)),
-        "expected EngineError::Config variant for world/persona failure; got: {err:?}"
-    );
-    let msg = match err {
-        EngineError::Config(m) => m,
-        other => format!("{other}"),
-    };
-    let mentions_world = msg.contains("World") || msg.contains("world");
-    let mentions_persona = msg.contains("Persona") || msg.contains("persona");
-    assert!(
-        mentions_world || mentions_persona,
-        "expected world-fallback or persona-not-found error, got: {msg}"
+        matches!(
+            &err,
+            EngineError::PersonaNotFound(key) if key == "__nonexistent_persona__"
+        ),
+        "expected EngineError::PersonaNotFound(\"__nonexistent_persona__\"), got: {err:?}"
     );
 }
 
@@ -99,15 +92,15 @@ fn test_run_persona_not_found_errors_cleanly() {
     assert!(result.is_err(), "bogus persona must error; got Ok");
     let err = result.unwrap_err();
     assert!(
-        matches!(err, EngineError::Config(_)),
-        "expected EngineError::Config variant for persona failure; got: {err:?}"
+        matches!(
+            &err,
+            EngineError::PersonaNotFound(key) if key == "__nonexistent_persona__"
+        ),
+        "expected EngineError::PersonaNotFound(\"__nonexistent_persona__\"), got: {err:?}"
     );
-    let msg = match err {
-        EngineError::Config(m) => m,
-        other => format!("{other}"),
-    };
+    let msg = err.to_string();
     assert!(
-        msg.contains("Persona '") && msg.contains("not found"),
-        "expected persona-not-found error mentioning 'Persona' and 'not found', got: {msg}"
+        msg.contains("Persona not found: __nonexistent_persona__"),
+        "expected canonical display, got: {msg}"
     );
 }

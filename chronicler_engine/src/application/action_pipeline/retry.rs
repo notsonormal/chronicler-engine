@@ -12,8 +12,6 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::error::internal_error;
-
 use crate::EngineError;
 
 #[instrument(skip(app))]
@@ -121,18 +119,9 @@ pub(crate) fn retry_event_continuation(
     };
     let (map, npcs_map, persona) = match (|| {
         let game_id = app.storage().current_game_id();
-        let game = app.storage().get_game(game_id)?.ok_or_else(|| {
-            EngineError::Internal(internal_error(format!("no game for id {game_id}")))
-        })?;
-        let world_with_map = app
-            .storage()
-            .get_world(&game.world_key)?
-            .ok_or_else(|| EngineError::WorldNotFound(game.world_key.clone()))?;
-        let persona: Arc<PersonaCard> = app
-            .storage()
-            .get_persona(&game.persona_key)?
-            .ok_or_else(|| EngineError::NpcNotFound(game.persona_key.clone()))
-            .map(Arc::new)?;
+        let game = app.storage().require_game(game_id)?;
+        let world_with_map = app.storage().require_world(&game.world_key)?;
+        let persona: Arc<PersonaCard> = Arc::new(app.storage().require_persona(&game.persona_key)?);
         let npcs_map: HashMap<String, NpcCard> = app
             .storage()
             .list_characters(world_with_map.world_id)?

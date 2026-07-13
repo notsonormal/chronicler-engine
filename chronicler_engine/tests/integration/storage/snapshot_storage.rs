@@ -318,9 +318,9 @@ fn test_get_and_update_active_swipe_index() {
     );
     let id = msg_repo.insert_message(&msg).unwrap();
 
-    assert_eq!(msg_repo.get_active_swipe_index(id).unwrap(), 0);
+    assert_eq!(msg_repo.get_active_swipe_index(id).unwrap(), Some(0));
     msg_repo.update_active_swipe(id, 2).unwrap();
-    assert_eq!(msg_repo.get_active_swipe_index(id).unwrap(), 2);
+    assert_eq!(msg_repo.get_active_swipe_index(id).unwrap(), Some(2));
 }
 
 #[test]

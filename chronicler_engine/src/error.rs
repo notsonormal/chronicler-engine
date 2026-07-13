@@ -90,8 +90,14 @@ pub enum EngineError {
     #[error("Room not found: {0}")]
     RoomNotFound(String),
 
-    #[error("NPC not found: {0}")]
-    NpcNotFound(String),
+    #[error("Message not found: {0}")]
+    MessageNotFound(u64),
+
+    #[error("Game not found: {0}")]
+    GameNotFound(u64),
+
+    #[error("Persona not found: {0}")]
+    PersonaNotFound(String),
 
     #[error("World not found: {0}")]
     WorldNotFound(String),

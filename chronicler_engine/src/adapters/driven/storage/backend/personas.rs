@@ -42,6 +42,14 @@ impl Storage {
         })
     }
 
+    /// Required-read of a persona row by key. Absence becomes
+    /// [`EngineError::PersonaNotFound`]. Catalogue / fallback callers should
+    /// stay on [`Storage::get_persona`](Self::get_persona).
+    pub fn require_persona(&self, key: &str) -> Result<PersonaCard, EngineError> {
+        self.get_persona(key)?
+            .ok_or_else(|| EngineError::PersonaNotFound(key.to_string()))
+    }
+
     pub fn seed_persona(&self, key: &str, card: &PersonaCard) -> Result<(), EngineError> {
         self.with_backend_mut("seed_persona", |backend| match backend {
             Backend::Sqlite { pool } => {

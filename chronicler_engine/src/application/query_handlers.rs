@@ -66,15 +66,8 @@ pub fn get_current_room_view(
 ) -> Result<(String, Option<String>), ApplicationError> {
     let game_state = app.load_or_fresh();
     let game_id = app.storage().current_game_id();
-    let game = app.storage().get_game(game_id)?.ok_or_else(|| {
-        ApplicationError::from(EngineError::Config(format!("game {game_id} not found")))
-    })?;
-    let world_with_map = app.storage().get_world(&game.world_key)?.ok_or_else(|| {
-        ApplicationError::from(EngineError::Config(format!(
-            "world '{}' not found",
-            game.world_key
-        )))
-    })?;
+    let game = app.storage().require_game(game_id)?;
+    let world_with_map = app.storage().require_world(&game.world_key)?;
     let world = world_with_map.world_card;
     let map = world_with_map.map;
     let room = map
@@ -105,15 +98,8 @@ pub fn get_npc_headshots(
 ) -> Result<Vec<(String, String)>, ApplicationError> {
     let game_state = app.load_or_fresh();
     let game_id = app.storage().current_game_id();
-    let game = app.storage().get_game(game_id)?.ok_or_else(|| {
-        ApplicationError::from(EngineError::Config(format!("game {game_id} not found")))
-    })?;
-    let world_with_map = app.storage().get_world(&game.world_key)?.ok_or_else(|| {
-        ApplicationError::from(EngineError::Config(format!(
-            "world '{}' not found",
-            game.world_key
-        )))
-    })?;
+    let game = app.storage().require_game(game_id)?;
+    let world_with_map = app.storage().require_world(&game.world_key)?;
     let npcs_list = app.storage().list_characters(world_with_map.world_id)?;
     let npcs: std::collections::HashMap<String, _> = {
         let mut m = std::collections::HashMap::new();

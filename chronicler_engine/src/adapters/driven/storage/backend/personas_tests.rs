@@ -86,6 +86,27 @@ fn test_get_persona_failure() {
 }
 
 #[test]
+fn require_persona_returns_entity_when_present() {
+    let storage = Storage::new_in_memory();
+    let card = test_persona_card("hit_persona", "Hit Persona");
+    storage.seed_persona("hit_key", &card).unwrap();
+    let via_get = storage.get_persona("hit_key").unwrap().unwrap();
+    let via_require = storage.require_persona("hit_key").unwrap();
+    assert_eq!(via_require.sheet.name, via_get.sheet.name);
+    assert_eq!(via_require.key, via_get.key);
+}
+
+#[test]
+fn require_persona_returns_canonical_not_found_when_absent() {
+    let storage = Storage::new_in_memory();
+    let result = storage.require_persona("missing");
+    match result {
+        Err(crate::error::EngineError::PersonaNotFound(key)) => assert_eq!(key, "missing"),
+        other => panic!("Expected EngineError::PersonaNotFound(\"missing\"), got: {other:?}"),
+    }
+}
+
+#[test]
 fn test_seed_persona_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     handle.set("seed_persona", TestOverride::internal("seed failed"));

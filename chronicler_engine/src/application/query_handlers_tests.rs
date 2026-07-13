@@ -92,6 +92,36 @@ fn test_get_current_room_view_succeeds_with_valid_state() {
 }
 
 #[test]
+fn test_get_current_room_view_returns_typed_error_when_game_missing() {
+    let app = minimal_app_no_game();
+    let err = get_current_room_view(&app).unwrap_err();
+    assert!(
+        matches!(
+            &err,
+            crate::application::errors::ApplicationError::Engine(
+                crate::error::EngineError::GameNotFound(id)
+            ) if *id == 0
+        ),
+        "expected GameNotFound(0), got: {err:?}"
+    );
+}
+
+#[test]
+fn test_get_npc_headshots_returns_typed_error_when_game_missing() {
+    let app = minimal_app_no_game();
+    let err = get_npc_headshots(&app, true).unwrap_err();
+    assert!(
+        matches!(
+            &err,
+            crate::application::errors::ApplicationError::Engine(
+                crate::error::EngineError::GameNotFound(id)
+            ) if *id == 0
+        ),
+        "expected GameNotFound(0), got: {err:?}"
+    );
+}
+
+#[test]
 fn test_get_npc_headshots_scene_only_empty() {
     let app = minimal_app();
     let headshots = get_npc_headshots(&app, true).unwrap();

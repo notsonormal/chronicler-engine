@@ -62,8 +62,7 @@ fn test_get_active_swipe_index_default() {
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 
-    let index = storage.get_active_swipe_index(msg_id).unwrap();
-    assert_eq!(index, 0);
+    assert_eq!(storage.get_active_swipe_index(msg_id).unwrap(), Some(0));
 }
 
 #[test]
@@ -77,8 +76,7 @@ fn test_get_active_swipe_index_after_update() {
         .unwrap();
     storage.update_active_swipe(msg_id, 1).unwrap();
 
-    let index = storage.get_active_swipe_index(msg_id).unwrap();
-    assert_eq!(index, 1);
+    assert_eq!(storage.get_active_swipe_index(msg_id).unwrap(), Some(1));
 }
 
 #[test]
@@ -92,8 +90,7 @@ fn test_update_active_swipe_sqlite() {
         .unwrap();
     storage.update_active_swipe(msg_id, 1).unwrap();
 
-    let index = storage.get_active_swipe_index(msg_id).unwrap();
-    assert_eq!(index, 1);
+    assert_eq!(storage.get_active_swipe_index(msg_id).unwrap(), Some(1));
 }
 
 #[test]
@@ -110,8 +107,34 @@ fn test_update_active_swipe_in_memory() {
         .unwrap();
     storage.update_active_swipe(msg_id, 2).unwrap();
 
-    let index = storage.get_active_swipe_index(msg_id).unwrap();
-    assert_eq!(index, 2);
+    assert_eq!(storage.get_active_swipe_index(msg_id).unwrap(), Some(2));
+}
+
+#[test]
+fn require_active_swipe_index_returns_index_when_message_present() {
+    let storage = Storage::new_in_memory();
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    storage
+        .insert_swipe(msg_id, &dummy_swipe("alt"), 2)
+        .unwrap();
+    storage.update_active_swipe(msg_id, 2).unwrap();
+
+    let via_get = storage.get_active_swipe_index(msg_id).unwrap();
+    let via_require = storage.require_active_swipe_index(msg_id).unwrap();
+    assert_eq!(via_require, 2);
+    assert_eq!(via_get, Some(via_require));
+}
+
+#[test]
+fn require_active_swipe_index_returns_canonical_not_found_when_absent() {
+    let storage = Storage::new_in_memory();
+    storage.set_game_id(1);
+    let result = storage.require_active_swipe_index(999);
+    match result {
+        Err(crate::error::EngineError::MessageNotFound(id)) => assert_eq!(id, 999),
+        other => panic!("Expected EngineError::MessageNotFound(999), got: {other:?}"),
+    }
 }
 
 #[test]

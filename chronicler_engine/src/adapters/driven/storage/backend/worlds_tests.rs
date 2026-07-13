@@ -96,6 +96,28 @@ fn test_get_world_failure() {
 }
 
 #[test]
+fn require_world_returns_entity_when_present() {
+    let storage = Storage::new_in_memory();
+    let (world_card, map) = test_world_data("hit_world", "Hit World");
+    storage.seed_world(&world_card, &map).unwrap();
+    let via_get = storage.get_world("hit_world").unwrap().unwrap();
+    let via_require = storage.require_world("hit_world").unwrap();
+    assert_eq!(via_require.world_card.key, via_get.world_card.key);
+    assert_eq!(via_require.world_card.name, via_get.world_card.name);
+    assert_eq!(via_require.world_id, via_get.world_id);
+}
+
+#[test]
+fn require_world_returns_canonical_not_found_when_absent() {
+    let storage = Storage::new_in_memory();
+    let result = storage.require_world("missing");
+    match result {
+        Err(crate::error::EngineError::WorldNotFound(key)) => assert_eq!(key, "missing"),
+        other => panic!("Expected EngineError::WorldNotFound(\"missing\"), got: {other:?}"),
+    }
+}
+
+#[test]
 fn test_seed_world_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     handle.set("seed_world", TestOverride::internal("seed failed"));

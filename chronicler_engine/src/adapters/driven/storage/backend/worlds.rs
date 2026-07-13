@@ -94,6 +94,14 @@ impl Storage {
         })
     }
 
+    /// Required-read of a world row by key. Absence becomes
+    /// [`EngineError::WorldNotFound`]. Catalogue / fallback / existence callers
+    /// should stay on [`Storage::get_world`](Self::get_world).
+    pub fn require_world(&self, key: &str) -> Result<WorldWithMap, EngineError> {
+        self.get_world(key)?
+            .ok_or_else(|| EngineError::WorldNotFound(key.to_string()))
+    }
+
     pub fn seed_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
         self.with_backend_mut("seed_world", |backend| match backend {
             Backend::Sqlite { pool } => {

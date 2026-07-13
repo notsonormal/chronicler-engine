@@ -3,16 +3,19 @@
 
 use std::sync::Arc;
 
+use tracing::instrument;
+
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::narrative_prompt::{build_narration_prompt, make_prompt_context, NpcContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::application::scenario::inject_scenario_logs;
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
+use crate::error::EngineError;
 
 pub struct ArrivalTaskContext {
     pub(crate) app: Arc<DefaultApplicationService>,
@@ -55,10 +58,11 @@ impl ArrivalTaskContext {
 
     #[doc(hidden)]
     pub fn run_sync(self) {
-        self.run();
+        let _ = self.run();
     }
 
-    pub(crate) fn run(self) {
+    #[instrument(err, skip(self), fields(room_id = %self.room_id))]
+    pub(crate) fn run(self) -> Result<(), EngineError> {
         let mut state = match self.app.load_expecting_valid_state() {
             Ok(s) => s,
             Err(e) => {
@@ -69,47 +73,19 @@ impl ArrivalTaskContext {
                     Ok(s) => s,
                     Err(e2) => {
                         tracing::error!("build_fresh_initial_state also failed: {e2}");
-                        return;
+                        return Err(e2);
                     }
                 }
             }
         };
 
-        let game_id = self.app.current_game_id();
-        let game = match self.app.storage().get_game(game_id) {
-            Ok(Some(g)) => g,
-            Ok(None) => {
-                tracing::error!("arrival: game {game_id} not found");
-                return;
-            }
-            Err(e) => {
-                tracing::error!("arrival: failed to load game: {e}");
-                return;
-            }
-        };
-        let world_with_map = match self.app.storage().get_world(&game.world_key) {
-            Ok(Some(w)) => w,
-            Ok(None) => {
-                tracing::error!("arrival: world '{}' not found", game.world_key);
-                return;
-            }
-            Err(e) => {
-                tracing::error!("arrival: failed to load world: {e}");
-                return;
-            }
-        };
-        let persona: Arc<crate::domain::model::character::PersonaCard> =
-            match self.app.storage().get_persona(&game.persona_key) {
-                Ok(Some(p)) => Arc::new(p),
-                Ok(None) => {
-                    tracing::error!("arrival: persona '{}' not found", game.persona_key);
-                    return;
-                }
-                Err(e) => {
-                    tracing::error!("arrival: failed to load persona: {e}");
-                    return;
-                }
-            };
+        let game = self
+            .app
+            .storage()
+            .require_game(self.app.current_game_id())?;
+        let world_with_map = self.app.storage().require_world(&game.world_key)?;
+        let persona: Arc<PersonaCard> =
+            Arc::new(self.app.storage().require_persona(&game.persona_key)?);
         let world: Arc<WorldCard> = Arc::new(world_with_map.world_card);
         let map: Arc<MapDef> = Arc::new(world_with_map.map);
         if state.narrative.history.is_empty() {
@@ -117,15 +93,14 @@ impl ArrivalTaskContext {
         }
         state.narrative.input_buffer.status = GenerationStatus::Generating;
 
-        let room = match map
+        let Some(room) = map
             .overworld
             .regions
             .iter()
             .flat_map(|r| r.rooms.iter())
             .find(|r| r.id == self.room_id)
-        {
-            Some(r) => r,
-            None => return,
+        else {
+            return Ok(());
         };
 
         let prompt_context = make_prompt_context(
@@ -177,5 +152,7 @@ impl ArrivalTaskContext {
         if let Err(e) = self.app.save_message_and_snapshot(&mut state) {
             tracing::error!("Failed to save arrival message and snapshot: {e}");
         }
+
+        Ok(())
     }
 }

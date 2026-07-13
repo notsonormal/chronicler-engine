@@ -269,7 +269,7 @@ fn test_inmemory_get_active_swipe_not_found() {
     storage.set_game_id(1);
 
     let result = storage.get_active_swipe_index(999);
-    assert!(result.is_err());
+    assert_eq!(result.unwrap(), None);
 }
 
 #[test]

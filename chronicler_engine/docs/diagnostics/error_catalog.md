@@ -126,23 +126,37 @@ Room lookup failure.
 
 ---
 
-## `EngineError::NpcNotFound(String)`
+## `EngineError::GameNotFound(u64)`
 
-NPC lookup failure.
+Game row lookup failure on a required read.
 
-- **First Check:** `state.npcs` map contains the expected ID.
-- **Common Causes:** NPC referenced in trigger but not loaded from `data/characters/`.
-- **Related Invariants:** `python build.py --validate-data` catches orphan NPC references.
+- **First Check:** The `game_id` in the error payload; verify it exists in the `games` table.
+- **Related Invariants:** See [storage read contract](../system/storage.md).
+
+## `EngineError::PersonaNotFound(String)`
+
+Persona row lookup failure on a required read.
+
+- **First Check:** The persona key in the error payload; verify it exists in the `personas` table.
+- **Related Invariants:** See [storage read contract](../system/storage.md).
 
 ---
 
 ## `EngineError::WorldNotFound(String)`
 
-World manifest missing.
+World row lookup failure on a required read.
 
-- **First Check:** `data/worlds/{world_id}/` exists and contains `manifest.json`.
-- **Common Causes:** Typo in `--world` CLI argument; world directory deleted.
-- **Related Invariants:** `docs/system/startup.md`
+- **First Check:** The world key in the error payload; verify it exists in the `worlds` table.
+- **Related Invariants:** See [storage read contract](../system/storage.md).
+
+---
+
+## `EngineError::MessageNotFound(u64)`
+
+Message row lookup failure on a required read.
+
+- **First Check:** The `message_id` in the error payload; verify it exists in the `messages` table for the current game.
+- **Related Invariants:** See [storage read contract](../system/storage.md).
 
 ---
 

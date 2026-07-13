@@ -76,6 +76,38 @@ Storage methods touch exactly one table. Multi-table operations are free functio
 
 **Atomicity:** Sequential SQLite statements on a single connection. Tiny crash window; acceptable for non-critical data.
 
+## Read Contract: `get_*` vs `require_*`
+
+`Storage` exposes paired optional/required read methods for the entity rows where absence means different things depending on caller intent.
+
+**Optional reads (`get_*`)** return `Result<Option<T>, EngineError>` and are the right choice when absence is a legitimate runtime state:
+
+- Catalogue / listing flows (`GameCatalogue`, `WorldCatalogue`) where absence is a user-visible condition, not an error.
+- Fallback paths (e.g. bootstrap primary-world attempt: `None` triggers fallback).  
+- Existence checks (`is_none()` guards).
+- Validation flows that surface as `ApplicationError::Validation`, not as missing-entity `EngineError`.
+
+**Required reads (`require_*`)** return `Result<T, EngineError>` and are the right choice when the caller cannot make progress without the row:
+
+- Action pipeline bundle load.
+- Retry continuation bundle.
+- Generation-gate action start.
+- Persistence-gate fresh-state bundle.
+- Query handlers that need a live game row.
+- Arrival task fetch.
+- Bootstrap inner fallback-world and persona load.
+
+Helpers delegate to `get_*` via `?.ok_or_else(...)`. Backend `Err` propagates unchanged; only `Ok(None)` becomes the canonical typed not-found variant.
+
+| Lookup | Required-read helper | Canonical variant | Display |
+|---|---|---|---|
+| `get_game(id: u64)` | `require_game(id)` | `EngineError::GameNotFound(u64)` | `Game not found: {id}` |
+| `get_world(key: &str)` | `require_world(key)` | `EngineError::WorldNotFound(String)` | `World not found: {key}` |
+| `get_persona(key: &str)` | `require_persona(key)` | `EngineError::PersonaNotFound(String)` | `Persona not found: {key}` |
+| `get_active_swipe_index(id: u64)` | `require_active_swipe_index(id)` | `EngineError::MessageNotFound(u64)` | `Message not found: {id}` |
+
+`GameNotFound(u64)` and `MessageNotFound(u64)` are intentional type asymmetry: game and message IDs are numeric throughout the storage interface. `PersonaNotFound` is the only canonical not-found variant for personas; `Persona` and `Character` are distinct entities per the domain glossary.
+
 ## GameStateSnapshot
 
 Serializable subset of `GameState` for persistence. Messages excluded; hydrated separately. Lives in `crate::domain::model::state::game_state_snapshot` (domain-owned DTO; storage layer serializes/deserializes it to the `game_state_snapshots` table, but the type itself lives in the domain so the application layer does not import from `adapters::driven::storage` to reference a snapshot value).

@@ -158,20 +158,9 @@ impl PersistenceGate {
         EngineError,
     > {
         let game_id = self.storage.current_game_id();
-        let game = self
-            .storage
-            .get_game(game_id)?
-            .ok_or_else(|| EngineError::Config(format!("current_game_id {game_id} not found")))?;
-        let world_with_map = self
-            .storage
-            .get_world(&game.world_key)?
-            .ok_or_else(|| EngineError::Config(format!("world '{}' not found", game.world_key)))?;
-        let persona = self
-            .storage
-            .get_persona(&game.persona_key)?
-            .ok_or_else(|| {
-                EngineError::Config(format!("persona '{}' not found", game.persona_key))
-            })?;
+        let game = self.storage.require_game(game_id)?;
+        let world_with_map = self.storage.require_world(&game.world_key)?;
+        let persona = self.storage.require_persona(&game.persona_key)?;
         let npcs_list = self.storage.list_characters(world_with_map.world_id)?;
         let npcs_map: std::collections::HashMap<String, NpcCard> =
             npcs_list.into_iter().map(|n| (n.id.clone(), n)).collect();
@@ -188,7 +177,7 @@ impl PersistenceGate {
     }
 
     pub fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
-        let index = self.storage.get_active_swipe_index(id)?;
+        let index = self.storage.require_active_swipe_index(id)?;
         self.storage.update_swipe_text(id, index, text)
     }
 

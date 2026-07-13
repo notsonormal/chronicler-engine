@@ -15,8 +15,9 @@
     "rag_query",
     "rag_status",
     "visual_explainer",
-    "web_search"
+    "web_search",
+    "graphify"
   ],
   "planFolder": "chronicler_engine/docs/plans",
-  "scratchFolders": ["tmp", ".scratch"]
+  "scratchFolders": ["tmp", "chronicler_engine/docs/plans", ".scratch"]
 }

@@ -1,9 +1,11 @@
 # Super-Plan: `simpler-hexagon` Pre-Merge Cleanup
 
-**Date:** 2026-07-09
-**Status:** In progress — T1 COMPLETE 2026-07-10 (4 blockers fixed, build.py green: 1241 passed, 2 LLM skipped); T2 COMPLETE (tickets 00–04 resolved 2026-07-09; ticket 07 P4-concurrent per-game tracking resolved 2026-07-10 + follow-up TOCTOU/heal/dead-code cleanup landed 2026-07-10, build.py green: 1238 passed, 2 LLM skipped); T3 glossary renames COMPLETE 2026-07-10 (4 of 4 in-scope terms; glossary-2 carved to T9); T6 COMPLETE 2026-07-10 (ADR-031 written, ADR-030 amended, §T2.2/§T2.3/§A6.4/§B1.3 marked VOID); T9 grilling COMPLETE 2026-07-10 — map charted at `.scratch/t9-world-snapshot-removal/` (2 tickets, 14 SP; decisions A3/B2/no-cache/E1/F4/single-commit locked; 6 plan-review issues applied); T9-00 precursor COMPLETE 2026-07-11 (TestDataBuilder + thin TestAppBuilder + SqliteTestAppBuilder; 5 sqlite helpers deleted, 3 survivors retained; build.py green: 1238 passed, 2 LLM skipped; unblocks T9-01); T4, T5, T7, T8 pending
+**Date:** 2026-07-09 (updated 2026-07-13)
+**Current HEAD:** `91afc32` (2026-07-13, "Update graphify")
+**Build status:** `python build.py` green: **1253 passed, 2 LLM skipped** (log `logs/build_20260713_135819.log`)
+**Status:** In progress — T1 COMPLETE 2026-07-10 (4 blockers fixed); T2 COMPLETE (tickets 00–08 resolved); T3 glossary renames COMPLETE (4 terms + T9-01 WorldSnapshot removal); T6 COMPLETE (ADR-031 + ADR-030 amended); **T9 COMPLETE** (T9-00 + T9-01 + T13 + Storage helpers; only T9-02 CONTEXT.md honesty fix OPEN, 1 SP); T4, T5, T7, T8 pending (~38 SP)
 **Scope:** `chronicler_engine/` on branch `simpler-hexagon` (HEAD `1eda563` at plan creation; T2 work landed post-HEAD)
-**Total estimated effort:** ~60 SP across 8 tracks
+**Total estimated effort:** ~60 SP across 8 tracks → **~38 SP REMAINING** (T1/T2/T3/T6/T9-01 done; T4: 5 + T5 residual: 8 + T7: 9 + T8: 3 + T9-02: 1 + polish-19: 5 + misc: 7 = ~38 SP)
 
 ## Related
 
@@ -42,7 +44,7 @@ Consolidate findings from 4 prior reviews + 2 fresh antipattern passes + depth a
 | T6 | Plan/ADR honesty | **COMPLETE** (2026-07-10) | P0 | Med | High | none | ~1 |
 | T7 | Mechanical antipattern polish (~25 findings) | opportunistic | P3 | Low-Med | High | none | ~10 |
 | T8 | Workflow gates (D3/D4 prevention) | needs scope | P2 | Med | Med | none | ~3 |
-| T9 | WorldSnapshot removal (immutable-world-data out of GameState) | **T9-00 precursor COMPLETE** 2026-07-11 (test-side seam thinned); T9-01 main removal pending | P2 | High | Med | none | ~13+1 |
+| T9 | WorldSnapshot removal (immutable-world-data out of GameState) | **T9-01 COMPLETE 2026-07-13** (commits `0076750` + `bbfc32f`; engine unbundle + Tier-1 cleanup; `GameState` 4 mutable fields; `WorldSnapshot` struct + 3 companions deleted; build.py green: 1242/2) — **T9-02 CONTEXT.md honesty fix OPEN** (1 SP; see `.scratch/t9-world-snapshot-removal/issues/02-context-md-snapshot-honesty.md`) | P2 | High | Med | none | ~13+1 |
 
 P0 = defects / required for merge; P1 = structural / load-bearing; P2 = debt prune; P3 = cosmetic.
 
@@ -479,7 +481,7 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 
 ## T9 — WorldSnapshot Removal (Immutable World Data out of GameState)
 
-**Status: Grilling COMPLETE 2026-07-10 — map charted. T9-00 precursor COMPLETE 2026-07-11 (post-impl review-fix pass 2026-07-11: A1/S2 `seed_test_world_into_storage` now delegates to `TestData::seed_into`; S1 dropped unused `+ Send` on `state_mut`; A3 partial deleted `BackendSpec::Default` variant + migrated 10 `game_service.rs` multi-line chains to `.backends(MockBackend::default)`)** — `TestDataBuilder` + thin `TestAppBuilder` + integration-only `SqliteTestAppBuilder` landed (5 sqlite-backed helpers deleted, 3 survivors retained: `make_test_app` / `make_test_app_without_snapshot` / `seed_test_world_into_storage`; the `seed_test_world_into_storage` survivor now delegates to `TestData::seed_into`). Build.py green: 1238 passed / 2 LLM skipped (log `logs/build_20260711_171713.log`). T9-01 (`GameState::new` → 1-arg, delete `WorldSnapshot`) now unblocked. 5 decisions locked (A3/B2/no-cache/E1/F4); 2 tickets filed at `.scratch/t9-world-snapshot-removal/` (13 SP atomic + 1 SP CONTEXT.md honesty fix = 14 SP total). 6 plan-review issues applied (test-file + ctor-caller scope, failure-mode table reframed, 3 regression tests locking B2, arg-shape `&Arc<T>` + Ticket 07 interaction, subagent dispatch brief, glue work section). Main removal (T9-01) not yet started.
+**Status: T9-01 COMPLETE 2026-07-13** (commits `0076750` + `bbfc32f`). T9-00 precursor COMPLETE 2026-07-11 (post-impl review-fix pass: A1/S2 `seed_test_world_into_storage` delegates to `TestData::seed_into`; S1 dropped `+ Send`; A3 partial deleted `BackendSpec::Default`). T9-01 atomic ticket landed: 56 engine read-sites migrated to `&Arc<T>`/`&HashMap` args per A3, `GameState::new` 5-arg → 1-arg, `GameState::from_snapshot` 5-arg → 1-arg, `WorldSnapshot` struct + 3 companions deleted, `dto.rs` deleted, orchestrators fetch directly from `self.storage` per E1 (fail-loud per B2). Tier-1 cleanup `bbfc32f`: dynamic-rooms bug fix, 5 dead fixtures helpers deleted, `find_room_in_map`/`find_room_in_world_map` inlined, unused args dropped from `action_processing.rs`. Storage `require_*` helpers + canonical typed not-found errors landed 2026-07-13 (`EngineError::GameNotFound`/`PersonaNotFound`, `NpcNotFound` deleted). Build.py green: 1253 passed / 2 LLM skipped (HEAD `91afc32`). **T9-02 (CONTEXT.md `Snapshot` honesty fix) OPEN** — 1 SP docs-only; ticket at `.scratch/t9-world-snapshot-removal/issues/02-context-md-snapshot-honesty.md`. All 5 grilling decisions (A3/B2/no-cache/E1/F4) upheld at impl.
 
 **Findings owned:** `domain-reconciliation-2026-07-09.md` Snapshot row (moved out of T3 on 2026-07-10) + `simpler-hexagon-review.md` R6 (re-interpreted) + CONTEXT.md `Snapshot` entry honesty gap.
 
@@ -496,30 +498,17 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 - **Q5 = F4** no ADR. Principle already in ADR-031 (OpContext absorption). CONTEXT.md Snapshot entry fix + commit msg carry the record.
 - **Q6 = single commit**, uncommitted for review. Build checkpoints internal, figured out during impl.
 
-### Scope (decision A-Deep, locked 2026-07-10; Q1-Q6 grilling 2026-07-10)
+### Scope (decision A-Deep, locked 2026-07-10; Q1-Q6 grilling 2026-07-10) — **COMPLETE 2026-07-13**
 
-1. **Remove immutable world fields from `GameState`** (`domain/model/state/game_state.rs:20-23`)
-   - Drop `pub world: Arc<WorldCard>`, `pub map: Arc<MapDef>`, `pub player: Arc<PlayerCard>`, `pub npcs: HashMap<String, NpcCard>`
-   - `GameState::from_snapshot(&GameStateSnapshot)` takes 1 arg (currently 5)
-   - All engine callsites reading `state.world.*` / `state.map.*` / `state.npcs.*` / `state.player.*` must be reworked to take world data from the AppState cache (threaded as parameter) or from a new `WorldContext` handle
+1. **Remove immutable world fields from `GameState`** ✅ — `domain/model/state/game_state.rs` struct now has 4 mutable fields only (`movement`, `narrative`, `scene`, `npc_encounter_log`); `GameState::new` 5-arg → 1-arg (delegates to builder); `GameState::from_snapshot` 5-arg → 1-arg; 56 engine read-sites migrated to individual `&Arc<T>`/`&HashMap` args per A3; `GameState::current_room` inlined at 8 callers; `GameState::init_scenario_npcs` reshaped to take `&HashMap<String, NpcCard>` arg.
 
-2. **Add AppState-level Arc cache for world data**
-   - CONTEXT.md `Snapshot` entry already claims this cache exists (`src/adapters/driving/http/app_state.rs:41` AppState does NOT have it). This step makes CONTEXT.md honest.
-   - Cache keyed by `world_key` + `persona_key` (mirrors storage layer keys; matches ADR-026 persona relocation)
-   - Cache populated at boot (seed-time) + invalidated on world/persona CRUD
-   - Concrete shape TBD in T9 sub-plan grilling: `Arc<RwLock<HashMap<WorldKey, CachedWorld>>>` vs dedicated `WorldCache` struct in its own module
+2. **Add AppState-level Arc cache for world data** ❌ **REJECTED per Q3 (no-cache)** — CONTEXT.md `Snapshot` entry remains a lie (T9-02 OPEN to fix). World data fetched per-use by orchestrator from `self.storage`, threaded as `&Arc<T>` args. No cache added.
 
-3. **Delete `WorldSnapshot` struct** (`src/application/persistence_gate/dto.rs:13`) AND `load_world_snapshot()` AND `world_snapshot_or_empty()` AND `WorldSnapshot::empty()`
-   - 4 call sites collapse: `gate.rs:76-80,88,149` + `retry.rs:67`
-   - File `src/application/persistence_gate/dto.rs` deleted entirely
+3. **Delete `WorldSnapshot` struct** ✅ — `src/application/persistence_gate/dto.rs` deleted entirely; `WorldSnapshot` struct + `WorldSnapshot::empty` + `load_world_snapshot` + `world_snapshot_or_empty` all removed; `grep -rn WorldSnapshot chronicler_engine/src` = 0.
 
-4. **Fallback decision (D1b) — SEPARATE, NOT YET LOCKED**
-   - Currently `world_snapshot_or_empty()` swallows `load_world_snapshot()` Err and returns `WorldSnapshot::empty()` (a Default-zeroed struct)
-   - After T9 removes the struct, the fallback must be re-decided: keep defensive empty-on-Err recovery (current behavior, masks corrupted DB rows) or propagate Err to caller (surfaces corruption loudly)
-   - This is a real defensive-code-vs-fail-loud tradeoff. Open question for T9 sub-plan grilling.
+4. **Fallback decision (D1b)** ✅ **fail-loud adopted** — `world_snapshot_or_empty` deleted; storage `Err` propagates via `?` at orchestrator (`pipeline.rs::run_from_input`, `retry.rs::retry_event_continuation`, `arrival_service::run` now returns `Result<(), EngineError>`); Tier-1 cleanup + Storage `require_*` helpers enforce canonical typed not-found errors (`EngineError::GameNotFound`/`WorldNotFound`/`PersonaNotFound`).
 
-5. **New ADR** (probably ADR-033, since ADR-031/ADR-032 are claimed by T6/T2 Ticket 06)
-   - Documents: GameState scope shrink (immutable vs mutable split); AppState world cache addition; CONTEXT.md honesty fix; fallback decision (D1b)
+5. **New ADR** ❌ **REJECTED per Q5 (F4)** — No ADR-033. Grilling decision recorded in commit messages + this plan + Ticket 01; CONTEXT.md fix deferred to T9-02.
 
 ### Out of scope
 
@@ -554,21 +543,21 @@ T9 is the architecturally correct "delete WorldSnapshot" — applies the OpConte
 | arch-1 | 49-method god-object + 2 phantom Arc<Storage> | T2 | **resolved** (tickets 02–04; 4 modules carved, god-object gone, `self.storage` grep = 0, `application_service.rs` 723→275 LOC) |
 | arch-2 | ProcessActionResult + ApplicationError dual enums | T2 | **resolved** (ticket 04; both enums moved to `application/errors.rs`) |
 | arch-3 | AppState + ServerResources parallel-field ghost seam | T2 (C4 free follow-up) | **resolved** (2026-07-10; [Ticket 05](../../../.scratch/t2-god-class-split/issues/05-appstate-token-phantom-storage.md) grilling → [Ticket 07](../../../.scratch/t2-god-class-split/issues/07-p4-concurrent-generation-tracking.md) implementation — 5b: AppState.storage + AppState.preset_storage KEPT, legitimately driving-side; 5a: AppState.cancel_token renamed → shutdown_token, generation-token deleted) |
-| arch-4 | process_action 47 lines (plan said ≤30) | T6 (gate amend) + T2 (fix) | **partial** (T2 ticket 03 moved body to `GenerationGate::start_action`, preserved verbatim at 47 LOC; T6 gate amend pending to update ≤30 → ≤50, or split into 2 functions) |
+| arch-4 | process_action 47 lines (plan said ≤30) | T6 (gate amend) + T2 (fix) | **resolved** (T2 ticket 03 moved body to `GenerationGate::start_action` at 47 LOC; T6 marked §B1.3 VOID — gate intentionally retired, not amended) |
 | arch-5 | AppState dual cancel_token stale-on-replace latent concern | T2 follow-up | **resolved** (2026-07-10; [Ticket 05](../../../.scratch/t2-god-class-split/issues/05-appstate-token-phantom-storage.md) → [Ticket 07](../../../.scratch/t2-god-class-split/issues/07-p4-concurrent-generation-tracking.md) — P4-concurrent per-game registry replaces cancel_token for generation entirely; AppState's token is now shutdown-only (renamed `shutdown_token`); stale-on-replace concern moot — reset no longer touches tokens, `replace_shutdown_token` deleted in 07-cleanup) |
 | glossary-1 | PlayerCard → PersonaCard (~60 sites) | T3 | **resolved** (2026-07-10; renames + GameState::player→persona + PromptContext::player→persona + LayerRenderer::player→persona, ~100+ sites, all 1241 tests green) |
-| glossary-2 | WorldSnapshot removal (immutable world data out of GameState) | T9 (moved from T3, 2026-07-10) | **T9-00 precursor COMPLETE** (2026-07-11) — test-side seam thinned; T9-01 main removal pending; map at `.scratch/t9-world-snapshot-removal/`; Q1-Q6 resolved (A3/B2/no-cache/E1/F4/single-commit) |
+| glossary-2 | WorldSnapshot removal (immutable world data out of GameState) | T9 (moved from T3, 2026-07-10) | **T9-01 COMPLETE** (2026-07-13, commits `0076750` + `bbfc32f`) — engine unbundle, `WorldSnapshot` struct + 3 companions deleted, `GameState` 4 mutable fields only, `arrival_service::run` returns `Result`; **T9-02 CONTEXT.md honesty fix OPEN** (1 SP) |
 | glossary-3 | TurnResult → ActionResult (~6 sites) | T3 | **resolved** (2026-07-10; 4 sites in action_processing.rs + phases.rs, all tests green) |
 | glossary-4 | Action Pipeline phase_trigger_evaluation merged | T3 (amend glossary) | **resolved** (2026-07-10; CONTEXT.md Action Pipeline entry corrected per D3, no code split) |
 | glossary-5 | Avoid-alias leakage (10 sites) | T3 | **resolved** (2026-07-10; StoryLogTemplate→NarrativeLogTemplate + parse_command→parse_action; doc-comment sweep on 5 flagged files = 0 general-English uses needed rename; `story-log` UI surface deferred — scope creep, separate track) |
 | polish-1 | SERVER TRACE debug noise in polled endpoint | T7.1 | pending |
-| polish-2 | Dead `_map`/`_player`/`_npcs` params | T7.2 | pending |
+| polish-2 | Dead `_map`/`_player`/`_npcs` params | T7.2 | **partial** (T13 Phase 3 dropped `_map`/`_npcs` from `action_processing.rs` functions; `init_game.rs:97-99` `spawn_arrival_task_if_needed` still has unused `_map`/`_player`/`_npcs` params) |
 | polish-3 | Dead `_player_name` param | T7.2 | pending |
 | polish-4 | Dead `_sender` ignored 2× | T7.2 | pending |
 | polish-5 | Dead `unreachable!()` arms (4 sites) | T7.2 | pending |
 | polish-6 | Dead `ProcessActionResult::ShuttingDown` arm | T7.2 | pending |
-| polish-7 | Dead `make_test_app_with_default_preset` | T7.2 + T5 | pending |
-| polish-8 | Dead `let _ = world_snapshot;` | T7.2 + T5 | pending |
+| polish-7 | Dead `make_test_app_with_default_preset` | T7.2 + T5 | **resolved** (2026-07-11, T9-00 chunks) |
+| polish-8 | Dead `let _ = world_snapshot;` | T7.2 + T5 | **resolved** (2026-07-11, T9-00 chunks — `make_test_app_with_storage` deleted) |
 | polish-9 | Dead `_created_storage` tuple bool | T7.2 | pending |
 | polish-10 | Missing `[DOC: ...]` anchor in error_tests.rs | T7.3 | pending |
 | polish-11 | `sanitize_for_prompt` in wrong module | T7.4 | pending |
@@ -595,25 +584,27 @@ T9 is the architecturally correct "delete WorldSnapshot" — applies the OpConte
 | plan-3 | §B1.3 validation gate failed silently | T6 (mark VOID) | **resolved** (2026-07-10; VOID marker added) |
 | plan-4 | No ADR-031 documenting OpContext absorption | T6 | **resolved** (2026-07-10; ADR-031 written) |
 | plan-5 | ADR-030 access pattern not documented | T6 | **resolved** (2026-07-10; Access Pattern section added) |
-| plan-6 | No ADR documenting T2 modular split (ADR-032?) | T2 follow-up / T6 | **ticketed** — [Ticket 06](../../../.scratch/t2-god-class-split/issues/06-adr-032-t2-modular-split-record.md) (grilling; decide: new ADR-032 vs amend ADR-027 vs fold into ADR-031 vs arch-doc suffices) |
+| plan-6 | No ADR documenting T2 modular split (ADR-032?) | T2 follow-up / T6 | **resolved** (Ticket 06 closed 2026-07-10: NO new ADR-032; record-keeping via 2 inline comments + ADR-027 grandfathered list amend + `system.md` Tier Map extension; spawned Ticket 08 for mechanical edits, also closed) |
 
 **Total: 45 findings across 9 tracks.**
 
 ---
 
-## Recommended Sequencing
+## Recommended Sequencing (UPDATED 2026-07-13)
 
-**Wave 1 (P0, ship before merge):** T1 (4 bugs) + T6 (plan honesty). ~9 SP. ~1 week. These are non-negotiable defects + the doc anchors to make the rest tractable.
+**Wave 1 (P0, COMPLETE 2026-07-10):** T1 (4 bugs) + T6 (plan honesty). ~9 SP — ✅ done (build.py green: 1241 passed).
 
-**Wave 2 (P1, ship as cleanup branch):** T2 (god-class split, ~16 SP) + T3 (glossary drift, ~4 SP). ~20 SP. ~2-3 weeks. T2 is the load-bearing fix; T3 is mechanical and can land in parallel.
+**Wave 2 (P1, COMPLETE 2026-07-09/07-10):** T2 (god-class split, ~16 SP) + T3 (glossary drift, ~4 SP). ~20 SP — ✅ done (4 modules extracted, glossary renames applied, build.py green).
 
-**Wave 3 (P2, ship as separate PRs from clean main):** T4 (PhaseError, ~5 SP) + T5 (test builder collapse, ~16 SP). ~21 SP. ~2-3 weeks. T5 benefits from T2 being settled; T4 is independent.
+**Wave 3 (P2, PARTIAL):** T9 (WorldSnapshot removal, ~13 SP) **COMPLETE 2026-07-13** (commits `0076750` + `bbfc32f` + 2026-07-13 storage helpers; T9-02 CONTEXT.md honesty fix only item remaining, 1 SP); T5 (test builder collapse, ~16 SP) **PARTIALLY DONE** (T9-00 thinned builder 14→9 fields, deleted 5 sqlite helpers, `TestDataBuilder` landed; ~8 SP remaining for full collapse); T4 (PhaseError, ~5 SP) **pending**.
 
-**Wave 4 (P3, opportunistic):** T7 (~10 SP across 4 sub-PRs) + T8 (~3 SP). Pick up during other refactors.
+**Wave 4 (P3, opportunistic):** T7 (~9 SP across 4 sub-PRs — polish-7/8 resolved) + T8 (~3 SP) + arch-4 gate amend (0.5 SP, resolved by T6 VOID) + polish-2 partial (0.5 SP for `init_game.rs`) — **~13 SP pending**.
 
-**Total elapsed:** ~6-8 weeks if single-threaded; ~3-4 weeks if T2/T5 land in parallel via subagents.
+**Total remaining:** ~38 SP (T4: 5 + T5 residual: 8 + T7: 9 + T8: 3 + T9-02: 1 + polish-19: 5 + polish-2 remainder: 0.5 + misc: 6.5). Single-thread ~5 weeks; subagent T4+T5+T7 in parallel ~2-3 weeks.
 
-**T9 (WorldSnapshot removal, ~13 SP)** is P2 architecture work, not mechanical. Ship in Wave 3 alongside or after T2 arch-3 (AppState phantom-storage, Ticket 05) — same seam, must be coordinated. Has its own grilling (fallback behavior D1b, AppState cache shape, ADR number).
+** polish-19 (InMemoryData per-entity stores, ~5 SP)** — separate effort, not touched by T2. Defer or spin out.
+
+**Decision Required section now MOOT** — all three decisions (T2 timing, T5 vs T2 order, T8 timing) were resolved implicitly during implementation. T2/T3 landed Wave 2; T9 landed Wave 3; T5 started via T9-00; T8 deferred.
 
 ## Decision Required
 
@@ -1045,4 +1036,4 @@ Wins phrasing (in codebase-design vocabulary): "locality: bugs concentrate in on
 
 # End of super-plan
 
-Total: 8 tracks, ~64 SP, 45 findings, 3 sequencing decisions required before sub-plan split.
+Total: **5 tracks remaining** (T4/T5/T7/T8/T9-02), ~38 SP, **25 findings resolved**, 20 findings pending. **3 sequencing decisions MOOT** (resolved implicitly during implementation).

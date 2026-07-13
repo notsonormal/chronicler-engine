@@ -99,3 +99,27 @@ fn test_narrative_failure_into_engine_error() {
         other => panic!("Expected EngineError::Narrative(PromptBuild), got: {other:?}"),
     }
 }
+
+#[test]
+fn test_engine_error_display_not_found_variants() {
+    let err = EngineError::GameNotFound(42u64);
+    assert!(err.to_string().contains("Game not found: 42"), "got: {err}");
+
+    let err = EngineError::PersonaNotFound("alice".to_string());
+    assert!(
+        err.to_string().contains("Persona not found: alice"),
+        "got: {err}"
+    );
+
+    let err = EngineError::WorldNotFound("bob".to_string());
+    assert!(
+        err.to_string().contains("World not found: bob"),
+        "got: {err}"
+    );
+
+    let err = EngineError::MessageNotFound(7u64);
+    assert!(
+        err.to_string().contains("Message not found: 7"),
+        "got: {err}"
+    );
+}

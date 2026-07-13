@@ -81,14 +81,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
                 args.world,
                 all_worlds[0].key
             );
-            match preset_storage.get_world(&all_worlds[0].key)? {
-                Some(w) => w,
-                None => {
-                    return Err(EngineError::Config(
-                        "Failed to load fallback world".to_string(),
-                    ));
-                }
-            }
+            preset_storage.require_world(&all_worlds[0].key)?
         }
     };
 
@@ -97,9 +90,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     let world_arc = Arc::new(world_with_map.world_card.clone());
     let map_arc = Arc::new(world_with_map.map);
 
-    let player = preset_storage
-        .get_persona(&args.persona)?
-        .ok_or_else(|| EngineError::Config(format!("Persona '{}' not found", args.persona)))?;
+    let player = preset_storage.require_persona(&args.persona)?;
 
     let active_game_id =
         super::init_game::resolve_game_id(&db_pool, &world_arc, &args.persona, &player.sheet.name)?;

@@ -68,6 +68,10 @@ Three `src/application/` files import `Storage` directly under `// arch-lint: st
 - `game_service.rs` — intentional persistence boundary (ADR-027).
 - `agents/registry.rs`, `agents/quantifier/agent.rs` — deferred to T2 reliability plan.
 
+## Storage Read Contract: `get_*` vs `require_*`
+
+Storage exposes paired optional (`get_*`) and required (`require_*`) read methods so that absence can mean either "legitimate runtime state" or "missing row" depending on caller intent. The mechanical contract — signatures, helper dispatch, per-entity variant mapping — lives in [`docs/system/storage.md`](./system/storage.md#read-contract-get-_-vs-require_).
+
 ## Settings Flow
 
 Settings are loaded **once** at startup and propagated through the construction chain:

@@ -733,3 +733,55 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
         final_state.narrative.input_buffer.status
     );
 }
+
+// Required-read migration: missing persona row must surface as canonical
+// `EngineError::PersonaNotFound` via `GenerationStatus::Error`.
+// Pre-migration emitted `NpcNotFound`.
+
+#[test]
+fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
+    let data = TestDataBuilder::default_test().build();
+    let storage = {
+        let base = Storage::new_in_memory();
+        // Seed only the world — persona row intentionally absent.
+        base.seed_world(&data.world, &data.map)
+            .expect("test setup: seed test world");
+        let id = base
+            .create_game(
+                &data.world.name,
+                &data.world.key,
+                "__missing_persona__",
+                &data.persona.sheet.name,
+                "Test Game",
+            )
+            .expect("test setup: create game");
+        base.set_game_id(id);
+        base
+    };
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(storage))
+        .skip_seeding(true)
+        .game_service(Arc::new(service))
+        .build_service();
+
+    let state = app.load_or_fresh();
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
+
+    assert!(
+        matches!(outcome, Ok(())),
+        "Pipeline must return Ok(()) (no panic, no Failed variant), got {outcome:?}"
+    );
+    let final_state = app.load_or_fresh();
+    let msg = match &final_state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error, got {other:?}"),
+    };
+    assert!(
+        msg.contains("Persona not found: __missing_persona__"),
+        "expected canonical 'Persona not found: __missing_persona__' in error message, got: {msg}"
+    );
+}

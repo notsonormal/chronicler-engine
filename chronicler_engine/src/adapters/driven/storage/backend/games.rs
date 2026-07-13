@@ -121,6 +121,14 @@ impl Storage {
             Backend::InMemory(data) => Ok(data.games.iter().find(|g| g.id == id).cloned()),
         })
     }
+
+    /// Required-read of a game row by id. Absence becomes
+    /// [`EngineError::GameNotFound`]. Optional / fallback / existence /
+    /// validation callers should stay on [`Storage::get_game`](Self::get_game).
+    pub fn require_game(&self, id: u64) -> Result<Game, EngineError> {
+        self.get_game(id)?
+            .ok_or_else(|| EngineError::GameNotFound(id))
+    }
 }
 
 fn db_game_to_game(db: &DbGame) -> Result<Game, EngineError> {

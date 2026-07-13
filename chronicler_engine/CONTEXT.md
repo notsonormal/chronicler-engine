@@ -57,7 +57,7 @@ An alternate version of an AI-generated Message, preserving a prior generation n
 _Avoid_: Variant, version, alternate
 
 **Snapshot**:
-A GameStateSnapshot — serialized mutable game sub-state (movement, narrative, scene, npc_encounter_log), message-aligned and persisted immediately with its corresponding Message. No `committed` flag; every snapshot is immediately valid for restore. Immutable world data is cached on AppState as Arcs and re-attached on load, not stored in the snapshot.
+A GameStateSnapshot — serialized mutable game sub-state (movement, narrative, scene, npc_encounter_log), message-aligned and persisted immediately with its corresponding Message. No `committed` flag; every snapshot is immediately valid for restore. Immutable world data (World, Map, Persona, Characters) lives in Storage only; the orchestrator (action pipeline, arrival service, retry) fetches each field it needs directly from Storage and threads it as an individual `Arc<T>` arg to the engine function that consumes it.
 _Avoid_: Save, checkpoint, dump
 
 ## Deprecated Terms

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::application::action_pipeline::retry::{
     retry_event_continuation, retry_last_response_impl, retry_main_narration,
 };
+use crate::application::action_pipeline::pipeline::ActionOutcome;
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
 use crate::adapters::driven::llm::providers::MockBackend;
@@ -851,5 +852,51 @@ fn test_retry_event_continuation_returns_completed_on_persona_fetch_failure() {
         ),
         "retry_event_continuation must persist GenerationStatus::Error on persona fetch failure, got {:?}",
         state.narrative.input_buffer.status
+    );
+}
+
+// Required-read migration: missing game row must surface as canonical
+// `EngineError::GameNotFound` via `GenerationStatus::Error`.
+// Pre-migration emitted an Internal string.
+
+#[test]
+fn retry_records_canonical_game_not_found_when_game_missing() {
+    let storage = {
+        let base = Storage::new_in_memory();
+        let data = TestDataBuilder::default_test().build();
+        // Seed world + persona + npcs so the IIFE bundle-load could proceed past
+        // `require_game` if it ever got that far. The missing-game path is what
+        // we want to lock in here.
+        data.seed_into(&base);
+        // Override `seed_into`'s `set_game_id(1)` — there is no game row at id
+        // 999, so `require_game(999)` will return `Err(GameNotFound(999))`.
+        base.set_game_id(999);
+        base
+    };
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let app = TestAppBuilder::with_data(TestDataBuilder::default_test().build())
+        .storage(Arc::new(storage))
+        .skip_seeding(true)
+        .game_service(Arc::new(service))
+        .build_service();
+
+    let mut state = app.load_or_fresh();
+    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
+
+    let outcome = retry_event_continuation(&app, state);
+    assert!(
+        matches!(outcome, ActionOutcome::Completed),
+        "retry_event_continuation must return Completed on missing game, got {outcome:?}"
+    );
+    let state = app.load_or_fresh();
+    let msg = match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error, got {other:?}"),
+    };
+    assert!(
+        msg.contains("Game not found: 999"),
+        "expected canonical 'Game not found: 999' in error message, got: {msg}"
     );
 }

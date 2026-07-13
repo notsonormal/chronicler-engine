@@ -150,6 +150,6 @@ pub fn spawn_arrival_task_if_needed(
     };
 
     runtime.spawn_blocking(move || {
-        task_ctx.run();
+        let _ = task_ctx.run();
     });
 }

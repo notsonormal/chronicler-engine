@@ -105,31 +105,41 @@ impl Storage {
         })
     }
 
-    pub fn get_active_swipe_index(&self, id: u64) -> Result<usize, EngineError> {
+    pub fn get_active_swipe_index(&self, id: u64) -> Result<Option<usize>, EngineError> {
         let game_id = self.game_id();
         self.with_backend_mut("get_active_swipe_index", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let idx: i64 = conn
-                    .query_row(
-                        "SELECT active_swipe_index FROM messages WHERE id = ?1 AND game_id = ?2",
-                        rusqlite::params![id as i64, game_id as i64],
-                        |row| row.get(0),
-                    )
-                    .map_err(|e| {
-                        EngineError::Config(format!("Failed to get active swipe index: {e}"))
-                    })?;
-                Ok(idx as usize)
+                match conn.query_row(
+                    "SELECT active_swipe_index FROM messages WHERE id = ?1 AND game_id = ?2",
+                    rusqlite::params![id as i64, game_id as i64],
+                    |row| row.get::<_, i64>(0),
+                ) {
+                    Ok(idx) => Ok(Some(idx as usize)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(e) => Err(EngineError::Config(format!(
+                        "Failed to get active swipe index: {e}"
+                    ))),
+                }
             }
             Backend::InMemory(data) => {
-                if let Some(vec) = data.messages.get(&game_id) {
-                    if let Some(m) = vec.iter().find(|m| m.id == id) {
-                        return Ok(m.active_swipe_index);
-                    }
+                let Some(vec) = data.messages.get(&game_id) else {
+                    return Ok(None);
+                };
+                match vec.iter().find(|m| m.id == id) {
+                    Some(m) => Ok(Some(m.active_swipe_index)),
+                    None => Ok(None),
                 }
-                Err(EngineError::Config(format!("Message {id} not found")))
             }
         })
+    }
+
+    /// Required-read of the active swipe index for a message. Absence becomes
+    /// [`EngineError::MessageNotFound`]. Optional / existence callers should
+    /// stay on [`Storage::get_active_swipe_index`](Self::get_active_swipe_index).
+    pub fn require_active_swipe_index(&self, id: u64) -> Result<usize, EngineError> {
+        self.get_active_swipe_index(id)?
+            .ok_or_else(|| EngineError::MessageNotFound(id))
     }
 
     pub fn update_active_swipe(&self, message_id: u64, index: usize) -> Result<(), EngineError> {

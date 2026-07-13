@@ -126,6 +126,29 @@ fn test_get_game_failure() {
 }
 
 #[test]
+fn require_game_returns_entity_when_present() {
+    let storage = Storage::new_in_memory();
+    let id = storage
+        .create_game("w", "w", "test_player", "Test Player", "RequireHit")
+        .unwrap();
+    let via_get = storage.get_game(id).unwrap().unwrap();
+    let via_require = storage.require_game(id).unwrap();
+    assert_eq!(via_require.id, via_get.id);
+    assert_eq!(via_require.name, via_get.name);
+    assert_eq!(via_require.id, id);
+}
+
+#[test]
+fn require_game_returns_canonical_not_found_when_absent() {
+    let storage = Storage::new_in_memory();
+    let result = storage.require_game(999);
+    match result {
+        Err(crate::error::EngineError::GameNotFound(id)) => assert_eq!(id, 999),
+        other => panic!("Expected EngineError::GameNotFound(999), got: {other:?}"),
+    }
+}
+
+#[test]
 fn test_delete_game_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     handle.set("delete_game", TestOverride::config("delete failed"));
