@@ -1,3 +1,5 @@
+"""Install git hooks from chronicler_engine/scripts/git-hooks/ to .git/hooks/."""
+
 import shutil
 import sys
 from pathlib import Path

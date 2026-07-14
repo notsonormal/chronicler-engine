@@ -1,3 +1,5 @@
+"""Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered."""
+
 import re
 import sys
 from pathlib import Path

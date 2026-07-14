@@ -37,9 +37,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `templates.rs` — Template rendering utilities
         - `view_models.rs` — View models decouple templates from domain types.
   - **application/**
-    - `application_service.rs` — DefaultApplicationService — thin façade over 4 cohesive modules plus 2 collaborator fields (T2 ticket 04 — final façade shrink).
+    - `application_service.rs` — DefaultApplicationService — façade over application collaborators.
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
-    - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state (T2 ticket 04 — extracted from DefaultApplicationService).
+    - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
     - `game_service.rs` — Game service handling gameplay operations
     - `generation_guard.rs` — Generation guard logic
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
@@ -53,6 +53,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **action_pipeline/**
       - `actions.rs` — Action enum and action processing types
       - `mod.rs` — Action pipeline for processing game actions
+      - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
       - `phases.rs` — Phase implementations for the action pipeline
       - `pipeline.rs` — Action pipeline orchestration and execution
       - `retry.rs` — Retry logic for action pipeline operations
@@ -61,7 +62,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `registry.rs` — Runtime agent lookup and lifecycle
       - `trait_def.rs` — Agent trait definitions
       - **quantifier/**
-        - `agent.rs` — Quantifier agent implementation
+        - `agent.rs` — Quantifier agent implementation.
         - `mod.rs` — Quantifier agent system
         - `orchestration.rs` — Quantifier orchestration
         - `parser.rs` — Quantifier output parsing
@@ -72,11 +73,12 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `dto.rs` — DebugStateView — debug-state DTO for the HTTP debug endpoint (T2 ticket 04 — extracted from DefaultApplicationService).
       - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint (T2 ticket 04 — extracted from DefaultApplicationService).
     - **game_catalogue/**
-      - `gate.rs` — GameCatalogue — game-lifecycle storage orchestration (T2 ticket 04 — façade-first carve-out from DefaultApplicationService).
+      - `gate.rs` — GameCatalogue — game-lifecycle storage orchestration.
       - `mod.rs` — GameCatalogue — game-lifecycle storage orchestration (T2 ticket 04 — façade-first carve-out).
     - **generation_gate/**
-      - `gate.rs` — GenerationGate — owns `CancellationToken` + `is_generating: Arc<AtomicBool>`
-      - `mod.rs` — GenerationGate — owns the per-process cancellation token + `is_generating`
+      - `gate.rs` — GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
+      - `mod.rs` — GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
+      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
     - **narrative_prompt/**
       - `assembler.rs` — Multi-stage prompt builder
       - `budget.rs` — Token budget management
@@ -84,9 +86,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Prompt construction orchestration
       - `types.rs` — Prompt type definitions
     - **persistence_gate/**
-      - `dto.rs` — WorldSnapshot DTO — persistence load bundle for an active game
-      - `gate.rs` — PersistenceGate — owns game `Arc<Storage>` + `Arc<PresetStore>` + persistence helpers
-      - `mod.rs` — PersistenceGate — game-storage seam + persistence helpers
+      - `gate.rs` — PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers (T2 façade-first carve-out).
+      - `mod.rs` — PersistenceGate — game-storage seam + persistence helpers (T2 façade-first carve-out).
     - **ports/**
       - `llm_message_repository.rs` — LLM message persistence port
       - `llm_provider.rs` — LLM provider port (transport-only)
@@ -141,27 +142,30 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `trigger_context.rs` — Stored trigger snapshot context
   - **test_support/**
     - `context.rs` — Builds `DefaultApplicationService` instances for integration tests.
-    - `fixtures.rs` — 
+    - `fixtures.rs` — Test fixtures shared between unit and integration tests.
     - `noop_forensics.rs` — Canonical NoopForensics implementation for tests.
     - `recording_forensics.rs` — Recording spy for `LlmMessageRepository`
-    - `test_app_builder.rs` — Test application builder for HTTP and integration tests
+    - `test_app_builder.rs` — Test application builder for HTTP and integration tests.
+    - `test_data_builder.rs` — Test data bundle builder for integration tests.
 - **scripts/**
   - `build.py` — Full build, validate, and test for Chronicler Engine.
-  - `check_python_docstrings.py` — Summary
-  - `check_test_structure.py` — Inline `#[cfg(test)] mod X { ... }` blocks are forbidden in src/.
-  - `coverage_summary.py` — No summary
-  - `diagnostic_benchmark.py` — No summary
+  - `check_python_docstrings.py` — Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings.
+  - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.
+  - `coverage_summary.py` — Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON.
+  - `diagnostic_benchmark.py` — Run the diagnostic benchmark suite and produce an aggregated markdown/JSON report.
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
+  - `find_free_fn_smells.py` — Find module-level free functions whose first parameter looks like a receiver.
   - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/AGENTS.md.
   - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
   - `generate_tests_structure_index.py` — Generate tests/AGENTS.md structure index from module summaries.
   - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.
-  - `install_git_hooks.py` — No summary
+  - `install_git_hooks.py` — Install git hooks from chronicler_engine/scripts/git-hooks/ to .git/hooks/.
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
-  - `refine_character_json.py` — No summary
+  - `refine_character_json.py` — Split character card descriptions into structured personality/scenario/description fields.
+  - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
   - `validate_adrs.py` — Validate ADR files against the standard in docs/adr/README.md.
-  - `validate_data.py` — No summary
+  - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
   - `validate_docs.py` — Validate markdown docs under chronicler_engine/docs/.
 <!-- AUTO-STRUCTURE END -->
 

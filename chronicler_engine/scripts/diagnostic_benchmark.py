@@ -1,3 +1,4 @@
+"""Run the diagnostic benchmark suite and produce an aggregated markdown/JSON report."""
 
 import argparse
 import json

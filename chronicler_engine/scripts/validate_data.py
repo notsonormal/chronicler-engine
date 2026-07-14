@@ -1,3 +1,5 @@
+"""Validate JSON data files against schemas and check cross-file references."""
+
 import json
 import sys
 from pathlib import Path

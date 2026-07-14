@@ -1,3 +1,5 @@
+"""Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings."""
+
 from __future__ import annotations
 
 import sys

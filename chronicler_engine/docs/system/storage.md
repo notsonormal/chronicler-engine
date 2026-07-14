@@ -7,7 +7,7 @@ The Chronicler Engine storage layer provides unified persistence for game sessio
 **Key Design Decisions:**
 
 - **Unified Storage struct** — Single `Storage` struct with all CRUD operations as methods
-- **Backend enum abstraction** — `Sqlite` (production), `InMemory` (dev), `Test` (testing)
+- **BackendKind decorator over Backend** — failure injection lives on `BackendKind`, not `Backend`. See "Backend Enum Pattern" below.
 - **No trait boilerplate** — No `dyn Trait`, `Arc<dyn>`, or custom mocks
 - **Single table per method** — Each storage method touches exactly one table
 - **Cross-table coordination in application tier** — `DefaultApplicationService` (the `application::application_service::DefaultApplicationService` orchestrator) composes multi-table operations

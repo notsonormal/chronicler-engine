@@ -44,7 +44,7 @@ See `architecture/guardrails.md` (§3, with test reference `tests/poison_recover
 
 Why: read-mostly hot path. Avoids lock contention for the common polling query.
 
-See `architecture/system.md` §Tier Map and [ADR-030](../adr/adr-030-is-generating-invariant.md).
+See `architecture/system.md` §Tier Map.
 
 ### `CancellationToken` shutdown gate
 
@@ -55,3 +55,7 @@ Why: shutdown signal is a runtime concern at the driving adapter, not a phase co
 ## Reserved
 
 (Add new entries only when a Rust idiom recurs across 2+ docs and the existing inline mentions are noise rather than load-bearing.)
+
+## Document References
+
+- [ADR-030: `is_generating` Invariant](../adr/adr-030-is-generating-invariant.md) — registry vs atomic, ownership check, projection update rationale

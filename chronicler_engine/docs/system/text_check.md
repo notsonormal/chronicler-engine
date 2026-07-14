@@ -1,167 +1,26 @@
 # Specification: Text Check System
 
-## Overview
-
-The Text Check system provides spell-checking and grammar-checking for player input before it reaches the LLM. It uses Harper Core — a pure-Rust linter from Automattic — with a built-in FST dictionary and configurable lint rules.
-
 ## Goals
 
 1. **Automatic pre-flight check**: Before player input reaches the LLM, the engine checks it and — if issues are found — shows a preview UI where the player can choose the corrected or original text.
 2. **Manual "Check Text" button**: A reusable UI button that can run the checker on-demand against any text.
 
-## Architecture
-
-```mermaid
-flowchart TD
-    A[Player Input] --> B[/action/check]
-    B -- Issues found --> C[Preview Fragment]
-    B -- No issues --> D[/action]
-    C -- Send Corrected --> E[/action/confirm]
-    C -- Send Original --> E
-    C -- Cancel --> F[Restore Action Area]
-```
-
-## Types
-
-### `CheckResult`
-
-```rust
-pub struct CheckResult {
-    pub original: String,
-    pub corrected: String,
-    pub issues: Vec<CheckIssue>,
-}
-```
-
-### `CheckIssue`
-
-```rust
-pub struct CheckIssue {
-    pub span: Range<usize>,      // Byte span in original text
-    pub message: String,         // Human-readable description
-    pub suggestion: Option<String>, // Replacement text, if any
-    pub kind: IssueKind,         // Classification
-}
-```
-
-### `IssueKind`
-
-```rust
-pub enum IssueKind {
-    Spelling,
-    Grammar,
-    Capitalization,
-    Formatting,
-    Style,
-    Other,
-}
-```
-
-## Check Modes
-
-`TextCheckMode` controls which lint rules are active; see `src/domain/model/settings.rs` for variant definitions.
-
 ## Dictionary Strategy
 
-The `HarperTextChecker` merges two dictionaries:
-
-1. **`FstDictionary::curated()`** — harper-core's built-in English dictionary (~130K words)
-2. **`MutableDictionary`** — user-provided ignored words from `TextCheckSettings.ignored_words`
-
-This allows fantasy names, place names, and game-specific terms to be added to a personal dictionary.
-
-## Server Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/action/check` | Pre-flight check. Returns preview if issues found, otherwise forwards to `/action`. |
-| `POST` | `/action/confirm` | Accepts corrected or original text from the preview fragment and processes the action. |
-| `POST` | `/check-text` | Manual check. Returns preview fragment for any text. |
-| `POST` | `/settings/text-check` | Saves text check mode and auto-check preference. |
+User-provided ignored words are merged with the checker's built-in dictionary at service construction; the snapshot does not refresh per-check.
 
 ## Settings
 
-`TextCheckSettings` is stored in the SQLite `settings` row (id=1) alongside existing `AppSettings` fields:
+Settings are stored as a row in the SQLite `settings` table. Mode defaults to `Disabled`; ignored words default to empty. See `src/domain/model/settings.rs` for variant definitions of `TextCheckMode`.
 
-```rust
-pub struct TextCheckSettings {
-    pub mode: TextCheckMode,
-    pub enable_auto_check: bool,
-    pub ignored_words: Vec<String>,
-}
-```
+## Issue Classification
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `mode` | `Disabled` | Which lint rules are active |
-| `enable_auto_check` | `true` | Whether `/action/check` runs automatically before sending |
-| `ignored_words` | `[]` | Words to treat as valid (fantasy names, etc.) |
-
-## UI Integration
-
-### Preview Fragment
-
-When issues are found, the action area is replaced with a preview showing:
-- Original text (muted)
-- Corrected text (green accent)
-- Issue tags (spell = orange, grammar = pink)
-- **Send** — submits the corrected text to `/action/confirm`
-- **Send Original** — submits the original text to `/action/confirm`
-- **Cancel** — restores the normal action area
-
-After submission, the action area restores to its normal form (`#command-form`) via `hx-on::after-request`.
-
-### Settings Card
-
-A "Text Check" card appears in the Settings tab below Connections:
-- Mode dropdown (Disabled / Spell / Grammar / Spell + Grammar)
-- "Check before sending to LLM" checkbox
+`IssueKind` classifies a check issue (`Spelling`, `Grammar`, `Capitalization`, `Formatting`, `Style`, `Other`). See `src/application/ports/text_checker.rs` for variant definitions.
 
 ## Error Handling
 
-- If harper-core fails to lint, the error is logged and the original text is forwarded to the action handler (fail-open).
-- If the preview template fails to render, a 500 error fragment is returned.
+- If the checker fails to lint, the error is logged and the original text is forwarded (fail-open).
 - If settings cannot be loaded, defaults are used (`Disabled` mode).
-
-## Performance
-
-- Linting is synchronous and in-memory (no I/O).
-- `HarperTextChecker` is constructed once per `TextCheckService` at startup; the `ignored_words` snapshot is taken at construction. The service is shared; per-check work does not re-instantiate the checker.
-- Typical check latency: <10ms for a single sentence.
-
-## Testing
-
- **Integration tests**: `tests/http/endpoints/text_check.rs` — misspelling detection, clean text, disabled mode, ignored words
-- **Integration tests**: Preview endpoint returns fragment when issues exist; forwards when disabled
-
-## Port, Service & Factory
-
-### `TextChecker` Port
-
-The `TextChecker` port trait defines the contract:
-
-```rust
-pub trait TextChecker {
-    fn check(
-        &self,
-        text: &str,
-        mode: TextCheckMode,
-        ignored_words: &[String],
-    ) -> Result<Option<CheckResult>, EngineError>;
-}
-```
-
-### `TextCheckService` Orchestrator
-
-The `TextCheckService` owns the `TextChecker` adapter and exposes `check_player_input()` as its public API. Driving adapters (HTTP handlers) call through this service:
-
-```rust
-app.text_check_service.check_player_input(text, mode)
-```
-
-### Factory Wiring
-
-The `bootstrap/text_check_factory.rs` module constructs the `TextCheckService` from the `HarperTextChecker` adapter and settings. This is the composition root for text checking.
 
 ## Boundaries
 

@@ -8,8 +8,8 @@ The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSee
 
 ### 1. The Blocking Task Pattern
 
-- **Concurrency**: `GameService` is fully synchronous; HTTP handlers in `src/adapters/driving/http/fragments/actions.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`. See [architecture/rust_technical.md](../architecture/rust_technical.md) §Sync services + `spawn_blocking` offload for the rationale (Axum event loop, Rust 2024 async-trait incompatibility).
-- **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown. Long-running pipelines (`ActionPipeline::run_from_input`) also perform an in-phase α-check (`app.current_game_id()` against the started id) at internal stage boundaries (after main narration, before trigger continuation, after trigger continuation) to abort stale generations whose `current_game_id()` changed mid-pipeline (e.g. via `switch_game` or `delete_game`). When cancelled mid-pipeline, `ActionPipeline::handle_cancellation()` resets `GenerationStatus::Idle`, clears the phase, and persists the state. See [system/action_pipeline.md](./action_pipeline.md) §Cancellation for the α-check boundary details.
+- **Concurrency**: `GameService` is fully synchronous; HTTP handlers in `src/adapters/driving/http/fragments/actions.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`.
+- **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown. Long-running pipelines (`ActionPipeline::run_from_input`) also perform an in-phase α-check (`app.current_game_id()` against the started id) at internal stage boundaries (after main narration, before trigger continuation, after trigger continuation) to abort stale generations whose `current_game_id()` changed mid-pipeline (e.g. via `switch_game` or `delete_game`). When cancelled mid-pipeline, `ActionPipeline::handle_cancellation()` resets `GenerationStatus::Idle`, clears the phase, and persists the state.
 
 ### 2. Model Configuration
 
@@ -107,4 +107,6 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
 - [ADR-010: Concurrency and Generation Gate Model](../adr/adr-010-concurrency-generation-gate.md) — `spawn_blocking` + `CancellationToken` + `is_generating` invariant
 - [ADR-012: LLM Call Logging and Forensics](../adr/adr-012-llm-message-logging.md) — `llm_messages` table + retention + dashboard tab
 - [system/prompt_system.md](./prompt_system.md) — layered prompt composition + token budget constants + trimming strategy
+- [system/action_pipeline.md](./action_pipeline.md) — α-check stage boundaries and cancellation flow
 - [diagnostics/DEBUGGING.md](../diagnostics/DEBUGGING.md) — instrumented function list + tracing commands
+- [architecture/rust_technical.md](../architecture/rust_technical.md) — `spawn_blocking` offload rationale (sync services, no async traits)

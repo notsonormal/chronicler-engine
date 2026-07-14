@@ -1,3 +1,5 @@
+"""Split character card descriptions into structured personality/scenario/description fields."""
+
 import json
 import re
 import glob

@@ -44,7 +44,7 @@ Narrative generation errors. These originate in the prompt builder and backend n
 - **Common Causes:** Prompt exceeds `max_context_tokens`; history too long; token budget miscalculation.
 - **Related Invariants:** In production, context overflow raises `EngineError::ContextOverflow` directly. The `PromptBuild` variant is only constructed in `src/error_tests.rs` (test fixture); no production path uses it.
 
-### `NarrativeFailure::Generation { stage, reason }`
+### `NarrativeFailure::Generation { stage, reason }`To b
 - **First Check:** Backend-specific logs. Mock backend uses `stage: "mock"` (narration path) or `stage: "mock_trigger"` (trigger-continuation path).
 - **Common Causes:** LLM call failed after prompt built successfully; backend misconfiguration (e.g. DeepSeek not implemented).
 - **Related Invariants:** See `docs/architecture/guardrails.md` §5 Runtime Invariants

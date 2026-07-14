@@ -611,7 +611,7 @@ def main():
             return
 
         total_steps = (
-            6  # clippy, test-structure, docstrings, copy assets, tests, report/skip
+            7  # clippy, test-structure, docstrings, doc-validation, copy assets, tests, report/skip
         )
         if not args.no_fmt:
             total_steps += 1
@@ -643,6 +643,12 @@ def main():
         timed_step(
             "Running Python docstring guardrail...",
             "python scripts/check_python_docstrings.py",
+            env=cargo_env,
+        )
+
+        timed_step(
+            "Validating markdown docs...",
+            "python scripts/validate_docs.py",
             env=cargo_env,
         )
 

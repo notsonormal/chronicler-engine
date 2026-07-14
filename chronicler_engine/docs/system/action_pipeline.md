@@ -2,7 +2,7 @@
 
 ## Objective
 
-The action pipeline orchestrates the FreeAction lifecycle: pre-snapshot, narrate, post-generation agents, engine commit, trigger continuation, finalize. It unifies the normal action flow and the retry flows. Pipeline phases run synchronously inside a `spawn_blocking` task; the pipeline instance is constructed once at startup and shared by `Arc`. See [architecture/rust_technical.md](../architecture/rust_technical.md) §Sync services + `spawn_blocking` offload for the runtime rationale.
+The action pipeline orchestrates the FreeAction lifecycle: pre-snapshot, narrate, post-generation agents, engine commit, trigger continuation, finalize. It unifies the normal action flow and the retry flows. Pipeline phases run synchronously inside a `spawn_blocking` task; the pipeline instance is constructed once at startup and shared by `Arc`.
 
 ## Phase Flow
 

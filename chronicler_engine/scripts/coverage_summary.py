@@ -1,3 +1,5 @@
+"""Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON."""
+
 import json
 import sys
 
