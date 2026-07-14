@@ -45,7 +45,7 @@ The state field IS the error channel: `state.narrative.input_buffer.status` carr
 
 Two error variants travel via `Result<_, PhaseError>`:
 
-- **`PhaseError::Cancelled`** — the only variant returned as `Err` from the pipeline. All other variants are absorbed because `status` already carries the error.
+- **`PhaseError::Cancelled`** — the only `PhaseError` variant propagated to the caller; all other variants are absorbed because `status` already carries the error.
 - **`PhaseError::PersistFailed { label, source }`** — constructed by `persist_snapshot_or_err` at four snapshot sites (`pre-main`, `pre-event`, `post-trigger`, `post-engine`); the helper writes `GenerationStatus::Error(...)` + persists state before returning the `Err`, so the UI surface stays consistent even when `run_from_input` returns `Err(...)` upstream. Only the pre-event site propagates the error to the caller; the other three call `persist_snapshot_or_err(...).is_err()` and swallow.
 
 The remaining variants (`NarratorFailed(String)`, `TriggerMissing`, `SnapshotMissing`) are reserved — not constructed in `src/`.
