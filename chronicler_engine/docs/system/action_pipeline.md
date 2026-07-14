@@ -37,20 +37,20 @@ flowchart TD
 
 Cancel checkpoints (red diamonds): the pipeline α-checks `app.current_game_id()` against the started id at three boundaries (after the narrator call returns, at the start of trigger continuation, after the trigger LLM call returns). Each returns `Err(PhaseError::Cancelled)` on mismatch — see [Cancellation](#cancellation).
 
-Error-return checkpoints (orange): `phase_narrate` for missing room / empty response / LLM error, `phase_trigger_continuation_llm_call` for trigger LLM error or empty response, `phase_engine_commit` for engine errors. All set `status = GenerationStatus::Error(...)` and return `Ok(())`.
+Error-return checkpoints (orange): `phase_narrate` for missing room / empty response / LLM error, `phase_trigger_continuation_llm_call` for trigger LLM error or empty response, `phase_engine_commit` for engine errors. Each phase returns `Err(PhaseError::...)`; the orchestrator's `finalize_phase_error` consumes each by setting `GenerationStatus::Error(msg)` + persisting + returning `Ok(())`.
 
 ## Error Model
 
-The state field IS the error channel: `state.narrative.input_buffer.status` carries phase failures, and the UI polls it via `get_generating_status`. The pipeline `Result` only signals cancellation. `run_from_input` finalizes and returns `Ok(())` whenever `status.error_message()` is set, so state is always persisted and the UI shows the error through the existing polling path.
+The state field IS the error channel: `state.narrative.input_buffer.status` carries phase failures, and the UI polls it via `get_generating_status`. The pipeline `Result` only signals cancellation. `run_from_input` consumes every non-`Cancelled` variant via `finalize_phase_error`, which loads fresh state (the in-memory `state` was moved into the phase call), sets `GenerationStatus::Error(msg)` from the variant, runs `phase_finalize`, and returns `Ok(())` — so state is always persisted and the UI shows the error through the existing polling path.
 
-Two error variants travel via `Result<_, PhaseError>`:
+`PhaseError` variants:
 
-- **`PhaseError::Cancelled`** — the only `PhaseError` variant propagated to the caller; all other variants are absorbed because `status` already carries the error.
-- **`PhaseError::PersistFailed { label, source }`** — constructed by `persist_snapshot_or_err` at four snapshot sites (`pre-main`, `pre-event`, `post-trigger`, `post-engine`); the helper writes `GenerationStatus::Error(...)` + persists state before returning the `Err`, so the UI surface stays consistent even when `run_from_input` returns `Err(...)` upstream. Only the pre-event site propagates the error to the caller; the other three call `persist_snapshot_or_err(...).is_err()` and swallow.
+- **`PhaseError::Cancelled`** — the only `PhaseError` variant propagated to the caller; constructed by `handle_cancellation` (load_or_fresh → Idle → persist → `Err(Cancelled)`). All other variants are consumed by `finalize_phase_error`.
+- **`PhaseError::NarratorFailed(String)`** — constructed by `error_return` (the narrator failure path of `phase_narrate` for missing room / empty response / LLM error). `error_return` preserves side effects: sets `GenerationStatus::Error(msg)`, persists state, then returns `Err(NarratorFailed(msg))`. The orchestrator's match arm consumes it via `finalize_phase_error`.
+- **`PhaseError::PersistFailed { label, source }`** — constructed by `persist_snapshot_or_err` at four snapshot sites (`pre-main`, `pre-event`, `post-trigger`, `post-engine`) and at the `phase_engine_commit` call site in `run_from_input` (wrapped from `EngineError`). After ticket 03, all four sites are consumed by `finalize_phase_error` (set Error, persist, `Ok(())`) — previously the pre-event site `?`-propagated.
+- **`PhaseError::TriggerMissing` / `PhaseError::SnapshotMissing`** — armed in `finalize_phase_error` for anticipated use by ticket 04 (retry path). Not yet constructed in `src/`; reserved for retry orchestrator linearization.
 
-The remaining variants (`NarratorFailed(String)`, `TriggerMissing`, `SnapshotMissing`) are reserved — not constructed in `src/`.
-
-`phase_finalize` resets `status` to `Idle` and `phase` to default UNLESS `status` is already `Error`, guaranteeing the UI never sees a stuck `Generating` after the pipeline returns. The retry path does not call `phase_finalize`: `save_retry_error` writes `Error(...)` and persists state directly; the heal path on the next action (`heal_stale_generating`) is what resets `status` for the retry case.
+`phase_finalize` resets `status` to `Idle` and `phase` to default UNLESS `status` is already `Error`, guaranteeing the UI never sees a stuck `Generating` after the pipeline returns. `finalize_phase_error` always sets `Error(...)` before calling `phase_finalize`, so the error persists. The retry path does not call `phase_finalize`: `save_retry_error` writes `Error(...)` and persists state directly; the heal path on the next action (`heal_stale_generating`) is what resets `status` for the retry case.
 
 ## Cancellation
 

@@ -14,6 +14,7 @@ use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::world::WorldCard;
 
 use crate::application::narrative_prompt::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
@@ -50,33 +51,17 @@ impl ActionPipeline {
         let started_for = app.current_game_id();
         let run = PipelineRun::new(self, app, started_for);
 
-        let (world, map, persona, npcs) = match (|| {
-            let game = app.storage().require_game(started_for)?;
-            let world_with_map = app.storage().require_world(&game.world_key)?;
-            let persona_card = app.storage().require_persona(&game.persona_key)?;
-            let npcs: HashMap<String, NpcCard> = app
-                .storage()
-                .list_characters(world_with_map.world_id)?
-                .into_iter()
-                .map(|n| (n.id.clone(), n))
-                .collect();
-            Ok::<_, EngineError>((
-                Arc::new(world_with_map.world_card),
-                Arc::new(world_with_map.map),
-                Arc::new(persona_card),
-                npcs,
-            ))
-        })() {
+        let (world, map, persona, npcs) = match Self::load_world_bundle(app, started_for) {
             Ok(bundle) => bundle,
             Err(e) => {
                 tracing::error!("run_from_input: {e}");
+                let mut state = app.load_or_fresh();
                 state.narrative.input_buffer.status = GenerationStatus::Error(e.to_string());
                 run.phase_finalize(&mut state);
                 return Ok(());
             }
         };
         let all_npcs: Vec<NpcCard> = npcs.values().cloned().collect();
-
         let inputs = PipelineInputs {
             input: input.clone(),
             world: Arc::clone(&world),
@@ -85,24 +70,23 @@ impl ActionPipeline {
             all_npcs,
         };
 
-        state = run.phase_pre_main_snapshot(state)?;
+        state = match run.phase_pre_main_snapshot(state) {
+            Ok(s) => s,
+            Err(e) => {
+                Self::finalize_phase_error(&run, e);
+                return Ok(());
+            }
+        };
 
         let (mut state, narration_text, backend_name, model_name) =
             match run.phase_narrate(state, &inputs) {
-                Err(PhaseError::Cancelled) => Err(run.handle_cancellation()),
-                other => other,
-            }?;
-
-        if state
-            .narrative
-            .input_buffer
-            .status
-            .error_message()
-            .is_some()
-        {
-            run.phase_finalize(&mut state);
-            return Ok(());
-        }
+                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
+                Err(e) => {
+                    Self::finalize_phase_error(&run, e);
+                    return Ok(());
+                }
+                Ok(t) => t,
+            };
         state.narrative.last_backend_name = Some(backend_name);
         state.narrative.last_model_name = Some(model_name);
 
@@ -122,9 +106,13 @@ impl ActionPipeline {
         ) {
             Ok(r) => r,
             Err(e) => {
-                state.narrative.input_buffer.status =
-                    GenerationStatus::Error(format!("Error: {e}"));
-                run.phase_finalize(&mut state);
+                Self::finalize_phase_error(
+                    &run,
+                    PhaseError::PersistFailed {
+                        label: "engine commit",
+                        source: e,
+                    },
+                );
                 return Ok(());
             }
         };
@@ -136,50 +124,92 @@ impl ActionPipeline {
             .and_then(|trigger_match| {
                 run.build_trigger_request(&next_state, &narration_text, &inputs, trigger_match)
             });
-
         if let Some(trigger) = &trigger_request {
             next_state.narrative.last_trigger = Some(trigger.clone());
         }
-
-        if run
-            .persist_snapshot_or_err(&mut next_state, "post-engine snapshot")
-            .is_err()
-        {
-            run.phase_finalize(&mut next_state);
+        if let Err(e) = run.persist_snapshot_or_err(&mut next_state, "post-engine snapshot") {
+            Self::finalize_phase_error(&run, e);
             return Ok(());
         }
-
         if let Some(target) = next_state.narrative.retry_target.take() {
             next_state.narrative.history.append(target);
         }
 
         if let Some(request) = trigger_request {
-            match run
+            let (updated_state, continuation_text) = match run
                 .phase_trigger_continuation_with_cancel_handling(next_state, &request, &map, &npcs)
             {
-                Ok((updated_state, continuation_text)) => {
-                    next_state = updated_state;
-
-                    if !continuation_text.is_empty() {
-                        next_state = run.reconcile_post_trigger_npcs(
-                            next_state,
-                            &input,
-                            &continuation_text,
-                            &map,
-                            &persona,
-                            &npcs,
-                        );
-                    }
-                }
+                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
                 Err(e) => {
-                    return Err(e);
+                    Self::finalize_phase_error(&run, e);
+                    return Ok(());
                 }
+                Ok(t) => t,
+            };
+            next_state = updated_state;
+            if !continuation_text.is_empty() {
+                next_state = run.reconcile_post_trigger_npcs(
+                    next_state,
+                    &input,
+                    &continuation_text,
+                    &map,
+                    &persona,
+                    &npcs,
+                );
             }
         }
 
         run.phase_finalize(&mut next_state);
         tracing::debug!("run_from_input: done");
         Ok(())
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn load_world_bundle(
+        app: &DefaultApplicationService,
+        started_for: u64,
+    ) -> Result<
+        (
+            Arc<WorldCard>,
+            Arc<MapDef>,
+            Arc<PersonaCard>,
+            HashMap<String, NpcCard>,
+        ),
+        EngineError,
+    > {
+        let game = app.storage().require_game(started_for)?;
+        let world_with_map = app.storage().require_world(&game.world_key)?;
+        let persona_card = app.storage().require_persona(&game.persona_key)?;
+        let npcs: HashMap<String, NpcCard> = app
+            .storage()
+            .list_characters(world_with_map.world_id)?
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
+        Ok((
+            Arc::new(world_with_map.world_card),
+            Arc::new(world_with_map.map),
+            Arc::new(persona_card),
+            npcs,
+        ))
+    }
+
+    fn finalize_phase_error(run: &PipelineRun<'_>, e: PhaseError) {
+        let msg = match e {
+            PhaseError::NarratorFailed(msg) => msg,
+            PhaseError::PersistFailed { label, source } => {
+                tracing::error!("{label}: {source}");
+                source.to_string()
+            }
+            PhaseError::TriggerMissing => "Retry failed: missing trigger context".to_string(),
+            PhaseError::SnapshotMissing => "World data unavailable for current game".to_string(),
+            PhaseError::Cancelled => {
+                unreachable!("Cancelled must be handled before calling finalize_phase_error")
+            }
+        };
+        let mut state = run.app.load_or_fresh();
+        state.narrative.input_buffer.status = GenerationStatus::Error(msg);
+        run.phase_finalize(&mut state);
     }
 
     pub(crate) fn phase_trigger_continuation(

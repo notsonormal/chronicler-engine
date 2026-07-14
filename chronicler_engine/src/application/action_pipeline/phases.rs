@@ -93,9 +93,9 @@ impl<'a> PipelineRun<'a> {
         mut state: GameState,
         msg: String,
     ) -> Result<(GameState, String, String, String), PhaseError> {
-        state.narrative.input_buffer.status = GenerationStatus::Error(msg);
+        state.narrative.input_buffer.status = GenerationStatus::Error(msg.clone());
         self.persist(&state);
-        Ok((state, String::new(), String::new(), String::new()))
+        Err(PhaseError::NarratorFailed(msg))
     }
 
     pub(super) fn phase_narrate(
