@@ -2,6 +2,18 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-07-14
+
+### Changed
+
+- **Enum variant-doc pruning** (wayfinder map: `.scratch/enum-doc-pruning/`). Doc-only pass bringing `docs/system/*.md` and `docs/reference/*.md` into compliance with `chronicler-docs-hygiene` SKILL Phase 8 (Enum variant paraphrase) — the rule that was already in force but not yet mechanically enforced on existing prose. Variant `///` rustdoc (or `/// [TRIVIAL_ENUM]`) is the source of truth; docs carry only behavior, contracts, flows, and cross-variant patterns they uniquely own.
+  - `docs/system/action_pipeline.md` §Error Model — `PhaseError::Cancelled` bullet rephrased to drop the surrounding `Err` token (variant name kept as a token in the behavioral sentence; the single Example 2 case the map carried in).
+  - `docs/system/storage.md` §Read Contract — stripped the `Lookup | Required-read helper | Canonical variant` table (helper→variant mapping obvious from naming and lives in source). Behavioral prose preserved (`get_*` vs `require_*` contract, `GameNotFound`/`MessageNotFound` numeric-ID note).
+  - `docs/system/text_check.md` §Check Modes — stripped the `TextCheckMode` variant→SpellCheck/Grammar-Rules mapping table; replaced with a source pointer to `src/domain/model/settings.rs`.
+  - `docs/system/worlds.md` §Delete Validation — stripped the " (typed variant, not string-matched)" compensation parenthetical from the `EngineError::WorldHasGames` bullet; the variant `///` doc (`src/error.rs:124`) already carries the semantic.
+  - Seven other in-scope docs (`game_flow.md`, `llm_processing.md`, `narration_engine.md`, `reference/test_support.md`, `reference/persona_system.md`, `architecture/system.md`, `architecture/rust_technical.md`) inspected and classified no-edit: every surviving variant mention is either a variant name as token in a behavioral sentence or a data-flow contract, not definition paraphrase.
+  - `validate_docs.py` PASS (0 errors / 0 warnings / 84 files). `python build.py` green: 1255 passed / 2 LLM skipped. Diff: 4 insertions / 18 deletions across 4 files (≤200-line target met). No `src/` changes.
+
 ## 2026-07-13
 
 ### Changed
