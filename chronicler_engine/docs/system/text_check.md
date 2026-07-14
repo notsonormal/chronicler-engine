@@ -59,14 +59,7 @@ pub enum IssueKind {
 
 ## Check Modes
 
-`TextCheckMode` controls which lint rules are active:
-
-| Mode | SpellCheck | Grammar Rules |
-|------|-----------|---------------|
-| `Disabled` | Off | Off |
-| `Spell` | On | Off |
-| `Grammar` | Off | On |
-| `SpellGrammar` | On | On |
+`TextCheckMode` controls which lint rules are active; see `src/domain/model/settings.rs` for variant definitions.
 
 ## Dictionary Strategy
 
