@@ -45,7 +45,6 @@ Canonical taxonomy: `validate_docs.py` STANDARD_DIR_NAMES. Hygiene audits what t
 - `docs/AGENTS.md` prose preamble — owned by `chronicler_engine/AGENTS.md` per-edit gate. Skip the AUTO-INDEX block too.
 - `docs/architecture/invariants.md` — machine-checked `INV-NNN` registry. Owned by `validate_docs.py`.
 - Rust `//!` / `///` and Python `#` comments — owned by `chronicler-comment-fixer`.
-- Single-mention illustrative path (`./foo.rs`, `docs/x.md`) — allowed; only bulk listings are Sediment.
 - `CONTEXT.md` glossary terms — owned by `domain-modeling`; do not redefine.
 - Auto-creating ADRs from extracted sediment — flag candidate only; user or `documentation-and-adrs` skill decides.
 

@@ -1,7 +1,5 @@
 # Specification: UI Design
 
-> **Related Decisions**: [ADR-001](../adr/adr-001-htmx-web-dashboard.md), [ADR-003](../adr/adr-003-askama-templates.md)
-
 ## Design Tokens
 
 ### Colors
@@ -97,7 +95,7 @@
 - Background: `--color-bg-secondary`
 - Border-bottom: 1px solid `--color-border`
 - Padding: 0 16px
-- Tabs: rendered from current configuration; the full tab list (Game, Settings, Prompt Presets, Worlds, Games, LLM Messages) is documented in [`system/dashboard.md`](./dashboard.md), this page specifies the styling tokens only
+- Tabs: rendered from current configuration; this page specifies the styling tokens only
 - Active tab: green text (`--color-accent-green`), green bottom border
 - Inactive tab: muted text (`--color-text-muted`), transparent border
 - Hover: muted text brightens to primary
@@ -193,15 +191,6 @@
 - Active: background linear-gradient(180deg, `--color-button-send-active-start` 0%, `--color-button-send-active-end` 100%)
 - Disabled: opacity 0.5, cursor not-allowed, box-shadow none
 
-### Action Hints
-- Font size: 12px
-- Color: `--color-text-muted`
-
-### Game Selector Button
-- Styled as a small button next to the game name in the header
-- Triggers `GET /fragment/games` to load the game dropdown
-- Dropdown is rendered into `#games-dropdown` below the button
-
 ### Status Display
 - Font size: 12px
 - Margin-left: auto
@@ -257,14 +246,13 @@
 - Transition: opacity 0.2s, color 0.2s
 
 #### Retrigger Button (♻)
-- Same styling as edit button
-- Only appears on the last narration message when `last_trigger` is present in state
-- Not shown on event continuations or user input
+- Uses its own `.retrigger-btn` cyan styling (cyan border, cyan text) — not the muted `.edit-btn` style
+- Only appears on the last narration or dialogue message when `has_last_trigger && is_narration && !is_event_continuation` (i.e. the previous turn had a trigger AND the last message is not itself an event continuation)
 - Calls `submitRetrigger()` → `POST /retrigger`
 
 #### Swipe Controls
 - Container: flex row, gap 8px, centered below message text
-- Only appears on the last message when `swipe_count > 1`
+- Only appears on the last narration or dialogue message when `swipe_count > 1`
 - **Left arrow (◀)**: switches to previous swipe. Disabled on first swipe.
 - **Counter**: `active_index + 1 / swipe_count` (e.g., "2 / 3")
 - **Right arrow (▶)**: if not on latest swipe, switches to next swipe. If on latest swipe, triggers new generation (`submitNewSwipe()` → `POST /swipe/new`).
@@ -295,16 +283,6 @@
 - During edit mode, story-log polling is paused via `hx-trigger: none`
 - `htmx.process()` called to force HTMX to re-read the trigger attribute
 - Polling resumes on save or cancel
-
-### Game Dropdown
-- Container: absolute positioned below the Games button, flex column, gap 8px, max-height 300px, overflow-y: auto
-- **Game item**: flex row, align-items center, gap 12px, padding 8px 12px
-  - Background: `--color-bg-secondary`, border: 1px solid `--color-border`, border-radius: 4px
-  - **Name**: primary text, flex 1
-  - **Meta**: muted text, "Game {id}"
-  - **Switch button**: cyan border, cyan text, `hx-post="/games/{id}/switch"`, `hx-swap="none"`, triggers full page refresh
-  - **Delete button**: "×" text, red on hover, `hx-post="/games/{id}/delete"`, `hx-target="closest .game-item"`, `hx-swap="outerHTML"`
-- **Create new game button**: at the bottom of the dropdown, `POST /games`, triggers full page refresh
 
 ### Settings Panel
 - Padding: 16px
@@ -348,11 +326,8 @@ Settings buttons use the standard utility classes defined in [Button Utility Cla
 
 ---
 
-### Responsive Breakpoints
+## Document References
 
-Media queries handle responsive behavior:
-
-| Breakpoint | Width | Adjustments |
-|-----------|-------|-------------|
-| Tablet | ≤ 768px | Stack sidebar below story log, sidebar 100% width |
-| Mobile | ≤ 480px | Wrap header elements, stack action area vertically |
+- [ADR-001: HTMX Web Dashboard Architecture](../adr/adr-001-htmx-web-dashboard.md) — htmx + server-rendered HTML architecture
+- [ADR-003: Askama Template Engine for HTML Rendering](../adr/adr-003-askama-templates.md) — Askama template choice + compile-time validation
+- [system/dashboard.md](./dashboard.md) — tab list + component layout

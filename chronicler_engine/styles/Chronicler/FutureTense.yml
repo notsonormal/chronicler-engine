@@ -1,0 +1,19 @@
+extends: existence
+message: "Avoid future tense in spec docs. Use declarative present ('engine does X', not 'will do X'). See docs/AGENTS.md Per-Edit Gate."
+level: warning
+ignorecase: true
+# Narrow verb list — catches common future-tense spec violations while
+# avoiding false positives on noun uses ("free will", "last will", "will of").
+# Extend the list as new violations surface.
+tokens:
+  - '\bwill (be|have|do|use|run|trigger|process|return|fail|succeed|reject|accept)\b'
+  - '\bwill (store|restore|generate|handle|check|update|create|delete|send|receive)\b'
+  - '\bwill (build|parse|extract|load|save|emit|provide|enable|disable|allow)\b'
+  - '\bwill (start|stop|finish|complete|continue|defer|retry|rollback|commit)\b'
+  - '\bwill (fire|dispatch|query|persist|snapshot|hydrate|call|invoke|hold|mutate)\b'
+  - '\bwill (append|locate|log|render|fetch|push|pop|enqueue|dequeue|read|write)\b'
+  - '\bshall\b'
+  - '\bgoing to\b'
+  - '\bplan to\b'
+  - '\bintends to\b'
+  - '\bwill eventually\b'

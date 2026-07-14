@@ -1,7 +1,5 @@
 # System: Auto-Trigger & Reactive Encounters
 
-> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md)
-
 The Auto-Trigger system allows the game world to react dynamically to the player's presence based on NPC-specific conditions.
 
 ## Overview
@@ -9,7 +7,7 @@ When a player enters a room or performs an action, the engine evaluates a set of
 
 ## Trigger Evaluation Sequence
 
-For where these steps fit in the full game loop (including main narration and quantification), see [`game_flow.md`](game_flow.md).
+These steps run after main narration and after quantification, in the engine-commit phase.
 
 ### 1. Player Action
 Player performs an action (movement, dialogue, etc.)
@@ -24,23 +22,24 @@ The quantifier analyzes the **generated narration** to:
 - This ensures dynamic NPC appearances (like Gabriella emerging from shadows) are detected
 
 ### 4. Trigger Evaluation
-`evaluate_triggers` scans **ALL NPCs** in `state.npcs`, but filters by room:
+`evaluate_triggers` iterates every NPC in the world's NPC map (the `npcs: &HashMap<String, NpcCard>` parameter), filtered by `room_id`:
 - Triggers with `room_id: null` (or missing) are **global** — they fire anywhere
 - Triggers with `room_id: "some_room_id"` only fire when the player is in that room
 
 This ensures NPC introduction triggers (like Gabriella in the Entrance Hall) don't fire in the wrong location.
 
 ### 5. Requirement Check
-Each trigger is checked against the current `NpcEncounterLog`:
+Each trigger is checked against the current `NpcEncounterLog` using `ComparisonOperator`:
 - `TimesMet Eq 0`: Fires on first encounter (times_met is 0 when evaluation happens)
-- `TimesMet Gte 1`: Fires on subsequent encounters
+- `TimesMet Lt N`: Fires when `times_met < N`
+- `TimesMet Gte N`: Fires when `times_met >= N` (subsequent encounters when N ≥ 1)
 
 ### 6. Execution
 - If repeatable: Trigger fires and can fire again
 - If non-repeatable: Trigger is marked as "fired" and won't re-fire
 
 ### 7. Narration
-Trigger narrations use the unified [7-layer prompt (with post-history splice)](prompt_system.md) with continuation context in the user message.
+Trigger continuation builds its prompt from the trigger's stored `TriggerNarration` (name + narration_prompt) and the current `PromptContext` shape, with `narration_prompt` placed in the user message. The layered prompt pipeline is not used for trigger continuations; the prompt is built directly in `phase_trigger_continuation` from the `StoredTriggerContext` carried on `state.narrative.last_trigger`.
 
 ### 8. Inline Event Header
 When a trigger fires, the engine stores the event name in `NarrativeState.pending_event`. The next `add_log` call (which adds the trigger continuation narration) absorbs this pending metadata into `LogEntry.event_header`. The frontend renders the event header inside the same div as the continuation narration. There is no standalone event message type.
@@ -176,3 +175,9 @@ The action pipeline and `execute_freeaction_impl` mutate state in a strict, load
 | 5 | `apply_npc_events()` — mutates `npc_encounter_log` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
 
 If you refactor `execute_freeaction_impl`, preserve this order explicitly.
+
+## Document References
+
+- [ADR-006: Quantifier-Driven Game Systems](../adr/adr-006-quantifier-systems.md) — quantifier detects NPCs + movement; triggers read `NpcEncounterLog`
+- [system/game_flow.md](./game_flow.md) — phase pipeline where trigger evaluation sits
+- [system/prompt_system.md](./prompt_system.md) — layered prompt architecture used for main narration (trigger continuations build their own prompt; see Step 7 above)

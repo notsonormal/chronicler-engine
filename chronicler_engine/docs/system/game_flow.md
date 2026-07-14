@@ -1,8 +1,6 @@
 # Specification: Game Flow
 
-> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md), [ADR-008](../adr/adr-008-sqlite-snapshot-persistence.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md), [ADR-017](../adr/adr-017-message-swipes.md)
-
-**Scope:** This document specifies the **runtime control flow** — the phase sequence from player input through LLM generation, quantification, and trigger evaluation back to UI update. For prompt composition, see [`prompt_system.md`](prompt_system.md). For trigger evaluation rules, see [`triggers.md`](triggers.md). For status display and polling, see [`dashboard.md`](dashboard.md). For Game Master role and behavioral constraints, see [`narration_engine.md`](narration_engine.md).
+**Scope:** This document specifies the **runtime control flow** — the phase sequence from player input through LLM generation, quantification, and trigger evaluation back to UI update.
 
 ## The Game Flow
 
@@ -23,7 +21,7 @@ flowchart TD
     Poll -.-> Await
 ```
 
-Main narration builds a comprehensive prompt using the [layered prompt system](prompt_system.md) — see that page for layer composition and [`llm_processing.md`](llm_processing.md) for token budget management.
+Main narration builds a comprehensive prompt using the layered prompt system.
 
 ### Granular Status Phases
 
@@ -99,8 +97,20 @@ The caller checks `state.narrative.input_buffer.status.error_message()` to decid
 - The UI shows the error via the existing `GenerationStatus::Error` polling path
 - `phase_finalize` always runs; the `is_generating` projection is cleared by `GenerationGuard::Drop` on the registry path (only if no other game's slot is still `Generating`)
 
-**Cancellation** produces `Err(PhaseError::Cancelled)`. `PhaseError::PersistFailed` also propagates via `Err` from snapshot sites; both are visible to `spawn_blocking` callers, but only `Err(PhaseError::Cancelled)` is matched at that boundary — other variants rely on `GenerationStatus::Error` already written to state. `PhaseError` is errors-only; success is `Ok(())`.
+**Cancellation** produces `Err(PhaseError::Cancelled)`. `PhaseError::PersistFailed` also propagates via `Err` from snapshot sites, but only `Err(PhaseError::Cancelled)` is matched by callers — other variants rely on `GenerationStatus::Error` already written to state. `PhaseError` is errors-only; success is `Ok(())`.
 
-**Stale-Generating recovery**: If `is_generating` is `false` but persisted status is still `Generating` (e.g., after a panic), `process_action` resets status to `Idle` before proceeding. The per-game registry is also self-healed on the same path: a `Generating` slot for `current_game_id()` whose projection atomic is false is cleared to `Idle`. Panics in `spawn_blocking` propagate naturally; `GenerationGuard::Drop` releases the registry slot if it still owns it (no-op if superseded by a younger generation) and stores the projection atomic to `false` only when no other game's slot is generating.
+**Stale-Generating recovery**: If `is_generating` is `false` but persisted status is still `Generating` (e.g., after a panic), `process_action` resets status to `Idle` before proceeding. The per-game registry is also self-healed on the same path: a `Generating` slot for `current_game_id()` whose projection atomic is false is cleared to `Idle`. `GenerationGuard::Drop` releases the registry slot if it still owns it (no-op if superseded by a younger generation) and stores the projection atomic to `false` only when no other game's slot is generating.
+
+## Document References
+
+- [ADR-006: Quantifier-Driven Game Systems](../adr/adr-006-quantifier-systems.md) — quantifier detects NPCs + movement after narration
+- [ADR-008: SQLite Snapshot Persistence](../adr/adr-008-sqlite-snapshot-persistence.md) — `GameStateSnapshot` table + `persist_snapshot_or_err` pattern
+- [ADR-010: Concurrency and Generation Gate Model](../adr/adr-010-concurrency-generation-gate.md) — `is_generating` dual-source invariant + `GenerationGuard`
+- [ADR-017: Message Swipes](../adr/adr-017-message-swipes.md) — swipe semantics for retry of last AI message
+- [system/prompt_system.md](./prompt_system.md) — layered prompt composition + per-layer token budget
+- [system/llm_processing.md](./llm_processing.md) — LLM call logging + agent registry contracts
+- [system/triggers.md](./triggers.md) — trigger evaluation rules + `NpcEncounterLog`
+- [system/dashboard.md](./dashboard.md) — polling endpoints + status display
+- [system/narration_engine.md](./narration_engine.md) — Game Master role + behavioral constraints
 
 

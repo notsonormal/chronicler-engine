@@ -46,11 +46,11 @@ let app = SqliteTestAppBuilder::with_data(data)
 app.process_action("look around".to_string());
 ```
 
-Builder selection: `TestAppBuilder` (in-memory, `src/test_support/`) for lib tests + in-memory integration tests; `SqliteTestAppBuilder` (integration-only, `tests/helpers/`) replaces the deleted `make_test_app_with_sqlite` / `_mock_backend` / `_backends` / `_separate_backends` / `_game_service` helpers. Three survivors remain in `src/test_support/context.rs` for narrow cases: `make_test_app`, `make_test_app_without_snapshot` (snapshot-skip semantics), `seed_test_world_into_storage` (failing-storage test). All `Result`-returning builders must be `?`'d (lib clippy denies unwrap/expect/panic). For tests that need to invoke pipeline phases through a `GameService`, use `.game_service(...)` (in-memory) or `.game_service_fn(|storage| { ... })` (sqlite) and call `app.process_action(input)` (the `DefaultApplicationService::process_action` entry point). See [`docs/reference/test_support.md`](test_support.md) for the full builder API.
+Builder selection: `TestAppBuilder` (in-memory, `src/test_support/`) for lib tests + in-memory integration tests; `SqliteTestAppBuilder` (integration-only, `tests/helpers/`) replaces the deleted `make_test_app_with_sqlite` / `_mock_backend` / `_backends` / `_separate_backends` / `_game_service` helpers. Three survivors remain in `src/test_support/context.rs` for narrow cases: `make_test_app`, `make_test_app_without_snapshot` (snapshot-skip semantics), `seed_test_world_into_storage` (failing-storage test). All `Result`-returning builders must be `?`'d (lib clippy denies unwrap/expect/panic). For tests that need to invoke pipeline phases through a `GameService`, use `.game_service(...)` (in-memory) or `.game_service_fn(|storage| { ... })` (sqlite) and call `app.process_action(input)` (the `DefaultApplicationService::process_action` entry point).
 
 `ActionPipeline` is non-generic; `run_post_generation_agents` is an inline phase method. See `tests/integration/application/action_pipeline/pipeline.rs` for working examples.
 
-**Do not** call `execute_action_impl()` directly — use the public `execute_action()` wrapper.
+**Do not** call `execute_action_impl()` directly — invoke through the `DefaultApplicationService` via `process_action(input)` so the cancellation gate + forensics + persistence flow runs end-to-end.
 
 ## Critical Tests
 
@@ -88,3 +88,7 @@ Polling, not `sleep`. Helpers at `tests/test_utils/wait.rs`: `wait_for_llm_idle`
 ## Coverage
 
 `cargo +stable install cargo-llvm-cov --locked`, then `cargo llvm-cov test --json --output-path coverage.json`.
+
+## Document References
+
+- [test_support.md](./test_support.md) — `TestAppBuilder` + `SqliteTestAppBuilder` + builder API

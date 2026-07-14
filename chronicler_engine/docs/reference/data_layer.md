@@ -15,9 +15,9 @@ Top-level game session record. Every snapshot and message belongs to a game.
 | Column      | Type    | Notes                                      |
 |-------------|---------|-------------------------------------------|
 | `id`        | INTEGER | PRIMARY KEY AUTOINCREMENT                 |
-| `world_key` | TEXT    | Key of the loaded world (ADR-025)         |
+| `world_key` | TEXT    | Key of the loaded world         |
 | `world_name`| TEXT    | Name of the loaded world                  |
-| `persona_key`| TEXT   | Foreign key into `personas.key` (ADR-026) |
+| `persona_key`| TEXT   | Foreign key into `personas.key` |
 | `persona_name`| TEXT | Denormalized persona name for list queries |
 | `name`      | TEXT    | Display name (e.g. `Redmist_2026-05-21_1`)|
 | `created_at`| TEXT    | ISO 8601 timestamp (RFC 3339)             |
@@ -122,3 +122,8 @@ llm_messages (*)  [independent]
 ## Migration Policy
 
 Migrations run on first access via `run_migrations`; see `src/adapters/driven/storage/db.rs`.
+
+## Document References
+
+- [ADR-025: Multi-World Data Foundation](../adr/adr-025-multi-world-data-foundation.md) — `world_key` foreign key into `worlds.key`
+- [ADR-026: Relocate Persona Binding from World to Game](../adr/adr-026-persona-relocation-to-game.md) — `persona_key` foreign key into `personas.key`

@@ -1,0 +1,12 @@
+extends: existence
+message: "External forum/community link is Sediment (chronicler-docs-hygiene Phase 1). Specs are self-contained; remove external references."
+level: warning
+ignorecase: true
+tokens:
+  - 'https?://(?:www\.)?reddit\.com'
+  - 'https?://(?:www\.)?stackoverflow\.com'
+  - 'https?://news\.ycombinator\.com'
+  - 'https?://(?:www\.)?hn\.al'
+  - 'https?://(?:www\.)?lobste\.rs'
+  - 'https?://(?:www\.)?dev\.to'
+  - 'https?://(?:www\.)?medium\.com'

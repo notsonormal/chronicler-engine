@@ -1,10 +1,8 @@
 # Specification: Text Check System
 
-> **Related Decisions**: [ADR-011](../adr/adr-011-text-check-integration.md)
-
 ## Overview
 
-The Text Check system provides spell-checking and grammar-checking for player input before it reaches the LLM. It uses [harper-core](https://github.com/Automattic/harper) (v0.25.0) — a pure-Rust linter from Automattic — with a built-in FST dictionary (~8MB stripped) and configurable lint rules.
+The Text Check system provides spell-checking and grammar-checking for player input before it reaches the LLM. It uses Harper Core — a pure-Rust linter from Automattic — with a built-in FST dictionary and configurable lint rules.
 
 ## Goals
 
@@ -90,7 +88,7 @@ This allows fantasy names, place names, and game-specific terms to be added to a
 
 ## Settings
 
-`TextCheckSettings` is stored in `settings.json` alongside existing `AppSettings`:
+`TextCheckSettings` is stored in the SQLite `settings` row (id=1) alongside existing `AppSettings` fields:
 
 ```rust
 pub struct TextCheckSettings {
@@ -135,12 +133,12 @@ A "Text Check" card appears in the Settings tab below Connections:
 ## Performance
 
 - Linting is synchronous and in-memory (no I/O).
-- `HarperTextChecker` is instantiated per-check (dictionary merge is cheap for small ignore lists).
+- `HarperTextChecker` is constructed once per `TextCheckService` at startup; the `ignored_words` snapshot is taken at construction. The service is shared; per-check work does not re-instantiate the checker.
 - Typical check latency: <10ms for a single sentence.
 
 ## Testing
 
- **Integration tests**: `tests/http/endpoints/text_check_tests.rs` — misspelling detection, clean text, disabled mode, ignored words
+ **Integration tests**: `tests/http/endpoints/text_check.rs` — misspelling detection, clean text, disabled mode, ignored words
 - **Integration tests**: Preview endpoint returns fragment when issues exist; forwards when disabled
 
 ## Port, Service & Factory
@@ -151,7 +149,12 @@ The `TextChecker` port trait defines the contract:
 
 ```rust
 pub trait TextChecker {
-    fn check(&self, text: &str, mode: TextCheckMode) -> CheckResult;
+    fn check(
+        &self,
+        text: &str,
+        mode: TextCheckMode,
+        ignored_words: &[String],
+    ) -> Result<Option<CheckResult>, EngineError>;
 }
 ```
 
@@ -172,3 +175,8 @@ The `bootstrap/text_check_factory.rs` module constructs the `TextCheckService` f
 - **Always**: Preserve prompt structure (XML tags, markdown). Never break `Action` parsing.
 - **Never**: Auto-correct player input silently. Show a preview where the user can choose corrected, original, or cancel.
 - **Never**: Commit dictionary secrets.
+
+## Document References
+
+- [ADR-011: Text Check Integration](../adr/adr-011-text-check-integration.md) — harper-core choice, pre-flight + manual UI flow
+- [Harper Core](https://github.com/Automattic/harper) (v0.25.0)

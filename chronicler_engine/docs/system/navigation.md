@@ -1,7 +1,5 @@
 # Specification: Semantic Navigation
 
-> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md)
-
 ## Objective
 
 The engine's movement system uses quantifier-driven detection. Player types natural language ("I walk through the front gate") and the LLM quantifier detects movement intent from the *narrative outcome*, then the engine resolves the destination room.
@@ -55,3 +53,7 @@ When `attempt_semantic_walk` fails to find a destination room in the static map,
 3. `state.movement.current_room_id` is updated to the new room's ID
 4. The player can proceed even to invalid destinations
 Dynamic rooms are intentionally sparse (no exits, no items) — they serve as fallback containers for player exploration that doesn't map to the static world.
+
+## Document References
+
+- [ADR-006: Quantifier-Driven Game Systems](../adr/adr-006-quantifier-systems.md) — quantifier detects movement intent + room creation

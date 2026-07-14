@@ -1,7 +1,5 @@
 # Specification: LLM Processing & Integration
 
-> **Related Decisions**: [ADR-004](../adr/adr-004-xml-prompt-format.md), [ADR-007](../adr/adr-007-settings-system.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md)
-
 ## Objective
 
 The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSeek, or local Ollama to handle Game Master narration and NPC dialogue.
@@ -10,12 +8,12 @@ The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSee
 
 ### 1. The Blocking Task Pattern
 
-- **Concurrency**: The engine keeps the `GameService` trait fully synchronous. HTTP handlers in `src/adapters/driving/http/fragments/actions.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`. This prevents the Axum event loop from stalling during network I/O while avoiding the `#[async_trait]` + `dyn Trait` incompatibility in Rust 2024 edition.
-- **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown. Long-running pipelines (`ActionPipeline::run_from_input`) also check the token at internal stage boundaries (after main narration, before trigger continuation, after trigger continuation) to abort early and avoid wasting LLM calls on stale requests. When cancelled mid-pipeline, `ActionPipeline::handle_cancellation()` resets `GenerationStatus::Idle`, clears the phase, and persists the state.
+- **Concurrency**: `GameService` is fully synchronous; HTTP handlers in `src/adapters/driving/http/fragments/actions.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`. See [architecture/rust_technical.md](../architecture/rust_technical.md) §Sync services + `spawn_blocking` offload for the rationale (Axum event loop, Rust 2024 async-trait incompatibility).
+- **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown. Long-running pipelines (`ActionPipeline::run_from_input`) also perform an in-phase α-check (`app.current_game_id()` against the started id) at internal stage boundaries (after main narration, before trigger continuation, after trigger continuation) to abort stale generations whose `current_game_id()` changed mid-pipeline (e.g. via `switch_game` or `delete_game`). When cancelled mid-pipeline, `ActionPipeline::handle_cancellation()` resets `GenerationStatus::Idle`, clears the phase, and persists the state. See [system/action_pipeline.md](./action_pipeline.md) §Cancellation for the α-check boundary details.
 
 ### 2. Model Configuration
 
-The engine supports flexible model selection via connection profiles stored in the SQLite `settings` table (seeded from `data/settings.json` at startup; see ADR-024).
+The engine supports flexible model selection via connection profiles stored in the SQLite `settings` table (seeded from `data/settings.json` at startup).
 
 - **Connections**: Named profiles combining `provider` + `model` + `api_key` + `base_url`
 - **Narration Connection**: The connection used for Game Master narration and NPC dialogue
@@ -51,17 +49,17 @@ Some models (particularly certain local/quantized models) ignore or poorly handl
 
 ### 5. Prompt Construction (Layered Prompts)
 
-The engine uses a [7-layer prompt system (with post-history splice)](prompt_system.md) inspired by SillyTavern's Prompt Manager, with XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. The prompt is split into a system half (Layer 0) and a user half (Layers 1–6, with post-history splice between Layer 5 and Layer 6). For the complete layer table, per-layer examples, system/user separation rationale, and token budget constants, see [`prompt_system.md`](prompt_system.md) — that document is the authoritative source for prompt composition.
+The engine uses a layered prompt system (with post-history splice) inspired by SillyTavern's Prompt Manager, with XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. The prompt is split into a system half (Layer 0) and a user half (Layers 1–6, with post-history splice between Layer 5 and Layer 6).
 
 ### 6. Token Budget Management
 
-Token budget constants (`MAX_CONTEXT_TOKENS`, `MAX_RESPONSE_TOKENS`, `MAX_HISTORY_TOKENS`, `SAFETY_MARGIN_TOKENS`, `MIN_INPUT_BUDGET_TOKENS`) and the `fit_messages_to_context()` trimming strategy are defined in [`prompt_system.md`](prompt_system.md). Connectors override `max_context_tokens` per connection via the settings system (see Section 2 above).
+Connectors override `max_context_tokens` per connection via the settings system (see Section 2 above).
 
 ### 7. Prompt Injection Sanitization
 
 User input is sanitized to prevent prompt injection:
 
-- `{{variable}}` patterns are escaped
+- `{{variable}}` patterns are replaced with `[FILTERED]`
 - Known injection patterns are stripped
 - Legitimate text passes through unchanged
 
@@ -82,18 +80,17 @@ This matches SillyTavern's `last_output_sequence` preset for Gemma 4. It pre-fil
 - **Scope**: Ollama backends only; Gemma 4 models detected by name.
 - **OpenRouter / chat-template backends**: Suffix is not applied — the backend's native chat template handles turn structure.
 - **Non-Gemma models**: Unaffected.
-- **Safety net**: `narrative::llm::sanitize::sanitize_llm_output()` (at `src/adapters/driven/llm/sanitize.rs`) strips any leaked `<channel|>`, `<thought>`, or `<|channel>thought` artifacts from all responses regardless of model. Sanitization runs inside `LlmCallRecorder::complete()` as part of postprocessing.
+- **Safety net**: `application::llm_sanitizer::sanitize_llm_output()` (at `src/application/llm_sanitizer.rs`) strips any leaked `<channel|>`, `<thought>`, or `<|channel>thought` artifacts from all responses regardless of model. Sanitization runs inside `LlmCallRecorder::complete()` as part of postprocessing.
 
 ### 9. LLM Call Logging & Forensics
 
 - **WHAT**: Every LLM call logs prompt + response pairs, metadata, and timestamps to a SQLite `llm_messages` table.
-- **RETENTION**: 50 rows per game — oldest rows auto-pruned, most recent kept.
+- **RETENTION**: 50 rows globally — oldest rows auto-pruned, most recent kept. (The `llm_messages` table has no `game_id` column; the cap is global, not per-game.)
 - **VIEW**: **LLM Messages** tab in the dashboard (`/fragment/llm-messages`).
-- **REF**: Architecture, port trait, and storage layer — [ADR-012](../adr/adr-012-llm-message-logging.md).
 
 ### 10. Runtime Tracing
 
-The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnostics. Critical execution paths emit spans and events automatically when `RUST_LOG` is set. See [`diagnostics/DEBUGGING.md`](../diagnostics/DEBUGGING.md) for the instrumented function list and tracing commands.
+The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnostics. Critical execution paths emit spans and events automatically when `RUST_LOG` is set. The instrumented function list and tracing commands are documented in the diagnostics reference.
 
 ## Conventions
 
@@ -102,3 +99,12 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
 - Use `LlmCallRecorder` for orchestration (forensics + postprocessing)
 - Use `PromptAssembler` for all prompt construction; `LlmProvider::complete()` for transport; `LlmCallRecorder::complete()` for orchestration
 - Configure `max_context_tokens` per connection to match the model's actual context window
+
+## Document References
+
+- [ADR-004: XML-Structured LLM Prompts](../adr/adr-004-xml-prompt-format.md) — XML-sectioned instructions + XML-wrapped data
+- [ADR-007: Settings System Architecture](../adr/adr-007-settings-system.md) — `AppSettings` + connection profiles + per-connection overrides
+- [ADR-010: Concurrency and Generation Gate Model](../adr/adr-010-concurrency-generation-gate.md) — `spawn_blocking` + `CancellationToken` + `is_generating` invariant
+- [ADR-012: LLM Call Logging and Forensics](../adr/adr-012-llm-message-logging.md) — `llm_messages` table + retention + dashboard tab
+- [system/prompt_system.md](./prompt_system.md) — layered prompt composition + token budget constants + trimming strategy
+- [diagnostics/DEBUGGING.md](../diagnostics/DEBUGGING.md) — instrumented function list + tracing commands

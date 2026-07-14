@@ -8,13 +8,13 @@ This guide explains how to debug test failures and runtime issues in the Chronic
 
 When a test fails:
 
-1. **Check the `llm_messages` table** (SQLite LLM call log — see ADR-012) for the most recent call payload + raw response
+1. **Check the `llm_messages` table** (SQLite LLM call log) for the most recent call payload + raw response
 2. **Run with `RUST_LOG=info`** to see structured traces
 3. **Re-run the failing test** with `RUST_LOG=trace cargo test -- --nocapture` for full spans/events
 
 ## LLM Call Forensics (SQLite)
 
-Per ADR-012, every `LlmCallRecorder::complete()` call persists a row to the `llm_messages` SQLite table via the `LlmMessageRepository` port. This is the authoritative forensics source for LLM-driven behavior.
+Every `LlmCallRecorder::complete()` call persists a row to the `llm_messages` SQLite table via the `LlmMessageRepository` port. This is the authoritative forensics source for LLM-driven behavior.
 
 Each row contains:
 
@@ -81,9 +81,9 @@ The following critical paths are instrumented:
 - `call_chat_completions` - tracks HTTP request/response lifecycle
 
 **Game Service:**
-- `execute_action` - top-level action entry point
-- `retry_last_response` - retry logic
-- `retrigger_event` - event retriggering
+- `execute_action_impl` - top-level action entry point
+- `retry_last_response_impl` - retry logic
+- `retrigger_event_impl` - event retriggering
 
 ## Common Issues
 
@@ -99,7 +99,7 @@ The following critical paths are instrumented:
 
 **Solution:** Check `RUST_LOG=trace` output instead of the `llm_messages` table; the in-flight prompt will appear in the tracing spans.
 
-## Related Documentation
+## Document References
 
 - [Testing Guide](../reference/testing.md)
 - [System Architecture](../architecture/system.md)

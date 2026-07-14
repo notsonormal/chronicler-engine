@@ -1,7 +1,5 @@
 # Specification: Dashboard UI
 
-> **Related Decisions**: [ADR-001](../adr/adr-001-htmx-web-dashboard.md), [ADR-002](../adr/adr-002-http-polling.md), [ADR-003](../adr/adr-003-askama-templates.md)
-
 ## Overview
 
 The Chronicler Engine presents a web-based HTMX dashboard for player interaction. The UI provides narrative immersion, visual grounding, and user input in a modern chat-app aesthetic inspired by SillyTavern.
@@ -31,8 +29,8 @@ Horizontal split into story context and visual context:
 
 - **Story Log (80%)**: Scrollable history of narration with chat-bubble styling
   - **Styles**:
-    - **Location headers**: Inline "Room Name - HH:MM", green token (chat-location), bold
-    - **Event headers**: Inline "Event Name - HH:MM", cyan token (chat-event), bold
+    - **Location headers**: Inline "Room Name - HH:MM", green token, bold
+    - **Event headers**: Inline "Event Name - HH:MM", cyan token (`.event-header`), bold
     - User input (right-aligned, darker gray background)
     - AI/Narration (left-aligned, dark cyan background)
     - AI/Dialogue (left-aligned, orange-tinted background, italic text)
@@ -44,8 +42,8 @@ Horizontal split into story context and visual context:
       - Edit button (✎) on all entries
       - Delete button (🗑) on last entry only (hidden when only one entry exists)
       - Check button (✓) on input entries (spellcheck)
-      - Retrigger button (♻) on last narration when trigger context is available
-    - Swipe controls on the last message when swipe count > 1:
+      - Retrigger button (♻) on the last narration or dialogue message when the previous turn had a trigger AND the message is not itself an event continuation
+    - Swipe controls on the last narration or dialogue message when `swipe_count > 1`:
       - Left arrow (◀) — previous swipe (hidden on first swipe)
       - Counter — `active + 1 / swipe_count` (e.g., "2 / 3")
       - Right arrow (▶) — next swipe if not on latest; triggers new generation if on latest swipe
@@ -53,7 +51,7 @@ Horizontal split into story context and visual context:
   - Location Image (top): Full-width location image
   - NPC Portraits (bottom): Horizontal scrollable row of 80×80 square images
 
-#### Action Area (64px height)
+#### Action Area
 
 Interactive zone for player input.
 
@@ -72,7 +70,7 @@ Interactive zone for player input.
   - **Send Original** — submits original text to `/action`
   - **Cancel** — restores normal action area
 
-**Empty Input Behavior**: Pressing Send with an empty text box triggers narrative continuation. The LLM generates the next scene without player input, same as SillyTavern's "Continue" button. Status shows "Thinking..." (unified with normal generation).
+**Empty Input Behavior**: Pressing Send with an empty text box dispatches `process_action(String::new())`, which routes to `continue_narration` (same as SillyTavern's "Continue" button). The submit button immediately changes to "Stop"; the next polled status reads "Thinking...".
 
 ### 4. Settings Tab
 
@@ -160,7 +158,7 @@ HTML template renders each entry with: timestamp, sender, text body, optional lo
 
 Multiple independent games across all worlds, each with isolated snapshots and messages. The Games panel sections: Active Game, New Game, and Saved Games.
 
-- **Create game**: New game section shows world + persona dropdowns and a "Start New Game" button. Game name auto-generated (`{WorldName}_{Date}_N`). Submit disabled when persona list is empty.
+- **Create game**: New game section shows world + persona dropdowns and a "Start New Game" button. Game name auto-generated as `{WorldName} {YYYY-MM-DD} {N}` (format `%Y-%m-%d`, spaces between segments). Submit disabled when persona list is empty.
 - **Active Game**: Shows current game name, world badge, persona badge, "Current" badge, and reset button.
 - **Switch game**: Loads the selected game (cross-world switching allowed).
 - **Delete game**: Removes the game and all its data.
@@ -168,7 +166,7 @@ Multiple independent games across all worlds, each with isolated snapshots and m
 
 ## Worlds Management Tab
 
-Dedicated tab for multi-world orchestration with CRUD operations. See [`worlds.md`](worlds.md) for the world model, data flow, and panel interactions.
+Dedicated tab for multi-world orchestration with CRUD operations.
 
 ### LLM Messages Tab
 
@@ -178,5 +176,12 @@ Forensics panel showing the last 50 LLM calls with full request/response visibil
 - **Expandable rows**: Click to reveal raw request JSON and raw response JSON
 - **Order**: Oldest-first (newest at bottom), matching chronological narrative flow
 - **Empty state**: "No LLM messages yet" when no calls have been logged
-- **Auto-pruning**: SQLite storage caps at 50 rows globally; oldest evicted on insert
+- **Auto-pruning**: Both backends (SQLite + InMemory) cap `llm_messages` at 50 rows globally; oldest evicted on insert. The `llm_messages` table has no `game_id` column, so the cap is global, not per-game.
 - **HTMX Polling**: `hx-get="/fragment/llm-messages" hx-trigger="load, every 4s"`
+
+## Document References
+
+- [ADR-001: HTMX Web Dashboard Architecture](../adr/adr-001-htmx-web-dashboard.md) — htmx + server-rendered HTML architecture
+- [ADR-002: HTTP Polling for Real-Time Updates](../adr/adr-002-http-polling.md) — polling-based real-time update mechanism
+- [ADR-003: Askama Template Engine for HTML Rendering](../adr/adr-003-askama-templates.md) — Askama template choice + compile-time validation
+- [system/worlds.md](./worlds.md) — world model + data flow + panel interactions

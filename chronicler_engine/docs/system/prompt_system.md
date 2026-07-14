@@ -1,7 +1,5 @@
 # Chronicler Engine Prompt System
 
-> **Related Decisions**: [ADR-004](../adr/adr-004-xml-prompt-format.md), [ADR-005](../adr/adr-005-layered-prompts.md)
-
 ## Overview
 
 The Chronicler Engine uses a layered prompt construction system inspired by SillyTavern's Prompt Manager. The system builds comprehensive context for game narration by combining game state, character information, world lore, and conversation history into a structured prompt sent to the LLM.
@@ -13,16 +11,16 @@ The engine follows a **Marinara-Engine-inspired pattern**:
 - **Instructions are XML-sectioned** — The system prompt contains behavioral instructions (`<role>`, `<instructions>`, `<global_rules>`). Prose and structural constraints (`<writing_style>`, `<output_format>`) are appended after conversation history in the user message, where LLMs weight them most heavily due to recency bias. Two dynamic sections (`<global_rules>`, response length) are injected at assembly time.
 - **Data is XML-wrapped** — External context (`<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, etc.) uses XML tags because it is *data*, not instructions.
 - **Why sections?** Labeled content containers let users edit individual prompt aspects (role, rules, style, format) without rewriting the entire prompt. The imperative text inside each section remains plain.
-- **Why not self-referential tags?** Tags like `<SystemPrompt>` or `<Role>` can trigger reasoning models (e.g., Gemma 4) to enter meta-analysis mode. The section tags (`<role>`, `<instructions>`) are content labels, not objects of analysis. See ADR-004 v4 for the full evolution.
+- **Why not self-referential tags?** Tags like `<SystemPrompt>` or `<Role>` can trigger reasoning models (e.g., Gemma 4) to enter meta-analysis mode. The section tags (`<role>`, `<instructions>`) are content labels, not objects of analysis.
 
 ## Source
 
 - **SillyTavern Docs**: <https://docs.sillytavern.app/usage/prompts/prompt-manager/>
 - **SillyTavern GitHub**: <https://github.com/SillyTavern/SillyTavern>
 
-## The 7-Layer Prompt System (with Post-History Splice)
+## Layered Prompt System (with Post-History Splice)
 
-The Chronicler Engine implements a 7-layer prompt structure (layers 0–6) mapped from SillyTavern's Prompt Manager. A **post-history splice** adds `<writing_style>` and `<output_format>` between Layer 5 and Layer 6 (see Post-History Is Not a Layer Variant below for why it is not counted as an 8th layer).
+The Chronicler Engine builds a layered prompt mapped from SillyTavern's Prompt Manager. A **post-history splice** adds `<writing_style>` and `<output_format>` between chat history and user input (see Post-History Splice Is Not a Layer below).
 
 | Layer | Name | SillyTavern Equivalent | Purpose |
 |-------|------|----------------------|---------|
@@ -30,15 +28,13 @@ The Chronicler Engine implements a 7-layer prompt structure (layers 0–6) mappe
 | 1 | Game State | Context | Current room, present NPCs |
 | 2 | NPC Cards | Character Description | In-room NPC character sheets |
 | 3 | Player | Persona Description | Player persona and description |
-| 4 | World Info | World Info / Lorebook | World lore triggered by keywords |
+| 4 | World Info | World Info / Lorebook | World name + description |
 | 5 | History | Chat History | Full conversation history |
 | 6 | User Input | User Message | Current player input |
 
-### Post-History Is Not a Layer Variant
+### Post-History Splice Is Not a Layer
 
-`<writing_style>` and `<output_format>` are rendered **after** `<ConversationHistory>` and **before** `<PlayerInput>` in the assembled user half. These post-history sections are not a layer variant; they are assembled as a separate string and spliced in between the history and user-input layers.
-
-The prompt layer enum has exactly 7 variants. Counting the post-history splice as an 8th layer would require either a phantom enum variant or non-type-safe numbering; the codebase avoids both.
+`<writing_style>` and `<output_format>` are rendered **after** `<ConversationHistory>` and **before** `<PlayerInput>` in the assembled user half. They are assembled as a separate string and spliced between the history and user-input layers; they are not a layer variant.
 
 ## Detailed Layer Descriptions
 
@@ -65,7 +61,7 @@ The prompt layer enum has exactly 7 variants. Counting the post-history splice a
   </global_rules>
   ```
 
-- **See also**: [`reference/system_prompt.md`](../reference/system_prompt.md) for the full prompt text and section definitions
+
 
 ### Layer 1: Game State
 
@@ -87,7 +83,7 @@ The prompt layer enum has exactly 7 variants. Counting the post-history splice a
 - **Role**: User (data)
 - **Content**: Two sections:
   - `<KnownNpcs>`: Condensed roster of **all** NPCs the player has met (name, location, 3-line summary)
-  - `<NpcsInRoom>`: Full character sheets for NPCs **currently present** (name, description, personality, scenario, goals, relationships)
+  - `<NpcsInRoom>`: Full character sheets for NPCs **currently present** (name, description, personality, scenario, relationships)
 - **Relationships**: For each in-room NPC, if they have `relationships` with other NPCs also present in the room, a `Relationships:` subsection is appended. Uses the `dynamic` text if non-empty, otherwise falls back to `static_text`.
 - **Why two-tier**: The LLM needs awareness of off-screen characters to reference them or write introduction scenes, but full cards for every NPC would bloat the prompt. Condensed cards (~40-60 words) preserve identity and motivation without the bulk.
 
@@ -96,15 +92,15 @@ The prompt layer enum has exactly 7 variants. Counting the post-history splice a
 - **Role**: User (data)
 - **Content**: Player's character sheet
 - **Format**: XML-wrapped (`<PlayerCharacter>... </PlayerCharacter>`)
-- **Includes**: name, description, personality, scenario
+- **Includes**: name, description, personality, scenario (rendered as `Background:`)
 
 ### Layer 4: World Info (Lorebook)
 
 - **Role**: User (data)
-- **Trigger**: Keyword matching in conversation
-- **Content**: World lore, setting facts, background information
+- **Content**: World name and description
 - **Format**: XML-wrapped (`<WorldLore>... </WorldLore>`)
 - **Implementation**: Renders `world.name` and `world.description` only. `global_rules` live in Layer 0 (System Prompt) to reduce token waste.
+- **Note**: No keyword-matching trigger exists. The doc previously described a keyword-driven lorebook; that mechanism is not implemented.
 
 ### Layer 5: Chat History
 
@@ -164,10 +160,12 @@ plot developments, build content (above 150 words), but allow the player to reac
 
 ## Context Templates
 
-The engine uses a variable system similar to SillyTavern's Handlebars-style templates:
+The engine supports a single template variable:
 
-- Variables populated from `GameState` at render time
+- `{{user}}` — substituted from the player persona's `name` at render time
 - Used in prompt construction within `PromptAssembler`
+
+No other `GameState`-derived variables are supported by the template engine today.
 
 ## Prompt Context Structure
 
@@ -194,9 +192,8 @@ The `make_prompt_context` helper function constructs `PromptContext` from indivi
 
 ## World Info / Knowledge Base
 
-- **Trigger**: Keywords appear in player input or history
 - **Content**: World name and description. World `global_rules` appear in Layer 0 (System Prompt), not here.
-- **Method**: Simple string matching (no RAG or vector DB)
+- **Method**: Static rendering of `world.name` and `world.description`; no keyword matching or RAG.
 
 ## Character Card Format
 
@@ -219,7 +216,14 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 
 ### Quantifier Prompt (Separate)
 
-The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 7-layer narrative prompt stack. See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text.
+The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the layered narrative prompt stack.
+
+## Document References
+
+- [ADR-004: XML-Structured LLM Prompts](../adr/adr-004-xml-prompt-format.md) — XML-sectioned instructions + XML-wrapped data; tags not objects of analysis
+- [ADR-005: SillyTavern-Style Layered Prompt System](../adr/adr-005-layered-prompts.md) — layered prompt architecture
+- [reference/system_prompt.md](../reference/system_prompt.md) — full system prompt text + section definitions
+- [reference/quantifier_prompt.md](../reference/quantifier_prompt.md) — full quantifier prompt text
 
 ## References
 

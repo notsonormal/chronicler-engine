@@ -1,6 +1,6 @@
 # SillyTavern Chat Window Reference
 
-> **Status:** historical/reference, not authoritative. HTML structure capture for comparison; chronicler design is defined in [`docs/system/dashboard.md`](../system/dashboard.md) + [`docs/system/ui_design.md`](../system/ui_design.md).
+> **Status:** historical/reference, not authoritative. HTML structure capture for comparison.
 
 This document describes the HTML structure of the SillyTavern chat window, verified against the official source code at [SillyTavern/SillyTavern](https://github.com/SillyTavern/SillyTavern) (`release` branch).
 
@@ -355,17 +355,6 @@ The `updateMessageElement()` function (`script.js:2611-2700`) performs these ope
 15. Updates swipe counter for non-user messages
 16. Applies character tags (`applyCharacterTagsToMessageDivs()`)
 
-## Cross-Reference with Prompt System
-
-See [`system/prompt_system.md`](../system/prompt_system.md) for the 7-layer prompt construction system. The chat window HTML is the **presentation layer** — it displays the conversation history (Layer 5: Chat History) and user input (Layer 6: User Input). The prompt assembly happens server-side via API calls; the HTML reflects the rendered conversation state.
-
-Key connections:
-- `.mes_text` content → becomes part of chat history sent to LLM
-- `mes_hide` / `mes_unhide` buttons → control whether a message is included in the prompt
-- `mes_ghost` icon → marks message as invisible to AI (excluded from prompts)
-- `.tokenCounterDisplay` → shows token count for budget management (see prompt system token budget section)
-- `swipeid` / `.swipes-counter` → alternate message variants, each with different content for the prompt
-
 ## Differences from Example HTML
 
 The `sillytavern_chat_window_example.html` file contains a **runtime snapshot** of a live SillyTavern instance with extensions loaded. Differences from the core template:
@@ -387,3 +376,9 @@ The `sillytavern_chat_window_example.html` file contains a **runtime snapshot** 
 | `${characterName}` in template | Literal string | Template has unresolved template literal |
 | SVG model icons in timestamps | Not present | Added by `insertSVGIcon()` when enabled |
 | Inline `style` attributes | Not present | Added by runtime for visibility toggling |
+
+## Document References
+
+- [system/dashboard.md](../system/dashboard.md) — chronicler dashboard HTML structure
+- [system/ui_design.md](../system/ui_design.md) — chronicler UI design tokens + tab styling
+- [system/prompt_system.md](../system/prompt_system.md) — chronicler prompt architecture

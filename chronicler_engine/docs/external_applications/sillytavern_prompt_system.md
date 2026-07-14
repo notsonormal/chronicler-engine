@@ -1,6 +1,6 @@
 # SillyTavern Prompt System Reference
 
-> **Status:** historical/reference, not authoritative. Comparison source for the [layered prompt system ADR-005](../adr/adr-005-layered-prompts.md); not a chronicler design source.
+> **Status:** historical/reference, not authoritative. Comparison source for the layered prompt system; not a chronicler design source.
 
 ## Overview
 
@@ -113,3 +113,7 @@ SillyTavern character cards (Jailbreak format):
 - SillyTavern Prompt Manager: https://docs.sillytavern.app/usage/prompts/prompt-manager/
 - SillyTavern Prompt Building: https://docs.sillytavern.app/usage/prompts/prompt-building/
 - Prompt Assembly Pipeline: https://deepwiki.com/SillyTavern/SillyTavern/3.3-prompt-assembly-pipeline
+
+## Document References
+
+- [ADR-005: SillyTavern-Style Layered Prompt System](../adr/adr-005-layered-prompts.md) — chronicler layered prompt design

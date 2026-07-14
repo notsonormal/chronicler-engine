@@ -1,7 +1,5 @@
 # Agent System
 
-> **Related Decisions**: [ADR-009](../adr/adr-009-agent-trait-registry.md)
-
 ## Overview
 
 The Chronicler Engine supports an extensible agent architecture where specialized agents can inject behavior into the narrative pipeline at specific execution phases. An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in the `AgentRegistry`.
@@ -27,7 +25,7 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
 |--------|---------|
 | `name()` | Human-readable identifier for logging |
 | `phase()` | When the agent runs (`PreGeneration` or `PostGeneration`) |
-| `backend_selector()` | Which LLM backend the agent uses |
+| `backend_selector()` | Which LLM backend the agent uses. Reserved; not consulted by the registry. |
 | `execute()` | Run the agent; returns `AgentResult` |
 
 ---
@@ -36,7 +34,7 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
 
 ```rust
 pub enum ExecutionPhase {
-    PreGeneration,   // Before main LLM call. No agent registered with this phase yet.
+    PreGeneration,   // Before main LLM call. Reserved; no agent dispatched here today.
     PostGeneration,  // After main LLM call. The `QuantifierAgent` runs here.
 }
 ```
@@ -44,10 +42,11 @@ pub enum ExecutionPhase {
 **Pipeline flow** (simplified):
 
 1. Load state from snapshot
-2. Run **PreGeneration** agents
-3. Generate main narration via LLM
-4. Run **PostGeneration** agents (`QuantifierAgent` analyzes narration)
-5. Apply agent results → `execute_freeaction_impl` → save snapshot
+2. Generate main narration via LLM
+3. Run **PostGeneration** agents (`QuantifierAgent` analyzes narration)
+4. Apply agent results → `execute_freeaction_impl` → save snapshot
+
+The `PreGeneration` variant exists in the enum for forward compatibility but no dispatcher reads it; the pipeline iterates only `PostGeneration` agents.
 
 ---
 
@@ -97,27 +96,7 @@ If no agent config exists, defaults are injected for backward compatibility:
 
 ### Config Format (settings.json)
 
-```json
-{
-  "agents": [
-    {
-      "name": "quantifier",
-      "agent_type": "quantifier",
-      "enabled": true,
-      "backend": { "type": "use_named", "value": "quantifier" },
-      "phase": "post_generation"
-    }
-  ]
-}
-```
-
-**Fields:**
-
-- `name` — Display name
-- `agent_type` — `"quantifier"` (unknown types fail fast at startup)
-- `enabled` — `true` to register; `false` skips
-- `backend` — `{"type": "use_main"}` or `{"type": "use_named", "value": "<connection_id>"}`
-- `phase` — `"pre_generation"` | `"post_generation"`
+Each agent receives a recorder bound at wiring time (see Backend Selection below); the settings format is the `AppSettings.agents` array. The `agent_type` discriminator selects the agent implementation; `enabled` controls registration.
 
 ---
 
@@ -130,7 +109,7 @@ pub enum BackendSelector {
 }
 ```
 
-**QuantifierAgent**: Resolves its backend via `AgentRegistry::from_configs_with_storage()`, which receives `&AppSettings` from the caller (no file I/O). The `quantifier_connection_id` is read from the passed settings. `UseMain` falls back to the default narration backend.
+**QuantifierAgent**: backend is bound at wiring time. `AgentRegistry::from_configs_with_storage` receives a pre-built `quantifier_recorder` (constructed from `settings.quantifier_connection_id` in `bootstrap::wiring`); the agent's `backend_selector()` is not consulted. `UseMain` is reserved (no fallback to the narration backend is currently applied).
 
 ---
 
@@ -143,4 +122,8 @@ Each agent can use a different LLM connection:
 
 This enables cost optimization (cheap model for quantifier, powerful model for narration).
 
-The engine works with **zero agents** — all agent execution is optional. See [ADR-009](../adr/adr-009-agent-trait-registry.md) for the authoritative extension procedure.
+The engine works with **zero agents** — all agent execution is optional.
+
+## Document References
+
+- [ADR-009: Agent Trait and Registry Architecture](../adr/adr-009-agent-trait-registry.md) — `Agent` trait + `AgentRegistry` + extension procedure

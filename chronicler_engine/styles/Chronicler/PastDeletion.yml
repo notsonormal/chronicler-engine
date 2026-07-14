@@ -1,0 +1,17 @@
+extends: existence
+message: "Past-tense deletion history is Sediment (chronicler-docs-hygiene Phase 3). State current contract; don't narrate removal. See docs/AGENTS.md."
+level: warning
+ignorecase: true
+tokens:
+  - '\bused to be\b'
+  - '\bused to (have|do|use|return|carry|mutate|trigger|fire|process|run)\b'
+  - '\bpreviously (also|had|mutated|wired|returned|triggered|called|held|used)\b'
+  - '\bwas removed on\b'
+  - '\bwas removed in\b'
+  - '\bwas deleted (in|on|during)\b'
+  - '\bdeleted in phase\b'
+  - '\bolder revisions of\b'
+  - '\bprevious version(s)? of this document\b'
+  - '\bprevious (revisions|versions) of\b'
+  - '\bin (phase|version) [0-9]+ we\b'
+  - '\bno longer (wired|used|called|present|exists|exist|supported)\b'

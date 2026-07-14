@@ -14,23 +14,20 @@ Docs in this repo are a **Specification**, not a conversation. They state contra
 
 Spec-Driven Implementation (SDI) means the code reflects the spec. It does **not** mean restating code in the docs. Symbols map 1-to-1 to concepts (SDI principle), so naming the concept in prose IS naming the symbol — no need to also quote the function/type/file.
 
-Before committing any edit to a `docs/system/*.md`, `docs/reference/*.md`, `docs/architecture/*.md`, or `docs/diagnostics/*.md` file, apply this test to every code reference (type, function, file, module path, line number) in your added or changed prose:
+#### Code Indexer
 
-> If this reference is removed, does the reader lose contract information?
+Documents should not be code indexers. The principle is that the code is self-documenting and the chronicler engine docs is a layer on top of that. The docs exist because they are more consise and easier to curate than AI generated code comment.
 
-- **Yes** — keep it. State the contract alongside; never let a reference stand alone as the substance.
-- **No** — remove it. The code is the verification. The doc verifies the contract, not the implementation.
+Docs should not be explaining how the code works, which is what excessive references to modules, classes, methods and types tends to be. Plans (`docs/plans`) is naturally excluded for this.
 
 XML/domain markups (e.g. `<ConversationHistory>`, `<PlayerInput>`) are domain tags, not code references — they don't trigger this test.
-
-Numerical anchor budgets ("max N per section") don't work — the writer is also the counter. Use the non-removable test instead.
 
 Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](../../.agents/skills/chronicler-docs-hygiene/SKILL.md) skill.
 
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-13 23:08 UTC*
+*Index last generated: 2026-07-14 13:29 UTC*
 
 ### `docs/adr/`
 
@@ -66,6 +63,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ### `docs/architecture/`
 
 - [Architecture Guardrails](./architecture/guardrails.md)
+- [Rust Implementation Idioms](./architecture/rust_technical.md)
 - [Specification: Core Architecture (Modular)](./architecture/system.md)
 
 ### `docs/diagnostics/`
@@ -84,6 +82,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
+- [Fix Pre-Existing Doc Audit Findings](./plans/fix-pre-existing-doc-audit-findings.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [P4-Concurrent Cleanup — Fix TOCTOU + Simplify heal](./plans/p4-concurrent-cleanup-fix-toctou-simplify-heal.md)
 - [Plan: Eliminate Free-Function Smells (Final)](./plans/plan-eliminate-free-function-smells-final.md)

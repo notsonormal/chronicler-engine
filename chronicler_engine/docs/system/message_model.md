@@ -1,9 +1,5 @@
 # Message Model
 
-## Status
-
-> Status: Implemented. See [ADR-017](../adr/adr-017-message-swipes.md) for swipe rationale.
-
 ## Objective
 
 The message model defines how conversation history is structured, accessed, and mutated. Two core types: `Message` (a single narrative unit with multiple swipes) and `MessageHistory` (the ordered collection). The single load-bearing rule: **content lives in `swipes[active_swipe_index]`; use accessor methods for reads; never mirror fields onto `Message` directly**.
@@ -86,7 +82,7 @@ Public surface (all methods):
 
 Retry replaces the last AI message's active swipe with a new swipe containing the new generation. The old swipe is preserved (non-destructive). Swipe navigation (`set_active_swipe`) on the last message lets the user compare generations.
 
-Why only the last message? Per ADR-017: swiping a non-last message would require deleting all messages after it (they depend on the state that the swipe changes). This is equivalent to retry, which already exists. Limiting swipes to the last message avoids history-truncation complexity while preserving the core value: A/B comparison of the most recent generation.
+Why only the last message? Swiping a non-last message would require deleting all messages after it (they depend on the state that the swipe changes). This is equivalent to retry, which already exists. Limiting swipes to the last message avoids history-truncation complexity while preserving the core value: A/B comparison of the most recent generation.
 
 Each `Swipe` carries its own `snapshot_id`. Switching swipes restores the exact `GameStateSnapshot` that produced that swipe's text. This is the state-consistent swipe property: no "ghost state" between swipe and world.
 
@@ -117,7 +113,7 @@ Soft deletes (`is_deleted = true`) preserve the row + swipes for retry restorati
 
 **Cap bypass**: `from_messages` and `replace` do not enforce the cap. Storage loaders use `from_messages` to hydrate from DB; if the DB ever contains more than `MAX_MESSAGES` entries (for example after a downgrade + upgrade cycle), `from_messages` would accept them all.
 
-## Cross-references
+## Document References
 
 - [ADR-017: Message Swipes](../adr/adr-017-message-swipes.md) -- swipe rationale, snapshot-per-swipe, event independence
 - [architecture/system.md §1](../architecture/system.md) -- `state` tier definition

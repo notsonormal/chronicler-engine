@@ -1,9 +1,5 @@
 # Storage System
 
-**Module:** `crate::adapters::driven::storage`
-**Status:** Implemented
-**Related ADRs:** [ADR-020](../adr/adr-020-storage-consolidation.md), [ADR-024](../adr/adr-024-game-data-migration-to-sqlite.md)
-
 ## Overview
 
 The Chronicler Engine storage layer provides unified persistence for game sessions, narrative content, user configurations, and LLM call forensics. It uses a concrete `Storage` struct with a `Backend` enum (`Sqlite`, `InMemory`) for real backends plus a `BackendKind` decorator (`Direct(Backend)` | `Test { base, overrides }`) for failure injection, instead of trait-based repository patterns.
@@ -104,3 +100,8 @@ Serializable subset of `GameState` for persistence. Messages excluded; hydrated 
 - InMemory backend for fast unit tests (no SQLite I/O)
 - `with_test_failures()` returns `(Storage, TestFailureHandle)` for failure injection
 - TestFailureHandle takes `&'static str` method-name keys + `TestOverride` failure payloads
+
+## Document References
+
+- [ADR-020: Unified Storage Struct](../adr/adr-020-storage-consolidation.md) — single Storage struct, Backend enum, no trait boilerplate
+- [ADR-024: Migrate Game Data to SQLite with Seed Pattern](../adr/adr-024-game-data-migration-to-sqlite.md) — `seed_game_data()` + JSON seed template pattern

@@ -6,7 +6,7 @@ The Chronicler Engine enforces coding standards through three complementary laye
 
 1. **Compile-time**: `clippy` lints (deny-level in `src/lib.rs`)
 2. **Test-time (declarative)**: `arch-lint` architecture rules (`arch-lint.toml`)
-3. **Test-time (custom)**: `syn`-based convention tests (`tests/guardrails.rs`)
+3. **Test-time (custom)**: `syn`-based convention tests in `tests/infrastructure/guardrails/` (17 registered conventions; load-bearing subset documented in §3.1–3.9)
 
 All three run in CI via `build.py`.
 
@@ -50,22 +50,23 @@ Declarative architecture rules in `arch-lint.toml`.
 
 ### Deferred arch-lint rules (not yet enforced)
 
-User decision (Task 0, Option B): arch-lint 0.4.3 lacks scoped file-level exemptions for `deny-scope-dep`. Pre-existing layer leaks (e.g. `templates.rs`/`view_models.rs` importing `LlmMessage`/`CheckResult`; `ports/llm_provider.rs` default impls reaching into `Storage`) would make every would-be Phase 1.7 rule fail the build at red. Instead these rules are deferred until Phase 2 closes the leaks (or a grep-based guardrail test replaces arch-lint enforcement).
+The `server → storage` half of the row below is already enforced by `arch-lint.toml`; only `server → narrative` remains open. Other rows describe pre-existing leaks that arch-lint cannot yet exempt cleanly.
 
-| Deferred rule | Rationale | Blocker | Target phase |
-|---------------|-----------|---------|---------------|
-| `server` → `storage`, `narrative` | Driving adapters must not import driven adapters directly; route through application ports | Phase 2.3 closed `check_player_input` leaks (now via `TextCheckService`). `templates.rs` + `view_models.rs` import `LlmMessage` + `CheckResult` — these are port types at `application/ports/`, so imports are legal. | Verification needed — may be closed |
-| `storage` → `narrative` | Driven adapters must not depend on other driven adapters | None currently (rule would pass today, but paired with the reverse) | After Phase 2 closes the leaks |
-| `narrative` → `storage` | Driven adapters must not depend on other driven adapters | Phase 2.1 removed default impls (`LlmProvider` is transport-only). `application/agents/registry.rs` + `application/agents/quantifier/agent.rs` still import `Storage` — these are application→driven leaks, not narrative→storage. Rule may be obsolete. | Verification needed |
-| `application` → `adapters/driven` | Application layer must not import driven adapters directly; route through ports | **5 exempted files** (see ADR-027): 3 intentional persistence-boundary (`context.rs`, `application_service.rs`, `game_service.rs` — marked `// arch-lint: storage-direct — intentional, see ADR-027`) + 2 deferred to T2 reliability plan (`agents/registry.rs`, `agents/quantifier/agent.rs` — marked `// arch-lint: storage-direct — deferred to T2, see ADR-027`). `action_pipeline/*` no longer imports driven adapters post-Phase-2. | Phase 2.5 (comment-only documentation); enforcement via PR review until then |
-| `domain` → anything (explicit) | Already covered by existing `model` scope deny rules; plan repeats for emphasis | Subsumed — no action | Already enforced |
-| `application/ports` → anything | Ports must depend only on `domain` and `error` | Subsumed by `application` → `server` rule + (deferred) `application` → `adapters/driven` rule | After Phase 2 closes the leaks |
+| Deferred rule | Status | Notes |
+|---------------|--------|-------|
+| `server` → `storage` | **Enforced** by `arch-lint.toml` (`from = "server" to = ["storage"]`); row is paired with `narrative` for symmetry | Driving adapters must not access storage directly; route through application ports |
+| `server` → `narrative` | Open | Driving adapters must not import narrative directly; route through application ports |
+| `storage` → `narrative` | Open | Driven adapters must not depend on other driven adapters |
+| `narrative` → `storage` | Open | Driven adapters must not depend on other driven adapters |
+| `application` → `adapters/driven` | Open | Application layer must not import driven adapters directly; route through ports. Three files carry explicit `arch-lint: storage-direct` markers (one intentional persistence boundary, two deferred to T2 reliability plan). Two additional files import `Storage` without a marker and need remediation. |
+| `domain` → anything (explicit) | Subsumed | Already covered by existing `model` scope deny rules |
+| `application/ports` → anything | Subsumed | Covered by `application` → `server` rule + (deferred) `application` → `adapters/driven` rule |
 
-The deferred-leak cleanup items were tracked in the hexagonal-reorganization work (Phase 1.7 arch-lint rule updates + Phase 2 layer-responsibility fixes). Formal Phase-3 deferrals (e.g. `DebugPort` rejected as phantom port; `StateRepository` port rejected as single-impl YAGNI) are recorded in ADR-027 + the `application` → `adapters/driven` row above.
+For the planning history that produced these deferrals, see the decision record (hexagonal-reorganization superplan).
 
-### `DebugPort` exemption (ADR-027 §3.2)
+### `DebugPort` exemption
 
-`src/adapters/driving/http/debug.rs` reaches into `ApplicationService` directly. This is an **intentional guardrail exemption** (no `DebugPort` trait) — single debug consumer + single debug surface = phantom port per ADR-027 §3.2. Documented here for traceability; no code change required.
+`src/adapters/driving/http/debug.rs` reaches into `ApplicationService` directly. This is an **intentional guardrail exemption** (no `DebugPort` trait) — single debug consumer + single debug surface = phantom port. Documented here for traceability; no code change required.
 
 ### Rules
 
@@ -80,9 +81,9 @@ Run: `cargo nextest run --test architecture`
 
 ---
 
-## 3. Custom syn-Based Guardrails (`tests/guardrails.rs`)
+## 3. Custom syn-Based Guardrails (`tests/infrastructure/guardrails/`)
 
-AST-parsed convention enforcement. Rules start at `warn` severity; legacy exemptions prevent blocking the build.
+AST-parsed convention enforcement. Rules start at `warn` severity; legacy exemptions prevent blocking the build. The full set of registered tests lives in `tests/infrastructure/guardrails/mod.rs`; §3.1–3.9 below document the most-load-bearing subset.
 
 ### 3.1 Import Ordering (`guardrails_import_ordering`)
 
@@ -178,13 +179,7 @@ Code coverage is measured via `cargo-llvm-cov` with file-level exclusions config
 
 **Approach:** `--ignore-filename-regex` flag instead of `#[coverage(off)]` attributes, because `#[coverage(off)]` requires nightly Rust (feature `coverage_attribute`) and stable Rust compatibility is required.
 
-**Excluded files** (integration-tested wiring/lifecycle, not business logic):
-- `server/(router|server_impl|handlers).rs`
-- `test_support/.*.rs`
-- `bootstrap/run.rs`
-- `narrative/llm/(openrouter|ollama|deepseek|backend).rs`
-
-**Reference:** cargo-llvm-cov Issue #453 recommends file-level exclusion for stable Rust.
+Excluded files are wiring/lifecycle (server bootstrap, test support, LLM backend clients) — covered by integration tests rather than unit coverage. The exclusion list lives in `build.py`'s `--ignore-filename-regex` flag.
 
 ---
 
@@ -195,24 +190,24 @@ Machine-checkable statements about engine runtime behavior. Violations indicate 
 ### State Mutations
 
 #### INV-001: Generation Status Lifecycle
-`generation_state.status` must return to `Idle` after every action.
-- **Test:** `tests/invariant_contract_tests.rs::test_inv001_generation_status_resets_on_panic`
+Every action must end with a free generation slot. The status (mirrored on `state.narrative.input_buffer.status`) returns to `Idle` when the pipeline completes; panics mid-flight heal on the next action via `heal_stale_generating`.
+- **Test:** `tests/infrastructure/invariant_contract.rs::test_inv001_generation_guard_resets_on_panic`
 
 #### INV-002: State Mutation Order
-`execute_freeaction_impl` applies mutations in order: handle_movement → resolve NPCs → add_log → evaluate_triggers → apply_npc_events. Violations compile but break silently.
-- **Test:** `tests/invariant_contract_tests.rs::test_inv002_state_mutation_order`
-- **Test:** `tests/invariant_contract_tests.rs::test_inv002_mutation_order_property` (proptest)
-- **Authoritative spec:** [`system/triggers.md`](../system/triggers.md) "State Mutation Order" section.
+Mutations between action start and end follow a fixed sequence: movement → NPC resolution → trigger evaluation → NPC events. State-mutation side effects (message persistence) live in per-phase helpers, not inline in the orchestrator. Out-of-order mutations compile but break silently.
+- **Test:** `tests/infrastructure/invariant_contract.rs::test_inv002_state_mutation_order`
+- **Test:** `tests/infrastructure/invariant_contract.rs::test_inv002_mutation_order_property` (proptest)
+
 
 ### Concurrency
 
 #### INV-003: No Raw OS Thread Spawning
-No `std::thread::spawn` in `src/`. All concurrent work uses `tokio::task::spawn_blocking`.
-- **Test:** `tests/guardrails/structure.rs::guardrails_no_std_thread`
+All concurrent work runs on the tokio runtime. No `std::thread::spawn` or `std::thread::sleep` anywhere in `src/`.
+- **Test:** `tests/infrastructure/guardrails/mod.rs::guardrails_no_std_thread`
 
 #### INV-004: LLM Calls Are Cancellable
-Blocking LLM work checks `CancellationToken` before/after backend calls and at `ActionPipeline` stage boundaries.
-- **Test:** `tests/invariant_contract_tests.rs::test_inv004_cancellable_at_boundaries`
+Long-running generation must be cancellable at phase boundaries. The `ActionPipeline` aborts stale generations at stage boundaries; the LLM transport enforces only a 180-second HTTP timeout (no backend-level cancellation token).
+- **Test:** `tests/infrastructure/invariant_contract.rs::test_inv004_cancellable_at_boundaries`
 
 #### INV-004b: No Concurrent Async Actions
 Only one `FreeAction` generation in flight at a time. Server rejects overlaps.
@@ -247,3 +242,8 @@ cargo nextest run
 # CI pipeline
 python build.py
 ```
+
+## Document References
+
+- [ADR-027: Hexagonal Architecture Migration](../adr/adr-027-hexagonal-architecture-migration.md) — phantom port heuristic + rejected ports + ports/traits collapse + `DebugPort` §3.2 exemption
+- [system/triggers.md](../system/triggers.md) — "State Mutation Order" section specifies mutation sequence that INV-002 tests

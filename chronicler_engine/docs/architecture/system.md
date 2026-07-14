@@ -8,7 +8,7 @@ Eight tiers organize the codebase:
 - `crate::domain::engine` — Pure simulation logic.
 - `crate::application` — Orchestration layer; owns port traits under `application/ports/`. Sub-modules from the T2 land package:
   - `crate::application::persistence_gate` — application persistence boundary; owns `Arc<Storage>` + `Arc<PresetStore>`.
-  - `crate::application::generation_gate` — per-game registry (write-side truth, `Arc<RwLock<HashMap<GameId, GenerationSlot>>>`) + atomic projection (`Arc<AtomicBool>`, read-only cache of "any slot Generating"); `is_shutting_down` lives on `DefaultApplicationService` reading `AppState.shutdown_token`. ADR-030 hot path.
+  - `crate::application::generation_gate` — per-game registry (write-side truth, `Arc<RwLock<HashMap<u64, GenerationSlot>>>`) + atomic projection (`Arc<AtomicBool>`, read-only cache of "any slot Generating"); `is_shutting_down` lives on `DefaultApplicationService` reading `AppState.shutdown_token`.
   - `crate::application::game_catalogue` — game-lifecycle orchestration; borrows `Arc<PersistenceGate>`.
   - `crate::application::world_catalogue` — worlds/presets persistence; takes raw `Arc<Storage>` (deliberate asymmetry vs GameCatalogue — independent seams).
 - `crate::adapters::driven` — Outbound adapters (storage, LLM providers, text check).
@@ -42,7 +42,7 @@ flowchart TD
     BOOT --> PORT_R
 ```
 
-See [ADR-027](../adr/adr-027-hexagonal-architecture-migration.md) for rationale (phantom port heuristic, rejected ports).
+
 
 ## Dependency Invariant
 
@@ -65,7 +65,7 @@ Trait paths under `application/ports/`.
 
 Three `src/application/` files import `Storage` directly under `// arch-lint: storage-direct`:
 
-- `game_service.rs` — intentional persistence boundary (ADR-027).
+- `game_service.rs` — intentional persistence boundary.
 - `agents/registry.rs`, `agents/quantifier/agent.rs` — deferred to T2 reliability plan.
 
 ## Settings Flow
@@ -96,3 +96,8 @@ flowchart TD
 Default connections (3): `openrouter-gpt-4o-mini`, `openrouter-euryale`, `ollama-gemma-4-26B`. Default `narration_connection_id` and `quantifier_connection_id`: `"openrouter-gpt-4o-mini"`.
 
 **Reload rules**: no business logic layer reloads settings from disk after bootstrap. Connection changes require a server restart to take effect.
+
+## Document References
+
+- [ADR-027: Hexagonal Architecture Migration](../adr/adr-027-hexagonal-architecture-migration.md) — phantom port heuristic + rejected ports + ports/traits collapse
+- [ADR-030: is_generating Dual-Source Invariant](../adr/adr-030-is-generating-invariant.md) — `AtomicBool` as cached projection of persisted `is_generating` status

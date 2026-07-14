@@ -1,6 +1,6 @@
 # Reference: Quantifier Prompt
 
-> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the [7-layer narrative prompt system](../system/prompt_system.md). For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
+> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the layered narrative prompt system.
 
 The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/application/agents/quantifier/prompt.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
 
@@ -132,15 +132,10 @@ The quantifier prompt can be customized at runtime via the **Prompt Presets** ta
 2. Create a new Quantifier Prompt preset (or edit an existing non-default one)
 3. Click **Set Active** to apply it
 
-The active preset is stored in `AppSettings.active_quantifier_prompt_preset_id`. Its text is assembled via `assemble_prompt_text()` (no global rules or response length for quantifier) and cached in `AppSettings.active_quantifier_prompt`. When an active preset is set, the assembled XML is injected into `QuantifierPromptContext.quantifier_prompt_override` and used by `QuantifierPromptBuilder::build_system_prompt()`. The builder then appends `<available_npc_ids>` and `<available_rooms>` after the assembled preset.
+The active preset id is stored in `AppSettings.active_quantifier_prompt_preset_id`. On each quantifier call the engine reads the preset from storage via `s.get_preset(&settings.active_quantifier_prompt_preset_id)`, calls `assemble_prompt_text()` to build the system text on the fly (no pre-assembly caching in `AppSettings`), and passes the assembled text through `QuantifierPromptContext.quantifier_prompt_override` to `QuantifierPromptBuilder::build_system_prompt()`. The builder then appends `<available_npc_ids>` and `<available_rooms>` after the assembled preset.
 
 Default presets (shipped as `data/prompt_presets/quantifier/default.json`) are protected and cannot be edited or deleted. To modify a default, create a copy and activate it.
 
-## Code references
+## Document References
 
-- System prompt default: `data/prompt_presets/quantifier/default.json`
-- System prompt builder: `src/application/agents/quantifier/prompt.rs:build_system_prompt()` (returns `quantifier_prompt_override` when set)
-- User prompt: `src/application/agents/quantifier/prompt.rs:build_user_prompt()`
-- Response parsing: `src/application/agents/quantifier/parser.rs` (see `parse_quantifier_response` functions)
-- Prompt preset storage: `src/adapters/driven/storage/prompt_preset_storage.rs`
-- Dashboard UI: `src/adapters/driving/http/prompt_presets_fragment/`
+- [system/prompt_system.md](../system/prompt_system.md) — main narrative layered prompt architecture (quantifier is separate)

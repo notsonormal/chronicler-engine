@@ -1,7 +1,5 @@
 # System: Dynamic Pseudo-Rooms
 
-> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md)
-
 Dynamic Rooms are a safety mechanism used when the LLM's narrative intent contradicts the static game map.
 
 ## Overview
@@ -13,9 +11,13 @@ Instead of failing or teleporting the player to a blank screen, the engine creat
 1. **Detection**: The Quantifier detects a movement intent but finds no matching `room_id` in the overworld.
 2. **Creation**: `crate::domain::engine::logic::create_dynamic_room` is called.
 3. **Data Source**: The quantifier's extracted "Destination Name" is used as the room title.
-4. **Description**: A generic or LLM-derived description is applied.
-5. **Lifespan**: Dynamic rooms are stored in `state.dynamic_rooms` (a `HashMap`).
+4. **Description**: A static placeholder (`"A place you have never seen before."`) is applied.
+5. **Lifespan**: Dynamic rooms are stored in `state.movement.dynamic_rooms` (a `HashMap`) and persist in the current game's snapshot.
 
 ## Limitations
 - Dynamic rooms typically have no exits unless the Quantifier detects a way out later.
-- They do not persist across full world reloads.
+- They are lost only when a new world is loaded or the database is re-seeded (they persist across normal game save/load cycles).
+
+## Document References
+
+- [ADR-006: Quantifier-Driven Game Systems](../adr/adr-006-quantifier-systems.md) — quantifier detects movement intent that triggers dynamic room creation

@@ -1,6 +1,6 @@
 # Marinara-Engine Reference
 
-> **Status:** historical/reference, not authoritative. See [ADR-027](../adr/adr-027-hexagonal-architecture-migration.md) for current architecture.
+> **Status:** historical/reference, not authoritative.
 
 **Location:** `D:\John\DevContainer\Marinara-Engine`  
 **Relation:** Sister project with a TypeScript-based engine that includes similar chronicler functionality. Contains relevant LLM infrastructure patterns.
@@ -258,3 +258,6 @@ Game mode uses a completely separate prompt stack:
    - Structured dialogue syntax with tags (`main`, `side`, `extra`, `action`, `thought`, `whisper:Target`)
    - Combat turn declarations
 
+## Document References
+
+- [ADR-027: Hexagonal Architecture Migration](../adr/adr-027-hexagonal-architecture-migration.md) — current chronicler architecture; Marinara-Engine is reference only

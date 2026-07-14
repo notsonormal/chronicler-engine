@@ -35,7 +35,7 @@ On first startup (or if DB is empty), `bootstrap::run()` calls seeding functions
    - Deserializes `WorldManifest` (file pointers: `map_file`, `characters_dir`)
    - Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `default_scenario_id`)
    - Calls `Storage::seed_world(world_card, map)` → returns `world_id: i64` (idempotent)
-   - Scans `data/personas/*.json` and seeds each as a `PersonaCard` via `Storage::seed_persona(key, player)` — idempotent (see ADR-026)
+   - Scans `data/personas/*.json` and seeds each as a `PersonaCard` via `Storage::seed_persona(key, player)` — idempotent
    - Loads `NpcCard`s from `data/characters/<characters_dir>/*.json` and seeds each via `seed_character(world_id, npc)` — skip if exists
 
 After seeding, runtime loading is 100% database-first:
@@ -54,17 +54,20 @@ Both `PersonaCard` and `NpcCard` share this unified structure for narrative fiel
 
 ```json
 {
+  "key": "string (filename stem; primary identifier when seeded)",
   "name": "string",
   "description": "string (physical appearance + general intro)",
   "personality": "string (e.g., 'Arrogant, brave, tech-savvy')",
   "scenario": "string (background or current motivation)",
   "example_dialogue": "string (optional example for LLM context)",
-  "inventory": ["item_id_1", "item_id_2"],  // Only on PersonaCard/NpcCard, NOT CharacterSheet
+  "inventory": ["item_id_1", "item_id_2"],
   "profile_image": "string (optional, preferred profile image)",
   "summary": "string (optional, brief character summary)",
   "headshot_image": "string (optional, headshot/portrait for sidebar grid)"
 }
 ```
+
+The `key` field is the filename stem for the persona/character at seed time (e.g. `data/personas/julian.json` → `key = "julian"`); for NpcCard it is derived from the JSON filename within `data/characters/<characters_dir>/`. Both fields are required on the live struct.
 
 ### Image Field Usage
 
@@ -76,19 +79,21 @@ This schema allows the LLM Game Master to treat player and NPCs with equal granu
 
 ## Room Schema
 
-Rooms in map.json have the following structure:
+Rooms in `map.json` define per-tile narrative state with cardinal exits. Exits use the lowercase-serialized `Direction` enum (`north`, `south`, `east`, `west`, `up`, `down`).
 
 ```json
 {
   "id": "string",
   "name": "string",
   "description": "string",
-  "exits": { "north": "room_id", "east": "room_id" },  // Cardinal direction exits
+  "exits": { "north": "room_id", "east": "room_id" },
   "items": ["item_id_1"],
   "navigation_description": "string (optional, custom movement narration)",
-  "image_path": "string"
+  "image_path": "string (optional, nullable)"
 }
 ```
+
+`image_path` is `Option<String>` with `#[serde(default)]`; omit or use `null` when no image is available.
 
 ## NpcCard Schema
 
@@ -116,85 +121,31 @@ Rooms in map.json have the following structure:
 
 ## Trigger Schema
 
-Attached to an NPC. Defines a condition and the narration to inject when that condition is met.
+Attached to an NPC. Defines a requirement and the narration to inject when that requirement is met. The live `Trigger` struct has the shape `{ requirement, narration, repeat, room_id? }`:
 
 ```json
 {
-  "name": "FirstMeeting",
-  "condition": { "TimesMet": ["Eq", 0] },
-  "action": { "narration_prompt": "The shopkeeper looks up from behind the counter with a warm smile." },
-  "repeat": false
+  "requirement": { "TimesMet": { "operator": "Eq", "threshold": 0 } },
+  "narration": {
+    "name": "FirstMeeting",
+    "narration_prompt": "The shopkeeper looks up from behind the counter with a warm smile."
+  },
+  "repeat": false,
+  "room_id": null
 }
 ```
 
 ### Fields
 
-- `name`: Display name for the trigger (used in logs and the `trigger_fired` map keys).
-- `condition`: The condition that must be true for this trigger to fire. Currently supports `TimesMet` with a comparison operator.
-  - `TimesMet`: Array of `[operator, value]`. Operators: `Eq` (equal), `Lt` (less than), `Gte` (greater than or equal)
-- `action.narration_prompt`: The text injected into the continuation LLM prompt when this trigger fires
+- `requirement`: The requirement that must hold for the trigger to fire. The `TimesMet` variant takes `operator` + `threshold`. Operators: `Eq` (equal), `Lt` (less than), `Gte` (greater than or equal).
+- `narration.name`: Display name for the trigger (used in logs and the event header).
+- `narration.narration_prompt`: The text injected into the continuation LLM prompt when this trigger fires.
 - `repeat`: If `false`, fires only once (first time condition is met). If `true`, fires whenever condition is met.
 - `room_id` (optional): If set, this trigger only fires when the player is in this room. If omitted or `null`, the trigger is global.
 
-## NpcEncounterState Schema
+## NPC Event Schemas
 
-Tracks character state for a specific NPC. Stored in `GameState.npc_encounter_log`.
-
-```json
-{
-  "times_met": 0,
-  "trigger_fired": {},
-  "currently_meeting": false
-}
-```
-
-### Fields
-
-- `times_met`: How many times the player has encountered this NPC
-- `trigger_fired`: Map of trigger index (usize) to boolean (whether that trigger has fired)
-- `currently_meeting`: Whether the player is currently in the same room/session as this NPC
-
-## NpcEncounterLog Schema
-
-Contains all NPC encounter state. Top-level field in `GameState`.
-
-```json
-{
-  "npcs": {}
-}
-```
-
-### Fields
-
-- `npcs`: Map of NPC ID to `NpcEncounterState`
-
-## NpcEventType Schema
-
-Enum representing NPC movement event types.
-
-```json
-"Entered" | "Left"
-```
-
-### Variants
-
-- `Entered`: NPC transitioned from not being in the area to being in the area
-- `Left`: NPC transitioned from being in the area to not being in the area
-
-## NpcEvent Schema
-
-A single NPC movement event.
-
-```json
-{
-  "npc_id": "carla",
-  "event_type": "Entered"
-}
-```
-
-## NpcEventList Schema
-
-Collection of NPC movement events with confidence level. Returned by `compute_npc_events()`.
+`compute_npc_events()` diffs the previous vs current NPC sets and returns an `NpcEventList` with the per-NPC transition type and an aggregate confidence level:
 
 ```json
 {
@@ -206,77 +157,31 @@ Collection of NPC movement events with confidence level. Returned by `compute_np
 }
 ```
 
-### Fields
+- `events`: Array of `NpcEvent { npc_id, event_type }`. `event_type` is `Entered` (was absent, now present) or `Left` (was present, now absent).
+- `confidence`: `High` (≥1 event with high confidence), `Medium` (events detected at medium confidence), `Low` (no events).
 
-- `events`: Array of `NpcEvent` objects
-- `confidence`: Confidence level (`High`, `Medium`, `Low`). Medium when events detected, Low when no events.
+Per-NPC encounter state is held in `GameState.npc_encounter_log`, mapping each NPC id to `{ times_met, trigger_fired, currently_meeting }`. `times_met` increments on `Entered` transitions only; `currently_meeting` mirrors current presence.
 
-## Swipe Schema
+## Swipe + Message Accessor Pattern
 
-A single alternative generation for a message. Stored in the `message_swipes` table.
+`Message` holds direct fields (`id`, `sender`, `message_type`, `timestamp`, `active_swipe_index`, `is_deleted`, `swipes`). The narrative content lives on the active swipe and is exposed via accessor methods only — never as direct top-level fields on `Message`. Accessor definitions live in `src/domain/model/message.rs`.
 
-```json
-{
-  "text": "string",
-  "snapshot_id": 42,
-  "location_header": "string (optional)",
-  "event_header": "string (optional)"
-}
-```
+A `Swipe` is `{ text, snapshot_id, location_header, event_header }`. `snapshot_id` is `None` for the initial swipe (no snapshot existed before its creation); for subsequent swipes it references the `GameStateSnapshot` that produced the text, enabling state-consistent switching.
 
-### Fields
+`sender` is `Option<String>` (`None` for narration; `"Player"` for input). `message_type` is one of `Narration`, `Dialogue`, `System`, `Input`.
 
-- `text`: The generated narrative text for this swipe
-- `snapshot_id`: Reference to the `GameStateSnapshot` that produced this text. Nullable for the initial swipe (no snapshot yet).
-- `location_header`: Location header associated with this swipe (if any)
-- `event_header`: Event header associated with this swipe (if any)
+## WorldManifest Schema
 
-## Message Schema
-
-Core narrative unit with swipe support. The persisted struct holds direct fields only; swipe-derived values are exposed via accessor methods. See [`system/message_model.md`](../system/message_model.md) for the accessor pattern.
+Top-level world definition loaded from `data/worlds/*/world.json`. This is the on-disk file shape; the runtime `WorldCard` is derived from it via `From<WorldManifest>` (which strips `map_file` and `characters_dir` and resolves `default_scenario_id`).
 
 ```json
 {
-  "id": 1,
-  "sender": "Game Master",
-  "message_type": "Narration",
-  "timestamp": "2026-05-24T12:00:00Z",
-  "active_swipe_index": 0,
-  "is_deleted": false,
-  "swipes": [
-    {
-      "text": "You enter the hall.",
-      "snapshot_id": 42,
-      "location_header": "Entrance Hall",
-      "event_header": null
-    }
-  ]
-}
-```
-
-### Direct Fields
-
-- `id`: Auto-incrementing message ID
-- `sender`: Optional sender name (None for narration, "Player" for input)
-- `message_type`: `Narration`, `Dialogue`, `System`, or `Input`
-- `timestamp`: UTC timestamp
-- `active_swipe_index`: Index of the currently displayed swipe
-- `is_deleted`: Soft-delete flag (true for messages temporarily hidden during retry)
-- `swipes`: Array of all swipes for this message
-
-### Accessor Methods (NOT direct fields)
-
-Swipe-derived values (`text`, `location_header`, `event_header`, `snapshot_id`) are exposed via accessor methods that read from the active swipe — they are not persisted as direct top-level fields. See [`system/message_model.md`](../system/message_model.md) for the accessor pattern and rationale.
-
-## WorldCard Schema
-
-Top-level world definition loaded from `data/worlds/*/world.json`.
-
-```json
-{
+  "id": "string (primary identifier; becomes world_key on disk)",
   "name": "string",
   "description": "string",
   "global_rules": ["rule 1", "rule 2"],
+  "map_file": "string (relative path to map.json within the world folder)",
+  "characters_dir": "string (subdirectory under world folder containing NPC JSON files)",
   "scenarios": [
     {
       "id": "string",
@@ -287,13 +192,22 @@ Top-level world definition loaded from `data/worlds/*/world.json`.
       "npcs": ["npc_id_1"]
     }
   ],
+  "default_scenario_id": "string (id of the default scenario; resolved at load time)",
   "default_room_image": "string (optional, fallback image for rooms without one)"
 }
 ```
 
 ### Fields
 
-- `name`: Display name of the world
-- `description`: Lore and setting description for the Game Master
-- `global_rules`: Array of global behavioral rules injected into the system prompt
-- `scenarios[].starting_room_id`: Default room ID for a given starting scenario (serde default `"start"`)
+- `id`: World identifier. Becomes `world_key` when persisted; readers use `Storage::get_world(key)`.
+- `name`: Display name of the world.
+- `description`: Lore and setting description for the Game Master.
+- `global_rules`: Array of global behavioral rules injected into the system prompt.
+- `map_file` / `characters_dir`: File pointers used by the seeding flow; stripped when converting to `WorldCard`.
+- `scenarios[].starting_room_id`: Default room id for the scenario (serde default `"start"`).
+- `default_scenario_id`: Resolved at load time to determine `WorldCard::starting_room_id()`.
+
+## Document References
+
+- [ADR-026: Relocate Persona Binding from World to Game](../adr/adr-026-persona-relocation-to-game.md) — persona binding relocation that informed idempotent seeding
+- [system/message_model.md](../system/message_model.md) — accessor pattern: `text()` + `location_header()` + `event_header()` + `snapshot_id()` read from active swipe

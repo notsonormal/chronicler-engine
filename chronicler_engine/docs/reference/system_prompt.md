@@ -1,10 +1,8 @@
 # Reference: System Prompt
 
-> **Context**: This document describes the **assembled system prompt** sent to the narration LLM. For the overall architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
-
 The system prompt is assembled by `PromptPreset` sections and `build_system_prompt()` in `assembler.rs` from four editable sections, plus two dynamically injected blocks. It is rendered by `PromptAssembler` as a single system message.
 
-> **Why XML sections?** Labeled content containers (`<role>`, `<instructions>`, etc.) give the LLM clear section boundaries without the self-referential meta-analysis risk of tags like `<SystemPrompt>`. The imperative text inside each section remains plain. See [ADR-004](../adr/adr-004-xml-prompt-format.md) for the full evolution.
+> **Why XML sections?** Labeled content containers (`<role>`, `<instructions>`, etc.) give the LLM clear section boundaries without the self-referential meta-analysis risk of tags like `<SystemPrompt>`. The imperative text inside each section remains plain.
 
 ---
 
@@ -26,25 +24,13 @@ The system prompt is assembled by `PromptPreset` sections and `build_system_prom
     - Quality prose with natural dialogue...
 </instructions>
 
-<writing_style>
-    Third-person limited perspective, focused on the player character.
-    Past tense narrative prose.
-</writing_style>
-
 <global_rules>
     - No explicit content.
     - Another world-specific rule from world.json.
 </global_rules>
-
-<output_format>
-    The player's next action is provided above. Your only job is to narrate what happens now.
-
-    Do not re-narrate events that already occurred in the history above.
-
-    Response Length:
-    flexible, based on the current scene...
-</output_format>
 ```
+
+The system prompt contains only `<role>`, `<instructions>`, and `<global_rules>`. `<writing_style>` and `<output_format>` are rendered as part of the post-history splice in the user message; see "Data Layers" below.
 
 ---
 
@@ -104,7 +90,7 @@ The following XML-tagged sections are sent in the **user message**, not the syst
 6. `<ConversationHistory>` — Truncated narration history
 7. `<PlayerInput>` — Sanitized current user input
 
-The `<writing_style>` and `<output_format>` sections are placed in the **user message** as a post-history splice (between Layer 5 `<ConversationHistory>` and Layer 6 `<PlayerInput>`) — see [prompt_system.md](../system/prompt_system.md) for the splice architecture. LLMs exhibit strong recency bias, so placing prose and structural rules late in the context window (just before the generation point) makes them more effective than burying them in the system message. The system prompt (Layer 0) contains only `<role>`, `<instructions>`, and `<global_rules>`.
+The `<writing_style>` and `<output_format>` sections are placed in the **user message** as a post-history splice (between `<ConversationHistory>` and `<PlayerInput>`). LLMs exhibit strong recency bias, so placing prose and structural rules late in the context window (just before the generation point) makes them more effective than burying them in the system message. The system prompt contains only `<role>`, `<instructions>`, and `<global_rules>`.
 
 ---
 
@@ -123,10 +109,7 @@ Default presets (shipped as `data/prompt_presets/system/default.json`) are prote
 
 ---
 
-## Code references
+## Document References
 
-- System preset seed: `data/prompt_presets/system/default.json`
-- Assembly logic: `src/domain/model/prompt_preset.rs` (`assemble_prompt_text()`)
-- Prompt assembler: `src/application/narrative_prompt/assembler.rs` (`build_system_prompt()`, `build_post_history_prompt()`)
-- Prompt preset storage: `src/adapters/driven/storage/prompt_preset_storage.rs`
-- Dashboard UI: `src/adapters/driving/http/prompt_presets_fragment/`
+- [ADR-004: XML-Structured LLM Prompts](../adr/adr-004-xml-prompt-format.md) — XML-sectioned instructions; section tags not objects of analysis
+- [system/prompt_system.md](../system/prompt_system.md) — layered prompt architecture + post-history splice

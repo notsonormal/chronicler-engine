@@ -6,7 +6,7 @@ Structured reference for every `EngineError` variant. Use this instead of greppi
 
 ## `EngineError::Llm(LlmFailure)`
 
-LLM subsystem errors. These originate in `src/adapters/driven/llm/transport/client.rs` and the backend implementations.
+LLM subsystem errors. The five variants map to distinct failure modes: `EmptyResponse` = backend returned no content; `Http` = provider returned non-2xx status; `ParseError` = response not in expected JSON shape; `Timeout` = request exceeded 180s budget; `Network` = transport-layer failure (DNS, TCP, TLS, gzip truncation).
 
 ### `LlmFailure::EmptyResponse`
 - **First Check:** Backend logs for `[LLM][req:N] Extracted content via:` — if this line is absent, the model returned an empty content/reasoning field.
@@ -39,13 +39,13 @@ LLM subsystem errors. These originate in `src/adapters/driven/llm/transport/clie
 
 Narrative generation errors. These originate in the prompt builder and backend narration methods.
 
-### `NarrativeFailure::PromptBuild { stage, reason }`
-- **First Check:** `docs/reference/prompt_budget.md` for context limit calculations.
+### `NarrativeFailure::PromptBuild { stage, reason }` (test-fixture only)
+- **First Check:** `docs/reference/quantifier_prompt.md` §Token Budget for budget calculation; `docs/system/prompt_system.md` for context-window constants.
 - **Common Causes:** Prompt exceeds `max_context_tokens`; history too long; token budget miscalculation.
-- **Related Invariants:** `ContextOverflow` is raised separately — `PromptBuild` means the builder itself failed, not that the budget was exceeded.
+- **Related Invariants:** In production, context overflow raises `EngineError::ContextOverflow` directly. The `PromptBuild` variant is only constructed in `src/error_tests.rs` (test fixture); no production path uses it.
 
 ### `NarrativeFailure::Generation { stage, reason }`
-- **First Check:** Backend-specific logs. Mock backend uses `stage: "mock"`.
+- **First Check:** Backend-specific logs. Mock backend uses `stage: "mock"` (narration path) or `stage: "mock_trigger"` (trigger-continuation path).
 - **Common Causes:** LLM call failed after prompt built successfully; backend misconfiguration (e.g. DeepSeek not implemented).
 - **Related Invariants:** See `docs/architecture/guardrails.md` §5 Runtime Invariants
 
@@ -56,12 +56,7 @@ Narrative generation errors. These originate in the prompt builder and backend n
 Logic invariant violated. These should never happen in normal operation.
 
 - **First Check:** The `invariant` field names the violated rule.
-- **Common Causes:**
-  - `History is empty` — `delete_last_turn()` called when no turns exist.
-  - `No input to retry` — `retry_last_response` called when the last log entry is not player input.
-  - `No AI response to retry` — `retry_last_response` called when there is no AI narration to replace.
-  - `AI response must be after input` — history ordering invariant violated.
-  - `AI response not found` — index mismatch in `replace_last_ai_response`.
+- **Common Causes:** State corruption — invariants about message-history ordering, room-map consistency, NPC-set consistency, or log ordering are violated. The stable invariant strings are matched by `tests/infrastructure/invariant_contract.rs`. Recovery: reload state from snapshot; the heal path runs on the next action.
 - **Related Invariants:** `docs/architecture/guardrails.md` §5 Runtime Invariants (INV-002)
 
 ---
@@ -131,14 +126,12 @@ Room lookup failure.
 Game row lookup failure on a required read.
 
 - **First Check:** The `game_id` in the error payload; verify it exists in the `games` table.
-- **Related Invariants:** See [storage read contract](../system/storage.md).
 
 ## `EngineError::PersonaNotFound(String)`
 
 Persona row lookup failure on a required read.
 
 - **First Check:** The persona key in the error payload; verify it exists in the `personas` table.
-- **Related Invariants:** See [storage read contract](../system/storage.md).
 
 ---
 
@@ -147,7 +140,6 @@ Persona row lookup failure on a required read.
 World row lookup failure on a required read.
 
 - **First Check:** The world key in the error payload; verify it exists in the `worlds` table.
-- **Related Invariants:** See [storage read contract](../system/storage.md).
 
 ---
 
@@ -156,7 +148,6 @@ World row lookup failure on a required read.
 Message row lookup failure on a required read.
 
 - **First Check:** The `message_id` in the error payload; verify it exists in the `messages` table for the current game.
-- **Related Invariants:** See [storage read contract](../system/storage.md).
 
 ---
 
@@ -194,6 +185,10 @@ Data file loading failure with nested cause.
 
 Prompt exceeds token budget.
 
-- **First Check:** `docs/reference/prompt_budget.md` for budget calculation.
+- **First Check:** `docs/reference/quantifier_prompt.md` §Token Budget for budget calculation.
 - **Common Causes:** History too long; system prompt too large; combined context exceeds `max_context_tokens`.
 - **Related Invariants:** Prompt builder must never exceed the configured context window.
+
+## Document References
+
+- [system/storage.md](../system/storage.md) — `get_*`/`require_*` read contract + `EngineError` not-found variants
