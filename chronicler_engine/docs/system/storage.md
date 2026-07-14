@@ -82,13 +82,6 @@ Storage methods touch exactly one table. Multi-table operations are free functio
 
 Helpers return `get_*(...)?` and map only `Ok(None)` to the typed not-found variant; backend `Err` propagates unchanged.
 
-| Lookup | Required-read helper | Canonical variant |
-|---|---|---|
-| `get_game(id: u64)` | `require_game(id)` | `EngineError::GameNotFound(u64)` |
-| `get_world(key: &str)` | `require_world(key)` | `EngineError::WorldNotFound(String)` |
-| `get_persona(key: &str)` | `require_persona(key)` | `EngineError::PersonaNotFound(String)` |
-| `get_active_swipe_index(id: u64)` | `require_active_swipe_index(id)` | `EngineError::MessageNotFound(u64)` |
-
 `GameNotFound(u64)` and `MessageNotFound(u64)` carry numeric IDs because game and message IDs are numeric throughout the storage interface; world and persona lookups use string keys. `Character` has no `require_*` helper or canonical not-found variant — characters are loaded via `list_characters(world_id)`, a listing rather than a single-row lookup. `Persona` and `Character` are distinct entities per the domain glossary.
 
 ## GameStateSnapshot
