@@ -18,4 +18,7 @@ pub enum PhaseError {
     TriggerMissing,
     /// Snapshot expected at this phase was absent from storage.
     SnapshotMissing,
+    /// Retry precondition fetch failed (world/persona/npc/game bundle lookup);
+    /// payload is `EngineError::to_string()` for terminal-failure surfacing.
+    FetchFailed(String),
 }

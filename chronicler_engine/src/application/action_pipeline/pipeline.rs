@@ -165,7 +165,7 @@ impl ActionPipeline {
     }
 
     #[allow(clippy::type_complexity)]
-    fn load_world_bundle(
+    pub(super) fn load_world_bundle(
         app: &DefaultApplicationService,
         started_for: u64,
     ) -> Result<
@@ -194,9 +194,10 @@ impl ActionPipeline {
         ))
     }
 
-    fn finalize_phase_error(run: &PipelineRun<'_>, e: PhaseError) {
+    pub(super) fn finalize_phase_error(run: &PipelineRun<'_>, e: PhaseError) {
         let msg = match e {
             PhaseError::NarratorFailed(msg) => msg,
+            PhaseError::FetchFailed(msg) => msg,
             PhaseError::PersistFailed { label, source } => {
                 tracing::error!("{label}: {source}");
                 source.to_string()

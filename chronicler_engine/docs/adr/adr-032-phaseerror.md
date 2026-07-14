@@ -26,6 +26,7 @@ pub enum PhaseError {
     PersistFailed { label: &'static str, source: EngineError },
     TriggerMissing,
     SnapshotMissing,
+    FetchFailed(String),
 }
 ```
 
@@ -48,9 +49,14 @@ The `label` distinguishes the call site that failed (`"pre-main snapshot"`, `"pr
 
 We deliberately do NOT provide a `From<EngineError> for PhaseError` blanket impl: every `PersistFailed` construction must be intentional, with the label chosen at the call site.
 
-### Why no `FetchFailed` variant yet
+### Why `FetchFailed` was added in ticket 04
 
-Retry precondition fetches (world/persona/npc bundle in `retry_event_continuation`) are not exercised by this ticket. Ticket 04 reconciles the three save-state paths and may amend the enum if it decides retry precondition fetch failures warrant a distinct variant. Today, retry fetch failures persist `GenerationStatus::Error` via `save_retry_error` and return `Ok(())` — caller `if let Err(PhaseError::Cancelled)` doesn't see them.
+Retry precondition fetches (game/world/persona/npc bundle in `retry_event_continuation`) wrap an underlying `EngineError` from the persistence/storage layer. We give them a distinct `FetchFailed(String)` variant — not `NarratorFailed` — because the recovery policy differs:
+
+- `FetchFailed` is a precondition check: the orchestrator could not even assemble the inputs required to call the narrator. Terminal, surface to user via `GenerationStatus::Error`.
+- `NarratorFailed` is a mid-flow LLM failure: the LLM was called and returned an error or empty response.
+
+Both end up funneled to `finalize_phase_error` and produce `GenerationStatus::Error`, but the seam deserves to know whether the failure was a storage lookup or an LLM call — future diagnostics or differential recovery will dispatch on the variant. The `String` payload is `EngineError::to_string()` so display-shaped failure messages like `Game not found: 999` flow through unchanged (locked in by `retry_records_canonical_game_not_found_when_game_missing`). This was intentionally deferred from ticket 02's baseline variant set because ticket 02 did not touch the retry body.
 
 ### Why no `std::error::Error` or `Display` impl
 
@@ -89,3 +95,4 @@ No cross-boundary bubble today. Orchestrators consume variants inline; the HTTP 
 ## History
 
 - **2026-07-13**: Initial acceptance (ticket 02 of T4 PhaseError wayfinding).
+- **2026-07-14**: Amended by ticket 04 — added `FetchFailed(String)` variant for retry precondition fetch failures.

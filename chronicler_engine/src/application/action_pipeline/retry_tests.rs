@@ -97,6 +97,86 @@ fn save_pre_event(app: &DefaultApplicationService) -> u64 {
     app.storage().save_snapshot(&snapshot).unwrap()
 }
 
+/// Build event-flow state in storage so `find_retry_anchor` + `load_messages`
+/// both succeed; tests then drive the failure mode they care about (fetch
+/// failure, trigger missing, etc.) via `handle.set(...)` or omitting the
+/// `last_trigger` setup.
+fn setup_event_flow(app: &DefaultApplicationService) {
+    let _ = add_input_and_save(app, "test input");
+    let _ = save_pre_main(app);
+
+    let mut pre_event_state = app.load_or_fresh();
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
+    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &pre_event_state,
+        );
+    let pre_event_id = app.storage().save_snapshot(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(pre_event_id));
+        insert_message_with_swipe(app, last);
+    }
+
+    let mut final_state = pre_event_state;
+    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let final_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &final_state,
+        );
+    let final_id = app.storage().save_snapshot(&final_snapshot).unwrap();
+    if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_id));
+        insert_message_with_swipe(app, last);
+    }
+}
+
+/// Event-flow state machine with NO `last_trigger` set on the pre-event
+/// snapshot — drives the `PhaseError::TriggerMissing` return in
+/// `retry_event_continuation`. The pre-event snapshot is built from the
+/// state right after `add_input_and_save`, which leaves `last_trigger = None`.
+fn setup_event_flow_without_trigger(app: &DefaultApplicationService) {
+    let _ = add_input_and_save(app, "test input");
+    let _ = save_pre_main(app);
+
+    let mut pre_event_state = app.load_or_fresh();
+    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &pre_event_state,
+        );
+    let pre_event_id = app.storage().save_snapshot(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(pre_event_id));
+        insert_message_with_swipe(app, last);
+    }
+
+    let mut final_state = pre_event_state;
+    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let final_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &final_state,
+        );
+    let final_id = app.storage().save_snapshot(&final_snapshot).unwrap();
+    if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_id));
+        insert_message_with_swipe(app, last);
+    }
+}
+
 #[test]
 fn test_retry_no_snapshot() {
     let state = make_test_state();
@@ -221,9 +301,7 @@ fn test_retry_event_storage_error_on_pre_event() {
         TestOverride::internal("simulated load_by_id failure"),
     );
 
-    let latest = app.load_or_fresh();
-
-    let _ = retry_event_continuation(&app, latest);
+    retry_last_response_impl(&app);
 
     handle.clear("load_snapshot_by_id");
 
@@ -231,9 +309,10 @@ fn test_retry_event_storage_error_on_pre_event() {
     assert!(
         matches!(
             state.narrative.input_buffer.status,
-            GenerationStatus::Error(_)
+            GenerationStatus::Error(ref msg) if msg.contains("simulated load_by_id failure"),
         ),
-        "Should set error status on storage failure"
+        "Should set error status on storage failure, got {:?}",
+        state.narrative.input_buffer.status
     );
 }
 
@@ -241,24 +320,19 @@ fn test_retry_event_storage_error_on_pre_event() {
 fn test_retry_event_missing_trigger_context() {
     let app = TestAppBuilder::default_test().build_service();
 
-    let _input_id = add_input_and_save(&app, "test input");
-    let _pre_event_id = save_pre_event(&app);
-
-    let mut state = app.load_or_fresh();
-    state.add_message("Event narration".to_string(), None, MessageType::Narration);
-    state
-        .narrative
-        .history
-        .last_mut()
-        .unwrap()
-        .set_event_header(Some("Event".to_string()));
-    let snapshot =
-        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &state,
-        );
-    let _ = app.storage().save_snapshot(&snapshot);
+    setup_event_flow_without_trigger(&app);
 
     retry_last_response_impl(&app);
+
+    let state = app.load_or_fresh();
+    let msg = match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error on TriggerMissing, got {other:?}"),
+    };
+    assert!(
+        msg.contains("missing trigger context"),
+        "expected canonical 'missing trigger context' in error message, got: {msg}"
+    );
 }
 
 #[test]
@@ -539,45 +613,6 @@ fn test_retry_main_storage_error_on_pre_main() {
     );
 }
 
-#[test]
-fn test_save_retry_error() {
-    let app = TestAppBuilder::default_test().build_service();
-
-    super::retry::save_retry_error(&app, "test error");
-
-    let state = app.load_or_fresh();
-    assert!(
-        matches!(
-            state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref msg) if msg == "test error"
-        ),
-        "Should save error status with exact message"
-    );
-}
-
-#[test]
-fn test_save_retry_error_persist_fails() {
-    let _state = make_test_state();
-    let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
-    let failing = Arc::new(failing_storage);
-    handle.set(
-        "save_snapshot",
-        TestOverride::internal("simulated save failure"),
-    );
-
-    let app = Arc::new(DefaultApplicationService::new(
-        failing,
-        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        Arc::new(std::sync::RwLock::new(
-            crate::domain::model::settings::AppSettings::default(),
-        )),
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        Arc::new(make_service()),
-    ));
-    super::retry::save_retry_error(&app, "persist failure");
-}
-
 struct EmptyTriggerBackend;
 
 impl crate::application::ports::llm_provider::LlmProvider for EmptyTriggerBackend {
@@ -765,7 +800,9 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     );
 }
 
-// B2 fail-loud: retry fetch block must return `Ok(())` and surface fetch failure as `GenerationStatus::Error`.
+// B2 fail-loud (orchestrator-level, ticket 04 seam): world fetch failure
+// during retry-event must surface as `GenerationStatus::Error` via
+// `ActionPipeline::finalize_phase_error` consuming `PhaseError::FetchFailed(msg)`.
 
 #[test]
 fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
@@ -788,26 +825,23 @@ fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
         .game_service(Arc::new(service))
         .build_service();
 
-    let mut state = app.load_or_fresh();
-    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
+    setup_event_flow(&app);
 
-    let outcome = retry_event_continuation(&app, state);
-    assert!(
-        outcome.is_ok(),
-        "retry_event_continuation must return Ok(()) on world fetch failure, got {outcome:?}"
-    );
+    retry_last_response_impl(&app);
+
     let state = app.load_or_fresh();
+    let msg = match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error on world fetch failure, got {other:?}"),
+    };
     assert!(
-        matches!(
-            state.narrative.input_buffer.status,
-            GenerationStatus::Error(_)
-        ),
-        "retry_event_continuation must persist GenerationStatus::Error on world fetch failure, got {:?}",
-        state.narrative.input_buffer.status
+        msg.contains("simulated get_world failure"),
+        "expected the injected storage error to flow through PhaseError::FetchFailed -> finalize_phase_error, got: {msg}"
     );
 }
 
-// B2 fail-loud: persona fetch failure must return `Ok(())` and surface as `GenerationStatus::Error`.
+// B2 fail-loud (orchestrator-level, ticket 04 seam): persona fetch failure,
+// same seam as the world-fetch test above.
 
 #[test]
 fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
@@ -830,28 +864,25 @@ fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
         .game_service(Arc::new(service))
         .build_service();
 
-    let mut state = app.load_or_fresh();
-    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
+    setup_event_flow(&app);
 
-    let outcome = retry_event_continuation(&app, state);
-    assert!(
-        outcome.is_ok(),
-        "retry_event_continuation must return Ok(()) on persona fetch failure, got {outcome:?}"
-    );
+    retry_last_response_impl(&app);
+
     let state = app.load_or_fresh();
+    let msg = match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error on persona fetch failure, got {other:?}"),
+    };
     assert!(
-        matches!(
-            state.narrative.input_buffer.status,
-            GenerationStatus::Error(_)
-        ),
-        "retry_event_continuation must persist GenerationStatus::Error on persona fetch failure, got {:?}",
-        state.narrative.input_buffer.status
+        msg.contains("simulated get_persona failure"),
+        "expected the injected storage error to flow through PhaseError::FetchFailed -> finalize_phase_error, got: {msg}"
     );
 }
 
 // Required-read migration: missing game row must surface as canonical
-// `EngineError::GameNotFound` via `GenerationStatus::Error`.
-// Pre-migration emitted an Internal string.
+// `EngineError::GameNotFound`. Full chain (ticket 04):
+// `require_game(999)` -> `Err(GameNotFound(999))` -> `PhaseError::FetchFailed(e.to_string())`
+// -> `finalize_phase_error` -> `GenerationStatus::Error(msg)`.
 
 #[test]
 fn retry_records_canonical_game_not_found_when_game_missing() {
@@ -876,14 +907,10 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
         .game_service(Arc::new(service))
         .build_service();
 
-    let mut state = app.load_or_fresh();
-    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
+    setup_event_flow(&app);
 
-    let outcome = retry_event_continuation(&app, state);
-    assert!(
-        outcome.is_ok(),
-        "retry_event_continuation must return Ok(()) on missing game, got {outcome:?}"
-    );
+    retry_last_response_impl(&app);
+
     let state = app.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
@@ -892,5 +919,197 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
     assert!(
         msg.contains("Game not found: 999"),
         "expected canonical 'Game not found: 999' in error message, got: {msg}"
+    );
+}
+
+// Cancellation seam coverage: drive the `Err(PhaseError::Cancelled)` arm
+// of `retry_last_response_impl` by flipping `app.set_game_id` mid-pipeline
+// (the α-check in `phase_trigger_continuation_llm_call` returns Cancelled
+// when the game id changes during the LLM call's sleep window).
+
+#[test]
+fn test_retry_last_response_impl_cancelled_at_phase_boundary() {
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
+    let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let app = TestAppBuilder::default_test()
+        .game_service(Arc::new(service))
+        .build_service();
+
+    setup_event_flow(&app);
+
+    let initial_game_id = app.current_game_id();
+    let app_for_thread = Arc::clone(&app);
+    let flipper = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(50));
+        app_for_thread.set_game_id(initial_game_id.wrapping_add(1));
+    });
+
+    retry_last_response_impl(&app);
+
+    flipper
+        .join()
+        .expect("game-id flipper thread should complete");
+
+    let state = app.load_or_fresh();
+    assert_eq!(
+        state.narrative.input_buffer.status,
+        GenerationStatus::Idle,
+        "Cancelled retry must reset status to Idle via the orchestrator's \
+         Cancelled match arm, got {:?}",
+        state.narrative.input_buffer.status
+    );
+    assert_eq!(
+        state.narrative.input_buffer.phase,
+        GenerationPhase::default(),
+        "Cancelled retry must reset phase to default, got {:?}",
+        state.narrative.input_buffer.phase
+    );
+}
+
+// Same game-id-flip trick for `retrigger_event_impl`: drives the
+// `Err(PhaseError::Cancelled)` arm in its bottom match block, which the
+// existing `test_retrigger_event_impl_cancels_cleanly` only covered by
+// accident (phase_finalize reset status to Idle after a successful run).
+
+#[test]
+fn test_retrigger_event_impl_cancelled_at_phase_boundary() {
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
+    let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let app = TestAppBuilder::default_test()
+        .game_service(Arc::new(service))
+        .build_service();
+
+    setup_event_flow(&app);
+
+    let initial_game_id = app.current_game_id();
+    let app_for_thread = Arc::clone(&app);
+    let flipper = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(50));
+        app_for_thread.set_game_id(initial_game_id.wrapping_add(1));
+    });
+
+    crate::application::action_pipeline::retrigger_event_impl(&app);
+
+    flipper
+        .join()
+        .expect("game-id flipper thread should complete");
+
+    let state = app.load_or_fresh();
+    assert_eq!(
+        state.narrative.input_buffer.status,
+        GenerationStatus::Idle,
+        "Cancelled retrigger must reset status to Idle via the \
+         orchestrator's Cancelled match arm, got {:?}",
+        state.narrative.input_buffer.status
+    );
+}
+
+// `retrigger_event_impl`'s `Err(e) => finalize_phase_error` arm: drives
+// `retry_event_continuation` to return `Err(PhaseError::FetchFailed(msg))`
+// by injecting a `get_world` storage failure and confirming the orchestrator
+// surfaces it as `GenerationStatus::Error` with the underlying message.
+
+#[test]
+fn test_retrigger_event_impl_emits_error_on_world_fetch_failure() {
+    let data = TestDataBuilder::default_test().build();
+    let (storage, handle) = {
+        let base = Storage::new_in_memory();
+        data.seed_into(&base);
+        base.with_test_failures()
+    };
+    handle.set(
+        "get_world",
+        TestOverride::internal("simulated get_world failure"),
+    );
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let app = TestAppBuilder::with_data(data)
+        .storage(Arc::new(storage))
+        .skip_seeding(true)
+        .game_service(Arc::new(service))
+        .build_service();
+
+    setup_event_flow(&app);
+
+    crate::application::action_pipeline::retrigger_event_impl(&app);
+
+    let state = app.load_or_fresh();
+    let msg = match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => {
+            panic!("expected GenerationStatus::Error on retrigger fetch failure, got {other:?}")
+        }
+    };
+    assert!(
+        msg.contains("simulated get_world failure"),
+        "expected FetchFailed(msg) to flow through finalize_phase_error, got: {msg}"
+    );
+}
+
+// `retry_event_continuation`'s `last_input_text()` None arm: when the
+// loaded state has no Input messages, fall back to an empty string so
+// downstream stages still see a valid value.
+
+#[test]
+fn test_retry_event_continuation_handles_state_without_input_message() {
+    let app = TestAppBuilder::default_test().build_service();
+
+    let mut state = app.load_or_fresh();
+    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
+    state.add_message(
+        "Narration without prior input".to_string(),
+        None,
+        MessageType::Narration,
+    );
+
+    let _ = crate::application::action_pipeline::retry::retry_event_continuation(&app, state);
+}
+
+// Snapshot referenced by the anchor message's swipe no longer exists in
+// storage — `load_snapshot_by_id` returns `Ok(None)`. The retry
+// orchestrator must record the missing snapshot as a typed error rather
+// than panicking on the unwrap.
+
+#[test]
+fn test_retry_records_missing_snapshot_id() {
+    const MISSING_ID: u64 = 99_999;
+
+    let app = TestAppBuilder::default_test().build_service();
+
+    let mut state = app.load_or_fresh();
+    let player_name = "Player".to_string();
+    state.add_message(
+        "test input".to_string(),
+        Some(player_name),
+        MessageType::Input,
+    );
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(MISSING_ID));
+        insert_message_with_swipe(&app, last);
+    }
+
+    retry_last_response_impl(&app);
+
+    let state = app.load_or_fresh();
+    let msg = match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error on missing snapshot, got {other:?}"),
+    };
+    assert!(
+        msg.contains(&format!("no snapshot found for id {MISSING_ID}")),
+        "expected typed 'no snapshot found for id {MISSING_ID}' error, got: {msg}"
     );
 }

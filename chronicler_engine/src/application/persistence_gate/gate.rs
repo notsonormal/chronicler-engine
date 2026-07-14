@@ -1,5 +1,8 @@
 //! [DOC: docs/system/game_flow.md]
-//! PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers (T2 façade-first carve-out).
+//! PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
+//!
+//! See [`gate`](self) for the three-call save-path distinction (`save_state` vs
+//! `save_message_and_snapshot` vs private `write_snapshot`).
 
 use std::sync::Arc;
 
@@ -66,13 +69,13 @@ impl PersistenceGate {
     }
 
     pub fn save_state(&self, state: &GameState) -> Result<u64, EngineError> {
-        let snapshot = GameStateSnapshot::from_game_state(state);
-        self.storage.save_snapshot(&snapshot)
+        // Snapshot-only write; routes through `write_snapshot`. See module doc.
+        self.write_snapshot(state)
     }
 
     pub fn save_message_and_snapshot(&self, state: &mut GameState) -> Result<u64, EngineError> {
-        let snapshot = GameStateSnapshot::from_game_state(state);
-        let snapshot_id = self.storage.save_snapshot(&snapshot)?;
+        // Snapshot + message insert + retry-target swipe wiring. See module doc.
+        let snapshot_id = self.write_snapshot(state)?;
 
         if let Some(ref mut target) = state.narrative.retry_target {
             let idx = target.swipes.len().saturating_sub(1);
@@ -99,6 +102,11 @@ impl PersistenceGate {
             }
         }
         Ok(snapshot_id)
+    }
+
+    fn write_snapshot(&self, state: &GameState) -> Result<u64, EngineError> {
+        let snapshot = GameStateSnapshot::from_game_state(state);
+        self.storage.save_snapshot(&snapshot)
     }
 
     pub fn delete_and_remove_message(

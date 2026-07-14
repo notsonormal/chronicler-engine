@@ -1,32 +1,53 @@
 //! [DOC: docs/system/game_flow.md]
 //! Retry logic for action pipeline operations
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use tracing::instrument;
 use crate::application::action_pipeline::phase_error::PhaseError;
+use crate::application::action_pipeline::phases::PipelineRun;
+use crate::application::action_pipeline::pipeline::ActionPipeline;
 use crate::application::application_service::DefaultApplicationService;
-use crate::domain::model::character::{NpcCard, PersonaCard};
-use crate::domain::model::map::MapDef;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::EngineError;
+
+fn retry_persist_error(app: &DefaultApplicationService, message: impl Into<String>) {
+    let mut state = app.load_or_fresh();
+    state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
+    if let Err(e) = app.save_state(&state) {
+        tracing::error!("Critical: failed to persist retry error state: {e}");
+    }
+}
+
+fn handle_retry_outcome(app: &DefaultApplicationService, outcome: Result<(), PhaseError>) {
+    match outcome {
+        Err(PhaseError::Cancelled) => {
+            let mut state = app.load_or_fresh();
+            state.narrative.input_buffer.status = GenerationStatus::Idle;
+            state.narrative.input_buffer.phase = GenerationPhase::default();
+            let _ = app.save_state(&state);
+        }
+        Err(e) => {
+            let pipeline = app.game_service().pipeline();
+            let started_for = app.current_game_id();
+            let run = PipelineRun::new(&pipeline, app, started_for);
+            ActionPipeline::finalize_phase_error(&run, e);
+        }
+        Ok(()) => {}
+    }
+}
 
 #[instrument(skip(app))]
 pub fn retry_last_response_impl(app: &DefaultApplicationService) {
     let messages = match app.load_messages() {
-        Ok(msgs) => msgs,
+        Ok(m) => m,
         Err(e) => {
-            tracing::error!("Failed to load messages: {e}");
+            retry_persist_error(app, format!("Retry failed: {e}"));
             return;
         }
     };
 
     let Some((anchor_idx, _anchor_msg, snapshot_id)) = app.find_retry_anchor(&messages) else {
-        tracing::error!("No anchor message found for retry");
-        save_retry_error(app, "Retry failed: no anchor message");
+        retry_persist_error(app, "Retry failed: no anchor message");
         return;
     };
 
@@ -53,22 +74,19 @@ pub fn retry_last_response_impl(app: &DefaultApplicationService) {
     let snapshot = match app.storage().load_snapshot_by_id(snapshot_id) {
         Ok(Some(s)) => s,
         Ok(None) => {
-            tracing::error!("No snapshot found for id {snapshot_id}");
-            save_retry_error(
+            retry_persist_error(
                 app,
                 format!("Retry failed: no snapshot found for id {snapshot_id}"),
             );
             return;
         }
         Err(e) => {
-            tracing::error!("Failed to load snapshot: {e}");
-            save_retry_error(app, format!("Retry failed: {e}"));
+            retry_persist_error(app, format!("Retry failed: {e}"));
             return;
         }
     };
 
     let mut state = GameState::from_snapshot(&snapshot);
-
     let mut truncated = messages;
     truncated.truncate(anchor_idx + 1);
     state.narrative.history.replace(truncated);
@@ -77,7 +95,7 @@ pub fn retry_last_response_impl(app: &DefaultApplicationService) {
     let input_text = match state.narrative.history.last_input_text() {
         Some((_, text)) => text,
         None => {
-            tracing::error!("No input to retry");
+            retry_persist_error(app, "Retry failed: no input to retry");
             return;
         }
     };
@@ -88,20 +106,7 @@ pub fn retry_last_response_impl(app: &DefaultApplicationService) {
         retry_main_narration(app, state, input_text)
     };
 
-    if let Err(PhaseError::Cancelled) = outcome {
-        let mut state = app.load_or_fresh();
-        state.narrative.input_buffer.status = GenerationStatus::Idle;
-        state.narrative.input_buffer.phase = GenerationPhase::default();
-        let _ = app.save_state(&state);
-    }
-}
-
-pub(crate) fn save_retry_error(app: &DefaultApplicationService, message: impl Into<String>) {
-    let mut state = app.load_or_fresh();
-    state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
-    if let Err(e) = app.save_state(&state) {
-        tracing::error!("Critical: failed to persist retry error state: {e}");
-    }
+    handle_retry_outcome(app, outcome);
 }
 
 pub(crate) fn retry_event_continuation(
@@ -109,70 +114,38 @@ pub(crate) fn retry_event_continuation(
     state: GameState,
 ) -> Result<(), PhaseError> {
     let Some(trigger) = state.narrative.last_trigger.clone() else {
-        tracing::error!("Missing trigger context for event retry");
-        save_retry_error(app, "Retry failed: missing trigger context");
-        return Ok(());
+        return Err(PhaseError::TriggerMissing);
     };
     let input_text = match state.narrative.history.last_input_text() {
         Some((_, text)) => text,
         None => String::new(),
     };
-    let (map, npcs_map, persona) = match (|| {
-        let game_id = app.storage().current_game_id();
-        let game = app.storage().require_game(game_id)?;
-        let world_with_map = app.storage().require_world(&game.world_key)?;
-        let persona: Arc<PersonaCard> = Arc::new(app.storage().require_persona(&game.persona_key)?);
-        let npcs_map: HashMap<String, NpcCard> = app
-            .storage()
-            .list_characters(world_with_map.world_id)?
-            .into_iter()
-            .map(|n| (n.id.clone(), n))
-            .collect();
-        let map: Arc<MapDef> = Arc::new(world_with_map.map);
-        Ok::<_, EngineError>((map, npcs_map, persona))
-    })() {
-        Ok(bundle) => bundle,
-        Err(e) => {
-            tracing::error!("Retry fetch failed: {e}");
-            save_retry_error(app, e.to_string());
-            return Ok(());
-        }
-    };
+    let (_, map, persona, npcs_map) =
+        match ActionPipeline::load_world_bundle(app, app.current_game_id()) {
+            Ok(b) => b,
+            Err(e) => return Err(PhaseError::FetchFailed(e.to_string())),
+        };
     let pipeline = app.game_service().pipeline();
-    let mut state = match pipeline.phase_trigger_continuation(state, &trigger, app, &map, &npcs_map)
-    {
-        Ok((s, continuation_text)) => {
-            if !continuation_text.is_empty() {
-                let started_for = app.current_game_id();
-                let run = crate::application::action_pipeline::phases::PipelineRun::new(
-                    &pipeline,
-                    app,
-                    started_for,
-                );
-                run.reconcile_post_trigger_npcs(
-                    s,
-                    &input_text,
-                    &continuation_text,
-                    &map,
-                    &persona,
-                    &npcs_map,
-                )
-            } else {
-                s
-            }
-        }
-        Err(outcome) => return Err(outcome),
-    };
+    let (mut state, continuation_text) =
+        pipeline.phase_trigger_continuation(state, &trigger, app, &map, &npcs_map)?;
+    if !continuation_text.is_empty() {
+        let started_for = app.current_game_id();
+        let run = PipelineRun::new(&pipeline, app, started_for);
+        state = run.reconcile_post_trigger_npcs(
+            state,
+            &input_text,
+            &continuation_text,
+            &map,
+            &persona,
+            &npcs_map,
+        );
+    }
     if let Some(target) = state.narrative.retry_target.take() {
         state.narrative.history.append(target);
     }
     {
         let started_for = app.current_game_id();
-        let run = crate::application::action_pipeline::phases::PipelineRun::new(
-            &pipeline,
-            app,
-            started_for,
-        );
+        let run = PipelineRun::new(&pipeline, app, started_for);
         run.phase_finalize(&mut state);
     }
     Ok(())
@@ -191,10 +164,5 @@ pub(crate) fn retry_main_narration(
 pub fn retrigger_event_impl(app: &DefaultApplicationService) {
     let state = app.load_or_fresh();
     let outcome = retry_event_continuation(app, state);
-    if let Err(PhaseError::Cancelled) = outcome {
-        let mut state = app.load_or_fresh();
-        state.narrative.input_buffer.status = GenerationStatus::Idle;
-        state.narrative.input_buffer.phase = GenerationPhase::default();
-        let _ = app.save_state(&state);
-    }
+    handle_retry_outcome(app, outcome);
 }

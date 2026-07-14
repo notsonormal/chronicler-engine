@@ -149,6 +149,10 @@ impl ArrivalTaskContext {
             }
         }
 
+        // Arrival is the only caller that injects scenario logs into
+        // `state.narrative.history` directly before this write, so it uses
+        // `save_message_and_snapshot` (not `save_state`) — the message +
+        // snapshot + swipe wiring matches the unpersisted arrival message.
         if let Err(e) = self.app.save_message_and_snapshot(&mut state) {
             tracing::error!("Failed to save arrival message and snapshot: {e}");
         }
