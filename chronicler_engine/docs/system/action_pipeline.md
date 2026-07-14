@@ -70,7 +70,7 @@ Retry re-enters the pipeline without duplicating phase logic:
 - **Main retry** (`retry_main_narration`) calls `pipeline.run_from_input` — the same path as a normal action. Soft-deletes messages after the anchor, re-runs narration + quantifier + trigger, preserves the old narration as a swipe.
 - **Event retry** re-runs the trigger continuation phase against the restored snapshot state, then re-quantifies NPCs from the new continuation text. Regenerates only the continuation text using the stored `StoredTriggerContext` (carried by `state.narrative.last_trigger`); does not rerun main narration or quantification.
 
-Anchor: `app.find_retry_anchor(&messages)` locates the message whose snapshot the retry will restore. The old target message is moved to `state.narrative.retry_target` and re-appended to history after the engine-commit (and before the trigger continuation runs) via `state.narrative.retry_target.take()`.
+Anchor: `app.find_retry_anchor(&messages)` locates the message whose snapshot the retry restores. The old target message is moved to `state.narrative.retry_target` and re-appended to history after the engine-commit (and before the trigger continuation runs) via `state.narrative.retry_target.take()`.
 
 ## Document References
 

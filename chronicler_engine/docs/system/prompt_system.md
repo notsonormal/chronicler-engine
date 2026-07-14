@@ -100,7 +100,7 @@ The Chronicler Engine builds a layered prompt mapped from SillyTavern's Prompt M
 - **Content**: World name and description
 - **Format**: XML-wrapped (`<WorldLore>... </WorldLore>`)
 - **Implementation**: Renders `world.name` and `world.description` only. `global_rules` live in Layer 0 (System Prompt) to reduce token waste.
-- **Note**: No keyword-matching trigger exists. The doc previously described a keyword-driven lorebook; that mechanism is not implemented.
+- **Note**: No keyword-matching trigger exists.
 
 ### Layer 5: Chat History
 

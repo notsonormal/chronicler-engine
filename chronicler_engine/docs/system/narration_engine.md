@@ -11,7 +11,7 @@ All player input is treated as a **Free Action** and sent to the LLM for narrati
 ## Game Master Role
 The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **PromptAssembler** (see `llm_processing.md`) from the current game state:
 
-- **World Lore**: The `WorldCard.global_rules` provide persistent setting and lore context, injected into the **system prompt** alongside the base rules. They no longer appear in the `<WorldLore>` user data layer.
+- **World Lore**: The `WorldCard.global_rules` provide persistent setting and lore context, injected into the **system prompt** alongside the base rules. The `<WorldLore>` user data layer carries only `world.name` and `world.description`.
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.
 - **Present NPCs**: All `NpcCard`s located in the current room, including their `personality`, `scenario`, and `description`.
 - **Player Identity**: The `PersonaCard.name` and `PersonaCard.description` for reference.

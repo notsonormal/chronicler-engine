@@ -46,7 +46,7 @@ Two accessor methods are private: `active_swipe(&self) -> Option<&Swipe>` and `a
 
 ## Invariant: Swipe is Sole Holder of Content Fields
 
-`Message` carries no `text`, `location_header`, `event_header`, or `snapshot_id` field. Any code path that mutated a swipe previously also had to mutate a mirrored field on `Message`; that two-source-of-truth coupling is what the accessor pattern eliminates. State is `Swipe`.
+`Message` carries no `text`, `location_header`, `event_header`, or `snapshot_id` field. The accessor pattern routes all field reads and writes through swipes, eliminating two-source-of-truth coupling. State is `Swipe`.
 
 ## MessageHistory Encapsulation
 

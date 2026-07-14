@@ -97,7 +97,7 @@ The following critical paths are instrumented:
 
 **Cause:** Provider-level error returned before `save_llm_message` fires — by design, the recorder saves only on provider success.
 
-**Solution:** Check `RUST_LOG=trace` output instead of the `llm_messages` table; the in-flight prompt will appear in the tracing spans.
+**Solution:** Check `RUST_LOG=trace` output instead of the `llm_messages` table; the in-flight prompt appears in the tracing spans.
 
 ## Document References
 

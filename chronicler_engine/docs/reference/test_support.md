@@ -4,7 +4,7 @@ Builders for `test_support::fixtures`, `TestDataBuilder`, `TestAppBuilder`, plus
 
 ## TestDataBuilder (`src/test_support/test_data_builder.rs`)
 
-Bundles world / map / persona / NPCs as a single `TestData` value (world-data bundle replacing the world/player/map/npcs/room_npcs fields thinned out of `TestAppBuilder` in T9-00). `default_test()` produces canonical defaults matching the old `TestGameState::with_npc("start", TestNpc::named(...))` fixture: world key `"test"` with scenarios populated, persona key `"test_player"`, npc id `"npc_1"`. `TestData::seed_into(&storage)` seeds world / persona / NPC character rows and returns `world_id` (replaces ad-hoc `seed_test_world_into_storage` calls). `TestData` derives `Clone` to support multi-app test patterns where the same world data is needed for two `Arc<DefaultApplicationService>` instances.
+Bundles world / map / persona / NPCs as a single `TestData` value. `default_test()` produces canonical defaults: world key `"test"` with scenarios populated, persona key `"test_player"`, npc id `"npc_1"`. `TestData::seed_into(&storage)` seeds world / persona / NPC character rows and returns `world_id`. `TestData` derives `Clone` to support multi-app test patterns where the same world data is needed for two `Arc<DefaultApplicationService>` instances.
 
 Methods: `default_test()`, `world(card)`, `map(def)`, `persona(card)`, `npc(card)`, `npcs(vec)`, `room_npc(id, card)`, `build()`. `TestData` methods: `seed_into(&storage)`, `find_npc(id)`, `world_key()`, `player_name()`.
 
@@ -19,7 +19,7 @@ let data = TestDataBuilder::default_test()
 
 ## TestAppBuilder (`src/test_support/test_app_builder.rs`)
 
-Fluent in-memory builder for `Arc<DefaultApplicationService>` (9 fields after T9-00 thinning: `test_data`, `logs`, `last_trigger`, `generation: Option<(GenerationStatus, GenerationPhase)>` tuple, `settings`, `storage`, `game_service`, `skip_seeding`, `is_generating`). Replaces the world-data mutator methods (`map` / `npc` / `npcs` / `room_npc` / `with_world_map` / `new(world, player)`) with a single `test_data: Option<TestData>` field. `build_service()` returns `Arc<DefaultApplicationService>`; `build_app_state()` returns the underlying `AppState` directly.
+Fluent in-memory builder for `Arc<DefaultApplicationService>`. Fields: `test_data: Option<TestData>`, `logs`, `last_trigger`, `generation: Option<(GenerationStatus, GenerationPhase)>` tuple, `settings`, `storage`, `game_service`, `skip_seeding`, `is_generating`. `build_service()` returns `Arc<DefaultApplicationService>`; `build_app_state()` returns the underlying `AppState` directly.
 
 ```rust
 use chronicler_engine::test_support::{TestDataBuilder, TestAppBuilder};
@@ -28,15 +28,15 @@ let data = TestDataBuilder::default_test().build();
 let app = TestAppBuilder::with_data(data).build_service()?;
 ```
 
-**`skip_seeding(true)`** skips `test_data.seed_into`, snapshot save, and message persistence inside `build_app_state`. The transient `GameState` (with `starting_room` derivation, `room_npcs` population, `last_trigger`, `generation`, `logs`) is still constructed from `test_data` but discarded. `build_app_state` uses `default_test_preset_storage()` for the `preset_storage` field (not an empty `Storage::new_in_memory()` — empty storage broke `phase_narrate → load_preset_and_response_length`).
+**`skip_seeding(true)`** skips `test_data.seed_into`, snapshot save, and message persistence inside `build_app_state`. The transient `GameState` (with `starting_room` derivation, `room_npcs` population, `last_trigger`, `generation`, `logs`) is still constructed from `test_data` but discarded. `build_app_state` uses `default_test_preset_storage()` for the `preset_storage` field.
 
 Methods: `default_test()`, `with_data(data)`, `data()`, `default_app()` (HTTP-test shorthand: `Self::default_test().build()`), `last_trigger(...)`, `log(...)`, `generation_status(...)`, `settings(...)`, `storage(...)`, `game_service(gs)`, `is_generating(value)`, `skip_seeding(bool)`, `build()`, `build_with_service(gs)`, `build_service()`, `from_base(base)`, `build_app_state()`.
 
 ## SqliteTestAppBuilder (`tests/helpers/sqlite_test_app_builder.rs`)
 
-Integration-only builder (not in `src/test_support/` — lib tests cannot import from `tests/`). Replaces the 5 deleted sqlite-backed helpers (`make_test_app_with_sqlite` / `_mock_backend` / `_backends` / `_separate_backends` / `_game_service`). File carries `#![allow(dead_code)]` at module level because it is `#[path]`-included in both the `tests/integration/` and `tests/infrastructure/` binaries — methods unused from one binary's view are used from the other.
+Integration-only builder (not in `src/test_support/` — lib tests cannot import from `tests/`). File carries `#![allow(dead_code)]` at module level because it is `#[path]`-included in both the `tests/integration/` and `tests/infrastructure/` binaries — methods unused from one binary's view are used from the other.
 
-Owns the body formerly in `build_seeded_sqlite_storage`: sqlite pool, `seed_default_game_row`, `test_data.seed_into`, snapshot save → `pre_main_id`, `Input` message `snapshot_id` wiring, first-swipe `snapshot_id` wiring, message + swipe persistence, final snapshot re-save. Private `finalize_app` is duplicated locally (not re-exported from `test_support::context` to avoid making the private helper `pub`).
+`SqliteTestAppBuilder` runs the following setup: sqlite pool, `seed_default_game_row`, `test_data.seed_into`, snapshot save → `pre_main_id`, `Input` message `snapshot_id` wiring, first-swipe `snapshot_id` wiring, message + swipe persistence, final snapshot re-save. Private `finalize_app` is duplicated locally (not re-exported from `test_support::context` to avoid making the private helper `pub`).
 
 ```rust
 use chronicler_engine::test_support::TestDataBuilder;
@@ -117,9 +117,9 @@ All three satisfy the `LlmMessageRepository` port; recorder wraps a provider + a
 
 `create_test_storage(id)` delegates to `test_support::seed_default_game_row` so sqlite-backed tests satisfy the `game_state_snapshots.game_id` / `messages.game_id` FK constraints without relying on a migration-seeded default game.
 
-## Survivor Helpers (`src/test_support/context.rs`)
+## Narrow-Case Helpers (`src/test_support/context.rs`)
 
-Three helpers retained after T9-00 as user-approved survivors. Prefer the dedicated builders above for new tests:
+Three narrow-case helpers. Prefer the dedicated builders above for new tests:
 
 | Helper | Returns | Use For |
 |--------|---------|---------|
