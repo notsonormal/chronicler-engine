@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::model::state::game_state::GameState;
 
+/// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionPhase {
@@ -13,6 +14,7 @@ pub enum ExecutionPhase {
     PostGeneration,
 }
 
+/// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case", tag = "type", content = "value")]
 pub enum BackendSelector {
@@ -69,6 +71,7 @@ impl StatePatch {
     }
 }
 
+/// [TRIVIAL_ENUM]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Confidence {
     High,
@@ -83,6 +86,7 @@ pub struct StatePatch {
     pub confidence: Confidence,
 }
 
+/// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, PartialEq)]
 pub enum AgentResult {
     PromptDirective(String),

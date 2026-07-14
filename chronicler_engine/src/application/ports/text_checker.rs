@@ -33,11 +33,17 @@ pub struct CheckIssue {
 /// Classification of a text check issue.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IssueKind {
+    /// Word misspelled; suggestion is the corrected spelling.
     Spelling,
+    /// Grammar rule violated (subject-verb, tense, agreement).
     Grammar,
+    /// Capitalization incorrect for context (proper noun, sentence start).
     Capitalization,
+    /// Style preference issue (passive voice, wordiness).
     Style,
+    /// Formatting issue (whitespace, punctuation, structure).
     Formatting,
+    /// Issue that doesn't fit the other categories; `message` carries details.
     Other,
 }
 

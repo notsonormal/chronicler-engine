@@ -75,6 +75,9 @@ Run all phases. **Zero findings in a phase = phase complete. Do not skip remaini
 
 7. **Cross-Doc Drift.** Conditional phase: when ≥2 STANDARD docs reference the same concept (layer count, enum name, struct field, phase number, status enum variant), verify all references agree. Common drift: layer counts (8 vs 7), enum variants, struct field names (direct vs accessor). Report drift with both file refs. Skip if no concept is referenced by ≥2 docs.
 
+8. **Enum variant paraphrase.** Enum variant semantics live on the variant in `src/` as `///` rustdoc (or are self-documenting via `/// [TRIVIAL_ENUM]`). Flag any `docs/system/*.md` or `docs/reference/*.md` section that re-paraphrases variant semantics already stated on the enum, unless the doc adds a Data-Flow Claim or behavior-specific contract (e.g. "PhaseError::Cancelled is surfaced to the client as HTTP 499, with state rolled back" — the HTTP rollback is the contract, the variant definition is not). Variant listings in docs must be a pointer to source ("see `PhaseError` in `src/application/action_pipeline/phase_error.rs`") or omitted. Affected files: any STANDARD doc listing enum variants by name with per-variant descriptions duplicating the variant `///`.
+   Completion: every enum variant re-paraphrase flagged with FILE:LINE; cite the source enum path.
+
 ## Output Format
 
 ```

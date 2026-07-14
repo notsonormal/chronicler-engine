@@ -42,6 +42,23 @@ Review the file `chronicler_engine\AGENTS.md` to understand the coding standards
 | Generic praise | "well-designed", "robust", "efficient" | DELETE |
 | Narration comments | `// This does X`, `// Then we do Y` | DELETE |
 | Separator comments | `// === Section ===` | DELETE |
+| Enum variant narration prose | `/// This variant represents...` | DELETE (rephrase as semantic, see below) |
+
+# Enum Variant Docs
+
+Enum variant `///` comments are **allowed and required** for non-trivial enums. The
+`check_enum_variant_docs` guardrail enforces this. The opt-out marker
+`/// [TRIVIAL_ENUM]` directly above the `enum` declaration signals that variants
+are self-documenting; no variant `///` may appear on a trivial-marked enum.
+
+A variant doc must be **semantic** — what the variant *means* or *when it is
+emitted* — not "What" narration.
+
+| Variant doc form | Verdict |
+|-----------------|---------|
+| `/// Generation cancelled by user; partial artifacts discarded.` | KEEP — semantic |
+| `/// This variant represents the cancelled state.` ("This variant...") | DELETE — slop |
+| `/// Red hue.` on `Color::Red` | DELETE — trivial, use `[TRIVIAL_ENUM]` |
 
 ### Python AI Slop
 

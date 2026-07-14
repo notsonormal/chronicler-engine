@@ -5,9 +5,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationStatus {
+    /// No generation running; input buffer is empty or consumed.
     #[default]
     Idle,
+    /// Generation in progress; `phase` tracks sub-stage.
     Generating,
+    /// Generation failed; payload is the user-facing error message.
     Error(String),
 }
 
@@ -26,9 +29,12 @@ impl GenerationStatus {
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationPhase {
+    /// Narrator LLM generating the scene response.
     #[default]
     Narrating,
+    /// Quantifier LLM evaluating NPC presence and movement.
     Quantifying,
+    /// Event-generation LLM producing derived side effects.
     GeneratingEvent,
 }
 

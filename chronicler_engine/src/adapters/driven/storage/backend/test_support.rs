@@ -11,6 +11,7 @@ pub struct TestOverride {
     message: String,
 }
 
+/// [TRIVIAL_ENUM]
 #[derive(Clone, Copy)]
 pub(crate) enum ErrorKind {
     Config,

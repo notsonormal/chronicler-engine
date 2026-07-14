@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+/// [TRIVIAL_ENUM]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LlmBackendType {
     #[default]

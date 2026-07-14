@@ -7,10 +7,14 @@ use crate::domain::model::llm_backend::LlmBackendType;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum TextCheckMode {
+    /// Text checking disabled; `check` short-circuits with `None`.
     #[default]
     Disabled,
+    /// Spell-check only.
     Spell,
+    /// Grammar-check only.
     Grammar,
+    /// Spell and grammar checks both applied.
     SpellGrammar,
 }
 

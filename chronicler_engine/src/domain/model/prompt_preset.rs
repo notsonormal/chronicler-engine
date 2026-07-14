@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+/// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PresetType {
     #[default]

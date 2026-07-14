@@ -1,15 +1,18 @@
 //! Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
 
+pub mod enums;
 pub mod layers;
 pub mod location;
 pub mod structure;
 pub mod style;
 
+pub use enums::*;
 pub use layers::*;
 pub use structure::{check_no_legacy_test_context, *};
 pub use style::*;
 pub use location::*;
 
+/// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     Error,
@@ -218,4 +221,14 @@ fn guardrails_messages_swipes_separation() {
 #[test]
 fn guardrails_handler_return_type() {
     check_src_files("handler return type", check_handler_return_type);
+}
+
+#[test]
+fn guardrails_enum_variant_docs() {
+    check_src_files("enum variant docs", check_enum_variant_docs);
+}
+
+#[test]
+fn guardrails_enum_variant_docs_tests() {
+    check_tests_files("enum variant docs (tests)", check_enum_variant_docs);
 }

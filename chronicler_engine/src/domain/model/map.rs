@@ -48,6 +48,7 @@ pub struct Room {
     pub navigation_description: Option<String>,
 }
 
+/// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Direction {

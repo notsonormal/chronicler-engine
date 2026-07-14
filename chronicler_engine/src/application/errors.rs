@@ -4,9 +4,13 @@
 use crate::error::EngineError;
 
 pub enum ApplicationError {
+    /// Input failed domain validation; payload is the user-facing reason.
     Validation(String),
+    /// Engine-layer failure surfaced through the application service.
     Engine(EngineError),
+    /// Server shutting down; reject new work.
     ShuttingDown,
+    /// Another generation already in progress for this game; caller must retry or back off.
     ConcurrentGeneration,
 }
 
@@ -59,7 +63,10 @@ impl From<EngineError> for ApplicationError {
 
 #[derive(Debug)]
 pub enum ProcessActionResult {
+    /// Generation task spawned and registered.
     Started,
+    /// Rejected: another generation holds the slot for this game.
     ConcurrentGeneration,
+    /// Rejected: server is shutting down.
     ShuttingDown,
 }

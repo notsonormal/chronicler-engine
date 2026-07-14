@@ -58,11 +58,13 @@ pub struct CharacterSeed {
     pub card: NpcCard,
 }
 
+/// [TRIVIAL_ENUM]
 pub enum Backend {
     Sqlite { pool: DbPool },
     InMemory(Box<InMemoryData>),
 }
 
+/// [TRIVIAL_ENUM]
 // `Test.base: Box<Backend>` (not `Box<BackendKind>`) pins the replace-not-nest invariant.
 pub enum BackendKind {
     Direct(Backend),

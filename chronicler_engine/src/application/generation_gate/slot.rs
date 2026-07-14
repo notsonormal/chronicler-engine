@@ -7,7 +7,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerationSlot {
+    /// No generation active for this game; slot is claimable.
     Idle,
+    /// Generation `generation_id` owns the slot; releasing requires matching id.
     Generating { generation_id: u64 },
 }
 

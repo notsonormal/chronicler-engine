@@ -6,7 +6,7 @@ The Chronicler Engine enforces coding standards through three complementary laye
 
 1. **Compile-time**: `clippy` lints (deny-level in `src/lib.rs`)
 2. **Test-time (declarative)**: `arch-lint` architecture rules (`arch-lint.toml`)
-3. **Test-time (custom)**: `syn`-based convention tests in `tests/infrastructure/guardrails/` (17 registered conventions; load-bearing subset documented in §3.1–3.9)
+3. **Test-time (custom)**: `syn`-based convention tests in `tests/infrastructure/guardrails/` (21 registered conventions; load-bearing subset documented in §3.1–3.10)
 
 All three run in CI via `build.py`.
 
@@ -169,9 +169,18 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 
 **Standard**: All HTTP handlers in the server layer must return `Response<Body>` with error mapping via `app_err_to_response()`. The tuple return type `(StatusCode, String)` is forbidden — it bypasses the centralized error-to-HTTP mapping and creates an inconsistent HTTP contract.
 
-**Severity**: error  
-**Scope**: `src/adapters/driving/http/` (excluding `mod.rs`, `debug.rs`, and `renderers.rs`)  
+**Severity**: error
+**Scope**: `src/adapters/driving/http/` (excluding `mod.rs`, `debug.rs`, and `renderers.rs`)
 **Checks**: Function signatures with `-> (StatusCode, String)` return type
+
+### 3.10 Enum Variant Docs (`guardrails_enum_variant_docs`, `guardrails_enum_variant_docs_tests`)
+
+**Standard**: Every enum variant carries `///` rustdoc stating what the variant *means* or *when emitted* (semantic, not narration). Trivial enums — variants self-document via name (e.g. `Direction::North`, `Confidence::High`) — may opt out with a `/// [TRIVIAL_ENUM]` marker directly above the `enum` declaration. A trivial-marked enum with any variant `///` is a violation. The rule fires in both directions: missing-doc and trivial-conflict.
+
+**Severity**: error
+**Scope**: `src/` and `tests/`
+**Checks**: `syn::visit::Visit` walk of every `ItemEnum`; per-variant presence of `doc` attr; per-enum presence of `[TRIVIAL_ENUM]` token in a `doc` attr.
+**Exemptions**: Empty enums (`enum Never {}`) pass trivially.
 
 ## 4. Coverage Exclusion Policy
 
