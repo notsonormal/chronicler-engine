@@ -98,6 +98,6 @@ Rendered by `render_worlds_panel()`:
 ### Delete Validation
 
 1. **No referencing games**: Storage layer executes SQL `SELECT COUNT(*) FROM games WHERE world_key = ?`
-2. **Returns `EngineError::WorldHasGames`** if games reference the world (typed variant, not string-matched)
+2. **Returns `EngineError::WorldHasGames`** if games reference the world
 3. **Handler uses `is_user_displayable()`** for type-driven branching — displayable errors render inline; others return error status
 4. **Cascades to map**: Map deleted automatically via FK cascade
