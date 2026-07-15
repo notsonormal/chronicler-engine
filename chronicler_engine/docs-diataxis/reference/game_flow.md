@@ -28,8 +28,6 @@ flowchart TD
     Poll -.-> Await
 ```
 
-Main narration builds a comprehensive prompt using the layered prompt system.
-
 ## Granular Status Phases
 
 During LLM processing, the UI displays granular status phases instead of a single "Thinking..." message.

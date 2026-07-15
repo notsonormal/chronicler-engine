@@ -99,6 +99,12 @@ Three honest frictions:
 
 4. **Negative-disclaimer paragraphs about what the diagrams don't show.** The first draft of the §3 architecture doc carried paragraphs saying "SillyTavern is not a runtime system" and "Harper is not an external system". This was defensive framing — it kept the very things it was disclaiming in the reader's mind, and read like apologizing for ticket 03's summary errors (which the reader never saw). **Convention**: the C4 diagrams and the Out-of-scope list are the source of truth for what's external. If something isn't in the diagram, it isn't in scope — no parallel negative paragraphs. Inspirations belong in the explanation doc for the thing they inspired (e.g. SillyTavern's prompt-system inspiration lives in the prompt-system doc, not the architecture overview). Harper appears only in the places where its in-process nature is a positive statement of fact (§5 Adapters description mentions `harper_core`; §7 deployment contract has an "In-process text check" bullet); it is not editorialized about.
 
+5. **Three slop patterns to avoid in bulk-writing** (found in pilot audit, 2026-07-15):
+   - **Negative-disclaimer prose** — paragraphs insisting that X is "not an external system" or "not in scope". Diagrams and Out-of-scope lists are the source of truth; if something isn't in the diagram, it isn't in scope. Don't editorialize about absences.
+   - **Tables-of-contents-as-prose** — a table that maps the doc's own sections to "Question answered" / "C4 level" / "Source of truth". The sections are coming right up; the reader doesn't need a preview. H2 headings + their prose are the TOC.
+   - **Dual citations / vague guarantees** — citing both INV-004 and ADR-010 for one value, or "O(1)" when the guarantee is "no storage round-trip per poll". Cite the single authoritative source; describe the guarantee concretely.
+   These apply to all four Diátaxis modes, not just architecture docs.
+
 ## 9. `game_flow.md` split verdict
 
 **The Two State Channels split held.** The reference doc reads as a clean phase/phase-table/retry/error-model contract; the explanation doc reads as a coherent essay on the dual-channel tradeoff. No content from the original aside had to be force-fit into either file, and no new content had to be invented to bridge them.

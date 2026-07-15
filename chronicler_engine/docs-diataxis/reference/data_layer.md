@@ -22,21 +22,21 @@ Every game and every world row can be referred to by multiple tables; the standa
 ### Game state cluster
 
 - **`games`** — top-level game session record. Every snapshot and message belongs to a game. Carries `world_key` (logical reference into `worlds.key`, no SQL FK) and `persona_key` (logical reference into `personas.key`, no SQL FK) so a game pins one world and one persona at creation time. Multiple games can exist in the same database and are switched at runtime via `set_game_id`. On first startup for a world, a new `games` row is auto-created with a generated name.
-- **`game_state_snapshots`** — frozen point-in-time captures of the mutable game state. Used to load the latest state on server startup and to retry a message by loading the snapshot referenced by a message's `snapshot_id`. **Snapshot invariant:** messages are **not** stored in the snapshot JSON. They live in `messages` and are hydrated after a snapshot load. Indexed by `idx_snapshots_game_latest(game_id, created_at DESC)`.
-- **`messages`** — chronological narrative history. Each row is one log entry (player input, narration, system message, dialogue). Persisted incrementally (one INSERT per new entry). There is exactly one message history per game. Soft-delete flag `is_deleted`. Indexed by `idx_messages_game_id(game_id, id)`.
+- **`game_state_snapshots`** — frozen point-in-time captures of the mutable game state. Used to load the latest state on server startup and to retry a message by loading the snapshot referenced by a message's `snapshot_id`. **Snapshot invariant:** messages are **not** stored in the snapshot JSON. They live in `messages` and are hydrated after a snapshot load. Indexed by `(game_id, created_at DESC)` for the latest-snapshot lookup.
+- **`messages`** — chronological narrative history. Each row is one log entry (player input, narration, system message, dialogue). Persisted incrementally (one INSERT per new entry). There is exactly one message history per game. Soft-delete flag `is_deleted`. Indexed by `(game_id, id)`.
 - **`message_swipes`** — per-message swipe versions. Each row is one alternative generation for a message. Cascades on message delete. `UNIQUE(message_id, swipe_index)`. Carries `snapshot_id`, an optional (nullable) reference to `game_state_snapshots(id)` that is **not** declared as a SQL FK — see Relationships.
 
 ### World catalogue cluster
 
 - **`worlds`** — world definitions. `key` is `UNIQUE` (e.g. `redmist_estate`). Carries global rules, scenarios, and default scenario as JSON columns. Root of the world catalogue: `maps` and `characters` belong to a world.
-- **`maps`** — map data per world. FK to `worlds(id) ON DELETE CASCADE`. `map_data` is a JSON-serialized `MapDef`. Indexed by `idx_maps_world(world_id)`.
-- **`characters`** — NPC definitions per world. FK to `worlds(id) ON DELETE CASCADE`. `UNIQUE(key, world_id)`. Carries personality, triggers, relationships, inventory as JSON columns. Indexed by `idx_characters_world(world_id)`.
+- **`maps`** — map data per world. FK to `worlds(id) ON DELETE CASCADE`. `map_data` is a JSON-serialized `MapDef`. Indexed by `world_id`.
+- **`characters`** — NPC definitions per world. FK to `worlds(id) ON DELETE CASCADE`. `UNIQUE(key, world_id)`. Carries personality, triggers, relationships, inventory as JSON columns. Indexed by `world_id`.
 - **`personas`** — player personas. `key` is `UNIQUE` (e.g. `julian`). Stands alone — no SQL FK relationships — but referenced logically by `games.persona_key`. Carries personality, scenario, example dialogue, images, inventory as JSON or text columns.
 
 ### Standalone tables
 
-- **`llm_messages`** — forensics log of LLM API calls. **Not game-scoped** and not referenced by any other table. Used for debugging and prompt engineering. Pruned automatically with a default cap of 50 rows. Indexed by `idx_llm_messages_created_at(created_at DESC)`.
-- **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is `TEXT PRIMARY KEY` (e.g. `system_default`). Carries role, instructions, writing style, output format columns. `is_default` flag. Indexed by `idx_prompt_presets_type(preset_type)`.
+- **`llm_messages`** — forensics log of LLM API calls. **Not game-scoped** and not referenced by any other table. Used for debugging and prompt engineering. Pruned automatically with a default cap of 50 rows. Indexed by `created_at DESC`.
+- **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is `TEXT PRIMARY KEY` (e.g. `system_default`). Carries role, instructions, writing style, output format columns. `is_default` flag. Indexed by `preset_type`.
 - **`settings`** — engine settings singleton. Enforced by `CHECK (id = 1)`; exactly one row. Carries connection list, default narration/quantifier connection IDs, response length, text-check config, agent configs, and active prompt preset IDs — most as JSON columns. Updated through the settings API; not related to any game or world.
 
 ## Relationships
@@ -97,7 +97,7 @@ Several relationships between clusters are load-bearing but are **not** SQL fore
 
 ## Migrations
 
-Migrations run on first access via `run_migrations` in `src/adapters/driven/storage/db.rs`, gated by `PRAGMA user_version`. Column-level DDL — including `ALTER TABLE` adjustments in later migrations — lives in that file; this reference does not restate it. If you need the exact column list for a table, read `db.rs`.
+Migrations run on first access via `run_migrations` in `src/adapters/driven/storage/db.rs`, gated by `PRAGMA user_version`. Column-level DDL — including `ALTER TABLE` adjustments in later migrations — lives in that file; this reference does not restate it.
 
 ## Document References
 
