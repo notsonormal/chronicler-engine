@@ -5,7 +5,7 @@ title: Game Flow
 
 > **Diátaxis mode:** Reference. This document describes the runtime control flow of a FreeAction as it is: phase sequence, status phases, retry branching, and the unified error model. The problem it solves for the reader is *look-up*: when the engine is in state X, what happens next.
 
-## Scope
+## Overview
 
 The runtime control flow: the phase sequence from player input through LLM generation, quantification, and trigger evaluation, back to a UI update.
 
