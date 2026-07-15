@@ -186,8 +186,11 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
    - Line 2: `//! Human-readable summary` (used for auto-generating STRUCTURE section)
    Function-level anchors removed.
 3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
-4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
-5. **Be Consise**: Be extremely concise. Sacrifice grammar for the sake of concision.
+4. **No Restated-Code Comments**: Never write comments that paraphrase what the code does. Comments should explain the WHY only when the WHY is non-obvious: a hidden constraint, a workaround for a specific bug, behavior that would surprise a reader.
+5. **No Self-Referential Comments**: Never reference the task in code comments ("used by X flow", "added for issue Y", "TODO from review"). Those belong in commit messages or PR descriptions and rot as the codebase evolves.
+6. **Be Consise**: Be extremely concise. Sacrifice grammar for the sake of concision.
+7. **Surface Hidden Trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
+8. **Honest Status Reporting**: When asked "is X done?", answer based on what is verified, not what was attempted. "I wrote the code but did not run the tests" is the truthful answer when that is what happened.
 
 ## THE TEST-FIRST PHILOSOPHY
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.

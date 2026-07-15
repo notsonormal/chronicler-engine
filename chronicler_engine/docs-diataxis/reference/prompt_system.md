@@ -121,6 +121,7 @@ The engine also uses a quantifier prompt — a separate secondary LLM call that 
 - [ADR-004: XML-Structured LLM Prompts](../../docs/adr/adr-004-xml-prompt-format.md) — XML-sectioned instructions + XML-wrapped data; tags not objects of analysis.
 - [ADR-005: SillyTavern-Style Layered Prompt System](../../docs/adr/adr-005-layered-prompts.md) — layered prompt architecture + post-history splice rationale.
 - [ADR-022: PromptAssembler Trait Decoupling](../../docs/adr/adr-022-prompt-assembler.md) — assembly decoupled from transport; preset-driven system prompt.
+- [`../explanation/prompt_system_design.md`](../explanation/prompt_system_design.md) — why the prompt system is shaped this way: system/user separation and two-tier NPC cards.
 - [`./system_prompt.md`](./system_prompt.md) — assembled system prompt structure + section definitions + dynamic injection points.
 - [`./quantifier_prompt.md`](./quantifier_prompt.md) — quantifier prompt architecture (separate secondary prompt).
 - [`./llm_processing.md`](./llm_processing.md) — transport + sanitization + forensics; single-user-message mode; response sanitization.

@@ -35,6 +35,14 @@ The two-phase split separates post-narration concerns (detecting NPCs, detecting
 
 The quantifier predates the `Agent` trait — it was promoted into the trait abstraction later. Agent constructors carry `Option<Arc<Storage>>` directly under the storage-direct exemption documented in the hexagonal-architecture ADR.
 
+## Why the quantifier reports presence
+
+The quantifier prompt returns a JSON object with `npcs_in_room` (the list of NPC ids present in the current room) and `movement` (entering, leaving, or null). The model reports presence; the engine derives NPC `Entered` and `Left` events by diffing the previous quantifier result against the current one.
+
+The reason for the split is that presence detection and transition reasoning are different jobs. Presence detection is structured extraction over a fixed schema — the model names the NPCs it can see in the scene. Transition reasoning would require the model to track prior state across calls and infer who moved since the last result, which is less reliable than a set diff the engine computes over two lists it already holds. Asking the model to do the harder job in the same call trades reliability of the answer for a tighter coupling between observation and inference.
+
+The tradeoff is that the quantifier and the NPC reconciliation step have to be coupled at the orchestration layer rather than at the prompt layer: the engine has to remember the previous result, diff the two lists, and feed the resulting events into the trigger pipeline. The design pays that orchestration cost in exchange for a deterministic source of truth for NPC transitions — the diff runs over inputs the engine already holds, while a model-reported transition would couple observation and inference in the same call.
+
 ## Document References
 
 - [ADR-009: Agent Trait and Registry Architecture](../../docs/adr/adr-009-agent-trait-registry.md) — historical decision record for the agent abstraction.

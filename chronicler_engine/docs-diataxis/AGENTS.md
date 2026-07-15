@@ -34,6 +34,8 @@ Every doc in this tree is in exactly one of four Diátaxis modes. The mode is de
 - Look up a fact → Reference
 - Understand why → Explanation
 
+For the framework's first principles (two-axis compass, adjacent-mode boundaries, workflow), see `explanation/diataxis.md`.
+
 If the content doesn't solve a reader problem under any of these, drop it. If it mixes modes, split it by mode. Canonical splits in this tree: `game_flow.md` ↔ `two-state-channels.md`, `agent_system.md` ↔ `agent_system_design.md`, `message_model.md` ↔ `message_swipe_model.md`.
 
 ### arc52 — architecture doc sections
@@ -153,6 +155,14 @@ Forbidden registers:
 - **Speculative color** — "a hypothetical prose guardian tomorrow". Drop speculative examples that add narrative color without carrying fact.
 
 Discursive means prose that explores design rationale across connected sections. It does not mean keynote address. The opinion-and-perspective Diátaxis permits is stated directly ("the design chose X over Y because Z"), not performed as a rhetorical event.
+
+#### Explanation unfolds; it does not justify
+
+Explanation docs in this tree explain **what is happening** — they unfold and illuminate their subject. They do not justify the design to a skeptical reviewer; that framing belongs in ADRs.
+
+The single most common framing failure: an Explanation doc whose sections read as an apologia — "Why an abstraction at all", "Why two and not one", "Why trait objects". Each of those is a defense of a choice against an imagined alternative. The apologia answers "should the design have been different?" — that is the ADRs' question. Explanation answers "what is going on here?".
+
+The test: a section title phrased as "Why X?" or "Why X instead of Y?" is a justification title; rephrase it as what the section explains ("How X works", "What X does", "The moving parts of X") and rewrite the body to unfold the subject rather than defend it. Comparisons to alternatives still appear where load-bearing — they become "X differs from Y on..." statements inside the unfolding, not the section's reason for existing.
 
 ### Tutorial
 

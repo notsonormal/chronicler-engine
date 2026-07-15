@@ -96,5 +96,6 @@ Default presets ship as `data/prompt_presets/quantifier/default.json` and are pr
 - [ADR-009: Agent Trait and Registry Architecture](../../docs/adr/adr-009-agent-trait-registry.md) — the `PostGeneration` dispatch that hosts the quantifier.
 - [`./prompt_system.md`](./prompt_system.md) — narrative layered prompt architecture; the quantifier is a separate secondary prompt, not part of the layered narrative stack.
 - [`./agent_system.md`](./agent_system.md) — the `QuantifierAgent` that drives this prompt and returns `StatePatch` results to the pipeline.
+- [`../explanation/agent_system_design.md`](../explanation/agent_system_design.md) — why the quantifier reports presence and lets the engine derive transitions.
 - [`./llm_processing.md`](./llm_processing.md) — transport + sanitization + forensics; the recorder the quantifier's `LlmCallRecorder` runs through.
 - [`./triggers.md`](./triggers.md) — uses the quantifier's NPC + movement output as the precondition for trigger evaluation and the source of NPC enter/leave deltas.
