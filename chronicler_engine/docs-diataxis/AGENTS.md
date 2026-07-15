@@ -160,9 +160,7 @@ One diagram per cluster, not one diagram for everything. Keep each diagram small
 
 The C4 diagrams and the Out-of-scope list are the source of truth for what's external to the engine. If something isn't in the diagram, it isn't in scope — **don't** add parallel paragraphs saying "X is not an external system" or "X is not a runtime dependency." That framing is defensive and keeps the very thing it's disclaiming in the reader's mind. (Analogy: a diagram showing AWS, GCP, and Postgres doesn't need a paragraph saying "Note: Microsoft Azure is not an external system here.")
 
-Inspirations belong in the explanation doc for the thing they inspired, not in the architecture overview. Example: SillyTavern's influence on the prompt system lives in the prompt-system doc (yet to be written), not in `overview.md`'s §3.
-
-If a previous version of a doc drew something as external and it turned out not to be, just remove it from the diagram. Don't apologize for the correction in the new doc — record the correction on the originating ticket (see ticket 03's correction notes for the SillyTavern and Harper examples) and in `_PILOT_NOTES.md` §8, and let the diagram speak.
+Inspirations belong in the explanation doc for the thing they inspired, not in the architecture overview.
 
 ## No code-indexer docs (inherited rule, with a carve-out)
 

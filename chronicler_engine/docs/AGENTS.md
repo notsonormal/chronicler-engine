@@ -27,7 +27,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-14 16:56 UTC*
+*Index last generated: 2026-07-15 01:29 UTC*
 
 ### `docs/adr/`
 
@@ -82,7 +82,6 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
-- [Fix Pre-Existing Doc Audit Findings](./plans/fix-pre-existing-doc-audit-findings.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [P4-Concurrent Cleanup — Fix TOCTOU + Simplify heal](./plans/p4-concurrent-cleanup-fix-toctou-simplify-heal.md)
 - [Plan: Eliminate Free-Function Smells (Final)](./plans/plan-eliminate-free-function-smells-final.md)
@@ -96,6 +95,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [T1: Error Model Unification](./plans/t1-error-model-unification.md)
 - [T10: Low-priority Cleanup Bundle](./plans/t10-low-priority-cleanup-bundle.md)
 - [T11: Documentation Hygiene Skill Hardening](./plans/t11-documentation-hygiene-skill-hardening.md)
+- [T13: Remove `PhaseError::SnapshotMissing` variant](./plans/t13-remove-snapshotmissing-variant.md)
 - [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
 - [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
