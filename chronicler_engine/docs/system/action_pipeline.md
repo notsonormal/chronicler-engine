@@ -1,77 +1,60 @@
 # Action Pipeline
 
-## Objective
+**Scope:** This document specifies the FreeAction lifecycle and the error and cancellation shapes that bound it.
 
-The action pipeline orchestrates the FreeAction lifecycle: pre-snapshot, narrate, post-generation agents, engine commit, trigger continuation, finalize. It unifies the normal action flow and the retry flows. Pipeline phases run synchronously inside a `spawn_blocking` task; the pipeline instance is constructed once at startup and shared by `Arc`.
+The FreeAction lifecycle is: pre-snapshot, narrate, post-generation agents, engine commit, trigger continuation, finalize. The pipeline unifies the normal action flow and the retry flows into a single execution path so phase logic is not duplicated. Phases run synchronously inside a `spawn_blocking` task.
 
 ## Phase Flow
 
 ```mermaid
 flowchart TD
-    Start([execute_action_impl called]) --> Pre[phase_pre_main_snapshot]
-    Pre -->|status=Generating<br/>phase=Narrating| Narrate[phase_narrate]
-    Narrate -->|cancel?| CC1((cancel checkpoint))
-    CC1 -->|cancelled| HC1[handle_cancellation]
-    CC1 -->|continue| EmptyCheck{empty response?}
-    EmptyCheck -->|yes| ErrEmpty[error_return: empty]
-    EmptyCheck -->|no| PostGen[phase_post_generation]
-    PostGen -->|phase=Quantifying<br/>run agents| Commit[phase_engine_commit]
-    Commit -->|Err| ErrEngine[status=Error, return Ok]
-    Commit -->|Ok ActionResult| TriggerReq{build_trigger_request?}
-    TriggerReq -->|Some| TriggerCont[phase_trigger_continuation_llm_call]
-    TriggerReq -->|None| Finalize
-    TriggerCont -->|cancel?| CC2((cancel checkpoint))
-    CC2 -->|cancelled| HC2[handle_cancellation]
-    CC2 -->|continue| TriggerEmpty{empty response?}
-    TriggerEmpty -->|yes| ErrTrigger[status=Error, return Ok]
-    TriggerEmpty -->|no| Reconcile[reconcile_post_trigger_npcs]
-    Reconcile --> Finalize
-    TriggerCont -->|all clear| Finalize[phase_finalize]
-    Finalize -->|status=Idle<br/>phase=default| End([Ok])
-    HC1 --> End
-    HC2 --> End
-    ErrEmpty --> End
-    ErrEngine --> End
-    ErrTrigger --> End
+    Start([Action submitted]) --> Pre[pre-main snapshot]
+    Pre --> Narrate[narrate]
+    Narrate --> PostGen[post-generation agents]
+    PostGen --> Commit[engine commit]
+    Commit -->|trigger present| Trigger[trigger continuation]
+    Commit -->|no trigger| Finalize[finalize]
+    Trigger --> Finalize
+    Finalize --> End([Idle])
 ```
-
-Cancel checkpoints (red diamonds): the pipeline α-checks `app.current_game_id()` against the started id at three boundaries (after the narrator call returns, at the start of trigger continuation, after the trigger LLM call returns). Each returns `Err(PhaseError::Cancelled)` on mismatch — see [Cancellation](#cancellation).
-
-Error-return checkpoints (orange): `phase_narrate` for missing room / empty response / LLM error, `phase_trigger_continuation_llm_call` for trigger LLM error or empty response, `phase_engine_commit` for engine errors. Each phase returns `Err(PhaseError::...)`; the orchestrator's `finalize_phase_error` consumes each by setting `GenerationStatus::Error(msg)` + persisting + returning `Ok(())`.
 
 ## Error Model
 
-The state field IS the error channel: `state.narrative.input_buffer.status` carries phase failures, and the UI polls it via `get_generating_status`. The pipeline `Result` only signals cancellation. `run_from_input` consumes every non-`Cancelled` variant via `finalize_phase_error`, which loads fresh state (the in-memory `state` was moved into the phase call), sets `GenerationStatus::Error(msg)` from the variant, runs `phase_finalize`, and returns `Ok(())` — so state is always persisted and the UI shows the error through the existing polling path.
+Phase failures are observed through `state.narrative.input_buffer.status`. A phase that fails sets `GenerationStatus::Error(msg)` before returning, and the UI polls the status. Only `PhaseError::Cancelled` propagates out of the orchestrator. Every other variant stays inside; the orchestrator consumes it before the next phase begins.
 
-`PhaseError` variants:
+| Variant | Contract | Recovery |
+|---------|----------|----------|
+| `Cancelled` | Mismatch between the started game and the active game. | Cancellation handler resets status to Idle, persists, returns the variant. |
+| `NarratorFailed(String)` | The narrate call failed (missing room, empty response, LLM error). | Orchestrator sets `GenerationStatus::Error`, persists via the finalize path, returns `Ok(())`. |
+| `PersistFailed { label, source }` | A snapshot persist failed at one of four checkpoints: pre-main, pre-event, post-trigger, post-engine. `label` names the site; `source` carries the underlying error. | Same as `NarratorFailed`. |
+| `TriggerMissing` | Event-retry precondition: `state.narrative.last_trigger` is absent. | Same as `NarratorFailed`. |
+| `FetchFailed(String)` | Event-retry precondition: `load_world_bundle` failed (game, world, persona lookup). Distinct from `NarratorFailed` because the failure precedes the LLM call. | Same as `NarratorFailed`. |
 
-- **`PhaseError::Cancelled`** — the only `PhaseError` variant propagated to the caller; constructed by `handle_cancellation` (load_or_fresh → Idle → persist → `Err(Cancelled)`). All other variants are consumed by `finalize_phase_error`.
-- **`PhaseError::NarratorFailed(String)`** — constructed by `error_return` (the narrator failure path of `phase_narrate` for missing room / empty response / LLM error). `error_return` preserves side effects: sets `GenerationStatus::Error(msg)`, persists state, then returns `Err(NarratorFailed(msg))`. The orchestrator's match arm consumes it via `finalize_phase_error`.
-- **`PhaseError::PersistFailed { label, source }`** — constructed by `persist_snapshot_or_err` at four snapshot sites (`pre-main`, `pre-event`, `post-trigger`, `post-engine`) and at the `phase_engine_commit` call site in `run_from_input` (wrapped from `EngineError`). After ticket 03, all four sites are consumed by `finalize_phase_error` (set Error, persist, `Ok(())`) — previously the pre-event site `?`-propagated.
-- **`PhaseError::TriggerMissing` / `PhaseError::SnapshotMissing`** — constructed by `retry_event_continuation`: `TriggerMissing` when `state.narrative.last_trigger` is absent on an event-retry; `SnapshotMissing` reserved for future snapshot-absent retry paths.
-- **`PhaseError::FetchFailed(String)`** — constructed by `retry_event_continuation` when `ActionPipeline::load_world_bundle` fails on an event-retry precondition (game/world/persona lookup). Payload is `e.to_string()`, preserving canonical `EngineError` displays (e.g. `Game not found: 999`). Distinct from `NarratorFailed` because the failure occurred before the narrator LLM call — different recovery policy (precondition check vs mid-flow LLM failure).
-
-`phase_finalize` resets `status` to `Idle` and `phase` to default UNLESS `status` is already `Error`, guaranteeing the UI never sees a stuck `Generating` after the pipeline returns. `finalize_phase_error` always sets `Error(...)` before calling `phase_finalize`, so the error persists. The retry path splits: **postcondition** failures returned from `retry_event_continuation` / `retry_main_narration` (any non-`Cancelled` `PhaseError`) propagate up to `retry_last_response_impl` / `retrigger_event_impl`'s outer `match` and are consumed by `ActionPipeline::finalize_phase_error` (same seam as `run_from_input`); **precondition** failures inside `retry_last_response_impl` before any phase runs (anchor missing, snapshot missing, load error, no input) persist `Error(...)` via the private `retry_persist_error` helper, which writes `Error` + `save_state` directly without `phase_finalize` (the heal path on the next action `heal_stale_generating` resets the status for this case).
+Errors must survive finalize. `phase_finalize` resets status to Idle unless status is already Error. Because every recovery path sets Error before calling finalize, the error persists. The UI never observes a stuck Generating after the pipeline returns.
 
 ## Cancellation
 
-Two independent cancellation mechanisms:
+Two independent mechanisms guard against in-flight generation drift. Both produce the `Cancelled` variant; the cancellation handler consumes it by resetting status to Idle, persisting, and returning.
 
-- **In-phase α-check** (`PipelineRun::check_game_unchanged(started_for)`) — game-id mismatch, NOT a shutdown token. Three sites: after the narrator call returns (before `add_message`); at the start of trigger continuation (before persisting the pre-event snapshot); after the trigger LLM call returns (before commit). `phase_pre_main_snapshot` has no α-check. Reset / `switch_game` / `delete_game` may run while a generation is in flight; the α-check rejects stale results at these boundaries.
-- **Pre-spawn shutdown gate** — `app.is_shutting_down()` is checked at the HTTP entry boundary only (retry/retrigger handlers in `application::message_editing`, process-action handler in `generation_gate`). It is never called inside a phase fn.
+**In-phase alpha-check.** Compares the current game id to the game id captured when generation started. A mismatch returns the `Cancelled` variant — a reset, game switch, or game deletion running while a generation is in flight causes the stale result to be rejected. Three sites:
 
-`handle_cancellation` is the single cleanup point for `Err(PhaseError::Cancelled)`: load fresh state, set `Idle`, clear `phase`, persist, return `Err(PhaseError::Cancelled)`. The retry orchestrators (`retry_last_response_impl`, `retrigger_event_impl`) match `Cancelled` inline at the bottom of their body (mirror of `handle_cancellation`'s load_or_fresh → Idle → persist) and route other `Err(PhaseError)` variants through `ActionPipeline::finalize_phase_error`.
+- After the narrate call returns; before the message is added to history.
+- At the start of trigger continuation; before the pre-event snapshot is persisted.
+- After the trigger LLM call returns; before commit.
 
-`GenerationGuard::Drop` releases the registry slot only if the caller still owns it (no-op if superseded by a younger generation).
+**Pre-spawn shutdown gate.** Checks whether the application is shutting down at the HTTP entry boundary only — retry handlers, retrigger handlers, and the process-action handler. When the gate is set, generation does not start; phases do not see this check.
+
+`GenerationGuard::Drop` releases the registry slot if the caller still owns it (no-op if superseded by a younger generation).
 
 ## Retry
 
-Retry re-enters the pipeline without duplicating phase logic:
+Both retry paths re-enter the pipeline without duplicating phase logic.
 
-- **Main retry** (`retry_main_narration`) calls `pipeline.run_from_input` — the same path as a normal action. Soft-deletes messages after the anchor, re-runs narration + quantifier + trigger, preserves the old narration as a swipe.
-- **Event retry** re-runs the trigger continuation phase against the restored snapshot state, then re-quantifies NPCs from the new continuation text. Regenerates only the continuation text using the stored `StoredTriggerContext` (carried by `state.narrative.last_trigger`); does not rerun main narration or quantification.
+- **Main retry** re-enters from action receipt. Soft-deletes messages after the anchor, preserves the old narration as a swipe, and re-runs narrate + quantifier + trigger.
+- **Event retry** re-runs the trigger continuation against the restored snapshot, then re-quantifies NPCs from the new continuation text. Does not rerun main narration or main quantifier.
+- **Anchor** is the message whose snapshot the retry restores. The target message is temporarily removed and re-inserted after engine commit and before trigger continuation, so the cycle can iterate cleanly.
 
-Anchor: `app.find_retry_anchor(&messages)` locates the message whose snapshot the retry restores. The old target message is moved to `state.narrative.retry_target` and re-appended to history after the engine-commit (and before the trigger continuation runs) via `state.narrative.retry_target.take()`.
+Retry errors split into two paths. Postcondition failures returned from a retry phase run through the orchestrator's finalize seam, like the standard action path. Precondition failures (missing anchor, snapshot lookup failure, load errors, no input) persist Error directly and rely on the next action's heal-stale-state path to reset status — they skip finalize.
 
 ## Document References
 
