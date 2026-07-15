@@ -179,6 +179,11 @@ Docs should not be code indexers. The code is self-documenting; the docs are a l
 
 **Carve-out**: schema column tables, struct field lists, function signatures, migration version numbers, and constants are code-indexing and are **not** restated in Reference docs — see "Reference defers to source" above. What Reference docs *do* carry (purpose, invariants, relationships, cross-references) is not code-indexing.
 
+**Seam identifiers vs. mechanics leaks.** Not every code reference is code-indexing. The test: *would a reader grep for the name to find the contract the prose is describing?* If yes, the name is a **seam identifier** — keep it. If no, it's a **mechanics leak** — drop it.
+
+- **Keep** (seam identifiers): type names, enum variants, and method references that name the contract the prose is describing — `LlmCallRecorder::complete()`, `assembler.assemble()`, `QuantifierAgent`, `PhaseError`, `state.scene.npcs_in_area`, `AppSettings.response_length`, `<ConversationHistory>`.
+- **Drop** (mechanics leaks): impl-detail references a reader wouldn't navigate to — bare free-function names that label mechanics (`run_migrations()`, `execute_freeaction_impl`, `spawn_pipeline_task`), struct field dumps (a bulleted list of every field on a struct), variant payload type syntax (`Variant(String)` → keep `Variant`), Rust-type leaks in prose (`Option<String>`), code syntax (`chars.div_ceil(4)`, `max_attempts = 2` assignment), constructor forms (`AppSettings::default()` — rephrase to "the engine's default settings").
+
 XML/domain markups (e.g. `<ConversationHistory>`, `<PlayerInput>`) are domain tags, not code references — they don't trigger the code-indexer test.
 
 ## No negative explaining
