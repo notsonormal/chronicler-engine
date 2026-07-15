@@ -156,12 +156,6 @@ Mermaid only. The toolchain is already in place; do not introduce a new diagram 
 
 One diagram per cluster, not one diagram for everything. Keep each diagram small enough to read at a glance.
 
-## No negative-disclaimer paragraphs about what the diagrams don't show
-
-The C4 diagrams and the Out-of-scope list are the source of truth for what's external to the engine. If something isn't in the diagram, it isn't in scope — **don't** add parallel paragraphs saying "X is not an external system" or "X is not a runtime dependency." That framing is defensive and keeps the very thing it's disclaiming in the reader's mind. (Analogy: a diagram showing AWS, GCP, and Postgres doesn't need a paragraph saying "Note: Microsoft Azure is not an external system here.")
-
-Inspirations belong in the explanation doc for the thing they inspired, not in the architecture overview.
-
 ## No code-indexer docs (inherited rule, with a carve-out)
 
 Inherited from `chronicler_engine/docs/AGENTS.md`: docs should not be code indexers. The code is self-documenting; the docs are a layer on top, existing because they are more concise and easier to curate than AI-generated code comments. Docs should not explain *how the code works* by exhaustively referencing modules, classes, methods, and types.
