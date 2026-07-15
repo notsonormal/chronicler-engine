@@ -97,7 +97,7 @@ Several relationships between clusters are load-bearing but are **not** SQL fore
 
 ## Migrations
 
-Migrations run on first access via `run_migrations` in `src/adapters/driven/storage/db.rs`, gated by `PRAGMA user_version`. Column-level DDL — including `ALTER TABLE` adjustments in later migrations — lives in that file; this reference does not restate it.
+Migrations run on first access, gated by `PRAGMA user_version`. Column-level DDL — including `ALTER TABLE` adjustments in later migrations — lives in `src/adapters/driven/storage/db.rs`; this reference does not restate it.
 
 ## Document References
 

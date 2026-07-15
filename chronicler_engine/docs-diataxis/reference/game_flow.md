@@ -83,7 +83,7 @@ flowchart TD
 
 Pipeline errors (LLM failures, empty responses, room-not-found, etc.) follow a unified contract:
 
-- **Phase failure** is signaled via the `GenerationStatus` field on `GameState`. The caller checks `status.error_message()` to decide whether to continue to later phases or skip straight to the finalize phase. The pipeline's `Err` return is reserved for cancellation.
+- **Phase failure** is signaled via the `GenerationStatus` field on `GameState`. The caller checks the status's error message to decide whether to continue to later phases or skip straight to the finalize phase. The pipeline's `Err` return is reserved for cancellation.
 - **Cancellation** propagates as `Err(PhaseError::Cancelled)` to external callers (the action handler and the message-editing HTTP path). Every other `PhaseError` variant is consumed at the orchestrator seam: the orchestrator sets `GenerationStatus::Error`, persists, and returns `Ok(())`. `PhaseError` is errors-only; success is `Ok(())`.
 - **Stale-Generating recovery.** If `is_generating` is `false` but persisted status is still `Generating` (e.g. after a panic), the next action resets status to `Idle` and clears the per-game registry slot. `GenerationGuard::Drop` releases the registry slot if it still owns it (no-op if superseded by a younger generation) and stores the projection atomic to `false` only when no other game's slot is generating.
 
@@ -94,8 +94,5 @@ Pipeline errors (LLM failures, empty responses, room-not-found, etc.) follow a u
 - [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — `is_generating` dual-source invariant + `GenerationGuard`.
 - [ADR-017: Message Swipes](../../docs/adr/adr-017-message-swipes.md) — swipe semantics for retry of the last AI message.
 - [`../explanation/two-state-channels.md`](../explanation/two-state-channels.md) — rationale for the dual-channel generation state.
-- [`system/prompt_system.md`](../../docs/system/prompt_system.md) — layered prompt composition + per-layer token budget.
-- [`system/llm_processing.md`](../../docs/system/llm_processing.md) — LLM call logging + agent registry contracts.
-- [`system/triggers.md`](../../docs/system/triggers.md) — trigger evaluation rules + `NpcEncounterLog`.
-- [`system/dashboard.md`](../../docs/system/dashboard.md) — polling endpoints + status display.
-- [`system/narration_engine.md`](../../docs/system/narration_engine.md) — Game Master role + behavioral constraints.
+- [`./triggers.md`](./triggers.md) — trigger evaluation rules + `NpcEncounterLog`.
+- [`./narration_engine.md`](./narration_engine.md) — Game Master role + behavioral constraints.

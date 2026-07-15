@@ -5,7 +5,7 @@ title: Two State Channels
 
 > **Diátaxis mode:** Explanation. This document is *understanding-oriented*: it explains why generation state is represented by two complementary signals rather than one.
 
-## The question
+## Why two signals
 
 A text-adventure engine needs to answer two questions that look similar but operate on different timescales:
 
@@ -22,7 +22,7 @@ These questions have different consumers, different latency budgets, and differe
 
 ## Why two and not one
 
-The temptation is to collapse to a single source: the persisted status, queried on every poll. That would work, but at a cost the engine has explicitly decided not to pay.
+The single-source alternative — query the persisted status on every poll — works, but carries a cost the engine has decided not to pay.
 
 The poll endpoint is the hottest read path in the application. Reading from SQLite on every poll — a query that runs dozens of times per second per active browser — would dominate request latency and burn through the connection-pool budget for no semantic benefit. The persisted status is good for *recovery* (one query when a process starts) and *debugging* (one query when a human looks) but bad for *steady-state polling* (hundreds of queries per second per session).
 
@@ -45,13 +45,8 @@ Because two representations of one fact are a documented divergence risk, the ar
 
 - Any code path other than the registry claim/release path that mutates the `true` atomic transition, or the persisted `GenerationStatus` `true` transition, is a bug.
 - Any code path other than `GenerationGuard::Drop` that mutates the `false` atomic transition is a bug.
-- Reading the atomic is permitted everywhere; writing it is not.
 
 The property test is the binding safety mechanism. If it is ever deleted or weakened, the invariant degrades from "machine-checked" to "convention only".
-
-## What this design does not address
-
-The dual-channel design assumes a single process. There is no cross-process coordination on the atomic flag. Multi-process deployments against a shared database would need a different gate (a database-level lock, or a distributed cache), and that design has not been considered. The single-process assumption is enforced upstream by the deployment story (one engine binary per SQLite file).
 
 ## Document References
 

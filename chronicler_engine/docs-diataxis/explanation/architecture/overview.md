@@ -141,7 +141,7 @@ C4Deployment
 - **SQLite database.** One file per instance (e.g. `chronicler_3000.db`), created automatically on first access.
 - **File system.** Reads JSON seeds from `data/`, writes runtime data to `saves/`, reads and writes prompt presets to `prompts/`.
 - **Outbound LLM calls.** HTTPS to the configured backend (OpenRouter, DeepSeek, or Ollama). The endpoint URL is configurable; the engine does not own the LLM service.
-- **In-process text check.** The `harper_core` crate is linked directly into the engine binary; text checking is a function call, not a network hop. No separate service or outbound HTTPS required.
+- **In-process text check.** The `harper_core` crate is linked directly into the engine binary; text checking is a function call.
 
 **Single-process assumption.** The engine assumes it is the only process against its SQLite database. The `is_generating` atomic flag is process-local; multi-process deployments against a shared database are not supported.
 
@@ -157,7 +157,7 @@ This section lists the cross-cutting quality attributes the architecture makes e
 |------------------------------------|--------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
 | Self-healing after panic           | Generation status returns to `Idle` on the next action even if the previous process exited mid-flight.                   | INV-001.                                                 |
 | Stale-state recovery               | If `is_generating` is `false` but persisted status is still `Generating`, the per-game registry slot is cleared on the next action. | INV-001.                                                 |
-| Lock-poison recovery               | Every `Mutex` / `RwLock` site recovers from poison via `into_inner()` — no panic propagation from lock poisoning.        | INV-005.                                                 |
+| Lock-poison recovery               | Every `Mutex` / `RwLock` site recovers from poison via `into_inner()`.        | INV-005.                                                 |
 | Dual-source consistency            | The atomic `is_generating` cache and the persisted `GenerationStatus` cannot drift: the registry claim/release path mutates both representations under the same write-lock scope. | INV-001.                                                 |
 | No double-spawn race               | Only one `FreeAction` generation in flight at a time; the server rejects overlaps.                                       | INV-004b.                                                |
 
@@ -166,20 +166,20 @@ This section lists the cross-cutting quality attributes the architecture makes e
 | Attribute                          | Guarantee                                                                                                                | Source of truth                                          |
 |------------------------------------|--------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
 | Hot poll path                     | The HTTP poll endpoint reads the atomic `is_generating` directly; no storage round-trip per poll.                        | INV-001.                                                 |
-| LLM HTTP timeout bounded           | The LLM transport enforces a 180-second HTTP timeout. There is no backend-level cancellation token.                      | INV-004.                                                 |
+| LLM HTTP timeout bounded           | The LLM transport enforces a 180-second HTTP timeout.                      | INV-004.                                                 |
 | One FreeAction at a time           | Long-running LLM calls do not queue — overlapping actions are rejected, matching single-player semantics.                | INV-004b.                                                |
 | No blocking on the Axum event loop | Synchronous services (`GameService`, `ActionPipeline`) run inside `tokio::task::spawn_blocking`; HTTP handlers return before the LLM call begins. | INV-006, INV-007.                                        |
-| Settings reload is bounded         | Connection changes require a server restart; only `max_context_tokens` is read dynamically. No business-logic layer reloads settings from disk after bootstrap. | `architecture/system.md` §Reload rules.                  |
+| Settings reload is bounded         | Connection changes require a server restart; only `max_context_tokens` is read dynamically. | `architecture/system.md` §Reload rules.                  |
 
 ### Concurrency
 
 | Attribute                          | Guarantee                                                                                                                | Source of truth                                          |
 |------------------------------------|--------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
-| Tokio-only concurrency             | All concurrent work runs on the tokio runtime. No `std::thread::spawn` or `std::thread::sleep` in production code.        | INV-003.                                                 |
+| Tokio-only concurrency             | All concurrent work runs on the tokio runtime.        | INV-003.                                                 |
 | Cancellable long-running work      | Generation is cancellable at phase boundaries (post-narration, pre-trigger, post-trigger) via the in-phase α-check on `current_game_id`. | INV-004.                                                 |
 | Atomic cache single-writer rule    | Only the registry claim/release path mutates the `Arc<AtomicBool>` projection's `true` transition. `GenerationGuard::Drop` mutates the `false` transition only. All other code paths treat the atomic as read-only. | INV-001.                                                 |
 | Shutdown gate at HTTP boundary     | `is_shutting_down()` is checked at the HTTP entry boundary only — never inside phase functions, preserving phase purity. | `architecture/rust_technical.md` §CancellationToken.     |
-| Pipeline isolation                 | Phases operate on `GameState`, not on runtime signals. The pipeline does not see the shutdown gate; it sees only the in-phase α-check. | INV-002.                                                 |
+| Pipeline isolation                 | Phases operate on `GameState` and see only the in-phase α-check. | INV-002.                                                 |
 
 ---
 
