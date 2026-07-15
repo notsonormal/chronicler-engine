@@ -14,7 +14,7 @@ This document follows the arc52 selective subset: §3 Context & Scope, §5 Build
 
 ## §3 Context & Scope
 
-The Chronicler Engine is a single-process Rust application that turns player input into LLM-generated narrative, persists state, and renders an HTMX dashboard. It does not own the LLM, the database engine, or the grammar checker — it orchestrates them.
+The Chronicler Engine is a single-process Rust application that turns player input into LLM-generated narrative, persists state, and renders an HTMX dashboard. It orchestrates the surrounding systems — LLM, database, grammar checker — through adapters, with the dependency direction pointing inward.
 
 ```mermaid
 C4Context
@@ -40,7 +40,7 @@ C4Context
 
 ### Out of scope for this overview
 
-The following exist in the broader workspace but are not part of the Chronicler Engine's contract:
+The following are workspace-level systems that the engine connects to but does not contractually own:
 
 - **Ollama runtime.** A consumed external system; the engine treats it as an HTTPS endpoint.
 - **Browser rendering.** The dashboard is rendered server-side; the engine owns the templates, not the DOM.
@@ -106,10 +106,10 @@ C4Component
 
 #### The four layers
 
-- **Domain Layer** — `src/domain/`. Pure data and rules. No I/O, no port imports. This is the only layer the engine guarantees will not depend on anything else.
+- **Domain Layer** — `src/domain/`. Pure data and rules; the only layer the engine guarantees depends on nothing else.
 - **Application Layer** — `src/application/`. Use cases and orchestration. Owns port trait definitions under `application/ports/`. Constructs `ActionPipeline`, `GenerationGate`, `GameService`, `AgentRegistry`. Reaches `Storage` only at the explicit persistence boundary.
 - **Adapters** — `src/adapters/`. Two sub-trees: `driving/` (HTTP, CLI) implements inbound port-shaped surfaces; `driven/` (storage, LLM providers, text-check via the `harper_core` crate) implements the port traits owned by application.
-- **Bootstrap** — `src/bootstrap/`. Composition root. The only module allowed to import both port traits and adapter impls. Wires everything together at startup.
+- **Bootstrap** — `src/bootstrap/`. Composition root; the module that imports both port traits and adapter impls. Wires everything together at startup.
 
 The dependency invariant is the load-bearing rule: `domain` + `application` depend on port traits only; adapters implement port traits; only `bootstrap` imports both. The existing 8-tier layout (`model`, `engine`, `application`, `adapters/driven`, `adapters/driving`, `bootstrap`, `settings`, `test_support`) is a file-tree expression of this rule.
 
@@ -143,7 +143,7 @@ C4Deployment
 - **Outbound LLM calls.** HTTPS to the configured backend (OpenRouter, DeepSeek, or Ollama). The endpoint URL is configurable; the engine does not own the LLM service.
 - **In-process text check.** The `harper_core` crate is linked directly into the engine binary; text checking is a function call.
 
-**Single-process assumption.** The engine assumes it is the only process against its SQLite database. The `is_generating` atomic flag is process-local; multi-process deployments against a shared database are not supported.
+**Single-process deployment.** The engine runs one process against its SQLite database. The `is_generating` atomic flag is process-local; the deployment contract is one process per database.
 
 ---
 
@@ -178,7 +178,7 @@ This section lists the cross-cutting quality attributes the architecture makes e
 | Tokio-only concurrency             | All concurrent work runs on the tokio runtime.        | INV-003.                                                 |
 | Cancellable long-running work      | Generation is cancellable at phase boundaries (post-narration, pre-trigger, post-trigger) via the in-phase α-check on `current_game_id`. | INV-004.                                                 |
 | Atomic cache single-writer rule    | Only the registry claim/release path mutates the `Arc<AtomicBool>` projection's `true` transition. `GenerationGuard::Drop` mutates the `false` transition only. All other code paths treat the atomic as read-only. | INV-001.                                                 |
-| Shutdown gate at HTTP boundary     | `is_shutting_down()` is checked at the HTTP entry boundary only — never inside phase functions, preserving phase purity. | `architecture/rust_technical.md` §CancellationToken.     |
+| Shutdown gate at HTTP boundary     | `is_shutting_down()` is checked at the HTTP entry boundary; phase functions remain pure. | `architecture/rust_technical.md` §CancellationToken.     |
 | Pipeline isolation                 | Phases operate on `GameState` and see only the in-phase α-check. | INV-002.                                                 |
 
 ---

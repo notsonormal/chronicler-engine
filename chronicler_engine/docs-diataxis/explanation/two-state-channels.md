@@ -3,50 +3,38 @@ diataxis: explanation
 title: Two State Channels
 ---
 
-> **Diátaxis mode:** Explanation. This document is *understanding-oriented*: it explains why generation state is represented by two complementary signals rather than one.
+> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: how generation state is represented across a process-local atomic flag and a durable persisted field, which code paths read which, and how the two stay coherent. Companion to `../reference/game_flow.md`, which describes the phase sequence as it is.
 
-## Why two signals
+## The two signals
 
-A text-adventure engine needs to answer two questions that look similar but operate on different timescales:
+The engine carries two representations of generation state. One answers "is something generating right now?" on a hot path that runs many times per second. The other answers "what was the durable generation phase when this state was committed?" after a panic, restart, or debug inspection. The two signals serve different consumers and carry different cost profiles, so the engine keeps both and maintains their consistency with an explicit invariant.
 
-1. **Right now, is something generating?** — asked by the HTTP poll endpoint on every page refresh, often many times per second.
-2. **What is the durable generation phase, and what was the last error?** — asked after a panic, a restart, or when a debug operator inspects a stuck game.
+## Channel A — the persisted status
 
-These questions have different consumers, different latency budgets, and different durability requirements. A single signal cannot answer both cheaply, and the Chronicler Engine therefore carries two.
+`state.narrative.input_buffer.status: GenerationStatus` lives in the game state and is persisted with every snapshot and message write. The persisted status survives panics, process restarts, and crashes. Recovery after an abnormal exit reads this field: if it still shows `Generating` while the runtime claims no work in flight, the next action concludes the previous run died mid-flight and resets the status to `Idle` before proceeding.
 
-## What each channel is
+The persisted status is the channel debug operators read when a game appears stuck. It is the only signal that survives across processes.
 
-**Channel A — the persisted status field.** `state.narrative.input_buffer.status: GenerationStatus` is part of the game state and is persisted with every snapshot and message write. It survives panics, process restarts, and crashes. The persisted status is the source of truth for recovery and debugging: after any abnormal exit, the next action reads this field, and if it still shows `Generating` while the runtime claims otherwise, the engine knows the previous run died mid-flight and heals the state.
+## Channel B — the process-local atomic
 
-**Channel B — the process-local atomic flag.** `is_generating: Arc<AtomicBool>` lives on the application service and is a cached projection of the per-game registry (`Arc<RwLock<HashMap<GameId, GenerationSlot>>>`). It is read on the hot poll path with a single atomic load — no lock, no storage round-trip. It is cleared by an RAII guard (`GenerationGuard::Drop`) so a panic mid-generation still releases the flag, and it is consulted by handlers to reject double-spawn attempts before they reach the pipeline.
+`is_generating: Arc<AtomicBool>` lives on the application service and is a cached projection of the per-game registry. Handlers and the HTTP poll endpoint read it on every request with a single atomic load — no lock acquired, no storage round-trip. An RAII guard (`GenerationGuard::Drop`) clears the flag on a normal return and on panic alike, so a generation interrupted by a panic still releases the flag the next time it is observed.
 
-## Why two and not one
+The atomic is process-local by design. The engine's deployment contract is one process against one database; a second engine process against the same database would hold its own atomic and would not see the first process's claim through it.
 
-The single-source alternative — query the persisted status on every poll — works, but carries a cost the engine has decided not to pay.
+## Where each channel is read
 
-The poll endpoint is the hottest read path in the application. Reading from SQLite on every poll — a query that runs dozens of times per second per active browser — would dominate request latency and burn through the connection-pool budget for no semantic benefit. The persisted status is good for *recovery* (one query when a process starts) and *debugging* (one query when a human looks) but bad for *steady-state polling* (hundreds of queries per second per session).
+The two signals answer different questions for different code paths:
 
-So the atomic flag exists as a read-mostly cache, kept consistent with the persisted status under a documented single-writer rule: only the registry claim/release path mutates both representations, and it does so under the same write-lock scope so no observer sees them disagree. The `GenerationGuard::Drop` is a second writer for the atomic's `false` transition only — the RAII panic-safety fallback. The persisted status's `true` transitions are owned solely by the application service's action path.
+- **UI display** reads the persisted status (via the polled status fragment). The UI shows the correct state even when a tab was loaded before a crash or when the page renders from a stale snapshot.
+- **Spawn-side concurrency gating** reads the atomic. Handlers reject double-spawn attempts on an O(1) check that does not contend with the storage layer.
+- **Self-healing recovery** reads the persisted status. On the next `process_action` after a panic, the engine compares persisted status against the atomic; disagreement (persisted says `Generating`, atomic says `false`) is evidence of a mid-flight crash, and the engine resets the persisted status to `Idle`.
+- **Cross-process coordination** is supported by the persisted status only. The atomic cannot coordinate across processes because each process holds its own; the deployment contract is one process per database.
 
-A property test (encoded as an invariant contract test) verifies the invariant: after any mutation, `AtomicBool.load() == (persisted_status == Generating)`. Drift between the two representations fails the test suite rather than shipping.
+## The single-writer rule
 
-## How they relate without duplicating
+The two signals are kept coherent by restricting who may write each one. Only the registry claim/release path mutates both representations, and it does so under the same write-lock scope so no observer sees them disagree. `GenerationGuard::Drop` is a second writer for the atomic's `false` transition only — the RAII panic-safety fallback. The persisted status's `true` transitions are owned solely by the application service's action path. All other code paths treat both signals as read-only.
 
-The two channels answer different questions and are consumed by different code paths:
-
-- **UI display** — driven by the persisted status (via the polled status fragment), because the UI must show the correct state even after the page was loaded from a stale tab or a crashed browser.
-- **Spawn-side concurrency gating** — driven by the atomic flag, because handlers need an O(1) check that does not contend with the storage layer.
-- **Self-healing recovery** — driven by the persisted status. On the next `process_action` after a panic, the engine compares persisted status against the atomic. If they disagree (persisted says `Generating`, atomic says `false`), it is evidence the previous run crashed mid-flight; the engine resets status to `Idle` and proceeds.
-- **Cross-process coordination** — impossible by design. The atomic flag is process-local. Two engine processes pointed at the same database would each maintain their own atomic, and neither would see the other's claim. The persisted status is the only signal that survives across processes; the engine does not run multiple processes against one database in production.
-
-## What this forbids
-
-Because two representations of one fact are a documented divergence risk, the architecture contract is explicit about what other code paths may do:
-
-- Any code path other than the registry claim/release path that mutates the `true` atomic transition, or the persisted `GenerationStatus` `true` transition, is a bug.
-- Any code path other than `GenerationGuard::Drop` that mutates the `false` atomic transition is a bug.
-
-The property test is the binding safety mechanism. If it is ever deleted or weakened, the invariant degrades from "machine-checked" to "convention only".
+A property test (an invariant contract test) verifies the rule: after any mutation, `AtomicBool.load() == (persisted_status == Generating)`. Drift between the two representations fails the test suite rather than shipping. If the property test is ever deleted or weakened, the invariant degrades from machine-checked to convention only.
 
 ## Document References
 
