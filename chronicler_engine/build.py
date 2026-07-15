@@ -647,6 +647,12 @@ def main():
         )
 
         timed_step(
+            "Running Python tests...",
+            "python -m unittest discover scripts/tests -v",
+            env=cargo_env,
+        )
+
+        timed_step(
             "Validating markdown docs...",
             "python scripts/validate_docs.py",
             env=cargo_env,

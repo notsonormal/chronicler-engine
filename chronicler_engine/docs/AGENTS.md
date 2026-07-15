@@ -27,7 +27,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-15 01:29 UTC*
+*Index last generated: 2026-07-15 11:59 UTC*
 
 ### `docs/adr/`
 

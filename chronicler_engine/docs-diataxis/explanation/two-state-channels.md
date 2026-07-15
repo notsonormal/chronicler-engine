@@ -3,7 +3,7 @@ diataxis: explanation
 title: Two State Channels
 ---
 
-> **Diátaxis mode:** Explanation. This document is *understanding-oriented*: it explains why generation state is represented by two complementary signals rather than one. The factual shape of the channels — when each phase is active, what UI text appears, what the polling endpoint returns — lives in [`../reference/game_flow.md`](../reference/game_flow.md); this document is about the tradeoff those channels encode.
+> **Diátaxis mode:** Explanation. This document is *understanding-oriented*: it explains why generation state is represented by two complementary signals rather than one.
 
 ## The question
 
@@ -53,7 +53,7 @@ The property test is the binding safety mechanism. If it is ever deleted or weak
 
 The dual-channel design assumes a single process. There is no cross-process coordination on the atomic flag. Multi-process deployments against a shared database would need a different gate (a database-level lock, or a distributed cache), and that design has not been considered. The single-process assumption is enforced upstream by the deployment story (one engine binary per SQLite file).
 
-## See also
+## Document References
 
 - [`../reference/game_flow.md`](../reference/game_flow.md) — the factual phase sequence and the granular status-phase table.
 - [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — the original generation-gate decision (tokio migration + atomic + RAII guard).

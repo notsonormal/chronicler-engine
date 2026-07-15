@@ -3,7 +3,7 @@ diataxis: reference
 title: Game Flow
 ---
 
-> **Diátaxis mode:** Reference. This document describes the runtime control flow of a FreeAction as it is: phase sequence, status phases, retry branching, and the unified error model. The problem it solves for the reader is *look-up*: when the engine is in state X, what happens next. The "why two signals exist" question is intentionally split out into [`../explanation/two-state-channels.md`](../explanation/two-state-channels.md) — this document describes the channels as they are, not why.
+> **Diátaxis mode:** Reference. This document describes the runtime control flow of a FreeAction as it is: phase sequence, status phases, retry branching, and the unified error model. The problem it solves for the reader is *look-up*: when the engine is in state X, what happens next.
 
 ## Scope
 
@@ -41,7 +41,6 @@ During LLM processing, the UI displays granular status phases instead of a singl
 - The persisted status field (`Idle` / `Generating` / `Error`) drives UI disable state for the polled render.
 - The frontend maps endpoint values (`narrating`, `quantifying`, `generating-event`) to human-readable text.
 - An optimistic "Thinking..." is shown immediately on form submit, before the first poll response.
-- The two state channels that report these granular phases vs. the coarse persisted status are described in [`../explanation/two-state-channels.md`](../explanation/two-state-channels.md).
 
 ## Retry Flow
 
@@ -82,17 +81,11 @@ flowchart TD
 
 ## Error Model
 
-Pipeline errors (LLM failures, empty responses, room-not-found, etc.) follow a unified pattern:
+Pipeline errors (LLM failures, empty responses, room-not-found, etc.) follow a unified contract:
 
-1. Set `state.narrative.input_buffer.status = GenerationStatus::Error(message)` on the current `GameState`.
-2. Persist via `save_state()` (or `save_message_and_snapshot()` if a system message was added).
-3. Return `Ok(state)` / `Ok(())` — phase failure is signalled via `state.narrative.input_buffer.status`, not via the `Err` path of the pipeline return type.
-
-The caller checks `state.narrative.input_buffer.status.error_message()` to decide whether to continue to later phases or skip straight to `phase_finalize`.
-
-**Cancellation** produces `Err(PhaseError::Cancelled)`. After T4, all `PhaseError` variants are consumed at the orchestrator seam: `run_from_input`, `retry_last_response_impl`, and `retrigger_event_impl` match `Cancelled` for the cancel-cleanup path and route every other variant through `ActionPipeline::finalize_phase_error` (set `GenerationStatus::Error`, persist via `phase_finalize`, return `Ok(())`). Only `Err(PhaseError::Cancelled)` propagates one level further to external callers (`execute_action_impl`, `message_editing` HTTP handlers); other variants never escape the orchestrator. `PhaseError` is errors-only; success is `Ok(())`.
-
-**Stale-Generating recovery.** If `is_generating` is `false` but persisted status is still `Generating` (e.g. after a panic), `process_action` resets status to `Idle` before proceeding. The per-game registry is also self-healed on the same path: a `Generating` slot for `current_game_id()` whose projection atomic is `false` is cleared to `Idle`. `GenerationGuard::Drop` releases the registry slot if it still owns it (no-op if superseded by a younger generation) and stores the projection atomic to `false` only when no other game's slot is generating.
+- **Phase failure** is signaled via the `GenerationStatus` field on `GameState`. The caller checks `status.error_message()` to decide whether to continue to later phases or skip straight to the finalize phase. The pipeline's `Err` return is reserved for cancellation.
+- **Cancellation** propagates as `Err(PhaseError::Cancelled)` to external callers (the action handler and the message-editing HTTP path). Every other `PhaseError` variant is consumed at the orchestrator seam: the orchestrator sets `GenerationStatus::Error`, persists, and returns `Ok(())`. `PhaseError` is errors-only; success is `Ok(())`.
+- **Stale-Generating recovery.** If `is_generating` is `false` but persisted status is still `Generating` (e.g. after a panic), the next action resets status to `Idle` and clears the per-game registry slot. `GenerationGuard::Drop` releases the registry slot if it still owns it (no-op if superseded by a younger generation) and stores the projection atomic to `false` only when no other game's slot is generating.
 
 ## Document References
 
