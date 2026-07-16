@@ -41,3 +41,12 @@ The `game_flow.md` and `action_pipeline.md` docs are valuable because they descr
 In some way, explaination docs are an 'overflow' for refrences. We need to write more detail on certain topics, but don't want to bloat the information docs. 
 
 What counts as a 'good' explaination docs and 'bad' is even more vague then reference docs. At very least they (a) shouldn't explain obvious things, (b) shouldn't explain code closely (which be even futher away from the code than reference documents), (c) shouldn't reiterate what the reference docs already say except to expand on them.
+
+# How to review
+
+Consider the things mentioned here when doing this review. Also load the following skills
+
+- `.agents/skills/chronicler-docs-hygiene/SKILL.md`
+- `.agents/skills/domain-modeling`
+
+Fundamentally, the goal is determine "is this documentation worth the cost". A line of documentation has a much high maintance cost than a line of code, the value can also be hard to define. 
