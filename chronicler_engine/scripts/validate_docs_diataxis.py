@@ -36,9 +36,6 @@ docs-diataxis/; the legacy docs/ tree predates the convention and is exempt):
   FRONTMATTER_MISSING_KEY      — required key (`diataxis:` or `title:`) absent.
   FRONTMATTER_INVALID_MODE     — `diataxis:` value not in the vocabulary.
   FRONTMATTER_INVALID_ARC52    — `arc52:` present but not a list of valid sections.
-  FRONTMATTER_ARC52_OUT_OF_PLACE — `arc52:` present on a non-architecture doc
-                                   (warning only; convention is arc52 only on
-                                   architecture-shaped docs).
   MODE_CONTENT_MISMATCH        — declared mode and a simple body heuristic
                                  disagree (warning only; the chronicler-docs-hygiene
                                  skill does the deeper semantic check).
@@ -106,10 +103,6 @@ VALID_DIATAXIS_MODES: frozenset[str] = frozenset(
 )
 
 VALID_ARC52_SECTIONS: frozenset[str] = frozenset({"§3", "§5", "§7", "§10"})
-
-# First-segment path names that mark an `arc52`-shaped doc (where `arc52:`
-# front-matter is appropriate). Anything else gets a warning.
-ARC52_FIRST_SEGMENTS: frozenset[str] = frozenset({"architecture"})
 
 # ---------------------------------------------------------------------------
 # Heuristic patterns for the simple mode-vs-content check (warn-only).
@@ -275,14 +268,6 @@ def classify_file(path: Path, docs_root: Path) -> str:
 def is_diataxis_tree_path(rel_to_engine: Path) -> bool:
     """True if `rel_to_engine` lives under engine_root/docs-diataxis/."""
     return bool(rel_to_engine.parts) and rel_to_engine.parts[0] == "docs-diataxis"
-
-
-def is_architecture_shaped(rel_to_docs: Path) -> bool:
-    """True if the doc lives under an `architecture/` directory.
-
-    Only checked for docs-diataxis/ docs. Used to validate `arc52:` placement.
-    """
-    return "architecture" in rel_to_docs.parts
 
 
 def collect_markdown_files(targets: list[Path], docs_root: Path) -> list[Path]:
@@ -664,23 +649,13 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def check_diataxis_frontmatter(
-    report: FileReport,
-    *,
-    is_architecture_shaped: bool = True,
-) -> None:
+def check_diataxis_frontmatter(report: FileReport) -> None:
     """Enforce YAML front-matter conventions on docs-diataxis/ STANDARD docs.
-
-    `is_architecture_shaped`: True if the file lives under an `architecture/`
-    subfolder. `arc52:` is appropriate there; the validator warns with
-    FRONTMATTER_ARC52_OUT_OF_PLACE when it's declared on a non-architecture
-    doc. The default is True so the function is safe to call in isolation
-    (e.g. from unit tests) without false-positive warnings.
 
     Emits MISSING_FRONTMATTER, EMPTY_FRONTMATTER, FRONTMATTER_PARSE_ERROR,
     FRONTMATTER_NOT_MAPPING, FRONTMATTER_MISSING_KEY, FRONTMATTER_INVALID_MODE,
-    FRONTMATTER_INVALID_ARC52, and FRONTMATTER_ARC52_OUT_OF_PLACE violations
-    as appropriate. See module docstring for the rule set.
+    and FRONTMATTER_INVALID_ARC52 violations as appropriate. See module
+    docstring for the rule set.
     """
     text = read_text(report)
     if text is None:
@@ -788,20 +763,9 @@ def check_diataxis_frontmatter(
                     )
                 )
 
-        # arc52 is only appropriate on architecture-shaped docs. Warn if not.
-        # Caller (scan_file) supplies the right value via is_architecture_shaped;
-        # this function does not derive it from the path because unit tests
-        # invoke it with synthetic paths that don't carry that signal.
-        if not is_architecture_shaped:
-            report.violations.append(
-                Violation(
-                    WARNING,
-                    "FRONTMATTER_ARC52_OUT_OF_PLACE",
-                    "Line 1: `arc52:` is declared but the file does not "
-                    "live under an `architecture/` subfolder. arc52 is "
-                    "reserved for architecture-shaped docs.",
-                )
-            )
+        # FRONTMATTER_ARC52_OUT_OF_PLACE used to live here: `arc52:` on a
+        # non-architecture doc was warned. Removed because the architecture
+        # doc moved to `explanation/architecture.md` (flat, no subfolder).
 
 
 def count_procedural_markers(body: str) -> int:
@@ -913,11 +877,7 @@ def scan_file(
     check_standard_plan_links(report, docs_root)
     check_standard_body_references(report, docs_root)
 
-    rel_to_docs = relative_to(path, docs_root)
-    is_arch = (
-        is_architecture_shaped(rel_to_docs) if rel_to_docs is not None else False
-    )
-    check_diataxis_frontmatter(report, is_architecture_shaped=is_arch)
+    check_diataxis_frontmatter(report)
     text = read_text(report)
     if text is not None:
         fm = parse_frontmatter(text)

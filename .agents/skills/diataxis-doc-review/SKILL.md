@@ -1,3 +1,9 @@
+---
+name: diataxis-doc-review
+description: Reviews the diataxis-doc-review
+disable-model-invocation: true
+---
+
 Read `chronicler_engine/docs-diataxis/explanation/diataxis.md` to gain an understanding of the Diataxis framework. 
 
 When LLM writes documentation, it tend to write what it knows. Either from it's own knowledgebase or by reading the code. The problem is that this kind of documentation is useless, because it obvious stuff that it already knows and because reading code is a far better way to understand the code.
@@ -22,8 +28,10 @@ The `agent_system.md` and `narration_engine.md` docs are valuabl because they ro
 
 The `unit_test_standards.md` and `integration_test_standards.md` are valuable for coding standards. As it's really difficult to keep thousands of LLM-generated tests consistent and aligned.
 
+The `game_flow.md` and `action_pipeline.md` docs are valuable because they describe a step-by-step flow that is hard to understand without reading through the code end-to-end.
+
 # Explaination
 
 In some way, explaination docs are an 'overflow' for refrences. We need to write more detail on certain topics, but don't want to bloat the information docs. 
 
-What counts as a 'good' explaination docs and 'bad' is even more vague then reference docs. 
+What counts as a 'good' explaination docs and 'bad' is even more vague then reference docs. At very least they (a) shouldn't explain obvious things, (b) shouldn't explain code closely (which be even futher away from the code than reference documents), (c) shouldn't reiterate what the reference docs already say except to expand on them.

@@ -25,7 +25,7 @@ Every doc in this tree is in exactly one of four Diátaxis modes. The mode is de
 | **Tutorial** | Learn from zero | Learning-oriented (study) | None exist yet — see "Tutorials" below |
 | **How-to** | Achieve a goal | Goal-oriented (work) | `diagnostics/DEBUGGING.md`; none here yet |
 | **Reference** | Look up a fact | Information-oriented (work) | `reference/data_layer.md`, `reference/game_flow.md` |
-| **Explanation** | Understand why | Understanding-oriented (study) | `explanation/two-state-channels.md`, `explanation/architecture/overview.md` |
+| **Explanation** | Understand why | Understanding-oriented (study) | `explanation/two-state-channels.md`, `explanation/architecture.md` |
 
 **Compass test** (apply when classifying): "What problem does this solve for the reader?"
 
@@ -40,7 +40,7 @@ If the content doesn't solve a reader problem under any of these, drop it. If it
 
 ### arc52 — architecture doc sections
 
-The architecture overview is structured as a single document (`explanation/architecture/overview.md`) with arc52 sections as H2 headings. The full 12-section arc52 template is **not** used — only the selective subset §3, §5, §7, §10. Each section answers a different question:
+The architecture overview is structured as a single document (`explanation/architecture.md`) with arc52 sections as H2 headings. The full 12-section arc52 template is **not** used — only the selective subset §3, §5, §7, §10. Each section answers a different question:
 
 | Section | Question | C4 level |
 |---|---|---|
@@ -85,7 +85,7 @@ State the mode and the reader problem the doc solves. This is the seam that lets
 Diátaxis-shape at the top level:
 
 - `reference/` — Reference docs, flat (no subfolders unless a topic grows large).
-- `explanation/` — Explanation docs. The `architecture/` subfolder groups arc52-shaped docs, because architecture is a category (future "Why Hexagonal?" docs land alongside `overview.md`).
+- `explanation/` — Explanation docs. Flat — no subfolders; if a future cluster of docs earns one, create it then.
 - `tutorials/` and `how-to/` — **do not create these directories until content earns its place.** Empty quadrant dirs are noise; create `tutorials/` and `how-to/` only when a doc earns the mode.
 
 `adr/` and `plans/` live under `docs/`, not under `docs-diataxis/`.
@@ -141,7 +141,7 @@ Discursive, understanding-oriented. Answers "why?" — design rationale, tradeof
 
 Explanation carries **current understanding**. ADRs capture decisions as they were made (frozen at decision time, possibly Superseded, possibly deleted per the ADR README). The two overlap on tradeoffs but differ in frame: an Explanation doc can be revised as the system evolves; an ADR cannot. Cite ADRs in Document References as historical decision records; do not duplicate their Consequences prose verbatim — re-frame as current understanding.
 
-The architecture overview (`explanation/architecture/overview.md`) is Explanation mode — it answers "why is it structured this way" by showing the structure and the quality tradeoffs.
+The architecture overview (`explanation/architecture.md`) is Explanation mode — it answers "why is it structured this way" by showing the structure and the quality tradeoffs.
 
 #### Register
 

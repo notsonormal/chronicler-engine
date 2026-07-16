@@ -36,8 +36,6 @@ class _FakeReport:
 def _run_check(
     tmp_path: Path,
     text: str,
-    *,
-    is_architecture_shaped: bool = True,
 ) -> list[str]:
     """Parse + check synthetic body; return the rule names found."""
     path = tmp_path / "fixture.md"
@@ -45,7 +43,6 @@ def _run_check(
     report = _FakeReport(path)
     vd.check_diataxis_frontmatter(
         report,  # type: ignore[arg-type]
-        is_architecture_shaped=is_architecture_shaped,
     )
     fm = vd.parse_frontmatter(text)
     if fm.present and fm.parsed is not None:
@@ -125,15 +122,6 @@ class TestDiataxisValidator(unittest.TestCase):
             "---\ndiataxis: reference\ntitle: Foo\narc52: [§3, §6, §11]\n---\n# Body\n",
         )
         self.assertEqual(rules, ["FRONTMATTER_INVALID_ARC52"])
-
-    def test_arc52_out_of_place(self) -> None:
-        # Warning only; fires when arc52: appears on a non-architecture doc.
-        rules = _run_check(
-            self._make_tmp(),
-            "---\ndiataxis: reference\ntitle: Foo\narc52: [§3, §5]\n---\n# Body\n",
-            is_architecture_shaped=False,
-        )
-        self.assertEqual(rules, ["FRONTMATTER_ARC52_OUT_OF_PLACE"])
 
     def test_mode_content_mismatch_reference_with_procedural(self) -> None:
         # Reference doc containing reader-directing prose triggers the heuristic.
