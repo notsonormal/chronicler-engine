@@ -10,6 +10,7 @@ use chronicler_engine::test_support::TestDataBuilder;
 
 use crate::{pipeline_helpers::latest_state, sqlite_test_app_builder::SqliteTestAppBuilder};
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.1
 #[test]
 fn test_pipeline_executes_and_persists_narration() {
     let app = SqliteTestAppBuilder::default_test()
@@ -35,6 +36,7 @@ fn test_pipeline_executes_and_persists_narration() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.2
 #[test]
 fn test_pipeline_persists_input_before_narration() {
     let msg = Message::new(
@@ -68,6 +70,7 @@ fn test_pipeline_persists_input_before_narration() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.1
 #[test]
 fn test_pipeline_handles_room_not_found() {
     let data = TestDataBuilder::default_test().build();
@@ -88,6 +91,7 @@ fn test_pipeline_handles_room_not_found() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.2
 #[test]
 fn test_pipeline_handles_llm_failure() {
     let app = SqliteTestAppBuilder::default_test()
@@ -109,6 +113,7 @@ fn test_pipeline_handles_llm_failure() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.1
 #[test]
 fn test_pipeline_clears_last_trigger() {
     let app = SqliteTestAppBuilder::default_test()
@@ -135,6 +140,7 @@ fn test_pipeline_clears_last_trigger() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.4
 #[test]
 fn test_pipeline_phase_transitions() {
     let app = SqliteTestAppBuilder::default_test()
@@ -153,6 +159,7 @@ fn test_pipeline_phase_transitions() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.4
 #[test]
 fn test_pipeline_phase_stays_narrating_on_error() {
     let app = SqliteTestAppBuilder::default_test()
@@ -171,6 +178,7 @@ fn test_pipeline_phase_stays_narrating_on_error() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.5
 #[test]
 fn test_pipeline_empty_input() {
     let app = SqliteTestAppBuilder::default_test()

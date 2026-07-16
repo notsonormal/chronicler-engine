@@ -27,7 +27,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-15 11:59 UTC*
+*Index last generated: 2026-07-16 23:31 UTC*
 
 ### `docs/adr/`
 
@@ -84,6 +84,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [P4-Concurrent Cleanup — Fix TOCTOU + Simplify heal](./plans/p4-concurrent-cleanup-fix-toctou-simplify-heal.md)
+- [Pilot: Feature Spec for `process_action`](./plans/pilot-feature-spec-for-process-action.md)
 - [Plan: Eliminate Free-Function Smells (Final)](./plans/plan-eliminate-free-function-smells-final.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [Remove Dev Container Infrastructure](./plans/remove-dev-container-infrastructure.md)
@@ -111,6 +112,10 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [Reference: System Prompt](./reference/system_prompt.md)
 - [Test Support Reference](./reference/test_support.md)
 - [Testing Policy](./reference/testing.md)
+
+### `docs/specs/`
+
+- [Component Spec: Action Pipeline](./specs/action_pipeline.md)
 
 ### `docs/system/`
 

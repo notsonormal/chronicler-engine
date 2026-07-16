@@ -32,6 +32,7 @@ fn trigger_data() -> TestData {
     }
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.3
 #[test]
 fn test_delayed_llm_completes_without_deadlock() {
     let app = SqliteTestAppBuilder::default_test()
@@ -62,6 +63,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.3
 #[test]
 fn test_quantifier_detects_movement() {
     let quantifier_recorder: Arc<
@@ -96,6 +98,7 @@ fn test_quantifier_detects_movement() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.4
 #[test]
 fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     let data = trigger_data();
@@ -149,6 +152,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.3
 #[test]
 fn test_empty_llm_response_handled_gracefully() {
     let app = SqliteTestAppBuilder::default_test()
@@ -188,6 +192,7 @@ fn test_empty_llm_response_handled_gracefully() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.4
 #[test]
 fn test_failing_trigger_narration_does_not_crash() {
     let data = trigger_data();
@@ -244,6 +249,7 @@ fn test_failing_trigger_narration_does_not_crash() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.1
 #[test]
 fn test_pipeline_cancels_when_token_cancelled() {
     let app = SqliteTestAppBuilder::default_test()
@@ -262,6 +268,7 @@ fn test_pipeline_cancels_when_token_cancelled() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.1
 #[tokio::test]
 async fn test_cancellation_resets_state_to_idle() {
     let app = SqliteTestAppBuilder::default_test()
@@ -289,6 +296,7 @@ async fn test_cancellation_resets_state_to_idle() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.2
 #[tokio::test]
 async fn test_pipeline_cancels_after_main_narration() {
     let mock_narrator_backend = Arc::new(MockBackend::default().with_delay(50));
@@ -337,6 +345,7 @@ async fn test_pipeline_cancels_after_main_narration() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.3
 #[tokio::test]
 async fn test_pipeline_cancels_during_trigger_continuation() {
     let data = trigger_data();
@@ -402,6 +411,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     assert!(has_narration, "Main narration should be preserved");
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 5.1
 #[test]
 fn test_pre_main_snapshot_saved_before_narration() {
     let app = SqliteTestAppBuilder::default_test()
@@ -419,6 +429,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 5.2
 #[test]
 fn test_pre_event_snapshot_saved_before_continuation() {
     let data = trigger_data();
@@ -457,6 +468,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.1
 #[test]
 fn test_pipeline_with_quantifier() {
     let app = SqliteTestAppBuilder::default_test()
@@ -480,6 +492,7 @@ fn test_pipeline_with_quantifier() {
     assert!(has_narration, "Should produce narration with quantifier");
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.2
 #[test]
 fn test_streaming_narration_saved_before_quantifier_complete() {
     use std::thread;
@@ -548,6 +561,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.2
 #[test]
 fn test_narration_no_duplicate_with_real_quantifier_flow() {
     let app = SqliteTestAppBuilder::default_test()
@@ -583,6 +597,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
     );
 }
 
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.1
 #[test]
 fn test_pipeline_continues_when_quantifier_save_warns() {
     let app = SqliteTestAppBuilder::default_test()
