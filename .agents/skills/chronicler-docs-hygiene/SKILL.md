@@ -1,82 +1,121 @@
 ---
 name: chronicler-docs-hygiene
-description: "Use when auditing chronicler_engine docs for stale cross-references, ghost schemas, code-indexer drift (mechanic listings without a data-flow claim), tone rot, behavior mismatch vs source, or cross-doc drift on shared concepts. Read-only; reports findings, never edits."
+description: "Use when auditing chronicler_engine/docs-diataxis/ docs against AGENTS.md and src/ for what validate_docs_diataxis.py can't catch: rule violations, mode drift, stale-source drift. Read-only; reports findings, never edits."
 ---
 
 # Documentation Hygiene
 
 **This skill is read-only on docs. Do NOT edit, delete, or rewrite files. Report findings only.**
 
-For the per-edit gate that prevents sediment during writing, see `chronicler_engine/docs/AGENTS.md` §"The Per-Edit Gate". This skill audits accumulated violations.
+For the writing-convention layer that prevents sediment during writing, see `chronicler_engine/docs-diataxis/AGENTS.md`. This skill audits accumulated violations.
 
 ## Philosophy
 
-Docs in this repo are a **Specification**, not a conversation. Predictable: a future reader who never saw the diff must reconstruct intent from the page alone. Sediment is the enemy; reasoning density is the goal.
+Docs are a **Specification**, not a conversation. Sediment is the enemy; reasoning density is the goal. A code reference in prose is justified only if removing it loses contract info; if prose can state the contract without the reference, the reference is sediment — the code is the verification, the doc verifies the contract, not the implementation.
 
-A code reference (type, function, file, module, line) in prose is justified only if removing it loses contract info. If prose can state the contract without the reference, the reference is sediment — the code is the verification, the doc verifies the contract, not the implementation. Bulk listings of functions/types/fields without a Data-Flow Claim are sediment by definition.
-
-## Leading Words
-
-Operational definitions. The audit phases below operationalize these.
-
-- **Specification** — declarative present-tense contract. The form `docs/system/*.md` should take.
 - **Sediment** — conversational clutter: PR metrics, timeline logs, "removed on YYYY-MM-DD", forum links, "what used to exist", implementation summaries, bulk symbol/field listings.
-- **Duplication** — the same meaning given more than one single source of truth. Multiple docs stating the same layer count, multiple sections restating the same contract, multiple cross-references for the same fact.
-- **Time Capsule** — Plan files (`docs/plans/*.md`). The only place narrative context, debugging paths, and model quirks belong. Out of scope here.
-- **Invariant** — RESERVED. Means `docs/architecture/invariants.md` machine-checked `INV-NNN` entries with contract tests. Do **not** use "invariant" for prose laws; that clashes with the registry term. Use "Specification" or name the law directly.
-- **Data-Flow Claim** — sentence naming what flows through what (input → module → output). The sole justification for keeping a mechanic reference in prose. Bulk function/type lists without one = Sediment.
-- **Code-Indexer** — section that reproduces source-tree shape (function/module/file listings) without a Data-Flow Claim or contract claim. Drift signal: prose contract replaced by structural enumeration. Phase 4 detects it.
-- **Tone Rot** — voice drift toward conversational past/future tense, narrative walkthrough, or hedging. Phase 3 detects it.
-- **Anchor** — a function/symbol/module/file reference in prose or a table cell. Each carries doc-rot tax (rename = audit finding). Pass the non-removable test or remove.
+- **Ghost Features** — doc asserts a capability or schema the live `src/` doesn't carry, with no explicit `> **Status:** Planned / Stub / Proposed` marker. Subtype: **schema claims** (doc asserts a struct has named fields, a JSON example lists field names, a function signature is shown — verify each against the live `src/`).
+
+## Three-layer enforcement model
+
+| Layer | Where | What it checks |
+|---|---|---|
+| Machine | `chronicler_engine/scripts/validate_docs_diataxis.py` | Front-matter presence, required keys, mode vocabulary, `arc52:` validity, required H2 sections for `reference`, broken links, broken ADR refs, body-prose markdown-link rule, simple mode-content heuristic (warn-only) |
+| Convention | `chronicler_engine/docs-diataxis/AGENTS.md` | Writing rules (front-matter + mode-declaration blockquote, Diátaxis compass, Reference defers to source, No code-indexer docs, No negative explaining, Reference/Explanation register, `#### Explanation unfolds; it does not justify`) |
+| Semantic | **this skill** | What the machine layer can't catch — see Phases 1–7 below |
+
+Run the validator first (`python chronicler_engine/scripts/validate_docs_diataxis.py --strict`). Surface any overlap in `Findings` rather than re-litigating machine-layer warnings.
 
 ## Scope & Boundaries
 
-Canonical taxonomy: `validate_docs.py` STANDARD_DIR_NAMES. Hygiene audits what the script treats as STANDARD; the script owns mechanical checks (broken links, ADR-NNN resolution, plan-link leakage), this skill owns semantic checks (Sediment, mechanics leakage, Tone Rot, ghost features). Run the script first and surface any overlap in `Findings`.
+**In scope:** all of `chronicler_engine/docs-diataxis/` excluding the carve-outs below.
 
-**In scope (STANDARD docs):**
+**Out of scope (carve-outs):**
 
-- All of `chronicler_engine/docs/` excluding `plans/`, `adr/`, `architecture/invariants.md`, and the auto-generated index (`docs/AGENTS.md` AUTO-INDEX block).
-
-**Out of scope:**
-
-- `docs/plans/`, `old-docs/`, `CHANGELOG.md` — Time Capsule. Audit only cross-link leakage INTO STANDARD pages.
-- `docs/adr/*.md` (prose) — decision records; date stamps, status changes, PR context are appropriate there. AUDIT only ADR cross-references that point INTO STANDARD pages.
-- `docs/adr/README.md`, `docs/adr/adr-000-template.md` — ADR standards meta + placeholder. Skip.
-- `docs/AGENTS.md` prose preamble — owned by `chronicler_engine/AGENTS.md` per-edit gate. Skip the AUTO-INDEX block too.
-- `docs/architecture/invariants.md` — machine-checked `INV-NNN` registry. Owned by `validate_docs.py`.
+- `chronicler_engine/docs-diataxis/_PILOT_NOTES.md` — pilot retrofit log; self-declared temporary, out of scope.
+- `chronicler_engine/docs-diataxis/explanation/diataxis.md` — Diátaxis framework primer; the always-loaded `docs-diataxis/AGENTS.md` is its conventions source, not this skill. Skip auditing framework-level exposition against engine conventions.
+- `chronicler_engine/docs/` (legacy tree) — out of scope pre-cutover; `validate_docs.py` remains the legacy-tree machine layer. After cutover this carve-out closes by removal.
 - Rust `//!` / `///` and Python `#` comments — owned by `chronicler-comment-fixer`.
 - `CONTEXT.md` glossary terms — owned by `domain-modeling`; do not redefine.
 - Auto-creating ADRs from extracted sediment — flag candidate only; user or `documentation-and-adrs` skill decides.
 
-## Execution Steps
+## Execution
 
-Run all phases. **Zero findings in a phase = phase complete. Do not skip remaining phases because an earlier phase was clean.**
+Run all phases regardless of earlier outcomes. A clean phase does not end the audit; the audit ends when every phase's completion criterion is met across every in-scope file.
 
-1. **Sediment audit.** Flag: rubric tests (mentioned with no assertion); past-tense deletion history ("was removed on DATE", "deleted in Phase X", "never wired"); external forum links (Reddit/StackOverflow/HN); PR-style validation metrics ("Reduced tokens from N to ~M"); implementation summaries (sections that could be deleted without losing contract info); bulk field/symbol bullets (`**foo**: desc. **bar**: desc. **baz**: desc. ...`).
-   Cross-ref: past-tense deletion history also surfaces in Phase 3 (Tone Rot) — cite both phases in findings.
-   Completion: every prose line in every in-scope file covered; each finding cites FILE:LINE and Sediment subtype.
+## Phase 1 — Conventions compliance
 
-2. **Mechanics eviction.** Flag private function names, type names, and module references embedded in body prose not justified by a Data-Flow Claim or contract claim. Apply the non-removable test (see Philosophy): if prose can state the contract without the reference, the reference is sediment.
-   Carve-out: fenced code blocks (`` ```rust ``, `` ``` ``, `` ```mermaid ``) are NOT prose. Their presence alone is not a finding; flag only when fenced code contradicts or duplicates prose claims.
-   Completion: every prose mechanic reference flagged unless it passes the non-removable test; citation FILE:LINE.
+Per-doc check against `docs-diataxis/AGENTS.md` rules the validator can't enforce. **The phase points at AGENTS.md anchors; it never restates the rule content.**
 
-3. **Tone correction.** Declarative present tense. Flag future tense ("will"), past tense describing current behavior ("used to", "previously"), narrative walkthroughs ("First we do X, then we do Y"), hedged claims ("probably", "should", "may"). Flag past-tense deletion-history walkthroughs (e.g. "Older revisions of this document called this X. That framing was inaccurate:" — the past-tense framing itself is Sediment, even when explaining a fix).
-   Completion: every tense/voice violation flagged with FILE:LINE; pass the Specification test (see Philosophy).
+Rules (check body prose against each anchor in `chronicler_engine/docs-diataxis/AGENTS.md`):
 
-4. **Code-indexer pattern detection.** Flag sections whose purpose is enumerating functions/files/modules/fields without a data-flow or contract claim. Whole-file registries of functions are sediment. A "Components" table is implementation summary unless each row states a contract.
-   Completion: every section listing 3+ functions/files OR any field-bullet enumeration OR any 16+ row symbol table flagged; citation FILE:LINE.
+- **`## No negative explaining`** — flag body-prose negation, tautological negative definitions, defensive scope disclaiming. Out-of-scope lists and Diagrams are the canonical home for scope statements (not findings); see the rule's carve-out.
+- **`#### Explanation unfolds; it does not justify`** — flag section titles phrased as `Why X?` or `Why X instead of Y?`; flag justification-tail framing in body prose (`the design pays that cost in exchange for X`, `the design holds this cost for Y`).
+- **`## No code-indexer docs`** — mechanics leaks in body prose: bare impl-detail function names, `Type::method()` form when instance form names it, variant payload syntax, struct field dumps, Rust-type leaks, code syntax. Apply the seam-identifier grep test (e.g. `assembler.assemble()` ✓, `run_migrations` ✗) — full Keep/Drop list at this anchor in AGENTS.md.
+- **`## Reference defers to source`** — flag column-level DDL, struct field lists, function signatures, migration version numbers, constants, caps restated in `reference/` prose when those are the authoritative source in code.
+- **`### Explanation #### Register`** — flag narrated reader experience, dramatic contrast framing, editorializing perspective, speculative color in `explanation/` prose.
 
-5. **Ghost Features.** A **capability claim** is an imperative or descriptive statement asserting the system supports / detects / enables / handles a named behaviour (e.g. "the engine detects double-submit and rejects", "triggers fire on every state transition"). Doc asserts capability; `src/` lacks it; no explicit `> **Status:** Planned / Stub / Proposed` marker. Treat unmarked claims as ghosts.
-   **Schema claims** (subtype): doc asserts a struct has named fields, a JSON example lists field names, or a function signature is shown. Verify each named field / signature exists in the live `src/` struct definition. JSON examples listing fields NOT on the struct are ghost-schema claims. Field bullets (`Message { text, location_header, ... }`) where any field is not a direct field of the named struct = ghost-schema claim.
-   Verification: search `src/` for the named behaviour — entry points, traits, dispatch tables, tests. Partial implementation counts as Ghost unless the doc downgrades the claim to "stub" / "planned" / "in progress".
-   Completion: every capability claim AND every schema claim verified against `src/`; unmarked ghosts reported with FILE:LINE and missing evidence.
+Each finding cites `FILE:LINE — AGENTS.md §<anchor> — Phase 1`.
 
-6. **Behavior Mismatch.** Doc claims behavior X; code does Y. Extract behavioral claims, verify against `src/`, report contradictions with file:line. This phase is semantic verification of behavioral claims (mechanical link / ADR / plan-link checks owned by `validate_docs.py` — see Scope).
+Completion: every in-scope file audited against each anchor; each finding carries the AGENTS.md §anchor.
 
-7. **Cross-Doc Drift.** Conditional phase: when ≥2 STANDARD docs reference the same concept (layer count, enum name, struct field, phase number, status enum variant), verify all references agree. Common drift: layer counts (8 vs 7), enum variants, struct field names (direct vs accessor). Report drift with both file refs. Skip if no concept is referenced by ≥2 docs.
+## Phase 2 — Mode consistency
 
-8. **Enum variant paraphrase.** Enum variant semantics live on the variant in `src/` as `///` rustdoc (or are self-documenting via `/// [TRIVIAL_ENUM]`). Flag any `docs/system/*.md` or `docs/reference/*.md` section that re-paraphrases variant semantics already stated on the enum, unless the doc adds a Data-Flow Claim or behavior-specific contract (e.g. "PhaseError::Cancelled is surfaced to the client as HTTP 499, with state rolled back" — the HTTP rollback is the contract, the variant definition is not). Variant listings in docs must be a pointer to source ("see `PhaseError` in `src/application/action_pipeline/phase_error.rs`") or omitted. Affected files: any STANDARD doc listing enum variants by name with per-variant descriptions duplicating the variant `///`.
-   Completion: every enum variant re-paraphrase flagged with FILE:LINE; cite the source enum path.
+Declared Diátaxis mode (from front-matter) vs. actual content. This phase is the **delta** over the validator — it does what `validate_docs_diataxis.py:818 check_mode_content_heuristic` can't. The validator covers the procedural-marker signal for reference/tutorial/how-to (warn-only); the skill covers the semantic drift the regex misses.
+
+For each `MODE_CONTENT_MISMATCH` warning the validator emits, cite it by pointer rather than reanalysing the same signal.
+
+Checks (the delta):
+
+- **Declared `explanation`** (validator intentionally skips — script docstring line 813: *"`explanation` is intentionally not checked by this heuristic: the inverse signal ('why' language) is too noisy to detect mechanically"*). Phase 1 already catches justification titles and tails; this phase catches the remaining mismatch: content is purely factual with no unfolding, or content reads as a Reference catalog (austere, neutral, no design rationale) rather than as discursive unfolding. Cite `docs-diataxis/AGENTS.md` `### Explanation` as the convention source.
+- **Subtle drift the regex misses:**
+  - Declared `reference` but content is discursive / opinionated / answers "why" (violates `AGENTS.md` `### Reference` "austere, neutral, authoritative — like a map") even without tripping the procedural-marker regex.
+  - Declared `tutorial` but content is goal-oriented (how-to shape) rather than learning-by-doing; or content is purely factual.
+  - Declared `how-to` but content is reference-shaped (factual catalog with no steps for the reader to follow).
+
+Each finding cites `FILE:LINE — Phase 2 — Delta over validate_docs_diataxis.py:818`.
+
+Completion: every in-scope file's declared mode checked against subtle content signals not caught by the validator.
+
+## Phase 3 — Sediment
+
+Flag: rubric tests (mentioned with no assertion); past-tense deletion history ("was removed on DATE", "deleted in Phase X", "never wired"); external forum links (Reddit / StackOverflow / HN); PR-style validation metrics ("Reduced tokens from N to ~M"); implementation summaries (sections that could be deleted without losing contract info); bulk field/symbol bullets (`**foo**: desc. **bar**: desc. **baz**: desc. ...`).
+
+Past-tense deletion history often co-occurs with Phase 1's no-negative-explaining or justification-tail findings — flag the prose once, citing both phases.
+
+Completion: every prose line in every in-scope file covered; each finding cites `FILE:LINE` and Sediment subtype.
+
+## Phase 4 — Ghost Features
+
+Doc asserts a capability or schema the live `src/` doesn't carry, with no explicit `> **Status:** Planned / Stub / Proposed` marker. Treat unmarked claims as ghosts.
+
+**Capability claims** — imperative or descriptive statements asserting the system supports / detects / enables / handles a named behaviour (e.g. "the engine detects double-submit and rejects", "triggers fire on every state transition"). Verify against `src/`: entry points, traits, dispatch tables, tests. Partial implementation counts as Ghost unless the doc downgrades the claim to "stub" / "planned" / "in progress".
+
+**Schema claims** (subtype) — doc asserts a struct has named fields, a JSON example lists field names, a function signature is shown. Verify each named field / signature exists in the live `src/` struct definition. JSON examples listing fields NOT on the struct are ghost-schema claims. Field bullets (`Message { text, location_header, ... }`) where any field is not a direct field of the named struct = ghost-schema claim.
+
+Completion: every capability claim AND every schema claim verified against `src/`; unmarked ghosts reported with `FILE:LINE` and missing evidence.
+
+## Phase 5 — Behavior Mismatch
+
+Doc claims behavior X; code does Y. Extract behavioral claims, verify against `src/`, report contradictions with `file:line`. This phase is semantic verification of behavioral claims (mechanical link / ADR / plan-link checks owned by `validate_docs_diataxis.py`).
+
+Completion: every behavioral claim verified against `src/`; contradictions reported with `FILE:LINE` (doc) and `src/file:line` (code).
+
+## Phase 6 — Cross-Doc Drift
+
+Conditional phase: when ≥2 in-scope docs reference the same concept (layer count, enum name, struct field, phase number, status enum variant, INV-NNN identifier), verify all references agree. Common drift: layer counts (8 vs 7), enum variants, struct field names (direct vs accessor), INV-NNN guarantees. Report drift with both file refs.
+
+**Cross-tree drift (subtype):** a `docs-diataxis/` doc citing a `docs/` path (or vice versa) is a finding with a pointer to the map's Cutover plan — the two trees coexist by design pre-cutover and must not mix.
+
+Skip if no concept is referenced by ≥2 docs AND no cross-tree citations exist.
+
+Completion: every concept referenced by ≥2 in-scope docs verified to agree across all references; cross-tree citations flagged.
+
+## Phase 7 — Enum variant paraphrase
+
+Enum variant semantics live on the variant in `src/` as `///` rustdoc (or are self-documenting via `/// [TRIVIAL_ENUM]`). Flag any in-scope doc section that re-paraphrases variant semantics already stated on the enum, unless the doc adds a Data-Flow Claim or behavior-specific contract (e.g. "`PhaseError::Cancelled` is surfaced to the client as HTTP 499, with state rolled back" — the HTTP rollback is the contract, the variant definition is not). Variant listings in docs must be a pointer to source ("see `PhaseError` in `src/application/action_pipeline/phase_error.rs`") or omitted.
+
+Completion: every enum variant re-paraphrase flagged with `FILE:LINE`; cite the source enum path.
 
 ## Output Format
 
@@ -86,7 +125,7 @@ Status: [PASS] or [FAIL]
 # Findings:
 - FILE:LINES — Severity — Phase
   Current: (snippet)
-  Expected: (spec-shaped rewrite | "remove" | "add evidence" | "downgrade to Stub/Planned")
+  Expected: (spec-shaped rewrite | "remove" | "add evidence" | "downgrade to Stub/Planned" | "see AGENTS.md §<anchor>")
 
 # Recommendations:
   FILE:LINES — Phase — one-line fix
@@ -94,11 +133,13 @@ Status: [PASS] or [FAIL]
 ```
 
 Severity decision rule:
+
 - `Error` — false claim or unmarked Ghost (reader-trust violation). Must fix before merge.
-- `Warning` — contract-weakening or reader-blocking Sediment / mechanics leak / Tone Rot that hides current state. Should fix.
+- `Warning` — contract-weakening or reader-blocking Sediment / mechanics leak / mode drift / AGENTS.md rule violation that hides current state. Should fix.
 - `Info` — cosmetic / minor (lone outdated date, single PR metric in otherwise-clean doc, illustrative path drift). Consider when nearby.
 
 ## Related Skills
 
-- **chronicler-comment-fixer** — detects AI slop in Rust `//!`/`///` and Python `#` comments. Sibling; 
+- **chronicler-comment-fixer** — detects AI slop in Rust `//!` / `///` and Python `#` comments. Sibling; audits code comments, this skill audits docs.
 - **domain-modeling** — owns `CONTEXT.md` glossary and ADR authoring triggers. Cross-reference terms; do not redefine.
+- **documentation-and-adrs** — owns ADR authoring and arc52 architecture-doc structure. This skill audits; it does not author.

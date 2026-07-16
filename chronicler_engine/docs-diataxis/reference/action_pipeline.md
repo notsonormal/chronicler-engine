@@ -38,6 +38,7 @@ Only `PhaseError::Cancelled` propagates out of the orchestrator. Every other var
 | `PersistFailed` | A snapshot persist failed at one of four checkpoints (pre-main, pre-event, post-trigger, post-engine); the variant carries a label naming the site and the underlying source error. | Same as `NarratorFailed`. |
 | `FetchFailed` | Event-retry precondition: world-bundle load (game, world, persona lookup) failed. Precedes the LLM call. | Same as `NarratorFailed`. |
 | `TriggerMissing` | Event-retry precondition: `state.narrative.last_trigger` is absent. | Same as `NarratorFailed`. |
+| `SnapshotMissing` | A snapshot expected at this phase was absent from storage. | Same as `NarratorFailed`. |
 
 **Error persistence across finalize.** The finalize phase resets status to `Idle` unless the status is already `Error`. Because every recovery path sets `Error` before calling finalize, the error persists. The UI never observes a stuck `Generating` after the pipeline returns.
 
