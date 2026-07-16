@@ -9,38 +9,6 @@ title: Worlds
 
 A world is the persistent definition of a setting plus the map structure that games run on. Multiple games can reference one world. The worlds management system is the dashboard UI plus CRUD route handlers that read/write worlds through the application service to storage.
 
-## CRUD flow
-
-```mermaid
-flowchart LR
-    Browser(["Dashboard Worlds tab"]) -->|htmx GET /fragment/worlds| LH["list_worlds_fragment"]
-    Browser -->|GET /fragment/worlds/new| NF["new_world_form_handler"]
-    Browser -->|GET /worlds/:key/edit| EF["edit_world_form_handler"]
-    Browser -->|POST /worlds| CH["create_world_handler"]
-    Browser -->|POST /worlds/:key| UH["update_world_handler"]
-    Browser -->|POST /worlds/:key/delete| DH["delete_world_handler"]
-    LH --> SVC["ApplicationService"]
-    NF --> SVC
-    EF --> SVC
-    CH --> SVC
-    UH --> SVC
-    DH --> SVC
-    SVC --> STG["Storage"]
-    CH -.->|"JSON parse + validate"| VF["Form layer"]
-    UH -.->|"JSON parse + validate"| VF
-```
-
-## Routes
-
-| Method | Path | Purpose |
-|:-------|:-----|:--------|
-| GET  | `/fragment/worlds`             | Render the worlds list panel |
-| GET  | `/fragment/worlds/new`         | Render the new-world inline form |
-| POST | `/worlds`                       | Create a new world |
-| GET  | `/worlds/:key/edit`             | Render the edit-world inline form |
-| POST | `/worlds/:key`                  | Update an existing world |
-| POST | `/worlds/:key/delete`           | Delete a world; refused if games reference it |
-
 ## World model & relationship
 
 A world is a runtime setting definition. JSON shapes (`WorldManifest`, `WorldCard`, `MapDef`, `Scenario`) live at `./data_schemas.md`. **Delete constraint:** a world can be deleted only when no game references it; both the handler and storage enforce this, user-displayable failures surface inline, others return HTTP status. When a world is removed, the map belonging to it is removed alongside.

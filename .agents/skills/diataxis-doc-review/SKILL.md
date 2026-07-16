@@ -10,7 +10,9 @@ When LLM writes documentation, it tend to write what it knows. Either from it's 
 
 Getting an LLM to write good documentation is a struggle against the initial instincts of every LLM.
 
-One of the purpose of the Diataxis framework more clearly organise the split between "understanding" (explaintion docs) and "information" (reference). However, start is just the standing point.
+
+
+One of the purpose of the Diataxis framework more clearly organise the split between "understanding" (explaintion docs) and "information" (reference). However, that is just the starting point.
 
 There are no use cases for tutorial and how-to documentation.
 
