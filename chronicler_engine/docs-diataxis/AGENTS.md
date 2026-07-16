@@ -207,3 +207,6 @@ Two forms, both banned:
 
 If the negative is genuinely load-bearing — a constraint the reader must know — state it as a **positive constraint**, not a disclaimer. "The LLM cannot call back into the engine" becomes "state mutation is the engine's job, run through the action pipeline after the LLM has spoken." The reader gets the same fact as an assertion about how the system behaves, not as an apology about what it doesn't do.
 
+# What are ADRs for
+
+Up until now we've been using ADRs as a mixture of high level design, explanation and reference documention. This type of multi-purpose doc does not fit in the diataxis framework. The plan is the migrate much of the ADRs into diataxis explaination/reference docs. Until this happens the new diataxis/reference docs will have overlapping information with the ADRs.
