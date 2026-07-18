@@ -12,21 +12,17 @@ pub async fn bind_with_retry(
 ) -> std::io::Result<TcpListener> {
     let mut attempts: u32 = 0;
     loop {
+        attempts += 1;
         match TcpListener::bind(addr).await {
             Ok(listener) => return Ok(listener),
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-                attempts += 1;
-                if let Some(limit) = max_attempts {
-                    if attempts >= limit {
-                        return Err(e);
-                    }
+                if max_attempts.is_some_and(|limit| attempts >= limit) {
+                    return Err(e);
                 }
                 tracing::error!("Port in use, attempting to free it...");
                 if let Some(pid) = find_process_on_port(addr) {
                     tracing::error!("Found process on port, attempting to kill PID {pid}...");
                     let _ = kill_process(pid);
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    continue;
                 }
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             }

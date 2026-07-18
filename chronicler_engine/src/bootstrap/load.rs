@@ -50,65 +50,75 @@ fn seed_worlds(
         if !world_dir.is_dir() {
             continue;
         }
-        let world_json = world_dir.join("world.json");
-        if !world_json.exists() {
+        process_world_dir(storage, &world_dir, data_dir)?;
+    }
+    Ok(())
+}
+
+fn process_world_dir(
+    storage: &Storage,
+    world_dir: &Path,
+    data_dir: &Path,
+) -> crate::error::Result<()> {
+    let world_json = world_dir.join("world.json");
+    if !world_json.exists() {
+        return Ok(());
+    }
+
+    let manifest: WorldManifest = match read_json_file(&world_json) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to parse world manifest {}: {e}",
+                world_json.display()
+            );
+            return Ok(());
+        }
+    };
+    let world_key = manifest.id.clone();
+    let characters_dir = manifest.characters_dir.clone();
+
+    let world_with_map = storage.get_world(&world_key)?;
+    let world_id = match world_with_map {
+        Some(existing) => existing.world_id,
+        None => {
+            let map_file = manifest.map_file.clone();
+            let world_card: WorldCard = manifest.into();
+            let map_path = world_dir.join(&map_file);
+            let map: MapDef = read_json_file(&map_path)?;
+            storage.seed_world(&world_card, &map)?
+        }
+    };
+
+    let chars_group = if characters_dir.is_empty() {
+        world_key.as_str()
+    } else {
+        characters_dir.as_str()
+    };
+    let chars_dir = data_dir.join("characters").join(chars_group);
+    if !chars_dir.is_dir() {
+        return Ok(());
+    }
+    let existing_chars: std::collections::HashSet<String> = storage
+        .list_characters(world_id)?
+        .into_iter()
+        .map(|c| c.id)
+        .collect();
+    for char_entry in std::fs::read_dir(&chars_dir)? {
+        let char_entry = char_entry?;
+        let path = char_entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
             continue;
         }
-
-        let manifest: WorldManifest = match read_json_file(&world_json) {
-            Ok(m) => m,
+        match read_json_file::<NpcCard>(&path) {
+            Ok(npc) => {
+                if !existing_chars.contains(&npc.id) {
+                    storage.seed_character(world_id, &npc)?;
+                    tracing::info!("Seeded character: {}", npc.id);
+                }
+            }
             Err(e) => {
-                tracing::warn!(
-                    "Failed to parse world manifest {}: {e}",
-                    world_json.display()
-                );
-                continue;
-            }
-        };
-        let world_key = manifest.id.clone();
-        let characters_dir = manifest.characters_dir.clone();
-
-        let world_with_map = storage.get_world(&world_key)?;
-        let world_id = match world_with_map {
-            Some(existing) => existing.world_id,
-            None => {
-                let map_file = manifest.map_file.clone();
-                let world_card: WorldCard = manifest.into();
-                let map_path = world_dir.join(&map_file);
-                let map: MapDef = read_json_file(&map_path)?;
-                storage.seed_world(&world_card, &map)?
-            }
-        };
-
-        let chars_group = if characters_dir.is_empty() {
-            world_key.as_str()
-        } else {
-            characters_dir.as_str()
-        };
-        let chars_dir = data_dir.join("characters").join(chars_group);
-        if chars_dir.is_dir() {
-            let existing_chars: std::collections::HashSet<String> = storage
-                .list_characters(world_id)?
-                .into_iter()
-                .map(|c| c.id)
-                .collect();
-            for char_entry in std::fs::read_dir(&chars_dir)? {
-                let char_entry = char_entry?;
-                let path = char_entry.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("json") {
-                    continue;
-                }
-                match read_json_file::<NpcCard>(&path) {
-                    Ok(npc) => {
-                        if !existing_chars.contains(&npc.id) {
-                            storage.seed_character(world_id, &npc)?;
-                            tracing::info!("Seeded character: {}", npc.id);
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to parse NPC {}: {e}", path.display())
-                    }
-                }
+                tracing::warn!("Failed to parse NPC {}: {e}", path.display())
             }
         }
     }

@@ -4,14 +4,17 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use crate::adapters::driven::storage::Storage;
 use crate::application::application_service::load_messages_with_swipes;
 use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
+use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
+use crate::error::EngineError;
 
 use super::run::{PRESET_STORAGE_GAME_ID, find_latest_game_for_world, list_game_names_for_world};
 
@@ -68,21 +71,31 @@ pub(crate) fn load_game_state(
             let snapshot_id = storage.save_snapshot(&initial_snapshot)?;
             // Snapshot is debug/audit only; `messages` table is source of truth on load (ADR-023).
             if let Some(msg) = new_state.narrative.history.last_mut() {
-                if msg.is_unpersisted() {
-                    msg.set_snapshot_id(Some(snapshot_id));
-                    if let Some(swipe) = msg.swipes.first_mut() {
-                        swipe.snapshot_id = Some(snapshot_id);
-                    }
-                    let id = storage.insert_message(&*msg)?;
-                    if let Some(swipe) = msg.swipes.first() {
-                        storage.insert_swipe(id, swipe, 0)?;
-                    }
-                    msg.id = id;
-                }
+                try_persist_initial_message(msg, storage, snapshot_id)?;
             }
             Ok(new_state)
         }
     }
+}
+
+fn try_persist_initial_message(
+    msg: &mut Message,
+    storage: &Storage,
+    snapshot_id: u64,
+) -> Result<(), EngineError> {
+    if !msg.is_unpersisted() {
+        return Ok(());
+    }
+    msg.set_snapshot_id(Some(snapshot_id));
+    if let Some(swipe) = msg.swipes.first_mut() {
+        swipe.snapshot_id = Some(snapshot_id);
+    }
+    let id = storage.insert_message(&*msg)?;
+    if let Some(swipe) = msg.swipes.first() {
+        storage.insert_swipe(id, swipe, 0)?;
+    }
+    msg.id = id;
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

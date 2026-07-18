@@ -61,11 +61,7 @@ impl Storage {
                 Ok(())
             }
             Backend::InMemory(data) => {
-                if let Some(swipes) = data.swipes.get_mut(&message_id) {
-                    if let Some(swipe) = swipes.get_mut(swipe_index) {
-                        swipe.text = text.to_string();
-                    }
-                }
+                update_swipe_text_inmemory(&mut data.swipes, message_id, swipe_index, text);
                 Ok(())
             }
         })
@@ -140,13 +136,10 @@ impl Storage {
                 Ok(result)
             }
             Backend::InMemory(data) => {
-                let mut result = HashMap::new();
-                for &id in message_ids {
-                    if let Some(s) = data.swipes.get(&id) {
-                        result.insert(id, s.clone());
-                    }
-                }
-                Ok(result)
+                Ok(load_swipes_for_messages_inmemory(
+                    &data.swipes,
+                    message_ids,
+                ))
             }
         })
     }
@@ -174,4 +167,28 @@ impl Storage {
             }
         })
     }
+}
+
+fn update_swipe_text_inmemory(
+    swipes: &mut HashMap<u64, Vec<Swipe>>,
+    message_id: u64,
+    swipe_index: usize,
+    text: &str,
+) {
+    if let Some(swipe) = swipes
+        .get_mut(&message_id)
+        .and_then(|vec| vec.get_mut(swipe_index))
+    {
+        swipe.text = text.to_string();
+    }
+}
+
+fn load_swipes_for_messages_inmemory(
+    swipes: &HashMap<u64, Vec<Swipe>>,
+    message_ids: &[u64],
+) -> HashMap<u64, Vec<Swipe>> {
+    message_ids
+        .iter()
+        .filter_map(|&msg_id| swipes.get(&msg_id).map(|v| (msg_id, v.clone())))
+        .collect()
 }

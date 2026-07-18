@@ -56,28 +56,33 @@ pub fn scan_worlds(data_dir: &Path) -> crate::error::Result<Vec<(String, String)
     if !worlds_dir.exists() {
         return Ok(vec![]);
     }
+    discover_worlds_in_dir(&worlds_dir)
+}
 
-    let mut worlds = Vec::new();
-    for entry in fs::read_dir(&worlds_dir)
-        .map_err(|e| EngineError::Io(format!("read_dir {}: {e}", worlds_dir.display())))?
-    {
-        let entry = entry.map_err(|e| {
-            EngineError::Io(format!("read_dir_entry {}: {e}", worlds_dir.display()))
-        })?;
-        let path = entry.path();
-        if path.is_dir() {
-            let world_file = path.join("world.json");
-            if world_file.exists() {
-                if let Ok(json) = fs::read_to_string(&world_file) {
-                    if let Ok(manifest) = serde_json::from_str::<WorldManifest>(&json) {
-                        worlds.push((manifest.id.clone(), manifest.name.clone()));
-                    }
-                }
-            }
-        }
+fn discover_worlds_in_dir(dir: &Path) -> crate::error::Result<Vec<(String, String)>> {
+    let entries = fs::read_dir(dir)
+        .map_err(|e| EngineError::Io(format!("read_dir {}: {e}", dir.display())))?;
+    let parsed: Vec<Option<(String, String)>> = entries
+        .map(|entry_result| {
+            let entry = entry_result
+                .map_err(|e| EngineError::Io(format!("read_dir_entry {}: {e}", dir.display())))?;
+            Ok(parse_world_at(&entry.path()))
+        })
+        .collect::<crate::error::Result<Vec<_>>>()?;
+    Ok(parsed.into_iter().flatten().collect())
+}
+
+fn parse_world_at(path: &Path) -> Option<(String, String)> {
+    if !path.is_dir() {
+        return None;
     }
-
-    Ok(worlds)
+    let world_file = path.join("world.json");
+    if !world_file.exists() {
+        return None;
+    }
+    let json = fs::read_to_string(&world_file).ok()?;
+    let manifest = serde_json::from_str::<WorldManifest>(&json).ok()?;
+    Some((manifest.id.clone(), manifest.name.clone()))
 }
 
 pub fn list_available_worlds() -> crate::error::Result<()> {

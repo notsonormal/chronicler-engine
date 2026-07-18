@@ -14,16 +14,18 @@ pub fn evaluate_triggers(
 
     for npc in npcs.values() {
         for (index, trigger) in npc.triggers.iter().enumerate() {
-            if let Some(room_id) = &trigger.room_id {
-                if room_id != current_room_id {
-                    tracing::debug!(
-                        npc_id = %npc.id,
-                        trigger = %trigger.narration.name,
-                        reason = "room_mismatch",
-                        "Trigger skipped"
-                    );
-                    continue;
-                }
+            if trigger
+                .room_id
+                .as_deref()
+                .is_some_and(|r| r != current_room_id)
+            {
+                tracing::debug!(
+                    npc_id = %npc.id,
+                    trigger = %trigger.narration.name,
+                    reason = "room_mismatch",
+                    "Trigger skipped"
+                );
+                continue;
             }
 
             if !check_condition(&state.npc_encounter_log, &npc.id, &trigger.requirement) {

@@ -30,15 +30,6 @@ data/
 └── images/              # Character sprites and assets
 ```
 
-## Documentation & Memory
-The Chronicler Engine uses a tiered **Spec-Driven Development (SDD 2.0)** approach. Documentation is organized to provide the best possible context for both humans and AI agents:
-
-- **[Architecture](docs/architecture/)**: System definition - single source of truth.
-- **[System](docs/system/)**: Domain documentation - explains subsystems.
-- **[Plans](docs/plans/)**: Implementation blueprints (active or archived).
-- **[ADR](docs/adr/)**: Architecture Decision Records with context and rationale.
-- **[Reference](docs/reference/)**: Data schemas, API specs, testing strategy.
-
 ## LLM Integration
 
 The engine uses a trait-based `LlmBackend` design for flexible LLM integration:

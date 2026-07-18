@@ -6,7 +6,7 @@ The Chronicler Engine enforces coding standards through three complementary laye
 
 1. **Compile-time**: `clippy` lints (deny-level in `src/lib.rs`)
 2. **Test-time (declarative)**: `arch-lint` architecture rules (`arch-lint.toml`)
-3. **Test-time (custom)**: `syn`-based convention tests in `tests/infrastructure/guardrails/` (21 registered conventions; load-bearing subset documented in §3.1–3.10)
+3. **Test-time (custom)**: `syn`-based convention tests in `tests/infrastructure/guardrails/` (22 registered conventions; load-bearing subset documented in §3.1–3.11)
 
 All three run in CI via `build.py`.
 
@@ -83,7 +83,7 @@ Run: `cargo nextest run --test architecture`
 
 ## 3. Custom syn-Based Guardrails (`tests/infrastructure/guardrails/`)
 
-AST-parsed convention enforcement. Rules start at `warn` severity; legacy exemptions prevent blocking the build. The full set of registered tests lives in `tests/infrastructure/guardrails/mod.rs`; §3.1–3.9 below document the most-load-bearing subset.
+AST-parsed convention enforcement. Rules start at `warn` severity; legacy exemptions prevent blocking the build. The full set of registered tests lives in `tests/infrastructure/guardrails/mod.rs`; §3.1–3.11 below document the most-load-bearing subset.
 
 ### 3.1 Import Ordering (`guardrails_import_ordering`)
 
@@ -181,6 +181,19 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 **Scope**: `src/` and `tests/`
 **Checks**: `syn::visit::Visit` walk of every `ItemEnum`; per-variant presence of `doc` attr; per-enum presence of `[TRIVIAL_ENUM]` token in a `doc` attr.
 **Exemptions**: Empty enums (`enum Never {}`) pass trivially.
+
+### 3.11 Nesting Depth (`guardrails_nesting_depth_src`)
+
+**Standard**: Function-body control-flow nesting depth must not exceed 3 (`MAX_NESTING_DEPTH = 3`). Depth 0 = function body; depth 4 = violation.
+
+**Counting constructs**: `if`/`if let`, `match`, `for`/`while`/`loop`, `closure` whose body contains direct control flow, `async block` whose body contains direct control flow.
+
+**Non-counting constructs**: `ExprBlock` (regular `{}` scoping), `?` operator, `try {}` blocks, macros. **Predicate-only closures** (`.retain(|m| ...)`, `.map_err(|e| ...)`, `.filter(|x| ...)`, `.find(...)`) do NOT bump depth — only closures/async blocks whose body contains direct control flow (`if`/`match`/`for`/`while`/`loop`) bump.
+
+**Severity**: error
+**Scope**: `src/`
+**Checks**: `syn::visit::Visit` walk of every `ItemFn` / `ImplItemFn` / `ExprClosure` / `ExprAsync`; per-construct depth increment via `NestingVisitor::enter`; `ControlFlowDetector` filters predicate-only closures/async.
+**Exemptions**: None (as of plan t12).
 
 ## 4. Coverage Exclusion Policy
 

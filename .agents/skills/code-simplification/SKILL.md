@@ -151,7 +151,7 @@ Scan for these patterns — each one is a concrete signal, not a vague smell:
 | Duplicated logic | Same 5+ lines in multiple places | Extract to a shared function |
 | Dead code | Unreachable branches, unused variables, commented-out blocks | Remove (after confirming it's truly dead) |
 | Unnecessary abstractions | Wrapper that adds no value | Inline the wrapper, call the underlying function directly |
-| Over-engineered patterns | Factory-for-a-factory, strategy-with-one-strategy | Replace with the simple direct approach |
+| Over-engineered patterns | Factory-for-a-factory, strategy-with-one-strategy | Replace with the simple direct approach | Extracted helper with only 1 or 2 callers |
 | Redundant type assertions | Casting to a type that's already inferred | Remove the assertion |
 
 ### Step 3: Apply Changes Incrementally

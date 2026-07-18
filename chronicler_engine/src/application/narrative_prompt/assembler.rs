@@ -2,6 +2,7 @@
 //! Multi-stage prompt builder
 
 use crate::error::EngineError;
+use crate::domain::model::character::{NpcCard, Relationship};
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::message_types::MessageEntry;
@@ -264,32 +265,11 @@ impl<'a> LayerRenderer<'a> {
             output.push_str("No characters in this world.\n");
         } else {
             for npc in self.npcs.all_npcs {
-                let presence = if in_area_ids.contains(npc.id.as_str()) {
-                    "(in room)"
-                } else {
-                    "(elsewhere)"
-                };
-                output.push_str(&format!("- {} {}\n", npc.sheet.name, presence));
-
-                let summary_text = npc
-                    .sheet
-                    .summary
-                    .clone()
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| {
-                        npc.sheet
-                            .description
-                            .lines()
-                            .take(3)
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    });
-                let summary_text = render_template(&summary_text, self.template_vars);
-
-                for line in summary_text.lines() {
-                    output.push_str(&format!("  {line}\n"));
-                }
-                output.push('\n');
+                output.push_str(&render_known_npc_entry(
+                    npc,
+                    &in_area_ids,
+                    self.template_vars,
+                ));
             }
         }
         output.push_str("</KnownNpcs>\n\n");
@@ -314,28 +294,14 @@ impl<'a> LayerRenderer<'a> {
                     output.push('\n');
                 }
 
-                let present_relations: Vec<_> = npc
-                    .relationships
-                    .iter()
-                    .filter(|r| in_area_ids.contains(r.with.as_str()))
-                    .collect();
-
-                if !present_relations.is_empty() {
-                    output.push_str("Relationships:\n");
-                    for rel in present_relations {
-                        let partner_name = self
-                            .npcs
-                            .all_npcs
-                            .iter()
-                            .find(|n| n.id == rel.with)
-                            .map(|n| n.sheet.name.as_str())
-                            .unwrap_or(&rel.with);
-                        output.push_str(&format!(
-                            "  → {}: {}\n",
-                            partner_name,
-                            render_template(rel.display_text(), self.template_vars)
-                        ));
-                    }
+                let relations_block = render_present_relationships(
+                    npc,
+                    self.npcs.all_npcs,
+                    &in_area_ids,
+                    self.template_vars,
+                );
+                if let Some(relations_block) = relations_block {
+                    output.push_str(&relations_block);
                 }
 
                 output.push('\n');
@@ -428,16 +394,9 @@ pub(crate) fn sanitize_for_prompt(input: &str) -> String {
 
     while i < chars.len() {
         if chars[i] == '{' && i + 1 < chars.len() && chars[i + 1] == '{' {
-            let mut j = i + 2;
-            while j + 1 < chars.len() {
-                if chars[j] == '}' && chars[j + 1] == '}' {
-                    break;
-                }
-                j += 1;
-            }
-            if j + 1 < chars.len() && j > i + 2 {
+            if let Some(next) = scan_filtered_block(&chars, i + 2) {
                 result.push_str("[FILTERED]");
-                i = j + 2;
+                i = next;
             } else {
                 result.push('{');
                 result.push('{');
@@ -449,4 +408,81 @@ pub(crate) fn sanitize_for_prompt(input: &str) -> String {
         }
     }
     result
+}
+
+fn scan_filtered_block(chars: &[char], start: usize) -> Option<usize> {
+    let mut k = start;
+    while k + 1 < chars.len() {
+        if chars[k] == '}' && chars[k + 1] == '}' {
+            return if k > start { Some(k + 2) } else { None };
+        }
+        k += 1;
+    }
+    None
+}
+
+fn render_known_npc_entry(
+    npc: &NpcCard,
+    in_area_ids: &std::collections::HashSet<&str>,
+    template_vars: &TemplateVars,
+) -> String {
+    let presence = if in_area_ids.contains(npc.id.as_str()) {
+        "(in room)"
+    } else {
+        "(elsewhere)"
+    };
+    let mut entry = format!("- {} {}\n", npc.sheet.name, presence);
+
+    let summary_text = npc
+        .sheet
+        .summary
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| {
+            npc.sheet
+                .description
+                .lines()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
+    let rendered_summary = render_template(&summary_text, template_vars);
+
+    for line in rendered_summary.lines() {
+        entry.push_str(&format!("  {line}\n"));
+    }
+    entry.push('\n');
+    entry
+}
+
+fn render_present_relationships(
+    npc: &NpcCard,
+    all_npcs: &[NpcCard],
+    in_area_ids: &std::collections::HashSet<&str>,
+    template_vars: &TemplateVars,
+) -> Option<String> {
+    let present_relations: Vec<&Relationship> = npc
+        .relationships
+        .iter()
+        .filter(|r| in_area_ids.contains(r.with.as_str()))
+        .collect();
+
+    if present_relations.is_empty() {
+        return None;
+    }
+
+    let mut block = String::from("Relationships:\n");
+    for rel in present_relations {
+        let partner_name = all_npcs
+            .iter()
+            .find(|n| n.id == rel.with)
+            .map(|n| n.sheet.name.as_str())
+            .unwrap_or(&rel.with);
+        block.push_str(&format!(
+            "  → {}: {}\n",
+            partner_name,
+            render_template(rel.display_text(), template_vars)
+        ));
+    }
+    Some(block)
 }

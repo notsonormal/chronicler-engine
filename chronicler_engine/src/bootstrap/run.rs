@@ -263,7 +263,7 @@ pub(crate) fn ensure_presets(
     db_pool: &crate::adapters::driven::storage::db::DbPool,
     data_dir: &std::path::Path,
 ) -> crate::error::Result<()> {
-    use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+    use crate::domain::model::prompt_preset::PresetType;
 
     let storage = crate::adapters::driven::storage::Storage::new_sqlite(
         db_pool.clone(),
@@ -286,46 +286,55 @@ pub(crate) fn ensure_presets(
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("json") {
-                continue;
-            }
-            let content = std::fs::read_to_string(&path)?;
-            let seed: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
-                crate::error::EngineError::Parse(format!(
-                    "Invalid preset seed {}: {e}",
-                    path.display()
-                ))
-            })?;
-
-            let id = seed["id"].as_str().unwrap_or("default").to_string();
-            let preset = PromptPreset {
-                id: id.clone(),
-                name: seed["name"].as_str().unwrap_or("Default").to_string(),
-                role: seed["role"].as_str().map(|s| s.to_string()),
-                instructions: seed["instructions"].as_str().map(|s| s.to_string()),
-                writing_style: seed["writing_style"].as_str().map(|s| s.to_string()),
-                output_format: seed["output_format"].as_str().map(|s| s.to_string()),
-                is_default: true,
-                preset_type,
-            };
-
-            if existing_ids.contains(&id) {
-                if let Ok(Some(existing)) = storage.get_preset(&id) {
-                    let has_content = existing.role.is_some()
-                        || existing.instructions.is_some()
-                        || existing.writing_style.is_some()
-                        || existing.output_format.is_some();
-                    if !has_content {
-                        storage.save_preset(&preset)?;
-                        tracing::info!("Updated {} prompt preset: {}", preset_type.as_str(), id);
-                    }
-                }
-                continue;
-            }
-            storage.save_preset(&preset)?;
-            tracing::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
+            process_preset_file(&storage, &path, &existing_ids, preset_type)?;
         }
     }
 
+    Ok(())
+}
+
+fn process_preset_file(
+    storage: &Storage,
+    path: &std::path::Path,
+    existing_ids: &std::collections::HashSet<String>,
+    preset_type: crate::domain::model::prompt_preset::PresetType,
+) -> Result<(), crate::error::EngineError> {
+    use crate::domain::model::prompt_preset::PromptPreset;
+
+    if path.extension().and_then(|s| s.to_str()) != Some("json") {
+        return Ok(());
+    }
+    let content = std::fs::read_to_string(path)?;
+    let seed: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+        crate::error::EngineError::Parse(format!("Invalid preset seed {}: {e}", path.display()))
+    })?;
+
+    let id = seed["id"].as_str().unwrap_or("default").to_string();
+    let preset = PromptPreset {
+        id: id.clone(),
+        name: seed["name"].as_str().unwrap_or("Default").to_string(),
+        role: seed["role"].as_str().map(|s| s.to_string()),
+        instructions: seed["instructions"].as_str().map(|s| s.to_string()),
+        writing_style: seed["writing_style"].as_str().map(|s| s.to_string()),
+        output_format: seed["output_format"].as_str().map(|s| s.to_string()),
+        is_default: true,
+        preset_type,
+    };
+
+    if existing_ids.contains(&id) {
+        if let Ok(Some(existing)) = storage.get_preset(&id) {
+            let has_content = existing.role.is_some()
+                || existing.instructions.is_some()
+                || existing.writing_style.is_some()
+                || existing.output_format.is_some();
+            if !has_content {
+                storage.save_preset(&preset)?;
+                tracing::info!("Updated {} prompt preset: {}", preset_type.as_str(), id);
+            }
+        }
+        return Ok(());
+    }
+    storage.save_preset(&preset)?;
+    tracing::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
     Ok(())
 }

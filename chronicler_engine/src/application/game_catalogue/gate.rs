@@ -3,9 +3,11 @@
 
 use std::sync::Arc;
 
+use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::domain::model::game::{generate_game_name, Game};
+use crate::domain::model::message::Swipe;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 
 #[derive(Clone)]
@@ -135,11 +137,7 @@ impl GameCatalogue {
                 match storage.insert_message(&*msg) {
                     Ok(id) => {
                         msg.id = id;
-                        for (index, swipe) in msg.swipes.iter().enumerate() {
-                            if let Err(e) = storage.insert_swipe(id, swipe, index) {
-                                tracing::error!("persist_initial_state: swipe {index} failed: {e}");
-                            }
-                        }
+                        persist_swipes_for_message(storage, id, &msg.swipes);
                     }
                     Err(e) => {
                         tracing::error!("persist_initial_state: message insert failed: {e}");
@@ -149,5 +147,13 @@ impl GameCatalogue {
         }
 
         Ok(snapshot_id)
+    }
+}
+
+fn persist_swipes_for_message(storage: &Storage, msg_id: u64, swipes: &[Swipe]) {
+    for (index, swipe) in swipes.iter().enumerate() {
+        if let Err(e) = storage.insert_swipe(msg_id, swipe, index) {
+            tracing::error!("persist_initial_state: swipe {index} failed: {e}");
+        }
     }
 }

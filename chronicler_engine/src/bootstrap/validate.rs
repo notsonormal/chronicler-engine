@@ -28,16 +28,7 @@ pub fn validate_loaded_data(
     }
 
     for npc in npcs {
-        for (i, trigger) in npc.triggers.iter().enumerate() {
-            if let Some(room_id) = &trigger.room_id {
-                if !valid_room_ids.contains(room_id) {
-                    errors.push(format!(
-                        "NPC '{}' Trigger[{}] references non-existent room_id: '{}'",
-                        npc.id, i, room_id
-                    ));
-                }
-            }
-        }
+        validate_npc_triggers(npc, &valid_room_ids, &mut errors);
     }
 
     let loaded_npc_ids: std::collections::HashSet<_> = npcs.iter().map(|n| n.id.clone()).collect();
@@ -56,5 +47,22 @@ pub fn validate_loaded_data(
         Ok(())
     } else {
         Err(errors.join("\n"))
+    }
+}
+
+fn validate_npc_triggers(
+    npc: &NpcCard,
+    valid_room_ids: &std::collections::HashSet<String>,
+    errors: &mut Vec<String>,
+) {
+    for (i, trigger) in npc.triggers.iter().enumerate() {
+        if let Some(room_id) = &trigger.room_id {
+            if !valid_room_ids.contains(room_id) {
+                errors.push(format!(
+                    "NPC '{}' Trigger[{}] references non-existent room_id: '{}'",
+                    npc.id, i, room_id
+                ));
+            }
+        }
     }
 }

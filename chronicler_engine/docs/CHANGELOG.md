@@ -2,6 +2,12 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-07-17
+
+### Changed
+
+- **T12: Nesting-depth guardrail rollout** (plan archived at `old-docs/archived-plans/plan-nesting-depth-guardrail-rollout-revised-private-helpers.md`). Tightened the existing syn-based nesting-depth probe so predicate-only closures (`.retain(|m| ...)`, `.map_err(|e| ...)`, `.filter(|x| ...)`, `.find(...)`) no longer bump depth — only closures/async blocks whose body contains direct control flow (`if`/`match`/`for`/`while`/`loop`) bump. The predicate-closure rule change dissolved 30 of the 52 initially-reported violations; the remaining 22 (across 12 files: messages.rs, swipes.rs, game.rs, validate.rs, trigger_eval.rs, load.rs, run.rs, init_game.rs, gate.rs, cli.rs, port_utils.rs, assembler.rs) plus a newly-discovered `sanitize_for_prompt` violation were dissolved via **private in-module helpers** (no shared cross-module abstractions). End state: zero nesting-depth violations, the rule promoted from probe to enforcement as `guardrails_nesting_depth_src`, and §3.11 added to `docs/architecture/guardrails.md`. `MAX_NESTING_DEPTH = 3`; scope `src/`; no exemptions. No behavior changes — all refactors preserve original semantics exactly.
+
 ## 2026-07-14
 
 ### Changed

@@ -3,11 +3,13 @@
 pub mod enums;
 pub mod layers;
 pub mod location;
+pub mod nesting;
 pub mod structure;
 pub mod style;
 
 pub use enums::*;
 pub use layers::*;
+pub use nesting::*;
 pub use structure::{check_no_legacy_test_context, *};
 pub use style::*;
 pub use location::*;
@@ -231,4 +233,9 @@ fn guardrails_enum_variant_docs() {
 #[test]
 fn guardrails_enum_variant_docs_tests() {
     check_tests_files("enum variant docs (tests)", check_enum_variant_docs);
+}
+
+#[test]
+fn guardrails_nesting_depth_src() {
+    check_src_files("nesting depth (src)", check_nesting_depth);
 }
