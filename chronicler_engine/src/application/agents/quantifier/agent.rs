@@ -79,13 +79,6 @@ impl Agent for QuantifierAgent {
             .main_response
             .ok_or_else(|| EngineError::Config("Quantifier requires main_response".into()))?;
 
-        let state = ctx.state;
-        let previous_room_npcs: Vec<_> = state.scene.npcs_in_area.clone();
-
-        let current_room = ctx
-            .current_room
-            .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
-
         let quantifier_prompt_override = {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
             self.preset_storage
@@ -99,17 +92,11 @@ impl Agent for QuantifierAgent {
         };
 
         let result = determine_npcs_in_room(
-            state,
-            current_room,
-            &[],
-            &previous_room_npcs,
+            ctx,
             main_response,
             self.recorder.as_ref(),
             quantifier_prompt_override,
-            ctx.map,
-            ctx.persona,
-            ctx.npcs,
-        );
+        )?;
 
         let confidence = Confidence::from(result.npcs.confidence);
 

@@ -1,14 +1,13 @@
 //! [DOC: docs/system/game_flow.md]
 //! PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
 //!
-//! See [`gate`](self) for the three-call save-path distinction (`save_state` vs
-//! `save_message_and_snapshot` vs private `write_snapshot`).
+//! `save_state`: snapshot only. `save_message_and_snapshot`: snapshot + message + retry-swipe link. Both route through `write_snapshot`.
 
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::PresetStore;
 use crate::adapters::driven::storage::Storage;
-use crate::domain::model::character::NpcCard;
+use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -69,12 +68,10 @@ impl PersistenceGate {
     }
 
     pub fn save_state(&self, state: &GameState) -> Result<u64, EngineError> {
-        // Snapshot-only write; routes through `write_snapshot`. See module doc.
         self.write_snapshot(state)
     }
 
     pub fn save_message_and_snapshot(&self, state: &mut GameState) -> Result<u64, EngineError> {
-        // Snapshot + message insert + retry-target swipe wiring. See module doc.
         let snapshot_id = self.write_snapshot(state)?;
 
         if let Some(ref mut target) = state.narrative.retry_target {
@@ -130,7 +127,14 @@ impl PersistenceGate {
     }
 
     pub fn build_fresh_initial_state(&self) -> Result<GameState, EngineError> {
-        let (world, map, persona, npcs_map) = self.fetch_world_data_for_fresh_state()?;
+        let WorldBundle {
+            world,
+            map,
+            persona,
+            npcs: npcs_map,
+        } = self
+            .storage
+            .world_bundle_for(self.storage.current_game_id())?;
         let starting_room_id = world.starting_room_id();
         let mut initial_state = GameState::new(starting_room_id.clone());
 
@@ -151,33 +155,6 @@ impl PersistenceGate {
         }
 
         Ok(initial_state)
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn fetch_world_data_for_fresh_state(
-        &self,
-    ) -> Result<
-        (
-            Arc<crate::domain::model::world::WorldCard>,
-            Arc<crate::domain::model::map::MapDef>,
-            Arc<crate::domain::model::character::PersonaCard>,
-            std::collections::HashMap<String, NpcCard>,
-        ),
-        EngineError,
-    > {
-        let game_id = self.storage.current_game_id();
-        let game = self.storage.require_game(game_id)?;
-        let world_with_map = self.storage.require_world(&game.world_key)?;
-        let persona = self.storage.require_persona(&game.persona_key)?;
-        let npcs_list = self.storage.list_characters(world_with_map.world_id)?;
-        let npcs_map: std::collections::HashMap<String, NpcCard> =
-            npcs_list.into_iter().map(|n| (n.id.clone(), n)).collect();
-        Ok((
-            Arc::new(world_with_map.world_card),
-            Arc::new(world_with_map.map),
-            Arc::new(persona),
-            npcs_map,
-        ))
     }
 
     pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {

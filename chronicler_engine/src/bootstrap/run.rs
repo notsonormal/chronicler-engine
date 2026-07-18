@@ -167,14 +167,16 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
 
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,
-        &app,
         &settings,
+        &app,
         &data.storage,
-        &world_arc,
-        &room_id,
-        nearby_npcs.clone(),
-        all_npcs.clone(),
         &data.db_pool,
+        super::init_game::ArrivalSpawnRequest {
+            world: world_arc,
+            room_id,
+            nearby_npcs,
+            all_npcs,
+        },
     );
 
     Ok(StateResources {

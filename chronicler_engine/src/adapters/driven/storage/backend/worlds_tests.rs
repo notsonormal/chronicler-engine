@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::backend::{Storage, TestOverride};
+use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::test_support::sqlite_storage;
 
 #[test]
@@ -125,6 +127,89 @@ fn test_seed_world_failure() {
     let (world_card, map) = test_world_data("fail_world", "Fail World");
     let result = storage.seed_world(&world_card, &map);
     assert!(result.is_err());
+}
+
+#[test]
+fn world_bundle_for_assembles_all_four_pieces() {
+    let storage = Storage::new_in_memory();
+    let (world_card, map) = test_world_data("bundle_world", "Bundle World");
+    storage.seed_world(&world_card, &map).unwrap();
+    let world_id = storage.require_world("bundle_world").unwrap().world_id;
+
+    let persona = PersonaCard {
+        key: "bundle_persona".to_string(),
+        sheet: CharacterSheet {
+            name: "Bundle Persona".to_string(),
+            ..CharacterSheet::default()
+        },
+        inventory: Vec::new(),
+    };
+    storage.seed_persona("bundle_persona", &persona).unwrap();
+
+    storage
+        .seed_character(
+            world_id,
+            &NpcCard {
+                id: "npc_alpha".to_string(),
+                sheet: CharacterSheet {
+                    name: "Alpha".to_string(),
+                    ..CharacterSheet::default()
+                },
+                inventory: Vec::new(),
+                triggers: Vec::new(),
+                relationships: Vec::new(),
+            },
+        )
+        .unwrap();
+    storage
+        .seed_character(
+            world_id,
+            &NpcCard {
+                id: "npc_beta".to_string(),
+                sheet: CharacterSheet {
+                    name: "Beta".to_string(),
+                    ..CharacterSheet::default()
+                },
+                inventory: Vec::new(),
+                triggers: Vec::new(),
+                relationships: Vec::new(),
+            },
+        )
+        .unwrap();
+
+    let game_id = storage
+        .create_game(
+            "bundle_world",
+            "bundle_world",
+            "bundle_persona",
+            "Bundle Persona",
+            "Bundle Game",
+        )
+        .unwrap();
+
+    let WorldBundle {
+        world,
+        map: map_arc,
+        persona: persona_arc,
+        npcs,
+    } = storage.world_bundle_for(game_id).unwrap();
+
+    assert_eq!(world.key, "bundle_world");
+    assert_eq!(map_arc.overworld.id, "overworld1");
+    assert_eq!(persona_arc.sheet.name, "Bundle Persona");
+    assert_eq!(npcs.len(), 2);
+    assert!(npcs.contains_key("npc_alpha"));
+    assert!(npcs.contains_key("npc_beta"));
+}
+
+#[test]
+fn world_bundle_for_propagates_missing_game() {
+    let storage = Storage::new_in_memory();
+    let result = storage.world_bundle_for(4242);
+    match result {
+        Err(crate::error::EngineError::GameNotFound(id)) => assert_eq!(id, 4242),
+        other => panic!("Expected EngineError::GameNotFound(4242), got: {other:?}"),
+    }
 }
 
 fn test_world_data(id: &str, name: &str) -> (WorldCard, MapDef) {

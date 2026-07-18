@@ -1,9 +1,13 @@
 //! [DOC: docs/system/storage.md]
 //! World storage backend operations
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use chrono::Utc;
 
 use crate::error::EngineError;
+use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::backend::{Backend, Storage, InMemoryWorld};
@@ -28,6 +32,14 @@ pub struct WorldWithMap {
     pub world_id: i64,
     pub world_card: WorldCard,
     pub map: MapDef,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorldBundle {
+    pub world: Arc<WorldCard>,
+    pub map: Arc<MapDef>,
+    pub persona: Arc<PersonaCard>,
+    pub npcs: HashMap<String, NpcCard>,
 }
 
 impl Storage {
@@ -94,12 +106,26 @@ impl Storage {
         })
     }
 
-    /// Required-read of a world row by key. Absence becomes
-    /// [`EngineError::WorldNotFound`]. Catalogue / fallback / existence callers
-    /// should stay on [`Storage::get_world`](Self::get_world).
     pub fn require_world(&self, key: &str) -> Result<WorldWithMap, EngineError> {
         self.get_world(key)?
             .ok_or_else(|| EngineError::WorldNotFound(key.to_string()))
+    }
+
+    pub fn world_bundle_for(&self, game_id: u64) -> Result<WorldBundle, EngineError> {
+        let game = self.require_game(game_id)?;
+        let world_with_map = self.require_world(&game.world_key)?;
+        let persona = self.require_persona(&game.persona_key)?;
+        let npcs: HashMap<String, NpcCard> = self
+            .list_characters(world_with_map.world_id)?
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
+        Ok(WorldBundle {
+            world: Arc::new(world_with_map.world_card),
+            map: Arc::new(world_with_map.map),
+            persona: Arc::new(persona),
+            npcs,
+        })
     }
 
     pub fn seed_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
@@ -203,7 +229,7 @@ impl Storage {
         self.with_backend_mut("get_world_by_id", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                // Two separate statements, same pattern as get_world() — avoids column-index conflicts in from_row
+                // Separate statements avoid column-index conflicts in `DbWorld::from_row` vs `DbMap::from_row`.
                 let mut world_stmt = conn.prepare(
                     "SELECT id, key, name, description, global_rules, scenarios, default_scenario_id, default_room_image, created_at, updated_at
                      FROM worlds WHERE id = ?",
@@ -254,7 +280,6 @@ impl Storage {
                     });
                 }
                 conn.execute("DELETE FROM worlds WHERE key = ?", [key])?;
-                // Map deletion cascades via FK
                 Ok(())
             }
             Backend::InMemory(data) => {

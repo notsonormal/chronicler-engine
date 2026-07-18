@@ -45,7 +45,7 @@ fn test_quantifier_retry_on_low_confidence() {
         ]);
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref());
 
     assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
@@ -77,7 +77,7 @@ fn test_quantifier_no_retry_when_high_confidence() {
         ]);
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref());
 
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
 }
@@ -196,10 +196,6 @@ fn npc_map_from_ids(ids: &[String]) -> HashMap<String, NpcCard> {
         .collect()
 }
 
-fn npc_map(npcs: Vec<NpcCard>) -> HashMap<String, NpcCard> {
-    npcs.into_iter().map(|npc| (npc.id.clone(), npc)).collect()
-}
-
 fn map_with_room(room: &Room) -> MapDef {
     MapDef {
         overworld: Overworld {
@@ -214,37 +210,36 @@ fn map_with_room(room: &Room) -> MapDef {
     }
 }
 
+// `npc_pool_ids` seeds the world lookup map; `scene_npcs` seeds `state.scene.npcs_in_area` (the low-conf fallback source). Both must carry asserted IDs in low-conf tests.
 fn determine_npcs_with_room(
-    state: &GameState,
+    state: &mut GameState,
     current_room: &Room,
-    room_npc_ids: &[String],
-    previous_room_npcs: &[crate::domain::model::character::NpcCard],
+    npc_pool_ids: &[String],
+    scene_npcs: &[NpcCard],
     player_action: &str,
     recorder: &LlmCallRecorder,
 ) -> crate::domain::model::quantifier::QuantifierResult {
+    use crate::domain::model::agent::AgentContext;
     let map = map_with_room(current_room);
     let persona = TestPersona::standard();
-    let mut npcs = npc_map_from_ids(room_npc_ids);
-    for npc in previous_room_npcs {
-        npcs.insert(npc.id.clone(), npc.clone());
-    }
-    determine_npcs_in_room(
-        state,
-        current_room,
-        room_npc_ids,
-        previous_room_npcs,
-        player_action,
-        recorder,
-        None,
-        &map,
-        &persona,
-        &npcs,
-    )
+    let npcs = npc_map_from_ids(npc_pool_ids);
+    state.scene.npcs_in_area = scene_npcs.to_vec();
+    let ctx = AgentContext {
+        state: &*state,
+        main_response: Some(player_action),
+        player_input: player_action,
+        current_room: Some(current_room),
+        map: &map,
+        persona: &persona,
+        npcs: &npcs,
+    };
+    determine_npcs_in_room(&ctx, player_action, recorder, None)
+        .expect("test should not fail agent-context resolution")
 }
 
 #[test]
 fn test_determine_npcs_high_confidence() {
-    let state = TestGameState::in_room("hall");
+    let mut state = TestGameState::in_room("hall");
     let room = make_room();
 
     let backend = HighConfidenceBackend {
@@ -252,7 +247,7 @@ fn test_determine_npcs_high_confidence() {
     };
     let recorder = recorder_with(backend);
     let result = determine_npcs_with_room(
-        &state,
+        &mut state,
         &room,
         &["carla".to_string(), "gabriella".to_string()],
         &[],
@@ -268,13 +263,13 @@ fn test_determine_npcs_high_confidence() {
 
 #[test]
 fn test_determine_npcs_medium_confidence() {
-    let state = TestGameState::in_room("hall");
+    let mut state = TestGameState::in_room("hall");
     let room = make_room();
 
     let backend = MediumConfidenceBackend;
     let recorder = recorder_with(backend);
     let result = determine_npcs_with_room(
-        &state,
+        &mut state,
         &room,
         &["carla".to_string()],
         &[],
@@ -288,16 +283,20 @@ fn test_determine_npcs_medium_confidence() {
 
 #[test]
 fn test_determine_npcs_low_confidence_fallback() {
-    let state = TestGameState::in_room("hall");
+    let mut state = TestGameState::in_room("hall");
     let room = make_room();
 
     let backend = LowConfidenceBackend;
     let recorder = recorder_with(backend);
+    let scene_npcs = vec![
+        make_npc("carla", "Carla"),
+        make_npc("gabriella", "Gabriella"),
+    ];
     let result = determine_npcs_with_room(
-        &state,
+        &mut state,
         &room,
         &["carla".to_string(), "gabriella".to_string()],
-        &[],
+        &scene_npcs,
         "test",
         recorder.as_ref(),
     );
@@ -308,16 +307,17 @@ fn test_determine_npcs_low_confidence_fallback() {
 
 #[test]
 fn test_determine_npcs_backend_error_fallback() {
-    let state = TestGameState::in_room("hall");
+    let mut state = TestGameState::in_room("hall");
     let room = make_room();
 
     let backend = ErrBackend;
     let recorder = recorder_with(backend);
+    let scene_npcs = vec![make_npc("carla", "Carla")];
     let result = determine_npcs_with_room(
-        &state,
+        &mut state,
         &room,
         &["carla".to_string()],
-        &[],
+        &scene_npcs,
         "test",
         recorder.as_ref(),
     );
@@ -328,7 +328,7 @@ fn test_determine_npcs_backend_error_fallback() {
 
 #[test]
 fn test_determine_npcs_filters_unknown_backend_ids() {
-    let state = TestGameState::in_room("hall");
+    let mut state = TestGameState::in_room("hall");
     let room = make_room();
 
     let backend = HighConfidenceBackend {
@@ -336,7 +336,7 @@ fn test_determine_npcs_filters_unknown_backend_ids() {
     };
     let recorder = recorder_with(backend);
     let result = determine_npcs_with_room(
-        &state,
+        &mut state,
         &room,
         &["carla".to_string()],
         &[],
@@ -400,7 +400,7 @@ fn test_quantifier_retry_on_llm_error() {
     };
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref());
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }
@@ -427,9 +427,8 @@ fn test_quantifier_all_attempts_fail_fallback() {
         .with_trigger_narration_fail();
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref());
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
     assert_eq!(result.movement.movement_type, None);
 }
@@ -457,42 +456,9 @@ fn test_quantifier_low_confidence_then_error_fallback() {
         .with_trigger_narration_fail();
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref());
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
-}
-
-#[test]
-fn test_static_npc_result_valid_ids() {
-    let carla = TestNpc::named("carla", "Carla");
-    let npcs = npc_map(vec![carla]);
-    let state = TestGameState::in_room("hall");
-    let movement = MovementParseResult {
-        movement_type: Some(MovementType::Entering),
-        destination: Some("kitchen".to_string()),
-        confidence: QuantifierConfidence::High,
-    };
-
-    let result = static_npc_result(&state, &["carla".to_string()], movement.clone(), &npcs);
-
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
-    assert_eq!(result.movement.movement_type, Some(MovementType::Entering));
-    assert_eq!(result.movement.destination, Some("kitchen".to_string()));
-}
-
-#[test]
-fn test_static_npc_result_filters_unknown_ids() {
-    let state = TestGameState::in_room("hall");
-    let npcs = npc_map(vec![TestNpc::named("carla", "Carla")]);
-    let result = static_npc_result(
-        &state,
-        &["carla".to_string(), "unknown".to_string()],
-        MovementParseResult::default(),
-        &npcs,
-    );
-
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }
 
 #[test]
@@ -504,7 +470,7 @@ fn test_static_npc_result_preserves_movement() {
         confidence: QuantifierConfidence::Medium,
     };
 
-    let result = static_npc_result(&state, &[], movement.clone(), &HashMap::new());
+    let result = static_npc_result(&state, movement.clone());
 
     assert!(result.npcs.npc_ids.is_empty());
     assert_eq!(result.movement.movement_type, Some(MovementType::Leaving));
@@ -513,12 +479,13 @@ fn test_static_npc_result_preserves_movement() {
 
 #[test]
 fn test_static_npc_result_fallback_to_scene_npcs() {
-    let carla = TestNpc::named("carla", "Carla");
-    let npcs = npc_map(vec![carla.clone()]);
     let mut state = TestGameState::in_room("hall");
-    state.scene.npcs_in_area.push(carla.clone());
+    state
+        .scene
+        .npcs_in_area
+        .push(TestNpc::named("carla", "Carla"));
 
-    let result = static_npc_result(&state, &[], MovementParseResult::default(), &npcs);
+    let result = static_npc_result(&state, MovementParseResult::default());
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }
@@ -551,7 +518,7 @@ fn test_quantifier_routes_through_recorder_for_forensics() {
         ]);
 
     let (recorder, spy) = make_spy_recorder(Arc::new(backend));
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref());
 
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
     assert_eq!(

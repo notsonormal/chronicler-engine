@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::application::action_pipeline::phase_error::PhaseError;
 use crate::application::action_pipeline::phases::{PipelineInputs, PipelineRun};
 use crate::application::application_service::DefaultApplicationService;
+use crate::adapters::driven::storage::worlds::WorldBundle;
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
@@ -14,7 +15,6 @@ use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::domain::model::world::WorldCard;
 
 use crate::application::narrative_prompt::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
@@ -51,7 +51,12 @@ impl ActionPipeline {
         let started_for = app.current_game_id();
         let run = PipelineRun::new(self, app, started_for);
 
-        let (world, map, persona, npcs) = match Self::load_world_bundle(app, started_for) {
+        let WorldBundle {
+            world,
+            map,
+            persona,
+            npcs,
+        } = match Self::load_world_bundle(app, started_for) {
             Ok(bundle) => bundle,
             Err(e) => {
                 tracing::error!("run_from_input: {e}");
@@ -164,34 +169,11 @@ impl ActionPipeline {
         Ok(())
     }
 
-    #[allow(clippy::type_complexity)]
     pub(super) fn load_world_bundle(
         app: &DefaultApplicationService,
         started_for: u64,
-    ) -> Result<
-        (
-            Arc<WorldCard>,
-            Arc<MapDef>,
-            Arc<PersonaCard>,
-            HashMap<String, NpcCard>,
-        ),
-        EngineError,
-    > {
-        let game = app.storage().require_game(started_for)?;
-        let world_with_map = app.storage().require_world(&game.world_key)?;
-        let persona_card = app.storage().require_persona(&game.persona_key)?;
-        let npcs: HashMap<String, NpcCard> = app
-            .storage()
-            .list_characters(world_with_map.world_id)?
-            .into_iter()
-            .map(|n| (n.id.clone(), n))
-            .collect();
-        Ok((
-            Arc::new(world_with_map.world_card),
-            Arc::new(world_with_map.map),
-            Arc::new(persona_card),
-            npcs,
-        ))
+    ) -> Result<WorldBundle, EngineError> {
+        app.storage().world_bundle_for(started_for)
     }
 
     pub(super) fn finalize_phase_error(run: &PipelineRun<'_>, e: PhaseError) {

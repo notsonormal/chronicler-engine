@@ -1,8 +1,11 @@
 //! [DOC: docs/system/agent_system.md]
 //! Quantifier orchestration
 
-use crate::domain::model::state::game_state::GameState;
 use crate::application::llm_recorder::LlmCallRecorder;
+use crate::domain::model::agent::AgentContext;
+use crate::domain::model::character::NpcCard;
+use crate::domain::model::state::game_state::GameState;
+use crate::error::EngineError;
 
 use super::parser::parse_quantifier_response_with_movement;
 use super::prompt::QuantifierPromptBuilder;
@@ -13,7 +16,6 @@ use super::types::{
 
 pub(crate) fn quantify_room_with_llm_call(
     context: &QuantifierPromptContext,
-    fallback_npc_ids: &[String],
     recorder: &LlmCallRecorder,
 ) -> QuantifierResult {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
@@ -100,7 +102,7 @@ pub(crate) fn quantify_room_with_llm_call(
     );
     QuantifierResult {
         npcs: QuantifierParseResult {
-            npc_ids: fallback_npc_ids.to_vec(),
+            npc_ids: Vec::new(),
             confidence: QuantifierConfidence::Low,
         },
         movement: MovementParseResult {
@@ -114,7 +116,6 @@ pub(crate) fn quantify_room_with_llm_call(
 fn process_quantifier_result(
     result: QuantifierResult,
     state: &GameState,
-    room_npc_ids: &[String],
     npcs: &std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
 ) -> QuantifierResult {
     match result.npcs.confidence {
@@ -136,31 +137,21 @@ fn process_quantifier_result(
         }
         QuantifierConfidence::Low => {
             tracing::info!("[Quantifier] Low confidence, using static NPCs");
-            static_npc_result(state, room_npc_ids, result.movement, npcs)
+            static_npc_result(state, result.movement)
         }
     }
 }
 
 pub(crate) fn static_npc_result(
     state: &GameState,
-    room_npc_ids: &[String],
     movement: MovementParseResult,
-    npcs: &std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
 ) -> QuantifierResult {
-    let npc_ids = if room_npc_ids.is_empty() {
-        state
-            .scene
-            .npcs_in_area
-            .iter()
-            .map(|n| n.id.clone())
-            .collect()
-    } else {
-        room_npc_ids
-            .iter()
-            .filter_map(|id| npcs.get(id))
-            .map(|n| n.id.clone())
-            .collect()
-    };
+    let npc_ids = state
+        .scene
+        .npcs_in_area
+        .iter()
+        .map(|n| n.id.clone())
+        .collect();
 
     QuantifierResult {
         npcs: QuantifierParseResult {
@@ -171,20 +162,23 @@ pub(crate) fn static_npc_result(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn determine_npcs_in_room(
-    state: &GameState,
-    current_room: &crate::domain::model::map::Room,
-    room_npc_ids: &[String],
-    previous_room_npcs: &[crate::domain::model::character::NpcCard],
-    player_action: &str,
+    ctx: &AgentContext,
+    main_response: &str,
     recorder: &LlmCallRecorder,
     quantifier_prompt_override: Option<String>,
-    map: &crate::domain::model::map::MapDef,
-    persona: &crate::domain::model::character::PersonaCard,
-    npcs: &std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
-) -> QuantifierResult {
-    let all_npcs: Vec<crate::domain::model::character::NpcCard> = npcs.values().cloned().collect();
+) -> Result<QuantifierResult, EngineError> {
+    let state = ctx.state;
+    let current_room = ctx
+        .current_room
+        .ok_or_else(|| EngineError::RoomNotFound("current room not set in AgentContext".into()))?;
+    let map = ctx.map;
+    let persona = ctx.persona;
+    let npcs = ctx.npcs;
+
+    let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
+
+    let all_npcs: Vec<NpcCard> = npcs.values().cloned().collect();
 
     let recent_history: Vec<_> = state
         .narrative
@@ -210,15 +204,15 @@ pub fn determine_npcs_in_room(
 
     let context = QuantifierPromptContext {
         room: current_room,
-        previous_room_npcs,
+        previous_room_npcs: &previous_room_npcs,
         all_known_npcs: &all_npcs,
         all_rooms: &all_rooms,
         player_name: &persona.sheet.name,
         recent_history: &recent_history,
-        player_action,
+        player_action: main_response,
         quantifier_prompt_override,
     };
 
-    let result = quantify_room_with_llm_call(&context, room_npc_ids, recorder);
-    process_quantifier_result(result, state, room_npc_ids, npcs)
+    let result = quantify_room_with_llm_call(&context, recorder);
+    Ok(process_quantifier_result(result, state, npcs))
 }

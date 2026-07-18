@@ -98,18 +98,28 @@ fn try_persist_initial_message(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+pub struct ArrivalSpawnRequest {
+    pub world: Arc<WorldCard>,
+    pub room_id: String,
+    pub nearby_npcs: Vec<NpcCard>,
+    pub all_npcs: Vec<NpcCard>,
+}
+
 pub fn spawn_arrival_task_if_needed(
     runtime: &tokio::runtime::Runtime,
-    app: &Arc<crate::application::application_service::DefaultApplicationService>,
     settings: &Arc<RwLock<AppSettings>>,
+    app: &Arc<crate::application::application_service::DefaultApplicationService>,
     storage: &Arc<crate::adapters::driven::storage::Storage>,
-    world: &Arc<WorldCard>,
-    room_id: &str,
-    nearby_npcs: Vec<NpcCard>,
-    all_npcs: Vec<NpcCard>,
     db_pool: &crate::adapters::driven::storage::db::DbPool,
+    request: ArrivalSpawnRequest,
 ) {
+    let ArrivalSpawnRequest {
+        world,
+        room_id,
+        nearby_npcs,
+        all_npcs,
+    } = request;
+
     let has_scenario = world.default_scenario().is_some_and(|s| !s.text.is_empty());
 
     if has_scenario {
@@ -149,7 +159,7 @@ pub fn spawn_arrival_task_if_needed(
 
     let task_ctx = crate::application::arrival_service::ArrivalTaskContext {
         app: Arc::clone(app),
-        room_id: room_id.to_string(),
+        room_id,
         arrival_preset,
         response_length,
         max_context_tokens,

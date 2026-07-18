@@ -6,6 +6,7 @@ use crate::application::action_pipeline::phase_error::PhaseError;
 use crate::application::action_pipeline::phases::PipelineRun;
 use crate::application::action_pipeline::pipeline::ActionPipeline;
 use crate::application::application_service::DefaultApplicationService;
+use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
@@ -120,11 +121,15 @@ pub(crate) fn retry_event_continuation(
         Some((_, text)) => text,
         None => String::new(),
     };
-    let (_, map, persona, npcs_map) =
-        match ActionPipeline::load_world_bundle(app, app.current_game_id()) {
-            Ok(b) => b,
-            Err(e) => return Err(PhaseError::FetchFailed(e.to_string())),
-        };
+    let WorldBundle {
+        map,
+        persona,
+        npcs: npcs_map,
+        ..
+    } = match ActionPipeline::load_world_bundle(app, app.current_game_id()) {
+        Ok(b) => b,
+        Err(e) => return Err(PhaseError::FetchFailed(e.to_string())),
+    };
     let pipeline = app.game_service().pipeline();
     let (mut state, continuation_text) =
         pipeline.phase_trigger_continuation(state, &trigger, app, &map, &npcs_map)?;

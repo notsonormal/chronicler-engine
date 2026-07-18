@@ -20,7 +20,7 @@ metadata:
   - Run `python chronicler_engine/scripts/healthcheck.py duplicates` to get a prioritized duplicate-code summary. For full options, run `python chronicler_engine/scripts/healthcheck.py duplicates --help`.
 9. Check to make sure that the code is consistent with any existing patterns or, if the new patterns is an improvement, that older code is updated to match
 10. Run the `/code-simplification` skill against the (usually uncommited) changes
-11. Run the `/chronicler-comment-fixer` skill against the (usually uncommited) changes
+11. Run the `/chronicler-comment-fixer` skill against the (usually uncommited) changes. Sometimes comments are written in lieu of fixing issues, surface any comments like that for investigation.
 12. Run the full build with the script `chronicler_engine/build.py`. **All Tests Must Pass**. Failing tests should be fixed even if they are failing for reasons that seem unrelated to the recent changes. "Seems unrelated" is a subjective opinion that is often wrong.
 13. Run the 3 different subagents for each of the 3 skills `/thermo-nuclear-code-quality-review`, `/code-review`, `test-police`. The first two subagents should be expliclty instructed now to run tests or to build, as we've already done both as they can't both run `build.py` as the same time. The `/test-police` does not need this instruction as re-running the build/tests is part of its workflow. 
 
