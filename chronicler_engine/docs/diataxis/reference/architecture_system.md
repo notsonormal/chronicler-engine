@@ -32,18 +32,6 @@ Eight tiers in `src/`, dependency rules enforced by `arch-lint.toml`. Three port
 
 Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
-## Port Inventory
-
-Three port traits under `src/application/ports/`: `LlmProvider`, `LlmMessageRepository`, `TextChecker`.
-
-| Port | Prod impls | Test impls |
-|---|---|---|
-| `LlmProvider` | 4 (`openrouter`, `deepseek`, `ollama`, `mock`) | 0 |
-| `LlmMessageRepository` | 1 (`storage/backend/llm_messages.rs`) | 3 (`RecordingForensics`, `NoopForensics`, `SpyForensics`) |
-| `TextChecker` | 1 (`harper_text_checker.rs`) | 4 |
-
-Impl counts may shift; regenerate via `git grep -c '^impl <Port> for' src/`.
-
 ## Storage Direct Access
 
 `arch-lint: storage-direct` markers in `src/application/` permit direct `Storage` access at the persistence boundary. The marker list is canonical at the source; see `## Document References` for the ADR that codifies the intentional/deferred split.
