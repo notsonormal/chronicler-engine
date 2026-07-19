@@ -83,7 +83,7 @@ State transitions happen on three events: form submission (immediately sets Thin
 
 ## Polling Cadences
 
-Four endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: story log 2s, visual sidebar 5s, status display 5s, LLM messages 4s; the header fetches once on load. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive. The cadence choice is a tradeoff between update latency and server load.
+Four endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: story log 2s, visual sidebar 5s, status display 5s, LLM messages 4s; the header fetches once on load. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive.
 
 ## Edit, Delete, Swipe, Retrigger Flows
 

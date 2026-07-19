@@ -7,7 +7,7 @@ title: Narration System
 
 ## §1 Model Configuration
 
-LLM connections are stored as a list on the `settings` singleton row. Each connection carries an identity (id + name, surfaced in the dashboard), a `LlmBackendType` discriminator (`openrouter` / `deepseek` / `ollama` / `mock`), a model identifier, an `api_key` with provider-specific env-var fallback (OpenRouter and DeepSeek fall back to `OPENROUTER_API_KEY` when no stored key is set), a `base_url` endpoint, a single-user-message toggle (cross-referenced below), and per-connection token caps (`max_tokens` for the response, `max_context_tokens` for the context window). The full set of fields and their per-provider defaults lives in `src/domain/model/settings.rs`; this reference does not restate them.
+LLM connections are stored as a list on the `settings` singleton row. Each connection carries an identity (id + name, surfaced in the dashboard), a `LlmBackendType` discriminator (`openrouter` / `deepseek` / `ollama` / `mock`), a model identifier, an `api_key` with provider-specific env-var fallback (OpenRouter and DeepSeek fall back to `OPENROUTER_API_KEY` when no stored key is set), a `base_url` endpoint, a single-user-message toggle, and per-connection token caps (`max_tokens` for the response, `max_context_tokens` for the context window). The full set of fields and their per-provider defaults lives in `src/domain/model/settings.rs`; this reference does not restate them.
 
 Two named connection ids are read from settings: `narration_connection_id` (main narrative call) and `quantifier_connection_id` (post-narration scene analysis). They may resolve to the same connection record or to different ones; the wiring builds a dedicated `LlmCallRecorder` for each.
 
@@ -50,11 +50,11 @@ The Game Master responds to three primary events:
 
 ## §5 Per-Action Flow
 
-A FreeAction runs through the engine's phase pipeline: state transition → narration → quantifier → trigger evaluation; the full pipeline mechanics, including the α-check at each phase boundary, are cross-referenced below.
+A FreeAction runs through the engine's phase pipeline: state transition → narration → quantifier → trigger evaluation. The α-check at each phase boundary is what makes in-flight shutdown signal cancellation race-safe.
 
 ## §6 Continuation Narration
 
-After main narration, the engine evaluates NPC triggers and may generate a continuation narration; the trigger evaluation rules, the `StoredTriggerContext` reuse, and the per-action mutation order are cross-referenced below.
+After main narration, the engine evaluates NPC triggers and may generate a continuation narration. The `StoredTriggerContext` carries the previous-turn snapshot so the diff has a stable input.
 
 ## §7 Response Sanitization & Gemma 4 Thinking-Channel Suffix
 

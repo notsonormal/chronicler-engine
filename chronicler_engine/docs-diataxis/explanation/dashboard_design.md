@@ -17,7 +17,7 @@ The Chronicler Engine's dashboard inherits its interaction model from SillyTaver
 
 ## Polling cadences
 
-Five endpoints carry their own cadence: four poll the server and one fetches once on load. The cadence values are stated in the cross-referenced dashboard reference (Polling Cadences). The shape of the values reflects what each endpoint carries:
+Five endpoints carry their own cadence: four poll the server and one fetches once on load. The shape of the values reflects what each endpoint carries:
 
 - **Story log at 2s.** The story log is the primary feedback channel — narrative text is what the player watches, and new generations should appear promptly.
 - **Status display at 5s.** The status pill ("Ready" / "Thinking..." / phase name) changes only on phase transitions, which are themselves paced by LLM round-trip time. A 5s cadence lands once per status transition.
@@ -70,7 +70,7 @@ The dashboard is a single `index.html` shell plus a fixed set of fragment endpoi
 
 The inline JavaScript block in `assets/index.html` is several hundred lines of imperative DOM manipulation, scoped to button state and polling pause. The HTMX runtime is loaded from a CDN; everything else is plain ES.
 
-The rendering pipeline is Askama with compile-time template validation; templates are checked at build time against their context structs. The visual specs that this rendering path produces are cross-referenced below.
+The rendering pipeline is Askama with compile-time template validation; templates are checked at build time against their context structs.
 
 ## Document References
 

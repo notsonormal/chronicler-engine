@@ -29,7 +29,7 @@ The wiring keeps the two paths independent. `AppSettings` carries separate `narr
 
 The two-phase split separates post-narration concerns (NPC detection, movement detection — clearly `PostGeneration`, after the narration LLM has spoken) from pre-narration concerns, which the design did not name in advance. `PreGeneration` exists on the trait without a dispatcher; future pre-narration concerns dispatch against it when a need surfaces.
 
-The quantifier predates the `Agent` trait; it was promoted into the trait abstraction later. Agent constructors carry `Option<Arc<Storage>>` directly under the storage-direct exemption documented in the hexagonal-architecture ADR.
+The quantifier predates the `Agent` trait; it was promoted into the trait abstraction later. Agent constructors carry `Option<Arc<Storage>>` directly. This is the storage-direct exemption — `Agent` is allowed to talk to `Storage` without an indirection port because the agent's whole job is to query persisted state.
 
 ## The quantifier's role
 

@@ -33,7 +33,7 @@ The dependency invariant for seed rows is:
 - **Personas are world-independent.** Their seed pass does not depend on a world row.
 - **Prompt presets are independent.** Their seed pass does not depend on world, map, character, or persona rows.
 
-The seeding contract, including startup blocking and corrupt-file handling, is enforced by the bootstrap layer.
+Seeding completes before the HTTP server starts; a malformed seed file is skipped without halting bootstrap.
 
 ## Game-State Initialization
 
@@ -58,7 +58,7 @@ The engine reads seed data from JSON files under `data/` during bootstrap. The f
 | `data/schemas/map.schema.json` | `MapDef` world map shape. |
 | `data/schemas/settings.schema.json` | `AppSettings` engine settings file shape. |
 
-The schema files are authoritative for seed-file fields and validation. Runtime behavior associated with those fields is covered by the invariants below and the linked Reference docs.
+The schema files are authoritative for seed-file fields and validation.
 
 ## Invariants Outside the Schemas
 
@@ -86,7 +86,7 @@ The schema files are authoritative for seed-file fields and validation. Runtime 
 
 ### Swipe snapshot reference
 
-`Swipe.snapshot_id` references `GameStateSnapshot`. The SQL layer declares this relationship as non-FK; the relationship and its persistence semantics are described under Relationships and Messages.
+`Swipe.snapshot_id` references `GameStateSnapshot`. The SQL layer declares this relationship as non-FK.
 
 ## Document References
 

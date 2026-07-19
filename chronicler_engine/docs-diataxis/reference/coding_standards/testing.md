@@ -3,7 +3,7 @@ diataxis: reference
 title: Testing
 ---
 
-> **Diátaxis mode:** Reference. This document is the testing-policy overview that cross-references the canonical sources for each topic. The policy items that do not have a canonical home elsewhere — critical test categories beyond XSS, the real-LLM gate mechanism, the Playwright UI test setup, and the smart-waiting stance — live here.
+> **Diátaxis mode:** Reference. This document holds the cross-cutting testing policy items that do not have a canonical home in the unit-tier or integration-tier standards: critical test categories beyond XSS, the real-LLM gate mechanism, the Playwright UI test setup, and the smart-waiting stance.
 
 ## Overview
 
@@ -11,7 +11,7 @@ The three-doc split for tests: unit-tier patterns, integration-tier patterns, an
 
 ## Critical Test Categories
 
-These four categories of test must never be deleted without replacement. XSS regression checks are the canonical load-bearing case and are documented in the cross-referenced unit-tier standards (Pattern 7 + Cross-cutting B). The three below are not catalogued elsewhere:
+These four categories of test must never be deleted without replacement. XSS regression checks are the canonical load-bearing case. The three below are not catalogued elsewhere:
 
 | Category | Why |
 |----------|-----|
@@ -39,7 +39,7 @@ Diagnostics on failure land in `chronicler_engine/tmp/screenshots/` (PNG) and `t
 
 Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_utils/wait.rs`: `wait_for_llm_idle`, `wait_for_status_ready`, and `wait_for_element_children`. Each helper retries until the condition is met or a per-helper timeout fires; the helpers are the contract for browser and HTTP-test synchronization.
 
-For unit tests of concurrency invariants, the `wait_for_condition` helper is file-local at `src/application/is_generating_invariant_tests.rs:215` — it is local by design and stays scoped to that file (Pattern 8 in the cross-referenced unit-tier standards).
+For unit tests of concurrency invariants, the `wait_for_condition` helper is file-local at `src/application/is_generating_invariant_tests.rs:215` — it is local by design and stays scoped to that file.
 
 ## Llm-call test helpers
 

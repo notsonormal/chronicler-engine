@@ -35,7 +35,7 @@ The assembled prompt is organised as labelled sections — `<role>`, `<instructi
 
 The labels give the user an edit handle per section. `<role>` carries role definition; `<instructions>` carries imperative rules; `<global_rules>` carries the world-bound rules from `world.json`; `<output_format>` carries the structural rules the generation must follow. Editing one aspect means editing the section that aspect lives in; the surrounding structure stays stable across edits.
 
-The engine's tags are content labels, not self-referential tags. A self-referential tag — `<SystemPrompt>`, `<Role>`, or `<AuxiliaryInstructions>` — names the prompt-as-a-whole rather than a region of it. Reasoning models (e.g. Gemma 4) treat such tags as a cue to enter meta-analysis mode, where the model comments on the prompt instead of answering it. The engine's tags differ from these on what they name: content tags carry the section's content. The verbatim section list and the per-section assembly rule are cross-referenced below.
+The engine's tags are content labels, not self-referential tags. A self-referential tag — `<SystemPrompt>`, `<Role>`, or `<AuxiliaryInstructions>` — names the prompt-as-a-whole rather than a region of it. Reasoning models (e.g. Gemma 4) treat such tags as a cue to enter meta-analysis mode, where the model comments on the prompt instead of answering it. The engine's tags differ from these on what they name: content tags carry the section's content.
 
 ## Document References
 

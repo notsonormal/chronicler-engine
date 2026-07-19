@@ -21,7 +21,7 @@ The nine patterns, in order they appear when reading the test tree from `src/` r
 8. **Concurrency invariant** — `#[tokio::test]` + `tokio::spawn` + `Arc<Barrier>` + file-local `wait_for_condition`.
 9. **Property-based (proptest!)** — `proptest!` block co-located with `#[test]`s for the same function.
 
-Four **cross-cutting patterns** apply across multiple of the nine: failure injection via `TestOverride`, XSS regression checks, idempotency tests, and sealed-trait polymorphism tests. They are documented together at the end.
+Four **cross-cutting patterns** apply across multiple of the nine: failure injection via `TestOverride`, XSS regression checks, idempotency tests, and sealed-trait polymorphism tests.
 
 The patterns are **not all the same density**. Pattern 1 covers ~50 of the 92 unit-test files; patterns 8 and 9 each cover 1–2 files. A review that does not cite a specific pattern usually means the test was written without consulting this doc.
 

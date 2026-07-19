@@ -149,7 +149,7 @@ The mode is per-connection, so different backends can use different strategies w
 
 User input enters the engine as `<PlayerInput>` content. The assembler passes it through `sanitize_for_prompt`, which replaces any `{{variable}}` pattern (double curly braces enclosing an identifier) with `[FILTERED]`. Legitimate text passes through unchanged; single braces and empty/unclosed brace pairs are preserved.
 
-Sanitization runs at render time only. Substitution of `{{user}}` in author-controlled preset fields happens before user input reaches the assembler. Output-side handling (response sanitization, including the Gemma 4 thinking-channel suffix workaround) is cross-referenced below.
+Sanitization runs at render time only. Substitution of `{{user}}` in author-controlled preset fields happens before user input reaches the assembler. Response sanitization (including the Gemma 4 thinking-channel suffix workaround) is handled downstream after the LLM call returns.
 
 ## Token Budget Management
 
@@ -194,7 +194,7 @@ World-author data uses the SillyTavern character-card shape:
 
 ## Quantifier Prompt (Separate)
 
-The engine also uses a quantifier prompt — a separate secondary LLM call that runs after narration to analyze the scene. It determines which NPCs are present and whether the player moved. It is **not** part of the layered narrative prompt stack; the quantifier's prompt shape and execution phases are cross-referenced below.
+The engine also uses a quantifier prompt — a separate secondary LLM call that runs after narration to analyze the scene. It determines which NPCs are present and whether the player moved. It is **not** part of the layered narrative prompt stack.
 
 ## Prompt Presets
 
