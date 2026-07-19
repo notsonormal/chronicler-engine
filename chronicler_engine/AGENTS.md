@@ -332,3 +332,5 @@ Tests are already concurrency-safe: they allocate ports dynamically from the ran
 ## DOING CODE REVIEWS
 
 Do not run try to compile, build or test the code when doing code reviews. Unless the review explictly calls for it (e.g. the `test-police` review). 
+
+During code reviews, avoid vague architectural critiques and focus on actionable changes.
