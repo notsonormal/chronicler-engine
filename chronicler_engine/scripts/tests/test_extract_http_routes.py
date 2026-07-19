@@ -264,9 +264,6 @@ class TestDocEmission(unittest.TestCase):
     def test_overview_h2(self) -> None:
         self.assertIn("## Overview", self.doc)
 
-    def test_document_references_h2(self) -> None:
-        self.assertIn("## Document References", self.doc)
-
     def test_seven_area_h2s(self) -> None:
         for _prefix, area in er.AREA_GROUPS:
             self.assertIn(f"## {area}", self.doc)

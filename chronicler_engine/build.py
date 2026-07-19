@@ -436,11 +436,6 @@ def main():
         ),
     )
     parser.add_argument(
-        "--validate-data",
-        action="store_true",
-        help="Validate JSON data files against schemas",
-    )
-    parser.add_argument(
         "--strict",
         action="store_true",
         help="Enable strict mode: warnings are errors, debug assertions enabled",
@@ -611,22 +606,22 @@ def main():
             return
 
         total_steps = (
-            7  # clippy, test-structure, docstrings, doc-validation, copy assets, tests, report/skip
+            8  # validate-data, clippy, test-structure, docstrings, doc-validation, copy assets, tests, report/skip
         )
         if not args.no_fmt:
             total_steps += 1
-        if args.validate_data:
-            total_steps += 1
         steps = StepCounter(total_steps)
-
-        if args.validate_data:
-            timed_step("Validating JSON data...", "python scripts/validate_data.py")
-            both_print("Data validation successful.")
 
         if not args.no_fmt:
             timed_step("Formatting...", "cargo fmt", env=cargo_env)
         else:
             both_print("Skipping formatting (--no-fmt set).")
+
+        timed_step(
+            "Validating JSON data...",
+            "python scripts/validate_data.py",
+            env=cargo_env,
+        )
 
         timed_step(
             "Running clippy...",

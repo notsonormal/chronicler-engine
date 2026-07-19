@@ -105,7 +105,13 @@ def validate_all():
             errors += 1
             continue
 
-        starting_room_id = world_data.get("starting_room_id", "start")
+        scenarios = world_data.get("scenarios", [])
+        default_id = world_data.get("default_scenario_id")
+        starting_room_id = (
+            next((s["starting_room_id"] for s in scenarios if s["id"] == default_id), None)
+            or (scenarios[0]["starting_room_id"] if scenarios else None)
+            or "start"
+        )
         if starting_room_id not in valid_room_ids:
             print(f"FAIL: {world_file}\n  starting_room_id '{starting_room_id}' not found in map")
             errors += 1

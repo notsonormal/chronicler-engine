@@ -93,9 +93,3 @@ This doc is generated from `src/adapters/driving/http/router.rs` and is the cano
 | GET | `/debug/state` | `debug::debug_state_handler` |
 | GET | `/debug/is_generating` | `debug::debug_is_generating_handler` |
 | GET | `/debug/backend` | `debug::debug_backend_handler` |
-
-## Document References
-
-- [`src/adapters/driving/http/router.rs`](../../../src/adapters/driving/http/router.rs) — the canonical route table; this doc is generated from it.
-- [`AGENTS.md`](../../AGENTS.md) — writing conventions the generator applies (seam identifiers, no mechanics leaks).
-- [`scripts/extract_http_routes.py`](../../../scripts/extract_http_routes.py) — the generator.

@@ -307,23 +307,6 @@ def _render_document(
         parts.append(_render_table(unknown))
         parts.append("")
 
-    parts.append("## Document References")
-    parts.append("")
-    parts.append(
-        "- [`src/adapters/driving/http/router.rs`](../../../src/adapters/driving/http/router.rs) "
-        "— the canonical route table; this doc is generated from it."
-    )
-    parts.append(
-        "- [`AGENTS.md`](../../AGENTS.md) "
-        "— writing conventions the generator applies (seam identifiers, "
-        "no mechanics leaks)."
-    )
-    parts.append(
-        "- [`scripts/extract_http_routes.py`](../../../scripts/extract_http_routes.py) "
-        "— the generator."
-    )
-    parts.append("")
-
     return "\n".join(parts)
 
 
