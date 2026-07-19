@@ -3,7 +3,7 @@ diataxis: reference
 title: Architecture System
 ---
 
-> **Diátaxis mode:** Reference. This document describes the architecture system as it is: the eight-tier tier map, the dependency invariant, the port inventory with impl counts, the storage-direct-access contract, the settings flow shape, and the deployment contract. The problem it solves for the reader is *look-up* — which tier a module lives in, which port trait defines which boundary, where settings are loaded from, what the engine binds at runtime. Module paths and port trait names are stable file-tree identifiers. Hexagonal architecture and the discursive rationale for layering live in `../explanation/architecture.md` §Layer Structure; the bootstrap sequence lives in `./startup.md`.
+> **Diátaxis mode:** Reference. This document describes the architecture system as it is: the eight-tier tier map, the dependency invariant, the port inventory with impl counts, the storage-direct-access contract, the settings flow shape, and the deployment contract. The problem it solves for the reader is *look-up* — which tier a module lives in, which port trait defines which boundary, where settings are loaded from, what the engine binds at runtime. Module paths and port trait names are stable file-tree identifiers.
 
 ## Overview
 
