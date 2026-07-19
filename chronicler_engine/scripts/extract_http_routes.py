@@ -14,7 +14,7 @@ a contiguous substring; from there the four fields (verb, path, handler)
 are pulled with a small inner parser.
 
 Output: writes the doc to
-`chronicler_engine/docs-diataxis/reference/http_routes.md`.
+`chronicler_engine/docs-diataxis/reference/frontend/http_routes.md`.
 
 Validator-clean: the doc satisfies every `validate_docs_diataxis.py` rule
 that applies to a `diataxis: reference` doc.
@@ -53,7 +53,7 @@ AREA_GROUPS: tuple[tuple[str, str], ...] = (
 
 # Paths (relative to chronicler_engine/) the script must find.
 ROUTER_REL = "src/adapters/driving/http/router.rs"
-OUTPUT_REL = "docs-diataxis/reference/http_routes.md"
+OUTPUT_REL = "docs-diataxis/reference/frontend/http_routes.md"
 
 
 # ---------------------------------------------------------------------------
@@ -318,16 +318,16 @@ def _render_document(
     parts.append("## Document References")
     parts.append("")
     parts.append(
-        "- [`src/adapters/driving/http/router.rs`](../../src/adapters/driving/http/router.rs) "
+        "- [`src/adapters/driving/http/router.rs`](../../../src/adapters/driving/http/router.rs) "
         "— the canonical route table; this doc is generated from it."
     )
     parts.append(
-        "- [`docs-diataxis/AGENTS.md`](../../docs-diataxis/AGENTS.md) "
+        "- [`AGENTS.md`](../../AGENTS.md) "
         "— writing conventions the generator applies (seam identifiers, "
         "no mechanics leaks)."
     )
     parts.append(
-        "- [`chronicler_engine/scripts/extract_http_routes.py`](../../chronicler_engine/scripts/extract_http_routes.py) "
+        "- [`scripts/extract_http_routes.py`](../../../scripts/extract_http_routes.py) "
         "— the generator."
     )
     parts.append("")
@@ -352,7 +352,7 @@ def _parser(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Extract .route(...) calls from router.rs and emit "
-            "docs-diataxis/reference/http_routes.md."
+            "docs-diataxis/reference/frontend/http_routes.md."
         ),
     )
     parser.add_argument(

@@ -143,14 +143,14 @@ New-game names are auto-generated as `{WorldName}_{YYYY-MM-DD}_{N}` (underscores
 
 - [`./http_routes.md`](./http_routes.md) — full HTTP route topology (52 routes; machine-generated).
 - [`./ui_design.md`](./ui_design.md) — design tokens (colors, typography, spacing) + component specs.
-- [`./llm_processing.md`](./llm_processing.md) — LLM Messages tab forensics + the 50-row `llm_messages` cap.
-- [`./text_check.md`](./text_check.md) — text-check preflight, settings, and preview UI.
-- [`./prompt_system.md`](./prompt_system.md) — Prompt Presets tab content.
-- [`./worlds.md`](./worlds.md) — Worlds tab CRUD + world-game delete dependency.
-- [`./message_model.md`](./message_model.md) — `Message`/`Swipe` model that drives swipe/retry controls.
-- [`./triggers.md`](./triggers.md) — trigger evaluation that retrigger re-runs.
-- [`./game_flow.md`](./game_flow.md) — phase pipeline that drives Thinking/Quantifying/Generating status text.
-- [`../explanation/dashboard_design.md`](../explanation/dashboard_design.md) — design rationale: SillyTavern lineage, polling cadence choice, polling-pause pattern, snapshot-restoration cascade, empty-input continuation, server-rendered fragments over a SPA.
-- [ADR-001: HTMX Web Dashboard Architecture](../../docs/adr/adr-001-htmx-web-dashboard.md) — HTMX + server-rendered HTML architecture.
-- [ADR-002: HTTP Polling for Real-Time Updates](../../docs/adr/adr-002-http-polling.md) — polling-based real-time updates.
-- [ADR-003: Askama Template Engine](../../docs/adr/adr-003-askama-templates.md) — compile-time template validation.
+- [`../narrative/narration_system.md#llm-call-logging--forensics`](../narrative/narration_system.md#llm-call-logging--forensics) — LLM Messages tab forensics + the 50-row `llm_messages` cap.
+- [`../game_flow.md#text-check-branch`](../game_flow.md#text-check-branch) — text-check preflight, settings, and preview UI.
+- [`../narrative/prompt_system.md`](../narrative/prompt_system.md) — Prompt Presets tab content.
+- [`../storage.md#worlds`](../storage.md#worlds) — Worlds tab CRUD + world-game delete dependency.
+- [`../storage.md#messages`](../storage.md#messages) — `Message`/`Swipe` model that drives swipe/retry controls.
+- [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — trigger evaluation that retrigger re-runs.
+- [`../game_flow.md`](../game_flow.md) — phase pipeline that drives Thinking/Quantifying/Generating status text.
+- [`../../explanation/dashboard_design.md`](../../explanation/dashboard_design.md) — design rationale: SillyTavern lineage, polling cadence choice, polling-pause pattern, snapshot-restoration cascade, empty-input continuation, server-rendered fragments over a SPA.
+- [ADR-001: HTMX Web Dashboard Architecture](../../../docs/adr/adr-001-htmx-web-dashboard.md) — HTMX + server-rendered HTML architecture.
+- [ADR-002: HTTP Polling for Real-Time Updates](../../../docs/adr/adr-002-http-polling.md) — polling-based real-time updates.
+- [ADR-003: Askama Template Engine](../../../docs/adr/adr-003-askama-templates.md) — compile-time template validation.

@@ -3,7 +3,7 @@ diataxis: reference
 title: Integration Test Standards
 ---
 
-> **Diátaxis mode:** Reference. This document is the canonical form for **integration tests** in the Chronicler Engine. The reader problem solved here is *alignment*: when writing a new integration test, refactoring an existing one, or reviewing a PR that adds one, the standard form for each test type is published here so tests written by different sessions converge. The pattern taxonomy is derived from the actual `chronicler_engine/tests/` corpus (48 test files organised across five fixture-weight binaries; ~343 test fns; surveyed 2026-07-16). For unit-test standards see `unit_test_standards.md`; for the testing policy (XSS regression checks, critical test categories) see legacy `docs/reference/testing.md` (migration target: `reference/testing.md`); for the test-support builder API see legacy `docs/reference/test_support.md` (migration target: `reference/test_support.md`); for the engine's overall conventions see [`../../AGENTS.md`](../../AGENTS.md).
+> **Diátaxis mode:** Reference. This document is the canonical form for **integration tests** in the Chronicler Engine. The reader problem solved here is *alignment*: when writing a new integration test, refactoring an existing one, or reviewing a PR that adds one, the standard form for each test type is published here so tests written by different sessions converge. The pattern taxonomy is derived from the actual `chronicler_engine/tests/` corpus (48 test files organised across five fixture-weight binaries; ~343 test fns; surveyed 2026-07-16).
 
 ## Overview
 
@@ -415,8 +415,6 @@ The `--llm-only` invocation is the canonical one for the integration-tier LLM te
 
 - [`unit_test_standards.md`](unit_test_standards.md) — unit-test standards (storage backend pair, LLM provider trait, LLM recorder, fragment renderer, concurrency invariant, proptest!; cross-tier alignment).
 - Legacy `docs/reference/testing.md` (migration target: `reference/testing.md`) — testing policy in terse form: what's required, builder-selection rule, XSS regression checks list (must never be deleted without replacement), critical test categories (XSS, Continue, scroll, overflow).
-- Legacy `docs/reference/test_support.md` (migration target: `reference/test_support.md`) — `TestAppBuilder` + `TestDataBuilder` API surface; the builder that the integration tier extends via `SqliteTestAppBuilder`.
-- [`../../AGENTS.md`](../../AGENTS.md) — engine conventions including goal-driven execution and `python build.py` validation gate.
 - `tests/AGENTS.md` — engine-side test-infrastructure policy; test-mirror convention, structure overview, `[binary] ↔ fixture-weight` mapping.
 - `chronicler_engine/docs/adr/0028-test-module-header.md` (ADR-028) — the `check_test_module_header` guardrail; enforces single-line `//! <summary>` on every `*_tests.rs` file (mirrored for integration via Pattern 7's Cross-cutting 10 in `unit_test_standards.md`; the integration tier inherits the same rule).
 - `tests/test_utils/server.rs` — port allocation, `TestServer` lifecycle, `SERVER_MANAGED` PID registry.

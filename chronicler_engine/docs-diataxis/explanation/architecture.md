@@ -1,18 +1,11 @@
 ---
 diataxis: explanation
-arc52: [§3, §5, §7, §10]
 title: Architecture Overview
 ---
 
-> **Diátaxis mode:** Explanation. This document is *understanding-oriented*: it shows how the Chronicler Engine is structured and why, and lays out the quality guarantees the architecture makes. It does not specify column types, phase transitions, or API contracts — those live in [`../../reference/`](../../reference/) and [`../../../docs/system/`](../../../docs/system/). The problem it solves for the reader is *understanding*: how the pieces fit together, what the system promises, and which tradeoffs those promises encode.
+> **Diátaxis mode:** Explanation. This document is *understanding-oriented*: it shows how the Chronicler Engine is structured and why, and lays out the quality guarantees the architecture makes. It does not specify column types, phase transitions, or API contracts — those live in [`../../reference/`](../../reference/). The problem it solves for the reader is *understanding*: how the pieces fit together, what the system promises, and which tradeoffs those promises encode.
 
-## Structure
-
-This document follows the arc52 selective subset: §3 Context & Scope, §5 Building Block View, §7 Deployment View, §10 Quality Requirements.
-
----
-
-## §3 Context & Scope
+## Context
 
 The Chronicler Engine is a single-process Rust application that turns player input into LLM-generated narrative, persists state, and renders an HTMX dashboard. It orchestrates the surrounding systems — LLM, database, grammar checker — through adapters, with the dependency direction pointing inward.
 
@@ -44,11 +37,9 @@ The following are workspace-level systems that the engine connects to but does n
 
 - **Ollama runtime.** A consumed external system; the engine treats it as an HTTPS endpoint.
 - **Browser rendering.** The dashboard is rendered server-side; the engine owns the templates, not the DOM.
-- **Other AI-stack containers** in the workspace (Open Notebook, SurrealDB, Suwayomi, Paperless, Stable Diffusion). They share the Docker network topology but are not part of the engine's runtime contract — see §7.
+- **Other AI-stack containers** in the workspace (Open Notebook, SurrealDB, Suwayomi, Paperless, Stable Diffusion). They share the Docker network topology but are not part of the engine's runtime contract — see the Deployment section.
 
----
-
-## §5 Building Block View
+## Layer Structure
 
 The engine has four containers at the L2 level, and four cooperating layers inside the application core at L3.
 
@@ -104,20 +95,13 @@ C4Component
     Rel(adapters, llm, "HTTPS calls")
 ```
 
-#### The four layers
+The engine is structured in four layers so the dependency direction is one-way: domain logic never reaches outward to HTTP or storage, application logic never reaches inward past port traits, and adapters never invent their own abstractions over the application core. Each layer has a single responsibility, and `arch-lint` enforces that no inner layer imports from an outer one. The result is that domain code can be tested without spinning up the HTTP server, and the HTTP server can be replaced without touching the orchestration layer.
 
-- **Domain Layer** — `src/domain/`. Pure data and rules; the only layer the engine guarantees depends on nothing else.
-- **Application Layer** — `src/application/`. Use cases and orchestration. Owns port trait definitions under `application/ports/`. Constructs `ActionPipeline`, `GenerationGate`, `GameService`, `AgentRegistry`. Reaches `Storage` only at the explicit persistence boundary.
-- **Adapters** — `src/adapters/`. Two sub-trees: `driving/` (HTTP, CLI) implements inbound port-shaped surfaces; `driven/` (storage, LLM providers, text-check via the `harper_core` crate) implements the port traits owned by application.
-- **Bootstrap** — `src/bootstrap/`. Composition root; the module that imports both port traits and adapter impls. Wires everything together at startup.
+See `../reference/architecture_system.md` §Layer Structure for the file-tree layout, §Dependency Invariant for the load-bearing rule, and §Port Inventory for the application-to-driven-adapter boundary.
 
-The dependency invariant is the load-bearing rule: `domain` + `application` depend on port traits only; adapters implement port traits; only `bootstrap` imports both. The existing 8-tier layout (`model`, `engine`, `application`, `adapters/driven`, `adapters/driving`, `bootstrap`, `settings`, `test_support`) is a file-tree expression of this rule.
+## Deployment
 
----
-
-## §7 Deployment View
-
-The engine's deployment contract ends at its process boundary: what the process binds, reads, and calls out to. Surrounding orchestration — Caddy, Docker, the `no-internet` network, sibling AI-stack containers — is workspace-level topology, out of scope for the engine's own docs (see the map's Out-of-scope section). This section describes only what the engine process itself needs to run.
+The engine's deployment contract ends at its process boundary: what the process binds, reads, and calls out to. Surrounding orchestration — Caddy, Docker, the `no-internet` network, sibling AI-stack containers — is workspace-level topology, out of scope for the engine's own docs (see the Out-of-scope list above).
 
 ```mermaid
 C4Deployment
@@ -137,19 +121,13 @@ C4Deployment
     Rel(engine, llm, "Generates narration", "HTTPS")
 ```
 
-- **HTTP port.** The engine binds a single HTTP port (configurable) and serves the dashboard, action, and polling endpoints. TLS termination, reverse proxying, and port mapping are workspace-operator concerns, not the engine's.
-- **SQLite database.** One file per instance (e.g. `chronicler_3000.db`), created automatically on first access.
-- **File system.** Reads JSON seeds from `data/`, writes runtime data to `saves/`, reads and writes prompt presets to `prompts/`.
-- **Outbound LLM calls.** HTTPS to the configured backend (OpenRouter, DeepSeek, or Ollama). The endpoint URL is configurable; the engine does not own the LLM service.
-- **In-process text check.** The `harper_core` crate is linked directly into the engine binary; text checking is a function call.
+**Single-process deployment.** The engine runs one process against its SQLite database. The `is_generating` atomic flag is process-local; the deployment contract is one process per database. This means the database is the coordination boundary, not the engine process — restarting the engine is safe, and two engines pointing at the same database would race on `is_generating`. The single-process commitment is deliberate; horizontal scale is not in scope.
 
-**Single-process deployment.** The engine runs one process against its SQLite database. The `is_generating` atomic flag is process-local; the deployment contract is one process per database.
+See `../reference/architecture_system.md` §Deployment Contract for the runtime elements (HTTP port, SQLite file, file system paths, outbound LLM, in-process text check) and what each binds/reads/calls.
 
----
+## Quality Story
 
-## §10 Quality Requirements
-
-This section lists the cross-cutting quality attributes the architecture makes explicit. Each attribute is named, the guarantee is stated, and the load-bearing decision or invariant is cited. The mechanism docs (how each guarantee is implemented) live in [`architecture/guardrails.md`](../../../docs/architecture/guardrails.md) and the relevant ADRs.
+The architecture makes a set of guarantees about how it behaves under load, failure, and concurrency. Each guarantee is named, the promise is stated, and the load-bearing decision is cited. The mechanism docs (how each guarantee is delivered) live in the guardrails and rust-technical sections of the legacy `architecture/` tree and the relevant ADRs; the architectural intent is here.
 
 ### Reliability
 
@@ -169,7 +147,7 @@ This section lists the cross-cutting quality attributes the architecture makes e
 | LLM HTTP timeout bounded           | The LLM transport enforces a 180-second HTTP timeout.                      | INV-004.                                                 |
 | One FreeAction at a time           | Long-running LLM calls do not queue — overlapping actions are rejected, matching single-player semantics.                | INV-004b.                                                |
 | No blocking on the Axum event loop | Synchronous services (`GameService`, `ActionPipeline`) run inside `tokio::task::spawn_blocking`; HTTP handlers return before the LLM call begins. | INV-006, INV-007.                                        |
-| Settings reload is bounded         | Connection changes require a server restart; only `max_context_tokens` is read dynamically. | `architecture/system.md` §Reload rules.                  |
+| Settings reload is bounded         | Connection settings are immutable post-boot (see `../reference/architecture_system.md` §Settings Flow). | INV-003. |
 
 ### Concurrency
 
@@ -190,8 +168,8 @@ This section lists the cross-cutting quality attributes the architecture makes e
 - [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md) — dependency invariant; port ownership; storage direct-access exemption.
 - [ADR-030: `is_generating` Dual-Source Invariant](../../../docs/adr/adr-030-is-generating-invariant.md) — single-writer rule; lock-order fix; property-test verification.
 - [ADR-032: PhaseError](../../../docs/adr/adr-032-phaseerror.md) — errors-only enum; orchestrator seam consumption.
-- [`architecture/guardrails.md`](../../../docs/architecture/guardrails.md) — INV-001 through INV-007 enumerated; test references.
-- [`architecture/rust_technical.md`](../../../docs/architecture/rust_technical.md) — cross-cutting Rust idioms referenced by §10.
-- [`architecture/system.md`](../../../docs/architecture/system.md) — 8-tier tier map; dependency invariant; port inventory.
-- [`../../reference/data_layer.md`](../../reference/data_layer.md) — SQLite schema; the eleven tables and their relationships.
-- [`../../explanation/two-state-channels.md`](../../explanation/two-state-channels.md) — why the engine carries two complementary generation-state signals rather than one.
+- [`docs/architecture/guardrails.md`](../../../docs/architecture/guardrails.md) — INV-001 through INV-007 enumerated; test references.
+- [`docs/architecture/rust_technical.md`](../../../docs/architecture/rust_technical.md) — cross-cutting Rust idioms referenced by the Quality Story section.
+- [`../reference/architecture_system.md`](../reference/architecture_system.md) — 8-tier tier map; dependency invariant; port inventory.
+- [`../../reference/storage.md`](../../reference/storage.md) — SQLite schema; the eleven tables and their relationships.
+- [`./two-state-channels.md`](./two-state-channels.md) — why the engine carries two complementary generation-state signals rather than one.

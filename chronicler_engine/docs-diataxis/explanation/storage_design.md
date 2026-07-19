@@ -3,11 +3,11 @@ diataxis: explanation
 title: Storage and Bootstrap Design
 ---
 
-> **Diátaxis mode:** Explanation. This document explains the design of the Chronicler Engine's persistence layer and bootstrap flow as it stands today — the `Storage` struct and its backend decorator, the two-phase seed-then-DB-first boundary, the seeding contract, the cross-table coordination rule, and the paired `get_*` / `require_*` read-helper contract. The problem it solves for the reader is *understand*: how the design fits together and what each piece is for. Reference detail (signatures, per-column DDL, per-field JSON shapes, invariants the schemas and code say directly) lives in `../reference/storage.md`, `../reference/startup.md`, `../reference/data_schemas.md`, and `../reference/data_layer.md`.
+> **Diátaxis mode:** Explanation. This document explains the design of the Chronicler Engine's persistence layer and bootstrap flow as it stands today — the `Storage` struct and its backend decorator, the two-phase seed-then-DB-first boundary, the seeding contract, the cross-table coordination rule, the paired `get_*` / `require_*` read-helper contract, and the design of the message-swipe aggregate. The problem it solves for the reader is *understand*: how the design fits together and what each piece is for. Reference detail (signatures, per-column DDL, per-field JSON shapes, invariants the schemas and code say directly) lives in `../reference/storage.md` and `../reference/startup.md`.
 
 ## Overview
 
-The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in `DefaultApplicationService`; and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error. This doc unfolds each of those pieces in turn.
+The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in `DefaultApplicationService`; and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error. Reference detail for each of these lives in `../reference/storage.md` (storage struct, backend decorator, seeding contract, read contract, eleven-table schema, entity persistence) and `../reference/startup.md` (bootstrap boundary, seeding order, schema files, invariants outside the schemas).
 
 ## The storage struct and its backend decorator
 
@@ -63,12 +63,38 @@ The not-found variants carry the kind of id the storage interface uses for that 
 
 The shape of the entity determines whether it has a required-read helper at all. Characters come back through a single roster helper, `list_characters(world_id)`, which returns the full character set for a world — character reads in the domain are world-scoped rosters. `Persona` and `Character` are distinct domain entities with their own storage surfaces; the persona surface keeps its `get_persona` + `require_persona` pair, while character reads stay roster-shaped.
 
+## Messages-and-swipes
+
+LLM narration is non-deterministic. The same player input can produce a strong paragraph on one run and a flat one on the next. The message aggregate carries this non-determinism directly: each retry of an AI message produces a new `Swipe` on the same `Message`, and the previous swipe is preserved. The player navigates between swipes; the engine holds all alternatives. The narrative cost of retry — a fresh LLM call, a snapshot to restore — is paid in full. The information cost — losing the prior generation — is zero.
+
+### Per-swipe state binding
+
+A swipe is not alternate text alone. Each `Swipe` carries its own `snapshot_id` pointing at the `GameStateSnapshot` that produced it. When the player navigates to a different swipe, the engine restores the entire world state that produced that swipe's text, not just the text itself.
+
+Narration mutates state. The quantifier runs after the narration LLM and detects NPCs and movement; it updates scene state and increments encounter counters. Two different narrations produce two different post-narration states. A model that swapped only the text would leave the world state tied to whichever swipe was generated last — a "ghost state" where the displayed text no longer matches the underlying world.
+
+The per-swipe `snapshot_id` binds each swipe to the state that produced it. Switching swipes rewinds the world to the moment that swipe was committed. Text and state stay coherent because they were captured together. The snapshot reference is deliberately not a SQL FK (see `../reference/storage.md` §Relationships): declaring it as a FK would cascade snapshot deletion to swipes, which the retry semantics don't want.
+
+### Last-message-only swiping
+
+Swiping is bounded to the last message. Each message depends on the state produced by the message before it: a narration's quantifier detected NPCs the next narration assumes are present; an event header recorded a trigger firing the next message's state reflects.
+
+A swipe on a non-last message would discard every message after it — the swipe rewinds state the subsequent messages were built on, so they cannot stand. The engine's retry operation handles that case as a single, well-named flow: roll the world back to a snapshot, soft-delete the messages that depended on it, regenerate. Carrying the same flow under two names (retry plus non-last swiping) would not gain capability.
+
+The player's A/B comparison lives at the last message. Comparing earlier messages means rolling back everything after them via retry.
+
+### Independent swipe sets across narration and event
+
+A message can be a narration (the LLM's response to the player's action) or an event continuation (a trigger firing after the narration). Each message has its own swipe set: retrying a narration does not disturb the event that followed it; retriggering an event does not disturb the narration that preceded it.
+
+The distinction lives in the last message's `event_header`. The retry path reads the header to decide which kind of retry to run — narration retry or event retrigger. Each generation keeps its grip on the previous independent of the other.
+
 ## Document References
 
+- [Storage](../reference/storage.md) — current contract for the storage layer and entity persistence.
+- [Startup and Bootstrap](../reference/startup.md) — current bootstrap boundary, seeding order, and schema files.
+- [ADR-008: SQLite Snapshot Persistence](../../docs/adr/adr-008-sqlite-snapshot-persistence.md) — supplies the `GameStateSnapshot` that each swipe references for state-consistent switching.
+- [ADR-017: Message Swipes](../../docs/adr/adr-017-message-swipes.md) — historical decision record for the swipe model.
 - [ADR-020: Unified Storage Struct](../../docs/adr/adr-020-storage-consolidation.md) — historical decision record for collapsing the six-trait repository pattern into a single `Storage` struct with the `Backend` enum and `BackendKind` decorator.
 - [ADR-024: Migrate Game Data to SQLite with Seed Pattern](../../docs/adr/adr-024-game-data-migration-to-sqlite.md) — historical decision record for the JSON-to-SQLite migration and the idempotent seed pattern.
 - [ADR-026: Relocate Persona Binding from World to Game](../../docs/adr/adr-026-persona-relocation-to-game.md) — historical decision record for moving the persona binding off the world and onto the game, which made personas a top-level world-independent directory in the seed flow.
-- [`../reference/storage.md`](../reference/storage.md) — current contract for the storage layer.
-- [`../reference/startup.md`](../reference/startup.md) — current bootstrap boundary + seeding order.
-- [`../reference/data_schemas.md`](../reference/data_schemas.md) — JSON seed-file shapes (authoritative at `data/schemas/`).
-- [`../reference/data_layer.md`](../reference/data_layer.md) — eleven-table schema and FK relationships.

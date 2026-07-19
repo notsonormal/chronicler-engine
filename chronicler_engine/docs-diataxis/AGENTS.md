@@ -12,7 +12,7 @@ This file is the **writing-convention layer** of a three-layer enforcement model
 
 When in doubt about *how* to write something, read this file. When in doubt about *framing*, invoke `/grilling` and `/domain-modeling`. When in doubt about *mode classification*, ask the Diátaxis compass: "What problem does this solve for the reader?"
 
-## The three frameworks
+## The two frameworks
 
 These are the writing perspectives the tree operates under.
 
@@ -23,7 +23,7 @@ Every doc in this tree is in exactly one of four Diátaxis modes. The mode is de
 | Mode | Reader problem | Orientation | Chronicler examples |
 |---|---|---|---|
 | **Tutorial** | Learn from zero | Learning-oriented (study) | None exist yet — see "Tutorials" below |
-| **How-to** | Achieve a goal | Goal-oriented (work) | `diagnostics/DEBUGGING.md`; none here yet |
+| **How-to** | Achieve a goal | Goal-oriented (work) | `how-to/debugging.md` |
 | **Reference** | Look up a fact | Information-oriented (work) | `reference/data_layer.md`, `reference/game_flow.md` |
 | **Explanation** | Understand why | Understanding-oriented (study) | `explanation/two-state-channels.md`, `explanation/architecture.md` |
 
@@ -36,29 +36,16 @@ Every doc in this tree is in exactly one of four Diátaxis modes. The mode is de
 
 For the framework's first principles (two-axis compass, adjacent-mode boundaries, workflow), see `explanation/diataxis.md`.
 
-If the content doesn't solve a reader problem under any of these, drop it. If it mixes modes, split it by mode. Canonical splits in this tree: `game_flow.md` ↔ `two-state-channels.md`, `agent_system.md` ↔ `agent_system_design.md`, `message_model.md` ↔ `message_swipe_model.md`.
-
-### arc52 — architecture doc sections
-
-The architecture overview is structured as a single document (`explanation/architecture.md`) with arc52 sections as H2 headings. The full 12-section arc52 template is **not** used — only the selective subset §3, §5, §7, §10. Each section answers a different question:
-
-| Section | Question | C4 level |
-|---|---|---|
-| §3 Context & Scope | What is this and what touches it? | L1 (System Context) |
-| §5 Building Block View | How is it built inside? | L2 (Container) + L3 (Component) |
-| §7 Deployment View | How do I run it? | Infrastructure topology (`C4Deployment`) |
-| §10 Quality Requirements | What guarantees does it make? | n/a (textual) |
-
-ADRs (in `chronicler_engine/docs/adr/`) satisfy arc52 §9 in their own frame — they are not retrofitted to Diátaxis. Plans (in `chronicler_engine/docs/plans/`) are time-capsule content in their own frame. Both live under `docs/`, not under `docs-diataxis/`.
+If the content doesn't solve a reader problem under any of these, drop it. If it mixes modes, split it by mode. Canonical splits in this tree: `game_flow.md` ↔ `two-state-channels.md`, `agent_system.md` ↔ `agent_system_design.md`, `storage.md` ↔ `storage_design.md`.
 
 ### C4 — diagram levels
 
 C4 diagrams are rendered via Mermaid's C4 directives (`C4Context`, `C4Container`, `C4Component`, `C4Deployment`). The four levels:
 
-- **L1 (Context)** — the engine as one system among external systems. Answer to §3.
-- **L2 (Container)** — the engine's major deployable units (HTTP server, application core, SQLite, outbound LLM clients). Answer to §5.
+- **L1 (Context)** — the engine as one system among external systems.
+- **L2 (Container)** — the engine's major deployable units (HTTP server, application core, SQLite, outbound LLM clients).
 - **L3 (Component)** — the internals of one container. Used **only** when zooming into the Application Core, where the domain/application/adapters/bootstrap decomposition is the load-bearing dependency-invariant story. L3 of SQLite or the HTTP server would be redundant — don't write it. One L3 diagram zooms into one container (the standard C4 pattern).
-- **Deployment** — runtime topology (process, files, network boundaries). Answer to §7.
+- **Deployment** — runtime topology (process, files, network boundaries).
 
 **C4 is for software components with tech stacks and responsibilities, not for database tables.** Don't use C4 primitives for data-layer relationships — use a Mermaid `flowchart` (see "Relationships diagrams" below).
 
@@ -68,7 +55,6 @@ Every doc carries YAML front-matter at the top of the file. Required keys:
 
 - `diataxis: <mode>` — one of `tutorial`, `how-to`, `reference`, `explanation`. The declared Diátaxis mode.
 - `title: <H1 mirror>` — the doc's title, mirroring the H1. Lets downstream indexes consume front-matter without parsing markdown.
-- `arc52: [§3, §5, §7, §10]` — only on arc52-shaped docs (the architecture overview). Omit on everything else. Lists which selective arc52 sections the doc covers.
 
 Front-matter does **not** duplicate what the content already signals — content signals by section structure (a Reference doc reads like a schema catalog; an Explanation doc reads as discursive discussion); front-matter signals by machine-readable key. They answer different questions, so the layering is useful, not redundant.
 
@@ -84,8 +70,8 @@ State the mode and the reader problem the doc solves. This is the seam that lets
 
 Diátaxis-shape at the top level:
 
-- `reference/` — Reference docs, flat (no subfolders unless a topic grows large).
-- `explanation/` — Explanation docs. Flat — no subfolders; if a future cluster of docs earns one, create it then.
+- `reference/` — Reference docs.
+- `explanation/` — Explanation docs.
 - `tutorials/` and `how-to/` — **do not create these directories until content earns its place.** Empty quadrant dirs are noise; create `tutorials/` and `how-to/` only when a doc earns the mode.
 
 `adr/` and `plans/` live under `docs/`, not under `docs-diataxis/`.
@@ -133,7 +119,7 @@ Where aggregate structure isn't obvious from reading the source sequentially, a 
 
 Austere, neutral, authoritative — like a map. Describes *what is*, not *how to use it* and not *why it's that way*. The last two belong in How-to and Explanation respectively. Canonical Diátaxis imperative: **describe and only describe; when tempted to explain, link to an Explanation doc** (per diataxis.fr/reference/). Do not absorb rationale into Reference prose; do not point at ADRs as the home for current-behaviour rationale — ADRs are frozen decision records, possibly Superseded, not living descriptions of how the system works today.
 
-If a Reference doc's content starts answering "why", split the why into an Explanation doc and cross-reference (the `game_flow.md` ↔ `two-state-channels.md`, `agent_system.md` ↔ `agent_system_design.md`, and `message_model.md` ↔ `message_swipe_model.md` splits are the canonical patterns in this tree).
+If a Reference doc's content starts answering "why", split the why into an Explanation doc and cross-reference (the `game_flow.md` ↔ `two-state-channels.md`, `agent_system.md` ↔ `agent_system_design.md`, and `storage.md` ↔ `storage_design.md` splits are the canonical patterns in this tree).
 
 ### Explanation
 
@@ -170,13 +156,13 @@ None exist yet. Tutorials are learning-by-doing walkthroughs that build a mental
 
 ### How-to
 
-Only `diagnostics/DEBUGGING.md`. Goal-oriented directions for already-competent users, written from the user's goal, not from the machinery.
+Only `how-to/debugging.md`. Goal-oriented directions for already-competent users, written from the user's goal, not from the machinery.
 
 ## Diagrams
 
 Mermaid only. The toolchain is already in place; do not introduce a new diagram tool.
 
-- **C4 directives** (`C4Context`, `C4Container`, `C4Component`, `C4Deployment`) — for the architecture overview's §3/§5/§7. Use the `UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="2")` directive for readability.
+- **C4 directives** (`C4Context`, `C4Container`, `C4Component`, `C4Deployment`) — use the `UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="2")` directive for readability.
 - **`flowchart`** — for relationships diagrams (see above) and for runtime/process diagrams (phase sequences, retry flows). Existing `game_flow.md` and `action_pipeline.md` use this style.
 - **`erDiagram`** — avoid; see "Relationships diagrams" above.
 - **`sequenceDiagram`** / **`stateDiagram-v2`** — available if a doc genuinely needs them.

@@ -3,7 +3,7 @@ diataxis: reference
 title: Unit Test Standards
 ---
 
-> **Diátaxis mode:** Reference. This document is the canonical form for **unit tests** in the Chronicler Engine. The reader problem solved here is *alignment*: when writing a new unit test, refactoring an existing one, or reviewing a PR that adds one, the standard form for each test type is published here so tests written by different sessions converge. The pattern taxonomy is derived from the actual `src/*_tests.rs` corpus (92 files, 865 `#[test]` fns, surveyed 2026-07-16). For the testing policy see [`../../reference/testing.md`](../../reference/testing.md); for the test-support builder API see [`../../reference/test_support.md`](../../reference/test_support.md); for the engine's overall conventions see [`../../AGENTS.md`](../../AGENTS.md).
+> **Diátaxis mode:** Reference. This document is the canonical form for **unit tests** in the Chronicler Engine. The reader problem solved here is *alignment*: when writing a new unit test, refactoring an existing one, or reviewing a PR that adds one, the standard form for each test type is published here so tests written by different sessions converge. The pattern taxonomy is derived from the actual `src/*_tests.rs` corpus (92 files, 865 `#[test]` fns, surveyed 2026-07-16).
 
 ## Overview
 
@@ -463,10 +463,7 @@ Used in: `src/application/ports/llm_message_repository_tests.rs` (1 test, polymo
 
 ## Document References
 
-- [`../../reference/testing.md`](../../reference/testing.md) — testing policy (terse, what's required, builder selection).
-- [`../../reference/test_support.md`](../../reference/test_support.md) — `TestAppBuilder` + `TestDataBuilder` API surface.
-- [`../../AGENTS.md`](../../AGENTS.md) — engine conventions including goal-driven execution and `python build.py` validation gate.
+- [`./testing.md`](./testing.md) — testing policy (terse, what's required, builder selection).
 - Legacy `docs/reference/testing.md` (referenced from this doc; migration target is `docs-diataxis/reference/testing.md` once ticket 15 lands) — critical test categories list, including the full XSS, Continue, scroll, and overflow regression checks that must never be deleted without replacement.
-- Legacy `docs/reference/test_support.md` — same migration target as the builder API doc.
 - `src/test_support/mod.rs` — entry point for fixture builders (`TestWorld`, `TestPersona`, `TestNpc`, `TestMap`, `TestGameState`, `TestStoredTriggerContext`).
 - `tests/infrastructure/guardrails/structure.rs` (ADR-028) — the `check_test_module_header` guardrail; enforces single-line `//! <summary>` on every `*_tests.rs` file.

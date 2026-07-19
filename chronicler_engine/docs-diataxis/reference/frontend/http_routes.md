@@ -98,6 +98,6 @@ This doc is generated from `src/adapters/driving/http/router.rs` and is the cano
 
 ## Document References
 
-- [`src/adapters/driving/http/router.rs`](../../src/adapters/driving/http/router.rs) — the canonical route table; this doc is generated from it.
-- [`docs-diataxis/AGENTS.md`](../../docs-diataxis/AGENTS.md) — writing conventions the generator applies (seam identifiers, no mechanics leaks).
-- [`chronicler_engine/scripts/extract_http_routes.py`](../../chronicler_engine/scripts/extract_http_routes.py) — the generator.
+- [`src/adapters/driving/http/router.rs`](../../../src/adapters/driving/http/router.rs) — the canonical route table; this doc is generated from it.
+- [`AGENTS.md`](../../AGENTS.md) — writing conventions the generator applies (seam identifiers, no mechanics leaks).
+- [`scripts/extract_http_routes.py`](../../../scripts/extract_http_routes.py) — the generator.

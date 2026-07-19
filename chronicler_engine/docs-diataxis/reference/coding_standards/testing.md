@@ -3,11 +3,11 @@ diataxis: reference
 title: Testing
 ---
 
-> **Diátaxis mode:** Reference. This document is the testing-policy overview that cross-references the canonical sources for each topic: the builder API lives in `./test_support.md`, the unit-tier patterns in `./unit_test_standards.md`, the integration-tier patterns in `./integration_test_standards.md`, the running-test commands in `chronicler_engine/AGENTS.md`, and the coverage-exclusion policy in `./guardrails.md`. The policy items that do not have a canonical home elsewhere — critical test categories beyond XSS, the real-LLM gate mechanism, the Playwright UI test setup, and the smart-waiting stance — live here.
+> **Diátaxis mode:** Reference. This document is the testing-policy overview that cross-references the canonical sources for each topic. The policy items that do not have a canonical home elsewhere — critical test categories beyond XSS, the real-LLM gate mechanism, the Playwright UI test setup, and the smart-waiting stance — live here.
 
 ## Overview
 
-The three-doc split for tests `./unit_test_standards.md` (unit-tier patterns), `./integration_test_standards.md` (integration-tier patterns), and this doc (cross-cutting policy that lives outside the three above). Running tests, coverage policy, and clippy/arch-lint enforcement live in `chronicler_engine/AGENTS.md` and `./guardrails.md` respectively.
+The three-doc split for tests `./unit_test_standards.md` (unit-tier patterns), `./integration_test_standards.md` (integration-tier patterns), and this doc (cross-cutting policy that lives outside the three above).
 
 ## Critical Test Categories
 
@@ -41,13 +41,24 @@ Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_u
 
 For unit tests of concurrency invariants, the `wait_for_condition` helper is file-local at `src/application/is_generating_invariant_tests.rs:215` — it is local by design and stays scoped to that file (see `./unit_test_standards.md` Pattern 8).
 
+## Llm-call test helpers
+
+`RecordingForensics` (`src/test_support/recording_forensics.rs`) is a spy implementation of `LlmMessageRepository` that captures every LLM call in memory for test assertion. It is a test-writing fixture, not a runtime-debugging tool — production runs write to the SQLite `llm_messages` table via `LlmCallRecorder`, and a `/fragment/llm-messages` UI tab exists for runtime inspection.
+
+Two reader methods expose the captured calls:
+
+| Method | Returns | Use |
+|--------|---------|-----|
+| `last_saved_message()` | `Option<&LlmMessage>` | The exact prompts and parsed response the orchestrator persisted for the most recent call |
+| `save_call_count()` | `usize` | Number of recorder fires — confirms the recorder did (or did not) fire the expected number of times |
+
+The recorder captures every attempt, including those that returned a configured error, which makes the two readers the right hook for verifying failure-path assertions.
+
 ## Document References
 
-- [`./test_support.md`](./test_support.md) — builder API + selection rule + fixtures + recording-forensics + integration helpers.
 - [`./unit_test_standards.md`](./unit_test_standards.md) — canonical nine-pattern form for `*_tests.rs` unit tests, with four cross-cutting patterns (XSS regression is Cross-cutting B).
 - [`./integration_test_standards.md`](./integration_test_standards.md) — canonical seven-pattern form for tests under `tests/`, with eight cross-cutting patterns.
 - [`./guardrails.md`](./guardrails.md) — coverage-exclusion policy and the test-module-header convention guardrail.
-- [`chronicler_engine/AGENTS.md`](../../AGENTS.md) — essential commands: `python build.py`, `cargo nextest run`, `--llm-only`, `--coverage`, iteration strategy.
-- [`tests/AGENTS.md`](../../tests/AGENTS.md) — live structure index for the integration test tree and the TEST MIRROR CONVENTION.
-- [`scripts/check_test_structure.py`](../../scripts/check_test_structure.py) — enforces `*_tests.rs` sibling-file layout (no inline `#[cfg(test)]` modules).
-- [ADR-028: Test Module Header Convention](../../docs/adr/adr-028-test-module-header-convention.md) — the single-line `//! <summary>` convention on every `*_tests.rs` file.
+- [`tests/AGENTS.md`](../../../tests/AGENTS.md) — live structure index for the integration test tree and the TEST MIRROR CONVENTION.
+- [`scripts/check_test_structure.py`](../../../scripts/check_test_structure.py) — enforces `*_tests.rs` sibling-file layout (no inline `#[cfg(test)]` modules).
+- [ADR-028: Test Module Header Convention](../../../docs/adr/adr-028-test-module-header-convention.md) — the single-line `//! <summary>` convention on every `*_tests.rs` file.

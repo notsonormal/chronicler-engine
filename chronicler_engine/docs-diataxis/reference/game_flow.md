@@ -3,96 +3,190 @@ diataxis: reference
 title: Game Flow
 ---
 
-> **Diátaxis mode:** Reference. This document describes the runtime control flow of a FreeAction as it is: phase sequence, status phases, retry branching, and the unified error model. The problem it solves for the reader is *look-up*: when the engine is in state X, what happens next.
+> **Diátaxis mode:** Reference. This document describes the FreeAction
+> runtime envelope as it is: the phase sequence from player input through
+> narrate, quantifier, trigger evaluation, and back to UI; the status phases
+> surfaced during generation; retry branching; the `PhaseError` contract; the
+> cancellation guards (α-check, `GenerationGuard::Drop`, shutdown gate); the
+> trigger-evaluation drilldown (nine-step sequence, `times_met`, mutation
+> order); and the two branch pipelines (movement, text-check pre-flight).
+>
+> Reader problem: *look-up* — when the engine is in state X, which phase
+> runs next, which errors surface, which guards reject stale work, and which
+> branch fires.
+>
+> Function-level detail lives in `src/application/action_pipeline/` and
+> `src/domain/engine/`.
 
 ## Overview
 
-The runtime control flow: the phase sequence from player input through LLM generation, quantification, and trigger evaluation, back to a UI update.
-
-## The Game Flow
+A FreeAction moves from player input through narration, scene quantification, engine commit, optional trigger continuation, and finalization. Polling projects persisted status and phase changes to the UI.
 
 ```mermaid
 flowchart TD
     Start["Start Game"]
-    Init["1. Initialize\nLoad world, set player, render UI, start polling"]
-    Await["2. Await Input\nStatus: Ready"]
-    Process["3. Process Action\nParse, validate, log, spawn LLM task"]
-    Narrate["Main Narration\nBuild prompt, LLM, Save to DB"]
-    Quantify["Quantifier\nDetect movement and NPC triggers"]
-    TriggerEval["Trigger Evaluation\nIf match: continuation narration"]
-    Quantify2["Post-Event Quantifier\nUpdate NPC presence"]
-    Poll["Polling Update\nClient refreshes via HTMX"]
+    Init["Initialize\nLoad Game and render UI"]
+    Await["Await Action\nStatus: Idle"]
+    Process["Process Action\nValidate, claim generation slot, spawn task"]
+    Narrate["Main Narration\nBuild prompt, call LLM, persist Message"]
+    Quantify["Quantifier\nDetect movement and Characters"]
+    Commit["Engine Commit\nMovement, Trigger evaluation, encounters"]
+    Trigger{"Trigger matched?"}
+    Continue["Continuation Narration"]
+    Reconcile["Post-event Quantifier"]
+    Finalize["Finalize\nPersist status and phase"]
+    Poll["Polling Update\nHTMX refresh"]
 
-    Start --> Init --> Await --> Process --> Narrate --> Quantify --> TriggerEval
-    TriggerEval --> Quantify2 --> Poll
-    Poll -.-> Await
+    Start --> Init --> Await --> Process --> Narrate --> Quantify --> Commit --> Trigger
+    Trigger -->|Yes| Continue --> Reconcile --> Finalize
+    Trigger -->|No| Finalize
+    Finalize --> Poll -.-> Await
 ```
 
 ## Granular Status Phases
 
-During LLM processing, the UI displays granular status phases instead of a single "Thinking..." message.
+`GenerationStatus` carries the coarse state (`Idle`, `Generating`, or `Error`). While it is `Generating`, `GenerationPhase` supplies the UI-facing stage.
 
-| Phase              | Display Text                  | Endpoint Value        | When Active                                                                                       |
-|--------------------|-------------------------------|-----------------------|---------------------------------------------------------------------------------------------------|
-| `Narrating`        | "Generating narration..."     | `narrating`           | Main LLM narration; narration is saved to DB before the quantifier runs.                          |
-| `Quantifying`      | "Quantifying scene..."        | `quantifying`         | Post-narration quantifier analysis; narration is visible, metadata pending.                       |
-| `GeneratingEvent`  | "Generating event..."         | `generating-event`    | Trigger continuation narration; fires after trigger evaluation.                                    |
+| Phase | Display text | Endpoint value | Active work |
+|---|---|---|---|
+| `Narrating` | "Generating narration..." | `narrating` | Main narration; the resulting Message is persisted before quantification. |
+| `Quantifying` | "Quantifying scene..." | `quantifying` | Post-narration or post-event scene analysis. |
+| `GeneratingEvent` | "Generating event..." | `generating-event` | Trigger continuation narration. |
 
-- The persisted status field (`Idle` / `Generating` / `Error`) drives UI disable state for the polled render.
-- The frontend maps endpoint values (`narrating`, `quantifying`, `generating-event`) to human-readable text.
-- An optimistic "Thinking..." is shown immediately on form submit, before the first poll response.
+The action response immediately projects "Thinking..."; subsequent polls replace it with the persisted phase display. Finalization returns the phase to its default and changes status to `Idle` unless an error is already present.
 
-## Retry Flow
+## Phase Flow
 
-Retrying a response (via the right-swipe arrow on the last message) branches on whether the last AI-generated content was a **main narration** or a **trigger event continuation**:
+Normal Actions and main retries run the same success-path phases. Event retry and retrigger enter at trigger continuation.
 
 ```mermaid
 flowchart TD
-    Start["User clicks retry"]
-    Check{"Event response?"}
-    Main["Main Retry Path"]
-    Event["Event Retry Path"]
-    MainAnchor["Find anchor message\nLoad snapshot"]
-    MainDel["Soft-delete messages after anchor"]
-    MainPreserve["Preserve old as swipe"]
-    MainRestore["Restore snapshot state"]
-    ReRunMain["Full Regeneration\nNarration + Quantifier + Trigger"]
-    EventAnchor["Find anchor message\nLoad snapshot"]
-    EventDel["Soft-delete event messages"]
-    EventPreserve["Preserve old event as swipe"]
-    EventRestore["Restore snapshot state"]
-    ReRunEvent["Trigger Continuation Only"]
-    Update["Update UI"]
-
-    Start --> Check
-    Check -->|No| Main
-    Check -->|Yes| Event
-    Main --> MainAnchor --> MainDel --> MainPreserve --> MainRestore --> ReRunMain --> Update
-    Event --> EventAnchor --> EventDel --> EventPreserve --> EventRestore --> ReRunEvent --> Update
+    Start([Action submitted]) --> Pre[pre-main snapshot]
+    Pre --> Narrate[narrate]
+    Narrate --> PostGen[post-generation Agents]
+    PostGen --> Commit[engine commit]
+    Commit -->|Trigger present| Trigger[trigger continuation]
+    Commit -->|No Trigger| Finalize[finalize]
+    Trigger --> Reconcile[post-event Agent reconciliation]
+    Reconcile --> Finalize
+    Finalize --> End([Idle or Error])
 ```
 
-**Retry semantics:**
+The narrate phase adds and persists the main narration before post-generation Agents run. Engine commit resolves movement, updates the current Character set, evaluates Triggers, and applies encounter transitions. A matched Trigger produces stored continuation context; continuation generation runs outside state mutation, then commits its Message before post-event reconciliation.
 
-- **Main retry** soft-deletes messages after the anchor input and re-runs phases 4 → 4.5 → 5 → 5.5 (full regeneration). Old narration is preserved as a swipe. On success, prior swipes migrate to the new message and soft-deletes are purged; on failure, soft-deletes are restored.
-- **Event retry** regenerates only the continuation text from the anchor snapshot using stored `StoredTriggerContext` prompts. Does not re-run main narration or quantification.
-- **Retrigger Event** (on a narration swipe with `last_trigger` and no following event messages) runs the trigger continuation + post-trigger NPC reconciliation + finalize phases from the restored snapshot state without re-running main narration.
-- Snapshots are standalone — no `base_snapshot_id` chain. Each message and each swipe carries its own `snapshot_id` of the state captured after it was created; switching swipes restores that exact state.
-- If the anchor message has no `snapshot_id` or the snapshot is missing, retry fails gracefully.
+Phase failures route to finalization. Cancellation exits through the separate contract below.
 
-## Error Model
+## Error Contract
 
-Pipeline errors (LLM failures, empty responses, room-not-found, etc.) follow a unified contract:
+Phase errors use `state.narrative.input_buffer.status` as their persisted observation channel. Finalization preserves `GenerationStatus::Error`; polling therefore exposes the failure while the pipeline stops advancing.
 
-- **Phase failure** is signaled via the `GenerationStatus` field on `GameState`. The caller checks the status's error message to decide whether to continue to later phases or skip straight to the finalize phase. The pipeline's `Err` return is reserved for cancellation.
-- **Cancellation** propagates as `Err(PhaseError::Cancelled)` to external callers (the action handler and the message-editing HTTP path). Every other `PhaseError` variant is consumed at the orchestrator seam: the orchestrator sets `GenerationStatus::Error`, persists, and returns `Ok(())`. `PhaseError` is errors-only; success is `Ok(())`.
-- **Stale-Generating recovery.** If `is_generating` is `false` but persisted status is still `Generating` (e.g. after a panic), the next action resets status to `Idle` and clears the per-game registry slot. `GenerationGuard::Drop` releases the registry slot if it still owns it (no-op if superseded by a younger generation) and stores the projection atomic to `false` only when no other game's slot is generating.
+Only `PhaseError::Cancelled` propagates out of the orchestrator. Other variants become `GenerationStatus::Error`, pass through finalization, and produce `Ok(())` at the orchestrator seam.
+
+| `PhaseError` variant | Pipeline disposition |
+|---|---|
+| `Cancelled` | Reset status to `Idle`, clear the phase, persist, and return cancellation to the caller. |
+| `NarratorFailed` | Persist the narrative failure as `Error`, then finalize. |
+| `PersistFailed` | Persist the underlying storage failure as `Error`, then finalize. |
+| `FetchFailed` | Persist the retry precondition failure as `Error`, then finalize. |
+| `TriggerMissing` | Persist the missing continuation context as `Error`, then finalize. |
+| `SnapshotMissing` | Persist the missing retry snapshot as `Error`, then finalize. |
+
+A later Action heals persisted `Generating` state when the generation registry has no active owner: status returns to `Idle`, phase clears, and the stale per-Game slot becomes claimable.
+
+## Cancellation
+
+`GameService` and the Action Pipeline are synchronous. HTTP entry points offload the work with `tokio::task::spawn_blocking`, so one blocking task owns the synchronous pipeline run.
+
+`GenerationGate` owns the per-Game slot registry and an `Arc<AtomicBool>` projection of whether any generation is active. Claiming a slot records a generation id, flips the projection, persists the initial `Generating` state, and then spawns the task. A claimed slot rejects a concurrent Action for the same Game. Shutdown checks bound task entry: retry and retrigger check before spawning, and every spawned closure checks again before running pipeline work.
+
+The in-phase **α-check** captures the active Game id when generation starts and compares it with the current active Game id at three stage boundaries:
+
+1. After main narration returns, before its Message enters history.
+2. At trigger-continuation entry, before the pre-event snapshot.
+3. After the trigger LLM call returns, before continuation commit.
+
+A Game switch, reset, or deletion invalidates stale work at the next boundary. Mismatch returns `PhaseError::Cancelled`; its handler resets `GenerationStatus` to `Idle`, clears the phase, and persists the state.
+
+`GenerationGuard::Drop` releases the per-Game slot on normal return or panic. Guard ownership carries both `game_id` and `generation_id`; drop mutates the registry only while both still identify the claimed slot. Cleanup from an older generation therefore leaves a newer owner's slot and atomic projection intact.
+
+## Trigger Evaluation
+
+Trigger evaluation runs after main narration and post-generation quantification, inside engine commit. At most the first matching Trigger produces a continuation for an Action.
+
+1. Player Action enters the FreeAction pipeline.
+2. Main narration is generated and persisted.
+3. Quantifier derives current Character ids and an optional movement destination from the narrative outcome.
+4. Engine iterates Character Triggers. A Trigger with a room id is eligible in that room; an omitted room id makes it globally eligible.
+5. Requirement comparison reads the Character's current `times_met`. Previously fired non-repeatable Triggers are ineligible.
+6. First eligible Trigger is selected. Repeatable Triggers remain eligible on later Actions; non-repeatable Triggers are marked during continuation commit.
+7. Stored Trigger context supplies the continuation prompt. The continuation LLM call runs after engine commit.
+8. Trigger name becomes event-header metadata on the continuation Message.
+9. Post-event Quantifier reconciles Characters introduced or removed by continuation text.
+
+### `times_met`
+
+`times_met` counts Character encounter entries. Entering after absence increments it; remaining with the same Character leaves it unchanged. Leaving clears current-meeting state so a later re-entry increments again.
+
+Trigger requirements observe the pre-increment value. A first-encounter equality check therefore sees `0`; after Trigger selection, encounter transitions advance the value to `1`. Less-than and greater-than-or-equal comparisons read that same pre-increment value.
+
+### INV-002 Mutation Order
+
+State mutation preserves this order:
+
+1. Main narration enters history.
+2. Movement resolves, then current Characters resolve against the destination.
+3. Trigger requirements read the existing encounter log.
+4. Character enter/leave events update `currently_meeting` and `times_met`.
+5. Trigger context is stored, continuation generation runs, and successful continuation commits event metadata.
+6. Post-event Character reconciliation applies after continuation commit.
+
+INV-002 depends on Trigger evaluation preceding encounter increments. Reversing those two operations suppresses first-encounter Triggers; moving continuation commit earlier deprives it of committed narration or resolved room context.
+
+## Retry Flow
+
+All retry forms restore Message-aligned Snapshot state before generation.
+
+| Branch | Entry and scope | Result |
+|---|---|---|
+| Main retry | Restore the last retry anchor, truncate history to it, then re-enter the full phase flow with the anchor's player Action. | New main narration becomes a Swipe on the prior Message; quantification and Trigger evaluation run again. |
+| Event retry | Restore the event anchor and reuse `StoredTriggerContext`. | Only continuation generation and post-event reconciliation rerun; main narration and its first quantifier pass remain unchanged. |
+| Retrigger | Start from a narration carrying stored Trigger context and no following event Message. | Continuation generation, post-event reconciliation, and finalization run from restored state. |
+
+Each Message and Swipe points to the Snapshot representing its resulting state. Missing anchors, missing Snapshots, world-bundle fetch failures, or absent Trigger context persist `GenerationStatus::Error`. Cancellation follows the common cancellation contract.
+
+## Movement Branch
+
+Movement is a branch of post-generation quantification:
+
+1. Movement occurs when the Quantifier derives a destination from the narrator's latest outcome.
+2. Destination resolution first matches the static World map.
+3. A static match updates `movement.current_room_id`. An unmatched destination creates a dynamic pseudo-room, stores it in `movement.dynamic_rooms`, and makes it current.
+4. Engine resolves current Characters and evaluates room-scoped Triggers against the destination.
+5. Movement detection runs on main narration; the post-event Quantifier reconciles Character presence.
+
+Starting room comes from the active World's Scenario and initializes `movement.current_room_id`. Dynamic rooms travel with mutable movement state in Snapshots.
+
+## Text-Check Branch
+
+Text checking branches before Action dispatch and uses the `TextChecker` port with the in-process `HarperTextChecker` adapter.
+
+- **Pre-flight entry.** Runs when text-check mode is enabled and auto-check is set. No issues dispatches the original Action. Issues render a preview where the player chooses corrected text, original text, or cancellation.
+- **Manual entry.** Runs on explicit UI request whenever text-check mode is enabled and returns the same preview shape.
+- **Settings lifetime.** Mode and auto-check are read per request. Ignored words are merged into Harper's local dictionary when the service is constructed.
+- **Fail-open boundary.** A pre-flight checker failure is logged and dispatches the original Action. Manual checker failures surface as an error response because no Action dispatch is pending.
+- **Player-consent invariant.** The submitted command remains unchanged until the player's explicit preview choice selects original or corrected text.
+
+Only player command text enters the checker. Result DTO and issue categories are defined by the port in `src/application/ports/text_checker.rs`.
 
 ## Document References
 
-- [ADR-006: Quantifier-Driven Game Systems](../../docs/adr/adr-006-quantifier-systems.md) — quantifier detects NPCs + movement after narration.
-- [ADR-008: SQLite Snapshot Persistence](../../docs/adr/adr-008-sqlite-snapshot-persistence.md) — `GameStateSnapshot` table + `persist_snapshot_or_err` pattern.
-- [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — `is_generating` dual-source invariant + `GenerationGuard`.
-- [ADR-017: Message Swipes](../../docs/adr/adr-017-message-swipes.md) — swipe semantics for retry of the last AI message.
-- [`../explanation/two-state-channels.md`](../explanation/two-state-channels.md) — rationale for the dual-channel generation state.
-- [`./triggers.md`](./triggers.md) — trigger evaluation rules + `NpcEncounterLog`.
-- [`./narration_engine.md`](./narration_engine.md) — Game Master role + behavioral constraints.
+- [ADR-006: Quantifier-Driven Game Systems](../../docs/adr/adr-006-quantifier-systems.md) — post-generation scene analysis, movement detection, and Trigger evaluation.
+- [ADR-008: SQLite Snapshot Persistence](../../docs/adr/adr-008-sqlite-snapshot-persistence.md) — Message-aligned Snapshot persistence used by retry.
+- [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — `spawn_blocking`, generation-gate, and cooperative-cancellation decision.
+- [ADR-014: Action Pipeline Architecture](../../docs/adr/adr-014-action-pipeline.md) — phase-based Action Pipeline and mutation-order decision.
+- [ADR-017: Message Swipes](../../docs/adr/adr-017-message-swipes.md) — alternate-generation and retry semantics.
+- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md) — application ownership of Action Pipeline orchestration.
+- [ADR-030: `is_generating` Dual-Source Invariant](../../docs/adr/adr-030-is-generating-invariant.md) — per-Game registry and atomic-projection contract.
+- [ADR-032: PhaseError](../../docs/adr/adr-032-phaseerror.md) — phase error vocabulary and orchestrator disposition.
+- [`../explanation/two-state-channels.md`](../explanation/two-state-channels.md) — rationale for persisted generation status and in-memory generation ownership.
+- [`./narrative/narration_system.md`](./narrative/narration_system.md) — narrator configuration, backend adapters, prompt-side role, response handling, and LLM call forensics.
