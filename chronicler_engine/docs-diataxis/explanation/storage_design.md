@@ -3,11 +3,11 @@ diataxis: explanation
 title: Storage and Bootstrap Design
 ---
 
-> **Diátaxis mode:** Explanation. This document explains the design of the Chronicler Engine's persistence layer and bootstrap flow as it stands today — the `Storage` struct and its backend decorator, the two-phase seed-then-DB-first boundary, the seeding contract, the cross-table coordination rule, the paired `get_*` / `require_*` read-helper contract, and the design of the message-swipe aggregate. The problem it solves for the reader is *understand*: how the design fits together and what each piece is for. Reference detail (signatures, per-column DDL, per-field JSON shapes, invariants the schemas and code say directly) lives in `../reference/storage.md` and `../reference/startup.md`.
+> **Diátaxis mode:** Explanation. This document explains the design of the Chronicler Engine's persistence layer and bootstrap flow as it stands today — the `Storage` struct and its backend decorator, the two-phase seed-then-DB-first boundary, the seeding contract, the cross-table coordination rule, the paired `get_*` / `require_*` read-helper contract, and the design of the message-swipe aggregate. The problem it solves for the reader is *understand*: how the design fits together and what each piece is for.
 
 ## Overview
 
-The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in `DefaultApplicationService`; and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error. Reference detail for each of these lives in `../reference/storage.md` (storage struct, backend decorator, seeding contract, read contract, eleven-table schema, entity persistence) and `../reference/startup.md` (bootstrap boundary, seeding order, schema files, invariants outside the schemas).
+The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in `DefaultApplicationService`; and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error. Reference detail for each of these is cross-referenced below.
 
 ## The storage struct and its backend decorator
 
@@ -27,7 +27,7 @@ The boundary is enforced by a two-phase bootstrap. Phase 1 runs once at boot: JS
 
 The seed manifests are an intermediate type that exists only to parse JSON files. They are converted to runtime card types via the `WorldManifest` → `WorldCard` conversion, which strips the file-pointer fields (`map_file`, `characters_dir`) on the way in. The runtime card has no notion of where the seed JSON lived — the database row is its only home, and the manifest-to-card conversion is the seam where the filesystem coupling is dropped.
 
-Settings live the same way: a singleton row in the `settings` table, seeded once from `data/settings.json`, then read from the database for the lifetime of the process. The load-once + restart-to-reload + dynamic-read-of-one-value mechanics live canonically in `../reference/architecture_system.md`; the bootstrap fact that belongs here is that the settings row is a database artifact from the moment seeding completes, and the runtime reads the row, never the file.
+Settings live the same way: a singleton row in the `settings` table, seeded once from `data/settings.json`, then read from the database for the lifetime of the process. The bootstrap fact that belongs here is that the settings row is a database artifact from the moment seeding completes, and the runtime reads the row, never the file.
 
 ## The seeding contract
 
@@ -73,7 +73,7 @@ A swipe is not alternate text alone. Each `Swipe` carries its own `snapshot_id` 
 
 Narration mutates state. The quantifier runs after the narration LLM and detects NPCs and movement; it updates scene state and increments encounter counters. Two different narrations produce two different post-narration states. A model that swapped only the text would leave the world state tied to whichever swipe was generated last — a "ghost state" where the displayed text no longer matches the underlying world.
 
-The per-swipe `snapshot_id` binds each swipe to the state that produced it. Switching swipes rewinds the world to the moment that swipe was committed. Text and state stay coherent because they were captured together. The snapshot reference is deliberately not a SQL FK (see `../reference/storage.md` §Relationships): declaring it as a FK would cascade snapshot deletion to swipes, which the retry semantics don't want.
+The per-swipe `snapshot_id` binds each swipe to the state that produced it. Switching swipes rewinds the world to the moment that swipe was committed. Text and state stay coherent because they were captured together. The snapshot reference is deliberately not a SQL FK: declaring it as a FK would cascade snapshot deletion to swipes, which the retry semantics don't want.
 
 ### Last-message-only swiping
 

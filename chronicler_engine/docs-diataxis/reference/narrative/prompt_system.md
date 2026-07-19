@@ -3,7 +3,7 @@ diataxis: reference
 title: Prompt System
 ---
 
-> **Diátaxis mode:** Reference. This document describes the prompt system as it is: the seven-layer narrative prompt architecture, the assembled system message structure (preset sections plus dynamic injection), the post-history splice for prose and format rules, the system/user split for OpenAI-compatible APIs, the token budget components, the response-length dynamic injection, the single-user-message mode toggle, the prompt-injection sanitization, and the single template variable. The problem it solves for the reader is *look-up*: given a player action, what the LLM sees in each of the system and user message halves. The quantifier prompt lives in `./agent_system.md`; LLM transport and forensics live in `./narration_system.md`. Verbatim preset text lives in `data/prompt_presets/`.
+> **Diátaxis mode:** Reference. This document describes the prompt system as it is: the seven-layer narrative prompt architecture, the assembled system message structure (preset sections plus dynamic injection), the post-history splice for prose and format rules, the system/user split for OpenAI-compatible APIs, the token budget components, the response-length dynamic injection, the single-user-message mode toggle, the prompt-injection sanitization, and the single template variable. The problem it solves for the reader is *look-up*: given a player action, what the LLM sees in each of the system and user message halves. Verbatim preset text lives in `data/prompt_presets/`.
 
 ## Overview
 
@@ -149,7 +149,7 @@ The mode is per-connection, so different backends can use different strategies w
 
 User input enters the engine as `<PlayerInput>` content. The assembler passes it through `sanitize_for_prompt`, which replaces any `{{variable}}` pattern (double curly braces enclosing an identifier) with `[FILTERED]`. Legitimate text passes through unchanged; single braces and empty/unclosed brace pairs are preserved.
 
-Sanitization runs at render time only. Substitution of `{{user}}` in author-controlled preset fields happens before user input reaches the assembler. Output-side handling (response sanitization, including the Gemma 4 thinking-channel suffix workaround) lives in `narration_system.md`.
+Sanitization runs at render time only. Substitution of `{{user}}` in author-controlled preset fields happens before user input reaches the assembler. Output-side handling (response sanitization, including the Gemma 4 thinking-channel suffix workaround) is cross-referenced below.
 
 ## Token Budget Management
 
@@ -194,7 +194,7 @@ World-author data uses the SillyTavern character-card shape:
 
 ## Quantifier Prompt (Separate)
 
-The engine also uses a quantifier prompt — a separate secondary LLM call that runs after narration to analyze the scene. It determines which NPCs are present and whether the player moved. It is **not** part of the layered narrative prompt stack; see `./agent_system.md` for the quantifier's prompt shape and execution phases.
+The engine also uses a quantifier prompt — a separate secondary LLM call that runs after narration to analyze the scene. It determines which NPCs are present and whether the player moved. It is **not** part of the layered narrative prompt stack; the quantifier's prompt shape and execution phases are cross-referenced below.
 
 ## Prompt Presets
 

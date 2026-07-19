@@ -3,7 +3,7 @@ diataxis: reference
 title: Startup and Bootstrap
 ---
 
-> **Diátaxis mode:** Reference. This document describes engine startup as it is: data-path resolution, the two-phase bootstrap boundary, seeding dependencies, game-state initialization, server startup, settings loading, the JSON seed-file contracts, and the runtime invariants the seed schemas do not encode. The problem it solves for the reader is *look-up*: which boundary and invariant governs each startup concern. Seeding guarantees live in `./storage.md`; the eleven-table relationships live in `./storage.md`.
+> **Diátaxis mode:** Reference. This document describes engine startup as it is: data-path resolution, the two-phase bootstrap boundary, seeding dependencies, game-state initialization, server startup, settings loading, the JSON seed-file contracts, and the runtime invariants the seed schemas do not encode. The problem it solves for the reader is *look-up*: which boundary and invariant governs each startup concern.
 
 ## Overview
 
@@ -33,7 +33,7 @@ The dependency invariant for seed rows is:
 - **Personas are world-independent.** Their seed pass does not depend on a world row.
 - **Prompt presets are independent.** Their seed pass does not depend on world, map, character, or persona rows.
 
-The seeding contract, including startup blocking and corrupt-file handling, is documented in `./storage.md`.
+The seeding contract, including startup blocking and corrupt-file handling, is enforced by the bootstrap layer.
 
 ## Game-State Initialization
 
@@ -45,7 +45,7 @@ The HTTP server does not start until bootstrap has completed, including seeding 
 
 ## Settings
 
-Settings are loaded once during bootstrap and reload on restart. The detailed reload rules are in `./architecture_system.md`.
+Settings are loaded once during bootstrap and reload on restart.
 
 ## Schema Files
 
@@ -78,15 +78,15 @@ The schema files are authoritative for seed-file fields and validation. Runtime 
 
 ### Trigger requirements
 
-`Trigger.requirement` carries an `operator` and a `threshold`. The operator vocabulary is `Eq`, `Lt`, and `Gte`; runtime evaluation occurs in the trigger evaluation step described in `./game_flow.md`.
+`Trigger.requirement` carries an `operator` and a `threshold`. The operator vocabulary is `Eq`, `Lt`, and `Gte`; runtime evaluation occurs in the trigger evaluation step.
 
 ### NPC event confidence
 
-`NpcEvent.confidence` uses the `QuantifierConfidence` variants `High`, `Medium`, and `Low`. The events-diff path emits `Medium` when at least one transition occurred and `Low` when the previous and current NPC sets matched. The quantifier step is described in `./game_flow.md` and `./agent_system.md`.
+`NpcEvent.confidence` uses the `QuantifierConfidence` variants `High`, `Medium`, and `Low`. The events-diff path emits `Medium` when at least one transition occurred and `Low` when the previous and current NPC sets matched.
 
 ### Swipe snapshot reference
 
-`Swipe.snapshot_id` references `GameStateSnapshot`. The SQL layer declares this relationship as non-FK; the relationship and its persistence semantics are described in `./storage.md` §Relationships and §Messages.
+`Swipe.snapshot_id` references `GameStateSnapshot`. The SQL layer declares this relationship as non-FK; the relationship and its persistence semantics are described under Relationships and Messages.
 
 ## Document References
 

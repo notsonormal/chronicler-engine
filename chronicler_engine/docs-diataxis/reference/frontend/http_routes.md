@@ -3,7 +3,7 @@ diataxis: reference
 title: HTTP Routes
 ---
 
-> **Diátaxis mode:** Reference. The reader problem this solves is *look-up*: wiring a client, testing an endpoint, or debugging a routing issue. The doc is a map of path to handler; it is not a tutorial on axum and not the LLM-call forensics workflow (see `./llm_processing.md`).
+> **Diátaxis mode:** Reference. The reader problem this solves is *look-up*: wiring a client, testing an endpoint, or debugging a routing issue. The doc is a map of path to handler; it is not a tutorial on axum and not the LLM-call forensics workflow.
 
 ## Overview
 

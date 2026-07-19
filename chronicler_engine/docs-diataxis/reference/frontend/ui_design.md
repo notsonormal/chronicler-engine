@@ -3,7 +3,7 @@ diataxis: reference
 title: UI Design
 ---
 
-> **Diátaxis mode:** Reference. The dashboard's design tokens and component specs as they are: the CSS custom properties for colors, typography, spacing, sizing, and animation, plus the structural and visual specifications for every dashboard component. The problem it solves for the reader is *look-up* — what token or selector to use for a given visual effect, and how each component is composed. Page layout, tabs, polling cadences, and edit/delete/swipe/retry flows: `./dashboard.md`.
+> **Diátaxis mode:** Reference. The dashboard's design tokens and component specs as they are: the CSS custom properties for colors, typography, spacing, sizing, and animation, plus the structural and visual specifications for every dashboard component. The problem it solves for the reader is *look-up* — what token or selector to use for a given visual effect, and how each component is composed.
 
 ## Overview
 
@@ -317,7 +317,7 @@ Replace the entry's action-button cluster while in edit mode. Both share the sam
 
 ### Text Check Preview
 
-Replaces the action area when text-check preflight surfaces issues. See `./text_check.md` for the text-check contract and `./dashboard.md` for the preflight flow.
+Replaces the action area when text-check preflight surfaces issues.
 
 - Background: `--color-bg-header`, border `1px solid var(--color-border)`, border-radius `8px`, padding `var(--spacing-md)`
 - Max-width: `600px`
@@ -392,7 +392,7 @@ Hover state for each class also adds a colored glow box-shadow in the matching a
 - Three prompt blocks per card: system prompt preview, user prompt preview (open by default), response preview; each rendered as `<details>` with the agent-color heading
 - Two raw JSON blocks below the prompts: raw request JSON, raw response JSON; each in a `<details>` block
 - Empty state: "No LLM messages yet" when no calls have been logged (muted, italic, centered, padded)
-- Polling pauses while any card is expanded; on collapse-all, polling resumes (see polling-pause pattern in `./dashboard.md`)
+- Polling pauses while any card is expanded; on collapse-all, polling resumes
 
 ## Document References
 

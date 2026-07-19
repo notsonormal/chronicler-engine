@@ -97,8 +97,6 @@ C4Component
 
 The engine is structured in four layers so the dependency direction is one-way: domain logic never reaches outward to HTTP or storage, application logic never reaches inward past port traits, and adapters never invent their own abstractions over the application core. Each layer has a single responsibility, and `arch-lint` enforces that no inner layer imports from an outer one. The result is that domain code can be tested without spinning up the HTTP server, and the HTTP server can be replaced without touching the orchestration layer.
 
-See `../reference/architecture_system.md` §Layer Structure for the file-tree layout, §Dependency Invariant for the load-bearing rule, and §Port Inventory for the application-to-driven-adapter boundary.
-
 ## Deployment
 
 The engine's deployment contract ends at its process boundary: what the process binds, reads, and calls out to. Surrounding orchestration — Caddy, Docker, the `no-internet` network, sibling AI-stack containers — is workspace-level topology, out of scope for the engine's own docs (see the Out-of-scope list above).
@@ -123,8 +121,6 @@ C4Deployment
 
 **Single-process deployment.** The engine runs one process against its SQLite database. The `is_generating` atomic flag is process-local; the deployment contract is one process per database. This means the database is the coordination boundary, not the engine process — restarting the engine is safe, and two engines pointing at the same database would race on `is_generating`. The single-process commitment is deliberate; horizontal scale is not in scope.
 
-See `../reference/architecture_system.md` §Deployment Contract for the runtime elements (HTTP port, SQLite file, file system paths, outbound LLM, in-process text check) and what each binds/reads/calls.
-
 ## Quality Story
 
 The architecture makes a set of guarantees about how it behaves under load, failure, and concurrency. Each guarantee is named, the promise is stated, and the load-bearing decision is cited. The mechanism docs (how each guarantee is delivered) live in the guardrails and rust-technical sections of the legacy `architecture/` tree and the relevant ADRs; the architectural intent is here.
@@ -147,7 +143,7 @@ The architecture makes a set of guarantees about how it behaves under load, fail
 | LLM HTTP timeout bounded           | The LLM transport enforces a 180-second HTTP timeout.                      | INV-004.                                                 |
 | One FreeAction at a time           | Long-running LLM calls do not queue — overlapping actions are rejected, matching single-player semantics.                | INV-004b.                                                |
 | No blocking on the Axum event loop | Synchronous services (`GameService`, `ActionPipeline`) run inside `tokio::task::spawn_blocking`; HTTP handlers return before the LLM call begins. | INV-006, INV-007.                                        |
-| Settings reload is bounded         | Connection settings are immutable post-boot (see `../reference/architecture_system.md` §Settings Flow). | INV-003. |
+| Settings reload is bounded         | Connection settings are immutable post-boot. | INV-003. |
 
 ### Concurrency
 
@@ -156,7 +152,7 @@ The architecture makes a set of guarantees about how it behaves under load, fail
 | Tokio-only concurrency             | All concurrent work runs on the tokio runtime.        | INV-003.                                                 |
 | Cancellable long-running work      | Generation is cancellable at phase boundaries (post-narration, pre-trigger, post-trigger) via the in-phase α-check on `current_game_id`. | INV-004.                                                 |
 | Atomic cache single-writer rule    | Only the registry claim/release path mutates the `Arc<AtomicBool>` projection's `true` transition. `GenerationGuard::Drop` mutates the `false` transition only. All other code paths treat the atomic as read-only. | INV-001.                                                 |
-| Shutdown gate at HTTP boundary     | `is_shutting_down()` is checked at the HTTP entry boundary; phase functions remain pure. | `architecture/rust_technical.md` §CancellationToken.     |
+| Shutdown gate at HTTP boundary     | `is_shutting_down()` is checked at the HTTP entry boundary; phase functions remain pure. | INV-005.     |
 | Pipeline isolation                 | Phases operate on `GameState` and see only the in-phase α-check. | INV-002.                                                 |
 
 ---

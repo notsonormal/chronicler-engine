@@ -58,7 +58,7 @@ The list of `arch-lint: storage-direct` markers is canonical at the source: `git
 
 Settings are loaded **once** at startup. The loaded `AppSettings` is shared via `Arc<RwLock<AppSettings>>` and held on `AppState.settings`. Construction-chain recipients (the game service, the agent registry, and the quantifier agent) take a reference to settings at wiring time.
 
-No business-logic layer reloads settings from disk after bootstrap. Connection changes require a server restart to take effect; only `max_context_tokens` is read dynamically per call (it is a per-call budget, not a connection-rewiring decision). The detailed bootstrap sequence is in `./startup.md`.
+No business-logic layer reloads settings from disk after bootstrap. Connection changes require a server restart to take effect; only `max_context_tokens` is read dynamically per call (it is a per-call budget, not a connection-rewiring decision).
 
 ## Deployment Contract
 

@@ -129,7 +129,7 @@ NPC enter/leave events are not returned by the LLM. Instead, the engine compares
 - **Entered** — NPC in the current result but not in the previous result.
 - **Left** — NPC in the previous result but not in the current result.
 
-The delta computation lives in the pipeline's NPC reconciliation step (see `game_flow.md` §Trigger Evaluation).
+The delta computation lives in the pipeline's NPC reconciliation step (cross-referenced below).
 
 ### Retry Behaviour
 

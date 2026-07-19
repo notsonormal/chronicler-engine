@@ -3,11 +3,11 @@ diataxis: reference
 title: Narration System
 ---
 
-> **Diátaxis mode:** Reference. This document describes the narrator as it is: per-connection model configuration, the four backend adapters, the Game Master's role and narrative modes, response sanitization and the Gemma 4 thinking-channel workaround, the LLM call forensics pipeline, and runtime diagnostics. The problem it solves for the reader is *look-up*: which layer owns model selection, prompt invocation, response handling, and forensics; where the narrative result returns to the Action Pipeline. Prompt-layer details live in `./prompt_system.md`; per-layer content is defined by the preset source in `data/prompt_presets/`.
+> **Diátaxis mode:** Reference. This document describes the narrator as it is: per-connection model configuration, the four backend adapters, the Game Master's role and narrative modes, response sanitization and the Gemma 4 thinking-channel workaround, the LLM call forensics pipeline, and runtime diagnostics. The problem it solves for the reader is *look-up*: which layer owns model selection, prompt invocation, response handling, and forensics; where the narrative result returns to the Action Pipeline. Per-layer content is defined by the preset source in `data/prompt_presets/`.
 
 ## §1 Model Configuration
 
-LLM connections are stored as a list on the `settings` singleton row. Each connection carries an identity (id + name, surfaced in the dashboard), a `LlmBackendType` discriminator (`openrouter` / `deepseek` / `ollama` / `mock`), a model identifier, an `api_key` with provider-specific env-var fallback (OpenRouter and DeepSeek fall back to `OPENROUTER_API_KEY` when no stored key is set), a `base_url` endpoint, a single-user-message toggle (see `prompt_system.md`), and per-connection token caps (`max_tokens` for the response, `max_context_tokens` for the context window). The full set of fields and their per-provider defaults lives in `src/domain/model/settings.rs`; this reference does not restate them.
+LLM connections are stored as a list on the `settings` singleton row. Each connection carries an identity (id + name, surfaced in the dashboard), a `LlmBackendType` discriminator (`openrouter` / `deepseek` / `ollama` / `mock`), a model identifier, an `api_key` with provider-specific env-var fallback (OpenRouter and DeepSeek fall back to `OPENROUTER_API_KEY` when no stored key is set), a `base_url` endpoint, a single-user-message toggle (cross-referenced below), and per-connection token caps (`max_tokens` for the response, `max_context_tokens` for the context window). The full set of fields and their per-provider defaults lives in `src/domain/model/settings.rs`; this reference does not restate them.
 
 Two named connection ids are read from settings: `narration_connection_id` (main narrative call) and `quantifier_connection_id` (post-narration scene analysis). They may resolve to the same connection record or to different ones; the wiring builds a dedicated `LlmCallRecorder` for each.
 
@@ -50,11 +50,11 @@ The Game Master responds to three primary events:
 
 ## §5 Per-Action Flow
 
-A FreeAction runs through the engine's phase pipeline: state transition → narration → quantifier → trigger evaluation; the full pipeline mechanics, including the α-check at each phase boundary, live in `game_flow.md` (§Phase Flow).
+A FreeAction runs through the engine's phase pipeline: state transition → narration → quantifier → trigger evaluation; the full pipeline mechanics, including the α-check at each phase boundary, are cross-referenced below.
 
 ## §6 Continuation Narration
 
-After main narration, the engine evaluates NPC triggers and may generate a continuation narration; the trigger evaluation rules, the `StoredTriggerContext` reuse, and the per-action mutation order live in `game_flow.md` (§Trigger Evaluation).
+After main narration, the engine evaluates NPC triggers and may generate a continuation narration; the trigger evaluation rules, the `StoredTriggerContext` reuse, and the per-action mutation order are cross-referenced below.
 
 ## §7 Response Sanitization & Gemma 4 Thinking-Channel Suffix
 

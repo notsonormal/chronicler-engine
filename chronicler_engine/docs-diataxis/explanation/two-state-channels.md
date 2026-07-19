@@ -3,7 +3,7 @@ diataxis: explanation
 title: Two State Channels
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: how generation state is represented across a process-local atomic flag and a durable persisted field, which code paths read which, and how the two stay coherent. Companion to `../reference/game_flow.md`, which describes the phase sequence as it is.
+> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: how generation state is represented across a process-local atomic flag and a durable persisted field, which code paths read which, and how the two stay coherent.
 
 ## The two signals
 

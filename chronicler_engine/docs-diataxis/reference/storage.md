@@ -28,11 +28,11 @@ The bootstrap seeding flow reads JSON templates under `data/` and writes the cor
 - **Startup-blocking.** Seeding completes before the HTTP server starts.
 - **Corrupt-file tolerance.** A malformed seed file is skipped and seeding continues with the remaining files.
 
-The bootstrap boundary and dependency order are described in `./startup.md`; the seed-file shapes are catalogued in `./startup.md` §Schema Files.
+The bootstrap boundary and dependency order are described below; the seed-file shapes are catalogued in the cross-references.
 
 ## Settings Persistence
 
-Settings occupy a singleton row in the `settings` table. Bootstrap loads the engine's settings once; the load-once and reload-on-restart rules are documented in `./architecture_system.md`.
+Settings occupy a singleton row in the `settings` table. Bootstrap loads the engine's settings once; the load-once and reload-on-restart rules hold for the lifetime of the process.
 
 ## Read Contract: get_* and require_*
 
@@ -143,15 +143,15 @@ Migrations run on first access, gated by `PRAGMA user_version`. Column-level DDL
 
 ## Worlds
 
-A world is the persistent definition of a setting plus the map structure that games run on. Multiple games can reference one world. JSON shapes (`WorldManifest`, `WorldCard`, `MapDef`, `Scenario`) live at `./startup.md` §Schema Files; storage internals at this document.
+A world is the persistent definition of a setting plus the map structure that games run on. Multiple games can reference one world. Storage internals at this document; the JSON shapes (`WorldManifest`, `WorldCard`, `MapDef`, `Scenario`) and worlds UI are cross-referenced below.
 
 **Delete constraint.** A world can be deleted only when no game references it; both the handler and storage enforce this. When a world is removed, its maps are removed alongside (FK cascade). The failure surfaces as the typed `WorldHasGames` error on the storage seam and a user-displayable failure on the dashboard.
 
-The worlds management system is the dashboard UI plus CRUD route handlers that read/write worlds through the application service to storage; UI description, validation rules, and the worlds tab layout live at `./dashboard.md`.
+The worlds management system is the dashboard UI plus CRUD route handlers that read/write worlds through the application service to storage.
 
 ## Personas
 
-The player persona is a `PersonaCard`, a structured character sheet used by the Game Master. The card shape is defined by `data/schemas/character.schema.json` and described in `./startup.md` §Schema Files.
+The player persona is a `PersonaCard`, a structured character sheet used by the Game Master. The card shape is defined by `data/schemas/character.schema.json`; cross-reference details are at the bottom of the file.
 
 - **World-independent loading.** During bootstrap, the seeding flow scans `data/personas/*.json` and creates the corresponding persona rows. Each persona is keyed by its JSON filename stem. The pass is world-independent and idempotent.
 - **Per-game binding.** A game binds one persona at creation time through `games.persona_key` (non-FK logical ref — see Relationships). Game loading uses the bound key to hydrate the player's prompt context.
@@ -167,7 +167,7 @@ The message aggregate has three pieces: `Message`, `Swipe`, and `MessageHistory`
 
 Component paths: `Message` + `Swipe` live at `src/domain/model/message.rs`; `MessageHistory` at `src/domain/model/message_history.rs`; `MessageType` + `MessageEntry` at `src/domain/model/state/message_types.rs`.
 
-The read/write contract (accessors, mutators, intent-named methods) lives at `src/domain/model/message.rs` and `src/domain/model/message_history.rs`; the FIFO cap and bypass live at `src/domain/model/message_history.rs`; the retry/swipe behaviour rationale lives at `../explanation/storage_design.md` §Messages-and-swipes.
+The read/write contract (accessors, mutators, intent-named methods) lives at `src/domain/model/message.rs` and `src/domain/model/message_history.rs`; the FIFO cap and bypass live at `src/domain/model/message_history.rs`; the retry/swipe behaviour rationale is cross-referenced below.
 
 ### Persistence notes
 

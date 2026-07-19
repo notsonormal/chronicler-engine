@@ -3,7 +3,7 @@ diataxis: explanation
 title: Diátaxis
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *orientation* on the framework that structures this docs tree: what Diátaxis sees in documentation, what its four kinds are, how the compass relates them, and where their boundaries blur. For the writing-convention layer see `../AGENTS.md`; for the per-mode writing notes see `../AGENTS.md` §"Mode-specific notes".
+> **Diátaxis mode:** Explanation. The reader problem solved here is *orientation* on the framework that structures this docs tree: what Diátaxis sees in documentation, what its four kinds are, how the compass relates them, and where their boundaries blur. The writing-convention layer and per-mode writing notes are cross-referenced below.
 
 ## What Diátaxis sees in documentation
 

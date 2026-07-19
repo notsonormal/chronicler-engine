@@ -19,12 +19,16 @@ Rules (only enforced on STANDARD docs):
                               Standards must be self-contained; plans are transient
                               and cannot be leaned on as canonical reference.
   STANDARD_DOC_BODY_REFERENCE — doc-internal reference in body prose (before the
-                              file's `## Document References` section). Catches:
-                                (a) `[text](relative/path.md)` where target is .md
-                                    inside the same docs root
-                                (b) `\bADR-NNN\b` mentions
-                              Both must appear only in the `## Document References`
-                              section at the bottom of the file.
+                              file's `## Document References` section). Catches any
+                              `.md` mention before that section, in any of:
+                                (a) `[text](relative/path.md)` markdown-link form
+                                (b) backtick form `` `path.md` `` where the content
+                                    is a path-like token ending in `.md`
+                                (c) plain §Section text on a line whose earlier text
+                                    contains a `.md` path
+                                (d) `\bADR-NNN\b` plain mentions
+                              All forms must appear only in the `## Document
+                              References` section at the bottom of the file.
 
 Diátaxis-front-matter rules (only enforced on STANDARD docs under
 docs-diataxis/; the legacy docs/ tree predates the convention and is exempt):
@@ -84,6 +88,23 @@ ADR_REF = re.compile(r"\bADR-(\d+)\b")
 # Heading regex for finding the `## Document References` section boundary.
 # Matches `## Document References` at start of line (any leading whitespace).
 DOC_REFERENCES_HEADING = re.compile(r"^\s*##\s+Document\s+References\s*$")
+
+# Backtick span: `…`. Captures the content between backticks. Body-prose backtick
+# refs only fire when the captured content is path-like and ends in `.md`
+# (see _is_md_path_in_backticks below). Naive (`[^`\n]+`) — multi-line backtick
+# spans in body prose are vanishingly rare.
+BACKTICK_SPAN = re.compile(r"`([^`\n]+)`")
+
+# Plain §Section token. Fires only when the same body-prose line contains a
+# `.md` path earlier (see check_standard_body_references). Captures the §Token
+# plus optional multi-word section names that include dashes, quotes, and
+# underscores; stops at punctuation, periods, or end of line.
+SECTION_TOKEN = re.compile(r"§[\w\"]+(?:\s+[\w\-\"]+)*")
+
+# Plain path-shaped .md token on a body-prose line. Used only to find the
+# document a § token refers to (the preceding path on the same line). Resolves
+# via the same inside-docs_root check as MARKDOWN_LINK.
+LINE_MD_TOKEN = re.compile(r"[A-Za-z0-9_./-]+\.md")
 
 # Fenced code block delimiter (``` or ~~~), optionally with language tag.
 FENCE_DELIMITER = re.compile(r"^\s*(```|~~~)")
@@ -555,6 +576,27 @@ def check_standard_plan_links(report: FileReport, docs_root: Path) -> None:
                 )
 
 
+def _is_md_path_in_backticks(token: str) -> bool:
+    """True if a backtick-wrapped token looks like a `.md` doc-path, not code.
+
+    Accepts:
+      - paths with explicit prefix: `./foo.md`, `../foo/bar.md`, `/abs/foo.md`
+      - bare filenames ending in `.md` whose stem has no dot/slash (so
+        `startup.md` and `2026-q3-notes.md` match, but `AppState.foo.md`
+        and `example.com/foo.md` do not).
+    """
+    if not token.endswith(".md") or len(token) < 4:
+        return False
+    if token.startswith(URI_SCHEMES):
+        return False
+    if token.startswith(("./", "../", "/")):
+        return True
+    stem = token[:-3]
+    if not stem:
+        return False
+    return all(c.isalnum() or c in "_-" for c in stem)
+
+
 def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
     """Flag doc-internal references in body prose.
 
@@ -564,6 +606,22 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
 
     ADRs (docs/adr/*.md) are exempt from this rule — they are decision records
     that link context inline by design.
+
+    Fires on any of the following in body prose, when the resolved target is
+    inside the docs root:
+
+      (a) Markdown link form: `[text](path.md)`.
+      (b) Backtick form: `` `path.md` `` (backtick content is path-shaped;
+          see _is_md_path_in_backticks).
+      (c) Plain §Section text where the same line earlier in the text
+          contains a `.md` path token (resolves via that preceding path).
+      (d) `\bADR-NNN\b` plain mention.
+
+    Forms (a) and (b) are primary: if either fires on a line, forms (c) and
+    (d) are skipped for that line to avoid noise (the existing markdown-link
+    dedup is preserved). Forms (c) and (d) can co-fire on a line with each
+    other, and (c) can fire multiple times on a single line when several
+    different § tokens appear with the same preceding path.
     """
     try:
         rel_to_docs = report.path.resolve().relative_to(docs_root.resolve())
@@ -585,6 +643,13 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
             body_end_lineno = idx
             break
 
+    def _line_has_flag() -> bool:
+        return any(
+            v.rule == "STANDARD_DOC_BODY_REFERENCE"
+            and v.message.startswith(f"Line {lineno}:")
+            for v in report.violations
+        )
+
     in_fence = False
     for lineno, line in enumerate(lines, start=1):
         if lineno >= body_end_lineno:
@@ -595,6 +660,7 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
         if in_fence:
             continue
 
+        # Stage 1: markdown-link form `[text](path.md)`.
         for match in MARKDOWN_LINK.finditer(line):
             target = match.group(1).strip()
             target_path_only = target.split(" ", 1)[0].split("#", 1)[0]
@@ -624,14 +690,69 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
                 )
             )
 
-        has_flagged_link = any(
-            v.rule == "STANDARD_DOC_BODY_REFERENCE" and v.message.startswith(
-                f"Line {lineno}:"
-            )
-            for v in report.violations
-        )
-        if has_flagged_link:
+        if _line_has_flag():
+            # Existing dedup: a markdown link on this line already flags the
+            # same conceptual issue; skip the secondary forms.
             continue
+
+        # Stage 2: backtick form `` `path.md` ``.
+        for match in BACKTICK_SPAN.finditer(line):
+            inner = match.group(1).strip()
+            if not _is_md_path_in_backticks(inner):
+                continue
+            resolved = (report.path.parent / inner).resolve()
+            try:
+                resolved.relative_to(docs_root_resolved)
+            except ValueError:
+                continue
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "STANDARD_DOC_BODY_REFERENCE",
+                    f"Line {lineno}: doc-internal backtick ref "
+                    f"`{inner}` appears in body prose. Move to "
+                    f"`## Document References` section at the bottom of the "
+                    f"file.",
+                )
+            )
+
+        if _line_has_flag():
+            # Backtick ref already flags this line; skip § and ADR forms.
+            continue
+
+        # Stage 3: plain §Section text. Only fires when the same line has a
+        # `.md` path token earlier; the path is what the § resolves to.
+        line_md_tokens = list(LINE_MD_TOKEN.finditer(line))
+        if line_md_tokens:
+            for sect_match in SECTION_TOKEN.finditer(line):
+                preceding_token = None
+                for cand in line_md_tokens:
+                    if cand.start() < sect_match.start():
+                        preceding_token = cand
+                if preceding_token is None:
+                    continue
+                path = preceding_token.group(0)
+                resolved = (report.path.parent / path).resolve()
+                try:
+                    resolved.relative_to(docs_root_resolved)
+                except ValueError:
+                    continue
+                # Trim trailing sentence punctuation from the § token for the
+                # message; the regex is greedy and would otherwise report
+                # `§Messages.` or `§Rel` etc.
+                section = sect_match.group(0).rstrip(".,;:!?")
+                report.violations.append(
+                    Violation(
+                        ERROR,
+                        "STANDARD_DOC_BODY_REFERENCE",
+                        f"Line {lineno}: body-prose `{section}` cross-ref "
+                        f"preceded by `{path}` on the same line. Move to "
+                        f"`## Document References` section at the bottom of "
+                        f"the file.",
+                    )
+                )
+
+        # Stage 4: ADR mention.
         for match in ADR_REF.finditer(line):
             report.violations.append(
                 Violation(

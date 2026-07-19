@@ -25,7 +25,7 @@ Eight **cross-cutting patterns** apply across multiple of the seven: process-wid
 
 The patterns are **not all the same density**. Pattern 1 covers ~10 of the integration-tier files (in-process across `application/action_pipeline`, `flow`, plus `tests/infrastructure/invariant_contract.rs`); patterns 6 and 7 each cover 1–4 files. A review that does not cite a specific pattern usually means the test was written without consulting this doc.
 
-Differences from the unit tier — see the comparison table in `unit_test_standards.md`'s Diff section, plus the tier-shape notes below:
+Differences from the unit tier — see the comparison table in the cross-referenced unit-tier standards' Diff section, plus the tier-shape notes below:
 
 - Integration tests use **`SqliteTestAppBuilder`** (`tests/helpers/sqlite_test_app_builder.rs`) instead of `TestAppBuilder`. The post-execution assertions read through the real SQLite snapshot path rather than in-memory storage.
 - Integration tests **call `execute_action_impl(&app, "…")` directly**, not `app.process_action(...)`. `app.process_action(...)` is the public API surface; `execute_action_impl` is the impl function the unit tier also uses. In unit tests it is exercised in isolation; in integration tests it is exercised end-to-end through the snapshot + message persistence path. The two `tests/integration/application/application_service.rs::test_process_action_*` tests and the two `tests/infrastructure/invariant_contract.rs::test_p4_concurrent_*` tests (`test_p4_concurrent_happy_path:463`, `test_p4_concurrent_triple_overlap:587`) go through `process_action`; that is the invariant under test.

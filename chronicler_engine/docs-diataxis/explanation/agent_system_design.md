@@ -3,7 +3,7 @@ diataxis: explanation
 title: Agent System Design
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: the shape of the agent abstraction — `Agent` trait + `AgentRegistry` + per-agent LLM backend + `ExecutionPhase` dispatch + the quantifier's role — and the tradeoffs that shape encodes. Companion to `../reference/agent_system.md`, which describes the machinery as it is.
+> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: the shape of the agent abstraction — `Agent` trait + `AgentRegistry` + per-agent LLM backend + `ExecutionPhase` dispatch + the quantifier's role — and the tradeoffs that shape encodes.
 
 ## The agent abstraction
 

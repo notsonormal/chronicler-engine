@@ -3,7 +3,7 @@ diataxis: reference
 title: Dashboard
 ---
 
-> **Diátaxis mode:** Reference. The player-facing dashboard as it is: page layout, tab bar, the Game tab's story log + visual sidebar + action area, real-time HTMX polling cadences, edit/delete/swipe/retry flows, and game management. The problem it solves for the reader is *look-up* — how each surface is structured and how each in-place interaction reaches the server. Full HTTP route topology: `./http_routes.md`; LLM processing details for the LLM Messages tab: `./llm_processing.md`; text-check details for the Settings tab: `./text_check.md`; worlds CRUD for the Worlds tab: `./worlds.md`; design rationale (SillyTavern lineage, polling cadence choice, polling-pause pattern, snapshot-restoration cascade): `../explanation/dashboard_design.md`.
+> **Diátaxis mode:** Reference. The player-facing dashboard as it is: page layout, tab bar, the Game tab's story log + visual sidebar + action area, real-time HTMX polling cadences, edit/delete/swipe/retry flows, and game management. The problem it solves for the reader is *look-up* — how each surface is structured and how each in-place interaction reaches the server.
 
 ## Overview
 
@@ -31,16 +31,16 @@ The header bar is 48px tall, fetched once on load, and carries the game title, c
 
 Six tabs, one active at a time. Tab switching is client-side JavaScript (`.tab` button toggles `.active` class on `.tab-content` siblings); only the panel-content fetch on first activation is server-rendered HTML.
 
-| Tab | Polling | Domain reference |
-|---|---|---|
-| Game (default) | yes (multiple cadences) | this doc |
-| Settings | on load | `./text_check.md` (Text Check card); `./llm_processing.md` (Connections) |
-| Prompt Presets | on load | `./prompt_system.md` |
-| Worlds | on load | `./worlds.md` |
-| Games | on load | `./worlds.md` (world dependency); this doc (Active/New/Saved Games UI) |
-| LLM Messages | yes (4s) | `./llm_processing.md` |
+| Tab | Polling |
+|---|---|
+| Game (default) | yes (multiple cadences) |
+| Settings | on load |
+| Prompt Presets | on load |
+| Worlds | on load |
+| Games | on load |
+| LLM Messages | yes (4s) |
 
-The fragment endpoint each tab fetches lives in `./http_routes.md` alongside the full route topology (52 routes across all features). Inactive-tab content is `display: none`; the active tab uses `display: flex; flex-direction: column`. The static shell styles these states in `assets/styles.css`.
+Inactive-tab content is `display: none`; the active tab uses `display: flex; flex-direction: column`. The static shell styles these states in `assets/styles.css`.
 
 ## Game Tab
 
@@ -48,7 +48,7 @@ The Game tab is the only view with three live regions stacked: the **main contai
 
 ### Story Log (80%)
 
-A scrollable list of `MessageEntry` rendered rows. The list polls its fragment endpoint every 2 seconds (see Polling Cadences) and auto-scrolls to the bottom on new content. Each entry carries one of four `log_type` classes (`narration`, `dialogue`, `system`, `input`) that determines bubble styling and text color tokens (see `./ui_design.md`).
+A scrollable list of `MessageEntry` rendered rows. The list polls its fragment endpoint every 2 seconds (see Polling Cadences) and auto-scrolls to the bottom on new content. Each entry carries one of four `log_type` classes (`narration`, `dialogue`, `system`, `input`) that determines bubble styling and text color tokens.
 
 Entry header structure:
 
@@ -83,11 +83,11 @@ State transitions happen on three events: form submission (immediately sets Thin
 
 ## Polling Cadences
 
-Four endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: story log 2s, visual sidebar 5s, status display 5s, LLM messages 4s; the header fetches once on load. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive. The cadence choice is a tradeoff between update latency and server load; the cadence-level reasoning is in `../explanation/dashboard_design.md` under "Polling cadence choice".
+Four endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: story log 2s, visual sidebar 5s, status display 5s, LLM messages 4s; the header fetches once on load. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive. The cadence choice is a tradeoff between update latency and server load.
 
 ## Edit, Delete, Swipe, Retrigger Flows
 
-All four flows operate on the **last entry** in the story log. Conditional visibility is computed in `NarrativeLogTemplate::new` (templates.rs) — `show_retrigger` is set when the last entry is narration/dialogue, has no event continuation, and the previous turn had a trigger; swipe controls appear only when `swipe_count > 1` on the last entry; the delete button appears only when the last entry is not the only entry. The route each flow reaches lives in `./http_routes.md`; the description below focuses on what each flow does.
+All four flows operate on the **last entry** in the story log. Conditional visibility is computed in `NarrativeLogTemplate::new` (templates.rs) — `show_retrigger` is set when the last entry is narration/dialogue, has no event continuation, and the previous turn had a trigger; swipe controls appear only when `swipe_count > 1` on the last entry; the delete button appears only when the last entry is not the only entry. The description below focuses on what each flow does.
 
 ### Edit Flow
 
@@ -96,7 +96,7 @@ All four flows operate on the **last entry** in the story log. Conditional visib
 3. JavaScript **resumes polling** (restores the original `hx-trigger` value) and triggers `htmx:refresh` on `#story-log`. Cancel does the same without the submission.
 4. The next poll re-renders the entry with the new text.
 
-The pause prevents the polling refresh from racing the user's edit; the moving-parts-level rationale for the polling-pause pattern is in `../explanation/dashboard_design.md` under "Polling-pause pattern".
+The pause prevents the polling refresh from racing the user's edit.
 
 The textarea height is auto-resized on input. The save/cancel buttons replace the action-button cluster only for the entry being edited; other entries are unaffected.
 
@@ -108,7 +108,7 @@ The textarea height is auto-resized on input. The save/cancel buttons replace th
 
 ### Swipe Flow
 
-Swipes exist on the **last entry only** and only when `swipe_count > 1`. The control row holds: a left arrow (◀, disabled on the first swipe), a counter (`active_swipe_index + 1 / swipe_count`), and a right arrow (▶). Clicking ◀ or ▶ submits to the swipe-switch endpoint with the target swipe index. On success, JavaScript replaces `#story-log` innerHTML with the response and refreshes the visual sidebar and header — the sidebar and header reflect game state, and switching swipes restores the `snapshot_id` of the target swipe, so both must re-render to match. Clicking ▶ when on the latest swipe submits to the new-swipe endpoint; JavaScript transitions the submit button to "Stop" / status to "Thinking..." immediately, then refreshes `#story-log` on response. The cascade is explained in `../explanation/dashboard_design.md` under "Snapshot restoration cascade".
+Swipes exist on the **last entry only** and only when `swipe_count > 1`. The control row holds: a left arrow (◀, disabled on the first swipe), a counter (`active_swipe_index + 1 / swipe_count`), and a right arrow (▶). Clicking ◀ or ▶ submits to the swipe-switch endpoint with the target swipe index. On success, JavaScript replaces `#story-log` innerHTML with the response and refreshes the visual sidebar and header — the sidebar and header reflect game state, and switching swipes restores the `snapshot_id` of the target swipe, so both must re-render to match. Clicking ▶ when on the latest swipe submits to the new-swipe endpoint; JavaScript transitions the submit button to "Stop" / status to "Thinking..." immediately, then refreshes `#story-log` on response.
 
 ### Retrigger Flow
 
@@ -117,11 +117,11 @@ The retrigger (♻) button appears on the last entry only when `show_retrigger` 
 1. The user clicks the retrigger button. JavaScript submits to the retrigger endpoint and immediately transitions the button to "Stop" / status to "Thinking...".
 2. On response, JavaScript triggers `htmx:refresh` on `#story-log`.
 
-Retrigger re-runs the trigger narration for the previous turn. See `./triggers.md` for trigger evaluation and `./message_model.md` for the swipe-vs-event distinction.
+Retrigger re-runs the trigger narration for the previous turn.
 
 ## Game Management
 
-The Games tab hosts three regions: **Active Game**, **New Game**, and **Saved Games**. Cross-world switching is allowed (a saved game from world A can be switched to while world B is active). The endpoints reached by Switch, Delete, Create, and Reset live in `./http_routes.md`; the description below focuses on what each surface does and what the user sees.
+The Games tab hosts three regions: **Active Game**, **New Game**, and **Saved Games**. Cross-world switching is allowed (a saved game from world A can be switched to while world B is active). The description below focuses on what each surface does and what the user sees.
 
 ### Active Game
 
