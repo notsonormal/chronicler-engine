@@ -1,6 +1,6 @@
 ---
 name: diataxis-doc-review
-description: Reviews the diataxis-doc-review
+description: Break the LLM's status-quo bias when reviewing chronicler_engine docs. Judge whether each diataxis doc earns its place or is merely inherited from what's already there.
 disable-model-invocation: true
 ---
 
@@ -12,41 +12,36 @@ Another issue the LLM will look at nearby documentation to see what documentatio
 
 In general, it can be a struggle to get LLM to think about documentation in a systematic and holistic way. Like, I often ask it to fix something and it says "oh that makes sense and goes and fixes half of it" and then I have to constantly follow up to get it to keep fixing, repeating the exact same principles I started with. 
 
-# Diataxis
+# Diátaxis
 
-Read `chronicler_engine/docs/diataxis/explanation/diataxis.md` to gain an understanding of the Diataxis framework. 
+Read `chronicler_engine/docs/diataxis/explanation/diataxis.md` for the framework's two-axis compass (action/cognition × study/work) and the four modes it produces (Tutorial, How-to, Reference, Explanation). The compass test ("what problem does this solve for the reader?") is the basic existence check — if no reader need registers under any mode, the doc fails the test.
 
-One of the purpose of the Diataxis framework more clearly organise the split between "understanding" (explaintion docs) and "information" (reference). However, that is just the starting point.
+# What earns a doc's place
 
-There are no use cases for tutorial and how-to documentation.
+A reference doc earns its place only if it carries something the code can't. The first instinct is to read the code and describe it — pointless, because the LLM reads the code anyway when doing work, and code is reasonably self-documenting, so the description starts rotting the moment it's written.
 
-## Reference
+The working test for the chronicler tree:
 
-When it comes to reference, the first instinct is to simply read the code and describe the code. But that is pointless because the LLM is going to read the code anything when it does work and the documentation is going to constantly become out of date.
+- `diataxis/reference/narrative/prompt_system.md` — earns its place because it describes something intrinsic to LLM chat engines: how the engine assembles the system/user message split for each call.
+- `diataxis/reference/narrative/agent_system.md` and `diataxis/reference/narrative/narration_system.md` — earn their place because they provide an overarching frame, a way to view the system. This stops different systems from leaking into each other, keeping each focused on its pillar.
+- `diataxis/reference/coding_standards/unit_test_standards.md` and `diataxis/reference/coding_standards/integration_test_standards.md` — earn their place because coding standards need to be consistent across thousands of LLM-generated tests.
+- `diataxis/reference/game_flow.md` — earns its place because it describes a step-by-step flow that's hard to grasp without reading the code end-to-end. (`docs/specs/action_pipeline.md` covers a similar flow but lives under `docs/specs/`; it is a component spec, not a Diátaxis reference doc — do not hold it up as a diátaxis example.)
 
-So the real question is what value does each reference doc, and all of it's content, provide when the AI is going to read the code anyway and the code is reasonably self-documenting. 
+The pattern: a doc earns its place when it carries **purpose, invariants, or an overarching frame** the code does not say directly. Re-stating what the code already says — field lists, function signatures, "how the system works" summaries — is the failure mode. That is what the code does, by definition, better.
 
-Exactly what counts as 'good' reference docs and 'bad' reference docs hasn't been completely narrowed down yet.
+# Explanation docs
 
-The `system_prompt.md` doc is valuable because it something intrinsic to LLM chat engines. 
-
-The `agent_system.md` and `narration_engine.md` docs are valuabl because they roviders an overarching frame, a way to view the system. For example, this should stop different systems from leaking into each other, or keep them focused on specific pillar.
-
-The `unit_test_standards.md` and `integration_test_standards.md` are valuable for coding standards. As it's really difficult to keep thousands of LLM-generated tests consistent and aligned.
-
-The `game_flow.md` and `action_pipeline.md` docs are valuable because they describe a step-by-step flow that is hard to understand without reading through the code end-to-end.
-
-## Explaination
-
-In some way, explaination docs are an 'overflow' for refrences. We need to write more detail on certain topics, but don't want to bloat the information docs. 
-
-What counts as a 'good' explaination docs and 'bad' is even more vague then reference docs. At very least they (a) shouldn't explain obvious things, (b) shouldn't explain code closely (which be even futher away from the code than reference documents), (c) shouldn't reiterate what the reference docs already say except to expand on them.
+Explanation docs are the overflow for reference: more detail on certain topics without bloating the reference docs. The bar for what earns a place is vaguer than for reference, but at minimum an explanation doc should not (a) explain obvious things, (b) restate what the code does (explanation sits further from the code than reference, not closer), or (c) reiterate what the reference docs already say except to genuinely expand on them.
 
 # How to review
 
-Consider the things mentioned here when doing this review. Also load the following skills
+Load these skills as input:
 
-- `.agents/skills/chronicler-docs-hygiene/SKILL.md`
-- `.agents/skills/domain-modeling`
+- `.agents/skills/chronicler-docs-hygiene/SKILL.md` — rule-compliance findings against `AGENTS.md ## Writing Conventions` and drift against `src/`. This is the lint layer; its findings are evidence, not the verdict.
+- `.agents/skills/domain-modeling` — for the project's ubiquitous language; do not redefine glossary terms in the docs under review.
 
-Fundamentally, the goal is determine "is this documentation worth the cost". A line of documentation has a much high maintance cost than a line of code, the value can also be hard to define. 
+The verdict is yours, not the lint layer's: a doc can pass every rule and still fail the status-quo test. "Matches the rules and matches what's there" is not the same as "earns its place".
+
+**Completion criterion:** every doc or section under review audited against (1) would I write this from scratch today? (2) what does it carry that the code can't? (3) does the maintenance cost over time stay less than the value it provides? Anything that fails (1) or (2) is inherited, not earned — flag for removal or rewrite.
+
+A line of documentation carries a much higher maintenance cost than a line of code, and the value is harder to define. The status quo bias is what makes the cost invisible — the doc is already there, so keeping it feels free. It isn't.
