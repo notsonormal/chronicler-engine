@@ -73,7 +73,7 @@ emitted* — not "What" narration.
 The first two lines of most production files will be a DOC module and a module comment e.g.
 
 ```rust
-//! [DOC: docs/system/startup.md]
+//! [DOC: docs/diataxis/reference/startup.md]
 //! Command-line interface definitions
 ```
 

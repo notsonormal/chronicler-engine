@@ -64,7 +64,7 @@ Diátaxis is applied iteratively, not as a one-time classification. The framewor
 
 ## Document References
 
-- [`../AGENTS.md`](../AGENTS.md) — the writing-convention layer for this docs tree, including the one-line compass test and the per-mode writing notes.
+- [`../../AGENTS.md`](../../AGENTS.md) — the writing-convention layer for this docs tree, including the one-line compass test and the per-mode writing notes.
 - [Diátaxis](https://diataxis.fr/) — Daniele Procida's site; the canonical source.
 - [Diátaxis framework source](https://github.com/evildmp/diataxis-documentation-framework) — the framework's source repository.
 

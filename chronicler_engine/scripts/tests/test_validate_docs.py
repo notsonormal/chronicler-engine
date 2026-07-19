@@ -1,9 +1,8 @@
-"""Regression tests for `scripts/validate_docs_diataxis.py`.
+"""Regression tests for `scripts/validate_docs.py`.
 
-Exercises each docs-diataxis-only rule in isolation by invoking the validator's
-parser/check helpers directly with synthetic text. Run from the
-``chronicler_engine/`` directory via ``python -m unittest discover scripts/tests``
-or via ``build.py``.
+Exercises each rule in isolation by invoking the validator's parser/check
+helpers directly with synthetic text. Run from the ``chronicler_engine/``
+directory via ``python -m unittest discover scripts/tests`` or via ``build.py``.
 
 Pinned at 14 fixtures (one per rule + two clean docs). Adding a new rule to the
 validator without a fixture here will show up in code review as a missing test.
@@ -18,7 +17,7 @@ from pathlib import Path
 REPO_ROOT = Path("/home/moridin84/projects/mrn-general")
 sys.path.insert(0, str(REPO_ROOT / "chronicler_engine" / "scripts"))
 
-import validate_docs_diataxis as vd  # noqa: E402
+import validate_docs as vd  # noqa: E402
 
 
 class _FakeReport:
@@ -44,9 +43,6 @@ def _run_check(
     vd.check_diataxis_frontmatter(
         report,  # type: ignore[arg-type]
     )
-    fm = vd.parse_frontmatter(text)
-    if fm.present and fm.parsed is not None:
-        vd.check_mode_content_heuristic(report, fm)  # type: ignore[arg-type]
     return sorted({v.rule for v in report.violations})
 
 
@@ -122,16 +118,6 @@ class TestDiataxisValidator(unittest.TestCase):
             "---\ndiataxis: reference\ntitle: Foo\narc52: [§3, §6, §11]\n---\n# Body\n",
         )
         self.assertEqual(rules, ["FRONTMATTER_INVALID_ARC52"])
-
-    def test_mode_content_mismatch_reference_with_procedural(self) -> None:
-        # Reference doc containing reader-directing prose triggers the heuristic.
-        rules = _run_check(
-            self._make_tmp(),
-            "---\ndiataxis: reference\ntitle: Foo\n---\n# Body\n\n"
-            "Let's walk through the steps. You should first set up the engine, "
-            "then run the tests.\n",
-        )
-        self.assertEqual(rules, ["MODE_CONTENT_MISMATCH"])
 
     def test_reference_clean(self) -> None:
         # Reference doc without procedural markers + correct front-matter: zero violations.

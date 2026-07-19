@@ -14,7 +14,7 @@ In general, it can be a struggle to get LLM to think about documentation in a sy
 
 # Diataxis
 
-Read `chronicler_engine/docs-diataxis/explanation/diataxis.md` to gain an understanding of the Diataxis framework. 
+Read `chronicler_engine/docs/diataxis/explanation/diataxis.md` to gain an understanding of the Diataxis framework. 
 
 One of the purpose of the Diataxis framework more clearly organise the split between "understanding" (explaintion docs) and "information" (reference). However, that is just the starting point.
 

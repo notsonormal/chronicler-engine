@@ -1,10 +1,10 @@
-"""Generate `docs-diataxis/reference/http_routes.md` from `router.rs`.
+"""Generate `docs/diataxis/reference/http_routes.md` from `router.rs`.
 
 Parses every `.route(<path>, <verb>(<handler>))` call in
 `chronicler_engine/src/adapters/driving/http/router.rs`, groups routes by
 handler-module prefix, and emits a single 7-area Reference doc.
 
-Standalone Python 3.12 — stdlib only (mirrors `validate_docs_diataxis.py`).
+Standalone Python 3.12 — stdlib only (mirrors `validate_docs.py`).
 
 The router's `.route()` calls are syntactically regular: a path string,
 followed by a verb wrapper (`get(...)` or `post(...)`), followed by a fully
@@ -14,9 +14,9 @@ a contiguous substring; from there the four fields (verb, path, handler)
 are pulled with a small inner parser.
 
 Output: writes the doc to
-`chronicler_engine/docs-diataxis/reference/frontend/http_routes.md`.
+`chronicler_engine/docs/diataxis/reference/frontend/http_routes.md`.
 
-Validator-clean: the doc satisfies every `validate_docs_diataxis.py` rule
+Validator-clean: the doc satisfies every `validate_docs.py` rule
 that applies to a `diataxis: reference` doc.
 
 Usage:
@@ -53,7 +53,7 @@ AREA_GROUPS: tuple[tuple[str, str], ...] = (
 
 # Paths (relative to chronicler_engine/) the script must find.
 ROUTER_REL = "src/adapters/driving/http/router.rs"
-OUTPUT_REL = "docs-diataxis/reference/frontend/http_routes.md"
+OUTPUT_REL = "docs/diataxis/reference/frontend/http_routes.md"
 
 
 # ---------------------------------------------------------------------------
@@ -271,14 +271,6 @@ def _render_document(
     parts.append("title: HTTP Routes")
     parts.append("---")
     parts.append("")
-    parts.append(
-        "> **Diátaxis mode:** Reference. The reader problem this solves is "
-        "*look-up*: wiring a client, testing an endpoint, or debugging a "
-        "routing issue. The doc is a map of path to handler; it is not a "
-        "tutorial on axum and not the LLM-call forensics workflow (see "
-        "`./llm_processing.md`)."
-    )
-    parts.append("")
     parts.append("## Overview")
     parts.append("")
     parts.append(_OVERVIEW_PROSE)
@@ -352,7 +344,7 @@ def _parser(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Extract .route(...) calls from router.rs and emit "
-            "docs-diataxis/reference/frontend/http_routes.md."
+            "docs/diataxis/reference/frontend/http_routes.md."
         ),
     )
     parser.add_argument(

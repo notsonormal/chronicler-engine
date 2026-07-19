@@ -2,6 +2,12 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-07-19
+
+### Changed
+
+- **Diátaxis folder cutover** (plan at `docs/plans/diataxis-folder-cutover.md`). Folded `docs/diataxis/AGENTS.md` content into `docs/AGENTS.md` as a new `## Writing Conventions` section. Renamed `scripts/validate_docs_diataxis.py` → `scripts/validate_docs.py`; the new validator scans `docs/diataxis/` only and enforces front-matter, mode vocabulary, link/ADR-ref integrity, body-reference placement, and mode-vs-content heuristic. Rewrote live references to `docs-diataxis/` and the legacy `docs/{architecture,system,reference,diagnostics}/` paths in scripts and `.agents/skills/*` to point at the new `docs/diataxis/` location. ADR cross-refs to deleted legacy doc paths are intentionally left stale (out of scope per user direction; no validator coverage exists for them).
+
 ## 2026-07-17
 
 ### Changed

@@ -87,4 +87,4 @@ Variants with non-trivial First Checks. For variants not listed here, the varian
 
 ## Document References
 
-- [`./testing.md`](./testing.md) — testing policy; the `*_tests.rs` sibling-file convention; test categories. The runtime `llm_messages` forensics table and the `RecordingForensics` test spy are documented there as test-writing helpers, not debugging tools.
+- [`../reference/coding_standards/testing.md`](../reference/coding_standards/testing.md) — testing policy; the `*_tests.rs` sibling-file convention; test categories. The runtime `llm_messages` forensics table and the `RecordingForensics` test spy are documented there as test-writing helpers, not debugging tools.

@@ -1,13 +1,13 @@
 ---
 name: chronicler-docs-hygiene
-description: "Use when auditing chronicler_engine/docs-diataxis/ docs against AGENTS.md and src/ for what validate_docs_diataxis.py can't catch: rule violations, mode drift, stale-source drift. Read-only; reports findings, never edits."
+description: "Use when auditing chronicler_engine/docs/diataxis/ docs against AGENTS.md and src/ for what validate_docs.py can't catch: rule violations, mode drift, stale-source drift. Read-only; reports findings, never edits."
 ---
 
 # Documentation Hygiene
 
 **This skill is read-only on docs. Do NOT edit, delete, or rewrite files. Report findings only.**
 
-For the writing-convention layer that prevents sediment during writing, see `chronicler_engine/docs-diataxis/AGENTS.md`. This skill audits accumulated violations.
+For the writing-convention layer that prevents sediment during writing, see `chronicler_engine/docs/AGENTS.md` `## Writing Conventions`. This skill audits accumulated violations.
 
 ## Philosophy
 
@@ -20,21 +20,20 @@ Docs are a **Specification**, not a conversation. Sediment is the enemy; reasoni
 
 | Layer | Where | What it checks |
 |---|---|---|
-| Machine | `chronicler_engine/scripts/validate_docs_diataxis.py` | Front-matter presence, required keys, mode vocabulary, `arc52:` validity, required H2 sections for `reference`, broken links, broken ADR refs, body-prose markdown-link rule, simple mode-content heuristic (warn-only) |
-| Convention | `chronicler_engine/docs-diataxis/AGENTS.md` | Writing rules (front-matter + mode-declaration blockquote, Diátaxis compass, Reference defers to source, No code-indexer docs, No negative explaining, Reference/Explanation register, `#### Explanation unfolds; it does not justify`) |
+| Machine | `chronicler_engine/scripts/validate_docs.py` | Front-matter presence, required keys, mode vocabulary, `arc52:` validity, required H2 sections for `reference`, broken links, broken ADR refs, body-prose markdown-link rule, simple mode-content heuristic (warn-only) |
+| Convention | `chronicler_engine/docs/AGENTS.md` `## Writing Conventions` | Writing rules (front-matter + mode-declaration blockquote, Diátaxis compass, Reference defers to source, No code-indexer docs, No negative explaining, Reference/Explanation register, `#### Explanation unfolds; it does not justify`) |
 | Semantic | **this skill** | What the machine layer can't catch — see Phases 1–7 below |
 
-Run the validator first (`python chronicler_engine/scripts/validate_docs_diataxis.py --strict`). Surface any overlap in `Findings` rather than re-litigating machine-layer warnings.
+Run the validator first (`python chronicler_engine/scripts/validate_docs.py --strict`). Surface any overlap in `Findings` rather than re-litigating machine-layer warnings.
 
 ## Scope & Boundaries
 
-**In scope:** all of `chronicler_engine/docs-diataxis/` excluding the carve-outs below.
+**In scope:** all of `chronicler_engine/docs/diataxis/` excluding the carve-outs below.
 
 **Out of scope (carve-outs):**
 
-- `chronicler_engine/docs-diataxis/_PILOT_NOTES.md` — pilot retrofit log; self-declared temporary, out of scope.
-- `chronicler_engine/docs-diataxis/explanation/diataxis.md` — Diátaxis framework primer; the always-loaded `docs-diataxis/AGENTS.md` is its conventions source, not this skill. Skip auditing framework-level exposition against engine conventions.
-- `chronicler_engine/docs/` (legacy tree) — out of scope pre-cutover; `validate_docs.py` remains the legacy-tree machine layer. After cutover this carve-out closes by removal.
+- `chronicler_engine/docs/diataxis/_PILOT_NOTES.md` — pilot retrofit log; self-declared temporary, out of scope.
+- `chronicler_engine/docs/diataxis/explanation/diataxis.md` — Diátaxis framework primer; the always-loaded `docs/AGENTS.md` `## Writing Conventions` is its conventions source, not this skill. Skip auditing framework-level exposition against engine conventions.
 - Rust `//!` / `///` and Python `#` comments — owned by `chronicler-comment-fixer`.
 - `CONTEXT.md` glossary terms — owned by `domain-modeling`; do not redefine.
 - Auto-creating ADRs from extracted sediment — flag candidate only; user or `documentation-and-adrs` skill decides.
@@ -45,9 +44,9 @@ Run all phases regardless of earlier outcomes. A clean phase does not end the au
 
 ## Phase 1 — Conventions compliance
 
-Per-doc check against `docs-diataxis/AGENTS.md` rules the validator can't enforce. **The phase points at AGENTS.md anchors; it never restates the rule content.**
+Per-doc check against `docs/AGENTS.md` `## Writing Conventions` rules the validator can't enforce. **The phase points at AGENTS.md anchors; it never restates the rule content.**
 
-Rules (check body prose against each anchor in `chronicler_engine/docs-diataxis/AGENTS.md`):
+Rules (check body prose against each anchor in `chronicler_engine/docs/AGENTS.md` `## Writing Conventions`):
 
 - **`## No negative explaining`** — flag body-prose negation, tautological negative definitions, defensive scope disclaiming. Out-of-scope lists and Diagrams are the canonical home for scope statements (not findings); see the rule's carve-out.
 - **`#### Explanation unfolds; it does not justify`** — flag section titles phrased as `Why X?` or `Why X instead of Y?`; flag justification-tail framing in body prose (`the design pays that cost in exchange for X`, `the design holds this cost for Y`).
@@ -61,19 +60,19 @@ Completion: every in-scope file audited against each anchor; each finding carrie
 
 ## Phase 2 — Mode consistency
 
-Declared Diátaxis mode (from front-matter) vs. actual content. This phase is the **delta** over the validator — it does what `validate_docs_diataxis.py:818 check_mode_content_heuristic` can't. The validator covers the procedural-marker signal for reference/tutorial/how-to (warn-only); the skill covers the semantic drift the regex misses.
+Declared Diátaxis mode (from front-matter) vs. actual content. This phase is the **delta** over the validator — it does what `validate_docs.py:check_mode_content_heuristic` can't. The validator covers the procedural-marker signal for reference/tutorial/how-to (warn-only); the skill covers the semantic drift the regex misses.
 
 For each `MODE_CONTENT_MISMATCH` warning the validator emits, cite it by pointer rather than reanalysing the same signal.
 
 Checks (the delta):
 
-- **Declared `explanation`** (validator intentionally skips — script docstring line 813: *"`explanation` is intentionally not checked by this heuristic: the inverse signal ('why' language) is too noisy to detect mechanically"*). Phase 1 already catches justification titles and tails; this phase catches the remaining mismatch: content is purely factual with no unfolding, or content reads as a Reference catalog (austere, neutral, no design rationale) rather than as discursive unfolding. Cite `docs-diataxis/AGENTS.md` `### Explanation` as the convention source.
+- **Declared `explanation`** (validator intentionally skips — script docstring line 813: *"`explanation` is intentionally not checked by this heuristic: the inverse signal ('why' language) is too noisy to detect mechanically"*). Phase 1 already catches justification titles and tails; this phase catches the remaining mismatch: content is purely factual with no unfolding, or content reads as a Reference catalog (austere, neutral, no design rationale) rather than as discursive unfolding. Cite `docs/AGENTS.md` `### Explanation` as the convention source.
 - **Subtle drift the regex misses:**
   - Declared `reference` but content is discursive / opinionated / answers "why" (violates `AGENTS.md` `### Reference` "austere, neutral, authoritative — like a map") even without tripping the procedural-marker regex.
   - Declared `tutorial` but content is goal-oriented (how-to shape) rather than learning-by-doing; or content is purely factual.
   - Declared `how-to` but content is reference-shaped (factual catalog with no steps for the reader to follow).
 
-Each finding cites `FILE:LINE — Phase 2 — Delta over validate_docs_diataxis.py:818`.
+Each finding cites `FILE:LINE — Phase 2 — Delta over validate_docs.py:check_mode_content_heuristic`.
 
 Completion: every in-scope file's declared mode checked against subtle content signals not caught by the validator.
 
@@ -97,7 +96,7 @@ Completion: every capability claim AND every schema claim verified against `src/
 
 ## Phase 5 — Behavior Mismatch
 
-Doc claims behavior X; code does Y. Extract behavioral claims, verify against `src/`, report contradictions with `file:line`. This phase is semantic verification of behavioral claims (mechanical link / ADR / plan-link checks owned by `validate_docs_diataxis.py`).
+Doc claims behavior X; code does Y. Extract behavioral claims, verify against `src/`, report contradictions with `file:line`. This phase is semantic verification of behavioral claims (mechanical link / ADR / plan-link checks owned by `validate_docs.py`).
 
 Completion: every behavioral claim verified against `src/`; contradictions reported with `FILE:LINE` (doc) and `src/file:line` (code).
 
@@ -105,7 +104,7 @@ Completion: every behavioral claim verified against `src/`; contradictions repor
 
 Conditional phase: when ≥2 in-scope docs reference the same concept (layer count, enum name, struct field, phase number, status enum variant, INV-NNN identifier), verify all references agree. Common drift: layer counts (8 vs 7), enum variants, struct field names (direct vs accessor), INV-NNN guarantees. Report drift with both file refs.
 
-**Cross-tree drift (subtype):** a `docs-diataxis/` doc citing a `docs/` path (or vice versa) is a finding with a pointer to the map's Cutover plan — the two trees coexist by design pre-cutover and must not mix.
+**Cross-tree drift (subtype):** a `docs/diataxis/` doc citing a `docs/` path (or vice versa) is a finding with a pointer to the map's Cutover plan — the two trees coexist by design pre-cutover and must not mix.
 
 Skip if no concept is referenced by ≥2 docs AND no cross-tree citations exist.
 

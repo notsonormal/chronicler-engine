@@ -73,7 +73,7 @@ The engine deploys as one process against one SQLite file. The `is_generating` a
 
 ## Architectural commitments
 
-A small set of guarantees follow from the shape above. Each is machine-checked or load-bearing in code; the formal enumeration lives in `docs/architecture/guardrails.md` §5 and the test references there. The architectural intent, in one line each:
+A small set of guarantees follow from the shape above. Each is machine-checked or load-bearing in code; see `## Document References` for the formal enumeration and test references. The architectural intent, in one line each:
 
 - Domain purity — domain code has no `tokio`, no I/O, no HTTP types. Tested without a runtime.
 - Single-process deployment — one engine, one database; the gate and registry are process-local.
@@ -89,4 +89,4 @@ A small set of guarantees follow from the shape above. Each is machine-checked o
 - [`../../reference/storage.md`](../../reference/storage.md) — SQLite schema and the eleven tables.
 - [`./two-state-channels.md`](./two-state-channels.md) — why the engine carries two complementary generation-state signals.
 - [`./rust_idioms.md`](./rust_idioms.md) — concrete services + `spawn_blocking` + settings-sharing shape that the hexagonal frame sits inside.
-- [`docs/architecture/guardrails.md`](../../../docs/architecture/guardrails.md) §5 — formal enumeration of INV-001..007 with test references.
+- [`../reference/coding_standards/guardrails.md`](../reference/coding_standards/guardrails.md) §5 — formal enumeration of INV-001..007 with test references.

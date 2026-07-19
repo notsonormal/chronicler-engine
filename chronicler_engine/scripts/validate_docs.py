@@ -1,14 +1,14 @@
-"""Validate markdown docs under chronicler_engine/docs/.
+"""Validate markdown docs under chronicler_engine/docs/diataxis/.
 
 Role-aware deterministic checks. Each .md file is classified into one of three
 roles which determine which rules apply:
 
-  STANDARD  — canonical spec docs (architecture/system/reference/diagnostics/
-              external_applications/adr-0XX). All rules enforced.
+  STANDARD  — canonical spec docs (reference/explanation/how-to/tutorials
+              under docs/diataxis/). All rules enforced.
   TRANSIENT — historical or forward-looking docs (CHANGELOG, plans). Exempt
               from all checks; they may reference anything historically.
-  EXCLUDED  — auto-generated indexes, ADR standards readme, template, archives.
-              Exempt from all checks.
+  EXCLUDED  — auto-generated indexes, ADR standards readme, template, archives,
+              process notes (AGENTS.md, _PILOT_NOTES.md). Exempt from all checks.
 
 Rules (only enforced on STANDARD docs):
 
@@ -18,14 +18,27 @@ Rules (only enforced on STANDARD docs):
                               Standards must be self-contained; plans are transient
                               and cannot be leaned on as canonical reference.
   STANDARD_DOC_BODY_REFERENCE — doc-internal reference in body prose (before the
-                              file's `## Document References` section). Catches:
-                                (a) `[text](relative/path.md)` where target is .md
-                                    inside docs/
-                                (b) `\bADR-NNN\b` mentions
-                              Both must appear only in the `## Document References`
-                              section at the bottom of the file. Body prose must
-                              stand alone as a Specification — no pointers to
-                              decision context or further reading inline.
+                              file's `## Document References` section). Catches any
+                              `.md` mention before that section, in any of:
+                                (a) `[text](relative/path.md)` markdown-link form
+                                (b) backtick form `` `path.md` `` where the content
+                                    is a path-like token ending in `.md`
+                                (c) plain §Section text on a line whose earlier text
+                                    contains a `.md` path
+                                (d) `\bADR-NNN\b` plain mentions
+                              All forms must appear only in the `## Document
+                              References` section at the bottom of the file.
+
+Diátaxis-front-matter rules (only enforced on STANDARD docs under
+docs/diataxis/):
+
+  MISSING_FRONTMATTER          — no YAML front-matter (`---` block) at top of file.
+  EMPTY_FRONTMATTER            — front-matter block present but parses to empty.
+  FRONTMATTER_PARSE_ERROR      — YAML does not parse.
+  FRONTMATTER_NOT_MAPPING      — YAML parses but the root is not a mapping.
+  FRONTMATTER_MISSING_KEY      — required key (`diataxis:` or `title:`) absent.
+  FRONTMATTER_INVALID_MODE     — `diataxis:` value not in the vocabulary.
+  FRONTMATTER_INVALID_ARC52    — `arc52:` present but not a list of valid sections.
 
 Mirrors `validate_adrs.py` structure (Violation NamedTuple, per-file report,
 summary line at bottom). Intentionally decoupled from the
@@ -36,11 +49,7 @@ Usage:
     python scripts/validate_docs.py
     python scripts/validate_docs.py --strict
     python scripts/validate_docs.py --list
-    python scripts/validate_docs.py --path chronicler_engine/docs/system/llm_processing.md
-    python scripts/validate_docs.py --links
-    python scripts/validate_docs.py --adr-refs
-    python scripts/validate_docs.py --plan-links
-    python scripts/validate_docs.py --body-refs
+    python scripts/validate_docs.py --path reference/data_layer.md
 """
 
 from __future__ import annotations
@@ -51,9 +60,18 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
+import yaml
+
+# ---------------------------------------------------------------------------
 # Severities.
+# ---------------------------------------------------------------------------
+
 ERROR = "error"  # fails build.
 WARNING = "warning"  # does not fail unless --strict.
+
+# ---------------------------------------------------------------------------
+# Shared markdown regexes (same shape as validate_docs.py).
+# ---------------------------------------------------------------------------
 
 # Markdown link: [text](target). Capture group 1 = target.
 # Excludes images (leading !).
@@ -67,42 +85,83 @@ ADR_REF = re.compile(r"\bADR-(\d+)\b")
 # Matches `## Document References` at start of line (any leading whitespace).
 DOC_REFERENCES_HEADING = re.compile(r"^\s*##\s+Document\s+References\s*$")
 
+# Backtick span: `…`. Captures the content between backticks. Body-prose backtick
+# refs only fire when the captured content is path-like and ends in `.md`
+# (see _is_md_path_in_backticks below). Naive (`[^`\n]+`) — multi-line backtick
+# spans in body prose are vanishingly rare.
+BACKTICK_SPAN = re.compile(r"`([^`\n]+)`")
+
+# Plain §Section token. Fires only when the same body-prose line contains a
+# `.md` path earlier (see check_standard_body_references). Captures the §Token
+# plus optional multi-word section names that include dashes, quotes, and
+# underscores; stops at punctuation, periods, or end of line.
+SECTION_TOKEN = re.compile(r"§[\w\"]+(?:\s+[\w\-\"]+)*")
+
+# Plain path-shaped .md token on a body-prose line. Used only to find the
+# document a § token refers to (the preceding path on the same line). Resolves
+# via the same inside-docs_root check as MARKDOWN_LINK.
+LINE_MD_TOKEN = re.compile(r"[A-Za-z0-9_./-]+\.md")
+
 # Fenced code block delimiter (``` or ~~~), optionally with language tag.
 FENCE_DELIMITER = re.compile(r"^\s*(```|~~~)")
+
+# Front-matter delimiter: a line that is exactly `---` (optional whitespace).
+FRONTMATTER_DELIMITER = re.compile(r"^---\s*$")
 
 # Paths whose existence we never check (network, mail, in-page anchors).
 URI_SCHEMES = ("http://", "https://", "mailto:")
 
-# Files exempt from all checks (auto-generated indexes, ADR standards readme,
-# template file containing placeholders, top-level README).
+# ---------------------------------------------------------------------------
+# Diátaxis front-matter vocabulary.
+# ---------------------------------------------------------------------------
+
+VALID_DIATAXIS_MODES: frozenset[str] = frozenset(
+    {"tutorial", "how-to", "reference", "explanation"}
+)
+
+VALID_ARC52_SECTIONS: frozenset[str] = frozenset({"§3", "§5", "§7", "§10"})
+
+# ---------------------------------------------------------------------------
+# Heuristic patterns for the simple mode-vs-content check (warn-only).
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# File / directory classification.
+# ---------------------------------------------------------------------------
+
+# Files exempt from all checks regardless of tree.
 EXCLUDED_FILE_NAMES: set[str] = {
     "AGENTS.md",
     "README.md",
+    "_PILOT_NOTES.md",  # process artifact, not a Diátaxis doc
 }
 
 # File patterns exempt from all checks (template, etc.). Matched on stem.
 EXCLUDED_STEM_PREFIXES: tuple[str, ...] = ("adr-000-template",)
 
-# Directories whose entire subtree is exempt (archives, transient plan
-# archives, et al.). Matched on any path segment under docs_root.
+# Directories whose entire subtree is exempt (archives, etc.).
 EXCLUDED_DIR_NAMES: set[str] = {"old-docs"}
 
-# Transient file paths: exempt from all checks because they are historical or
-# forward-looking logs, not canonical specs.
+# Transient file paths: exempt because they are historical or forward-looking
+# logs, not canonical specs.
 TRANSIENT_FILE_PATHS: tuple[str, ...] = (
     "CHANGELOG.md",
-    "plans",  # whole plans/ directory
+    "plans",
 )
 
-# Directories whose *.md files are STANDARDS (canonical spec docs).
+# Standard dir names. docs/diataxis/ uses reference/explanation/how-to/
+# (and tutorials/ once content earns it).
 STANDARD_DIR_NAMES: set[str] = {
-    "architecture",
-    "system",
     "reference",
-    "diagnostics",
-    "external_applications",
-    "adr",  # ADR cross-file link/ref checks enforced here
+    "explanation",
+    "how-to",
+    "tutorials",
 }
+
+
+# ---------------------------------------------------------------------------
+# Result types.
+# ---------------------------------------------------------------------------
 
 
 class Violation(NamedTuple):
@@ -121,10 +180,37 @@ class FileReport:
         self.violations: list[Violation] = []
 
 
-def relative_to_docs(path: Path, docs_root: Path) -> Path | None:
-    """Return path relative to docs_root, or None if not inside docs_root."""
+class FrontmatterResult(NamedTuple):
+    """Result of front-matter extraction.
+
+    `present`     True if the file has a `---` block at the top.
+    `empty`       True if the block exists but parses to nothing.
+    `parsed`      The parsed mapping (None on error or absence).
+    `error`       Human-readable error message if extraction failed.
+    `error_kind`  One of None / "yaml_parse" / "not_mapping" / "unterminated".
+                  Lets the caller map errors to specific violation rule
+                  names (FRONTMATTER_PARSE_ERROR vs FRONTMATTER_NOT_MAPPING).
+    `body_offset` Line index in the original file where the body starts
+                  (0 if no front-matter).
+    """
+
+    present: bool
+    empty: bool
+    parsed: dict | None
+    error: str | None
+    error_kind: str | None
+    body_offset: int
+
+
+# ---------------------------------------------------------------------------
+# Helpers.
+# ---------------------------------------------------------------------------
+
+
+def relative_to(path: Path, root: Path) -> Path | None:
+    """Return path relative to root, or None if not inside root."""
     try:
-        return path.resolve().relative_to(docs_root.resolve())
+        return path.resolve().relative_to(root.resolve())
     except ValueError:
         return None
 
@@ -140,7 +226,7 @@ def classify_file(path: Path, docs_root: Path) -> str:
       5. First segment in STANDARD_DIR_NAMES → STANDARD
       6. Otherwise → EXCLUDED (unrecognized top-level doc — be permissive)
     """
-    rel = relative_to_docs(path, docs_root)
+    rel = relative_to(path, docs_root)
     if rel is None:
         return "EXCLUDED"
 
@@ -169,6 +255,15 @@ def classify_file(path: Path, docs_root: Path) -> str:
     return "EXCLUDED"
 
 
+def is_diataxis_tree_path(rel_to_engine: Path) -> bool:
+    """True if `rel_to_engine` lives under engine_root/docs/diataxis/."""
+    return (
+        len(rel_to_engine.parts) >= 2
+        and rel_to_engine.parts[0] == "docs"
+        and rel_to_engine.parts[1] == "diataxis"
+    )
+
+
 def collect_markdown_files(targets: list[Path], docs_root: Path) -> list[Path]:
     """Expand targets to a sorted list of .md files under docs_root.
 
@@ -182,7 +277,7 @@ def collect_markdown_files(targets: list[Path], docs_root: Path) -> list[Path]:
             continue
         if target.is_dir():
             for md_file in target.rglob("*.md"):
-                rel = relative_to_docs(md_file, docs_root)
+                rel = relative_to(md_file, docs_root)
                 if rel is None:
                     continue
                 if any(part in EXCLUDED_DIR_NAMES for part in rel.parts):
@@ -192,7 +287,7 @@ def collect_markdown_files(targets: list[Path], docs_root: Path) -> list[Path]:
         # Fallback: treat as glob pattern.
         for md_file in docs_root.glob(target.as_posix()):
             if md_file.is_file():
-                rel = relative_to_docs(md_file, docs_root)
+                rel = relative_to(md_file, docs_root)
                 if rel is None:
                     continue
                 if any(part in EXCLUDED_DIR_NAMES for part in rel.parts):
@@ -211,8 +306,116 @@ def read_text(report: FileReport) -> str | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# Front-matter extraction.
+# ---------------------------------------------------------------------------
+
+
+def parse_frontmatter(text: str) -> FrontmatterResult:
+    """Parse YAML front-matter from the top of `text`.
+
+    Front-matter shape:
+        ---
+        key: value
+        ---
+        <body>
+
+    The opening `---` must be on line 0 (line 1 in 1-indexed). Anything else
+    means "no front-matter" (caller decides what that implies).
+    """
+    lines = text.splitlines()
+    if not lines or not FRONTMATTER_DELIMITER.match(lines[0]):
+        return FrontmatterResult(
+            present=False,
+            empty=False,
+            parsed=None,
+            error=None,
+            error_kind=None,
+            body_offset=0,
+        )
+
+    end_idx: int | None = None
+    for idx in range(1, len(lines)):
+        if FRONTMATTER_DELIMITER.match(lines[idx]):
+            end_idx = idx
+            break
+    if end_idx is None:
+        return FrontmatterResult(
+            present=True,
+            empty=False,
+            parsed=None,
+            error="front-matter opened with `---` but never closed",
+            error_kind="unterminated",
+            body_offset=len(lines),
+        )
+
+    fm_text = "\n".join(lines[1:end_idx])
+    body_offset = end_idx + 1
+    if not fm_text.strip():
+        return FrontmatterResult(
+            present=True,
+            empty=True,
+            parsed={},
+            error=None,
+            error_kind=None,
+            body_offset=body_offset,
+        )
+
+    try:
+        parsed = yaml.safe_load(fm_text)
+    except yaml.YAMLError as exc:
+        return FrontmatterResult(
+            present=True,
+            empty=False,
+            parsed=None,
+            error=f"YAML parse error: {exc}",
+            error_kind="yaml_parse",
+            body_offset=body_offset,
+        )
+
+    if parsed is None:
+        return FrontmatterResult(
+            present=True,
+            empty=True,
+            parsed={},
+            error=None,
+            error_kind=None,
+            body_offset=body_offset,
+        )
+
+    if not isinstance(parsed, dict):
+        return FrontmatterResult(
+            present=True,
+            empty=False,
+            parsed=None,
+            error=f"front-matter must be a YAML mapping, got {type(parsed).__name__}",
+            error_kind="not_mapping",
+            body_offset=body_offset,
+        )
+
+    return FrontmatterResult(
+        present=True,
+        empty=False,
+        parsed=parsed,
+        error=None,
+        error_kind=None,
+        body_offset=body_offset,
+    )
+
+
+def body_text(text: str, fm: FrontmatterResult) -> str:
+    """Return the markdown body (lines after the front-matter)."""
+    lines = text.splitlines()
+    return "\n".join(lines[fm.body_offset:])
+
+
+# ---------------------------------------------------------------------------
+# Existing checks (link / ADR / plan / body references).
+# ---------------------------------------------------------------------------
+
+
 def check_markdown_links(report: FileReport, docs_root: Path) -> None:
-    """Flag [text](relative/path.md) where target file does not exist in docs/."""
+    """Flag [text](relative/path.md) where target file does not exist."""
     text = read_text(report)
     if text is None:
         return
@@ -220,7 +423,6 @@ def check_markdown_links(report: FileReport, docs_root: Path) -> None:
     for lineno, line in enumerate(text.splitlines(), start=1):
         for match in MARKDOWN_LINK.finditer(line):
             target = match.group(1).strip()
-            # Strip optional title (`href "title"`) and fragment (`href#frag`).
             target_path_only = target.split(" ", 1)[0].split("#", 1)[0]
             if not target_path_only:
                 continue
@@ -228,19 +430,14 @@ def check_markdown_links(report: FileReport, docs_root: Path) -> None:
                 continue
             if target_path_only.startswith("#"):
                 continue
-            # Only check relative .md paths. Skip absolute paths and other exts.
             if not target_path_only.endswith(".md"):
                 continue
-            # Skip `adr-000-template.md` (placeholder file referenced by docs).
             if target_path_only.endswith("adr-000-template.md"):
                 continue
-            # Resolve relative to the linking file's directory.
             resolved = (report.path.parent / target_path_only).resolve()
             try:
                 resolved.relative_to(docs_root.resolve())
             except ValueError:
-                # Target escapes docs/ tree — out of scope for this check.
-                # (Plan-link rule catches standards→plans/ outside docs/.)
                 continue
             if not resolved.exists():
                 report.violations.append(
@@ -253,7 +450,15 @@ def check_markdown_links(report: FileReport, docs_root: Path) -> None:
 
 
 def check_adr_refs(report: FileReport, adr_dir: Path) -> None:
-    """Flag ADR-NNN mentions where the corresponding ADR file is missing."""
+    """Flag ADR-NNN mentions where the corresponding ADR file is missing.
+
+    `adr_dir` may be None if the engine has no docs/adr/ directory; in that
+    case the check is a no-op (matches the existing validate_docs.py behavior
+    of silently skipping when the ADR dir is absent).
+    """
+    if adr_dir is None or not adr_dir.exists():
+        return
+
     text = read_text(report)
     if text is None:
         return
@@ -268,7 +473,6 @@ def check_adr_refs(report: FileReport, adr_dir: Path) -> None:
             padded = f"{number:03d}"
             matches = list(adr_dir.glob(f"adr-{padded}-*.md"))
             if not matches:
-                # Fallback: any case.
                 matches = [
                     p
                     for p in adr_dir.iterdir()
@@ -286,10 +490,7 @@ def check_adr_refs(report: FileReport, adr_dir: Path) -> None:
 
 
 def check_standard_plan_links(report: FileReport, docs_root: Path) -> None:
-    """Flag standards linking into docs/plans/ or old-docs/archived-plans/.
-
-    Plans are transient; standards must be self-contained.
-    """
+    """Flag standards linking into docs/plans/ or old-docs/archived-plans/."""
     text = read_text(report)
     if text is None:
         return
@@ -308,7 +509,6 @@ def check_standard_plan_links(report: FileReport, docs_root: Path) -> None:
             if not target_path_only.endswith(".md"):
                 continue
 
-            # Normalise the target for plan-shape matching.
             normalised = target_path_only.replace("\\", "/").lstrip("./")
             lower = normalised.lower()
 
@@ -320,15 +520,10 @@ def check_standard_plan_links(report: FileReport, docs_root: Path) -> None:
             if not is_plan_link:
                 continue
 
-            # Resolve to confirm it really lives under docs_root/plans or
-            # docs_root/old-docs/archived-plans (not e.g. a sibling docs/plans
-            # outside the engine).
             resolved = (report.path.parent / target_path_only).resolve()
             try:
                 rel_to_docs = resolved.relative_to(docs_root_resolved)
             except ValueError:
-                # Escapes docs/ — still a plan-shape link from a standard.
-                # Report by target string as written.
                 report.violations.append(
                     Violation(
                         ERROR,
@@ -354,6 +549,27 @@ def check_standard_plan_links(report: FileReport, docs_root: Path) -> None:
                 )
 
 
+def _is_md_path_in_backticks(token: str) -> bool:
+    """True if a backtick-wrapped token looks like a `.md` doc-path, not code.
+
+    Accepts:
+      - paths with explicit prefix: `./foo.md`, `../foo/bar.md`, `/abs/foo.md`
+      - bare filenames ending in `.md` whose stem has no dot/slash (so
+        `startup.md` and `2026-q3-notes.md` match, but `AppState.foo.md`
+        and `example.com/foo.md` do not).
+    """
+    if not token.endswith(".md") or len(token) < 4:
+        return False
+    if token.startswith(URI_SCHEMES):
+        return False
+    if token.startswith(("./", "../", "/")):
+        return True
+    stem = token[:-3]
+    if not stem:
+        return False
+    return all(c.isalnum() or c in "_-" for c in stem)
+
+
 def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
     """Flag doc-internal references in body prose.
 
@@ -361,18 +577,25 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
     (or the entire file if no such section exists). Fenced code blocks
     inside body prose are exempt.
 
-    Flagged in body:
-      (a) `[text](relative/path.md)` where target is .md and resolves inside docs/
-      (b) `\bADR-NNN\b` mentions
-
-    Both belong only in the `## Document References` section at the bottom.
-    Body prose must stand alone as a Specification — no inline pointers to
-    decision context or further reading.
-
     ADRs (docs/adr/*.md) are exempt from this rule — they are decision records
-    that link context (status, tradeoffs, related decisions) inline by design.
+    that link context inline by design.
+
+    Fires on any of the following in body prose, when the resolved target is
+    inside the docs root:
+
+      (a) Markdown link form: `[text](path.md)`.
+      (b) Backtick form: `` `path.md` `` (backtick content is path-shaped;
+          see _is_md_path_in_backticks).
+      (c) Plain §Section text where the same line earlier in the text
+          contains a `.md` path token (resolves via that preceding path).
+      (d) `\bADR-NNN\b` plain mention.
+
+    Forms (a) and (b) are primary: if either fires on a line, forms (c) and
+    (d) are skipped for that line to avoid noise (the existing markdown-link
+    dedup is preserved). Forms (c) and (d) can co-fire on a line with each
+    other, and (c) can fire multiple times on a single line when several
+    different § tokens appear with the same preceding path.
     """
-    # ADR exemption: decision records allow inline cross-references.
     try:
         rel_to_docs = report.path.resolve().relative_to(docs_root.resolve())
     except ValueError:
@@ -387,17 +610,19 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
     docs_root_resolved = docs_root.resolve()
     lines = text.splitlines()
 
-    # Find the `## Document References` section boundary line index (1-based
-    # end of body). Lines from boundary onward are reference section, exempt.
-    body_end_lineno = len(lines) + 1  # default: entire file is body
+    body_end_lineno = len(lines) + 1
     for idx, line in enumerate(lines, start=1):
         if DOC_REFERENCES_HEADING.match(line):
             body_end_lineno = idx
             break
 
-    # Walk body lines, tracking fenced-code-block state. Fenced blocks contain
-    # documentation examples with literal `[...](...)` markup that is content,
-    # not a reference.
+    def _line_has_flag() -> bool:
+        return any(
+            v.rule == "STANDARD_DOC_BODY_REFERENCE"
+            and v.message.startswith(f"Line {lineno}:")
+            for v in report.violations
+        )
+
     in_fence = False
     for lineno, line in enumerate(lines, start=1):
         if lineno >= body_end_lineno:
@@ -408,7 +633,7 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
         if in_fence:
             continue
 
-        # (a) Doc-internal markdown link
+        # Stage 1: markdown-link form `[text](path.md)`.
         for match in MARKDOWN_LINK.finditer(line):
             target = match.group(1).strip()
             target_path_only = target.split(" ", 1)[0].split("#", 1)[0]
@@ -422,9 +647,6 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
                 continue
             if target_path_only.endswith("adr-000-template.md"):
                 continue
-            # Resolve relative to the linking file's directory. Only flag if
-            # target is inside docs/ — anything escaping docs/ is out of scope
-            # for this rule (plan-link rule catches docs/plans separately).
             resolved = (report.path.parent / target_path_only).resolve()
             try:
                 resolved.relative_to(docs_root_resolved)
@@ -440,22 +662,70 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
                     f"file.",
                 )
             )
-            # Don't double-report: an inline ADR-NNN mention like `ADR-014`
-            # typically appears in the same line as `[ADR-014](path.md)`.
-            # Reporting the link is sufficient; the ADR-NNN mention in the
-            # link text is the same reference. Skip ADR scan for this line.
 
-        # (b) ADR-NNN mention — only if no link on this line was reported
-        # for the same ADR. If the line already had a flagged link, the ADR
-        # mention is part of the same reference — don't double-flag.
-        has_flagged_link = any(
-            v.rule == "STANDARD_DOC_BODY_REFERENCE" and v.message.startswith(
-                f"Line {lineno}:"
-            )
-            for v in report.violations
-        )
-        if has_flagged_link:
+        if _line_has_flag():
+            # Existing dedup: a markdown link on this line already flags the
+            # same conceptual issue; skip the secondary forms.
             continue
+
+        # Stage 2: backtick form `` `path.md` ``.
+        for match in BACKTICK_SPAN.finditer(line):
+            inner = match.group(1).strip()
+            if not _is_md_path_in_backticks(inner):
+                continue
+            resolved = (report.path.parent / inner).resolve()
+            try:
+                resolved.relative_to(docs_root_resolved)
+            except ValueError:
+                continue
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "STANDARD_DOC_BODY_REFERENCE",
+                    f"Line {lineno}: doc-internal backtick ref "
+                    f"`{inner}` appears in body prose. Move to "
+                    f"`## Document References` section at the bottom of the "
+                    f"file.",
+                )
+            )
+
+        if _line_has_flag():
+            # Backtick ref already flags this line; skip § and ADR forms.
+            continue
+
+        # Stage 3: plain §Section text. Only fires when the same line has a
+        # `.md` path token earlier; the path is what the § resolves to.
+        line_md_tokens = list(LINE_MD_TOKEN.finditer(line))
+        if line_md_tokens:
+            for sect_match in SECTION_TOKEN.finditer(line):
+                preceding_token = None
+                for cand in line_md_tokens:
+                    if cand.start() < sect_match.start():
+                        preceding_token = cand
+                if preceding_token is None:
+                    continue
+                path = preceding_token.group(0)
+                resolved = (report.path.parent / path).resolve()
+                try:
+                    resolved.relative_to(docs_root_resolved)
+                except ValueError:
+                    continue
+                # Trim trailing sentence punctuation from the § token for the
+                # message; the regex is greedy and would otherwise report
+                # `§Messages.` or `§Rel` etc.
+                section = sect_match.group(0).rstrip(".,;:!?")
+                report.violations.append(
+                    Violation(
+                        ERROR,
+                        "STANDARD_DOC_BODY_REFERENCE",
+                        f"Line {lineno}: body-prose `{section}` cross-ref "
+                        f"preceded by `{path}` on the same line. Move to "
+                        f"`## Document References` section at the bottom of "
+                        f"the file.",
+                    )
+                )
+
+        # Stage 4: ADR mention.
         for match in ADR_REF.finditer(line):
             report.violations.append(
                 Violation(
@@ -468,21 +738,168 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
             )
 
 
+# ---------------------------------------------------------------------------
+# Diátaxis front-matter checks.
+# ---------------------------------------------------------------------------
+
+
+def check_diataxis_frontmatter(report: FileReport) -> None:
+    """Enforce YAML front-matter conventions on docs/diataxis/ STANDARD docs.
+
+    Emits MISSING_FRONTMATTER, EMPTY_FRONTMATTER, FRONTMATTER_PARSE_ERROR,
+    FRONTMATTER_NOT_MAPPING, FRONTMATTER_MISSING_KEY, FRONTMATTER_INVALID_MODE,
+    and FRONTMATTER_INVALID_ARC52 violations as appropriate. See module
+    docstring for the rule set.
+    """
+    text = read_text(report)
+    if text is None:
+        return
+
+    fm = parse_frontmatter(text)
+
+    if not fm.present:
+        report.violations.append(
+            Violation(
+                ERROR,
+                "MISSING_FRONTMATTER",
+                "Line 1: file has no YAML front-matter block "
+                "(expected `---` on line 1, content, then closing `---`). "
+                "Every docs/diataxis/ doc must declare `diataxis:` and `title:`.",
+            )
+        )
+        return
+    if fm.error is not None:
+        # Map structured error_kind to the specific rule. unterminated and
+        # yaml_parse both fall under FRONTMATTER_PARSE_ERROR (the front-matter
+        # block exists but is malformed); not_mapping is its own rule because
+        # the YAML is well-formed but not a key/value mapping.
+        if fm.error_kind == "not_mapping":
+            rule = "FRONTMATTER_NOT_MAPPING"
+        else:
+            rule = "FRONTMATTER_PARSE_ERROR"
+        report.violations.append(
+            Violation(ERROR, rule, f"Line 1: {fm.error}")
+        )
+        return
+    if fm.empty or not fm.parsed:
+        report.violations.append(
+            Violation(
+                ERROR,
+                "EMPTY_FRONTMATTER",
+                "Line 1: front-matter block is empty; "
+                "must declare at least `diataxis:` and `title:`.",
+            )
+        )
+        return
+
+    parsed = fm.parsed
+
+    # Required keys.
+    for required in ("diataxis", "title"):
+        if required not in parsed:
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "FRONTMATTER_MISSING_KEY",
+                    f"Line 1: front-matter is missing required key `{required}:`",
+                )
+            )
+
+    # Mode vocabulary check (only if `diataxis:` is present and scalar-ish).
+    if "diataxis" in parsed:
+        mode_value = parsed["diataxis"]
+        if not isinstance(mode_value, str):
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "FRONTMATTER_INVALID_MODE",
+                    f"Line 1: `diataxis:` must be a string, got "
+                    f"{type(mode_value).__name__}",
+                )
+            )
+        elif mode_value not in VALID_DIATAXIS_MODES:
+            valid = ", ".join(sorted(VALID_DIATAXIS_MODES))
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "FRONTMATTER_INVALID_MODE",
+                    f"Line 1: `diataxis: {mode_value}` is not a valid mode. "
+                    f"Valid values: {valid}.",
+                )
+            )
+
+    # arc52 check (only if present).
+    if "arc52" in parsed:
+        arc52_value = parsed["arc52"]
+        # Must be a list of strings drawn from VALID_ARC52_SECTIONS.
+        if not isinstance(arc52_value, list):
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "FRONTMATTER_INVALID_ARC52",
+                    f"Line 1: `arc52:` must be a YAML list, got "
+                    f"{type(arc52_value).__name__}",
+                )
+            )
+        else:
+            bad: list[str] = []
+            for entry in arc52_value:
+                if not isinstance(entry, str) or entry not in VALID_ARC52_SECTIONS:
+                    bad.append(repr(entry))
+            if bad:
+                valid = ", ".join(sorted(VALID_ARC52_SECTIONS))
+                report.violations.append(
+                    Violation(
+                        ERROR,
+                        "FRONTMATTER_INVALID_ARC52",
+                        f"Line 1: `arc52:` contains invalid entries "
+                        f"{bad}. Valid sections: {valid}.",
+                    )
+                )
+
+        # FRONTMATTER_ARC52_OUT_OF_PLACE used to live here: `arc52:` on a
+        # non-architecture doc was warned. Removed because the architecture
+        # doc moved to `explanation/architecture.md` (flat, no subfolder).
+
+
+# ---------------------------------------------------------------------------
+# Scanning and rendering.
+# ---------------------------------------------------------------------------
+
+
 def scan_file(
-    path: Path, docs_root: Path, adr_dir: Path, modes: set[str]
+    path: Path,
+    engine_root: Path,
 ) -> FileReport:
+    """Scan a single .md file with all checks.
+
+    `engine_root` is the chronicler_engine/ directory; the file's parent path
+    is used to determine which docs root it lives under. This script only
+    scans files under `docs/diataxis/`.
+    """
     report = FileReport(path)
+    rel_to_engine = relative_to(path, engine_root)
+    if rel_to_engine is None or not rel_to_engine.parts:
+        return report
+    if not is_diataxis_tree_path(rel_to_engine):
+        return report  # not under docs/diataxis/; nothing to check
+
+    docs_root = engine_root / "docs" / "diataxis"
+    # Cross-tree ADR lookup: docs/diataxis/ files reference ADRs that live in
+    # docs/adr/.
+    adr_dir = engine_root / "docs" / "adr"
+
     role = classify_file(path, docs_root)
     if role != "STANDARD":
         return report
-    if "links" in modes:
-        check_markdown_links(report, docs_root)
-    if "adr-refs" in modes:
-        check_adr_refs(report, adr_dir)
-    if "plan-links" in modes:
-        check_standard_plan_links(report, docs_root)
-    if "body-refs" in modes:
-        check_standard_body_references(report, docs_root)
+
+    check_markdown_links(report, docs_root)
+    check_adr_refs(report, adr_dir)
+    check_standard_plan_links(report, docs_root)
+    check_standard_body_references(report, docs_root)
+
+    check_diataxis_frontmatter(report)
+
     return report
 
 
@@ -512,7 +929,8 @@ def render_reports(
                 warning_count += 1
 
     summary = (
-        f"{error_count} error(s), {warning_count} warning(s) across {files_with_violations} file(s)"
+        f"{error_count} error(s), {warning_count} warning(s) across "
+        f"{files_with_violations} file(s)"
     )
     lines.append("")
     lines.append("=" * 60)
@@ -521,9 +939,16 @@ def render_reports(
     return "\n".join(lines), error_count, warning_count, files_with_violations
 
 
+# ---------------------------------------------------------------------------
+# CLI.
+# ---------------------------------------------------------------------------
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate markdown docs under chronicler_engine/docs/.",
+        description=(
+            "Validate markdown docs under chronicler_engine/docs/diataxis/."
+        ),
     )
     parser.add_argument(
         "--path",
@@ -541,75 +966,43 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="list_only",
         help="Print violations only, no PASS/FAIL summary. Always exits 0.",
     )
-    parser.add_argument(
-        "--links",
-        action="store_true",
-        help="Run only the broken-markdown-link check.",
-    )
-    parser.add_argument(
-        "--adr-refs",
-        action="store_true",
-        help="Run only the broken-ADR-ref check.",
-    )
-    parser.add_argument(
-        "--plan-links",
-        action="store_true",
-        help="Run only the standards-must-not-link-to-plans check.",
-    )
-    parser.add_argument(
-        "--body-refs",
-        action="store_true",
-        help="Run only the doc-internal-reference-in-body check.",
-    )
     return parser.parse_args(argv)
-
-
-def resolve_modes(args: argparse.Namespace) -> set[str]:
-    # Translate argparse flag attrs to mode names.
-    mode_names: set[str] = set()
-    if args.links:
-        mode_names.add("links")
-    if args.adr_refs:
-        mode_names.add("adr-refs")
-    if args.plan_links:
-        mode_names.add("plan-links")
-    if args.body_refs:
-        mode_names.add("body-refs")
-    if mode_names:
-        return mode_names
-    return {"links", "adr-refs", "plan-links", "body-refs"}
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
     engine_root = Path(__file__).parent.parent
-    docs_root = engine_root / "docs"
-    adr_dir = docs_root / "adr"
+    diataxis_root = engine_root / "docs" / "diataxis"
 
-    if not docs_root.exists():
-        print(f"Error: docs directory not found: {docs_root}", file=sys.stderr)
+    if not diataxis_root.exists():
+        print(f"Error: docs/diataxis/ not found: {diataxis_root}", file=sys.stderr)
         return 2
-
-    modes = resolve_modes(args)
 
     if args.path:
         target = args.path.resolve()
         if not target.exists():
             print(f"Error: file not found: {args.path}", file=sys.stderr)
             return 2
+        try:
+            rel = target.relative_to(engine_root)
+        except ValueError:
+            rel = None
+        if rel is None or not rel.parts[:2] == ["docs", "diataxis"]:
+            print(
+                f"Error: --path file must be under docs/diataxis/: {args.path}",
+                file=sys.stderr,
+            )
+            return 2
         files = [target]
     else:
-        files = collect_markdown_files([docs_root], docs_root)
+        files = collect_markdown_files([diataxis_root], diataxis_root)
+        if not files:
+            print(f"No markdown files found under {diataxis_root}", file=sys.stderr)
+            return 0
 
-    if not files:
-        print(f"No markdown files found under {docs_root}", file=sys.stderr)
-        return 0
-
-    reports = [scan_file(f, docs_root, adr_dir, modes) for f in files]
-    rendered, error_count, warning_count, files_with_violations = render_reports(
-        reports, engine_root
-    )
+    reports = [scan_file(f, engine_root) for f in files]
+    rendered, error_count, warning_count, _ = render_reports(reports, engine_root)
     print(rendered)
 
     if args.list_only:

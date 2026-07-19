@@ -46,7 +46,7 @@ Impl counts may shift; regenerate via `git grep -c '^impl <Port> for' src/`.
 
 ## Storage Direct Access
 
-`arch-lint: storage-direct` markers in `src/application/` permit direct `Storage` access at the persistence boundary. The marker list is canonical at the source. See ADR-027 for the intentional/deferred split.
+`arch-lint: storage-direct` markers in `src/application/` permit direct `Storage` access at the persistence boundary. The marker list is canonical at the source; see `## Document References` for the ADR that codifies the intentional/deferred split.
 
 ## Settings
 

@@ -10,9 +10,9 @@ fixtures. The tests cover:
 - Handler-module prefix grouping (the seven-area structure)
 - Doc emission (front-matter, required H2s, table row counts)
 - `use super::...` import normalization (bare handler → qualified)
-- `validate_docs_diataxis.py --strict` pass on the emitted doc
+- `validate_docs.py --strict` pass on the emitted doc
 
-Mirrors the `scripts/tests/test_validate_docs_diataxis.py` pattern: REPO_ROOT
+Mirrors the `scripts/tests/test_validate_docs.py` pattern: REPO_ROOT
 sys.path insert, `_run_check` style helpers, unittest discoverable.
 
 Run from the ``chronicler_engine/`` directory via
@@ -261,9 +261,6 @@ class TestDocEmission(unittest.TestCase):
     def test_front_matter_title(self) -> None:
         self.assertIn("title: HTTP Routes", self.doc)
 
-    def test_mode_declaration_blockquote(self) -> None:
-        self.assertIn("> **Diátaxis mode:** Reference.", self.doc)
-
     def test_overview_h2(self) -> None:
         self.assertIn("## Overview", self.doc)
 
@@ -317,14 +314,13 @@ class TestRealRouter(unittest.TestCase):
         self.assertEqual(len(routes), grep_count)
 
     def test_real_router_doc_passes_validator(self) -> None:
-        """The emitted doc passes validate_docs_diataxis.py --strict.
+        """The emitted doc passes validate_docs.py --strict.
 
         We write the doc to a temp file under a fake engine root and run
         the validator in single-file mode so the warning from the
         pre-existing architecture.md does not contaminate the result.
         The fake engine root includes stub files for the relative links
-        the doc body references (`../../src/...`, `../../docs-diataxis/
-        AGENTS.md`, `../../chronicler_engine/scripts/...`).
+        the doc body references (`../../src/...`, `../../chronicler_engine/scripts/...`).
         """
         router_path = ENGINE_ROOT / er.ROUTER_REL
         if not router_path.exists():
@@ -335,7 +331,7 @@ class TestRealRouter(unittest.TestCase):
             0,
             str(REPO_ROOT / "chronicler_engine" / "scripts"),
         )
-        import validate_docs_diataxis as vd
+        import validate_docs as vd
 
         source = router_path.read_text(encoding="utf-8")
         routes = er.extract_routes(source)
@@ -349,13 +345,13 @@ class TestRealRouter(unittest.TestCase):
             # Build the minimum directory structure so the doc's relative
             # body links resolve to existing files. The validator checks
             # link existence via the docs_root resolution; for our doc
-            # (under docs-diataxis/reference/), the docs_root it computes
-            # is <engine_root>/docs-diataxis, and the doc's relative links
+            # (under docs/diataxis/reference/), the docs_root it computes
+            # is <engine_root>/docs/diataxis, and the doc's relative links
             # traverse `../../` back into engine_root territory.
-            (fake_engine_root / "docs-diataxis" / "reference").mkdir(
-                parents=True
-            )
-            (fake_engine_root / "docs-diataxis" / "AGENTS.md").write_text(
+            (
+                fake_engine_root / "docs" / "diataxis" / "reference" / "frontend"
+            ).mkdir(parents=True)
+            (fake_engine_root / "docs" / "AGENTS.md").write_text(
                 "# stub\n", encoding="utf-8"
             )
             (fake_engine_root / "src" / "adapters" / "driving" / "http").mkdir(
@@ -381,7 +377,8 @@ class TestRealRouter(unittest.TestCase):
 
             doc_path = (
                 fake_engine_root
-                / "docs-diataxis"
+                / "docs"
+                / "diataxis"
                 / "reference"
                 / "http_routes.md"
             )
@@ -428,7 +425,9 @@ class TestWriter(unittest.TestCase):
             grouped = er.group_routes_by_area(routes)
             rendered = er._render_document(routes, grouped)
 
-            out_path = tmp / "docs-diataxis" / "reference" / "http_routes.md"
+            out_path = (
+                tmp / "docs" / "diataxis" / "reference" / "frontend" / "http_routes.md"
+            )
             written = er.write_document(tmp, rendered)
             self.assertEqual(written, out_path)
             self.assertTrue(out_path.exists())
