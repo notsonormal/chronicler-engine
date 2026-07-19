@@ -3,8 +3,6 @@ diataxis: reference
 title: HTTP Routes
 ---
 
-> **Diátaxis mode:** Reference. The reader problem this solves is *look-up*: wiring a client, testing an endpoint, or debugging a routing issue. The doc is a map of path to handler; it is not a tutorial on axum and not the LLM-call forensics workflow.
-
 ## Overview
 
 This doc is generated from `src/adapters/driving/http/router.rs` and is the canonical map of HTTP route to handler for the engine's HTTP server. Re-run `python scripts/extract_http_routes.py` after any change to `router.rs`. The seven areas below match the seven handler-module prefixes discovered from the router file (one prefix per source-tree module under `src/adapters/driving/http/`). Static-asset behaviour — `.nest_service` for `/assets` and `/data`, plus the `fallback_service` for unmatched paths — lives in `router.rs` but is not enumerated here; the generator handles `.route()` calls only.

@@ -3,8 +3,6 @@ diataxis: explanation
 title: Storage and Bootstrap Design
 ---
 
-> **Diátaxis mode:** Explanation. This document explains the design of the Chronicler Engine's persistence layer and bootstrap flow as it stands today — the `Storage` struct and its backend decorator, the two-phase seed-then-DB-first boundary, the seeding contract, the cross-table coordination rule, the paired `get_*` / `require_*` read-helper contract, and the design of the message-swipe aggregate. The problem it solves for the reader is *understand*: how the design fits together and what each piece is for.
-
 ## Overview
 
 The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in `DefaultApplicationService`; and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error.

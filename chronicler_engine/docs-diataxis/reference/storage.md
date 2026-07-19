@@ -3,8 +3,6 @@ diataxis: reference
 title: Storage
 ---
 
-> **Diátaxis mode:** Reference. This document describes the storage layer as it is: the `Storage` boundary, backend decorator, game scoping, read contracts, snapshots, seeding guarantees, and testing seam — and the entity aggregates it persists: worlds, personas, and messages. The problem it solves for the reader is *look-up*: which storage contract applies to a given operation, which table holds a given entity, and which invariants govern entity persistence. Column-level DDL is not restated here; it lives in `src/adapters/driven/storage/db.rs` and is the authoritative source.
-
 ## Overview
 
 `Storage` is the engine's persistence boundary for game sessions, narrative content, settings, and LLM call forensics. `Backend` identifies the real storage implementations (`Sqlite` and `InMemory`), while `BackendKind` selects direct access or the `Test` decorator. Storage methods operate on one table; multi-table coordination lives in `DefaultApplicationService`. The eleven-table schema follows; entity aggregates for worlds, personas, and messages come after.
@@ -145,15 +143,12 @@ Migrations run on first access, gated by `PRAGMA user_version`. Column-level DDL
 
 A world is the persistent definition of a setting plus the map structure that games run on. Multiple games can reference one world. JSON shapes for world data (`WorldManifest`, `WorldCard`, `MapDef`, `Scenario`) live in the JSON seed-file contracts (see `data/schemas/world.schema.json` and `data/schemas/map.schema.json`).
 
-**Delete constraint.** A world can be deleted only when no game references it; both the handler and storage enforce this. When a world is removed, its maps are removed alongside (FK cascade). The failure surfaces as the typed `WorldHasGames` error on the storage seam and a user-displayable failure on the dashboard.
-
 The worlds management system is the dashboard UI plus CRUD route handlers that read/write worlds through the application service to storage.
 
 ## Personas
 
 The player persona is a `PersonaCard`, a structured character sheet used by the Game Master. The card shape is defined by `data/schemas/character.schema.json`.
 
-- **World-independent loading.** During bootstrap, the seeding flow scans `data/personas/*.json` and creates the corresponding persona rows. Each persona is keyed by its JSON filename stem. The pass is world-independent and idempotent.
 - **Per-game binding.** A game binds one persona at creation time through `games.persona_key` (non-FK logical ref — see Relationships). Game loading uses the bound key to hydrate the player's prompt context.
 - **Empty-database creation.** When the database is empty, bootstrap auto-creates a game using the `--world` and `--persona` CLI flags. The requested persona key must already be present in the seeded persona rows; a missing persona key is a hard startup error.
 

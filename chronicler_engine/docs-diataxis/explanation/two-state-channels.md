@@ -3,8 +3,6 @@ diataxis: explanation
 title: Two State Channels
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: how generation state is represented across a process-local atomic flag and a durable persisted field, which code paths read which, and how the two stay coherent.
-
 ## The two signals
 
 The engine carries two representations of generation state. One answers "is something generating right now?" on a hot path that runs many times per second. The other answers "what was the durable generation phase when this state was committed?" after a panic, restart, or debug inspection. The two signals serve different consumers and carry different cost profiles, so the engine keeps both and maintains their consistency with an explicit invariant.

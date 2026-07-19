@@ -3,8 +3,6 @@ diataxis: reference
 title: Dashboard
 ---
 
-> **Diátaxis mode:** Reference. The player-facing dashboard as it is: page layout, tab bar, the Game tab's story log + visual sidebar + action area, real-time HTMX polling cadences, edit/delete/swipe/retry flows, and game management. The problem it solves for the reader is *look-up* — how each surface is structured and how each in-place interaction reaches the server.
-
 ## Overview
 
 The dashboard is a single-page HTMX application served at `/`. The page is statically served from `assets/index.html`; every per-tab panel and every per-message update is fetched as a server-rendered HTML fragment. The Game tab is the default landing view; the other five tabs host management surfaces whose domain content lives in their own reference docs.

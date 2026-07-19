@@ -3,8 +3,6 @@ diataxis: explanation
 title: Architecture Overview
 ---
 
-> **Diátaxis mode:** Explanation. This document is *understanding-oriented*: it shows how the Chronicler Engine is structured and why, and lays out the quality guarantees the architecture makes. It does not specify column types, phase transitions, or API contracts — those live in [`../../reference/`](../../reference/). The problem it solves for the reader is *understanding*: how the pieces fit together, what the system promises, and which tradeoffs those promises encode.
-
 ## Context
 
 The Chronicler Engine is a single-process Rust application that turns player input into LLM-generated narrative, persists state, and renders an HTMX dashboard. It orchestrates the surrounding systems — LLM, database, grammar checker — through adapters, with the dependency direction pointing inward.

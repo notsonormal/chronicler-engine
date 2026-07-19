@@ -3,8 +3,6 @@ diataxis: reference
 title: Architecture Guardrails
 ---
 
-> **Diátaxis mode:** Reference. This document describes the Chronicler Engine's coding-standards enforcement layers as they are: where each rule registry lives, what each layer is for, and what runtime invariants exist by name. The problem it solves for the reader is *look-up* — which file holds which rule set, what an `INV-NNN` identifier refers to. Lint names, scope identifiers, and INV-NNN identifiers are stable seams. Per-rule details and invariant guarantee text live in the source files those identifiers point at.
-
 ## Overview
 
 The Chronicler Engine enforces coding standards through three complementary layers: clippy lints at compile time, declarative `arch-lint` rules at test time, and custom `syn`-based convention walkers at test time. A coverage exclusion policy (`cargo-llvm-cov` with `--ignore-filename-regex`) keeps the wiring/lifecycle code from being unit-tested separately from its integration tests. Seven runtime invariants (INV-001..INV-007) describe engine behavior at runtime; they sit alongside the static guardrails but are enforced by the invariant contract suite rather than by clippy or `syn` walking. All four layers run in CI via `python build.py`.

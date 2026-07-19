@@ -3,8 +3,6 @@ diataxis: explanation
 title: Diátaxis
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *orientation* on the framework that structures this docs tree: what Diátaxis sees in documentation, what its four kinds are, how the compass relates them, and where their boundaries blur.
-
 ## What Diátaxis sees in documentation
 
 Documentation serves readers who arrive with particular needs at particular moments. Three needs recur: to learn a system from zero, to look up a particular fact, to follow steps toward a result. Each calls for different writing — mixing them in one document fails all three, because the writing that serves one need is in the way for the reader with another.

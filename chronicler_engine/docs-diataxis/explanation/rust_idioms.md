@@ -3,8 +3,6 @@ diataxis: explanation
 title: Rust Idioms
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: the cross-cutting Rust conventions threaded across the engine — concrete services over trait objects, blocking-task offload, shared settings via `Arc<RwLock<…>>`, lock-poison recovery, the atomic projection of the generation registry, and the shutdown gate. This doc unfolds what the conventions do and how the system uses them.
-
 ## Concrete services and backend enum dispatch
 
 `GameService` is a concrete struct. So is `Storage`. `Storage` is backed by a `Backend` enum — `Sqlite` or `InMemory` — plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the agent registry's `Box<dyn Agent>` for heterogeneous agent dispatch).

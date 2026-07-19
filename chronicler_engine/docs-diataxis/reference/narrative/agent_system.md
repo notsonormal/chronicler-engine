@@ -3,8 +3,6 @@ diataxis: reference
 title: Agent System
 ---
 
-> **Diátaxis mode:** Reference. This document describes the agent abstraction as it is: the trait contract, the execution phases where agents run, the result types they return, and how the registry wires per-agent backends at startup; followed by the quantifier prompt shape — XML-sectioned instructions + XML-wrapped data, the response JSON, the client-side NPC event computation, and the low-confidence retry behaviour. The problem it solves for the reader is *look-up*: what does an `Agent` look like to the pipeline, when does it run, and what can it return; what does the quantifier LLM receive and what does it produce. Trait, result, and quantifier definitions live in `src/application/agents/`.
-
 ## Overview
 
 The engine has an agent architecture. An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in `AgentRegistry`. The pipeline iterates registered agents at each `ExecutionPhase` and dispatches them in registration order. The engine works with **zero agents** — all agent execution is optional.

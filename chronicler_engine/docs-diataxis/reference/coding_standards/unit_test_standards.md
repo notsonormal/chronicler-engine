@@ -3,28 +3,6 @@ diataxis: reference
 title: Unit Test Standards
 ---
 
-> **Diátaxis mode:** Reference. This document is the canonical form for **unit tests** in the Chronicler Engine. The reader problem solved here is *alignment*: when writing a new unit test, refactoring an existing one, or reviewing a PR that adds one, the standard form for each test type is published here so tests written by different sessions converge. The pattern taxonomy is derived from the actual `src/*_tests.rs` corpus (92 files, 865 `#[test]` fns, surveyed 2026-07-16).
-
-## Overview
-
-Unit tests in this repo come in **nine distinguishable patterns**, distinguished by what production layer they test and what helper infrastructure they use. Each pattern has a canonical form below; each existing test file should match one of the patterns (or be a deliberate, documented deviation).
-
-The nine patterns, in order they appear when reading the test tree from `src/` root:
-
-1. **Pure unit** — function under test only; no fixture, no async, no LLM. Domain models, error mapping, port-trait polymorphism tests.
-2. **Storage backend pair** — `Storage::new_in_memory()` + paired `sqlite_storage()` for every `Storage` method.
-3. **LLM provider trait** — `MockBackend` against `LlmProvider` trait (no recorder/forensics).
-4. **LLM recorder / orchestration** — `MockBackend` wrapped in `LlmCallRecorder` + `RecordingForensics` spy.
-5. **Application service-layer** — `TestAppBuilder` + `TestDataBuilder` + `GameService::with_backends` + `build_service`.
-6. **HTTP handler** — `TestAppBuilder` + `#[tokio::test]` + axum handler invocation + status/HTML assertion.
-7. **Fragment renderer / template** — render to HTML; assert presence/absence (XSS regression checks load-bearing).
-8. **Concurrency invariant** — `#[tokio::test]` + `tokio::spawn` + `Arc<Barrier>` + file-local `wait_for_condition`.
-9. **Property-based (proptest!)** — `proptest!` block co-located with `#[test]`s for the same function.
-
-Four **cross-cutting patterns** apply across multiple of the nine: failure injection via `TestOverride`, XSS regression checks, idempotency tests, and sealed-trait polymorphism tests.
-
-The patterns are **not all the same density**. Pattern 1 covers ~50 of the 92 unit-test files; patterns 8 and 9 each cover 1–2 files. A review that does not cite a specific pattern usually means the test was written without consulting this doc.
-
 ## Pattern 1 — Pure unit
 
 **Purpose.** Test a pure function or a method on a domain type with no external dependencies. The function under test is the only thing the test constructs (plus optional domain-builder helpers like `TestPersona::default()`).

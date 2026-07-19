@@ -3,8 +3,6 @@ diataxis: explanation
 title: Prompt System Design
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: the shape of the prompt system — the system/user split, two-tier NPC cards, and post-history placement of prose constraints — and the tradeoffs that shape encodes.
-
 ## The two halves of a prompt
 
 The `PromptAssembler` produces two message halves for each LLM call: a system half carrying the instruction sections (`<role>`, `<instructions>`, `<global_rules>`) and a user half carrying the XML-wrapped data layers, the post-history splice (`<writing_style>`, `<output_format>`), and the `<PlayerInput>`. The transport sends them as the system message and the user message of a single LLM call.

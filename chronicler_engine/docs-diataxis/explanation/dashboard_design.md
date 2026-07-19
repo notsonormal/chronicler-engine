@@ -3,8 +3,6 @@ diataxis: explanation
 title: Dashboard Design
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: the design behind the player-facing dashboard — the chat-app aesthetic inherited from SillyTavern, the polling cadences, the polling-pause pattern, the snapshot-restoration cascade, the empty-input continuation flow, and the server-rendered fragments.
-
 ## The SillyTavern lineage
 
 The Chronicler Engine's dashboard inherits its interaction model from SillyTavern, the chat-front-end for LLM roleplay that defined the UX vocabulary this dashboard speaks. The borrowed pieces are visible in the static shell and the per-message template:

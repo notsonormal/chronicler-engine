@@ -3,21 +3,6 @@ diataxis: reference
 title: Game Flow
 ---
 
-> **Diátaxis mode:** Reference. This document describes the FreeAction
-> runtime envelope as it is: the phase sequence from player input through
-> narrate, quantifier, trigger evaluation, and back to UI; the status phases
-> surfaced during generation; retry branching; the `PhaseError` contract; the
-> cancellation guards (α-check, `GenerationGuard::Drop`, shutdown gate); the
-> trigger-evaluation drilldown (nine-step sequence, `times_met`, mutation
-> order); and the two branch pipelines (movement, text-check pre-flight).
->
-> Reader problem: *look-up* — when the engine is in state X, which phase
-> runs next, which errors surface, which guards reject stale work, and which
-> branch fires.
->
-> Function-level detail lives in `src/application/action_pipeline/` and
-> `src/domain/engine/`.
-
 ## Overview
 
 A FreeAction moves from player input through narration, scene quantification, engine commit, optional trigger continuation, and finalization. Polling projects persisted status and phase changes to the UI.
@@ -75,23 +60,6 @@ flowchart TD
 The narrate phase adds and persists the main narration before post-generation Agents run. Engine commit resolves movement, updates the current Character set, evaluates Triggers, and applies encounter transitions. A matched Trigger produces stored continuation context; continuation generation runs outside state mutation, then commits its Message before post-event reconciliation.
 
 Phase failures route to finalization. Cancellation exits through the separate contract below.
-
-## Error Contract
-
-Phase errors use `state.narrative.input_buffer.status` as their persisted observation channel. Finalization preserves `GenerationStatus::Error`; polling therefore exposes the failure while the pipeline stops advancing.
-
-Only `PhaseError::Cancelled` propagates out of the orchestrator. Other variants become `GenerationStatus::Error`, pass through finalization, and produce `Ok(())` at the orchestrator seam.
-
-| `PhaseError` variant | Pipeline disposition |
-|---|---|
-| `Cancelled` | Reset status to `Idle`, clear the phase, persist, and return cancellation to the caller. |
-| `NarratorFailed` | Persist the narrative failure as `Error`, then finalize. |
-| `PersistFailed` | Persist the underlying storage failure as `Error`, then finalize. |
-| `FetchFailed` | Persist the retry precondition failure as `Error`, then finalize. |
-| `TriggerMissing` | Persist the missing continuation context as `Error`, then finalize. |
-| `SnapshotMissing` | Persist the missing retry snapshot as `Error`, then finalize. |
-
-A later Action heals persisted `Generating` state when the generation registry has no active owner: status returns to `Idle`, phase clears, and the stale per-Game slot becomes claimable.
 
 ## Cancellation
 

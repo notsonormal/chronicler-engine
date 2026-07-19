@@ -3,8 +3,6 @@ diataxis: reference
 title: Startup and Bootstrap
 ---
 
-> **Diátaxis mode:** Reference. This document describes engine startup as it is: data-path resolution, the two-phase bootstrap boundary, seeding dependencies, game-state initialization, server startup, settings loading, the JSON seed-file contracts, and the runtime invariants the seed schemas do not encode. The problem it solves for the reader is *look-up*: which boundary and invariant governs each startup concern.
-
 ## Overview
 
 Bootstrap resolves the seed-data location, completes file seeding, initializes the first game state from database-backed world data, and only then starts the HTTP server. The file-to-database boundary is the central startup contract: file reads belong to seeding, and runtime reads use the database.

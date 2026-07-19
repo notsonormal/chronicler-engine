@@ -3,8 +3,6 @@ diataxis: reference
 title: Architecture System
 ---
 
-> **Diátaxis mode:** Reference. This document describes the architecture system as it is: the eight-tier tier map, the dependency invariant, the port inventory with impl counts, the storage-direct-access contract, the settings flow shape, and the deployment contract. The problem it solves for the reader is *look-up* — which tier a module lives in, which port trait defines which boundary, where settings are loaded from, what the engine binds at runtime. Module paths and port trait names are stable file-tree identifiers.
-
 ## Overview
 
 The source tree has eight tiers with one-direction dependency rules enforced by [`arch-lint.toml`](../../arch-lint.toml). Three port traits (`LlmProvider`, `LlmMessageRepository`, `TextChecker`) define the application-to-driven-adapter boundary under [`src/application/ports/`](../../src/application/ports/). A small set of `arch-lint: storage-direct` markers permit direct `Storage` access at the persistence boundary — either as an intentional persistence seam or as a deferred exemption. Settings are loaded once at startup in `bootstrap/run.rs::load_settings` and propagated as `Arc<RwLock<AppSettings>>` held on `AppState.settings`; construction-chain recipients take a reference to settings at wiring time and no business-logic layer reloads settings from disk after bootstrap. At runtime the engine binds a single HTTP port, writes to one SQLite file, reads seeds from `data/`, writes runtime data to `saves/`, reads and writes prompt presets to `prompts/`, and calls out to a configured LLM backend over HTTPS.

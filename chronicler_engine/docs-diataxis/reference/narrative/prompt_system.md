@@ -3,8 +3,6 @@ diataxis: reference
 title: Prompt System
 ---
 
-> **Diátaxis mode:** Reference. This document describes the prompt system as it is: the seven-layer narrative prompt architecture, the assembled system message structure (preset sections plus dynamic injection), the post-history splice for prose and format rules, the system/user split for OpenAI-compatible APIs, the token budget components, the response-length dynamic injection, the single-user-message mode toggle, the prompt-injection sanitization, and the single template variable. The problem it solves for the reader is *look-up*: given a player action, what the LLM sees in each of the system and user message halves. Verbatim preset text lives in `data/prompt_presets/`.
-
 ## Overview
 
 The engine assembles a structured prompt for every Game Master call from the active system-prompt preset plus the current game state. The system half carries XML-sectioned instruction content. The user half carries XML-wrapped game data, followed by the conversation history, followed by a post-history splice of writing-style and output-format sections, followed by the player's input. Two dynamic sections (`global_rules` from `world.json` and response length from settings) are injected at assembly time. Token budget enforcement fits the assembled prompt into the connection's configured context window by trimming oldest history entries first. Some local/quantized models ignore the `system` role; per-connection `single_user_message` mode merges system and user into one user message. User input is sanitized at render time to strip `{{variable}}` patterns before the prompt reaches the LLM.

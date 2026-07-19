@@ -18,7 +18,7 @@ These are the writing perspectives the tree operates under.
 
 ### Diátaxis — doc modes
 
-Every doc in this tree is in exactly one of four Diátaxis modes. The mode is declared in front-matter and in a blockquote at the top of the body.
+Every doc in this tree is in exactly one of four Diátaxis modes. The mode is declared in front-matter.
 
 | Mode | Reader problem | Orientation | Chronicler examples |
 |---|---|---|---|
@@ -57,14 +57,6 @@ Every doc carries YAML front-matter at the top of the file. Required keys:
 - `title: <H1 mirror>` — the doc's title, mirroring the H1. Lets downstream indexes consume front-matter without parsing markdown.
 
 Front-matter does **not** duplicate what the content already signals — content signals by section structure (a Reference doc reads like a schema catalog; an Explanation doc reads as discursive discussion); front-matter signals by machine-readable key. They answer different questions, so the layering is useful, not redundant.
-
-## Mode-declaration blockquote
-
-Immediately under the front-matter, every doc carries a blockquote of the form:
-
-> **Diátaxis mode:** Reference. This document describes X as it is, not how to use it. The problem it solves for the reader is *look-up*: ...
-
-State the mode and the reader problem the doc solves. This is the seam that lets a reader (or LLM) orient without parsing the content. Keep it to 2–4 lines.
 
 ## Subfolder shape
 

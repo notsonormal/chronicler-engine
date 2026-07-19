@@ -3,8 +3,6 @@ diataxis: reference
 title: UI Design
 ---
 
-> **Diátaxis mode:** Reference. The dashboard's design tokens and component specs as they are: the CSS custom properties for colors, typography, spacing, sizing, and animation, plus the structural and visual specifications for every dashboard component. The problem it solves for the reader is *look-up* — what token or selector to use for a given visual effect, and how each component is composed.
-
 ## Overview
 
 The dashboard's visual language is defined by a small set of CSS custom properties (design tokens) and a structured set of component specifications. Tokens are the source of truth for colors, typography, spacing, sizing, and animation timings; components declare the token-derived styling for each dashboard surface. The static stylesheet at `assets/styles.css` is the binding code that consumes both.

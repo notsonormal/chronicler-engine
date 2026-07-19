@@ -3,17 +3,11 @@ diataxis: explanation
 title: Agent System Design
 ---
 
-> **Diátaxis mode:** Explanation. The reader problem solved here is *understanding*: the shape of the agent abstraction — `Agent` trait + `AgentRegistry` + per-agent LLM backend + `ExecutionPhase` dispatch + the quantifier's role — and the tradeoffs that shape encodes.
-
 ## The agent abstraction
 
 The post-generation phase runs through a registry of agents. Each agent implements the `Agent` trait; the `AgentRegistry` holds the set the bootstrap wired in; the pipeline's `PostGeneration` dispatch iterates over whatever the registry contains, including the empty set. The pipeline runs correctly with zero agents configured.
 
 The trait-plus-registry shape keeps the pipeline indifferent to which post-processing concerns exist. Adding a new agent is a wiring change in bootstrap; removing one is removing it from the registry; reordering is changing the iteration order. None of these changes require editing the pipeline itself.
-
-## Trait objects in the registry
-
-The registry holds `Box<dyn Agent>` — trait objects, not a generic `AgentRegistry<T: Agent>`. The registry stores a heterogeneous collection: each agent is a distinct concrete type (the quantifier today, future agents would be others), and a generic registry would thread a type parameter through every call site that holds the registry even though only the storage needs the type. Trait objects pay a vtable call per agent per phase dispatch; that cost sits next to the LLM call each agent makes, which dominates the dispatch budget by orders of magnitude.
 
 ## Per-agent LLM backends
 

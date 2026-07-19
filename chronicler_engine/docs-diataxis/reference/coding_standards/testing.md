@@ -3,24 +3,6 @@ diataxis: reference
 title: Testing
 ---
 
-> **Diátaxis mode:** Reference. This document holds the cross-cutting testing policy items that do not have a canonical home in the unit-tier or integration-tier standards: critical test categories beyond XSS, the real-LLM gate mechanism, the Playwright UI test setup, and the smart-waiting stance.
-
-## Overview
-
-The three-doc split for tests: unit-tier patterns, integration-tier patterns, and this doc (cross-cutting policy that lives outside the two above).
-
-## Critical Test Categories
-
-These four categories of test must never be deleted without replacement. XSS regression checks are the canonical load-bearing case. The three below are not catalogued elsewhere:
-
-| Category | Why |
-|----------|-----|
-| Empty / whitespace-only command handling | SillyTavern "Continue" continuation behaviour |
-| Scroll behaviour of the story log | Functional regression guard for the history view |
-| Horizontal-overflow sanity on rendered pages | Layout regression guard |
-
-When removing any critical-category test, replace with an assertion at least as strong before deletion.
-
 ## Real-LLM Tests
 
 `tests/llm/` is the only binary that exercises real LLM providers. It gates itself on `has_llm_api_key()` — the runtime check returns early when `OPENROUTER_API_KEY` is unset in the environment, so no provider call happens by default. The suite runs only under `python build.py --llm-only`. The gatestand mechanism is in `tests/llm/flow_llm_tests.rs::with_real_llm`.
@@ -41,7 +23,7 @@ Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_u
 
 For unit tests of concurrency invariants, the `wait_for_condition` helper is file-local at `src/application/is_generating_invariant_tests.rs:215` — it is local by design and stays scoped to that file.
 
-## Llm-call test helpers
+## LLM-call test helpers
 
 `RecordingForensics` (`src/test_support/recording_forensics.rs`) is a spy implementation of `LlmMessageRepository` that captures every LLM call in memory for test assertion. It is a test-writing fixture, not a runtime-debugging tool — production runs write to the SQLite `llm_messages` table via `LlmCallRecorder`, and a `/fragment/llm-messages` UI tab exists for runtime inspection.
 

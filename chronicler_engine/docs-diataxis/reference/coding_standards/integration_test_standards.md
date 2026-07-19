@@ -3,35 +3,6 @@ diataxis: reference
 title: Integration Test Standards
 ---
 
-> **Diátaxis mode:** Reference. This document is the canonical form for **integration tests** in the Chronicler Engine. The reader problem solved here is *alignment*: when writing a new integration test, refactoring an existing one, or reviewing a PR that adds one, the standard form for each test type is published here so tests written by different sessions converge. The pattern taxonomy is derived from the actual `chronicler_engine/tests/` corpus (48 test files organised across five fixture-weight binaries; ~343 test fns; surveyed 2026-07-16).
-
-## Overview
-
-Integration tests in this repo are organised by **fixture weight** (process startup cost), not by code location. Five binaries cover the five weight classes — `integration` (in-process against real SQLite), `http` (in-process against axum with `tower::ServiceExt::oneshot`), `browser` (Playwright against a child-process server), `llm` (real-LLM API calls, `#[ignore]`'d by default), `infrastructure` (arch-lint guardrails). Each binary has its own helper conventions and port-allocation policy; tests **mirror `src/` paths within a binary**, not across binaries.
-
-The integration tier comes in **seven distinguishable patterns**, distinguished by what production surface they exercise and what fixture infrastructure they use. Each pattern has a canonical form; each existing integration test file should match one of them (or be a deliberate, documented deviation).
-
-The seven patterns, ordered by where a new integration-test writer is most likely to start:
-
-1. **SQLite-backed app + builder handoff** — `SqliteTestAppBuilder` + `.game_service_fn(|s| …)` closure against real in-memory SQLite; the dominant integration pattern (~10 files).
-2. **Real `TestServer` lifecycle + port allocation** — child-process `chronicler_engine` binary on a file-locked port in 3010–3050; the browser + LLM pattern.
-3. **Storage-direct round-trip** — a `Storage` method exercised directly against `create_test_storage` or `Storage::new_in_memory()`; 5 files, no service wiring.
-4. **HTTP one-shot via `tower::ServiceExt::oneshot`** — axum router dispatch against a `TestAppBuilder`-built app with no listening port; the dominant HTTP pattern (~10 files).
-5. **Failure-injection via `Storage::with_failure` / `Storage::with_test_failures`** — flip a `TestOverride` on a specific storage method and assert the error surfaces; tested against action handlers and arrival flow.
-6. **Bootstrap `run(Args)` direct invocation** — call the prod-startup entry-point, assert the error path; one file (`tests/integration/bootstrap/run_branches.rs`).
-7. **Arch-lint rule self-tests** — paired positive/negative tests against synthetic source strings; the guardrails-fixture pattern.
-
-Eight **cross-cutting patterns** apply across multiple of the seven: process-wide `SettingsTestGuard` mutex for settings mutations, file-locked port allocation on 3010–3050, mock-backend auto-injection via `--settings-path`, `HEADED` / `SLOW_MO` env-var overrides for Playwright, `capture_failure_state` diagnostic-dump convention, `SqliteTestAppBuilder` over `TestAppBuilder` for snapshot assertions, `MockBackend` factory form vs closure form, and `#[ignore]` for real-LLM tests.
-
-The patterns are **not all the same density**. Pattern 1 covers ~10 of the integration-tier files (in-process across `application/action_pipeline`, `flow`, plus `tests/infrastructure/invariant_contract.rs`); patterns 6 and 7 each cover 1–4 files. A review that does not cite a specific pattern usually means the test was written without consulting this doc.
-
-Differences from the unit tier — the tier-shape notes below:
-
-- Integration tests use **`SqliteTestAppBuilder`** (`tests/helpers/sqlite_test_app_builder.rs`) instead of `TestAppBuilder`. The post-execution assertions read through the real SQLite snapshot path rather than in-memory storage.
-- Integration tests **call `execute_action_impl(&app, "…")` directly**, not `app.process_action(...)`. `app.process_action(...)` is the public API surface; `execute_action_impl` is the impl function the unit tier also uses. In unit tests it is exercised in isolation; in integration tests it is exercised end-to-end through the snapshot + message persistence path. The two `tests/integration/application/application_service.rs::test_process_action_*` tests and the two `tests/infrastructure/invariant_contract.rs::test_p4_concurrent_*` tests (`test_p4_concurrent_happy_path:463`, `test_p4_concurrent_triple_overlap:587`) go through `process_action`; that is the invariant under test.
-- Integration tests for HTTP, browser, and LLM fixtures **spawn the engine binary as a child process**. The `Drop` impl of `TestServer` kills the child and deletes the SQLite DB file. Unit tests don't need any of this.
-- Integration tests use **process-wide `SettingsTestGuard`** for any test that mutates `AppSettings`. `AppSettings` lives in a global static; parallel HTTP runs would race without the guard. Unit tests don't touch global settings.
-
 ## Pattern 1 — SQLite-backed app + builder handoff
 
 **Purpose.** Test an application service method end-to-end against a real `:memory:` SQLite database. The service is the system under test; state persists through snapshots and messages the way it does in production. The same `SqliteTestAppBuilder` is the basis for tests that need a *swap-mid-scenario* (calling `TestAppBuilder::from_base(&app, new_service)` to change the `GameService` while keeping the storage).

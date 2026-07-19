@@ -3,9 +3,7 @@ diataxis: reference
 title: Narration System
 ---
 
-> **Diátaxis mode:** Reference. This document describes the narrator as it is: per-connection model configuration, the four backend adapters, the Game Master's role and narrative modes, response sanitization and the Gemma 4 thinking-channel workaround, the LLM call forensics pipeline, and runtime diagnostics. The problem it solves for the reader is *look-up*: which layer owns model selection, prompt invocation, response handling, and forensics; where the narrative result returns to the Action Pipeline. Per-layer content is defined by the preset source in `data/prompt_presets/`.
-
-## §1 Model Configuration
+## Model Configuration
 
 LLM connections are stored as a list on the `settings` singleton row. Each connection carries an identity (id + name, surfaced in the dashboard), a `LlmBackendType` discriminator (`openrouter` / `deepseek` / `ollama` / `mock`), a model identifier, an `api_key` with provider-specific env-var fallback (OpenRouter and DeepSeek fall back to `OPENROUTER_API_KEY` when no stored key is set), a `base_url` endpoint, a single-user-message toggle, and per-connection token caps (`max_tokens` for the response, `max_context_tokens` for the context window). The full set of fields and their per-provider defaults lives in `src/domain/model/settings.rs`; this reference does not restate them.
 
@@ -13,16 +11,11 @@ Two named connection ids are read from settings: `narration_connection_id` (main
 
 Settings are loaded once at startup and held as `Arc<RwLock<AppSettings>>`. No business logic reloads settings from disk.
 
-## §2 Backend Selection
+## Backend Selection
 
-Four adapters implement the `LlmProvider` port; the dispatcher selects by `provider`:
+Four adapters implement the `LlmProvider` port; the dispatcher selects by `provider`. OpenRouter, Deepseek (not implemented), Ollama, Mock (for testing).
 
-- **`openrouter`** — `OpenRouterBackend`. Calls the OpenRouter chat-completions endpoint with the connection's `api_key` (or the env-var fallback) and the connection's `model`.
-- **`deepseek`** — `DeepSeekBackend`. Wired into the `LlmProvider` port and selected by `provider = "deepseek"`, but every call returns `EngineError::Config` because the transport layer is not implemented. The adapter exists so configuration can name DeepSeek without the engine crashing at load time.
-- **`ollama`** — `OllamaBackend`. Calls a local Ollama instance with the connection's `base_url` and `model`. Ollama does not apply a native chat template, so the adapter holds the responsibility for any user-message preprocessing (see "Response Sanitization & Gemma 4 Thinking-Channel Suffix" below).
-- **`mock`** — `MockBackend`. In-process deterministic backend used by tests; no API key or endpoint required.
-
-## §3 Game Master Role
+## Game Master Role
 
 The narrator is an LLM acting as a Game Master for a text adventure. All non-empty player input that does not match a recognized system command is treated as a **Free Action** and sent to the LLM for narration. The narrator produces a single paragraph describing the outcome; the engine then runs the post-generation quantifier to detect NPCs and movement, evaluates NPC triggers, and may generate a continuation narration.
 
@@ -40,7 +33,7 @@ The Game Master's prompt is built from the current game state at action receipt:
 
 History is sent in full and trimmed oldest-first if it exceeds the cap. Token budget enforcement is deterministic and happens during assembly.
 
-## §4 Narrative Modes
+## Narrative Modes
 
 The Game Master responds to three primary events:
 
@@ -48,15 +41,15 @@ The Game Master responds to three primary events:
 2. **Dialogue** — NPC speech embedded within a free-action narration. There is no separate "speak" command; NPC lines appear inside the narrator's paragraph when context calls for them.
 3. **Arrivals** — the player entering a new room via quantifier-detected movement. The room dashboard is rendered before narration to provide system context.
 
-## §5 Per-Action Flow
+## Per-Action Flow
 
 A FreeAction runs through the engine's phase pipeline: state transition → narration → quantifier → trigger evaluation. The α-check at each phase boundary is what makes in-flight shutdown signal cancellation race-safe.
 
-## §6 Continuation Narration
+## Continuation Narration
 
 After main narration, the engine evaluates NPC triggers and may generate a continuation narration. The `StoredTriggerContext` carries the previous-turn snapshot so the diff has a stable input.
 
-## §7 Response Sanitization & Gemma 4 Thinking-Channel Suffix
+## Response Sanitization & Gemma 4 Thinking-Channel Suffix
 
 **Response sanitization.** `LlmCallRecorder::complete()` runs `sanitize_llm_output` on every response before saving forensics and returning the text to the pipeline. The sanitizer strips leaked reasoning artifacts that some chat-template-less models emit:
 
@@ -77,7 +70,7 @@ For affected Ollama backends, `OllamaBackend::preprocess_user_text()` appends th
 
 to the user message. OpenRouter backends are unaffected because the backend's native chat template handles turn structure. The response sanitizer above is the safety net for any artifact that still leaks.
 
-## §8 LLM Call Logging & Forensics
+## LLM Call Logging & Forensics
 
 Every LLM call flows through `LlmCallRecorder::complete()`. The recorder:
 
@@ -91,7 +84,7 @@ Storage holds the table `llm_messages` with a 50-row global cap: each insert pru
 
 The dashboard exposes the table via the LLM Messages tab at `/fragment/llm-messages`. The view shows the latest 50 calls with their prompts, raw request/response, and parsed response.
 
-## §9 Runtime Tracing
+## Runtime Tracing
 
 The engine uses `log` + `env_logger` for structured runtime diagnostics. Spans and events fire automatically when `RUST_LOG` is set. Key markers cover per-LLM-call model + transport (`[LLM][req:N] Using model: ...`) and quantifier confidence (`[Quantifier] Detected NPCs: ... (confidence: ...)`). The project explicitly does not use `tracing` (see `arch-lint.toml`).
 

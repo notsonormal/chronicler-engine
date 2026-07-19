@@ -3,8 +3,6 @@ diataxis: how-to
 title: Debugging the Engine
 ---
 
-> **Diátaxis mode:** How-to. Goal-oriented: a test failed or the engine misbehaved at runtime, what now. Procedures below assume you can read Rust source.
-
 ## Quick Start
 
 Run the checks in this order. Most failures resolve before step 7.
