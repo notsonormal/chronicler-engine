@@ -1,21 +1,21 @@
 # Plan: Eliminate Free-Function Smells (Final)
 
 ## Summary
-Move 13 module-level `pub fn`s into `impl` blocks on the right receiver, plus a structural deepening: introduce an `ApplicationQueries` seam so view fns don't pollute `PersistenceGate`. Delete 3 dead duplicates; add 1 `From` impl. Defer 32+ smells as documented exceptions (engine layer, mappers, Arc-self orchestrators, factories, guardrails).
+Move module-level `pub fn`s into `impl` blocks on the right receiver, plus a structural deepening: introduce an `ApplicationQueries` seam so view fns don't pollute `PersistenceGate`. Move `map_llm_error` onto `EngineError` as a method (preserves `String` return type consumed by `Phases::error_return`). Delete 2 dead duplicates. Defer 32+ smells as documented exceptions (engine layer, mappers, Arc-self orchestrators, factories, guardrails).
 
-- **Scope:** 13 fns moved + 3 deletions + 1 From impl + 5 test helpers, across 6 phases
+- **Scope:** ~31 fns moved/converted + 2 deletions + 1 EngineError method, across 6 phases
 - **Effort:** 16 SP
 - **Validation:** `python chronicler_engine/scripts/build.py` after each phase + `find_free_fn_smells.py` to confirm count drops
 
 ## Key Changes
 
 - 6 render fns → `impl AppState` (Phase 1)
-- 8 query_handlers view fns → new `ApplicationQueries` seam over `PersistenceGate` (Phase 2A) — **deepening**, not relocation
+- 8 query_handlers view fns → new `ApplicationQueries` seam over `PersistenceGate` (Phase 2A) — **deepening**, not relocation (gets `get_input_status` call site at `fragment_renderers.rs:71`)
 - 3 message_editing CRUD fns → `impl PersistenceGate` (Phase 2B) — fits persistence concern
-- 3 mapper fns → `From` impls (Phase 3)
-- 1 `PromptContext` method + 6 bootstrap moves + `GenerationGate::release_owned_slot` delegator (Phase 4)
+- 2 mapper fns → `From` impls; 1 mapper `build_narration_prompt` → `impl PromptContext` method (Phase 3); `model_swipes_to_db` stays free (doctrine)
+- 6 bootstrap moves + `GenerationGate::release_owned_slot` delegator (Phase 4)
 - 5 test helpers → `TestAppBuilder` methods (Phase 5)
-- 3 fns deleted (dead duplicates) + 1 `From<&EngineError> for ApplicationError` added (Phase 0)
+- 2 fns deleted (dead duplicates) + `map_llm_error` moved to `impl EngineError { fn llm_error_string }` (Phase 0)
 - `chronicler_engine/docs/architecture/system.md` gains "Free fn Doctrine" section (table-style, matching existing doc voice)
 
 ## Doctrine (accepted exceptions — not fixed)
@@ -37,23 +37,38 @@ Move 13 module-level `pub fn`s into `impl` blocks on the right receiver, plus a 
 
 ## Implementation
 
-### Phase 0: Dead code cleanup + `From` impl (1 SP)
+### Phase 0: Dead code cleanup + `EngineError::llm_error_string` method (1 SP)
 
-- [ ] #### Task 0.1: Delete duplicates + add `From` impl + preserve `get_input_status` test (1 SP)
+- [ ] #### Task 0.1: Delete duplicates + convert `map_llm_error` to method + preserve `get_input_status` test (1 SP)
 
   **Files modified:**
-  - `src/application/application_service.rs` — delete `load_messages_with_swipes` free fn (line 30); canonical is `PersistenceGate::load_messages_with_swipes` at `persistence_gate/gate.rs:201`
-  - `src/application/query_handlers.rs` — delete `get_input_status` (line 58, byte-identical duplicate of `get_generating_status` above)
-  - `src/application/mappers.rs` — delete `map_llm_error`; add `impl From<&EngineError> for ApplicationError` in `src/application/errors.rs`
-  - `src/application/mod.rs` — remove `pub use mappers::map_llm_error;` re-export (verify with grep)
+  - `src/application/application_service.rs` — delete the free fn `load_messages_with_swipes` (line 30) and the `pub use crate::application::mappers::map_llm_error;` re-export on line 16. The free fn body moves to `impl Storage` (next bullet).
+  - `src/adapters/driven/storage/backend/messages.rs` — **add `impl Storage { pub fn load_messages_with_swipes(&self) -> Result<Vec<Message>, EngineError> }`** by moving the body verbatim from the deleted free fn. This file already hosts `load_message_rows` (line 67) and is the canonical home for message storage methods. **Why `impl Storage` not `impl PersistenceGate`:** both external callers (`bootstrap/init_game.rs:58`, `tests/integration/flow/arrival_persistence.rs:106`) hold `&Storage`, not `&PersistenceGate`. `PersistenceGate` (gate.rs:119/161) already wraps the free fn and will continue to wrap the Storage method.
+  - `src/application/persistence_gate/gate.rs:119,161` — update both `load_messages_with_swipes` and `load_messages` bodies from `crate::application::application_service::load_messages_with_swipes(&self.storage)` → `self.storage.load_messages_with_swipes()`
+  - **External callers of `load_messages_with_swipes`** (free fn, path-qualified) — migrate to Storage method call:
+    - `bootstrap/init_game.rs:8` (use) + `:58` (call `load_messages_with_swipes(storage)`) → drop the `use`; rewrite call as `storage.load_messages_with_swipes()`
+    - `tests/integration/flow/arrival_persistence.rs:106` (`chronicler_engine::application::application_service::load_messages_with_swipes(app.storage())`) → `app.storage().load_messages_with_swipes()`
+  - `src/application/query_handlers.rs` — delete `get_input_status` (line 58, one-line delegator to `get_generating_status`; NOT byte-identical — verify before deletion)
+  - `src/adapters/driving/http/fragments/renderers/fragment_renderers.rs:71` — **external caller of `get_input_status`** (missed in original plan): rewrite call as `query_handlers::get_generating_status(&state.application_service)` (file is also touched in Phase 1 — keep this rewrite in Phase 0 so the deleted symbol stops being referenced before Phase 1 lands)
+  - `src/application/mappers.rs` — delete entire file; **convert `map_llm_error` to `impl EngineError { pub fn llm_error_string(&self) -> String }` in `src/error.rs`** (keeps `String` return type — caller `Phases::error_return(state, msg: String)` at `src/application/action_pipeline/phases.rs:91` consumes the string as `GenerationStatus::Error(msg)` user message; NOT a `From<&EngineError> for ApplicationError` because that would change the observable string and break `error_return` signature)
+  - `src/application/mod.rs` — remove `mod mappers;` declaration and `pub use crate::application::mappers::map_llm_error;` re-export if still present (verify with grep)
+  - `src/application/action_pipeline/phases.rs:7,146,157` — update `use crate::application::application_service::map_llm_error;` → `use crate::error::EngineError;`; calls `map_llm_error(&e)` → `e.llm_error_string()`
   - `src/application/query_handlers_tests.rs` — **rewrite** `test_get_input_status_delegates_to_generating_status` to assert on `get_generating_status` directly (preserves the delegation contract test)
 
+  **Why not `From<&EngineError> for ApplicationError`:** Original plan assumed `map_llm_error` produced `ApplicationError`, but it produces `String` for user-facing error display. `From<EngineError> for ApplicationError` (owned) already exists at `errors.rs:58` with different semantics. Adding `From<&EngineError>` would either duplicate semantics (clippy) or change the error string reaching the user via `GenerationStatus::Error(msg)`.
+
   **Automation:**
-  - Use sed for call-site renames: `sed -i 's/map_llm_error(\(.*\))/(\1).into()/g'` — review each resulting diff before commit (map_llm_error took a single arg; verify sed produces valid Rust)
+  - Use sed for `map_llm_error` call-site renames AFTER the method exists: `sed -i 's/map_llm_error(&\([a-z_]*\))/\1.llm_error_string()/g'`
+  - Review each resulting diff before commit (map_llm_error took a single arg; verify sed produces valid Rust)
+  - Do NOT use sed for `load_messages_with_swipes` migration — only 2 external callers, both path-qualified and simple enough for manual edit
+
+  **Chesterton's Fence check:**
+  - `git log -p --follow src/application/application_service.rs | head -30` — confirm the free fn at line 30 was not extracted as a deliberate seam (commit message may reference T2 ticket 04 extraction).
+  - `git log -p --follow src/application/mappers.rs` — same; file header says "T2 ticket 04 — extracted from DefaultApplicationService", confirming it's a carve-out, not a doctrine.
 
   **Validation:**
   - `cd chronicler_engine && cargo fmt && cargo clippy -- -D warnings && cargo nextest run --lib`
-  - `python scripts/find_free_fn_smells.py | head -3` — smell count drops by 3
+  - `python scripts/find_free_fn_smells.py | head -3` — smell count drops by 3 (2 deleted free fns + 1 moved to method)
 
 ### Phase 1: AppState renderers (3 SP)
 
@@ -176,7 +191,7 @@ Move 13 module-level `pub fn`s into `impl` blocks on the right receiver, plus a 
 
 ### Phase 3: Adapter `From` impls + `PromptContext` method (2 SP)
 
-- [ ] #### Task 3.1: Convert 3 message mapper free fns to `From` impls + `PromptContext::build_narration_prompt` (2 SP)
+- [ ] #### Task 3.1: Convert 2 message mapper free fns to `From` impls + `PromptContext::build_narration_prompt` (2 SP)
 
   **Free fns (convert):**
   - `db_message_to_model(&DbMessage)` → `impl From<&DbMessage> for Message` in `adapters/driven/storage/mappers/message.rs`
@@ -310,7 +325,7 @@ Every task:
 - **No port trait for `ApplicationService`.** Confirmed via grep — `DefaultApplicationService` is a concrete struct, not a trait; adding methods + a `queries()` accessor does not affect adapter boundary.
 - **`ApplicationQueries` deepening.** New module borrows `&PersistenceGate` (arbitrary lifetime, no `Arc`). `DefaultApplicationService::queries(&self)` returns `ApplicationQueries<'_>` borrowing from `self.persistence_gate`. Callers cannot outlive the borrow; Rust's borrow checker enforces.
 - **`message_editing` file stays.** `retry` and `retrigger` (Arc-self fns for spawn_blocking) remain as free fns in `src/application/message_editing.rs`; the file is NOT deleted. Only the 3 mutation fns move to `PersistenceGate`.
-- **`map_llm_error` conversion choice.** Implementer picks `impl From<&EngineError> for ApplicationError` (preferred) vs `EngineError::to_application(&self)` (named method). Both acceptable.
+- **`map_llm_error` conversion choice.** Convert to `impl EngineError { pub fn llm_error_string(&self) -> String }` (method, preserves String return). NOT `From<&EngineError> for ApplicationError` — caller `Phases::error_return(state, msg: String)` consumes the string as `GenerationStatus::Error(msg)`, a user-facing message. `From<EngineError> for ApplicationError` already exists at `errors.rs:58` (owned, different semantics).
 - **`model_swipes_to_db` stays as free fn.** Per Issue 8 doctrine; flagged in `system.md`.
 - **`release_owned_slot` Option C.** Free fn stays for `GenerationGuard::drop`; `impl GenerationGate::release_owned_slot` is a one-line delegator. Documented in `slot.rs` with rationale.
 - **Phase 5 routing deferred to implementer.** `TestAppBuilder` methods vs `PipelineTestExt` extension trait — depends on existing `TestAppBuilder` shape. Subagent reads the file first and decides.
@@ -321,7 +336,7 @@ Every task:
 HTTP responses, persisted state, and test outcomes preserved. Acknowledged contract changes:
 
 - **`get_input_status`** — removed from public surface; delegation contract preserved by rewriting its test to assert on `get_generating_status` directly (test still exists, no behavioral change documented)
-- **`map_llm_error`** — removed from public surface; callers use `.into()`. If `map_llm_error` had tracing/logging calls beyond pure conversion, those are lost. Subagent verifies via `git log -p` before deleting.
+- **`map_llm_error`** — removed from public surface; callers use `e.llm_error_string()` (method on `EngineError`, preserves `String` return type). If `map_llm_error` had tracing/logging calls beyond pure conversion, those are lost — subagent verifies via `git log -p` before deleting. The observable user-facing `GenerationStatus::Error(msg)` string is preserved exactly because the method returns `String` (not `ApplicationError`).
 - **`retry` / `retrigger` / `retry_last_response_impl` / `retrigger_event_impl` / `execute_action_impl`** — DEFERRED, not moved. Free-fn shape is correct because these take `Arc<app>` by value for spawn_blocking closure lifetimes; converting to `&self` would force Arc::clone at call sites AND break the spawn contract. This is the load-bearing reason for the doctrine exception.
 - **Test path in Phase 2A** — tests moved from `query_handlers_tests.rs` to `application_queries_tests.rs`. Test bodies unchanged except the call form (`get_foo(&app)` → `app.queries().get_foo()`).
 

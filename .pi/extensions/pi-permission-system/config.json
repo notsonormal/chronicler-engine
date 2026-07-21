@@ -38,7 +38,9 @@
       "git branch -f *": "deny",
       "git branch --force *": "deny",
       "git clean -f *": "deny",
-      "git clean --force *": "deny"
+      "git clean --force *": "deny",
+      "git commit": "deny",
+      "git commit *": "deny"
     }
   }
 }
