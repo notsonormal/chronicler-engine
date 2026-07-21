@@ -97,12 +97,12 @@ fn test_mock_with_failing_trigger_narration() {
 #[test]
 fn test_mock_backend_logs_to_storage() {
     use crate::adapters::driven::storage::Storage;
-    use crate::application::llm_recorder::LlmCallRecorder;
-    use crate::application::ports::llm_message_repository::LlmMessageRepository;
+    use crate::application::ports::llm_provider::LlmProvider;
+    use crate::test_support::make_test_recorder_with_storage;
     use std::sync::Arc;
-    let storage: Arc<dyn LlmMessageRepository> = Arc::new(Storage::new_in_memory());
-    let backend = Arc::new(MockBackend::new());
-    let recorder = Arc::new(LlmCallRecorder::new(backend, Arc::clone(&storage)));
+    let storage = Arc::new(Storage::new_in_memory());
+    let backend: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
+    let recorder = make_test_recorder_with_storage(backend, Arc::clone(&storage));
 
     let result = recorder.complete("narrator", "sys", "user action", None);
     assert!(result.is_ok());
@@ -117,12 +117,12 @@ fn test_mock_backend_logs_to_storage() {
 #[test]
 fn test_mock_backend_logs_multiple_calls() {
     use crate::adapters::driven::storage::Storage;
-    use crate::application::llm_recorder::LlmCallRecorder;
-    use crate::application::ports::llm_message_repository::LlmMessageRepository;
+    use crate::application::ports::llm_provider::LlmProvider;
+    use crate::test_support::make_test_recorder_with_storage;
     use std::sync::Arc;
-    let storage: Arc<dyn LlmMessageRepository> = Arc::new(Storage::new_in_memory());
-    let backend = Arc::new(MockBackend::new());
-    let recorder = Arc::new(LlmCallRecorder::new(backend, Arc::clone(&storage)));
+    let storage = Arc::new(Storage::new_in_memory());
+    let backend: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
+    let recorder = make_test_recorder_with_storage(backend, Arc::clone(&storage));
 
     let _ = recorder.complete("narrator", "sys", "first", None);
     let _ = recorder.complete("trigger", "sys", "second", None);

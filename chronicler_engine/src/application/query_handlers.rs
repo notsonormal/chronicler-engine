@@ -5,7 +5,7 @@ use crate::application::ApplicationError;
 use crate::application::DebugStateView;
 use crate::application::application_service::DefaultApplicationService;
 use crate::error::EngineError;
-use crate::application::ports::llm_message_repository::LlmMessage;
+use crate::application::llm_message::LlmMessage;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageEntry;
 

@@ -11,6 +11,7 @@ pub mod game_catalogue;
 pub mod game_service;
 pub mod generation_gate;
 pub mod generation_guard;
+pub mod llm_message;
 pub mod llm_recorder;
 pub mod llm_sanitizer;
 pub mod mappers;

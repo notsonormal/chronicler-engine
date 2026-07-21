@@ -1,5 +1,7 @@
-//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
-//! LLM message persistence port
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/narration_system.md]
+//! LLM message DTO + recorder save seam
+
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 
@@ -20,7 +22,4 @@ pub struct LlmMessage {
     pub created_at: DateTime<Utc>,
 }
 
-pub trait LlmMessageRepository: Send + Sync {
-    fn save_llm_message(&self, message: &LlmMessage) -> Result<(), EngineError>;
-    fn list_latest_llm_messages(&self, limit: usize) -> Result<Vec<LlmMessage>, EngineError>;
-}
+pub type SaveLlmMessageFn = Arc<dyn Fn(&LlmMessage) -> Result<(), EngineError> + Send + Sync>;

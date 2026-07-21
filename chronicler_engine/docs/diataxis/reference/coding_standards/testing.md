@@ -23,19 +23,6 @@ Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_u
 
 For unit tests of concurrency invariants, the `wait_for_condition` helper is file-local at `src/application/is_generating_invariant_tests.rs:215` — it is local by design and stays scoped to that file.
 
-## LLM-call test helpers
-
-`RecordingForensics` (`src/test_support/recording_forensics.rs`) is a spy implementation of `LlmMessageRepository` that captures every LLM call in memory for test assertion. It is a test-writing fixture, not a runtime-debugging tool — production runs write to the SQLite `llm_messages` table via `LlmCallRecorder`, and a `/fragment/llm-messages` UI tab exists for runtime inspection.
-
-Two reader methods expose the captured calls:
-
-| Method | Returns | Use |
-|--------|---------|-----|
-| `last_saved_message()` | `Option<&LlmMessage>` | The exact prompts and parsed response the orchestrator persisted for the most recent call |
-| `save_call_count()` | `usize` | Number of recorder fires — confirms the recorder did (or did not) fire the expected number of times |
-
-The recorder captures every attempt, including those that returned a configured error, which makes the two readers the right hook for verifying failure-path assertions.
-
 ## Document References
 
 - [`./unit_test_standards.md`](./unit_test_standards.md) — canonical nine-pattern form for `*_tests.rs` unit tests, with four cross-cutting patterns (XSS regression is Cross-cutting B).

@@ -57,9 +57,6 @@ mod lifecycle;
 #[path = "adapters/driven/llm/llm_client.rs"]
 mod llm_client;
 
-#[path = "application/wiring.rs"]
-mod application_wiring;
-
 #[path = "flow/arrival_persistence.rs"]
 mod flow_arrival_persistence;
 #[path = "flow/retry_event.rs"]

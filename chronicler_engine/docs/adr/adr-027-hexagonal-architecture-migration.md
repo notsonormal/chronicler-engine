@@ -41,7 +41,6 @@ src/
 | Port | Rationale | Impl Count |
 |------|-----------|------------|
 | `LlmProvider` | 4 impls: OpenRouter, DeepSeek, Ollama, Mock. Clear substitution seam. | 4 |
-| `LlmMessageRepository` | Consumer (`LlmCallRecorder`) is in core; producer (`Storage`) is driven adapter. Justified by consumer location. | 1 |
 | `TextChecker` | Consumer (`TextCheckService`) is in core; producer (`HarperTextChecker`) is driven adapter. Single impl justified by consumer location. | 1 |
 
 ### Rejected Port Traits
@@ -54,16 +53,12 @@ src/
 
 ### Phantom Port Heuristic
 
-**One impl alone does NOT make a port phantom.** A port is phantom (unjustified) when:
+A port is justified only when both clauses hold:
 
-- Single impl **AND**
-- Consumer is **not** in core **OR** producer is **not** an adapter.
+1. The consumer is in core and the producer is an adapter.
+2. The test seam requires capabilities not satisfied by an existing mechanism (such as a `Backend` enum, direct methods, or a closure), and trait ceremony is proportionate to the focused concern (roughly a few methods).
 
-A port is justified (even with one impl) when:
-- Single impl **BUT**
-- Consumer is in core **AND** producer is a driven adapter.
-
-Without the port, core would import the adapter — violating the dependency invariant.
+Otherwise, a concrete struct plus closure or a concrete struct plus `Backend` enum covers the seam with less ceremony.
 
 ### Storage Direct Access Exemption
 
@@ -108,7 +103,7 @@ The exemption is intentional, not a leak:
 
 - ✅ Architecture visible at file-tree level. `ls src/` shows hexagonal structure immediately.
 - ✅ Dependency direction enforced. Core depends on ports; adapters implement ports; `bootstrap/` wires both.
-- ✅ LLM, TextChecker, Storage-direct-access exemptions documented and marked in code.
+- ✅ LLM, TextChecker, Storage-direct, Recorder-save-closure exemptions documented and marked in code.
 - ✅ "Phantom port" heuristic is explicit. Future port decisions have clear criteria.
 
 ### Negative
@@ -121,7 +116,7 @@ The exemption is intentional, not a leak:
 
 - Chose hexagonal over pure-layered to keep the existing LLM port rather than drop it or pretend it isn't a port (mixed architecture).
 - Chose concrete `Storage` + `Backend` enum over `StateRepository` trait — substitution seam already exists without trait ceremony.
-- Chose consumer-location heuristic over strict "one-impl = phantom" to keep `LlmMessageRepository` and `TextChecker` (justified by consumer location).
+- Chose concrete `LlmCallRecorder` + `SaveLlmMessageFn` closure over `LlmMessageRepository` trait — the closure is sufficient for the recorder save seam without trait ceremony.
 - Chose `LlmProviderConfig` rename-in-place over full split — naming win achieved without schema migration cost.
 
 ## Related ADRs
@@ -137,3 +132,4 @@ The exemption is intentional, not a leak:
 - **2026-07-04**: Phase B (arch-lint scope split) landed — `model → application` and ports deny rules enforced in `arch-lint.toml`. Phase C (composition root cleanup) landed — `Bootstrap::wiring` is now the only module importing both port traits and adapter impls for LLM/agent construction. `Connection` renamed to `LlmProviderConfig` (Phase E.1). `Swipe::snapshot_id` kept on domain entity (Phase E.2 dropped as YAGNI — Deviation 3). Phase F.1 landed — `ArrivalTaskContext` extracted from `bootstrap/init_game.rs` to `application/arrival_service.rs`; `inject_scenario_logs` moved from `bootstrap/scenario.rs` to `application/scenario.rs`. Storage exemption reduced from 5 files to 3: `QuantifierAgent::from_config_with_storage` and `AgentRegistry::from_configs_with_storage` no longer take `Option<Arc<Storage>>` — recorder injected directly.
 - **2026-07-06**: Corrected — exemption is 5 files, not 3. The 2 "deferred to T2" sites (`src/application/agents/registry.rs`, `src/application/agents/quantifier/agent.rs`) still import `Storage` directly (T2 not yet landed). Current grandfathered list: `src/application/context.rs`, `src/application/game_service.rs`, `src/application/application_service.rs` (intentional) + `src/application/agents/registry.rs`, `src/application/agents/quantifier/agent.rs` (deferred to T2). Storage-direct access in any other `application/` file is now blocked by `check_application_storage_direct` guardrail in `tests/infrastructure/guardrails/layers.rs`, since arch-lint 0.4.x lacks per-file allowlists. Test files (`*_tests.rs`) are excluded because arch-lint cannot distinguish test fakes from production leaks.
 - **2026-07-09**: T2 land package landed. The 3 intentional-grandfathered carve-outs (`persistence_gate`, `game_catalogue`, `world_catalogue`) joined the boundary. `generation_gate` does not touch `Storage` (cancel token + atomic slot only — not on the list). Grandfathered list grew from 5 to 8; "Deferred to T2" relabeled "Deferred to G1-B" — T2 done, but the 2 agent constructors still take `Option<Arc<Storage>>` and will be migrated by ticket G1-B (separate effort). Marker comments in the 2 deferred files (`agents/registry.rs`, `agents/quantifier/agent.rs`) updated to point at the now-landed `persistence_gate` carve-out.
+- **2026-07-10**: Removed `LlmMessageRepository` port. `LlmCallRecorder` now uses `SaveLlmMessageFn = Arc<dyn Fn(&LlmMessage) -> Result<(), EngineError> + Send + Sync>` closure. Test support types (NoopForensics, SpyForensics, RecordingForensics) deleted — tests now use real `Storage::list_latest_llm_messages` for assertion and inline `SaveLlmMessageFn` closures for error injection; no spy struct needed. Restores symmetry with rejected `StateRepository` decision. Phantom-port heuristic rewritten as two-clause rule.

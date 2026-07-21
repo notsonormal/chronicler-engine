@@ -31,6 +31,43 @@ fn mock_backend_path_returns_recorder_with_mock_provider() {
 }
 
 #[test]
+fn mock_backend_recorder_persists_forensics_to_storage() {
+    // Regression guard: the factory must wire `SaveLlmMessageFn` to
+    // `Storage::save_llm_message`, not a no-op closure. If the silent fallback
+    // is reintroduced, `storage.list_latest_llm_messages(...)` comes back empty.
+    let connection = LlmProviderConfig {
+        id: "test-mock".to_string(),
+        name: "Test Mock".to_string(),
+        provider: LlmBackendType::Mock,
+        model: "mock-model".to_string(),
+        api_key: None,
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    };
+    let storage = Arc::new(Storage::new_in_memory());
+
+    let recorder = get_llm_recorder_for(&connection, Arc::clone(&storage))
+        .expect("get_llm_recorder_for should succeed for Mock backend");
+
+    recorder
+        .complete("wiring-test-agent", "sys", "usr", None)
+        .expect("recorder.complete should succeed against MockBackend");
+
+    let messages = storage
+        .list_latest_llm_messages(10)
+        .expect("Storage::list_latest_llm_messages should succeed");
+    assert_eq!(
+        messages.len(),
+        1,
+        "expected exactly one LlmMessage persisted to Storage"
+    );
+    assert_eq!(messages[0].agent_name, "wiring-test-agent");
+    assert_eq!(messages[0].backend_name, "Mock");
+}
+
+#[test]
 fn deepseek_path_returns_recorder() {
     let connection = LlmProviderConfig {
         id: "test-deepseek".to_string(),

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
-use crate::application::ports::llm_message_repository::LlmMessage;
+use crate::application::llm_message::LlmMessage;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::fragments::render_llm_messages;
 use crate::test_support::TestAppBuilder;

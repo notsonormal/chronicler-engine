@@ -32,7 +32,6 @@ flowchart LR
 
     subgraph ports["application::ports (traits)"]
         llm["LlmProvider"]
-        msgs["LlmMessageRepository"]
         tc["TextChecker"]
     end
 
@@ -50,7 +49,6 @@ flowchart LR
     cli --> app
 
     app -. uses .-> llm
-    app -. uses .-> msgs
     app -. uses .-> tc
     app --> storage
 
@@ -58,14 +56,13 @@ flowchart LR
     deepseek -.-> llm
     ollama -.-> llm
     harper -.-> tc
-    msgs -.-> storage
 
     bootstrap -. wires .-> driving
     bootstrap -. wires .-> driven
     bootstrap -. wires .-> app
 ```
 
-Three port traits are accepted (`LlmProvider`, `LlmMessageRepository`, `TextChecker`); four others were considered and rejected as phantom. `Storage` is accessed directly by a small set of application-tier seams under a deliberate `arch-lint: storage-direct` exemption — the engine's persistence boundary is concrete-by-design, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
+Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::llm_factory`). `Storage` is accessed directly by a small set of application-tier seams under a deliberate `arch-lint: storage-direct` exemption — the engine's persistence boundary is concrete-by-design, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
 
 ## Why one process
 

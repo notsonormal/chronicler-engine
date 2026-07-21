@@ -7,8 +7,8 @@ use crate::error::EngineError;
 use crate::domain::model::settings::LlmProviderConfig;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::adapters::driven::storage::Storage;
+use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
 use crate::application::ports::llm_provider::LlmProvider;
-use crate::application::ports::llm_message_repository::LlmMessageRepository;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::adapters::driven::llm::providers::{
     OpenRouterBackend, DeepSeekBackend, OllamaBackend, MockBackend,
@@ -26,7 +26,6 @@ pub fn get_llm_recorder_for(
         connection.model
     );
 
-    // Create the provider (adapter)
     let provider: Arc<dyn LlmProvider> = match connection.provider {
         LlmBackendType::Mock => Arc::new(MockBackend::new()),
         LlmBackendType::DeepSeek => Arc::new(DeepSeekBackend::from_config(connection)),
@@ -34,9 +33,8 @@ pub fn get_llm_recorder_for(
         LlmBackendType::Ollama => Arc::new(OllamaBackend::from_config(connection)),
     };
 
-    // Storage implements LlmMessageRepository - use it as the forensics repository
-    let forensics: Arc<dyn LlmMessageRepository> = storage;
+    let save_fn: SaveLlmMessageFn =
+        Arc::new(move |message: &LlmMessage| storage.save_llm_message(message));
 
-    // Return the orchestrator
-    Ok(Arc::new(LlmCallRecorder::new(provider, forensics)))
+    Ok(Arc::new(LlmCallRecorder::new(provider, save_fn)))
 }

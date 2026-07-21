@@ -70,24 +70,6 @@ For affected Ollama backends, `OllamaBackend::preprocess_user_text()` appends th
 
 to the user message. OpenRouter backends are unaffected because the backend's native chat template handles turn structure. The response sanitizer above is the safety net for any artifact that still leaks.
 
-## LLM Call Logging & Forensics
-
-Every LLM call flows through `LlmCallRecorder::complete()`. The recorder:
-
-1. Calls the backend's transport (pure API call).
-2. Runs `sanitize_llm_output` on the response text.
-3. Builds an `LlmMessage` record with the prompts, raw request JSON, raw response JSON, backend name, model name, agent name, sanitized parsed response, optional error message, and timestamp.
-4. Saves the record through the `LlmMessageRepository` port.
-5. Returns the sanitized result to the pipeline.
-
-Storage holds the table `llm_messages` with a 50-row global cap: each insert prunes older rows so only the most recent 50 calls across all games are retained. The table has no `game_id` column, so the cap is global, not per-game.
-
-The dashboard exposes the table via the LLM Messages tab at `/fragment/llm-messages`. The view shows the latest 50 calls with their prompts, raw request/response, and parsed response.
-
-## Runtime Tracing
-
-The engine uses `log` + `env_logger` for structured runtime diagnostics. Spans and events fire automatically when `RUST_LOG` is set. Key markers cover per-LLM-call model + transport (`[LLM][req:N] Using model: ...`) and quantifier confidence (`[Quantifier] Detected NPCs: ... (confidence: ...)`). The project explicitly does not use `tracing` (see `arch-lint.toml`).
-
 ## Document References
 
 - [ADR-004: XML-Structured LLM Prompts](../../../docs/adr/adr-004-xml-prompt-format.md) — XML-sectioned instructions + XML-wrapped data; sanitization rationale.

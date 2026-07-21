@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::error::EngineError;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::game::Game;
-use crate::application::ports::llm_message_repository::LlmMessage;
+use crate::application::llm_message::LlmMessage;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::PromptPreset;

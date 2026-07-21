@@ -3,7 +3,7 @@
 
 use askama::Template;
 
-use crate::application::ports::llm_message_repository::LlmMessage;
+use crate::application::llm_message::LlmMessage;
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::view_models::{

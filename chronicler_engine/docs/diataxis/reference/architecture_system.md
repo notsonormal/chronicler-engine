@@ -5,8 +5,6 @@ title: Architecture System
 
 ## Overview
 
-Eight tiers in `src/`, dependency rules enforced by `arch-lint.toml`. Three port traits under `src/application/ports/`. Single-process deployment against one SQLite file.
-
 ## Layer Structure
 
 - `crate::domain::model` — Pure data structures; game state.

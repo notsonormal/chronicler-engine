@@ -9,7 +9,7 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::error::EngineError;
 use crate::test_support::fixtures::{TestGameState, TestNpc, TestPersona};
-use crate::test_support::noop_forensics::make_test_recorder;
+use crate::test_support::make_test_recorder;
 
 use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result};
 use super::test_support::{make_npc, make_room};
@@ -492,8 +492,9 @@ fn test_static_npc_result_fallback_to_scene_npcs() {
 
 #[test]
 fn test_quantifier_routes_through_recorder_for_forensics() {
-    // Regression guard: bypassing the recorder (e.g. `recorder.provider().clone()`) makes `SpyForensics::save_count` stay at 0.
-    use crate::test_support::noop_forensics::make_spy_recorder;
+    // Regression guard: bypassing the recorder (e.g. `recorder.provider().clone()`) leaves storage.list_latest_llm_messages(...) empty.
+    use crate::adapters::driven::storage::Storage;
+    use crate::test_support::make_test_recorder_with_storage;
 
     let room = make_room();
     let carla = make_npc("carla", "Carla");
@@ -517,12 +518,16 @@ fn test_quantifier_routes_through_recorder_for_forensics() {
             r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
         ]);
 
-    let (recorder, spy) = make_spy_recorder(Arc::new(backend));
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(Arc::new(backend), Arc::clone(&storage));
     let result = quantify_room_with_llm_call(&context, recorder.as_ref());
 
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
     assert_eq!(
-        spy.save_count(),
+        storage
+            .list_latest_llm_messages(10)
+            .expect("list should not error")
+            .len(),
         1,
         "quantifier LLM call must route through LlmCallRecorder so forensics are saved exactly once"
     );

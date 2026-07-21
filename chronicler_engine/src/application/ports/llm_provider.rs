@@ -2,7 +2,7 @@
 //! LLM provider port (transport-only)
 
 use crate::error::EngineError;
-use crate::application::ports::llm_message_repository::LlmMessage;
+use crate::application::llm_message::LlmMessage;
 
 pub const AGENT_NARRATOR: &str = "narrator";
 pub const AGENT_QUANTIFIER: &str = "quantifier";

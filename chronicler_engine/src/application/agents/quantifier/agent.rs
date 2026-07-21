@@ -51,10 +51,10 @@ impl QuantifierAgent {
 
     #[cfg(feature = "testing")]
     pub fn with_provider(name: String, provider: Arc<dyn LlmProvider>) -> Self {
-        use crate::test_support::noop_forensics::NoopForensics;
+        use crate::test_support::make_noop_save_fn;
         Self {
             name,
-            recorder: Arc::new(LlmCallRecorder::new(provider, Arc::new(NoopForensics))),
+            recorder: Arc::new(LlmCallRecorder::new(provider, make_noop_save_fn())),
             preset_storage: None,
             settings: Arc::new(RwLock::new(AppSettings::default())),
         }

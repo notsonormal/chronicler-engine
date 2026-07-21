@@ -5,11 +5,13 @@
 
 use std::sync::Arc;
 
+use crate::adapters::driven::llm::providers::MockBackend;
+use crate::adapters::driven::storage::Storage;
+use crate::application::llm_message::SaveLlmMessageFn;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::LlmProvider;
-use crate::adapters::driven::llm::providers::MockBackend;
 use crate::error::EngineError;
-use crate::test_support::recording_forensics::RecordingForensics;
+use crate::test_support::{make_noop_save_fn, make_test_recorder_with_storage};
 
 const _: fn() = || {
     fn assert<T: Send + Sync>() {}
@@ -19,8 +21,8 @@ const _: fn() = || {
 #[test]
 fn complete_happy_path_calls_provider_and_persists_forensics() {
     let provider = Arc::new(MockBackend::new());
-    let forensics = Arc::new(RecordingForensics::new());
-    let recorder = LlmCallRecorder::new(provider, forensics.clone());
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     let result = recorder
         .complete("narrator", "system prompt", "user prompt", None)
@@ -30,9 +32,10 @@ fn complete_happy_path_calls_provider_and_persists_forensics() {
     assert!(!result.text.is_empty());
 
     // Forensics persisted exactly one message
-    assert_eq!(forensics.save_call_count(), 1);
-    let saved = forensics
-        .last_saved_message()
+    let saved = storage
+        .list_latest_llm_messages(10)
+        .expect("list should not error")
+        .pop()
         .expect("message should be saved");
 
     // Message has correct metadata
@@ -49,8 +52,8 @@ fn complete_strips_thought_tags_from_parsed_response() {
     let provider = Arc::new(MockBackend::new().with_narrations(vec![
         "<thought>inner monologue</thought>Hello, user!".to_string(),
     ]));
-    let forensics = Arc::new(RecordingForensics::new());
-    let recorder = LlmCallRecorder::new(provider, forensics.clone());
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     let result = recorder
         .complete("narrator", "system", "user", None)
@@ -61,8 +64,10 @@ fn complete_strips_thought_tags_from_parsed_response() {
     assert!(result.text.contains("Hello, user!"));
 
     // Raw response JSON in forensics IS the original (unsanitized)
-    let saved = forensics
-        .last_saved_message()
+    let saved = storage
+        .list_latest_llm_messages(10)
+        .expect("list should not error")
+        .pop()
         .expect("message should be saved");
     assert!(saved.raw_response_json.contains("<thought>"));
 
@@ -74,8 +79,8 @@ fn complete_strips_thought_tags_from_parsed_response() {
 #[test]
 fn complete_propagates_provider_error_without_forensics_write() {
     let provider = Arc::new(MockBackend::new().with_fail());
-    let forensics = Arc::new(RecordingForensics::new());
-    let recorder = LlmCallRecorder::new(provider, forensics.clone());
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     let err = recorder
         .complete("narrator", "system", "user", None)
@@ -85,32 +90,34 @@ fn complete_propagates_provider_error_without_forensics_write() {
     assert!(matches!(err, EngineError::Narrative(_)));
 
     // No forensics write happened
-    assert_eq!(forensics.save_call_count(), 0);
+    assert_eq!(
+        storage
+            .list_latest_llm_messages(10)
+            .expect("list should not error")
+            .len(),
+        0
+    );
 }
 
 #[test]
-fn complete_propagates_forensics_error_after_provider_success() {
+fn complete_propagates_closure_save_error() {
     let provider = Arc::new(MockBackend::new());
-    let forensics = Arc::new(
-        RecordingForensics::new().with_next_save_error(EngineError::Io("disk full".into())),
-    );
-    let recorder = LlmCallRecorder::new(provider, forensics.clone());
+    let save_fn: SaveLlmMessageFn = Arc::new(|_| Err(EngineError::Io("disk full".into())));
+    let recorder = LlmCallRecorder::new(provider, save_fn);
 
     let err = recorder
         .complete("narrator", "system", "user", None)
         .unwrap_err();
 
-    // Error propagates from forensics layer
+    // Error propagates from the save-fn closure
     assert!(matches!(err, EngineError::Io(_)));
-    // Error message preserved
     assert!(err.to_string().contains("disk full"));
 }
 
 #[test]
 fn provider_accessor_returns_injected_provider() {
     let original: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
-    let forensics = Arc::new(RecordingForensics::new());
-    let recorder = LlmCallRecorder::new(original.clone(), forensics);
+    let recorder = LlmCallRecorder::new(original.clone(), make_noop_save_fn());
 
     assert!(Arc::ptr_eq(&original, recorder.provider()));
 }
@@ -119,10 +126,16 @@ fn provider_accessor_returns_injected_provider() {
 fn recorder_with_configurable_mock_backend() {
     // Verify that various MockBackend configurations work through the recorder
     let mocking_empty = Arc::new(MockBackend::new().with_empty_response());
-    let forensics = Arc::new(RecordingForensics::new());
-    let recorder = LlmCallRecorder::new(mocking_empty, forensics.clone());
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(mocking_empty, Arc::clone(&storage));
 
     let result = recorder.complete("narrator", "sys", "user", None).unwrap();
     assert_eq!(result.text, "");
-    assert_eq!(forensics.save_call_count(), 1);
+    assert_eq!(
+        storage
+            .list_latest_llm_messages(10)
+            .expect("list should not error")
+            .len(),
+        1
+    );
 }

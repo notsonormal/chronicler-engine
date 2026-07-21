@@ -3,6 +3,7 @@
 #![allow(clippy::unwrap_used)]
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
@@ -15,6 +16,9 @@ use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarratio
 use crate::domain::model::world::{WorldCard, WorldManifest};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
+use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
+use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::ports::llm_provider::LlmProvider;
 
 pub struct TestWorld;
 
@@ -382,4 +386,21 @@ pub fn dummy_swipe(text: &str) -> Swipe {
         location_header: None,
         event_header: None,
     }
+}
+
+pub fn make_noop_save_fn() -> SaveLlmMessageFn {
+    Arc::new(|_message: &LlmMessage| Ok(()))
+}
+
+pub fn make_test_recorder(provider: Arc<dyn LlmProvider>) -> Arc<LlmCallRecorder> {
+    Arc::new(LlmCallRecorder::new(provider, make_noop_save_fn()))
+}
+
+pub fn make_test_recorder_with_storage(
+    provider: Arc<dyn LlmProvider>,
+    storage: Arc<Storage>,
+) -> Arc<LlmCallRecorder> {
+    let save_fn: SaveLlmMessageFn =
+        Arc::new(move |message: &LlmMessage| storage.save_llm_message(message));
+    Arc::new(LlmCallRecorder::new(provider, save_fn))
 }

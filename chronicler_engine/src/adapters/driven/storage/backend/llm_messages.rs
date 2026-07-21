@@ -4,7 +4,7 @@
 use crate::error::EngineError;
 use crate::adapters::driven::storage::backend::{Backend, Storage};
 use crate::adapters::driven::storage::models::llm_message::DbLlmMessage;
-use crate::application::ports::llm_message_repository::{LlmMessage, LlmMessageRepository};
+use crate::application::llm_message::LlmMessage;
 
 impl Storage {
     pub fn save_llm_message(&self, message: &LlmMessage) -> Result<(), EngineError> {
@@ -85,15 +85,5 @@ impl Storage {
                 Ok(data.llm_messages[start..].to_vec())
             }
         })
-    }
-}
-
-impl LlmMessageRepository for Storage {
-    fn save_llm_message(&self, message: &LlmMessage) -> Result<(), EngineError> {
-        Storage::save_llm_message(self, message)
-    }
-
-    fn list_latest_llm_messages(&self, limit: usize) -> Result<Vec<LlmMessage>, EngineError> {
-        Storage::list_latest_llm_messages(self, limit)
     }
 }

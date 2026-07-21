@@ -42,6 +42,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
     - `game_service.rs` — Game service handling gameplay operations
     - `generation_guard.rs` — Generation guard logic
+    - `llm_message.rs` — LLM message DTO + recorder save seam
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
     - `llm_sanitizer.rs` — LLM input/output sanitization
     - `mappers.rs` — map_llm_error — LLM failure mapper (T2 ticket 04 — extracted from DefaultApplicationService).
@@ -86,10 +87,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Prompt construction orchestration
       - `types.rs` — Prompt type definitions
     - **persistence_gate/**
-      - `gate.rs` — PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers (T2 façade-first carve-out).
+      - `gate.rs` — PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
       - `mod.rs` — PersistenceGate — game-storage seam + persistence helpers (T2 façade-first carve-out).
     - **ports/**
-      - `llm_message_repository.rs` — LLM message persistence port
       - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)
       - `text_checker.rs` — TextChecker port trait and CheckResult DTO
@@ -143,8 +143,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - **test_support/**
     - `context.rs` — Builds `DefaultApplicationService` instances for integration tests.
     - `fixtures.rs` — Test fixtures shared between unit and integration tests.
-    - `noop_forensics.rs` — Canonical NoopForensics implementation for tests.
-    - `recording_forensics.rs` — Recording spy for `LlmMessageRepository`
     - `test_app_builder.rs` — Test application builder for HTTP and integration tests.
     - `test_data_builder.rs` — Test data bundle builder for integration tests.
 - **scripts/**
@@ -153,6 +151,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.
   - `coverage_summary.py` — Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON.
   - `diagnostic_benchmark.py` — Run the diagnostic benchmark suite and produce an aggregated markdown/JSON report.
+  - `extract_http_routes.py` — Generate `docs/diataxis/reference/http_routes.md` from `router.rs`.
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
   - `find_free_fn_smells.py` — Find module-level free functions whose first parameter looks like a receiver.
@@ -166,7 +165,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
   - `validate_adrs.py` — Validate ADR files against the standard in docs/adr/README.md.
   - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
-  - `validate_docs.py` — Validate markdown docs under chronicler_engine/docs/.
+  - `validate_docs.py` — Validate markdown docs + DOC anchors under chronicler_engine/.
+  - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration
 <!-- AUTO-STRUCTURE END -->
 
 ## YOUR RESPONSIBILITY 

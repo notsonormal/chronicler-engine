@@ -103,30 +103,30 @@ For non-mock backends, the assertion is typically `name()` / `model_name()` retu
 use std::sync::Arc;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::adapters::driven::llm::providers::MockBackend;
-use crate::test_support::recording_forensics::RecordingForensics;
+use crate::adapters::driven::storage::Storage;
+use crate::test_support::make_test_recorder_with_storage;
 
 #[test]
 fn complete_<behaviour>_<expected_outcome>() {
     let provider = Arc::new(MockBackend::new());
-    let forensics = Arc::new(RecordingForensics::new());
-    let recorder = LlmCallRecorder::new(provider, forensics.clone());
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     let result = recorder
         .complete("agent_name", "system_prompt", "user_prompt", None);
 
     <assert result matches expected outcome>;
-    <if expected: also assert forensics state via spy.save_call_count() / spy.last_saved_message()>;
+    <if expected: also assert forensics state via `storage.list_latest_llm_messages(N)` (`len()` for count, `.pop()` for last saved message)>;
 }
 ```
 
 Use `MockBackend::default()` for the deterministic default response. Use `MockBackend::new().with_fail()` / `.with_empty_response()` / `.with_narrations(...)` only when the test specifically exercises that variant of provider behaviour.
 
-**Exemplar.** `src/application/llm_recorder_tests.rs` (6 tests covering happy path, sanitization strip, error propagation from provider, error propagation from forensics, provider accessor, configurable mock). Includes a `Send + Sync` static assertion on line 24 — keep that pattern in recorder tests; the recorder must be safe to share across tasks.
+**Exemplar.** `src/application/llm_recorder_tests.rs` (6 tests covering happy path, sanitization strip, error propagation from provider, error propagation from closure save, provider accessor, configurable mock). Includes a `Send + Sync` static assertion on line 17 — keep that pattern in recorder tests; the recorder must be safe to share across tasks.
 
 **Drift notes.**
 
-- `src/application/agents/quantifier/orchestration_tests.rs` uses a `SpyForensics` (test-only variant of `RecordingForensics`) for the multi-step orchestration test — see `make_spy_recorder` in `src/test_support/noop_forensics.rs`. Use `SpyForensics` only when you need to assert specific message ordering across multiple `complete()` calls; use `RecordingForensics::new()` otherwise.
-- `src/application/ports/llm_message_repository_tests.rs` is scope-guarded to trait polymorphism across `Noop` / `Recording` impls. Do NOT re-test the implementation details here.
+- `src/application/agents/quantifier/orchestration_tests.rs` uses `make_test_recorder_with_storage` from `src/test_support/llm_recorder_save_seam.rs` — assert via real `Storage::list_latest_llm_messages` for multi-step orchestration assertions.
 - Tests of agent-level orchestration (multi-step retry, fallback to empty response) live in `src/application/agents/quantifier/{agent_tests,orchestration_tests}.rs`, not here. Pattern 4 tests the recorder, not the agent.
 
 ## Pattern 5 — Application service-layer
@@ -138,7 +138,7 @@ Use `MockBackend::default()` for the deterministic default response. Use `MockBa
 ```rust
 use std::sync::Arc;
 use crate::test_support::{TestAppBuilder, TestDataBuilder, TestStoredTriggerContext};
-use crate::test_support::{make_test_recorder};  // from noop_forensics
+use crate::test_support::{make_test_recorder};
 use crate::adapters::driven::llm::providers::MockBackend;
 
 fn make_test_service(
@@ -417,7 +417,7 @@ Used in: `src/bootstrap/load_tests.rs` (`seed_game_data` over filesystem worlds)
 
 ### Cross-cutting D — Sealed-trait polymorphism tests
 
-**When.** Testing that a trait implementation correctly satisfies the trait contract (e.g., `LlmMessageRepository` is satisfied by both `Noop` and `Recording`). Used in trait-port tests where the contract is the system under test, not the implementation.
+**When.** Testing that a trait implementation correctly satisfies the trait contract (e.g., `TextChecker`). Used in trait-port tests where the contract is the system under test, not the implementation.
 
 **The standard.**
 
@@ -437,7 +437,7 @@ fn <trait>_dispatches_across_impls() {
 
 Critical rule: **scope-guard the test to polymorphism only.** Do NOT duplicate impl-internal tests in the trait-port test file. Implementation-internal tests belong with the impl (e.g., Harper-specific tests live in `harper_text_checker_tests.rs`, not `text_checker_tests.rs`).
 
-Used in: `src/application/ports/llm_message_repository_tests.rs` (1 test, polymorphism across `Noop` / `Recording`), `src/application/ports/text_checker_tests.rs` (2 tests, polymorphism only).
+Used in: `src/application/ports/text_checker_tests.rs` (2 tests, polymorphism only).
 
 ## Document References
 

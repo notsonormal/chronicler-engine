@@ -8,25 +8,37 @@ from pathlib import Path
 
 
 def extract_module_info(filepath: Path) -> tuple[str, str] | None:
-    """Extract DOC anchor and summary from a Rust file.
+    """Extract summary from a Rust file.
+
+    Accepts two shapes:
+      - `//! [DOC: ...]` on line 1 + `//! summary` on line 2 (anchor style)
+      - `//! summary` on line 1 (anchor-less, e.g. src/test_support/ per AGENTS.md)
 
     Returns (filename, summary) or None if not a valid module.
     """
     try:
         lines = filepath.read_text(encoding="utf-8").splitlines()
-        if len(lines) < 2:
+        if not lines:
             return None
 
         line1 = lines[0].strip()
-        line2 = lines[1].strip()
-
-        if not line1.startswith("//! [DOC:"):
+        if not line1.startswith("//!"):
             return None
 
-        if not line2.startswith("//!"):
-            return None
+        first = line1.removeprefix("//!").strip()
 
-        summary = line2.removeprefix("//!").strip()
+        if first.startswith("[DOC:"):
+            if len(lines) < 2:
+                return None
+            line2 = lines[1].strip()
+            if not line2.startswith("//!"):
+                return None
+            summary = line2.removeprefix("//!").strip()
+        else:
+            summary = first
+
+        if not summary:
+            return None
 
         return (filepath.name, summary)
     except Exception:
