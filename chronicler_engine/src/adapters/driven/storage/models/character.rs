@@ -1,4 +1,4 @@
-//! [DOC: docs/system/storage.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/storage.md]
 //! Character database model
 
 /// Database row for `characters` table (NpcCard).

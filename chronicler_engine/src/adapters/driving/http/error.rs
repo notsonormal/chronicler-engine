@@ -1,4 +1,4 @@
-//! [DOC: docs/architecture/system.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/architecture_system.md]
 //! HTTP driving adapter — maps application `ApplicationError` to axum `Response`.
 
 use axum::http::StatusCode;

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/storage.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/storage.md]
 //! Prompt preset model
 
 pub struct DbPromptPreset {

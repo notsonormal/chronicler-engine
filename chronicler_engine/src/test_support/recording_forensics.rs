@@ -1,4 +1,3 @@
-//! [DOC: docs/system/storage.md]
 //! Recording spy for `LlmMessageRepository`
 
 use parking_lot::Mutex;

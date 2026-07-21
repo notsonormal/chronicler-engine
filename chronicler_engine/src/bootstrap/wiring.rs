@@ -1,4 +1,4 @@
-//! [DOC: docs/system/startup.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/startup.md]
 //! Composition root for application orchestrators — wires port impls to
 //! `LlmCallRecorder`, `AgentRegistry`, and `GameService`. This is the only
 //! module that imports both port traits and adapter impls (see ADR-027).

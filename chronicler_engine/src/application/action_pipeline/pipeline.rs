@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Action pipeline orchestration and execution
 
 use std::collections::HashMap;

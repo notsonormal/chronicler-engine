@@ -1,4 +1,4 @@
-//! [DOC: docs/system/dashboard.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! Settings fragments
 
 use crate::domain::model::llm_backend::LlmBackendType;

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Core data models and domain types
 
 pub mod agent;

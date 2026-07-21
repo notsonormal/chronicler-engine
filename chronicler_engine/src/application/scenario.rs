@@ -1,4 +1,4 @@
-//! [DOC: docs/system/startup.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/startup.md]
 //! Scenario log injection at game initialization
 
 use crate::domain::model::character::PersonaCard;

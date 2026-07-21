@@ -1,4 +1,4 @@
-//! [DOC: docs/system/storage.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/storage.md]
 //! Storage layer and database access
 
 pub mod backend;

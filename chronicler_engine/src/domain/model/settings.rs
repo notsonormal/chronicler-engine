@@ -1,4 +1,4 @@
-//! [DOC: docs/system.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/architecture_system.md]
 //! Settings and configuration types
 
 use serde::{Deserialize, Serialize};

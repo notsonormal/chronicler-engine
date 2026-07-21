@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! State snapshot value types (persistable representations of game state).
 //!
 //! These are domain-owned DTOs: the storage layer serializes/deserializes

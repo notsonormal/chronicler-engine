@@ -1,4 +1,4 @@
-//! [DOC: docs/system/agent_system.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/agent_system.md]
 //! Agent trait definitions
 
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/startup.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/startup.md]
 //! Command-line interface definitions
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]

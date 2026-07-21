@@ -1,4 +1,4 @@
-//! [DOC: docs/system/storage.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/storage.md]
 //! LLM message mapper
 
 use chrono::{DateTime, Utc};

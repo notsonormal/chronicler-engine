@@ -1,4 +1,4 @@
-//! [DOC: docs/system/dashboard.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! Shared poison-recovering lock helpers for the HTTP layer.
 
 use std::sync::{RwLock, RwLockWriteGuard};

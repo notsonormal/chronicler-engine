@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Application layer services and game flow orchestration
 
 pub mod action_pipeline;

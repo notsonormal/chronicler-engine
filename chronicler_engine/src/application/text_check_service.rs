@@ -1,4 +1,4 @@
-//! [DOC: docs/system/text_check.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! TextCheckService orchestrator for text checking
 
 use std::sync::Arc;

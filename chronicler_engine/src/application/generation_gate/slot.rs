@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
 
 use std::collections::HashMap;

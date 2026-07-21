@@ -1,4 +1,4 @@
-//! [DOC: docs/system/llm_processing.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
 //! LLM message persistence port
 
 use chrono::{DateTime, Utc};

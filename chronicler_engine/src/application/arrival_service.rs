@@ -1,4 +1,4 @@
-//! [DOC: docs/system/startup.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/startup.md]
 //! Arrival narration use case — generates the opening scene when a player enters a room
 
 use std::sync::Arc;

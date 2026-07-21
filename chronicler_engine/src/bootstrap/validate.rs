@@ -1,4 +1,4 @@
-//! [DOC: docs/system/startup.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/startup.md]
 //! Data validation utilities
 
 use crate::domain::model::character::{NpcCard, PersonaCard};

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/navigation.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Game engine core modules
 
 pub mod action;

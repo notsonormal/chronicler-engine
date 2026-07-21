@@ -1,4 +1,4 @@
-//! [DOC: docs/system/dashboard.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! View models decouple templates from domain types.
 
 use std::fmt;

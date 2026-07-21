@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
 
 use crate::error::EngineError;

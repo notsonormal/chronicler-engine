@@ -182,7 +182,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 ### Core Principles
 1. **Naming as Documentation**: Symbols (functions, types, variables) must use verbose, domain-aligned names that map 1-to-1 with concepts in the `docs/`.
 2. **Module-Level Two-Line Headers**: Every file in `src/` has:
-   - Line 1: `//! [DOC: docs/path/to/domain-doc.md]` (links to domain documentation)
+   - Line 1: `//! [DOC: chronicler_engine/docs/diataxis/reference/<area>/<name>.md]` (links to reference documentation; `reference/` only — no `explanation/`, `how-to/`, or `tutorials/` targets)
    - Line 2: `//! Human-readable summary` (used for auto-generating STRUCTURE section)
    Function-level anchors removed.
 3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
@@ -230,9 +230,9 @@ When creating or updating a plan for chronicler_engine work (via any planning sk
 **Why:** Plans that skip these steps result in rework — architecture docs out of sync, missing tests, clippy failures discovered late, and undocumented changes.
 
 ## CONVENTIONS
-- **Module-Level DOC Anchors**: Every `src/` file has `//! [DOC: ...]` on line 1 pointing to domain-specific docs. Remove function-level `/// [DOC:` and `// [DOC:` comments.
+- **Module-Level DOC Anchors**: Every non-test `src/` file has `//! [DOC: ...]` on line 1 pointing to a reference doc under `chronicler_engine/docs/diataxis/reference/`. `src/test_support/*.rs` MUST NOT carry a `[DOC: ...]` line ( organise by fixture weight, ADR-028). Remove function-level `/// [DOC:` and `// [DOC:` comments.
 - **Enum Variant Docs**: Every enum variant carries `///` rustdoc unless the enum is marked `/// [TRIVIAL_ENUM]` directly above the `enum` keyword. Never both.
-- **Test Module Headers**: Every file under `tests/` (including `mod.rs` and `helpers/`/`test_utils/`) starts with a single-line `//! <summary>` describing what it covers. The `[DOC: ...]` anchor is **optional** for tests because they are organised by fixture weight, not domain — see ADR-028. Multi-line summary blocks are forbidden.
+- **Test Module Headers**: Every file under `tests/` (including `mod.rs` and `helpers/`/`test_utils/`) starts with a single-line `//! <summary>` describing what it covers. `tests/**/*.rs` MUST NOT carry a `[DOC: ...]` line — tests are organised by fixture weight, not domain (ADR-028). Multi-line summary blocks are forbidden.
 - **LLM backend**: Trait-based (`LlmBackend`), mock via `MockBackend` in tests
 - **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
 

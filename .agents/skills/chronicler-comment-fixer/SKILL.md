@@ -73,11 +73,20 @@ emitted* — not "What" narration.
 The first two lines of most production files will be a DOC module and a module comment e.g.
 
 ```rust
-//! [DOC: docs/diataxis/reference/startup.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/startup.md]
 //! Command-line interface definitions
 ```
 
 This is enforced by the guardrails. The second line is needed for auto-generating the STRUCTURE section in the AGENTS.md file.
+
+Canonical anchor rules (mirrored by `scripts/validate_docs.py --anchors`):
+
+- Anchor target must be a full repo path under `chronicler_engine/docs/diataxis/reference/` (e.g. `chronicler_engine/docs/diataxis/reference/storage.md`). `explanation/`, `how-to/`, `tutorials/` targets are rejected — source files associate with reference docs only.
+- No section suffix. Path-only anchors.
+- `src/test_support/*.rs` MUST NOT carry a `[DOC: ...]` line — shared test
+  helpers are organised by fixture weight (ADR-028); a `//! <summary>` line
+  on line 1 suffices.
+- `tests/**/*.rs` MUST NOT carry a `[DOC: ...]` line.
 
 # Output Format
 

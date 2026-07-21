@@ -1,4 +1,4 @@
-// [DOC: docs/architecture/guardrails.md]
+// [DOC: chronicler_engine/docs/diataxis/reference/coding_standards/guardrails.md]
 // AI Guardrails: These lint attributes enforce the project's coding standards
 // at compile time. Any violation will fail the build.
 #![deny(

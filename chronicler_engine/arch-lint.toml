@@ -1,5 +1,5 @@
 # Architecture linting configuration for Chronicler Engine
-# [DOC: docs/architecture/guardrails.md]
+# [DOC: chronicler_engine/docs/diataxis/reference/coding_standards/guardrails.md]
 #
 # This file defines the architectural guardrails that enforce
 # the project's coding standards via arch-lint.

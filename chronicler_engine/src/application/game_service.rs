@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Game service handling gameplay operations
 //! arch-lint: storage-direct — intentional, see ADR-027
 

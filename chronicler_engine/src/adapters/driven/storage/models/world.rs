@@ -1,4 +1,4 @@
-//! [DOC: docs/system/storage.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/storage.md]
 //! Database row structs for world and map tables
 
 pub struct DbWorld {

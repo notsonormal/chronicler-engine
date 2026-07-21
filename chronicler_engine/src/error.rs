@@ -1,4 +1,4 @@
-//! [DOC: docs/architecture/system.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/architecture_system.md]
 //! Error types and result aliases
 
 use thiserror::Error;

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/dashboard.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! HTTP response helpers
 
 use axum::{body::Body, http::StatusCode, response::Response};

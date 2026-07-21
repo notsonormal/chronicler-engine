@@ -1,4 +1,4 @@
-//! [DOC: docs/system/dashboard.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! Debug utilities and endpoints
 
 use axum::{Json, extract::State, http::StatusCode};

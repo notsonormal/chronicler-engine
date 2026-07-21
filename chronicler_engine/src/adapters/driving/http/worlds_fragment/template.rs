@@ -1,4 +1,4 @@
-//! [DOC: docs/system/worlds.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Worlds templates
 
 use askama::Template;

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/prompt_system.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
 //! Token budget management
 
 /// Maximum tokens allocated for the entire context window (fallback default).

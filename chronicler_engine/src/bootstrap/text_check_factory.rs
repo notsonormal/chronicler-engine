@@ -1,4 +1,4 @@
-//! [DOC: docs/system/text_check.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Text check factory - wires TextChecker port to HarperTextChecker impl
 
 use std::sync::Arc;

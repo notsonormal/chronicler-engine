@@ -1,4 +1,4 @@
-//! [DOC: docs/system/storage.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/storage.md]
 //! SQLite database connection pool and migrations
 
 use std::sync::{Arc, Mutex};

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/prompt_system.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
 //! Template placeholder substitution for author-controlled text fields.
 
 /// Known template variables available for substitution.

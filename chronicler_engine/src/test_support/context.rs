@@ -1,4 +1,3 @@
-//! [DOC: docs/reference/test_support.md — section "Survivor Helpers"]
 //! Builds `DefaultApplicationService` instances for integration tests.
 
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Action execution pipeline and validation
 use std::collections::HashMap;
 use std::sync::Arc;

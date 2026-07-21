@@ -1,4 +1,4 @@
-//! [DOC: docs/system/character_state.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/agent_system.md]
 //! Character sheet data and NPC card definitions
 
 use serde::{Deserialize, Serialize};

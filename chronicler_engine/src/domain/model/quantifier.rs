@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Quantifier types for narrative evaluation
 
 use crate::domain::model::agent::Confidence;

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/llm_processing.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
 //! Mock LLM provider for testing
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};

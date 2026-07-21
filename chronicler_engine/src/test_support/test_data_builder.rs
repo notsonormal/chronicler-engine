@@ -1,4 +1,3 @@
-//! [DOC: docs/reference/test_support.md — section "TestDataBuilder"]
 //! Test data bundle builder for integration tests.
 #![allow(clippy::expect_used)]
 

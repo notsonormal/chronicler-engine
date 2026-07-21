@@ -1,4 +1,3 @@
-//! [DOC: docs/reference/test_support.md]
 //! Canonical NoopForensics implementation for tests.
 //!
 //! Provides a no-op `LlmMessageRepository` implementation useful for tests

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
 //!
 //! `save_state`: snapshot only. `save_message_and_snapshot`: snapshot + message + retry-swipe link. Both route through `write_snapshot`.

@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! map_llm_error — LLM failure mapper (T2 ticket 04 — extracted from DefaultApplicationService).
 
 use crate::error::{EngineError, LlmFailure};

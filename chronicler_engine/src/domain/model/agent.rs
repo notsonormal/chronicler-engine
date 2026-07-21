@@ -1,4 +1,4 @@
-//! [DOC: docs/system/agent_system.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/agent_system.md]
 //! Agent definitions and behavior types
 
 use serde::{Deserialize, Serialize};

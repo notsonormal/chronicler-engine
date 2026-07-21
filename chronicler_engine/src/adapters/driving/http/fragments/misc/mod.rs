@@ -1,4 +1,4 @@
-//! [DOC: docs/system/dashboard.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! Miscellaneous fragment utilities (re-exports from submodules)
 
 pub mod game_control;

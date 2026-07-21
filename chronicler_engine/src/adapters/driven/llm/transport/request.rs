@@ -1,4 +1,4 @@
-//! [DOC: docs/system/llm_processing.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
 //! LLM request building
 
 use std::sync::atomic::{AtomicU64, Ordering};

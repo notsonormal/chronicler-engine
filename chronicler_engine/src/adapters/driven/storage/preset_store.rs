@@ -1,4 +1,4 @@
-//! [DOC: docs/system/storage.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/storage.md]
 //! PresetStore newtype — distinguishes preset storage from game storage
 //! per ADR-027 hexagonal boundary. See T2 ticket 01.
 

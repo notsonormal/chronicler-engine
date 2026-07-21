@@ -1,4 +1,4 @@
-//! [DOC: docs/architecture/invariants.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/coding_standards/guardrails.md]
 //! State diagnostics and debugging utilities
 
 use std::collections::HashMap;

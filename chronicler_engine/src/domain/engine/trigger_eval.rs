@@ -1,4 +1,4 @@
-//! [DOC: docs/system/triggers.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Trigger evaluation and condition checking
 
 use crate::domain::model::character::NpcCard;

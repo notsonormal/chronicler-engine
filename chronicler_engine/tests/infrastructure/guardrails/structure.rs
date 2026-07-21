@@ -84,7 +84,7 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
         violations.push(Violation::warn(
             path,
             1,
-            format!("Module `{path}` lacks a module-level DOC anchor. Add `//! [DOC: docs/path/to/file.md]` at the top of the file."),
+            format!("Module `{path}` lacks a module-level DOC anchor. Add `//! [DOC: chronicler_engine/docs/diataxis/reference/<area>/<name>.md]` at the top of the file."),
         ));
         return violations;
     }
@@ -92,11 +92,13 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
     let anchor_path = extract_doc_anchor_path(lines[0]);
 
     if let Some(anchor) = anchor_path {
-        if !anchor.starts_with("docs/") {
+        if !anchor.starts_with("chronicler_engine/docs/diataxis/reference/")
+            || anchor.contains("/../")
+        {
             violations.push(Violation::error(
                 path,
                 1,
-                format!("Module `{path}` DOC anchor `{anchor}` must start with `docs/`."),
+                format!("Module `{path}` DOC anchor `{anchor}` must resolve under `chronicler_engine/docs/diataxis/reference/`."),
             ));
         }
 

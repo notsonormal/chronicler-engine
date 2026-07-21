@@ -1,4 +1,4 @@
-//! [DOC: docs/system/prompt_system.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
 //! Prompt context building
 
 use crate::error::EngineError;

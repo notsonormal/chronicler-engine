@@ -1,4 +1,4 @@
-"""Validate markdown docs under chronicler_engine/docs/diataxis/.
+"""Validate markdown docs + DOC anchors under chronicler_engine/.
 
 Role-aware deterministic checks. Each .md file is classified into one of three
 roles which determine which rules apply:
@@ -44,6 +44,23 @@ Mirrors `validate_adrs.py` structure (Violation NamedTuple, per-file report,
 summary line at bottom). Intentionally decoupled from the
 `chronicler-docs-hygiene` skill — skill handles LLM semantic analysis, this
 script handles deterministic checks. CI / pre-commit can run this in <1s.
+
+DOC anchor rules (applied to src/**/*.rs, tests/**/*.rs, *.toml):
+
+  BROKEN_DOC_ANCHOR              — `[DOC: <path>.md]` target file missing,
+                                  OR path not under
+                                  `chronicler_engine/docs/diataxis/reference/`
+                                  (two message variants of one rule).
+  TEST_SUPPORT_ANCHOR_FORBIDDEN  — any `src/test_support/*.rs` carrying a
+                                  `[DOC: ...]` line. Test helpers are
+                                  organised by fixture weight (ADR-028).
+  TEST_FILES_ANCHOR_FORBIDDEN    — any `tests/**/*.rs` carrying a
+                                  `[DOC: ...]` line. Mirrors ADR-028.
+  TEST_SUPPORT_SUMMARY_REQUIRED  — `src/test_support/*.rs` line 1 is missing
+                                  or empty `//! <summary>`.
+
+The validator does NOT support the `— section "..."` suffix form. Anchors are
+path-only. Anchors are scanned unconditionally — there is no opt-out flag.
 
 Usage:
     python scripts/validate_docs.py
@@ -107,6 +124,22 @@ FENCE_DELIMITER = re.compile(r"^\s*(```|~~~)")
 
 # Front-matter delimiter: a line that is exactly `---` (optional whitespace).
 FRONTMATTER_DELIMITER = re.compile(r"^---\s*$")
+
+# DOC anchor presence on a line: `[DOC: ...]` in any form. Used to detect
+# forbidden anchors in test_support/tests paths where the strict path-parsing
+# regex would miss malformed or suffix-form anchors. Anchored to line start
+# (after an optional `//!` / `//` / `#` comment prefix) so mid-line mentions in
+# format strings or prose doc-comments inside guardrail code are not mistaken
+# for real anchors.
+DOC_ANCHOR_LINE = re.compile(r"^\s*(?://!|//|#)?\s*\[DOC:[^]]*\]")
+
+# DOC anchor strict regex: `[DOC: <path>.md]`. Path-only, no section suffix.
+# Capture group 1 is the target path, which must end in `.md`. Char class
+# excludes the em dash so the legacy `— section "..."` suffix form simply
+# will not match. Anchored to line start (after an optional `//!` / `//` / `#`
+# comment prefix) so format-string literals mentioning `[DOC: ...]` inside
+# test guardrails are not mistaken for real anchors.
+DOC_ANCHOR = re.compile(r"^\s*(?://!|//|#)?\s*\[DOC:\s+([a-zA-Z0-9_/.\\-]+\.md)\s*\]")
 
 # Paths whose existence we never check (network, mail, in-page anchors).
 URI_SCHEMES = ("http://", "https://", "mailto:")
@@ -863,6 +896,121 @@ def check_diataxis_frontmatter(report: FileReport) -> None:
 
 
 # ---------------------------------------------------------------------------
+# DOC anchor checks.
+# ---------------------------------------------------------------------------
+
+
+def check_doc_anchors(report: FileReport, path: Path, engine_root: Path) -> None:
+    """Emit BROKEN_DOC_ANCHOR for src/ (non-test_support) and top-level *.toml.
+
+    Two violation variants under one rule name:
+      * Path-form variant: target not under
+        `chronicler_engine/docs/diataxis/reference/`.
+      * Target-missing variant: target file does not exist on disk.
+
+    `src/test_support/**` and `tests/**` paths are handled by
+    `check_test_support_rules`; here we skip them to avoid double-counting.
+    """
+    rel = relative_to(path, engine_root)
+    if rel is None:
+        return
+    parts = rel.parts
+    if parts[:1] == ("tests",):
+        return
+    if "test_support" in parts:
+        return
+
+    text = read_text(report)
+    if text is None:
+        return
+
+    repo_root = engine_root.parent
+    reference_root = (repo_root / "chronicler_engine" / "docs" / "diataxis" / "reference").resolve()
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for match in DOC_ANCHOR.finditer(line):
+            target = match.group(1)
+            resolved = (repo_root / target).resolve()
+            try:
+                resolved.relative_to(reference_root)
+            except ValueError:
+                report.violations.append(
+                    Violation(
+                        ERROR,
+                        "BROKEN_DOC_ANCHOR",
+                        f"Line {lineno}: DOC anchor must resolve under chronicler_engine/docs/diataxis/reference/: `{target}` ({rel})",
+                    )
+                )
+                continue
+            if not resolved.is_file():
+                report.violations.append(
+                    Violation(
+                        ERROR,
+                        "BROKEN_DOC_ANCHOR",
+                        f"Line {lineno}: DOC anchor target file does not exist: `{target}` ({rel})",
+                    )
+                )
+
+
+def check_test_support_rules(report: FileReport, path: Path, engine_root: Path) -> None:
+    """Emit TEST_SUPPORT_ANCHOR_FORBIDDEN / TEST_FILES_ANCHOR_FORBIDDEN /
+    TEST_SUPPORT_SUMMARY_REQUIRED for src/test_support/*.rs and tests/**/*.rs.
+    """
+    rel = relative_to(path, engine_root)
+    if rel is None:
+        return
+    parts = rel.parts
+
+    is_test_support = parts[:1] == ("src",) and "test_support" in parts
+    is_test_file = parts[:1] == ("tests",)
+    if not (is_test_support or is_test_file):
+        return
+
+    # Mirror the Rust guardrail's MODULE_DOC_EXEMPTIONS: lib.rs/main.rs/mod.rs
+    # are module-declaration files, not source files that need a summary.
+    is_module_decl = path.name in {"lib.rs", "main.rs", "mod.rs"}
+
+    text = read_text(report)
+    if text is None:
+        return
+
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if DOC_ANCHOR_LINE.search(line):
+            rule = (
+                "TEST_SUPPORT_ANCHOR_FORBIDDEN"
+                if is_test_support
+                else "TEST_FILES_ANCHOR_FORBIDDEN"
+            )
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    rule,
+                    f"Line {lineno}: `{rule}`: this file must not carry a `[DOC: ...]` line ({rel})",
+                )
+            )
+
+    if is_test_support and not is_module_decl:
+        lines = text.splitlines()
+        if not lines or not lines[0].strip().startswith("//!"):
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "TEST_SUPPORT_SUMMARY_REQUIRED",
+                    f"Line 1: `src/test_support/*.rs` must start with a `//! <summary>` line ({rel})",
+                )
+            )
+        else:
+            after = lines[0].strip()[3:].strip()
+            if not after:
+                report.violations.append(
+                    Violation(
+                        ERROR,
+                        "TEST_SUPPORT_SUMMARY_REQUIRED",
+                        f"Line 1: `src/test_support/*.rs` line 1 is an empty `//!`; must be a `//! <summary>` line ({rel})",
+                    )
+                )
+
+
+# ---------------------------------------------------------------------------
 # Scanning and rendering.
 # ---------------------------------------------------------------------------
 
@@ -969,6 +1117,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def scan_anchor_file(path: Path, engine_root: Path) -> FileReport:
+    """Doc-anchor scan for a single .rs/.toml file."""
+    report = FileReport(path)
+    check_doc_anchors(report, path, engine_root)
+    check_test_support_rules(report, path, engine_root)
+    return report
+
+
+def collect_anchor_files(engine_root: Path) -> list[Path]:
+    """Collect .rs files under src/ and tests/, plus top-level *.toml files."""
+    files: set[Path] = set()
+    for pat in ("src/**/*.rs", "tests/**/*.rs"):
+        files.update(p.resolve() for p in engine_root.glob(pat) if p.is_file())
+    for p in engine_root.glob("*.toml"):
+        if p.is_file():
+            files.add(p.resolve())
+    return sorted(files)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
@@ -1005,13 +1172,25 @@ def main(argv: list[str] | None = None) -> int:
     rendered, error_count, warning_count, _ = render_reports(reports, engine_root)
     print(rendered)
 
+    md_errors, md_warnings = error_count, warning_count
+
+    anchor_files = collect_anchor_files(engine_root)
+    if anchor_files:
+        anchor_reports = [scan_anchor_file(f, engine_root) for f in anchor_files]
+        anchor_render, anchor_err, anchor_warn, _ = render_reports(
+            anchor_reports, engine_root
+        )
+        print(anchor_render)
+        md_errors += anchor_err
+        md_warnings += anchor_warn
+
     if args.list_only:
         return 0
 
-    if error_count > 0:
+    if md_errors > 0:
         print("\nFAIL — see violations above.")
         return 1
-    if args.strict and warning_count > 0:
+    if args.strict and md_warnings > 0:
         print("\nFAIL (--strict) — warnings present.")
         return 1
 

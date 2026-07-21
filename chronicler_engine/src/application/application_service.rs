@@ -1,4 +1,4 @@
-//! [DOC: docs/system/game_flow.md]
+//! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! DefaultApplicationService — façade over application collaborators.
 
 use std::sync::atomic::AtomicBool;
