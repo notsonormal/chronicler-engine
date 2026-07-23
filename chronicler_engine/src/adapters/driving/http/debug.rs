@@ -4,7 +4,6 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Serialize;
 
-use crate::application::query_handlers;
 use crate::adapters::driving::http::AppState;
 
 #[derive(Serialize)]
@@ -16,7 +15,9 @@ pub struct DebugBackendResponse {
 pub async fn debug_state_handler(
     State(state): State<AppState>,
 ) -> Result<Json<crate::application::DebugStateView>, StatusCode> {
-    query_handlers::get_debug_state(&state.application_service)
+    state
+        .application_service
+        .get_debug_state()
         .map(Json)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }

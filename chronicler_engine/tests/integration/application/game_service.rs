@@ -5,7 +5,7 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
-use crate::pipeline_helpers::{latest_state, add_input_and_save};
+use crate::application_ext::PipelineHelpers;
 
 #[test]
 fn test_with_storage_uses_external() {
@@ -16,7 +16,7 @@ fn test_with_storage_uses_external() {
 
     chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Service should complete action execution"
@@ -35,7 +35,7 @@ fn test_with_backends_no_disk_read() {
         "test input".to_string(),
     );
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Explicit backends should complete execution"
@@ -55,7 +55,7 @@ fn test_execute_action_saves_narration() {
         "test action".to_string(),
     );
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     let final_history_len = final_state.narrative.history.len();
 
     assert!(
@@ -73,7 +73,7 @@ fn test_execute_action_empty_input() {
 
     chronicler_engine::application::action_pipeline::execute_action_impl(&app, "".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Empty input should not leave pipeline in generating state"
@@ -96,7 +96,7 @@ fn test_execute_action_clears_last_trigger() {
         "second action".to_string(),
     );
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Trigger state should be cleared between executions"
@@ -117,7 +117,7 @@ fn test_execute_action_cancellation() {
 
     chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Cancelled execution should not remain in generating state"
@@ -131,11 +131,11 @@ fn test_retry_finds_anchor() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "Test input");
+    app.add_input_and_save("Test input");
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Retry should complete without hanging"
@@ -151,7 +151,7 @@ fn test_retry_event_fallback() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Empty history retry should fail gracefully without hanging"
@@ -176,7 +176,6 @@ fn test_retry_empty_history() {
 
 #[test]
 fn test_switch_swipe_out_of_bounds() {
-    use chronicler_engine::application::message_editing;
     use chronicler_engine::application::ApplicationError;
     use chronicler_engine::domain::model::message::{Message, Swipe};
 
@@ -205,7 +204,7 @@ fn test_switch_swipe_out_of_bounds() {
     let message_id = last_message.id;
     let swipe_count = last_message.swipes.len();
 
-    let result = message_editing::switch_swipe(&app, message_id, swipe_count);
+    let result = app.switch_swipe(message_id, swipe_count);
 
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), ApplicationError::Engine(_)));
@@ -215,7 +214,6 @@ fn test_switch_swipe_out_of_bounds() {
 fn test_edit_history_updates_text() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing;
 
     let msg = Message::new(
         None,
@@ -234,7 +232,7 @@ fn test_edit_history_updates_text() {
     let message_id = messages.last().unwrap().id;
     let edited_text = "Edited narration".to_string();
 
-    let result = message_editing::edit_history(&app, message_id, edited_text.clone());
+    let result = app.edit_history(message_id, edited_text.clone());
     assert!(result.is_ok());
 
     let messages = app.load_messages().unwrap();
@@ -246,7 +244,6 @@ fn test_edit_history_updates_text() {
 fn test_edit_history_no_snapshot() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing;
 
     let msg = Message::new(None, "Test message", MessageType::Narration, None, None);
     let app = SqliteTestAppBuilder::default_test()
@@ -258,13 +255,12 @@ fn test_edit_history_no_snapshot() {
     let messages = app.load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
 
-    let result = message_editing::edit_history(&app, message_id, "Edited".to_string());
+    let result = app.edit_history(message_id, "Edited".to_string());
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_delete_last_removes() {
-    use chronicler_engine::application::message_editing;
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
     let msg = Message::new(
@@ -281,7 +277,7 @@ fn test_delete_last_removes() {
         .build_service()
         .unwrap();
 
-    let result = message_editing::delete_last(&app);
+    let result = app.delete_last();
     assert!(result.is_ok());
 
     let messages = app.storage().load_message_rows().unwrap();
@@ -290,7 +286,6 @@ fn test_delete_last_removes() {
 
 #[test]
 fn test_delete_last_empty_rejected() {
-    use chronicler_engine::application::message_editing;
     use chronicler_engine::application::ApplicationError;
 
     let app = SqliteTestAppBuilder::default_test()
@@ -298,7 +293,7 @@ fn test_delete_last_empty_rejected() {
         .build_service()
         .unwrap();
 
-    let result = message_editing::delete_last(&app);
+    let result = app.delete_last();
     assert!(result.is_err());
     if let ApplicationError::Engine(e) = result.unwrap_err() {
         assert!(e.to_string().contains("History is empty"));
@@ -311,7 +306,6 @@ fn test_delete_last_empty_rejected() {
 fn test_edit_history_storage_failure() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing;
 
     let msg = Message::new(None, "Test", MessageType::Narration, None, None);
     let app = SqliteTestAppBuilder::default_test()
@@ -323,7 +317,7 @@ fn test_edit_history_storage_failure() {
     let messages = app.load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
 
-    let result = message_editing::edit_history(&app, message_id, "Edited".to_string());
+    let result = app.edit_history(message_id, "Edited".to_string());
     assert!(result.is_ok() || result.is_err());
 }
 
@@ -402,14 +396,13 @@ async fn test_retrigger_storage_operations() {
 fn test_delete_last_storage_failure() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing;
     let msg = Message::new(None, "Test message", MessageType::Narration, None, None);
     let app = SqliteTestAppBuilder::default_test()
         .backends(MockBackend::default)
         .message(msg)
         .build_service()
         .unwrap();
-    let result = message_editing::delete_last(&app);
+    let result = app.delete_last();
     assert!(result.is_ok() || result.is_err());
 }
 
@@ -442,10 +435,10 @@ fn test_continue_narration_fresh_game() {
         .build_service()
         .unwrap();
 
-    let initial_history = latest_state(&app).narrative.history.len();
+    let initial_history = app.latest_state().narrative.history.len();
     chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         guard.narrative.history.len() > initial_history,
         "Empty input should generate narration (history should grow)"
@@ -476,7 +469,7 @@ fn test_continue_narration_with_stale_is_generating_flag() {
 
     chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     assert!(
         !final_state.narrative.history.is_empty(),
         "Pipeline should run even with stale is_generating flag"
@@ -502,7 +495,7 @@ fn test_whitespace_variations() {
             whitespace.to_string(),
         );
 
-        let final_state = latest_state(&app);
+        let final_state = app.latest_state();
         assert!(
             !final_state.narrative.history.is_empty(),
             "Whitespace input '{whitespace:?}' should produce continuation narration"

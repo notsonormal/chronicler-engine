@@ -4,6 +4,7 @@
 use axum::{Form, extract::State, response::Html};
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::settings::save_settings;
 use crate::adapters::driving::http::AppState;
 
 use super::fragments::{preset_card_html, preset_edit_form_html, preset_view_form_html};
@@ -244,7 +245,7 @@ pub async fn activate_preset_handler(
             settings.active_quantifier_prompt_preset_id = id.clone();
         }
     }
-    if let Err(e) = settings.save(&app_state.storage) {
+    if let Err(e) = save_settings(&settings, &app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 

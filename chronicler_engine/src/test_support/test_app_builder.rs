@@ -1,6 +1,7 @@
 //! Test application builder for HTTP and integration tests.
 #![allow(clippy::expect_used)]
 
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 
 use axum::Router;
@@ -8,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::game_service::GameService;
-use crate::bootstrap::text_check_factory::create_text_check_service;
+use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -192,36 +193,24 @@ impl TestAppBuilder {
 
         let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
         let preset_storage = crate::test_support::default_test_preset_storage();
-        let game_service: Arc<GameService> = if let Some(service) = self.game_service.take() {
-            service
-        } else {
-            Arc::new(
-                crate::bootstrap::wiring::build_game_service_for_tests(
-                    Arc::clone(&settings_arc),
-                    Arc::clone(&storage),
-                    Arc::clone(&preset_storage),
-                )
-                .expect("build_game_service_for_tests should succeed"),
-            )
-        };
-        let text_check_service = Arc::new(create_text_check_service(&self.settings));
-        let is_generating = Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating));
-        let shutdown_token = CancellationToken::new();
-        AppState {
-            storage: Arc::clone(&storage),
-            preset_storage: Arc::clone(&preset_storage),
-            game_service: Arc::clone(&game_service),
-            application_service: Arc::new(DefaultApplicationService::new(
-                Arc::clone(&storage),
-                Arc::clone(&preset_storage),
-                Arc::clone(&settings_arc),
-                shutdown_token.clone(),
-                Arc::clone(&is_generating),
-                game_service,
-            )),
-            text_check_service,
-            settings: Arc::clone(&settings_arc),
-            shutdown_token: Arc::new(RwLock::new(shutdown_token)),
+        let game_service_override = self.game_service.take();
+
+        let wired = build_app_graph_for_tests(
+            Arc::clone(&settings_arc),
+            Arc::clone(&storage),
+            Arc::clone(&preset_storage),
+            game_service_override,
+        )
+        .expect("build_app_graph_for_tests should succeed");
+
+        if self.is_generating {
+            wired
+                .application_service
+                .is_generating()
+                .store(true, Ordering::SeqCst);
         }
+
+        let shutdown_token = CancellationToken::new();
+        AppState::from_wired(wired, shutdown_token)
     }
 }

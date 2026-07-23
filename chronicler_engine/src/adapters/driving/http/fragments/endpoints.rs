@@ -3,13 +3,7 @@
 
 use axum::{extract::State, response::Html};
 
-use crate::application::query_handlers;
 use crate::adapters::driving::http::AppState;
-
-use super::renderers::{
-    render_action_area, render_character_headshots, render_header, render_llm_messages,
-    render_story_log, render_visual_sidebar,
-};
 
 fn render_fragment<F>(state: &AppState, render: F, name: &str) -> Html<String>
 where
@@ -25,31 +19,35 @@ where
 }
 
 pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
-    render_fragment(&state, render_header, "header_fragment")
+    render_fragment(&state, |s| s.render_header(), "header_fragment")
 }
 
 pub async fn story_log_fragment(State(state): State<AppState>) -> Html<String> {
-    render_fragment(&state, render_story_log, "story_log_fragment")
+    render_fragment(&state, |s| s.render_story_log(), "story_log_fragment")
 }
 
 pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Html<String> {
-    render_fragment(&state, render_visual_sidebar, "visual_sidebar_fragment")
+    render_fragment(
+        &state,
+        |s| s.render_visual_sidebar(),
+        "visual_sidebar_fragment",
+    )
 }
 
 pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String> {
-    render_fragment(&state, render_action_area, "action_area_fragment")
+    render_fragment(&state, |s| s.render_action_area(), "action_area_fragment")
 }
 
 pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html<String> {
     render_fragment(
         &state,
-        render_character_headshots,
+        |s| s.render_character_headshots(),
         "character_headshots_fragment",
     )
 }
 
 pub async fn llm_messages_fragment(State(state): State<AppState>) -> Html<String> {
-    render_fragment(&state, render_llm_messages, "llm_messages_fragment")
+    render_fragment(&state, |s| s.render_llm_messages(), "llm_messages_fragment")
 }
 
 pub async fn status_ready_handler() -> Html<String> {
@@ -90,7 +88,7 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 }
 
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
-    match query_handlers::reset_generating_status(&state.application_service) {
+    match state.application_service.reset_generating_status() {
         Ok(()) => Html("reset".to_string()),
         Err(e) => {
             tracing::error!("reset_generating_handler: {e}");

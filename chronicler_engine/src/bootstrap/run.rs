@@ -7,8 +7,9 @@ use std::sync::{Arc, RwLock};
 use crate::adapters::driving::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
-use crate::adapters::driving::http::{ServerConfig, ServerResources};
-use crate::bootstrap::wiring::{build_game_service, build_text_check_service};
+use crate::adapters::driving::http::ServerConfig;
+use crate::bootstrap::wiring::{WiredApp, build_app_graph};
+use crate::settings::load_settings;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::settings::AppSettings;
@@ -29,8 +30,7 @@ struct PreparedData {
 
 struct StateResources {
     runtime: tokio::runtime::Runtime,
-    settings: Arc<RwLock<AppSettings>>,
-    app: Arc<crate::application::application_service::DefaultApplicationService>,
+    wired: WiredApp,
 }
 
 pub fn run(args: Args) -> crate::error::Result<()> {
@@ -45,7 +45,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         bind_attempts: None,
     };
     let state = prepare_state(&args, &data)?;
-    start_server(data, state, config)?;
+    start_server(state, config)?;
     Ok(())
 }
 
@@ -145,30 +145,19 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
         tracing::info!("Imported settings from {}", path.display());
         imported
     } else {
-        crate::settings::load_settings(&data.storage).unwrap_or_else(|_| AppSettings::default())
+        load_settings(&data.storage).unwrap_or_else(|_| AppSettings::default())
     };
     let settings = Arc::new(RwLock::new(settings));
-
-    let game_service = Arc::new(build_game_service(
-        Arc::clone(&settings),
+    let wired = build_app_graph(
+        settings,
         Arc::clone(&data.storage),
         Arc::clone(&data.preset_storage),
-    )?);
-    let app = Arc::new(
-        crate::application::application_service::DefaultApplicationService::new(
-            Arc::clone(&data.storage),
-            Arc::clone(&data.preset_storage),
-            Arc::clone(&settings),
-            tokio_util::sync::CancellationToken::new(),
-            Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            Arc::clone(&game_service),
-        ),
-    );
+    )?;
 
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,
-        &settings,
-        &app,
+        &wired.settings,
+        &wired.application_service,
         &data.storage,
         &data.db_pool,
         super::init_game::ArrivalSpawnRequest {
@@ -179,37 +168,15 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
         },
     );
 
-    Ok(StateResources {
-        runtime,
-        settings,
-        app,
-    })
+    Ok(StateResources { runtime, wired })
 }
 
-fn start_server(
-    data: PreparedData,
-    state: StateResources,
-    config: ServerConfig,
-) -> crate::error::Result<()> {
-    let game_service = Arc::clone(state.app.game_service());
-    let text_check_service = build_text_check_service(Arc::clone(&state.settings));
-
-    let resources = ServerResources {
-        storage: data.storage,
-        preset_storage: data.preset_storage,
-        settings: state.settings,
-        game_service,
-        text_check_service,
-    };
-
-    let (_addr, server) =
-        state
-            .runtime
-            .block_on(crate::adapters::driving::http::run_server_with_config(
-                resources, config,
-            ))?;
-    state
-        .runtime
+fn start_server(state: StateResources, config: ServerConfig) -> crate::error::Result<()> {
+    let StateResources { runtime, wired } = state;
+    let (_addr, server) = runtime.block_on(
+        crate::adapters::driving::http::run_server_with_config(wired, config),
+    )?;
+    runtime
         .block_on(server)
         .map_err(|e| EngineError::Config(format!("Server stopped: {e}")))??;
     Ok(())

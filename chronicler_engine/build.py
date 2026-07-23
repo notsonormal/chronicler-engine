@@ -605,9 +605,7 @@ def main():
             both_print("=== Build Complete ===")
             return
 
-        total_steps = (
-            8  # validate-data, clippy, test-structure, docstrings, doc-validation, copy assets, tests, report/skip
-        )
+        total_steps = 11  # Non-format validation, packaging, tests, and report steps.
         if not args.no_fmt:
             total_steps += 1
         steps = StepCounter(total_steps)
@@ -644,6 +642,12 @@ def main():
         timed_step(
             "Running Python tests...",
             "python -m unittest discover scripts/tests -v",
+            env=cargo_env,
+        )
+
+        timed_step(
+            "Checking intentional free functions...",
+            "python scripts/find_free_fn_smells.py",
             env=cargo_env,
         )
 

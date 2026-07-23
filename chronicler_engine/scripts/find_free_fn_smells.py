@@ -27,6 +27,32 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+SUPPRESSED_FREE_FNS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("adapters/driven/storage/mappers/message.rs", "model_swipes_to_db"),
+        ("adapters/driven/storage/mappers/state_snapshot.rs", "snapshot_to_db"),
+        ("bootstrap/load.rs", "seed_game_data"),
+        ("test_support/context.rs", "seed_test_world_into_storage"),
+        ("settings.rs", "load_settings"),
+        ("settings.rs", "save_settings"),
+        ("bootstrap/validate.rs", "validate_loaded_data"),
+        ("domain/engine/action_processing.rs", "execute_freeaction_impl"),
+        ("domain/engine/logic.rs", "attempt_semantic_walk"),
+        ("domain/engine/state_diagnostics.rs", "assert_state_consistency"),
+        ("domain/engine/trigger_eval.rs", "evaluate_triggers"),
+        ("application/agents/quantifier/orchestration.rs", "determine_npcs_in_room"),
+        ("application/scenario.rs", "inject_scenario_logs"),
+        ("application/narrative_prompt/assembler.rs", "assemble_prompt_text"),
+        ("application/narrative_prompt/context.rs", "make_prompt_context"),
+        ("adapters/driving/http/locks.rs", "read_lock_or_recover"),
+        ("adapters/driving/http/locks.rs", "write_lock_or_recover"),
+        ("application/action_pipeline/retry.rs", "retry_last_response_impl"),
+        ("application/action_pipeline/retry.rs", "retrigger_event_impl"),
+        ("application/action_pipeline/actions.rs", "execute_action_impl"),
+        ("application/generation_gate/slot.rs", "release_owned_slot"),
+    }
+)
+
 # Standard-library / wrapper types whose uppercase identifiers are NOT receiver smells.
 STDLIB_WRAPPER_TYPES: frozenset[str] = frozenset(
     {
@@ -111,6 +137,13 @@ class FreeFn:
     first_param_raw: str
     bare_type: str
     category: str
+
+
+def is_suppressed(path: Path, name: str) -> bool:
+    """Match suppression entries against paths relative to `src/`."""
+    parts = path.parts
+    relative = Path(*parts[parts.index("src") + 1 :]) if "src" in parts else path
+    return (relative.as_posix(), name) in SUPPRESSED_FREE_FNS
 
 
 def strip_string_and_comment_chars(source: str) -> str:
@@ -541,8 +574,13 @@ def main(argv: list[str]) -> int:
     for root in roots:
         findings.extend(scan(root))
     findings.sort(key=lambda f: (str(f.file), f.line))
+    findings = [
+        finding
+        for finding in findings
+        if finding.category != "SMELL" or not is_suppressed(finding.file, finding.name)
+    ]
     print(render(findings))
-    return 0
+    return 1 if any(finding.category == "SMELL" for finding in findings) else 0
 
 
 if __name__ == "__main__":

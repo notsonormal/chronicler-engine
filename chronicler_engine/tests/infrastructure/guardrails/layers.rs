@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn test_check_application_storage_direct_catches_violation() {
         let violations = check_application_storage_direct(
-            "application/query_handlers.rs",
+            "application/narrative_prompt/assembler.rs",
             "use crate::adapters::driven::storage::Storage;\n",
         );
         assert_eq!(violations.len(), 1);
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn test_check_application_storage_direct_skips_tests_files() {
         let violations = check_application_storage_direct(
-            "application/query_handlers_tests.rs",
+            "application/application_service_tests.rs",
             "use crate::adapters::driven::storage::Storage;\n",
         );
         assert_eq!(violations.len(), 0);
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn test_check_application_storage_direct_skips_comments() {
         let violations = check_application_storage_direct(
-            "application/query_handlers.rs",
+            "application/narrative_prompt/assembler.rs",
             "// use crate::adapters::driven::storage::Storage;\n",
         );
         assert_eq!(violations.len(), 0);

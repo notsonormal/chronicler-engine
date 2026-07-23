@@ -1,13 +1,16 @@
-//! Integration test binary root: wires shared helpers (`test_utils`, `pipeline_helpers`, `fixtures`) and re-exports factory helpers (`failing_service`, `working_service`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
+//! Integration test binary root: wires shared helpers (`test_utils`, `fixtures`, `storage_ext`, `application_ext`) and re-exports factory helpers (`failing_service`, `working_service`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
 
 #[path = "../test_utils/mod.rs"]
 mod test_utils;
 
-#[path = "../helpers/pipeline_helpers.rs"]
-mod pipeline_helpers;
-
 #[path = "../helpers/fixtures.rs"]
 mod fixtures;
+
+#[path = "../helpers/storage_ext.rs"]
+mod storage_ext;
+
+#[path = "../helpers/application_ext.rs"]
+mod application_ext;
 
 #[path = "../helpers/sqlite_test_app_builder.rs"]
 mod sqlite_test_app_builder;

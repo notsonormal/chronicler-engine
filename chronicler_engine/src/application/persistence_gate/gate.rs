@@ -3,17 +3,21 @@
 //!
 //! `save_state`: snapshot only. `save_message_and_snapshot`: snapshot + message + retry-swipe link. Both route through `write_snapshot`.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+
+use chrono::Utc;
 
 use crate::adapters::driven::storage::PresetStore;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::worlds::WorldBundle;
+use crate::application::errors::ApplicationError;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::template::{render_template, TemplateVars};
-use crate::error::EngineError;
+use crate::error::{EngineError, internal_error};
 
 #[derive(Clone)]
 pub struct PersistenceGate {
@@ -117,7 +121,7 @@ impl PersistenceGate {
     }
 
     pub fn load_messages_with_swipes(&self) -> Result<Vec<Message>, EngineError> {
-        crate::application::application_service::load_messages_with_swipes(&self.storage)
+        self.storage.load_messages_with_swipes()
     }
 
     pub fn load_messages_into_state(&self, state: &mut GameState) {
@@ -158,12 +162,90 @@ impl PersistenceGate {
     }
 
     pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
-        crate::application::application_service::load_messages_with_swipes(&self.storage)
+        self.storage.load_messages_with_swipes()
     }
 
     pub fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
         let index = self.storage.require_active_swipe_index(id)?;
         self.storage.update_swipe_text(id, index, text)
+    }
+
+    pub fn switch_swipe(
+        &self,
+        is_generating: &Arc<AtomicBool>,
+        message_id: u64,
+        swipe_index: usize,
+    ) -> Result<(), ApplicationError> {
+        if is_generating.load(Ordering::SeqCst) {
+            return Err(ApplicationError::ConcurrentGeneration);
+        }
+
+        let messages = self.load_messages()?;
+        let is_last = messages.last().map(|m| m.id == message_id).unwrap_or(false);
+        if !is_last {
+            return Err(ApplicationError::validation(
+                "Only the last message can be swiped",
+            ));
+        }
+
+        self.storage.update_active_swipe(message_id, swipe_index)?;
+
+        let target_msg = messages
+            .iter()
+            .find(|m| m.id == message_id)
+            .ok_or_else(|| app_err_internal("Message not found"))?;
+
+        let target_swipe = target_msg
+            .swipes
+            .get(swipe_index)
+            .ok_or_else(|| app_err_internal("Swipe index out of bounds"))?;
+
+        let snapshot_id = target_swipe
+            .snapshot_id
+            .ok_or_else(|| app_err_internal("Swipe has no associated snapshot"))?;
+
+        let mut snapshot = self
+            .storage
+            .load_snapshot_by_id(snapshot_id)?
+            .ok_or_else(|| app_err_internal("Snapshot not found"))?;
+
+        snapshot.created_at = Utc::now();
+        self.storage.save_snapshot(&snapshot)?;
+
+        Ok(())
+    }
+
+    pub fn edit_history(&self, id: u64, text: String) -> Result<(), ApplicationError> {
+        let latest = self.storage.load_latest_snapshot()?;
+        let mut guard = self.load_or_fresh();
+        guard.narrative.history.edit(id, text.clone())?;
+
+        if latest.is_some() {
+            let snapshot = GameStateSnapshot::from_game_state(&guard);
+            self.storage.save_snapshot(&snapshot)?;
+            self.update_message_text(id, &text)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn delete_last(&self) -> Result<(), ApplicationError> {
+        let mut guard = self.load_or_fresh();
+        let last_id = guard
+            .narrative
+            .history
+            .last()
+            .map(|m| m.id)
+            .ok_or_else(|| {
+                ApplicationError::Engine(EngineError::Internal(internal_error("History is empty")))
+            })?;
+
+        guard.narrative.history.delete_last()?;
+        let snapshot = GameStateSnapshot::from_game_state(&guard);
+        self.storage.save_snapshot(&snapshot)?;
+        self.storage.delete_message(last_id)?;
+
+        Ok(())
     }
 
     pub fn find_retry_anchor<'a>(
@@ -192,4 +274,8 @@ impl PersistenceGate {
     pub fn set_game_id(&self, game_id: u64) {
         self.storage.set_game_id(game_id);
     }
+}
+
+fn app_err_internal(msg: impl Into<String>) -> ApplicationError {
+    ApplicationError::Engine(EngineError::Internal(internal_error(msg)))
 }

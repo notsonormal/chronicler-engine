@@ -20,7 +20,7 @@ Inline cleanup PR on `simpler-hexagon` — no new T2 map ticket.
 - **MODIFIED** `chronicler_engine/src/application/generation_gate/slot.rs` — `release_owned_slot` moves the `is_generating.store(false)` inside the existing `registry.write()` scope, after the `any_generating()` scan (still inside the lock).
 - **MODIFIED** `chronicler_engine/src/application/application_service.rs` — drop dead `claim_generation_slot` + `release_generation_slot` `#[allow(dead_code)]` façade delegates (zero non-façade callers post-07c).
 - **MODIFIED** `chronicler_engine/src/adapters/driving/http/app_state.rs` — drop dead `replace_shutdown_token` (zero callers post-07c reset_handler slim).
-- **NEW** TOCTOU regression test in `src/application/is_generating_invariant_tests.rs` — observable-behavior test using only public `app.is_generating()` API (no field widening). Exercises the race: claim A → reset/start B → release A → assert projection still `true` while B active.
+- **NEW** TOCTOU regression test in `src/application/application_service_tests.rs` (is_generating invariant section) — observable-behavior test using only public `app.is_generating()` API (no field widening). Exercises the race: claim A → reset/start B → release A → assert projection still `true` while B active.
 - **MODIFIED** `chronicler_engine/docs/adr/adr-030-is-generating-invariant.md` — amendment note: projection writes now occur inside the registry write lock on both claim and release paths (closes pre-fix TOCTOU); documents heal's authoritative source-of-truth inside the lock.
 
 No new files. No new types. No `pub(crate)` visibility changes. ~4 SP total.
@@ -49,7 +49,7 @@ No new files. No new types. No `pub(crate)` visibility changes. ~4 SP total.
 ### Phase 3: TOCTOU regression test
 
 - [ ] #### Task 3.1: Add TOCTOU invariant test (1 SP)
-  - New test in `src/application/is_generating_invariant_tests.rs`: `test_projection_invariant_under_interleaved_release` (Concern 1 resolution — observable-behavior only, no field widening)
+  - New test in `src/application/application_service_tests.rs` (is_generating invariant section): `test_projection_invariant_under_interleaved_release` (Concern 1 resolution — observable-behavior only, no field widening)
   - **Test shape** (uses existing public API `app.is_generating()` + `app.process_action()` only, no `registry` field access):
     1. Setup app with a `MockBackend` that has a configurable delay (≥200ms) so generation A stays in-flight during the test window.
     2. Start generation A: `app.process_action("look")` → `ProcessActionResult::Started`. Assert `app.is_generating().load() == true`.
@@ -90,7 +90,7 @@ No new files. No new types. No `pub(crate)` visibility changes. ~4 SP total.
 - **SubTask 1.1.3**: `cargo build` green. `rg '!self.is_generating.load' src/application/generation_gate/gate.rs` returns 1 (not 2). `heal_stale_generating` has single registry write-lock acquisition; inner re-check of `slot.is_generating()` gates the clear (code review).
 - **Task 1.1 (overall, primary verifies)**: `cargo test` green. Primary reviews all 3 modified files; confirms lock-order + heal structure visually before running tests.
 - **Task 2.1**: `cargo build` green. `rg 'replace_shutdown_token|claim_generation_slot\(|release_generation_slot\(' src/application/application_service.rs src/adapters/driving/http/app_state.rs` returns 0.
-- **Task 3.1**: New test passes. `rg 'test_projection_invariant_under_interleaved_release' src/application/is_generating_invariant_tests.rs` returns match. `cargo test --test invariant_contract` passes. `cargo test generation_guard_tests` passes.
+- **Task 3.1**: New test passes. `rg 'test_projection_invariant_under_interleaved_release' src/application/application_service_tests.rs` returns match. `cargo test --test invariant_contract` passes. `cargo test generation_guard_tests` passes.
 - **Task 4.1**: `rg 'Lock-order fix|TOCTOU' chronicler_engine/docs/adr/adr-030-is-generating-invariant.md` returns match.
 
 ## Assumptions

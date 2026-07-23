@@ -1,7 +1,7 @@
 use crate::domain::model::message::Message;
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::backend::{Storage, TestOverride};
-use crate::test_support::{dummy_message, sqlite_storage};
+use crate::test_support::{dummy_message, dummy_swipe, sqlite_storage};
 
 #[test]
 fn test_insert_message_returns_positive_id() {
@@ -44,6 +44,52 @@ fn test_insert_message_preserves_swipes() {
     assert_eq!(loaded[0].swipes.len(), 2);
     assert_eq!(loaded[0].swipes[0].text, "test");
     assert_eq!(loaded[0].swipes[1].text, "alt");
+}
+
+#[test]
+fn test_load_messages_with_swipes_restores_swipes_and_active_index() {
+    let storage = Storage::new_in_memory();
+    storage.set_game_id(1);
+    let message_id = storage.insert_message(&dummy_message("original")).unwrap();
+    storage
+        .insert_swipe(message_id, &dummy_swipe("original"), 0)
+        .unwrap();
+    storage
+        .insert_swipe(message_id, &dummy_swipe("alternate"), 1)
+        .unwrap();
+    storage.update_active_swipe(message_id, 1).unwrap();
+
+    let messages = storage.load_messages_with_swipes().unwrap();
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].active_swipe_index, 1);
+    assert_eq!(messages[0].swipes.len(), 2);
+    assert_eq!(messages[0].swipes[0].text, "original");
+    assert_eq!(messages[0].swipes[1].text, "alternate");
+    assert_eq!(messages[0].text(), "alternate");
+}
+
+#[test]
+fn test_load_messages_with_swipes_restores_swipes_and_active_index_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    storage.set_game_id(1);
+    let message_id = storage.insert_message(&dummy_message("original")).unwrap();
+    storage
+        .insert_swipe(message_id, &dummy_swipe("original"), 0)
+        .unwrap();
+    storage
+        .insert_swipe(message_id, &dummy_swipe("alternate"), 1)
+        .unwrap();
+    storage.update_active_swipe(message_id, 1).unwrap();
+
+    let messages = storage.load_messages_with_swipes().unwrap();
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].active_swipe_index, 1);
+    assert_eq!(messages[0].swipes.len(), 2);
+    assert_eq!(messages[0].swipes[0].text, "original");
+    assert_eq!(messages[0].swipes[1].text, "alternate");
+    assert_eq!(messages[0].text(), "alternate");
 }
 
 #[test]

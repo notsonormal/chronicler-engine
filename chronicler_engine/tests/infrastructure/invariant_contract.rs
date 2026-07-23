@@ -27,15 +27,21 @@ use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
 use chronicler_engine::application::generation_gate::slot::GenerationSlot;
 use chronicler_engine::test_support::make_test_recorder;
 
+#[path = "../test_utils/mod.rs"]
+mod test_utils;
+
+#[path = "../helpers/application_ext.rs"]
+mod application_ext;
 #[path = "../helpers/fixtures.rs"]
 mod fixtures;
-#[path = "../helpers/pipeline_helpers.rs"]
-mod pipeline_helpers;
 #[path = "../helpers/sqlite_test_app_builder.rs"]
 mod sqlite_test_app_builder;
+#[path = "../helpers/storage_ext.rs"]
+mod storage_ext;
 
-use pipeline_helpers::{create_minimal_test_state, latest_state};
+use fixtures::create_minimal_test_state;
 use fixtures::create_test_state;
+use application_ext::PipelineHelpers;
 
 fn shopkeeper_npc() -> NpcCard {
     NpcCard {
@@ -223,13 +229,13 @@ fn test_inv004_cancellable_at_boundaries() {
     let started_for = app.current_game_id();
     let switched_to = started_for.wrapping_add(99);
     let pipeline = app.game_service().pipeline();
-    let state_for_thread = latest_state(&app);
+    let state_for_thread = app.latest_state();
 
     let outcome = std::thread::scope(|s| {
         let handle =
             s.spawn(|| pipeline.run_from_input(&app, state_for_thread, "look".to_string()));
         assert!(
-            pipeline_helpers::wait_for_condition(
+            test_utils::wait::wait_for_condition_sync(
                 std::time::Duration::from_secs(5),
                 std::time::Duration::from_millis(50),
                 || {
@@ -250,7 +256,7 @@ fn test_inv004_cancellable_at_boundaries() {
         "INV-004: pipeline should return Cancelled on game_id mismatch at boundary, got {outcome:?}"
     );
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -493,7 +499,7 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     assert!(
-        pipeline_helpers::wait_for_condition(
+        test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
             || mock_backend_raw.narration_started.load(Ordering::SeqCst),
@@ -507,7 +513,7 @@ async fn test_p4_concurrent_happy_path() {
     assert_ne!(game2, game1, "reset must produce a distinct game id");
 
     assert!(
-        pipeline_helpers::wait_for_condition(
+        test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
             || !app.is_generating().load(Ordering::SeqCst),
@@ -515,7 +521,7 @@ async fn test_p4_concurrent_happy_path() {
         "gen A's pipeline must complete (slot released) within timeout"
     );
 
-    let state_after_a = latest_state(&app);
+    let state_after_a = app.latest_state();
     let a_present = state_after_a
         .narrative
         .history
@@ -541,7 +547,7 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     assert!(
-        pipeline_helpers::wait_for_condition(
+        test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
             || !app.is_generating().load(Ordering::SeqCst),
@@ -549,7 +555,7 @@ async fn test_p4_concurrent_happy_path() {
         "gen B's pipeline must complete within timeout"
     );
 
-    let state_after_b = latest_state(&app);
+    let state_after_b = app.latest_state();
     let b_present = state_after_b
         .narrative
         .history
@@ -617,7 +623,7 @@ async fn test_p4_concurrent_triple_overlap() {
     );
 
     assert!(
-        pipeline_helpers::wait_for_condition(
+        test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
             || mock_backend_raw.narration_started.load(Ordering::SeqCst),
@@ -654,7 +660,7 @@ async fn test_p4_concurrent_triple_overlap() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     assert!(
-        pipeline_helpers::wait_for_condition(
+        test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(10),
             std::time::Duration::from_millis(100),
             || !app.is_generating().load(Ordering::SeqCst),
@@ -668,7 +674,7 @@ async fn test_p4_concurrent_triple_overlap() {
         "active game must be game 3 at end of test"
     );
 
-    let state3 = latest_state(&app);
+    let state3 = app.latest_state();
     let history_texts: Vec<String> = state3
         .narrative
         .history

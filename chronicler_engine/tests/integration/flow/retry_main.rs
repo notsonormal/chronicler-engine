@@ -14,11 +14,9 @@ use chronicler_engine::domain::model::trigger::{
 use chronicler_engine::{TestAppBuilder, TestDataBuilder};
 
 use crate::make_test_recorder_with_storage;
-use crate::pipeline_helpers::{
-    add_input_and_save, create_minimal_test_state, latest_snapshot, latest_state, save_state,
-    wait_for_generation_complete,
-};
+use crate::fixtures::create_minimal_test_state;
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
+use crate::application_ext::PipelineHelpers;
 
 fn base_data(npcs: Vec<NpcCard>) -> chronicler_engine::test_support::TestData {
     TestDataBuilder::default_test()
@@ -45,7 +43,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "walk around");
+    app.add_input_and_save("walk around");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -64,10 +62,10 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        app.wait_for_generation_complete(1000),
         "First execution should complete"
     );
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert_eq!(
         guard.movement.current_room_id, "room1",
         "First execution: player should stay in room1"
@@ -75,10 +73,10 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
     retry_last_response_impl(&app);
 
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        app.wait_for_generation_complete(1000),
         "Retry should complete"
     );
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Retry should apply NEW quantifier result and move player to room2"
@@ -107,7 +105,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "approach the innkeeper");
+    app.add_input_and_save("approach the innkeeper");
 
     let llm_backend =
         crate::make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
@@ -119,10 +117,10 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "approach the innkeeper".to_string());
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        app.wait_for_generation_complete(1000),
         "First execution should complete"
     );
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let first_narration = guard
         .narrative
         .history()
@@ -137,10 +135,10 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 
     retry_last_response_impl(&app);
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        app.wait_for_generation_complete(1000),
         "Retry should complete"
     );
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let retry_narration = guard
         .narrative
         .history()
@@ -171,7 +169,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "walk around");
+    app.add_input_and_save("walk around");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -190,20 +188,20 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
     );
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
-    let _snap = latest_snapshot(&app);
+    assert!(app.wait_for_generation_complete(1000));
+    let _snap = app.latest_snapshot();
 
     retry_last_response_impl(&app);
-    assert!(wait_for_generation_complete(&app, 1000));
-    let _snap = latest_snapshot(&app);
-    let guard = latest_state(&app);
+    assert!(app.wait_for_generation_complete(1000));
+    let _snap = app.latest_snapshot();
+    let guard = app.latest_state();
     assert_eq!(guard.movement.current_room_id, "room2");
 
     retry_last_response_impl(&app);
-    assert!(wait_for_generation_complete(&app, 1000));
-    let _snap = latest_snapshot(&app);
+    assert!(app.wait_for_generation_complete(1000));
+    let _snap = app.latest_snapshot();
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let history = guard.narrative.history();
     assert!(
         !history.is_empty(),
@@ -227,7 +225,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "walk around");
+    app.add_input_and_save("walk around");
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -239,17 +237,17 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        app.wait_for_generation_complete(1000),
         "First execution should complete"
     );
 
     retry_last_response_impl(&app);
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        app.wait_for_generation_complete(1000),
         "Retry should complete"
     );
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let input_msg = guard
         .narrative
         .history
@@ -279,7 +277,7 @@ fn test_retry_after_edited_input_uses_new_text() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "walk around");
+    app.add_input_and_save("walk around");
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -290,9 +288,9 @@ fn test_retry_after_edited_input_uses_new_text() {
     );
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
+    assert!(app.wait_for_generation_complete(1000));
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let first_narration = guard
         .narrative
         .history()
@@ -306,7 +304,7 @@ fn test_retry_after_edited_input_uses_new_text() {
     );
 
     {
-        let mut state = latest_state(&app);
+        let mut state = app.latest_state();
         if let Some(msg) = state
             .narrative
             .history
@@ -318,12 +316,12 @@ fn test_retry_after_edited_input_uses_new_text() {
                 swipe.text = "sprint forward".to_string();
             }
         }
-        save_state(&app, &state);
+        app.save_test_state(&state);
     }
 
     retry_last_response_impl(&app);
-    assert!(wait_for_generation_complete(&app, 1000));
-    let guard = latest_state(&app);
+    assert!(app.wait_for_generation_complete(1000));
+    let guard = app.latest_state();
     let retry_narration = guard
         .narrative
         .history()
@@ -381,7 +379,7 @@ fn test_main_retry_reevaluates_triggers() {
         })
         .build_service()
         .unwrap();
-    add_input_and_save(&app, "walk around");
+    app.add_input_and_save("walk around");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -399,8 +397,8 @@ fn test_main_retry_reevaluates_triggers() {
     );
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
-    let guard = latest_state(&app);
+    assert!(app.wait_for_generation_complete(1000));
+    let guard = app.latest_state();
     let events_after_execute = guard
         .narrative
         .history()
@@ -413,8 +411,8 @@ fn test_main_retry_reevaluates_triggers() {
     );
 
     retry_last_response_impl(&app);
-    assert!(wait_for_generation_complete(&app, 1000));
-    let guard = latest_state(&app);
+    assert!(app.wait_for_generation_complete(1000));
+    let guard = app.latest_state();
     let events_after_retry = guard
         .narrative
         .history()
@@ -443,7 +441,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "walk around");
+    app.add_input_and_save("walk around");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -460,11 +458,11 @@ fn test_retry_completes_when_quantifier_returns_none() {
     );
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "walk around".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
+    assert!(app.wait_for_generation_complete(1000));
 
     retry_last_response_impl(&app);
-    assert!(wait_for_generation_complete(&app, 1000));
-    let guard = latest_state(&app);
+    assert!(app.wait_for_generation_complete(1000));
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Retry should complete even if quantifier returns None"
@@ -540,7 +538,7 @@ fn test_retry_no_pre_main_snapshot() {
             )),
         ));
 
-    add_input_and_save(&setup_app, "examine room");
+    setup_app.add_input_and_save("examine room");
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -561,21 +559,21 @@ fn test_retry_no_pre_main_snapshot() {
             std::sync::Arc::new(service),
         ));
     execute_action_impl(&app, "examine room".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
+    assert!(app.wait_for_generation_complete(1000));
 
-    let state_before_reset = latest_state(&app);
+    let state_before_reset = app.latest_state();
 
     {
         let conn = db_pool.conn();
         let _ = conn.execute("DELETE FROM game_state_snapshots WHERE game_id = 1", []);
     }
     {
-        save_state(&app, &state_before_reset);
+        app.save_test_state(&state_before_reset);
     }
 
     retry_last_response_impl(&app);
 
-    let stable = wait_for_generation_complete(&app, 500);
+    let stable = app.wait_for_generation_complete(500);
     assert!(
         stable,
         "Retry with no pre-main snapshot should complete (possibly with error)"
@@ -598,7 +596,7 @@ fn test_movement_with_arrival_narration_retry() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "walk to room2");
+    app.add_input_and_save("walk to room2");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -615,9 +613,9 @@ fn test_movement_with_arrival_narration_retry() {
     );
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "walk to room2".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
+    assert!(app.wait_for_generation_complete(1000));
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let arrival_count_before = guard
         .narrative
         .history()
@@ -630,9 +628,9 @@ fn test_movement_with_arrival_narration_retry() {
     );
 
     retry_last_response_impl(&app);
-    assert!(wait_for_generation_complete(&app, 1000));
+    assert!(app.wait_for_generation_complete(1000));
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Retry should still end in room2"
@@ -663,7 +661,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app, "examine room");
+    app.add_input_and_save("examine room");
 
     let llm_backend =
         crate::make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
@@ -674,7 +672,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     let app = TestAppBuilder::from_base(&app, Arc::new(service));
     execute_action_impl(&app, "examine room".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
+    assert!(app.wait_for_generation_complete(1000));
 
     let msgs = app.load_messages().unwrap();
     let narration = msgs
@@ -685,7 +683,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
     assert_eq!(narration.swipes.len(), 1);
 
     retry_last_response_impl(&app);
-    assert!(wait_for_generation_complete(&app, 1000));
+    assert!(app.wait_for_generation_complete(1000));
 
     let msgs = app.load_messages().unwrap();
     let narrations: Vec<_> = msgs

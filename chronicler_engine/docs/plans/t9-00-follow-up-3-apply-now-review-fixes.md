@@ -15,17 +15,17 @@ Rejected: full A3 collapse to 2 helpers, A6 `tests/_support/` crate move, S6 per
 | File | Change |
 |------|--------|
 | `src/test_support/context.rs` | `seed_test_world_into_storage`: 5 sites swap silent error suppression → `.expect("test setup: ...")` matching `TestData::seed_into` |
-| `tests/helpers/sqlite_test_app_builder.rs` | `type StateMut` drop `+ Send`; `type GameServiceBuilder` drop `+ 'static` explicit (still implicit); delete `BackendSpec::Default` variant + doc comment + match arm + `use build_game_service_for_tests` import + `backend: BackendSpec::Default` initializer (→ use any remaining variant; init via `GameServiceFn` placeholder or unwrap default) |
+| `tests/helpers/sqlite_test_app_builder.rs` | `type StateMut` drop `+ Send`; `type GameServiceBuilder` drop `+ 'static` explicit (still implicit); delete `BackendSpec::Default` variant + doc comment + match arm + legacy wiring import + `backend: BackendSpec::Default` initializer (→ use any remaining variant; init via `GameServiceFn` placeholder or unwrap default) |
 
 ### `with_data` initializer question (single open decision — resolving in plan)
 
-Current: `backend: BackendSpec::Default`. After dropping `Default`, need a different initializer. Options: (a) init to `GameServiceFn` with a closure calling `build_game_service_for_tests` (defers to the same prod fn, preserving the "if no backend set, use the prod wiring" intent without needing an enum variant), or (b) make `backend` an `Option<BackendSpec>` + error at `build_service` if unset.
+Current: `backend: BackendSpec::Default`. After dropping `Default`, need a different initializer. Options: (a) init to `GameServiceFn` with a closure calling legacy production wiring (defers to same composition path, preserving "if no backend set, use prod wiring" intent without needing enum variant), or (b) make `backend` an `Option<BackendSpec>` + error at `build_service` if unset.
 
-Choosing (a): keeps the "default to prod wiring" semantic that `Default` variant provided, without crowding the enum. The closure: `Box::new(|_storage| Arc::new(build_game_service_for_tests(...)))` — but wait, this still requires the `build_game_service_for_tests` import. So import stays if (a).
+Choosing (a): keeps "default to prod wiring" semantic that `Default` variant provided, without crowding enum. Closure would still require legacy wiring import, so import stays if (a).
 
-Re-choosing (b) — simpler: `backend: Option<BackendSpec>` starting `None`, and `build_service` `match` adds a `None` arm returning `Err` or panicking. Since every existing caller sets a backend, `None` is truly a user error. This drops the `build_game_service_for_tests` import from sqlite_test_app_builder.rs entirely (it's still used by `test_app_builder.rs`, unaffected).
+Re-choosing (b) — simpler: `backend: Option<BackendSpec>` starting `None`, and `build_service` `match` adds a `None` arm returning `Err` or panicking. Since every existing caller sets a backend, `None` is truly a user error. This drops legacy wiring import from sqlite_test_app_builder.rs entirely (still used by test_app_builder.rs at that time, unaffected).
 
-**Decision locked: (b)** — `backend: Option<BackendSpec>`, new `None` arm panics with clear message `"SqliteTestAppBuilder: no backend set; call .game_service_fn(...) or .mock_backend(...) before .build_service()"`. Import `build_game_service_for_tests` removed from this file.
+**Decision locked: (b)** — `backend: Option<BackendSpec>`, new `None` arm panics with clear message `"SqliteTestAppBuilder: no backend set; call .game_service_fn(...) or .mock_backend(...) before .build_service()"`. Legacy wiring import removed from this file.
 
 ## Implementation
 
@@ -54,7 +54,7 @@ Single phase — 3 SP total, 3 tasks, sequential.
 
 - [ ] #### Task 1.3: Delete `BackendSpec::Default` variant (1 SP)
   - In `tests/helpers/sqlite_test_app_builder.rs`:
-    - Remove `use chronicler_engine::bootstrap::wiring::build_game_service_for_tests;` (line 22)
+    - Remove legacy wiring import (line 22)
     - Remove `Default` variant + 2-line doc comment from `enum BackendSpec` (lines ~42-44)
     - Change `backend` field type to `Option<BackendSpec>`; initializer `backend: None`
     - Add `None` arm at top of `match self.backend` in `build_service`: `panic!("SqliteTestAppBuilder: no backend set; call .game_service_fn(...) or .mock_backend(...) before .build_service()")`

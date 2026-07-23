@@ -17,7 +17,7 @@ pub mod templates;
 pub mod view_models;
 pub mod worlds_fragment;
 
-pub use app_state::{AppState, ServerResources};
+pub use app_state::AppState;
 pub use server_impl::{run_server_with_config, ServerConfig};
 
 #[cfg(test)]

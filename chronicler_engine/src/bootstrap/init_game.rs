@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::adapters::driven::storage::Storage;
-use crate::application::application_service::load_messages_with_swipes;
 use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
@@ -55,7 +54,7 @@ pub(crate) fn load_game_state(
     match storage.load_latest_snapshot() {
         Ok(Some(snap)) => {
             let mut new_state = GameState::from_snapshot(&snap);
-            if let Ok(msgs) = load_messages_with_swipes(storage) {
+            if let Ok(msgs) = storage.load_messages_with_swipes() {
                 new_state.narrative.history.replace(msgs);
             }
             Ok(new_state)
@@ -69,7 +68,7 @@ pub(crate) fn load_game_state(
             }
             let initial_snapshot = GameStateSnapshot::from_game_state(&new_state);
             let snapshot_id = storage.save_snapshot(&initial_snapshot)?;
-            // Snapshot is debug/audit only; `messages` table is source of truth on load (ADR-023).
+
             if let Some(msg) = new_state.narrative.history.last_mut() {
                 try_persist_initial_message(msg, storage, snapshot_id)?;
             }
@@ -109,7 +108,7 @@ pub fn spawn_arrival_task_if_needed(
     runtime: &tokio::runtime::Runtime,
     settings: &Arc<RwLock<AppSettings>>,
     app: &Arc<crate::application::application_service::DefaultApplicationService>,
-    storage: &Arc<crate::adapters::driven::storage::Storage>,
+    _storage: &Arc<crate::adapters::driven::storage::Storage>,
     db_pool: &crate::adapters::driven::storage::db::DbPool,
     request: ArrivalSpawnRequest,
 ) {
@@ -130,7 +129,7 @@ pub fn spawn_arrival_task_if_needed(
         db_pool.clone(),
         PRESET_STORAGE_GAME_ID,
     );
-    let (arrival_preset, response_length, max_context_tokens, max_tokens, connection) =
+    let (arrival_preset, response_length, max_context_tokens, max_tokens) =
         with_settings(settings, |guard| {
             let preset_id = &guard.active_system_prompt_preset_id;
             let preset = preset_storage.get_preset(preset_id).ok().flatten();
@@ -138,24 +137,10 @@ pub fn spawn_arrival_task_if_needed(
             let max_context_tokens = conn.resolve_max_context_tokens();
             let max_tokens = conn.max_tokens;
             let response_length = guard.response_length.clone();
-            (
-                preset,
-                response_length,
-                max_context_tokens,
-                max_tokens,
-                conn,
-            )
+            (preset, response_length, max_context_tokens, max_tokens)
         });
 
-    let recorder =
-        match crate::bootstrap::llm_factory::get_llm_recorder_for(&connection, Arc::clone(storage))
-        {
-            Ok(recorder) => recorder,
-            Err(e) => {
-                tracing::error!("Failed to create LLM recorder for arrival task: {e}");
-                return;
-            }
-        };
+    let recorder = Arc::clone(&app.game_service().llm_recorder);
 
     let task_ctx = crate::application::arrival_service::ArrivalTaskContext {
         app: Arc::clone(app),

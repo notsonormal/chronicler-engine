@@ -14,7 +14,7 @@ use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
-use super::renderers::{internal_error, ok, render_action_area, render_error, service_unavailable};
+use super::renderers::{internal_error, ok, render_error, service_unavailable};
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
@@ -60,7 +60,7 @@ pub async fn action_confirm_handler(
     let action_response = dispatch_action(&state, command).await;
     let status = action_response.status();
 
-    let action_area_html = match render_action_area(&state) {
+    let action_area_html = match state.render_action_area() {
         Ok(html) => html,
         Err(e) => {
             tracing::error!("Failed to render action area: {e}");

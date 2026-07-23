@@ -96,3 +96,4 @@ The schema files are authoritative for seed-file fields and validation.
 - [ADR-024: Migrate Game Data to SQLite with Seed Pattern](../../docs/adr/adr-024-game-data-migration-to-sqlite.md) — historical record of the seed pattern.
 - [ADR-025: Multi-World Data Foundation](../../docs/adr/adr-025-multi-world-data-foundation.md) — historical record of the multi-world data foundation.
 - [ADR-026: Relocate Persona Binding from World to Game](../../docs/adr/adr-026-persona-relocation-to-game.md) — historical record of per-game persona binding.
+- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md) — historical record restricting port-trait × adapter-impl imports to the composition root.

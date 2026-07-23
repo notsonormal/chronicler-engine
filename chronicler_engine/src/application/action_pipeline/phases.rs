@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::application::application_service::map_llm_error;
 use crate::domain::engine::action_processing::{
     FreeActionContext, TriggerMatch, apply_npc_events, commit_trigger_narration,
     execute_freeaction_impl,
@@ -19,7 +18,7 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
-use crate::application::narrative_prompt::{NpcContext, build_narration_prompt, make_prompt_context};
+use crate::application::narrative_prompt::{NpcContext, make_prompt_context};
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
@@ -134,8 +133,7 @@ impl<'a> PipelineRun<'a> {
             &history,
         );
 
-        let assembled = match build_narration_prompt(
-            &context,
+        let assembled = match context.build_narration_prompt(
             &preset,
             &inputs.world.global_rules,
             Some(&response_length),
@@ -143,7 +141,7 @@ impl<'a> PipelineRun<'a> {
             self.pipeline.assembler.max_tokens,
         ) {
             Ok(a) => a,
-            Err(e) => return self.error_return(state, map_llm_error(&e)),
+            Err(e) => return self.error_return(state, e.llm_error_string()),
         };
 
         tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
@@ -154,7 +152,7 @@ impl<'a> PipelineRun<'a> {
             Some(assembled.max_tokens),
         ) {
             Ok(result) => result,
-            Err(e) => return self.error_return(state, map_llm_error(&e)),
+            Err(e) => return self.error_return(state, e.llm_error_string()),
         };
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;

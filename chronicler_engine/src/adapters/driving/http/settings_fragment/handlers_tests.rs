@@ -12,71 +12,33 @@ use crate::adapters::driving::http::settings_fragment::handlers::{
 };
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
-use crate::application::application_service::DefaultApplicationService;
+use crate::bootstrap::wiring::build_app_graph_for_tests;
 use tokio_util::sync::CancellationToken;
 
 fn make_test_app_state() -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(AppSettings::default()));
-    let game_service = Arc::new(
-        crate::bootstrap::wiring::build_game_service_for_tests(
-            Arc::clone(&settings),
-            Arc::clone(&storage),
-            Arc::new(Storage::new_in_memory()),
-        )
-        .expect("build_game_service_for_tests should succeed"),
-    );
-    let text_check_service = Arc::new(
-        crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
-    );
-    AppState {
-        storage: Arc::clone(&storage),
-        preset_storage: Arc::new(Storage::new_in_memory()),
-        game_service: Arc::clone(&game_service),
-        application_service: Arc::new(DefaultApplicationService::new(
-            Arc::clone(&storage),
-            Arc::new(Storage::new_in_memory()),
-            Arc::clone(&settings),
-            CancellationToken::new(),
-            Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            Arc::clone(&game_service),
-        )),
-        text_check_service,
-        settings,
-        shutdown_token: Arc::new(RwLock::new(CancellationToken::new())),
-    }
+    let wired = build_app_graph_for_tests(
+        Arc::clone(&settings),
+        Arc::clone(&storage),
+        Arc::new(Storage::new_in_memory()),
+        None,
+    )
+    .expect("build_app_graph_for_tests should succeed");
+    AppState::from_wired(wired, CancellationToken::new())
 }
 
 fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(settings));
-    let game_service = Arc::new(
-        crate::bootstrap::wiring::build_game_service_for_tests(
-            Arc::clone(&settings),
-            Arc::clone(&storage),
-            Arc::new(Storage::new_in_memory()),
-        )
-        .expect("build_game_service_for_tests should succeed"),
-    );
-    let text_check_service = Arc::new(
-        crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
-    );
-    AppState {
-        storage: Arc::clone(&storage),
-        preset_storage: Arc::new(Storage::new_in_memory()),
-        game_service: Arc::clone(&game_service),
-        application_service: Arc::new(DefaultApplicationService::new(
-            Arc::clone(&storage),
-            Arc::new(Storage::new_in_memory()),
-            Arc::clone(&settings),
-            CancellationToken::new(),
-            Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            Arc::clone(&game_service),
-        )),
-        text_check_service,
-        settings,
-        shutdown_token: Arc::new(RwLock::new(CancellationToken::new())),
-    }
+    let wired = build_app_graph_for_tests(
+        Arc::clone(&settings),
+        Arc::clone(&storage),
+        Arc::new(Storage::new_in_memory()),
+        None,
+    )
+    .expect("build_app_graph_for_tests should succeed");
+    AppState::from_wired(wired, CancellationToken::new())
 }
 
 #[tokio::test]

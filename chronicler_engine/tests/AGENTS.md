@@ -20,8 +20,10 @@ Examples:
     - `structure.rs` — Browser tests for DOM structure on page load: header shows the game title, connection-status indicator renders, and the action area exposes the expected input affordances.
     - `trigger.rs` — Browser tests for trigger-driven narration: `look` command emits narration entries, subsequent quantifier passes detect NPCs in the current room, and NPCs without triggers produce no narration.
 - **helpers/**
+    - `application_ext.rs` — Test-only `DefaultApplicationService` extension trait for driving pipeline scenarios.
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage, world, character, and game-state instances with deterministic defaults so tests can focus on the behaviour under test.
-    - `pipeline_helpers.rs` — Shared pipeline helpers used by integration tests across binaries; builds a minimal `GameState` and a few derived fixtures for action-pipeline scenarios.
+    - `sqlite_test_app_builder.rs` — Integration-only SQLite-backed application builder for integration tests.
+    - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP integration tests for the action and action-confirm handlers: graceful degradation when state load or message insert fails, and snapshot-save failure paths.
     - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
@@ -39,13 +41,15 @@ Examples:
     - `architecture.rs` — Architecture guardrail tests using arch-lint — fail the build on any violation defined in `arch-lint.toml`; run with `cargo nextest run --test architecture`.
     - `invariant_contract.rs` — Runtime invariant contract tests — fast regression guards.
     - **guardrails/**
+      - `enums.rs` — Enum variant doc guardrail: every enum variant must carry `///` doc, OR the enum must be marked `/// [TRIVIAL_ENUM]` with all variants bare.
       - `layers.rs` — Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, and tests-vs-messages/swipes separation.
       - `location.rs` — Location guardrail tests: ensures `#[test]` / `#[cfg(test)]` units live in the correct directory (e.g., unit tests stay in `src/`, integration tests stay in `tests/`).
       - `mod.rs` — Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
+      - `nesting.rs` — Nesting depth guardrail — reports function-body control-flow nesting depth violations (probe only; does not gate the build).
       - `structure.rs` — Structure guardrail tests: doc-anchor standards, mod.rs purity, no-std-thread, file length, and the new test module-header rule.
       - `style.rs` — Style guardrail tests: import ordering, single-letter variable usage, separator comments, long comment runs, and per-file `cfg(test)` tracking.
 - **integration/**
-    - `mod.rs` — Integration test binary root: wires shared helpers (`test_utils`, `pipeline_helpers`, `fixtures`) and re-exports factory helpers (`failing_service`, `working_service`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
+    - `mod.rs` — Integration test binary root: wires shared helpers (`test_utils`, `fixtures`, `storage_ext`, `application_ext`) and re-exports factory helpers (`failing_service`, `working_service`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
     - **adapters/**
       - **driven/**
         - **llm/**
@@ -54,7 +58,6 @@ Examples:
       - `application_service.rs` — Integration tests for DefaultApplicationService
       - `game_service.rs` — GameService integration tests
       - `lifecycle.rs` — Integration tests for game lifecycle operations — cross-cutting over `src/application/` rather than a mirror of a single src file; kept here for simplicity until the suite grows enough to split per-module.
-      - `wiring.rs` — Integration wiring test — exercises the prod composition path (`bootstrap::wiring::build_game_service` → `llm_factory::get_llm_recorder_for`) end-to-end and catches silent-fallback regressions where the recorder falls back to a mock instead of the real `Storage`.
       - **action_pipeline/**
         - `actions.rs` — Integration tests for the action pipeline: verifies that user actions are persisted to state, that narrations from the LLM are stored, and that error paths (room not found, LLM failure) are surfaced gracefully.
         - `pipeline.rs` — Integration tests for the action pipeline: delayed LLM completion, quantifier detection of movement and NPCs (with trigger firing), and graceful handling of empty LLM responses.

@@ -14,6 +14,10 @@ use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::db::DbPool;
 
+pub fn create_minimal_test_state() -> GameState {
+    GameState::new("room1".to_string())
+}
+
 pub fn create_test_world() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
@@ -215,29 +219,6 @@ pub fn create_test_world_with_scenario() -> WorldCard {
         }],
         ..Default::default()
     }
-}
-
-pub fn seed_test_world(storage: &Storage) {
-    use chronicler_engine::test_support::{TestMap, TestPersona, TestWorld};
-    let world = TestWorld::minimal();
-    let map = TestMap::single_room("start");
-    storage.seed_world(&world, &map).expect("seed world");
-    let player = TestPersona::standard();
-    storage
-        .seed_persona(&player.key, &player)
-        .expect("seed persona");
-}
-
-pub fn seed_test_world_with_scenario(storage: &Storage) {
-    let world = create_test_world_with_scenario();
-    let map = create_test_map();
-    storage
-        .seed_world(&world, &map)
-        .expect("seed world with scenario");
-    let player = chronicler_engine::test_support::TestPersona::standard();
-    storage
-        .seed_persona(&player.key, &player)
-        .expect("seed persona");
 }
 
 // Pre-seeds the games row so `game_state_snapshots.game_id` / `messages.game_id` FKs hold.

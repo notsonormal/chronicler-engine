@@ -10,7 +10,8 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::{TestAppBuilder, TestDataBuilder};
 
-use crate::fixtures::{create_test_world_with_scenario, seed_test_world, seed_test_world_with_scenario};
+use crate::fixtures::{create_test_world_with_scenario};
+use crate::storage_ext::TestWorldFixture;
 
 #[allow(dead_code)]
 fn create_app_service() -> Arc<DefaultApplicationService> {
@@ -34,7 +35,7 @@ fn test_create_game_with_scenario() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world_with_scenario(&storage);
+    storage.seed_test_world_with_scenario_fixture();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
@@ -84,7 +85,7 @@ fn test_reset_creates_scenario_message() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world_with_scenario(&storage);
+    storage.seed_test_world_with_scenario_fixture();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
@@ -125,7 +126,7 @@ fn test_switch_game_loads_correct_state() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
@@ -184,7 +185,7 @@ fn test_switch_to_nonexistent_game() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let app_service = TestAppBuilder::default_test()
         .storage(storage.clone())
         .game_service(Arc::new(GameService::with_backends(
@@ -206,7 +207,7 @@ fn test_reset_without_existing_game() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world_with_scenario(&storage);
+    storage.seed_test_world_with_scenario_fixture();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
@@ -233,7 +234,7 @@ fn test_create_game_name_uniqueness() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
@@ -278,7 +279,7 @@ fn test_switch_game_world_mismatch() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
@@ -318,7 +319,7 @@ fn test_delete_game_removes() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
@@ -358,7 +359,7 @@ fn test_delete_game_active_rejected() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)

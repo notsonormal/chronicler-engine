@@ -8,9 +8,10 @@ use tracing;
 
 use crate::error::{EngineError, Result};
 
-use super::app_state::{AppState, ServerResources};
+use super::app_state::AppState;
 use super::router::build_router;
 use super::port_utils::bind_with_retry;
+use crate::bootstrap::wiring::WiredApp;
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
@@ -29,28 +30,11 @@ impl Default for ServerConfig {
 }
 
 pub async fn run_server_with_config(
-    resources: ServerResources,
+    app: WiredApp,
     config: ServerConfig,
 ) -> Result<(SocketAddr, JoinHandle<std::io::Result<()>>)> {
     let shutdown_token = tokio_util::sync::CancellationToken::new();
-    let app_state = AppState {
-        storage: Arc::clone(&resources.storage),
-        preset_storage: Arc::clone(&resources.preset_storage),
-        settings: Arc::clone(&resources.settings),
-        game_service: Arc::clone(&resources.game_service),
-        application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(
-                Arc::clone(&resources.storage),
-                Arc::clone(&resources.preset_storage),
-                Arc::clone(&resources.settings),
-                shutdown_token.clone(),
-                Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                Arc::clone(&resources.game_service),
-            ),
-        ),
-        text_check_service: Arc::clone(&resources.text_check_service),
-        shutdown_token: Arc::new(std::sync::RwLock::new(shutdown_token)),
-    };
+    let app_state = AppState::from_wired(app, shutdown_token.clone());
     let shutdown_token_arc = Arc::clone(&app_state.shutdown_token);
 
     let app = build_router(app_state);

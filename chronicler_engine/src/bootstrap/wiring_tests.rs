@@ -1,15 +1,30 @@
-//! Unit tests for `get_llm_recorder_for` factory function.
+//! Unit tests for LLM provider composition through the public wiring API.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::adapters::driven::storage::Storage;
-use crate::domain::model::settings::LlmProviderConfig;
+use crate::bootstrap::wiring::{WiredApp, build_app_graph};
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::bootstrap::llm_factory::get_llm_recorder_for;
+use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 
-#[test]
-fn mock_backend_path_returns_recorder_with_mock_provider() {
-    let connection = LlmProviderConfig {
+fn settings_with(connection: LlmProviderConfig) -> Arc<RwLock<AppSettings>> {
+    let mut settings = AppSettings::default();
+    settings.connections = vec![connection];
+    settings.narration_connection_id = settings.connections[0].id.clone();
+    Arc::new(RwLock::new(settings))
+}
+
+fn wired_app(connection: LlmProviderConfig, storage: Arc<Storage>) -> WiredApp {
+    build_app_graph(
+        settings_with(connection),
+        storage,
+        Arc::new(Storage::new_in_memory()),
+    )
+    .expect("build_app_graph should succeed")
+}
+
+fn mock_connection() -> LlmProviderConfig {
+    LlmProviderConfig {
         id: "test-mock".to_string(),
         name: "Test Mock".to_string(),
         provider: LlmBackendType::Mock,
@@ -19,13 +34,16 @@ fn mock_backend_path_returns_recorder_with_mock_provider() {
         single_user_message: false,
         max_tokens: None,
         max_context_tokens: None,
-    };
+    }
+}
+
+#[test]
+fn mock_backend_path_returns_recorder_with_mock_provider() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, storage.clone())
-        .expect("get_llm_recorder_for should succeed for Mock backend");
+    let wired = wired_app(mock_connection(), storage);
+    let recorder = &wired.game_service.llm_recorder;
 
-    // Verify the recorder was created and has the right provider
     assert_eq!(recorder.provider().name(), "Mock");
     assert_eq!(recorder.provider().model(), "mock");
 }
@@ -35,21 +53,10 @@ fn mock_backend_recorder_persists_forensics_to_storage() {
     // Regression guard: the factory must wire `SaveLlmMessageFn` to
     // `Storage::save_llm_message`, not a no-op closure. If the silent fallback
     // is reintroduced, `storage.list_latest_llm_messages(...)` comes back empty.
-    let connection = LlmProviderConfig {
-        id: "test-mock".to_string(),
-        name: "Test Mock".to_string(),
-        provider: LlmBackendType::Mock,
-        model: "mock-model".to_string(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    };
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, Arc::clone(&storage))
-        .expect("get_llm_recorder_for should succeed for Mock backend");
+    let wired = wired_app(mock_connection(), Arc::clone(&storage));
+    let recorder = &wired.game_service.llm_recorder;
 
     recorder
         .complete("wiring-test-agent", "sys", "usr", None)
@@ -82,8 +89,8 @@ fn deepseek_path_returns_recorder() {
     };
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, storage.clone())
-        .expect("get_llm_recorder_for should succeed for DeepSeek backend");
+    let wired = wired_app(connection, storage);
+    let recorder = &wired.game_service.llm_recorder;
 
     assert_eq!(recorder.provider().name(), "DeepSeek");
 }
@@ -103,8 +110,8 @@ fn openrouter_path_returns_recorder() {
     };
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, storage.clone())
-        .expect("get_llm_recorder_for should succeed for OpenRouter backend");
+    let wired = wired_app(connection, storage);
+    let recorder = &wired.game_service.llm_recorder;
 
     assert_eq!(recorder.provider().name(), "OpenRouter");
 }
@@ -124,17 +131,18 @@ fn ollama_path_returns_recorder() {
     };
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, storage.clone())
-        .expect("get_llm_recorder_for should succeed for Ollama backend");
+    let wired = wired_app(connection, storage);
+    let recorder = &wired.game_service.llm_recorder;
 
     assert_eq!(recorder.provider().name(), "Ollama");
 }
 
 #[test]
 fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
-    // from_config() doesn't actually fail on missing fields at construction.
-    // It defers errors to call time (e.g., when complete() is called).
-    // This test documents that behavior.
+    // `from_config()` does not fail on missing fields at construction.
+    // Errors defer to call time (e.g., when `complete()` runs). This test
+    // documents that the public composition entry point preserves the
+    // same deferred-error contract.
     let connection = LlmProviderConfig {
         id: "test-deepseek-missing".to_string(),
         name: "Test DeepSeek Missing".to_string(),
@@ -148,8 +156,10 @@ fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
     };
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, storage.clone());
+    let wired = wired_app(connection, storage);
 
-    // Factory succeeds - error deferred to call time
-    let _ = recorder.expect("factory should succeed, error deferred");
+    assert_eq!(
+        wired.game_service.llm_recorder.provider().name(),
+        "DeepSeek"
+    );
 }

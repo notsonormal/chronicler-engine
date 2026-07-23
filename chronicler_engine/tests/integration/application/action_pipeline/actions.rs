@@ -8,7 +8,8 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
 use chronicler_engine::test_support::TestDataBuilder;
 
-use crate::{pipeline_helpers::latest_state, sqlite_test_app_builder::SqliteTestAppBuilder};
+use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
+use crate::application_ext::PipelineHelpers;
 
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.1
 #[test]
@@ -20,7 +21,7 @@ fn test_pipeline_executes_and_persists_narration() {
 
     execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     let has_narration = final_state
         .narrative
         .history()
@@ -54,7 +55,7 @@ fn test_pipeline_persists_input_before_narration() {
 
     execute_action_impl(&app, "examine the room".to_string());
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
@@ -84,7 +85,7 @@ fn test_pipeline_handles_room_not_found() {
 
     execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Should reset generating status when room not found"
@@ -101,7 +102,7 @@ fn test_pipeline_handles_llm_failure() {
 
     execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     assert!(
         final_state
             .narrative
@@ -133,7 +134,7 @@ fn test_pipeline_clears_last_trigger() {
 
     execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared"
@@ -151,7 +152,7 @@ fn test_pipeline_phase_transitions() {
 
     execute_action_impl(&app, "look".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert_eq!(
         guard.narrative.input_buffer.phase,
         GenerationPhase::default(),
@@ -170,7 +171,7 @@ fn test_pipeline_phase_stays_narrating_on_error() {
 
     execute_action_impl(&app, "look".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert_eq!(
         guard.narrative.input_buffer.phase,
         GenerationPhase::Narrating,
@@ -188,7 +189,7 @@ fn test_pipeline_empty_input() {
 
     execute_action_impl(&app, String::new());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Empty input should complete generation: {:?}",

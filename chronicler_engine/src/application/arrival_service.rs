@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::narrative_prompt::{build_narration_prompt, make_prompt_context, NpcContext};
+use crate::application::narrative_prompt::{make_prompt_context, NpcContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::{NpcCard, PersonaCard};
@@ -117,22 +117,22 @@ impl ArrivalTaskContext {
 
         let global_rules = &world.global_rules;
         let narration = match self.arrival_preset.as_ref() {
-            Some(preset) => build_narration_prompt(
-                &prompt_context,
-                preset,
-                global_rules,
-                Some(&self.response_length),
-                self.max_context_tokens,
-                self.max_tokens,
-            )
-            .and_then(|assembled| {
-                self.recorder.complete(
-                    AGENT_NARRATOR,
-                    &assembled.system_prompt,
-                    &assembled.user_prompt,
-                    Some(assembled.max_tokens),
+            Some(preset) => prompt_context
+                .build_narration_prompt(
+                    preset,
+                    global_rules,
+                    Some(&self.response_length),
+                    self.max_context_tokens,
+                    self.max_tokens,
                 )
-            }),
+                .and_then(|assembled| {
+                    self.recorder.complete(
+                        AGENT_NARRATOR,
+                        &assembled.system_prompt,
+                        &assembled.user_prompt,
+                        Some(assembled.max_tokens),
+                    )
+                }),
             None => Err(crate::error::EngineError::Config(
                 "No active preset found for arrival narration".into(),
             )),

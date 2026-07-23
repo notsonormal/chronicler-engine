@@ -39,6 +39,56 @@ fn test_engine_error_display_variants() {
 }
 
 #[test]
+fn test_llm_error_string_maps_user_facing_messages() {
+    let cases = [
+        (
+            EngineError::Llm(LlmFailure::Timeout),
+            "LLM Error: request timed out",
+        ),
+        (
+            EngineError::Llm(LlmFailure::Network {
+                url: "http://localhost:11434".to_string(),
+                detail: "connection refused".to_string(),
+            }),
+            "LLM Error: network error (http://localhost:11434) — connection refused",
+        ),
+        (
+            EngineError::Llm(LlmFailure::ParseError {
+                raw_response: "invalid".to_string(),
+                expected_format: "JSON",
+            }),
+            "LLM Error: unexpected response format (expected JSON)",
+        ),
+        (
+            EngineError::Llm(LlmFailure::EmptyResponse),
+            "LLM Error: empty response",
+        ),
+        (
+            EngineError::Llm(LlmFailure::Http {
+                status: 503,
+                body: "unavailable".to_string(),
+            }),
+            "LLM Error: HTTP 503 — unavailable",
+        ),
+        (
+            EngineError::Narrative(NarrativeFailure::PromptBuild {
+                stage: "assembly",
+                reason: "budget",
+            }),
+            "LLM Error: Prompt build failed at stage 'assembly': budget",
+        ),
+        (
+            EngineError::Config("missing preset".to_string()),
+            "LLM Error: Configuration error: missing preset",
+        ),
+    ];
+
+    for (error, expected) in cases {
+        assert_eq!(error.llm_error_string(), expected);
+    }
+}
+
+#[test]
 fn test_internal_error_from_helper() {
     let err: EngineError = crate::error::internal_error("test invariant").into();
     match err {

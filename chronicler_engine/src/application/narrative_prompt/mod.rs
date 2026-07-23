@@ -6,7 +6,7 @@ pub mod budget;
 pub mod context;
 pub mod types;
 
-pub use assembler::{build_narration_prompt, AssembledPrompt, PromptAssembler};
+pub use assembler::{AssembledPrompt, PromptAssembler};
 pub use context::{fit_messages_to_context, make_prompt_context};
 pub use types::{NpcContext, PromptContext, PromptLayer};
 

@@ -3,8 +3,7 @@
 use std::sync::Arc;
 
 use crate::{
-    fixtures::create_test_state,
-    pipeline_helpers::{create_minimal_test_state, latest_state, wait_for_generation_complete},
+    fixtures::create_test_state, fixtures::create_minimal_test_state,
     sqlite_test_app_builder::SqliteTestAppBuilder,
 };
 use chronicler_engine::test_support::TestData;
@@ -17,6 +16,7 @@ use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnaps
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::make_test_app_without_snapshot;
 use chronicler_engine::TestAppBuilder;
+use crate::application_ext::PipelineHelpers;
 
 fn trigger_data() -> TestData {
     TestData {
@@ -54,7 +54,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         &app,
         "look around".to_string(),
     );
-    let after_first = latest_state(&app);
+    let after_first = app.latest_state();
     let first_narration_count = after_first
         .narrative
         .history()
@@ -65,7 +65,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let after_retry = latest_state(&app);
+    let after_retry = app.latest_state();
     let retry_narration_count = after_retry
         .narrative
         .history()
@@ -87,7 +87,7 @@ fn test_retry_with_empty_history_is_noop() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     assert!(final_state.narrative.history().is_empty());
 }
 
@@ -110,7 +110,7 @@ fn test_retry_after_llm_failure_succeeds() {
         &failing_app,
         "look".to_string(),
     );
-    let after_fail = latest_state(&failing_app);
+    let after_fail = failing_app.latest_state();
     assert!(
         after_fail
             .narrative
@@ -129,7 +129,7 @@ fn test_retry_after_llm_failure_succeeds() {
     );
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&working_app);
 
-    let after_retry = latest_state(&working_app);
+    let after_retry = working_app.latest_state();
     assert!(
         !after_retry.narrative.input_buffer.status.is_generating(),
         "Retry should complete: {:?}",
@@ -139,11 +139,12 @@ fn test_retry_after_llm_failure_succeeds() {
 
 #[test]
 fn test_retry_no_snapshot() {
-    let app = make_test_app_without_snapshot(create_test_state()).unwrap();
+    let wired = make_test_app_without_snapshot(create_test_state()).unwrap();
+    let app = &wired.application_service;
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(app);
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Retry without snapshot should not hang in generating state"
@@ -164,7 +165,7 @@ fn test_retry_no_input_text() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert_eq!(guard.narrative.history().len(), 2);
 }
 
@@ -186,7 +187,7 @@ fn test_retry_room_not_found() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -214,7 +215,7 @@ fn test_retry_llm_error() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -242,7 +243,7 @@ fn test_retry_empty_narration() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -271,10 +272,10 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let completed = wait_for_generation_complete(&app, 1000);
+    let completed = app.wait_for_generation_complete(1000);
     assert!(completed, "Retry should complete within timeout");
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let narrations: Vec<_> = guard
         .narrative
         .history()
@@ -351,10 +352,10 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
 
     chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let completed = wait_for_generation_complete(&app, 1000);
+    let completed = app.wait_for_generation_complete(1000);
     assert!(completed, "Event retry should complete within timeout");
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let main_narrations: Vec<_> = guard
         .narrative
         .history()

@@ -8,18 +8,10 @@ use tokio_util::sync::CancellationToken;
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::GameService;
 use crate::application::text_check_service::TextCheckService;
+use crate::bootstrap::wiring::WiredApp;
 use crate::domain::model::settings::AppSettings;
 
 use super::locks::read_lock_or_recover;
-
-#[derive(Clone)]
-pub struct ServerResources {
-    pub storage: Arc<crate::adapters::driven::storage::Storage>,
-    pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
-    pub settings: Arc<RwLock<AppSettings>>,
-    pub game_service: Arc<GameService>,
-    pub text_check_service: Arc<TextCheckService>,
-}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -33,6 +25,18 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub fn from_wired(wired: WiredApp, shutdown_token: CancellationToken) -> Self {
+        AppState {
+            storage: wired.storage,
+            preset_storage: wired.preset_storage,
+            game_service: wired.game_service,
+            application_service: wired.application_service,
+            text_check_service: wired.text_check_service,
+            settings: wired.settings,
+            shutdown_token: Arc::new(RwLock::new(shutdown_token)),
+        }
+    }
+
     pub fn current_shutdown_token(&self) -> CancellationToken {
         read_lock_or_recover(&self.shutdown_token, "shutdown_token")
     }

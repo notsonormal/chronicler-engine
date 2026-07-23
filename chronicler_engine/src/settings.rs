@@ -24,8 +24,6 @@ pub fn load_settings(storage: &Storage) -> Result<AppSettings> {
     }
 }
 
-impl AppSettings {
-    pub fn save(&self, storage: &Storage) -> Result<()> {
-        storage.save_settings(self)
-    }
+pub fn save_settings(settings: &AppSettings, storage: &Storage) -> Result<()> {
+    storage.save_settings(settings)
 }

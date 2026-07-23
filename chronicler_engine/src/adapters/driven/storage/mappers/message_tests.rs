@@ -1,8 +1,7 @@
 use crate::domain::model::message::Message;
 use crate::domain::model::state::message_types::MessageType;
-use crate::adapters::driven::storage::mappers::message::{
-    db_message_to_model, model_message_to_db, model_swipes_to_db,
-};
+use crate::adapters::driven::storage::mappers::message::model_swipes_to_db;
+use crate::adapters::driven::storage::models::message::DbMessage;
 
 #[test]
 fn test_message_roundtrip() {
@@ -20,9 +19,9 @@ fn test_message_roundtrip() {
         location_header: Some("Room A".to_string()),
         event_header: None,
     }];
-    let db = model_message_to_db(&original, 1).unwrap();
+    let db = DbMessage::try_from((&original, 1)).unwrap();
     let swipes = model_swipes_to_db(&original);
-    let back = db_message_to_model(&db, &swipes).unwrap();
+    let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert_eq!(original.id, back.id);
     assert_eq!(original.sender, back.sender);
@@ -50,9 +49,9 @@ fn test_message_unpersisted_roundtrip() {
         location_header: None,
         event_header: Some("Event".to_string()),
     }];
-    let db = model_message_to_db(&original, 2).unwrap();
+    let db = DbMessage::try_from((&original, 2)).unwrap();
     let swipes = model_swipes_to_db(&original);
-    let back = db_message_to_model(&db, &swipes).unwrap();
+    let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert_eq!(back.id, 0);
     assert!(back.sender.is_none());
@@ -69,7 +68,7 @@ fn test_message_log_type_json_serialization() {
         location_header: None,
         event_header: None,
     }];
-    let db = model_message_to_db(&msg, 1).unwrap();
+    let db = DbMessage::try_from((&msg, 1)).unwrap();
     let _swipes = model_swipes_to_db(&msg);
 
     assert_eq!(db.message_type_json, "\"Dialogue\"");
@@ -99,14 +98,14 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
             event_header: Some("Event B".to_string()),
         },
     ];
-    let db = model_message_to_db(&original, 1).unwrap();
+    let db = DbMessage::try_from((&original, 1)).unwrap();
     let swipes = model_swipes_to_db(&original);
 
     // Simulate stale active_swipe_index by mutating the db row
     let mut db_stale = db;
     db_stale.active_swipe_index = 99;
 
-    let back = db_message_to_model(&db_stale, &swipes).unwrap();
+    let back = Message::try_from((&db_stale, &swipes[..])).unwrap();
     assert_eq!(back.text(), "First swipe");
     assert_eq!(back.location_header(), Some("Room A"));
     assert_eq!(back.snapshot_id(), Some(1));

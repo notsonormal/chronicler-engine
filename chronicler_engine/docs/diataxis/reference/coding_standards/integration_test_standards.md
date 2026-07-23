@@ -19,7 +19,7 @@ fn test_<scenario>_<expected_outcome>() {
 
     execute_action_impl(&app, "<input>".to_string());
 
-    let state = latest_state(&app);                     // from tests/helpers/pipeline_helpers
+    let state = app.latest_state();                    // via `PipelineHelpers` in tests/helpers/pipeline_helpers
     assert_eq!(state.narrative.history().len(), <expected>);
 }
 ```
@@ -32,7 +32,7 @@ let failing_app = SqliteTestAppBuilder::default_test()
     .message(msg).build_service().unwrap();
 
 execute_action_impl(&failing_app, "look".to_string());
-let after_fail = latest_state(&failing_app);
+let after_fail = failing_app.latest_state();
 assert!(
     after_fail
         .narrative
@@ -50,7 +50,7 @@ let working_app = TestAppBuilder::from_base(
 retry_last_response_impl(&working_app);
 ```
 
-**Exemplar.** `tests/integration/application/action_pipeline/actions.rs` (8 tests, named `test_pipeline_*`, one behaviour per test, `execute_action_impl` invocation, `latest_state(&app)` snapshot assertion). `tests/integration/flow/retry_main.rs` (10 tests, the canonical handoff form — every test uses `TestAppBuilder::from_base(&app, …)` to swap services between actions).
+**Exemplar.** `tests/integration/application/action_pipeline/actions.rs` (8 tests, named `test_pipeline_*`, one behaviour per test, `execute_action_impl` invocation, `app.latest_state()` snapshot assertion). `tests/integration/flow/retry_main.rs` (10 tests, the canonical handoff form — every test uses `TestAppBuilder::from_base(&app, …)` to swap services between actions).
 
 **Drift notes.**
 
@@ -391,7 +391,8 @@ The `--llm-only` invocation is the canonical one for the integration-tier LLM te
 - `tests/test_utils/server.rs` — port allocation, `TestServer` lifecycle, `SERVER_MANAGED` PID registry.
 - `tests/test_utils/wait.rs` — smart-waiting helpers (`wait_for_llm_idle`, `wait_for_status_ready`, `wait_for_element_children`, etc.).
 - `tests/helpers/sqlite_test_app_builder.rs` — `SqliteTestAppBuilder` (Pattern 1) and `TestAppBuilder::from_base(...)` handoff.
-- `tests/helpers/pipeline_helpers.rs` — `latest_state`, `wait_for_generation_complete`, `wait_for_condition` (sync).
+- `tests/helpers/pipeline_helpers.rs` — extension trait `PipelineHelpers` (`latest_state`, `wait_for_generation_complete`) and `wait_for_condition` (sync).
+- `tests/helpers/fixtures.rs` — extension trait `TestWorldFixture` for storage-backed test-world seeding.
 - `tests/test_utils/browser.rs` — Playwright setup, `with_test_page`, `capture_failure_state`, `HEADED` / `SLOW_MO` env-var conventions.
 - `chronicler_engine/scripts/tests/test_validate_docs_diataxis.py` — 14 fixture tests enforcing front-matter, mode vocabulary, and required H2 sections (`## Overview` + `## Document References`) for Reference docs.
 - `chronicler_engine/docs-diataxis/explanation/diataxis.md` — Diátaxis primer (Reference mode's place in the four-kind taxonomy).

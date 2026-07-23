@@ -128,19 +128,21 @@ impl PromptAssembler {
     }
 }
 
-pub fn build_narration_prompt(
-    context: &PromptContext,
-    preset: &PromptPreset,
-    global_rules: &[String],
-    response_length: Option<&str>,
-    max_context_tokens: u32,
-    max_tokens: Option<u32>,
-) -> Result<AssembledPrompt, EngineError> {
-    let mut assembler = PromptAssembler::new(max_context_tokens);
-    if let Some(max) = max_tokens {
-        assembler = assembler.with_max_tokens(max);
+impl PromptContext<'_> {
+    pub fn build_narration_prompt(
+        &self,
+        preset: &PromptPreset,
+        global_rules: &[String],
+        response_length: Option<&str>,
+        max_context_tokens: u32,
+        max_tokens: Option<u32>,
+    ) -> Result<AssembledPrompt, EngineError> {
+        let mut assembler = PromptAssembler::new(max_context_tokens);
+        if let Some(max) = max_tokens {
+            assembler = assembler.with_max_tokens(max);
+        }
+        assembler.assemble(self, preset, global_rules, response_length)
     }
-    assembler.assemble(context, preset, global_rules, response_length)
 }
 
 fn build_system_prompt(

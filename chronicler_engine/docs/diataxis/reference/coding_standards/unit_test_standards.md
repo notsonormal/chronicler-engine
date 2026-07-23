@@ -172,8 +172,7 @@ fn test_<method>_<expected_outcome>() {
 **Drift notes.**
 
 - `src/application/action_pipeline/pipeline_tests.rs` and `retry_tests.rs` share the same construction chain but are larger (20 and 25 tests respectively) because the corresponding production modules expose many service methods. The chain is identical; only the test count grows.
-- `src/application/query_handlers_tests.rs` covers a different surface (read-only query methods vs. write methods) but uses the same construction chain.
-- `src/application/is_generating_invariant_tests.rs` is Pattern 5 + Pattern 8 (concurrency). See Pattern 8 for the concurrency-specific additions.
+- `src/application/application_service_tests.rs` covers both the read-only query surface and the Pattern 5 + Pattern 8 (concurrency) `is_generating` invariant checks. See Pattern 8 for the concurrency-specific additions.
 - Failure injection for service-layer tests uses `Storage::new_in_memory().with_test_failures()` directly (the test owns the storage before `build_service` constructs the service from it). See Cross-cutting pattern A.
 
 ## Pattern 6 — HTTP handler
@@ -297,9 +296,9 @@ async fn wait_for_condition(
 }
 ```
 
-The `wait_for_condition` helper is **file-local** in `src/application/is_generating_invariant_tests.rs:215`. Do NOT promote it to `src/test_support/` — it's the only file using this pattern, and the helper belongs to the specific invariant test.
+The `wait_for_condition` helper is **file-local** in `src/application/application_service_tests.rs` (within the `is_generating` invariant section). Do NOT promote it to `src/test_support/` — it's the only site using this pattern, and the helper belongs to the specific invariant test.
 
-**Exemplar.** `src/application/is_generating_invariant_tests.rs` (3 tests: helper divergence detection, `wait_until_idle` failure mode with `#[should_panic]`, and the load-bearing TOCTOU regression test using `Arc<Barrier>` for entry/exit coordination).
+**Exemplar.** `src/application/application_service_tests.rs` — the `is_generating` invariant section (3 tests: helper divergence detection, `wait_until_idle` failure mode with `#[should_panic]`, and the load-bearing TOCTOU regression test using `Arc<Barrier>` for entry/exit coordination).
 
 **Drift notes.**
 

@@ -3,8 +3,7 @@
 use std::sync::Arc;
 
 use crate::{
-    pipeline_helpers::{latest_state, wait_for_condition, wait_for_generation_complete},
-    sqlite_test_app_builder::SqliteTestAppBuilder,
+    test_utils::wait::wait_for_condition_sync, sqlite_test_app_builder::SqliteTestAppBuilder,
     test_utils::wait::wait_for_condition_async,
 };
 use chronicler_engine::application::GameService;
@@ -14,6 +13,7 @@ use chronicler_engine::domain::model::state::generation_status::GenerationStatus
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::TestData;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+use crate::application_ext::PipelineHelpers;
 
 fn trigger_data() -> TestData {
     TestData {
@@ -51,7 +51,7 @@ fn test_delayed_llm_completes_without_deadlock() {
 
     execute_action_impl(&app, "look around".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after delayed action completes"
@@ -84,10 +84,10 @@ fn test_quantifier_detects_movement() {
 
     execute_action_impl(&app, "walk to the village square".to_string());
 
-    let completed = wait_for_generation_complete(&app, 500);
+    let completed = app.wait_for_generation_complete(500);
     assert!(completed, "Movement action should complete within timeout");
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after movement action"
@@ -127,7 +127,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
 
     execute_action_impl(&app, "enter the shop".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after trigger action"
@@ -171,7 +171,7 @@ fn test_empty_llm_response_handled_gracefully() {
 
     execute_action_impl(&app, "examine the room".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -224,7 +224,7 @@ fn test_failing_trigger_narration_does_not_crash() {
 
     execute_action_impl(&app, "examine the shopkeeper".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after trigger narration failure"
@@ -260,7 +260,7 @@ fn test_pipeline_cancels_when_token_cancelled() {
 
     execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&app);
+    let final_state = app.latest_state();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -289,7 +289,7 @@ async fn test_cancellation_resets_state_to_idle() {
     token.cancel();
     execute_action_impl(&app, "look around".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation"
@@ -338,7 +338,7 @@ async fn test_pipeline_cancels_after_main_narration() {
 
     handle.await.unwrap();
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation at post-narration checkpoint"
@@ -397,7 +397,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
 
     handle.await.unwrap();
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation at post-trigger checkpoint"
@@ -422,7 +422,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
 
     execute_action_impl(&app, "examine the room".to_string());
 
-    let completed = wait_for_generation_complete(&app, 1000);
+    let completed = app.wait_for_generation_complete(1000);
     assert!(completed, "FreeAction should complete within timeout");
 
     let latest = app.storage().load_latest_snapshot().unwrap().unwrap();
@@ -458,7 +458,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
 
     execute_action_impl(&app, "examine the shopkeeper".to_string());
 
-    let completed = wait_for_generation_complete(&app, 1000);
+    let completed = app.wait_for_generation_complete(1000);
     assert!(
         completed,
         "FreeAction with trigger should complete within timeout"
@@ -479,7 +479,7 @@ fn test_pipeline_with_quantifier() {
 
     execute_action_impl(&app, "look around".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Should complete with quantifier backend"
@@ -523,7 +523,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         execute_action_impl(&app_clone, "look around".to_string());
     });
 
-    let narration_found = wait_for_condition(
+    let narration_found = wait_for_condition_sync(
         Duration::from_millis(400),
         Duration::from_millis(50),
         || {
@@ -543,7 +543,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
 
     handle.join().expect("Action thread should complete");
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Should complete after quantifier finishes"
@@ -572,7 +572,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
 
     execute_action_impl(&app, "test action".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
 
     let history = guard.narrative.history();
     let narration_count = history
@@ -608,7 +608,7 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
 
     execute_action_impl(&app, "look".to_string());
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Pipeline should complete even if quantifier save has warnings"

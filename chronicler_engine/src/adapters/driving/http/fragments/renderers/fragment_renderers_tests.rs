@@ -6,7 +6,6 @@ use chrono::Utc;
 
 use crate::application::llm_message::LlmMessage;
 use crate::adapters::driven::storage::Storage;
-use crate::adapters::driving::http::fragments::render_llm_messages;
 use crate::test_support::TestAppBuilder;
 
 fn make_test_app_state(
@@ -22,7 +21,7 @@ fn make_test_app_state(
 #[test]
 fn test_render_llm_messages_empty() {
     let app_state = make_test_app_state(None);
-    let html = render_llm_messages(&app_state).unwrap();
+    let html = app_state.render_llm_messages().unwrap();
     assert!(html.contains("llm-message-list"));
     assert!(html.contains("No LLM messages yet"));
 }
@@ -46,7 +45,7 @@ fn test_render_llm_messages_with_data() {
     llm_storage.save_llm_message(&msg).unwrap();
 
     let app_state = make_test_app_state(Some(llm_storage));
-    let html = render_llm_messages(&app_state).unwrap();
+    let html = app_state.render_llm_messages().unwrap();
     assert!(html.contains("llm-message-list"));
     assert!(html.contains("narrator"));
     assert!(html.contains("OpenRouter"));

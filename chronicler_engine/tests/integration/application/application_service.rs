@@ -8,8 +8,10 @@ use chronicler_engine::domain::model::state::generation_status::GenerationStatus
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::{TestAppBuilder, TestDataBuilder};
 
-use crate::fixtures::{create_test_storage_arc as create_storage, seed_test_world};
+use crate::fixtures::{create_test_storage_arc as create_storage};
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
+use crate::application_ext::PipelineHelpers;
+use crate::storage_ext::TestWorldFixture;
 
 fn create_game_service() -> Arc<GameService> {
     Arc::new(crate::working_service())
@@ -18,7 +20,7 @@ fn create_game_service() -> Arc<GameService> {
 #[test]
 fn test_create_game_integration() {
     let storage = create_storage(1);
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let game_service = create_game_service();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
@@ -40,7 +42,7 @@ fn test_create_game_integration() {
 #[test]
 fn test_switch_game_integration() {
     let storage = create_storage(1);
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let game_service = create_game_service();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
@@ -67,7 +69,7 @@ fn test_switch_game_integration() {
 #[test]
 fn test_delete_game_integration() {
     let storage = create_storage(1);
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let game_service = create_game_service();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
@@ -93,7 +95,7 @@ fn test_delete_game_integration() {
 #[test]
 fn test_list_games_integration() {
     let storage = create_storage(1);
-    seed_test_world(&storage);
+    storage.seed_test_world_fixture();
     let game_service = create_game_service();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
@@ -119,9 +121,7 @@ fn test_get_generating_status() {
         .skip_seeding(true)
         .build_service();
 
-    let (status, phase) =
-        chronicler_engine::application::query_handlers::get_generating_status(&app_service)
-            .unwrap();
+    let (status, phase) = app_service.get_generating_status().unwrap();
     assert_eq!(status, GenerationStatus::Idle);
     assert_eq!(phase, GenerationPhase::default());
 }
@@ -141,10 +141,10 @@ async fn test_process_action_persists_input_message() {
         "process_action should return Started"
     );
 
-    let completed = crate::pipeline_helpers::wait_for_generation_complete(&app_service, 5000);
+    let completed = app_service.wait_for_generation_complete(5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    let guard = crate::pipeline_helpers::latest_state(&app_service);
+    let guard = app_service.latest_state();
     let entries = guard.narrative.history();
     let input_idx = entries
         .iter()
@@ -182,10 +182,10 @@ async fn test_process_action_self_heals_stale_generating_status() {
         "process_action should return Started"
     );
 
-    let completed = crate::pipeline_helpers::wait_for_generation_complete(&app_service, 5000);
+    let completed = app_service.wait_for_generation_complete(5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    let guard = crate::pipeline_helpers::latest_state(&app_service);
+    let guard = app_service.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should not be Generating after completion, got {:?}",

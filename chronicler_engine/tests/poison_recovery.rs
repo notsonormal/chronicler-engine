@@ -14,6 +14,17 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::error::EngineError;
 use chronicler_engine::application::ports::text_checker::CheckResult;
 
+fn test_game_service() -> Arc<chronicler_engine::application::game_service::GameService> {
+    chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        Arc::new(Storage::new_in_memory()),
+        Arc::new(Storage::new_in_memory()),
+        None,
+    )
+    .expect("build_app_graph_for_tests should succeed")
+    .game_service
+}
+
 struct NoopTextChecker;
 impl TextChecker for NoopTextChecker {
     fn check(
@@ -40,14 +51,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service = Arc::new(
-        chronicler_engine::bootstrap::wiring::build_game_service_for_tests(
-            Arc::new(std::sync::RwLock::new(AppSettings::default())),
-            Arc::new(Storage::new_in_memory()),
-            Arc::new(Storage::new_in_memory()),
-        )
-        .expect("build_game_service_for_tests should succeed"),
-    );
+    let game_service = test_game_service();
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
@@ -84,14 +88,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service = Arc::new(
-        chronicler_engine::bootstrap::wiring::build_game_service_for_tests(
-            Arc::new(std::sync::RwLock::new(AppSettings::default())),
-            Arc::new(Storage::new_in_memory()),
-            Arc::new(Storage::new_in_memory()),
-        )
-        .expect("build_game_service_for_tests should succeed"),
-    );
+    let game_service = test_game_service();
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),

@@ -16,9 +16,9 @@ use chronicler_engine::TestDataBuilder;
 use crate::make_test_recorder_with_storage;
 use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 
-use crate::pipeline_helpers::{add_input_and_save, latest_state, wait_for_generation_complete};
 use crate::fixtures::create_test_map;
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
+use crate::application_ext::PipelineHelpers;
 
 fn trigger_npc_test_data() -> TestData {
     let shopkeeper = NpcCard {
@@ -66,7 +66,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app1, "enter shop");
+    app1.add_input_and_save("enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -86,17 +86,17 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 
     execute_action_impl(&app2, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&app2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Execute should complete"
     );
 
     retry_last_response_impl(&app2);
     assert!(
-        wait_for_generation_complete(&app2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Event retry should complete"
     );
 
-    let guard = latest_state(&app2);
+    let guard = app2.latest_state();
     let narration_msgs: Vec<_> = guard
         .narrative
         .history
@@ -123,7 +123,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app1, "enter shop");
+    app1.add_input_and_save("enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -143,10 +143,10 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
 
     execute_action_impl(&app2, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&app2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Execute should complete"
     );
-    let guard = latest_state(&app2);
+    let guard = app2.latest_state();
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Execute: player should have moved to room2"
@@ -164,10 +164,10 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
 
     retry_last_response_impl(&app2);
     assert!(
-        wait_for_generation_complete(&app2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Event retry should complete"
     );
-    let guard = latest_state(&app2);
+    let guard = app2.latest_state();
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Event retry: room should be unchanged (quantifier not rerun)"
@@ -266,7 +266,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         .build_service()
         .unwrap();
 
-    add_input_and_save(&app1, "enter shop");
+    app1.add_input_and_save("enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -291,11 +291,11 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     execute_action_impl(&app2, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&app2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Execute should complete"
     );
 
-    let guard = latest_state(&app2);
+    let guard = app2.latest_state();
 
     let event_count = guard
         .narrative

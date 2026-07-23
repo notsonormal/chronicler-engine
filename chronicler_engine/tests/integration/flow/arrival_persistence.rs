@@ -15,8 +15,9 @@ use chronicler_engine::test_support::{
     make_test_recorder_with_storage, seed_test_world_into_storage, TestDataBuilder,
 };
 
-use crate::pipeline_helpers::{create_minimal_test_state, latest_state};
+use crate::fixtures::create_minimal_test_state;
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
+use crate::application_ext::PipelineHelpers;
 
 #[test]
 fn test_arrival_narration_survives_reload() {
@@ -86,7 +87,7 @@ fn test_arrival_narration_survives_reload() {
         "Narration message should have non-zero id (persisted to llm_messages table)"
     );
 
-    let guard = latest_state(&app);
+    let guard = app.latest_state();
     let history_narrations: Vec<_> = guard
         .narrative
         .history()
@@ -102,11 +103,7 @@ fn test_arrival_narration_survives_reload() {
     let history_narration = history_narrations.first().unwrap();
     let history_narration_text = history_narration.text.clone();
 
-    let reloaded_messages =
-        chronicler_engine::application::application_service::load_messages_with_swipes(
-            app.storage(),
-        )
-        .unwrap();
+    let reloaded_messages = app.storage().load_messages_with_swipes().unwrap();
 
     assert!(
         !reloaded_messages.is_empty(),

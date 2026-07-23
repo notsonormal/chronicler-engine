@@ -1,14 +1,15 @@
-//! Builds `DefaultApplicationService` instances for integration tests.
+//! Builds `WiredApp` instances for integration tests.
 
 use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::adapters::driven::storage::Storage;
-use crate::application::application_service::DefaultApplicationService;
+use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+use crate::domain::model::settings::AppSettings;
 use crate::error::Result;
 use crate::test_support::TestData;
 
@@ -40,29 +41,13 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
     let _ = data.seed_into(storage);
 }
 
-fn build_test_app(storage: Arc<Storage>) -> Result<Arc<DefaultApplicationService>> {
-    let settings = Arc::new(RwLock::new(
-        crate::domain::model::settings::AppSettings::default(),
-    ));
+fn build_test_app(storage: Arc<Storage>) -> Result<WiredApp> {
+    let settings = Arc::new(RwLock::new(AppSettings::default()));
     let preset_storage = default_test_preset_storage();
-
-    let game_service = crate::bootstrap::wiring::build_game_service_for_tests(
-        Arc::clone(&settings),
-        Arc::clone(&storage),
-        Arc::clone(&preset_storage),
-    )?;
-
-    Ok(Arc::new(DefaultApplicationService::new(
-        storage,
-        preset_storage,
-        settings,
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        Arc::new(game_service),
-    )))
+    build_app_graph_for_tests(settings, storage, preset_storage, None)
 }
 
-pub fn make_test_app(state: GameState) -> Result<Arc<DefaultApplicationService>> {
+pub fn make_test_app(state: GameState) -> Result<WiredApp> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(Storage::new_in_memory());
     seed_test_world_into_storage(&storage, &state);
@@ -77,7 +62,7 @@ pub fn make_test_app(state: GameState) -> Result<Arc<DefaultApplicationService>>
     build_test_app(storage)
 }
 
-pub fn make_test_app_without_snapshot(state: GameState) -> Result<Arc<DefaultApplicationService>> {
+pub fn make_test_app_without_snapshot(state: GameState) -> Result<WiredApp> {
     let storage = Arc::new(Storage::new_in_memory());
     seed_test_world_into_storage(&storage, &state);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {

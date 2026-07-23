@@ -83,9 +83,9 @@ Not a module-shape issue — a behaviour decision. Sequence after T1 so T8's swa
 
 1. **Token registration (N21 fix):** thread the server's cancel token from `run_server_with_config` into `spawn_arrival_task_if_needed`. Two design options:
    - **(i) Move spawn site:** relocate `spawn_arrival_task_if_needed` call from `bootstrap::run` into `run_server_with_config` after `AppState` construction (`server_impl.rs:33`ish). Arrival task gets `app_state.current_cancel_token()` directly. Breaks the "bootstrap module owns arrival spawn" boundary.
-   - **(ii) Plumb token through `ServerResources`:** create cancel token at bootstrap time, pass to both `spawn_arrival_task_if_needed` and `ServerResources`; `AppState` adopts the existing token instead of creating its own. Cleaner module separation. `ServerResources` gains one new field.
+   - **(ii) Plumb token through `WiredApp`:** create cancel token at bootstrap time, pass to both `spawn_arrival_task_if_needed` and `WiredApp`; `AppState` adopts the existing token instead of creating its own. Cleaner module separation. `WiredApp` gains one new field.
    
-   Recommend (ii) — preserves module boundaries, mirrors how `storage`/`settings` already thread through `ServerResources`.
+   Recommend (ii) — preserves module boundaries, mirrors how `storage`/`settings` already thread through `WiredApp`.
 
 2. **Cancellation checks (N17):** add three `is_cancelled()` checks in `ArrivalTaskContext::run()` per the A/B/C placement above. Unit-returning fn → early `return;` on cancel. Log style: sentence-form no prefix, matches arrival file's existing log convention (`"No snapshot found in spawn, starting fresh"`, `"Failed to save arrival message and snapshot: {e}"`). Suggested messages:
    - `"Arrival task cancelled before start"`
@@ -108,7 +108,7 @@ Not a module-shape issue — a behaviour decision. Sequence after T1 so T8's swa
 - Persistence policy on `save_message_and_snapshot` warn — R1 in this plan.
 
 **Blast radius:**
-- N21: `server/server_impl.rs` ( AppState construction adopts token), `server/app_state.rs` (`ServerResources` gains field, `current_cancel_token` reads existing), `bootstrap/run.rs` (creates token, passes to both spawn + resources), `bootstrap/init_game.rs` (`spawn_arrival_task_if_needed` signature gains `cancel_token` param).
+- N21: `server/server_impl.rs` ( AppState construction adopts token), `server/app_state.rs` (`WiredApp` gains field, `current_cancel_token` reads existing), `bootstrap/run.rs` (creates token, passes to both spawn + composition root), `bootstrap/init_game.rs` (`spawn_arrival_task_if_needed` signature gains `cancel_token` param).
 - N17: `bootstrap/init_game.rs` `ArrivalTaskContext::run` (~12 lines).
 
 **Dependencies:** none. R2 can proceed independently. Coordinate with the abstraction-fixes super-plan's T2-ARCH (which will benefit from the registered token for its G4 cancellation-plumbing grilling).
@@ -133,7 +133,7 @@ For abstraction-fixes findings, see `abstraction-fixes-followup-superplan.md` Fi
 ## Decisions to Lock Before Sub-Plans
 
 - **R1:** Partial-persistence failure: propagate, mark-needs-repair, or silent+healthcheck?
-- **R2 (N21):** Move spawn site to `run_server_with_config` (option i), or plumb token through `ServerResources` (option ii)?
+- **R2 (N21):** Move spawn site to `run_server_with_config` (option i), or plumb token through `WiredApp` (option ii)?
 
 ---
 

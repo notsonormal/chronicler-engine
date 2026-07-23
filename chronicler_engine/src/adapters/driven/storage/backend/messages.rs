@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::error::EngineError;
 use crate::domain::model::message::Message;
 use crate::adapters::driven::storage::backend::{Backend, Storage};
-use crate::adapters::driven::storage::models::message::DbMessage;
+use crate::adapters::driven::storage::models::message::{DbMessage, DbSwipe};
 
 impl Storage {
     pub fn insert_message(&self, msg: &Message) -> Result<u64, EngineError> {
@@ -14,8 +14,7 @@ impl Storage {
         self.with_backend_mut("insert_message", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let db_msg =
-                    crate::adapters::driven::storage::mappers::message::model_message_to_db(msg, game_id as i64)?;
+                let db_msg = DbMessage::try_from((msg, game_id as i64))?;
                 conn.execute(
                     "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -89,12 +88,7 @@ impl Storage {
                     let db_msg = row.map_err(|e| {
                         EngineError::Config(format!("Failed to read message row: {e}"))
                     })?;
-                    messages.push(
-                        crate::adapters::driven::storage::mappers::message::db_message_to_model(
-                            &db_msg,
-                            &[],
-                        )?,
-                    );
+                    messages.push(Message::try_from((&db_msg, &[] as &[DbSwipe]))?);
                 }
 
                 Ok(messages)
@@ -224,6 +218,27 @@ impl Storage {
                 Ok(())
             }
         })
+    }
+
+    pub fn load_messages_with_swipes(&self) -> Result<Vec<Message>, EngineError> {
+        let mut messages = self.load_message_rows()?;
+        let ids: Vec<u64> = messages.iter().map(|m| m.id).collect();
+        let swipes_map = self.load_swipes_for_messages(&ids)?;
+        for msg in &mut messages {
+            if let Some(swipes) = swipes_map.get(&msg.id) {
+                msg.swipes = swipes.clone();
+                let fallback_applied = msg.ensure_valid_swipe_index();
+                if fallback_applied {
+                    tracing::warn!(
+                        "active_swipe_index was out of bounds for message {} ({} swipes), fell back to 0",
+                        msg.id,
+                        msg.swipes.len()
+                    );
+                }
+                msg.set_active_swipe(msg.active_swipe_index);
+            }
+        }
+        Ok(messages)
     }
 }
 

@@ -70,16 +70,15 @@ fn test_server_config_max_port() {
 #[test]
 fn test_app_state_struct_fields() {
     let settings = Arc::new(std::sync::RwLock::new(AppSettings::default()));
-    let game_service: Arc<GameService> = Arc::new(
-        crate::bootstrap::wiring::build_game_service_for_tests(
-            Arc::clone(&settings),
-            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        )
-        .expect("build_game_service_for_tests should succeed"),
-    );
+    let wired = crate::bootstrap::wiring::build_app_graph_for_tests(
+        Arc::clone(&settings),
+        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+        None,
+    )
+    .expect("build_app_graph_for_tests should succeed");
 
-    let _app_state = (game_service, settings);
+    let _app_state = (wired.game_service, settings);
 }
 
 #[test]

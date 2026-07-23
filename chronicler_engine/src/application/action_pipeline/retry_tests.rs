@@ -180,8 +180,9 @@ fn setup_event_flow_without_trigger(app: &DefaultApplicationService) {
 #[test]
 fn test_retry_no_snapshot() {
     let state = make_test_state();
-    let app = make_test_app_without_snapshot(state).unwrap();
-    retry_last_response_impl(&app);
+    let wired = make_test_app_without_snapshot(state).unwrap();
+    let app = &wired.application_service;
+    retry_last_response_impl(app);
 
     let state = app.load_or_fresh();
     assert!(
