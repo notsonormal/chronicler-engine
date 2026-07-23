@@ -139,6 +139,14 @@ fn test_get_debug_state_populates_fields() {
 }
 
 #[test]
+fn test_active_quantifier_prompt_does_not_panic() {
+    let app = minimal_app();
+    let prompt = app.active_quantifier_prompt();
+    // Method returns String; no panic on either preset-found or preset-missing path.
+    let _ = prompt.len();
+}
+
+#[test]
 fn test_reset_generating_status_sets_idle() {
     let app = minimal_app_no_game();
     let result = app.reset_generating_status();

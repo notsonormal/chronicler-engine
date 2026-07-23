@@ -7,9 +7,11 @@ use std::sync::{Arc, RwLock};
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::application_service::ProcessActionResult;
+use crate::application::errors::ApplicationError;
 use crate::application::generation_guard::GenerationGuard;
 use crate::application::generation_gate::slot::GenerationSlot;
 use crate::application::generation_gate::slot::release_owned_slot;
+use crate::application::persistence_gate::PersistenceGate;
 use crate::application::spawn_pipeline_task;
 use crate::application::action_pipeline::execute_action_impl;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -173,5 +175,15 @@ impl GenerationGate {
     pub fn release_generation_slot(&self, game_id: u64, generation_id: u64) {
         // Use claimed id — concurrent reset cannot steer release at the wrong slot.
         release_owned_slot(&self.registry, &self.is_generating, game_id, generation_id);
+    }
+
+    pub fn reset_generating_status(
+        &self,
+        persistence_gate: &PersistenceGate,
+    ) -> Result<(), ApplicationError> {
+        let mut game_state = persistence_gate.load_or_fresh();
+        game_state.narrative.input_buffer.status = GenerationStatus::Idle;
+        persistence_gate.save_state(&game_state)?;
+        Ok(())
     }
 }

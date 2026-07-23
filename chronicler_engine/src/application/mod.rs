@@ -9,6 +9,7 @@ pub mod debug;
 pub mod errors;
 pub mod game_catalogue;
 pub mod game_service;
+pub mod game_view_query;
 pub mod generation_gate;
 pub mod generation_guard;
 pub mod llm_message;
@@ -27,6 +28,7 @@ pub use application_service::{
     ApplicationError, DebugStateView, DefaultApplicationService, ProcessActionResult,
 };
 pub use game_catalogue::GameCatalogue;
+pub use game_view_query::GameViewQuery;
 pub use world_catalogue::WorldCatalogue;
 pub use generation_gate::GenerationGate;
 pub use game_service::GameService;

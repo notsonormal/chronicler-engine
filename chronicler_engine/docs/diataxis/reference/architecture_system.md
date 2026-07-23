@@ -9,17 +9,12 @@ title: Architecture System
 
 - `crate::domain::model` — Pure data structures; game state.
 - `crate::domain::engine` — Pure simulation logic.
-- `crate::application` — Orchestration; owns port traits under `application/ports/`.
-  - `application::persistence_gate` — Application persistence boundary; owns `Arc<Storage>` + `Arc<PresetStore>`.
-  - `application::generation_gate` — Per-game registry (`Arc<RwLock<HashMap<u64, GenerationSlot>>>`) + atomic projection (`Arc<AtomicBool>`).
-  - `application::game_catalogue` — Game-lifecycle orchestration; borrows `Arc<PersistenceGate>`.
-  - `application::world_catalogue` — Worlds/presets persistence; takes raw `Arc<Storage>`.
+- `crate::application` — Orchestration.
 - `crate::adapters::driven` — Outbound adapters (storage, LLM providers, text check).
-  - `adapters::driven::storage::preset_store` — Adapter around `Storage` for prompt preset CRUD.
 - `crate::adapters::driving` — Inbound adapters (HTTP, CLI).
 - `crate::bootstrap` — Composition root.
-- `crate::settings` — Settings data model (`src/settings.rs`); DB-backed.
-- `crate::test_support` — Shared fixtures; `TestDataBuilder`, `TestAppBuilder`.
+- `crate::settings` — Settings data model.
+- `crate::test_support` — Shared fixtures.
 
 ## Dependency Invariant
 

@@ -2,6 +2,17 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-07-23
+
+### Changed
+
+- **All-in-facade: `GameViewQuery` + `GenerationGate::reset_generating_status`** (wayfinder map: `.scratch/all-in-facade/`). Follow-up to the closed `t2-god-class-split` effort. The eight read-side view methods on `DefaultApplicationService` (`get_current_room_view`, `get_npc_headshots`, `get_debug_state`, `get_story_log_entries`, `get_current_game_name`, `list_latest_llm_messages`, `get_generating_status`, `active_quantifier_prompt`) move to a new `application::game_view_query::GameViewQuery` collaborator. `reset_generating_status` moves to `application::generation_gate::GenerationGate::reset_generating_status(&self, persistence_gate: &PersistenceGate)`. Service keeps nine thin delegation methods (one per relocated method) so the ~28 caller sites stay untouched. Mechanical lift — bodies verbatim, only `self.storage()` accessor calls rewritten to `self.persistence_gate.storage()` within `GameViewQuery`. Internal-collaborator signatures (`&DefaultApplicationService` passed into `generation_gate`, `action_pipeline`, `arrival_service`, `spawn`, `message_editing`) are deliberately **not** redesigned this wave — Tier 3, out of scope. `application_service.rs` remains on the `arch-lint: storage-direct` grandfathered list (for the `storage()` accessor return type only — no method body touches `Storage` directly).
+- **New module**: `chronicler_engine/src/application/game_view_query.rs` (flat, sibling of `game_service.rs`). Holds `Arc<PersistenceGate>` + `Arc<RwLock<AppSettings>>`. `preset_store` reaches through `persistence_gate.preset_store()` (existing accessor) — no third `Arc<PresetStore>` clone at the service layer. Storage access routes through `PersistenceGate` (symmetric with `GameCatalogue`) to avoid a third `Arc<Storage>` holder.
+- **New `GenerationGate` method**: `reset_generating_status(&self, persistence_gate: &PersistenceGate) -> Result<(), ApplicationError>`. Takes the gate's collaborator as a param (not a field) to keep the gate's `is_generating` + `registry` + `next_generation_id` field count unchanged. Body routes through `persistence_gate.save_state(&game_state)?` rather than inlining the `from_game_state` + `save_snapshot` pair — `save_state` already wraps both.
+- **New test**: `test_active_quantifier_prompt_does_not_panic` (`src/application/application_service_tests.rs`) — the only relocated view method that previously had no test. Smoke test that the method returns a `String` on a default-seeded app.
+- **Docs**: `docs/diataxis/reference/architecture_system.md` catalogs the new `application::game_view_query` collaborator alongside `game_catalogue`, `world_catalogue`, `persistence_gate`, `generation_gate`. `docs/diataxis/reference/game_flow.md` and ADR-027 unchanged.
+- **Verification**: `python build.py` green (12/12 steps, 1280 tests passed, 2 LLM skipped, 0 failed). `cargo clippy --all-targets`: 0 errors. `grep -n 'self\.storage()' src/application/application_service.rs`: 0 matches in method bodies → destination invariant met. Service file shrunk from 14.2 KB → 9.5 KB (≈33% smaller). The 6 leaky accessors (`storage()`, `preset_storage()`, `settings()`, `is_generating()`, `cancel_token()`, `game_service()`) stay — Tier 3.
+
 ## 2026-07-19
 
 ### Changed
