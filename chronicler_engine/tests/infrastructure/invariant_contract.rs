@@ -7,16 +7,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use chronicler_engine::application::action_pipeline::PhaseError;
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::domain::engine::action_processing::{
-    FreeActionContext, apply_npc_events, execute_freeaction_impl,
-};
+use chronicler_engine::domain::model::state::game_state::{FreeActionContext, GameState};
 
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::domain::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
 };
-use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::{
@@ -147,17 +144,17 @@ fn test_inv002_state_mutation_order() {
     let player = Arc::new(fixtures::create_test_player());
     let npcs = npc_map(vec![shopkeeper_npc()]);
 
-    let result = execute_freeaction_impl(
-        &state,
-        &FreeActionContext {
-            narration_text: "You look around the shop.",
-            quantifier_result: &quantifier,
-        },
-        &map,
-        &player,
-        &npcs,
-    )
-    .expect("execute_freeaction_impl should succeed");
+    let result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "You look around the shop.",
+                quantifier_result: &quantifier,
+            },
+            &map,
+            &player,
+            &npcs,
+        )
+        .expect("execute_freeaction_impl should succeed");
     assert!(
         result.trigger_match.is_some(),
         "INV-002: trigger should have fired (evaluated before times_met increment)"
@@ -192,18 +189,16 @@ fn test_inv002_violation_demo() {
     }];
     let map = Arc::new(fixtures::create_test_map());
     let npcs = npc_map(vec![shopkeeper_npc()]);
-    let state_after_events = apply_npc_events(state.clone(), &events, &map, &npcs)
+    let state_after_events = state
+        .clone()
+        .apply_npc_events(&events, &map, &npcs)
         .expect("apply_npc_events should succeed");
-    let triggers_after_swap = chronicler_engine::domain::engine::trigger_eval::evaluate_triggers(
-        &state_after_events,
-        &npcs,
-    );
+    let triggers_after_swap = state_after_events.evaluate_triggers(&npcs);
     assert!(
         triggers_after_swap.is_empty(),
         "VIOLATION: trigger should NOT fire when apply_npc_events runs first (times_met == 1)"
     );
-    let triggers_correct =
-        chronicler_engine::domain::engine::trigger_eval::evaluate_triggers(&state, &npcs);
+    let triggers_correct = state.evaluate_triggers(&npcs);
     assert!(
         !triggers_correct.is_empty(),
         "Correct order: trigger SHOULD fire (times_met == 0)"
@@ -322,9 +317,6 @@ fn test_inv003_snapshot_captures_state_fields() {
 }
 #[test]
 fn test_inv005_handle_movement_runs_before_narration() {
-    use chronicler_engine::domain::engine::action_processing::{
-        FreeActionContext, execute_freeaction_impl,
-    };
     use chronicler_engine::domain::model::quantifier::{
         QuantifierConfidence, QuantifierParseResult, QuantifierResult,
     };
@@ -349,17 +341,17 @@ fn test_inv005_handle_movement_runs_before_narration() {
         },
     };
 
-    let result = execute_freeaction_impl(
-        &state,
-        &FreeActionContext {
-            narration_text: "I walk north.",
-            quantifier_result: &quantifier,
-        },
-        &map,
-        &player,
-        &npcs,
-    )
-    .expect("execute_freeaction_impl should succeed");
+    let result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "I walk north.",
+                quantifier_result: &quantifier,
+            },
+            &map,
+            &player,
+            &npcs,
+        )
+        .expect("execute_freeaction_impl should succeed");
 
     assert_eq!(
         result.next_state.movement.current_room_id, target_room,
@@ -372,8 +364,6 @@ fn test_inv005_handle_movement_runs_before_narration() {
 }
 #[test]
 fn test_inv007_dynamic_room_creation_on_invalid_destination() {
-    use chronicler_engine::domain::engine::action_processing::handle_movement;
-
     let state = create_test_state();
     let invalid_destination = "nonexistent_place_xyz";
 
@@ -389,7 +379,9 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
         "precondition: invalid_destination should not exist in map"
     );
 
-    let result = handle_movement(state, Some(invalid_destination), &[], &map, &npcs).unwrap();
+    let result = state
+        .handle_movement(Some(invalid_destination), &[], &map, &npcs)
+        .unwrap();
     assert!(
         !result.movement.dynamic_rooms.is_empty(),
         "INV-007: dynamic room should be created for invalid destination"
@@ -435,8 +427,7 @@ fn test_inv002_mutation_order_property() {
         let map = Arc::new(fixtures::create_test_map());
         let player = Arc::new(fixtures::create_test_player());
         let npcs = npc_map(vec![shopkeeper_npc()]);
-        let result = execute_freeaction_impl(
-            &state,
+        let result = state.execute_freeaction_impl(
             &FreeActionContext {
                 narration_text: &narration_text,
                 quantifier_result: &quantifier,

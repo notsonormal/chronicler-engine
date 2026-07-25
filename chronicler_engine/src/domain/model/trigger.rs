@@ -85,4 +85,13 @@ impl NpcEncounterLog {
             .map(|s| s.currently_meeting)
             .unwrap_or(false)
     }
+
+    pub fn check_condition(&self, npc_id: &str, condition: &TriggerRequirement) -> bool {
+        let times_met = self.get_times_met(npc_id);
+        match condition.operator {
+            ComparisonOperator::Eq => times_met == condition.threshold,
+            ComparisonOperator::Lt => times_met < condition.threshold,
+            ComparisonOperator::Gte => times_met >= condition.threshold,
+        }
+    }
 }

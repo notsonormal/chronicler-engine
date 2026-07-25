@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::settings::{get_settings_path, load_settings, save_settings};
+use crate::test_support::sqlite_storage;
 
 static SETTINGS_DB_LOCK: Mutex<()> = Mutex::new(());
 
@@ -30,8 +31,7 @@ fn test_get_settings_path_default() {
 #[test]
 fn test_load_settings_valid_file() {
     with_isolated_settings(|_path| {
-        let pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-        let storage = crate::adapters::driven::storage::Storage::new_sqlite(pool, 1);
+        let storage = sqlite_storage().unwrap();
 
         let custom = AppSettings {
             connections: vec![LlmProviderConfig::new(
@@ -55,8 +55,7 @@ fn test_load_settings_valid_file() {
 #[test]
 fn test_save_settings_roundtrip() {
     with_isolated_settings(|_path| {
-        let pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-        let storage = crate::adapters::driven::storage::Storage::new_sqlite(pool, 1);
+        let storage = sqlite_storage().unwrap();
 
         let settings = AppSettings {
             connections: vec![LlmProviderConfig {

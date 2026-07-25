@@ -1,6 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Core data models and domain types
 
+pub mod action;
 pub mod agent;
 pub mod character;
 pub mod game;
@@ -17,6 +18,8 @@ pub mod template;
 pub mod trigger;
 pub mod world;
 
+#[cfg(test)]
+mod action_tests;
 #[cfg(test)]
 mod character_tests;
 #[cfg(test)]

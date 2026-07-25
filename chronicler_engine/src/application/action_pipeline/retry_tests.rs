@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::application::action_pipeline::retry::{
-    retry_event_continuation, retry_last_response_impl, retry_main_narration,
-};
+use crate::application::action_pipeline::retry::{retry_event_continuation, retry_main_narration};
 
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
@@ -182,7 +180,7 @@ fn test_retry_no_snapshot() {
     let state = make_test_state();
     let wired = make_test_app_without_snapshot(state).unwrap();
     let app = &wired.application_service;
-    retry_last_response_impl(app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     assert!(
@@ -212,13 +210,13 @@ fn test_retry_load_messages_error() {
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
         Arc::new(make_service()),
     ));
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 }
 
 #[test]
 fn test_retry_no_input() {
     let app = TestAppBuilder::default_test().build_service();
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 }
 
 #[test]
@@ -241,7 +239,7 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
         );
     let _ = app.storage().save_snapshot(&snapshot);
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 }
 
 #[test]
@@ -262,7 +260,7 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
         );
     let _ = app.storage().save_snapshot(&snapshot);
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 }
 
 #[test]
@@ -302,7 +300,7 @@ fn test_retry_event_storage_error_on_pre_event() {
         TestOverride::internal("simulated load_by_id failure"),
     );
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     handle.clear("load_snapshot_by_id");
 
@@ -323,7 +321,7 @@ fn test_retry_event_missing_trigger_context() {
 
     setup_event_flow_without_trigger(&app);
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -411,7 +409,7 @@ fn test_retry_event_trigger_narration_fails() {
         insert_message_with_swipe(&app, last);
     }
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     assert!(
@@ -460,7 +458,7 @@ fn test_retry_event_empty_continuation_text() {
         );
     let _ = app.storage().save_snapshot(&final_snapshot);
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 }
 
 #[test]
@@ -489,7 +487,7 @@ fn test_retry_main_no_pre_main_snapshot() {
         insert_message_with_swipe(&app, last);
     }
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     assert!(
@@ -540,7 +538,7 @@ fn test_retry_event_continuation_happy_path() {
         insert_message_with_swipe(&app, last);
     }
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     assert!(
@@ -600,7 +598,7 @@ fn test_retry_main_storage_error_on_pre_main() {
         TestOverride::internal("simulated load_by_id failure"),
     );
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     handle.clear("load_snapshot_by_id");
 
@@ -688,7 +686,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&app, last);
     }
-    retry_last_response_impl(&app);
+    app.retry_last_response();
     let state = app.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
@@ -721,7 +719,7 @@ fn test_retry_appends_swipe_to_same_message() {
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
         .unwrap();
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let msgs = app.load_messages().unwrap();
     let narration = msgs
@@ -745,7 +743,7 @@ fn test_retry_appends_swipe_to_same_message() {
 }
 
 #[test]
-fn test_retrigger_event_impl_cancels_cleanly() {
+fn test_retrigger_event_cancels_cleanly() {
     let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
@@ -785,7 +783,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
 
     app.cancel_token().cancel();
 
-    crate::application::action_pipeline::retrigger_event_impl(&app);
+    app.retrigger_event();
 
     let state = app.load_or_fresh();
     assert_eq!(
@@ -828,7 +826,7 @@ fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
 
     setup_event_flow(&app);
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -867,7 +865,7 @@ fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
 
     setup_event_flow(&app);
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -910,7 +908,7 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
 
     setup_event_flow(&app);
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -924,12 +922,12 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
 }
 
 // Cancellation seam coverage: drive the `Err(PhaseError::Cancelled)` arm
-// of `retry_last_response_impl` by flipping `app.set_game_id` mid-pipeline
+// of `retry_last_response` by flipping `app.set_game_id` mid-pipeline
 // (the α-check in `phase_trigger_continuation_llm_call` returns Cancelled
 // when the game id changes during the LLM call's sleep window).
 
 #[test]
-fn test_retry_last_response_impl_cancelled_at_phase_boundary() {
+fn test_retry_last_response_cancelled_at_phase_boundary() {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
@@ -951,7 +949,7 @@ fn test_retry_last_response_impl_cancelled_at_phase_boundary() {
         app_for_thread.set_game_id(initial_game_id.wrapping_add(1));
     });
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     flipper
         .join()
@@ -973,13 +971,13 @@ fn test_retry_last_response_impl_cancelled_at_phase_boundary() {
     );
 }
 
-// Same game-id-flip trick for `retrigger_event_impl`: drives the
+// Same game-id-flip trick for `retrigger_event`: drives the
 // `Err(PhaseError::Cancelled)` arm in its bottom match block, which the
-// existing `test_retrigger_event_impl_cancels_cleanly` only covered by
+// existing `test_retrigger_event_cancels_cleanly` only covered by
 // accident (phase_finalize reset status to Idle after a successful run).
 
 #[test]
-fn test_retrigger_event_impl_cancelled_at_phase_boundary() {
+fn test_retrigger_event_cancelled_at_phase_boundary() {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
@@ -1001,7 +999,7 @@ fn test_retrigger_event_impl_cancelled_at_phase_boundary() {
         app_for_thread.set_game_id(initial_game_id.wrapping_add(1));
     });
 
-    crate::application::action_pipeline::retrigger_event_impl(&app);
+    app.retrigger_event();
 
     flipper
         .join()
@@ -1017,13 +1015,13 @@ fn test_retrigger_event_impl_cancelled_at_phase_boundary() {
     );
 }
 
-// `retrigger_event_impl`'s `Err(e) => finalize_phase_error` arm: drives
+// `retrigger_event`'s `Err(e) => finalize_phase_error` arm: drives
 // `retry_event_continuation` to return `Err(PhaseError::FetchFailed(msg))`
 // by injecting a `get_world` storage failure and confirming the orchestrator
 // surfaces it as `GenerationStatus::Error` with the underlying message.
 
 #[test]
-fn test_retrigger_event_impl_emits_error_on_world_fetch_failure() {
+fn test_retrigger_event_emits_error_on_world_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
     let (storage, handle) = {
         let base = Storage::new_in_memory();
@@ -1045,7 +1043,7 @@ fn test_retrigger_event_impl_emits_error_on_world_fetch_failure() {
 
     setup_event_flow(&app);
 
-    crate::application::action_pipeline::retrigger_event_impl(&app);
+    app.retrigger_event();
 
     let state = app.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -1102,7 +1100,7 @@ fn test_retry_records_missing_snapshot_id() {
         insert_message_with_swipe(&app, last);
     }
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let state = app.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {

@@ -4,9 +4,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::engine::action_processing::{
-    FreeActionContext, TriggerMatch, apply_npc_events, commit_trigger_narration,
-    execute_freeaction_impl,
+use crate::domain::model::state::game_state::{
+    ActionResult, FreeActionContext, GameState, TriggerMatch,
 };
 use crate::error::EngineError;
 use crate::domain::model::character::{NpcCard, PersonaCard};
@@ -14,7 +13,6 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::quantifier::{QuantifierConfidence, QuantifierResult, compute_npc_events};
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
-use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
@@ -277,17 +275,19 @@ impl<'a> PipelineRun<'a> {
             return Ok((state, String::new()));
         }
 
-        state =
-            match commit_trigger_narration(state.clone(), trigger, &continuation_text, map, npcs) {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::error!("Trigger commit failed: {e}");
-                    state.narrative.input_buffer.status =
-                        GenerationStatus::Error(format!("Trigger error: {e}"));
-                    self.persist(&state);
-                    return Ok((state, String::new()));
-                }
-            };
+        state = match state
+            .clone()
+            .commit_trigger_narration(trigger, &continuation_text, map, npcs)
+        {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!("Trigger commit failed: {e}");
+                state.narrative.input_buffer.status =
+                    GenerationStatus::Error(format!("Trigger error: {e}"));
+                self.persist(&state);
+                return Ok((state, String::new()));
+            }
+        };
 
         self.persist_snapshot_or_err(&mut state, "post-trigger snapshot")?;
 
@@ -335,7 +335,7 @@ impl<'a> PipelineRun<'a> {
         state.scene.npcs_in_area = npc_cards;
 
         let events = compute_npc_events(&previous_ids, &new_ids);
-        match apply_npc_events(state.clone(), &events.events, map, npcs) {
+        match state.clone().apply_npc_events(&events.events, map, npcs) {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!("Post-trigger reconcile failed: {e}");
@@ -436,9 +436,8 @@ impl ActionPipeline {
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> Result<crate::domain::engine::action_processing::ActionResult, EngineError> {
-        execute_freeaction_impl(
-            state,
+    ) -> Result<ActionResult, EngineError> {
+        state.execute_freeaction_impl(
             &FreeActionContext {
                 narration_text,
                 quantifier_result,

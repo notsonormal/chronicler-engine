@@ -46,9 +46,6 @@ SUPPRESSED_FREE_FNS: frozenset[tuple[str, str]] = frozenset(
         ("application/narrative_prompt/context.rs", "make_prompt_context"),
         ("adapters/driving/http/locks.rs", "read_lock_or_recover"),
         ("adapters/driving/http/locks.rs", "write_lock_or_recover"),
-        ("application/action_pipeline/retry.rs", "retry_last_response_impl"),
-        ("application/action_pipeline/retry.rs", "retrigger_event_impl"),
-        ("application/action_pipeline/actions.rs", "execute_action_impl"),
         ("application/generation_gate/slot.rs", "release_owned_slot"),
     }
 )

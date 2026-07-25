@@ -1,9 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::domain::engine::trigger_eval::{
-    check_condition, evaluate_triggers as evaluate_triggers_with_npcs,
-};
 use crate::domain::model::character::{CharacterSheet, NpcCard};
 use crate::domain::model::state::game_state::{GameState, GameStateBuilder};
 use crate::domain::model::state::scene_state::SceneState;
@@ -16,7 +13,7 @@ thread_local! {
 }
 
 fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
-    TEST_NPCS.with(|npcs| evaluate_triggers_with_npcs(state, &npcs.borrow()))
+    TEST_NPCS.with(|npcs| state.evaluate_triggers(&npcs.borrow()))
 }
 fn make_npc(id: &str, triggers: Vec<Trigger>) -> NpcCard {
     NpcCard {
@@ -360,9 +357,5 @@ fn test_check_condition_missing_npc_defaults_to_zero() {
         operator: ComparisonOperator::Eq,
         threshold: 0,
     };
-    assert!(check_condition(
-        &npc_encounter_log,
-        "unknown_npc",
-        &condition
-    ));
+    assert!(npc_encounter_log.check_condition("unknown_npc", &condition));
 }

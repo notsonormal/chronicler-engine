@@ -7,8 +7,6 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::TestDataBuilder;
 
-use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
-
 use crate::fixtures::create_minimal_test_state;
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 use crate::application_ext::PipelineHelpers;
@@ -24,11 +22,8 @@ fn base_data() -> chronicler_engine::test_support::TestData {
 
 #[test]
 fn test_sequential_execute_retry_execute() {
-    let mut state = create_minimal_test_state();
-    state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
-        .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
@@ -42,20 +37,20 @@ fn test_sequential_execute_retry_execute() {
         .unwrap();
 
     app.add_input_and_save("examine room");
-    execute_action_impl(&app, "examine room".to_string());
+    app.execute_action("examine room".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
         "Action A should complete"
     );
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
     assert!(
         app.wait_for_generation_complete(1000),
         "Retry A should complete"
     );
 
     app.add_input_and_save("look around");
-    execute_action_impl(&app, "look around".to_string());
+    app.execute_action("look around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
         "Action B should complete"
@@ -90,11 +85,8 @@ fn test_sequential_execute_retry_execute() {
 
 #[test]
 fn test_sequential_execute_delete_execute() {
-    let mut state = create_minimal_test_state();
-    state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
-        .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
@@ -108,7 +100,7 @@ fn test_sequential_execute_delete_execute() {
         .unwrap();
 
     app.add_input_and_save("examine room");
-    execute_action_impl(&app, "examine room".to_string());
+    app.execute_action("examine room".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
         "Action A should complete"
@@ -130,7 +122,7 @@ fn test_sequential_execute_delete_execute() {
     }
 
     app.add_input_and_save("look around");
-    execute_action_impl(&app, "look around".to_string());
+    app.execute_action("look around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
         "Action B should complete"
@@ -150,11 +142,8 @@ fn test_sequential_execute_delete_execute() {
 
 #[test]
 fn test_async_action_sequence_then_retry() {
-    let mut state = create_minimal_test_state();
-    state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
-        .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
@@ -168,14 +157,14 @@ fn test_async_action_sequence_then_retry() {
         .unwrap();
 
     app.add_input_and_save("hello");
-    execute_action_impl(&app, "hello".to_string());
+    app.execute_action("hello".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
     app.add_input_and_save("examine room");
-    execute_action_impl(&app, "examine room".to_string());
+    app.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
-    retry_last_response_impl(&app);
+    app.retry_last_response();
     assert!(app.wait_for_generation_complete(1000));
 
     let guard = app.latest_state();
@@ -190,11 +179,8 @@ fn test_async_action_sequence_then_retry() {
 
 #[test]
 fn test_three_actions_in_sequence() {
-    let mut state = create_minimal_test_state();
-    state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
-        .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
@@ -209,7 +195,7 @@ fn test_three_actions_in_sequence() {
 
     for action in ["examine room", "look around", "check inventory"] {
         app.add_input_and_save(action);
-        execute_action_impl(&app, action.to_string());
+        app.execute_action(action.to_string());
         assert!(
             app.wait_for_generation_complete(1000),
             "Action '{action}' should complete"
@@ -239,12 +225,8 @@ fn test_three_actions_in_sequence() {
 
 #[test]
 fn test_delete_input_then_retry_fails_gracefully() {
-    let mut state = create_minimal_test_state();
-    state.narrative.history.clear();
-    let state_for_app1 = state.clone();
     let data1 = base_data();
     let app1 = SqliteTestAppBuilder::with_data(data1)
-        .state_mut(move |s| *s = state_for_app1)
         .mock_backend(MockBackend::new)
         .build_service()
         .unwrap();
@@ -253,7 +235,6 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
     let data2 = base_data();
     let app2 = SqliteTestAppBuilder::with_data(data2)
-        .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
@@ -266,7 +247,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app2, "examine room".to_string());
+    app2.execute_action("examine room".to_string());
     assert!(app2.wait_for_generation_complete(1000));
 
     {
@@ -275,7 +256,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
         app2.save_test_state(&state);
     }
 
-    retry_last_response_impl(&app2);
+    app2.retry_last_response();
     let guard = app2.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
@@ -285,12 +266,8 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
 #[test]
 fn test_reset_clears_history_and_state() {
-    let mut state = create_minimal_test_state();
-    state.narrative.history.clear();
-    let state_for_app1 = state.clone();
     let data1 = base_data();
     let app1 = SqliteTestAppBuilder::with_data(data1)
-        .state_mut(move |s| *s = state_for_app1)
         .mock_backend(MockBackend::new)
         .build_service()
         .unwrap();
@@ -303,7 +280,6 @@ fn test_reset_clears_history_and_state() {
 
     let data2 = base_data();
     let app2 = SqliteTestAppBuilder::with_data(data2)
-        .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
@@ -316,7 +292,7 @@ fn test_reset_clears_history_and_state() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app2, "walk to room2".to_string());
+    app2.execute_action("walk to room2".to_string());
     assert!(app2.wait_for_generation_complete(1000));
     let guard = app2.latest_state();
     assert_eq!(guard.movement.current_room_id, "room2");
@@ -338,11 +314,8 @@ fn test_reset_clears_history_and_state() {
 
 #[test]
 fn test_reset_then_execute_works() {
-    let mut state = create_minimal_test_state();
-    state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
-        .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
@@ -356,14 +329,14 @@ fn test_reset_then_execute_works() {
         .unwrap();
 
     app.add_input_and_save("examine room");
-    execute_action_impl(&app, "examine room".to_string());
+    app.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
     let fresh_state = create_minimal_test_state();
     app.save_test_state(&fresh_state);
 
     app.add_input_and_save("look around");
-    execute_action_impl(&app, "look around".to_string());
+    app.execute_action("look around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
         "Action after reset should complete"
@@ -385,11 +358,8 @@ fn test_reset_then_execute_works() {
 
 #[test]
 fn test_delete_mid_sequence() {
-    let mut state = create_minimal_test_state();
-    state.narrative.history.clear();
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
-        .state_mut(move |s| *s = state)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
@@ -403,11 +373,11 @@ fn test_delete_mid_sequence() {
         .unwrap();
 
     app.add_input_and_save("examine room");
-    execute_action_impl(&app, "examine room".to_string());
+    app.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
     app.add_input_and_save("look around");
-    execute_action_impl(&app, "look around".to_string());
+    app.execute_action("look around".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
     let guard = app.latest_state();
@@ -427,7 +397,7 @@ fn test_delete_mid_sequence() {
     }
 
     app.add_input_and_save("check door");
-    execute_action_impl(&app, "check door".to_string());
+    app.execute_action("check door".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
     let guard = app.latest_state();

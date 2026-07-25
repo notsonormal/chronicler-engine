@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::engine::logic::{attempt_semantic_walk, create_dynamic_room};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::state::game_state::GameState;
 
@@ -117,7 +116,7 @@ fn test_get_current_room_failure() {
 #[test]
 fn test_attempt_semantic_walk_valid() {
     let (mut state, map) = setup_test_state();
-    let result = attempt_semantic_walk(&mut state, &map, "room2");
+    let result = state.attempt_semantic_walk(&map, "room2");
     assert!(result.is_ok());
     assert!(result.unwrap().contains("Dusty Kitchen"));
     assert_eq!(state.movement.current_room_id, "room2");
@@ -126,7 +125,7 @@ fn test_attempt_semantic_walk_valid() {
 #[test]
 fn test_attempt_semantic_walk_invalid() {
     let (mut state, map) = setup_test_state();
-    let result = attempt_semantic_walk(&mut state, &map, "nonexistent_room");
+    let result = state.attempt_semantic_walk(&map, "nonexistent_room");
     assert!(result.is_err());
     assert_eq!(state.movement.current_room_id, "room1");
 }
@@ -134,29 +133,29 @@ fn test_attempt_semantic_walk_invalid() {
 #[test]
 fn test_attempt_semantic_walk_empty() {
     let (mut state, map) = setup_test_state();
-    let result = attempt_semantic_walk(&mut state, &map, "");
+    let result = state.attempt_semantic_walk(&map, "");
     assert!(result.is_err(), "Empty room id should return error");
 }
 
 #[test]
 fn test_attempt_semantic_walk_dynamic_room() {
     let (mut state, map) = setup_test_state();
-    let dynamic = create_dynamic_room("Secret Cave", "Dark and damp.");
+    let dynamic = Room::new_dynamic("Secret Cave", "Dark and damp.");
     let dynamic_id = dynamic.id.clone();
     state
         .movement
         .dynamic_rooms
         .insert(dynamic_id.clone(), dynamic);
 
-    let result = attempt_semantic_walk(&mut state, &map, &dynamic_id);
+    let result = state.attempt_semantic_walk(&map, &dynamic_id);
     assert!(result.is_ok());
     assert!(result.unwrap().contains("Secret Cave"));
     assert_eq!(state.movement.current_room_id, dynamic_id);
 }
 
 #[test]
-fn test_create_dynamic_room() {
-    let room = create_dynamic_room("Test Room", "A test room.");
+fn test_new_dynamic_room() {
+    let room = Room::new_dynamic("Test Room", "A test room.");
     assert_eq!(room.name, "Test Room");
     assert_eq!(room.description, "A test room.");
     assert!(room.id.starts_with("dynamic_"));

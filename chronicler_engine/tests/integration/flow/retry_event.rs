@@ -14,8 +14,6 @@ use chronicler_engine::test_support::make_test_recorder;
 use chronicler_engine::test_support::TestData;
 use chronicler_engine::TestDataBuilder;
 use crate::make_test_recorder_with_storage;
-use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
-
 use crate::fixtures::create_test_map;
 use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 use crate::application_ext::PipelineHelpers;
@@ -84,13 +82,13 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app2, "enter shop".to_string());
+    app2.execute_action("enter shop".to_string());
     assert!(
         app2.wait_for_generation_complete(1000),
         "Execute should complete"
     );
 
-    retry_last_response_impl(&app2);
+    app2.retry_last_response();
     assert!(
         app2.wait_for_generation_complete(1000),
         "Event retry should complete"
@@ -141,7 +139,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app2, "enter shop".to_string());
+    app2.execute_action("enter shop".to_string());
     assert!(
         app2.wait_for_generation_complete(1000),
         "Execute should complete"
@@ -162,7 +160,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         "Trigger should have fired and added an Event"
     );
 
-    retry_last_response_impl(&app2);
+    app2.retry_last_response();
     assert!(
         app2.wait_for_generation_complete(1000),
         "Event retry should complete"
@@ -289,7 +287,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app2, "enter shop".to_string());
+    app2.execute_action("enter shop".to_string());
     assert!(
         app2.wait_for_generation_complete(1000),
         "Execute should complete"

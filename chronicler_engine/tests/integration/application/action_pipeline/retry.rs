@@ -50,10 +50,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(
-        &app,
-        "look around".to_string(),
-    );
+    app.execute_action("look around".to_string());
     let after_first = app.latest_state();
     let first_narration_count = after_first
         .narrative
@@ -63,7 +60,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         .count();
     assert_eq!(first_narration_count, 1);
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let after_retry = app.latest_state();
     let retry_narration_count = after_retry
@@ -85,7 +82,7 @@ fn test_retry_with_empty_history_is_noop() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let final_state = app.latest_state();
     assert!(final_state.narrative.history().is_empty());
@@ -106,10 +103,7 @@ fn test_retry_after_llm_failure_succeeds() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(
-        &failing_app,
-        "look".to_string(),
-    );
+    failing_app.execute_action("look".to_string());
     let after_fail = failing_app.latest_state();
     assert!(
         after_fail
@@ -127,7 +121,7 @@ fn test_retry_after_llm_failure_succeeds() {
             chronicler_engine::application::agents::registry::AgentRegistry::default(),
         )),
     );
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&working_app);
+    working_app.retry_last_response();
 
     let after_retry = working_app.latest_state();
     assert!(
@@ -142,7 +136,7 @@ fn test_retry_no_snapshot() {
     let wired = make_test_app_without_snapshot(create_test_state()).unwrap();
     let app = &wired.application_service;
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(app);
+    app.retry_last_response();
 
     let guard = app.latest_state();
     assert!(
@@ -163,7 +157,7 @@ fn test_retry_no_input_text() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let guard = app.latest_state();
     assert_eq!(guard.narrative.history().len(), 2);
@@ -185,7 +179,7 @@ fn test_retry_room_not_found() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let guard = app.latest_state();
     assert!(
@@ -213,7 +207,7 @@ fn test_retry_llm_error() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let guard = app.latest_state();
     assert!(
@@ -241,7 +235,7 @@ fn test_retry_empty_narration() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let guard = app.latest_state();
     assert!(
@@ -270,7 +264,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let completed = app.wait_for_generation_complete(1000);
     assert!(completed, "Retry should complete within timeout");
@@ -350,7 +344,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let completed = app.wait_for_generation_complete(1000);
     assert!(completed, "Event retry should complete within timeout");

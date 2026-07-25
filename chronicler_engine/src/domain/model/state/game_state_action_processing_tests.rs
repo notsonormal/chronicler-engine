@@ -3,17 +3,13 @@ use std::sync::Arc;
 
 use proptest::prelude::*;
 
-use crate::domain::engine::action_processing::{
-    FreeActionContext, apply_npc_events, commit_trigger_narration, execute_freeaction_impl,
-    handle_movement,
-};
+use crate::domain::model::state::game_state::{FreeActionContext, GameState};
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Overworld, Region};
 use crate::domain::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
 };
-use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{TestGameState, TestMap, TestNpc, TestPersona};
 
@@ -98,8 +94,7 @@ fn test_execute_freeaction_impl_no_movement() {
         MessageType::Narration,
     );
 
-    let result = execute_freeaction_impl(
-        &state,
+    let result = state.execute_freeaction_impl(
         &FreeActionContext {
             narration_text: "You examine the room.",
             quantifier_result: &make_quantifier_result_no_movement(),
@@ -129,8 +124,7 @@ fn test_execute_freeaction_impl_with_movement() {
     let deps = deps_with_carla("room1");
     let state = TestGameState::in_room("room1");
 
-    let result = execute_freeaction_impl(
-        &state,
+    let result = state.execute_freeaction_impl(
         &FreeActionContext {
             narration_text: "You walk to the tavern.",
             quantifier_result: &make_quantifier_result_with_movement("nonexistent_room"),
@@ -163,8 +157,7 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
 
     assert!(state.scene.npcs_in_area.is_empty());
 
-    let result = execute_freeaction_impl(
-        &state,
+    let result = state.execute_freeaction_impl(
         &FreeActionContext {
             narration_text: "You look around.",
             quantifier_result: &make_quantifier_result_no_movement(),
@@ -186,8 +179,7 @@ fn test_execute_freeaction_impl_npc_events_entered() {
     let mut state = TestGameState::in_room("room1");
     state.scene.npcs_in_area = vec![];
 
-    let result = execute_freeaction_impl(
-        &state,
+    let result = state.execute_freeaction_impl(
         &FreeActionContext {
             narration_text: "You see Carla.",
             quantifier_result: &make_quantifier_result_no_movement(),
@@ -217,7 +209,9 @@ fn test_apply_npc_events_entered() {
         event_type: NpcTransitionType::Entered,
     }];
 
-    let state = apply_npc_events(state, &events, &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .apply_npc_events(&events, &deps.map, &deps.npcs)
+        .unwrap();
 
     assert!(state.npc_encounter_log.is_currently_meeting("carla"));
 }
@@ -232,7 +226,9 @@ fn test_apply_npc_events_left() {
         event_type: NpcTransitionType::Left,
     }];
 
-    let state = apply_npc_events(state, &events, &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .apply_npc_events(&events, &deps.map, &deps.npcs)
+        .unwrap();
 
     assert!(!state.npc_encounter_log.is_currently_meeting("carla"));
 }
@@ -247,7 +243,9 @@ fn test_apply_npc_events_increments_times_met() {
         event_type: NpcTransitionType::Entered,
     }];
 
-    let state = apply_npc_events(state, &events, &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .apply_npc_events(&events, &deps.map, &deps.npcs)
+        .unwrap();
 
     assert_eq!(
         state.npc_encounter_log.get_times_met("carla"),
@@ -261,8 +259,9 @@ fn test_handle_movement_no_destination() {
     let state = make_test_state();
     let original_room = state.movement.current_room_id.clone();
 
-    let state =
-        handle_movement(state, None, &["carla".to_string()], &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .handle_movement(None, &["carla".to_string()], &deps.map, &deps.npcs)
+        .unwrap();
 
     assert_eq!(state.movement.current_room_id, original_room);
 }
@@ -274,14 +273,14 @@ fn test_handle_movement_same_room_no_increment() {
     state.movement.current_room_id = "test_room".to_string();
     let initial_times = state.npc_encounter_log.get_times_met("carla");
 
-    let state = handle_movement(
-        state,
-        Some("test_room"),
-        &["carla".to_string()],
-        &deps.map,
-        &deps.npcs,
-    )
-    .unwrap();
+    let state = state
+        .handle_movement(
+            Some("test_room"),
+            &["carla".to_string()],
+            &deps.map,
+            &deps.npcs,
+        )
+        .unwrap();
 
     assert_eq!(
         state.npc_encounter_log.get_times_met("carla"),
@@ -295,8 +294,9 @@ fn test_handle_movement_creates_dynamic_room() {
     let state = make_test_state();
     let original_room = state.movement.current_room_id.clone();
 
-    let state =
-        handle_movement(state, Some("nonexistent_room"), &[], &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .handle_movement(Some("nonexistent_room"), &[], &deps.map, &deps.npcs)
+        .unwrap();
 
     assert_ne!(state.movement.current_room_id, original_room);
     assert!(
@@ -312,14 +312,14 @@ fn test_handle_movement_sets_pending_location() {
     let deps = deps_with_carla("test_room");
     let state = make_test_state();
 
-    let state = handle_movement(
-        state,
-        Some("test_room"),
-        &["carla".to_string()],
-        &deps.map,
-        &deps.npcs,
-    )
-    .unwrap();
+    let state = state
+        .handle_movement(
+            Some("test_room"),
+            &["carla".to_string()],
+            &deps.map,
+            &deps.npcs,
+        )
+        .unwrap();
 
     assert!(state.narrative.history().is_empty());
     assert_eq!(
@@ -333,14 +333,14 @@ fn test_handle_movement_sets_currently_meeting() {
     let deps = deps_with_carla("test_room");
     let state = make_test_state();
 
-    let state = handle_movement(
-        state,
-        Some("new_room"),
-        &["carla".to_string()],
-        &deps.map,
-        &deps.npcs,
-    )
-    .unwrap();
+    let state = state
+        .handle_movement(
+            Some("new_room"),
+            &["carla".to_string()],
+            &deps.map,
+            &deps.npcs,
+        )
+        .unwrap();
 
     assert!(state.npc_encounter_log.is_currently_meeting("carla"));
 }
@@ -361,17 +361,17 @@ fn test_trigger_split_architecture_produces_event_header() {
         MessageType::Narration,
     );
 
-    let turn_result = execute_freeaction_impl(
-        &state,
-        &FreeActionContext {
-            narration_text: "You enter the room.",
-            quantifier_result: &make_quantifier_result_no_movement(),
-        },
-        &deps.map,
-        &deps.persona,
-        &deps.npcs,
-    )
-    .unwrap();
+    let turn_result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "You enter the room.",
+                quantifier_result: &make_quantifier_result_no_movement(),
+            },
+            &deps.map,
+            &deps.persona,
+            &deps.npcs,
+        )
+        .unwrap();
 
     let request = crate::test_support::TestStoredTriggerContext::for_npc(
         "carla",
@@ -379,14 +379,15 @@ fn test_trigger_split_architecture_produces_event_header() {
         "Carla appears",
     );
 
-    let state = commit_trigger_narration(
-        turn_result.next_state,
-        &request,
-        "Carla emerges from the shadows.",
-        &deps.map,
-        &deps.npcs,
-    )
-    .unwrap();
+    let state = turn_result
+        .next_state
+        .commit_trigger_narration(
+            &request,
+            "Carla emerges from the shadows.",
+            &deps.map,
+            &deps.npcs,
+        )
+        .unwrap();
 
     assert_eq!(state.narrative.history().len(), 2);
 
@@ -415,14 +416,14 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
         "Carla appears",
     );
 
-    let state = commit_trigger_narration(
-        state,
-        &request,
-        "Gabriella emerges from the shadows.",
-        &deps.map,
-        &deps.npcs,
-    )
-    .unwrap();
+    let state = state
+        .commit_trigger_narration(
+            &request,
+            "Gabriella emerges from the shadows.",
+            &deps.map,
+            &deps.npcs,
+        )
+        .unwrap();
 
     assert_eq!(state.narrative.history().len(), 1);
 
@@ -446,8 +447,9 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
         "Carla appears",
     );
 
-    let state =
-        commit_trigger_narration(state, &request, "Some text.", &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .commit_trigger_narration(&request, "Some text.", &deps.map, &deps.npcs)
+        .unwrap();
 
     assert!(
         state.npc_encounter_log.is_trigger_fired("carla", 0),
@@ -468,8 +470,9 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
     stored.trigger_repeat = true;
     let request = stored;
 
-    let state =
-        commit_trigger_narration(state, &request, "Some text.", &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .commit_trigger_narration(&request, "Some text.", &deps.map, &deps.npcs)
+        .unwrap();
 
     assert!(
         !state.npc_encounter_log.is_trigger_fired("carla", 0),
@@ -488,10 +491,14 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
         "Carla appears",
     );
 
-    let state = commit_trigger_narration(state, &request, "", &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .commit_trigger_narration(&request, "", &deps.map, &deps.npcs)
+        .unwrap();
     assert!(state.narrative.history().is_empty());
 
-    let state = commit_trigger_narration(state, &request, "   ", &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .commit_trigger_narration(&request, "   ", &deps.map, &deps.npcs)
+        .unwrap();
     assert!(state.narrative.history().is_empty());
 }
 
@@ -507,8 +514,9 @@ fn test_commit_trigger_narration_stores_trigger_context() {
         512,
     );
 
-    let state =
-        commit_trigger_narration(state, &request, "Carla emerges.", &deps.map, &deps.npcs).unwrap();
+    let state = state
+        .commit_trigger_narration(&request, "Carla emerges.", &deps.map, &deps.npcs)
+        .unwrap();
 
     let trigger = state
         .narrative
@@ -543,8 +551,8 @@ proptest! {
     ) {
         let deps = deps_for_npc_ids(TestMap::two_rooms("room1", "room2"), &new_npc_ids);
         let state = make_two_room_state();
-        let state = handle_movement(state, destination, &new_npc_ids, &deps.map, &deps.npcs).unwrap();
-        crate::domain::engine::state_diagnostics::assert_state_consistency(&state, &deps.map, &deps.npcs).ok();
+        let state = state.handle_movement( destination, &new_npc_ids, &deps.map, &deps.npcs).unwrap();
+        state.assert_state_consistency(&deps.map, &deps.npcs).ok();
     }
 
     #[test]
@@ -567,8 +575,8 @@ proptest! {
                 event_type,
             })
             .collect();
-        let state = apply_npc_events(state, &events, &deps.map, &deps.npcs).unwrap();
-        crate::domain::engine::state_diagnostics::assert_state_consistency(&state, &deps.map, &deps.npcs).ok();
+        let state = state.apply_npc_events( &events, &deps.map, &deps.npcs).unwrap();
+        state.assert_state_consistency(&deps.map, &deps.npcs).ok();
     }
 
     #[test]
@@ -597,8 +605,7 @@ proptest! {
             movement,
         };
 
-        let result = execute_freeaction_impl(
-            &state,
+        let result = state.execute_freeaction_impl(
             &FreeActionContext {
                 narration_text: "You do something.",
                 quantifier_result: &quantifier_result,
@@ -614,6 +621,6 @@ proptest! {
             result.err()
         );
         let next_state = result.unwrap().next_state;
-        crate::domain::engine::state_diagnostics::assert_state_consistency(&next_state, &deps.map, &deps.npcs).ok();
+        next_state.assert_state_consistency(&deps.map, &deps.npcs).ok();
     }
 }

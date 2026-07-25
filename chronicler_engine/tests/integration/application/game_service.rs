@@ -14,7 +14,7 @@ fn test_with_storage_uses_external() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
+    app.execute_action("test".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -30,10 +30,7 @@ fn test_with_backends_no_disk_read() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(
-        &app,
-        "test input".to_string(),
-    );
+    app.execute_action("test input".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -50,10 +47,7 @@ fn test_execute_action_saves_narration() {
         .unwrap();
     let initial_history_len = 0_usize;
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(
-        &app,
-        "test action".to_string(),
-    );
+    app.execute_action("test action".to_string());
 
     let final_state = app.latest_state();
     let final_history_len = final_state.narrative.history.len();
@@ -71,7 +65,7 @@ fn test_execute_action_empty_input() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(&app, "".to_string());
+    app.execute_action("".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -87,14 +81,8 @@ fn test_execute_action_clears_last_trigger() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(
-        &app,
-        "first action".to_string(),
-    );
-    chronicler_engine::application::action_pipeline::execute_action_impl(
-        &app,
-        "second action".to_string(),
-    );
+    app.execute_action("first action".to_string());
+    app.execute_action("second action".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -115,7 +103,7 @@ fn test_execute_action_cancellation() {
 
     app.cancel_token().cancel();
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
+    app.execute_action("test".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -133,7 +121,7 @@ fn test_retry_finds_anchor() {
 
     app.add_input_and_save("Test input");
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let final_state = app.latest_state();
     assert!(
@@ -149,7 +137,7 @@ fn test_retry_event_fallback() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let guard = app.latest_state();
     assert!(
@@ -165,7 +153,7 @@ fn test_retry_empty_history() {
         .build_service()
         .unwrap();
 
-    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    app.retry_last_response();
 
     let messages = app.storage().load_message_rows().unwrap();
     assert!(
@@ -436,7 +424,7 @@ fn test_continue_narration_fresh_game() {
         .unwrap();
 
     let initial_history = app.latest_state().narrative.history.len();
-    chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
+    app.execute_action(String::new());
 
     let guard = app.latest_state();
     assert!(
@@ -467,7 +455,7 @@ fn test_continue_narration_with_stale_is_generating_flag() {
     app.is_generating()
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
-    chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
+    app.execute_action(String::new());
 
     let final_state = app.latest_state();
     assert!(
@@ -490,10 +478,7 @@ fn test_whitespace_variations() {
             .backends(MockBackend::default)
             .build_service()
             .unwrap();
-        chronicler_engine::application::action_pipeline::execute_action_impl(
-            &app,
-            whitespace.to_string(),
-        );
+        app.execute_action(whitespace.to_string());
 
         let final_state = app.latest_state();
         assert!(

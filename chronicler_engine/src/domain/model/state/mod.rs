@@ -11,6 +11,12 @@ pub mod scene_state;
 pub mod trigger_context;
 
 #[cfg(test)]
+mod game_state_action_processing_tests;
+#[cfg(test)]
+mod game_state_logic_tests;
+#[cfg(test)]
 mod game_state_snapshot_tests;
 #[cfg(test)]
-mod state_tests;
+mod game_state_tests;
+#[cfg(test)]
+mod game_state_trigger_eval_tests;

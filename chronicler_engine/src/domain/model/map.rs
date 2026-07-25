@@ -48,6 +48,26 @@ pub struct Room {
     pub navigation_description: Option<String>,
 }
 
+impl Room {
+    pub fn new_dynamic(name: &str, description: &str) -> Self {
+        use std::time::SystemTime;
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        Self {
+            id: format!("dynamic_{timestamp}"),
+            name: name.to_string(),
+            description: description.to_string(),
+            exits: HashMap::new(),
+            items: vec![],
+            image_path: None,
+            navigation_description: None,
+        }
+    }
+}
+
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

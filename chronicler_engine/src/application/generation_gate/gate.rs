@@ -13,7 +13,6 @@ use crate::application::generation_gate::slot::GenerationSlot;
 use crate::application::generation_gate::slot::release_owned_slot;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::application::spawn_pipeline_task;
-use crate::application::action_pipeline::execute_action_impl;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
@@ -89,7 +88,7 @@ impl GenerationGate {
                 tracing::debug!("spawn_blocking: shutting down before execute_action");
                 return;
             }
-            execute_action_impl(app, input);
+            app.execute_action(input);
             tracing::debug!("spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)

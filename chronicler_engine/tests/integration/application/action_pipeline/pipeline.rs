@@ -7,7 +7,6 @@ use crate::{
     test_utils::wait::wait_for_condition_async,
 };
 use chronicler_engine::application::GameService;
-use chronicler_engine::application::action_pipeline::execute_action_impl;
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -49,7 +48,7 @@ fn test_delayed_llm_completes_without_deadlock() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look around".to_string());
+    app.execute_action("look around".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -82,7 +81,7 @@ fn test_quantifier_detects_movement() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "walk to the village square".to_string());
+    app.execute_action("walk to the village square".to_string());
 
     let completed = app.wait_for_generation_complete(500);
     assert!(completed, "Movement action should complete within timeout");
@@ -125,7 +124,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "enter the shop".to_string());
+    app.execute_action("enter the shop".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -169,7 +168,7 @@ fn test_empty_llm_response_handled_gracefully() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "examine the room".to_string());
+    app.execute_action("examine the room".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -222,7 +221,7 @@ fn test_failing_trigger_narration_does_not_crash() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "examine the shopkeeper".to_string());
+    app.execute_action("examine the shopkeeper".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -258,7 +257,7 @@ fn test_pipeline_cancels_when_token_cancelled() {
         .unwrap();
     app.cancel_token().cancel();
 
-    execute_action_impl(&app, "look".to_string());
+    app.execute_action("look".to_string());
 
     let final_state = app.latest_state();
     assert_eq!(
@@ -287,7 +286,7 @@ async fn test_cancellation_resets_state_to_idle() {
     let token = app.cancel_token().clone();
 
     token.cancel();
-    execute_action_impl(&app, "look around".to_string());
+    app.execute_action("look around".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -318,7 +317,7 @@ async fn test_pipeline_cancels_after_main_narration() {
 
     let app_clone = Arc::clone(&app);
     let handle = tokio::task::spawn_blocking(move || {
-        execute_action_impl(&app_clone, "look around".to_string());
+        app_clone.execute_action("look around".to_string());
     });
 
     assert!(
@@ -377,7 +376,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
 
     let app_clone = Arc::clone(&app);
     let handle = tokio::task::spawn_blocking(move || {
-        execute_action_impl(&app_clone, "enter the shop".to_string());
+        app_clone.execute_action("enter the shop".to_string());
     });
 
     assert!(
@@ -420,7 +419,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "examine the room".to_string());
+    app.execute_action("examine the room".to_string());
 
     let completed = app.wait_for_generation_complete(1000);
     assert!(completed, "FreeAction should complete within timeout");
@@ -456,7 +455,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "examine the shopkeeper".to_string());
+    app.execute_action("examine the shopkeeper".to_string());
 
     let completed = app.wait_for_generation_complete(1000);
     assert!(
@@ -477,7 +476,7 @@ fn test_pipeline_with_quantifier() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look around".to_string());
+    app.execute_action("look around".to_string());
 
     let guard = app.latest_state();
     assert!(
@@ -520,7 +519,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     let app_clone = Arc::clone(&app);
     let handle = thread::spawn(move || {
         let _ = backend_clone;
-        execute_action_impl(&app_clone, "look around".to_string());
+        app_clone.execute_action("look around".to_string());
     });
 
     let narration_found = wait_for_condition_sync(
@@ -570,7 +569,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "test action".to_string());
+    app.execute_action("test action".to_string());
 
     let guard = app.latest_state();
 
@@ -606,7 +605,7 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look".to_string());
+    app.execute_action("look".to_string());
 
     let guard = app.latest_state();
     assert!(

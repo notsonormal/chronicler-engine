@@ -6,8 +6,11 @@ use std::sync::{Arc, RwLock};
 
 use tokio_util::sync::CancellationToken;
 
+use tracing::instrument;
+
 use crate::adapters::driven::storage::worlds::WorldWithMap;
 use crate::adapters::driven::storage::{PresetStore, Storage};
+use crate::application::action_pipeline::phase_error::PhaseError;
 pub use crate::application::debug::DebugStateView;
 pub use crate::application::errors::{ApplicationError, ProcessActionResult};
 use crate::application::game_catalogue::GameCatalogue;
@@ -23,7 +26,7 @@ use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
@@ -181,6 +184,111 @@ impl DefaultApplicationService {
 
     pub fn process_action(&self, input: String) -> Result<ProcessActionResult, EngineError> {
         self.generation_gate.start_action(self, input)
+    }
+
+    #[instrument(skip(self), fields(input_length))]
+    pub fn execute_action(&self, input: String) {
+        let mut state = self.load_or_fresh();
+        state.narrative.last_trigger = None;
+        let pipeline = self.game_service().pipeline();
+        if let Err(PhaseError::Cancelled) = pipeline.run_from_input(self, state, input) {
+            tracing::debug!("Pipeline cancelled");
+        }
+    }
+
+    #[instrument(skip(self))]
+    pub fn retry_last_response(&self) {
+        let messages = match self.load_messages() {
+            Ok(m) => m,
+            Err(e) => {
+                crate::application::action_pipeline::retry::retry_persist_error(
+                    self,
+                    format!("Retry failed: {e}"),
+                );
+                return;
+            }
+        };
+
+        let Some((anchor_idx, _anchor_msg, snapshot_id)) = self.find_retry_anchor(&messages) else {
+            crate::application::action_pipeline::retry::retry_persist_error(
+                self,
+                "Retry failed: no anchor message",
+            );
+            return;
+        };
+
+        let is_event = messages
+            .last()
+            .map(|m| m.event_header().is_some())
+            .unwrap_or(false);
+
+        let old_target = messages
+            .iter()
+            .rev()
+            .find(|m| {
+                if is_event {
+                    m.event_header().is_some()
+                } else {
+                    matches!(
+                        m.message_type,
+                        MessageType::Narration | MessageType::Dialogue
+                    ) && m.event_header().is_none()
+                }
+            })
+            .cloned();
+
+        let snapshot = match self.storage().load_snapshot_by_id(snapshot_id) {
+            Ok(Some(s)) => s,
+            Ok(None) => {
+                crate::application::action_pipeline::retry::retry_persist_error(
+                    self,
+                    format!("Retry failed: no snapshot found for id {snapshot_id}"),
+                );
+                return;
+            }
+            Err(e) => {
+                crate::application::action_pipeline::retry::retry_persist_error(
+                    self,
+                    format!("Retry failed: {e}"),
+                );
+                return;
+            }
+        };
+
+        let mut state = GameState::from_snapshot(&snapshot);
+        let mut truncated = messages;
+        truncated.truncate(anchor_idx + 1);
+        state.narrative.history.replace(truncated);
+        state.narrative.retry_target = old_target;
+
+        let input_text = match state.narrative.history.last_input_text() {
+            Some((_, text)) => text,
+            None => {
+                crate::application::action_pipeline::retry::retry_persist_error(
+                    self,
+                    "Retry failed: no input to retry",
+                );
+                return;
+            }
+        };
+
+        let outcome = if is_event {
+            crate::application::action_pipeline::retry::retry_event_continuation(self, state)
+        } else {
+            crate::application::action_pipeline::retry::retry_main_narration(
+                self, state, input_text,
+            )
+        };
+
+        crate::application::action_pipeline::retry::handle_retry_outcome(self, outcome);
+    }
+
+    #[instrument(skip(self))]
+    pub fn retrigger_event(&self) {
+        let state = self.load_or_fresh();
+        let outcome =
+            crate::application::action_pipeline::retry::retry_event_continuation(self, state);
+        crate::application::action_pipeline::retry::handle_retry_outcome(self, outcome);
     }
 
     #[allow(dead_code)]

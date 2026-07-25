@@ -35,57 +35,6 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     Err(())
 }
 
-pub async fn wait_for_location_change(page: &playwright_rs::Page, initial: &str) -> String {
-    for _ in 0..50 {
-        let location: String = page
-            .evaluate::<(), String>("document.querySelector('.location')?.innerText || ''", None)
-            .await
-            .unwrap_or_default();
-
-        if location != initial {
-            return location;
-        }
-        sleep(Duration::from_millis(200)).await;
-    }
-    String::new()
-}
-
-pub async fn wait_for_story_log_change(page: &playwright_rs::Page, initial: &str) -> String {
-    for _ in 0..50 {
-        let content: String = page
-            .evaluate::<(), String>(
-                "document.querySelector('#story-log')?.innerText || ''",
-                None,
-            )
-            .await
-            .unwrap_or_default();
-
-        if content != initial {
-            return content;
-        }
-        sleep(Duration::from_millis(200)).await;
-    }
-    String::new()
-}
-
-pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: usize) -> usize {
-    for _ in 0..50 {
-        let messages: Vec<String> = page
-            .evaluate::<(), Vec<String>>(
-                "Array.from(document.querySelectorAll('#story-log .log-entry .text')).map(el => el.innerText)",
-                None,
-            )
-            .await
-            .unwrap_or_default();
-
-        if messages.len() > initial_count {
-            return messages.len();
-        }
-        sleep(Duration::from_millis(200)).await;
-    }
-    initial_count
-}
-
 pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &str) -> String {
     let locator = page.locator(selector).await;
     let start = std::time::Instant::now();
@@ -100,29 +49,6 @@ pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &s
 
     capture_failure_state(page, &format!("wait_for_non_loading_value_{selector}")).await;
     String::new()
-}
-
-pub async fn wait_for_element_class(
-    page: &playwright_rs::Page,
-    selector: &str,
-    class_name: &str,
-    max_attempts: u32,
-) -> bool {
-    for _ in 0..max_attempts {
-        let has_class: bool = page
-            .evaluate::<(), bool>(
-                &format!("document.querySelector('{selector}')?.classList.contains('{class_name}') ?? false"),
-                None,
-            )
-            .await
-            .unwrap_or(false);
-
-        if has_class {
-            return true;
-        }
-        sleep(Duration::from_millis(250)).await;
-    }
-    false
 }
 
 pub async fn wait_for_element_children(
@@ -157,22 +83,6 @@ pub async fn wait_for_element_children(
     );
     capture_failure_state(page, &format!("wait_for_element_children_{selector}")).await;
     last_count
-}
-
-pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -> String {
-    let locator = page.locator(selector).await;
-    let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(10);
-
-    while start.elapsed() < timeout {
-        match locator.inner_text().await {
-            Ok(text) if !text.is_empty() => return text,
-            _ => sleep(Duration::from_millis(200)).await,
-        }
-    }
-
-    capture_failure_state(page, &format!("wait_for_element_text_{selector}")).await;
-    String::new()
 }
 
 /// Wait for an element to become visible

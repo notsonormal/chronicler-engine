@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use crate::application::action_pipeline::{retry_last_response_impl, retrigger_event_impl};
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::ApplicationError;
 use crate::domain::model::state::game_state::GameState;
@@ -46,7 +45,7 @@ pub fn retry(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError
         if app_inner.is_shutting_down() {
             return;
         }
-        retry_last_response_impl(app_inner);
+        app_inner.retry_last_response();
     });
 
     Ok(())
@@ -87,7 +86,7 @@ pub fn retrigger(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationE
         if app_inner.is_shutting_down() {
             return;
         }
-        retrigger_event_impl(app_inner);
+        app_inner.retrigger_event();
     });
 
     Ok(())

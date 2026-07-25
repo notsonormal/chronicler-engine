@@ -1,7 +1,6 @@
 //! Integration tests for the action pipeline: verifies that user actions are persisted to state, that narrations from the LLM are stored, and that error paths (room not found, LLM failure) are surfaced gracefully.
 
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::application::action_pipeline::execute_action_impl;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -19,7 +18,7 @@ fn test_pipeline_executes_and_persists_narration() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look".to_string());
+    app.execute_action("look".to_string());
 
     let final_state = app.latest_state();
     let has_narration = final_state
@@ -53,7 +52,7 @@ fn test_pipeline_persists_input_before_narration() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "examine the room".to_string());
+    app.execute_action("examine the room".to_string());
 
     let final_state = app.latest_state();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
@@ -83,7 +82,7 @@ fn test_pipeline_handles_room_not_found() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look".to_string());
+    app.execute_action("look".to_string());
 
     let final_state = app.latest_state();
     assert!(
@@ -100,7 +99,7 @@ fn test_pipeline_handles_llm_failure() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look".to_string());
+    app.execute_action("look".to_string());
 
     let final_state = app.latest_state();
     assert!(
@@ -132,7 +131,7 @@ fn test_pipeline_clears_last_trigger() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look".to_string());
+    app.execute_action("look".to_string());
 
     let final_state = app.latest_state();
     assert!(
@@ -150,7 +149,7 @@ fn test_pipeline_phase_transitions() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look".to_string());
+    app.execute_action("look".to_string());
 
     let guard = app.latest_state();
     assert_eq!(
@@ -169,7 +168,7 @@ fn test_pipeline_phase_stays_narrating_on_error() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, "look".to_string());
+    app.execute_action("look".to_string());
 
     let guard = app.latest_state();
     assert_eq!(
@@ -187,7 +186,7 @@ fn test_pipeline_empty_input() {
         .build_service()
         .unwrap();
 
-    execute_action_impl(&app, String::new());
+    app.execute_action(String::new());
 
     let guard = app.latest_state();
     assert!(

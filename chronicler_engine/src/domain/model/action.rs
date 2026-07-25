@@ -6,3 +6,9 @@
 pub enum Action {
     FreeAction(String),
 }
+
+impl Action {
+    pub fn parse(input: &str) -> Self {
+        Self::FreeAction(input.to_string())
+    }
+}
