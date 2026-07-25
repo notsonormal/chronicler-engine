@@ -334,7 +334,7 @@ Defense-in-depth: the `#[ignore]` keeps the tests out of `cargo test` runs; the 
 - `cargo nextest run --test llm --run-ignored` (with key: real LLM, ~30s)
 - `python build.py --llm-only` (the build.py convenience invocation that aggregates LLM tests across the tree; see `tests/AGENTS.md`).
 
-The `--llm-only` invocation is the canonical one for the integration-tier LLM tests. When modifying `src/narrative/` or LLM-parsing code, run `--llm-only` once locally with a valid `OPENROUTER_API_KEY` to confirm the tests still pass — CI does not exercise the ignored tests.
+The `--llm-only` invocation is the canonical one for the integration-tier LLM tests. When modifying `src/application/narrative_prompt/` or `src/adapters/driven/llm/`, or LLM-parsing code, run `--llm-only` once locally with a valid `OPENROUTER_API_KEY` to confirm the tests still pass — CI does not exercise the ignored tests.
 
 ## Document References
 

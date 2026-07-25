@@ -173,11 +173,11 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 
 You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task.
 
-## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
-This project follows a **Spec-Driven Implementation** (SDI) strategy.
+**Surface Hidden Trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
 
-### The Golden Rule: Spec-First
-**NEVER** implement a new technical system or narrative logic without first creating/updating its specification in `docs/`. The code must reflect the spec, not the other way around.
+**Honest Status Reporting**: When asked "is X done?", answer based on what is verified, not what was attempted. "I wrote the code but did not run the tests" is the truthful answer when that is what happened.
+
+## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
 
 ### Core Principles
 1. **Naming as Documentation**: Symbols (functions, types, variables) must use verbose, domain-aligned names that map 1-to-1 with concepts in the `docs/`.
@@ -185,12 +185,8 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
    - Line 1: `//! [DOC: chronicler_engine/docs/diataxis/reference/<area>/<name>.md]` (links to reference documentation; `reference/` only — no `explanation/`, `how-to/`, or `tutorials/` targets)
    - Line 2: `//! Human-readable summary` (used for auto-generating STRUCTURE section)
    Function-level anchors removed.
-3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
-4. **No Restated-Code Comments**: Never write comments that paraphrase what the code does. Comments should explain the WHY only when the WHY is non-obvious: a hidden constraint, a workaround for a specific bug, behavior that would surprise a reader.
-5. **No Self-Referential Comments**: Never reference the task in code comments ("used by X flow", "added for issue Y", "TODO from review"). Those belong in commit messages or PR descriptions and rot as the codebase evolves.
-6. **Be Consise**: Be extremely concise. Sacrifice grammar for the sake of concision.
-7. **Surface Hidden Trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
-8. **Honest Status Reporting**: When asked "is X done?", answer based on what is verified, not what was attempted. "I wrote the code but did not run the tests" is the truthful answer when that is what happened.
+3. **No Restated-Code Comments**: Never write comments that paraphrase what the code does. If the code isn't clear, rename the symbols rather than comment. Comments explain the WHY only when non-obvious: a hidden constraint, a workaround for a specific bug, behavior that would surprise a reader.
+4. **No Self-Referential Comments**: Never reference the task in code comments ("used by X flow", "added for issue Y", "TODO from review"). Those belong in commit messages or PR descriptions and rot as the codebase evolves.
 
 ## THE TEST-FIRST PHILOSOPHY
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
@@ -215,30 +211,9 @@ If you're unsure why a test failed, say so and investigate - don't invent explan
 
 You should avoid **analysis paralysis**, that is, spending excessively large amounts of time trying to reason through a problem without ever coming to any conclusion or doing any action. You should read, run, update or write new tests if you are struggling to understand a problem. Or if that doesn't help, check the UI directly via the browser, or to add logging or other diagnostics in the production code.
 
-## PLANNING REQUIREMENTS
-
-When creating or updating a plan for chronicler_engine work (via any planning skill), the plan **must** include these steps explicitly:
-
-1. **Doc updates** — Update `docs/**/*.md` **before** writing code. The code must reflect the spec, not the other way around.
-2. **Test-first** — Write a failing test or update existing tests **before** implementing the fix/feature. Every task must have a verification step that includes running tests.
-3. **Guardrail compliance** — Verify the change won't violate existing guardrails (clippy lints, arch-lint rules, max file size limits). Run `cargo clippy` and `cargo nextest run <relevant_test>` during development, not just at the end.
-4. **Build validation** — Final validation with `python build.py` must pass before the task is considered complete.
-5. **Plan archive** — Move completed plans to `old-docs/archived-plans/` (engine root, not inside `docs/`) and update `CHANGELOG.md`.
-
-**Plan Adherence:** Do not change the plan partway through implementation without explicit user permission. If you encounter a problem not addressed in the current plan, stop and ask before proceeding.
-
-**Why:** Plans that skip these steps result in rework — architecture docs out of sync, missing tests, clippy failures discovered late, and undocumented changes.
-
-## CONVENTIONS
-- **Module-Level DOC Anchors**: Every non-test `src/` file has `//! [DOC: ...]` on line 1 pointing to a reference doc under `chronicler_engine/docs/diataxis/reference/`. `src/test_support/*.rs` MUST NOT carry a `[DOC: ...]` line ( organise by fixture weight, ADR-028). Remove function-level `/// [DOC:` and `// [DOC:` comments.
-- **Enum Variant Docs**: Every enum variant carries `///` rustdoc unless the enum is marked `/// [TRIVIAL_ENUM]` directly above the `enum` keyword. Never both.
-- **Test Module Headers**: Every file under `tests/` (including `mod.rs` and `helpers/`/`test_utils/`) starts with a single-line `//! <summary>` describing what it covers. `tests/**/*.rs` MUST NOT carry a `[DOC: ...]` line — tests are organised by fixture weight, not domain (ADR-028). Multi-line summary blocks are forbidden.
-- **LLM backend**: Trait-based (`LlmBackend`), mock via `MockBackend` in tests
-- **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
-
 ## LLM TEST POLICY
 - `python build.py` runs the fast suite only. LLM tests are `#[ignore]'`d by default.
-- When modifying ANY file in `src/narrative/` or changing LLM prompt/parsing behavior, you MUST also run `python build.py --llm-only` to verify real LLM integration.
+- When modifying ANY file in `src/application/narrative_prompt/` or `src/adapters/driven/llm/`, or changing LLM prompt/parsing behavior, you MUST also run `python build.py --llm-only` to verify real LLM integration.
 
 ## ANTI-PATTERNS
 - **Never** continue previous reasoning after user says stop, wait, nevermind, or asks a direct question. Halt immediately and answer directly.
@@ -321,13 +296,10 @@ Tests are already concurrency-safe: they allocate ports dynamically from the ran
 
 ## CODE QUALITY
 
-- Keep answers short and concise
 - Do not preserve backward compatibility unless the user asks for it.
 - Read files in full before wide-ranging changes, before editing files you have not fully inspected, and when asked to investigate or audit. Do not rely on search snippets for broad changes.
-- Technical prose only, be direct
 - When the user asks a question, answer it first before making edits or running implementation commands.
 - When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
-- For UI changes, verify in the browser with a screenshot before claiming completion.
 
 ## DOING CODE REVIEWS
 
