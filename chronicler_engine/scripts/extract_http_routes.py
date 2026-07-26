@@ -42,13 +42,14 @@ from pathlib import Path
 # operator, who decides whether to add a new area or fold it into an existing
 # one.
 AREA_GROUPS: tuple[tuple[str, str], ...] = (
-    ("handlers::", "Index"),
-    ("fragments::", "Action / Status / History / Lifecycle"),
-    ("games_fragment::", "Games"),
-    ("worlds_fragment::", "Worlds"),
-    ("settings_fragment::", "Settings & connections"),
-    ("prompt_presets_fragment::", "Prompt presets"),
-    ("debug::", "Debug"),
+    ("core::", "Core"),
+    ("action::", "Action"),
+    ("history::", "History"),
+    ("layout::", "Layout fragments"),
+    ("games::", "Games"),
+    ("worlds::", "Worlds"),
+    ("settings::", "Settings & connections"),
+    ("prompt_presets::", "Prompt presets"),
 )
 
 # Paths (relative to chronicler_engine/) the script must find.
@@ -240,35 +241,30 @@ def group_routes_by_area(routes: list[Route]) -> dict[str, list[Route]]:
 
 
 _OVERVIEW_PROSE = (
-    "This doc is generated from `src/adapters/driving/http/builders/router.rs` and is "
-    "the canonical map of HTTP route to handler for the engine's HTTP server. "
-    "Re-run `python scripts/extract_http_routes.py` after any change to "
-    "`router.rs`. The seven areas below match the seven handler-module "
-    "prefixes discovered from the router file (one prefix per source-tree "
-    "module under `src/adapters/driving/http/`). Static-asset behaviour — "
-    "`.nest_service` for `/assets` and `/data`, plus the `fallback_service` "
-    "for unmatched paths — lives in `router.rs` but is not enumerated here; "
-    "the generator handles `.route()` calls only."
+    "Generated from `src/adapters/driving/http/builders/router.rs` — "
+    "re-run `python scripts/extract_http_routes.py` after any `router.rs` change. "
+    "Covers `.route()` calls only; `.nest_service` (assets/data) and "
+    "`fallback_service` live in `router.rs` but aren't enumerated."
 )
+
+
+def _strip_module_prefix(handler: str) -> str:
+    """Drop every `::`-prefixed segment; H2 already names the module."""
+    return handler.rsplit("::", 1)[-1]
 
 
 def _render_table(routes: list[Route]) -> str:
     """Render one per-area table. Routes are emitted in input order (source order)."""
-    if not routes:
-        return ""
     lines = [
         "| Method | Path | Handler |",
         "|--------|------|---------|",
     ]
     for r in routes:
-        lines.append(f"| {r.verb} | `{r.path}` | `{r.handler}` |")
+        lines.append(f"| {r.verb} | `{r.path}` | `{_strip_module_prefix(r.handler)}` |")
     return "\n".join(lines)
 
 
-def _render_document(
-    routes: list[Route],
-    grouped: dict[str, list[Route]],
-) -> str:
+def _render_document(grouped: dict[str, list[Route]]) -> str:
     """Render the full markdown document."""
     unknown = grouped.pop("_unknown", [])
 
@@ -286,15 +282,6 @@ def _render_document(
     for _prefix, area in AREA_GROUPS:
         rows = grouped.get(area, [])
         if not rows:
-            # No routes in this area; still emit the H2 + a one-line note so
-            # the seven-area shape stays stable if a future router change
-            # empties an area.
-            parts.append(f"## {area}")
-            parts.append("")
-            parts.append(
-                "_No routes in this area in the current `router.rs`._"
-            )
-            parts.append("")
             continue
         parts.append(f"## {area}")
         parts.append("")
@@ -388,7 +375,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     grouped = group_routes_by_area(routes)
-    rendered = _render_document(routes, grouped)
+    rendered = _render_document(grouped)
 
     if args.stdout:
         sys.stdout.write(rendered)

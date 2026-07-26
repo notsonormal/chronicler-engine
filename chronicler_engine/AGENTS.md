@@ -7,33 +7,29 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 <!-- AUTO-STRUCTURE START -->
 - **src/**
   - `error.rs` — Error types and result aliases
-  - `settings.rs` — Application settings and configuration
   - **adapters/**
     - **driven/**
       - `mod.rs` — Driven adapters: outbound external systems (storage, LLM providers, text check)
       - **llm/**
         - `mod.rs` — LLM driven adapters: provider implementations and HTTP transport
       - **storage/**
-        - `db.rs` — SQLite database connection pool and migrations
+        - `db.rs` — SQLite database connection pool
         - `mod.rs` — Storage layer and database access
         - `preset_store.rs` — PresetStore newtype — distinguishes preset storage from game storage
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
         - `types.rs` — Text check adapter-specific type definitions
+      - **utils/**
+        - `harper.rs` — Harper text-check adapter boundary helpers.
+        - `mock.rs` — Mock LLM provider utilities.
+        - `mod.rs` — Driven-adapter shared utilities.
     - **driving/**
-      - `cli.rs` — Command-line interface definitions
       - `mod.rs` — Driving adapters: HTTP and CLI interfaces
       - **http/**
         - `app_state.rs` — Application state management
-        - `debug.rs` — Debug utilities and endpoints
         - `error.rs` — HTTP driving adapter — maps application `ApplicationError` to axum `Response`.
-        - `handlers.rs` — Core HTTP request routing and handling
-        - `locks.rs` — Shared poison-recovering lock helpers for the HTTP layer.
         - `mod.rs` — HTTP server and API endpoints
-        - `port_utils.rs` — Port management utilities
-        - `router.rs` — Router configuration
-        - `server_impl.rs` — Server implementation
         - `templates.rs` — Template rendering utilities
         - `view_models.rs` — View models decouple templates from domain types.
   - **application/**
@@ -41,18 +37,12 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
     - `game_service.rs` — Game service handling gameplay operations
+    - `game_view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
     - `generation_guard.rs` — Generation guard logic
     - `llm_message.rs` — LLM message DTO + recorder save seam
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
-    - `llm_sanitizer.rs` — LLM input/output sanitization
-    - `mappers.rs` — map_llm_error — LLM failure mapper (T2 ticket 04 — extracted from DefaultApplicationService).
-    - `message_editing.rs` — Message editing and modification utilities
-    - `query_handlers.rs` — Read-only data access for game state and debug views
-    - `scenario.rs` — Scenario log injection at game initialization
-    - `spawn.rs` — Shared spawn helper for pipeline tasks
     - `text_check_service.rs` — TextCheckService orchestrator for text checking
     - **action_pipeline/**
-      - `actions.rs` — Action enum and action processing types
       - `mod.rs` — Action pipeline for processing game actions
       - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
       - `phases.rs` — Phase implementations for the action pipeline
@@ -65,10 +55,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **quantifier/**
         - `agent.rs` — Quantifier agent implementation.
         - `mod.rs` — Quantifier agent system
-        - `orchestration.rs` — Quantifier orchestration
-        - `parser.rs` — Quantifier output parsing
+        - `parser.rs` — Quantifier parse entry points (`QuantifierParseResult::parse`, `QuantifierResult::parse_with_movement`).
         - `prompt.rs` — Quantifier prompt construction
-        - `test_support.rs` — Quantifier test utilities
         - `types.rs` — Quantifier type definitions
     - **debug/**
       - `dto.rs` — DebugStateView — debug-state DTO for the HTTP debug endpoint (T2 ticket 04 — extracted from DefaultApplicationService).
@@ -79,13 +67,16 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **generation_gate/**
       - `gate.rs` — GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
       - `mod.rs` — GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
-      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
     - **narrative_prompt/**
-      - `assembler.rs` — Multi-stage prompt builder
-      - `budget.rs` — Token budget management
-      - `context.rs` — Prompt context building
+      - `assembler.rs` — Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
       - `mod.rs` — Prompt construction orchestration
       - `types.rs` — Prompt type definitions
+      - **builders/**
+        - `assembler.rs` — Multi-stage prompt builder.
+        - `mod.rs` — Narrative prompt builder modules.
+      - **utils/**
+        - `context.rs` — Prompt context fitting — message budget enforcement.
+        - `mod.rs` — Narrative prompt utility modules.
     - **persistence_gate/**
       - `gate.rs` — PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
       - `mod.rs` — PersistenceGate — game-storage seam + persistence helpers (T2 façade-first carve-out).
@@ -93,28 +84,27 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)
       - `text_checker.rs` — TextChecker port trait and CheckResult DTO
+    - **utils/**
+      - `llm_provider.rs` — Merge system + user prompts for models that ignore the system role.
+      - `mod.rs` — Application-layer utility modules.
+      - `retry.rs` — Retry/retrigger top-level orchestrators (shuttle work to background via spawn_pipeline_task).
+      - `sanitize.rs` — LLM input/output sanitization
+      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
+      - `spawn.rs` — Shared spawn helper for pipeline tasks
+      - `token_budget.rs` — Token budget management
     - **world_catalogue/**
       - `gate.rs` — WorldCatalogue — worlds/personas CRUD pass-through (T2 ticket 04 — façade-first carve-out from DefaultApplicationService).
       - `mod.rs` — WorldCatalogue — worlds/personas CRUD pass-through (T2 ticket 04 — façade-first carve-out).
   - **bootstrap/**
     - `init_game.rs` — Game state initialization and arrival narration spawning
-    - `llm_factory.rs` — LLM factory - wires LlmProvider port to provider impls and returns LlmCallRecorder
     - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution
-    - `text_check_factory.rs` — Text check factory - wires TextChecker port to HarperTextChecker impl
     - `validate.rs` — Data validation utilities
     - `wiring.rs` — Composition root for application orchestrators — wires port impls to
   - **domain/**
-    - **engine/**
-      - `action.rs` — Action enum and semantic command types
-      - `action_processing.rs` — Action execution pipeline and validation
-      - `logic.rs` — Game logic and rule evaluation
-      - `mod.rs` — Game engine core modules
-      - `parser.rs` — Parser for game data formats
-      - `state_diagnostics.rs` — State diagnostics and debugging utilities
-      - `trigger_eval.rs` — Trigger evaluation and condition checking
     - **model/**
+      - `action.rs` — Action enum and semantic command types
       - `agent.rs` — Agent definitions and behavior types
       - `character.rs` — Character sheet data and NPC card definitions
       - `game.rs` — Game state and session management
@@ -140,11 +130,22 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `narrative_state.rs` — Narrative state with history and input buffer
         - `scene_state.rs` — Current scene NPCs and quantifier confidence
         - `trigger_context.rs` — Stored trigger snapshot context
+      - **utils/**
+        - `game_name.rs` — Game name generation with date-based disambiguation.
+        - `mod.rs` — Domain model utility modules.
+        - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.
+        - `settings_defaults.rs` — Serde default-fn-pointers for `AppSettings` fields. Cannot become methods — `#[serde(default = "...")]` requires a fn path.
+        - `template.rs` — Template placeholder substitution for author-controlled text fields.
+        - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.
   - **test_support/**
-    - `context.rs` — Builds `DefaultApplicationService` instances for integration tests.
+    - `context.rs` — Builds `WiredApp` instances for integration tests.
     - `fixtures.rs` — Test fixtures shared between unit and integration tests.
+    - `quantifier.rs` — Quantifier test utilities
     - `test_app_builder.rs` — Test application builder for HTTP and integration tests.
     - `test_data_builder.rs` — Test data bundle builder for integration tests.
+  - **utils/**
+    - `cli.rs` — Command-line interface definitions
+    - `settings.rs` — Application settings and configuration
 - **scripts/**
   - `build.py` — Full build, validate, and test for Chronicler Engine.
   - `check_python_docstrings.py` — Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings.
@@ -154,7 +155,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `extract_http_routes.py` — Generate `docs/diataxis/reference/http_routes.md` from `router.rs`.
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
-  - `find_free_fn_smells.py` — Find module-level free functions whose first parameter looks like a receiver.
   - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/AGENTS.md.
   - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
   - `generate_tests_structure_index.py` — Generate tests/AGENTS.md structure index from module summaries.

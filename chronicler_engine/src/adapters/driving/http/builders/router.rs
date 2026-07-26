@@ -8,161 +8,180 @@ use axum::{
 use tower_http::services::ServeDir;
 
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::debug;
-use crate::adapters::driving::http::fragments;
-use crate::adapters::driving::http::games_fragment;
-use crate::adapters::driving::http::handlers::index_handler;
-use crate::adapters::driving::http::prompt_presets_fragment;
-use crate::adapters::driving::http::settings_fragment;
-use crate::adapters::driving::http::worlds_fragment;
+use crate::adapters::driving::http::action;
+use crate::adapters::driving::http::core;
+use crate::adapters::driving::http::games;
+use crate::adapters::driving::http::history;
+use crate::adapters::driving::http::layout;
+use crate::adapters::driving::http::prompt_presets;
+use crate::adapters::driving::http::settings;
+use crate::adapters::driving::http::worlds;
 
 pub(crate) fn build_router(app_state: AppState) -> Router {
     Router::new()
-        .route("/", get(index_handler))
-        .route("/fragment/header", get(fragments::header_fragment))
-        .route("/fragment/story-log", get(fragments::story_log_fragment))
+        .route("/", get(core::handlers::index_handler))
+        .route("/fragment/header", get(layout::handlers::header_fragment))
+        .route(
+            "/fragment/story-log",
+            get(layout::handlers::story_log_fragment),
+        )
         .route(
             "/fragment/visual-sidebar",
-            get(fragments::visual_sidebar_fragment),
+            get(layout::handlers::visual_sidebar_fragment),
         )
         .route(
             "/fragment/action-area",
-            get(fragments::action_area_fragment),
+            get(layout::handlers::action_area_fragment),
         )
         .route(
             "/fragment/character-headshots",
-            get(fragments::character_headshots_fragment),
+            get(layout::handlers::character_headshots_fragment),
         )
-        .route("/action", post(fragments::action_handler))
-        .route("/action/check", post(fragments::action_check_handler))
-        .route("/action/confirm", post(fragments::action_confirm_handler))
-        .route("/check-text", post(fragments::check_text_handler))
-        .route("/status/ready", get(fragments::status_ready_handler))
+        .route("/action", post(action::handlers::action_handler))
+        .route(
+            "/action/check",
+            post(action::handlers::action_check_handler),
+        )
+        .route(
+            "/action/confirm",
+            post(action::handlers::action_confirm_handler),
+        )
+        .route("/check-text", post(core::handlers::check_text_handler))
+        .route("/status/ready", get(layout::handlers::status_ready_handler))
         .route(
             "/status/generating",
-            get(fragments::generating_status_handler),
+            get(layout::handlers::generating_status_handler),
         )
         .route(
             "/status/reset-generating",
-            post(fragments::reset_generating_handler),
+            post(layout::handlers::reset_generating_handler),
         )
-        .route("/history/:id", post(fragments::edit_history_handler))
-        .route("/history/delete", post(fragments::delete_history_handler))
-        .route("/swipe/new", post(fragments::retry_handler))
+        .route(
+            "/history/:id",
+            post(history::handlers::edit_history_handler),
+        )
+        .route(
+            "/history/delete",
+            post(history::handlers::delete_history_handler),
+        )
+        .route("/swipe/new", post(core::handlers::retry_handler))
         .route(
             "/message/:id/swipe/:index",
-            post(fragments::switch_swipe_handler),
+            post(core::handlers::switch_swipe_handler),
         )
-        .route("/retrigger", post(fragments::retrigger_handler))
-        .route("/reset", post(fragments::reset_handler))
-        .route("/games", post(games_fragment::create_game_handler))
+        .route("/retrigger", post(core::handlers::retrigger_handler))
+        .route("/reset", post(core::handlers::reset_handler))
+        .route("/games", post(games::handlers::create_game_handler))
         .route(
             "/games/:id/switch",
-            post(games_fragment::switch_game_handler),
+            post(games::handlers::switch_game_handler),
         )
         .route(
             "/games/:id/delete",
-            post(games_fragment::delete_game_handler),
+            post(games::handlers::delete_game_handler),
         )
-        .route("/fragment/games", get(games_fragment::list_games_fragment))
+        .route("/fragment/games", get(games::handlers::list_games_fragment))
         .route(
             "/fragment/llm-messages",
-            get(fragments::llm_messages_fragment),
+            get(layout::handlers::llm_messages_fragment),
         )
         .route(
             "/fragment/worlds",
-            get(worlds_fragment::list_worlds_fragment),
+            get(worlds::handlers::list_worlds_fragment),
         )
-        .route("/worlds", post(worlds_fragment::create_world_handler))
-        .route("/worlds/:key", post(worlds_fragment::update_world_handler))
+        .route("/worlds", post(worlds::handlers::create_world_handler))
+        .route("/worlds/:key", post(worlds::handlers::update_world_handler))
         .route(
             "/fragment/worlds/new",
-            get(worlds_fragment::new_world_form_handler),
+            get(worlds::handlers::new_world_form_handler),
         )
         .route(
             "/worlds/:key/edit",
-            get(worlds_fragment::edit_world_form_handler),
+            get(worlds::handlers::edit_world_form_handler),
         )
         .route(
             "/worlds/:key/delete",
-            post(worlds_fragment::delete_world_handler),
+            post(worlds::handlers::delete_world_handler),
         )
-        .route("/fragment/settings", get(settings_fragment::settings_panel))
-        .route("/settings", post(settings_fragment::save_settings_handler))
+        .route(
+            "/fragment/settings",
+            get(settings::handlers::settings_panel),
+        )
+        .route("/settings", post(settings::handlers::save_settings_handler))
         .route(
             "/connections/add",
-            post(settings_fragment::add_connection_handler),
+            post(settings::handlers::add_connection_handler),
         )
         .route(
             "/fragment/connections/:id",
-            get(settings_fragment::connection_card_fragment),
+            get(settings::handlers::connection_card_fragment),
         )
         .route(
             "/fragment/connections/:id/edit",
-            get(settings_fragment::edit_connection_form),
+            get(settings::handlers::edit_connection_form),
         )
         .route(
             "/connections/:id/edit",
-            post(settings_fragment::edit_connection_handler),
+            post(settings::handlers::edit_connection_handler),
         )
         .route(
             "/connections/:id/delete",
-            post(settings_fragment::delete_connection_handler),
+            post(settings::handlers::delete_connection_handler),
         )
         .route(
             "/connections/:id/set-narrator",
-            post(settings_fragment::set_narrator_handler),
+            post(settings::handlers::set_narrator_handler),
         )
         .route(
             "/connections/:id/set-quantifier",
-            post(settings_fragment::set_quantifier_handler),
+            post(settings::handlers::set_quantifier_handler),
         )
         .route(
             "/settings/text-check",
-            post(settings_fragment::save_text_check_handler),
+            post(settings::handlers::save_text_check_handler),
         )
         .route(
             "/fragment/prompt-presets",
-            get(prompt_presets_fragment::panel_handler),
+            get(prompt_presets::handlers::panel_handler),
         )
         .route(
             "/prompt-presets",
-            post(prompt_presets_fragment::save_preset_handler),
+            post(prompt_presets::handlers::save_preset_handler),
         )
         .route(
             "/fragment/prompt-presets/:id",
-            get(prompt_presets_fragment::preset_card_handler),
+            get(prompt_presets::handlers::preset_card_handler),
         )
         .route(
             "/fragment/prompt-presets/:id/edit",
-            get(prompt_presets_fragment::edit_preset_form_handler),
+            get(prompt_presets::handlers::edit_preset_form_handler),
         )
         .route(
             "/fragment/prompt-presets/:id/view",
-            get(prompt_presets_fragment::view_preset_form_handler),
+            get(prompt_presets::handlers::view_preset_form_handler),
         )
         .route(
             "/prompt-presets/:id",
-            post(prompt_presets_fragment::update_preset_handler),
+            post(prompt_presets::handlers::update_preset_handler),
         )
         .route(
             "/prompt-presets/:id/delete",
-            post(prompt_presets_fragment::delete_preset_handler),
+            post(prompt_presets::handlers::delete_preset_handler),
         )
         .route(
             "/prompt-presets/:id/duplicate",
-            post(prompt_presets_fragment::duplicate_preset_handler),
+            post(prompt_presets::handlers::duplicate_preset_handler),
         )
         .route(
             "/prompt-presets/:id/activate",
-            post(prompt_presets_fragment::activate_preset_handler),
+            post(prompt_presets::handlers::activate_preset_handler),
         )
-        .route("/debug/state", get(debug::debug_state_handler))
+        .route("/debug/state", get(core::handlers::debug_state_handler))
         .route(
             "/debug/is_generating",
-            get(debug::debug_is_generating_handler),
+            get(core::handlers::debug_is_generating_handler),
         )
-        .route("/debug/backend", get(debug::debug_backend_handler))
+        .route("/debug/backend", get(core::handlers::debug_backend_handler))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))

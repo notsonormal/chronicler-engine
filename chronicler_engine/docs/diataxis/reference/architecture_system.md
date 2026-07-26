@@ -8,7 +8,6 @@ title: Architecture System
 ## Layer Structure
 
 - `crate::domain::model` — Pure data structures; game state.
-- `crate::domain::engine` — Pure simulation logic.
 - `crate::application` — Orchestration.
 - `crate::adapters::driven` — Outbound adapters (storage, LLM providers, text check).
 - `crate::adapters::driving` — Inbound adapters (HTTP, CLI).

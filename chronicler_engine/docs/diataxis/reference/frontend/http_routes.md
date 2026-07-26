@@ -5,91 +5,96 @@ title: HTTP Routes
 
 ## Overview
 
-This doc is generated from `src/adapters/driving/http/builders/router.rs` and is the canonical map of HTTP route to handler for the engine's HTTP server. Re-run `python scripts/extract_http_routes.py` after any change to `router.rs`. The seven areas below match the seven handler-module prefixes discovered from the router file (one prefix per source-tree module under `src/adapters/driving/http/`). Static-asset behaviour — `.nest_service` for `/assets` and `/data`, plus the `fallback_service` for unmatched paths — lives in `router.rs` but is not enumerated here; the generator handles `.route()` calls only.
+Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python scripts/extract_http_routes.py` after any `router.rs` change. Covers `.route()` calls only; `.nest_service` (assets/data) and `fallback_service` live in `router.rs` but aren't enumerated.
 
-## Index
-
-| Method | Path | Handler |
-|--------|------|---------|
-| GET | `/` | `handlers::index_handler` |
-
-## Action / Status / History / Lifecycle
+## Core
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/header` | `fragments::header_fragment` |
-| GET | `/fragment/story-log` | `fragments::story_log_fragment` |
-| GET | `/fragment/visual-sidebar` | `fragments::visual_sidebar_fragment` |
-| GET | `/fragment/action-area` | `fragments::action_area_fragment` |
-| GET | `/fragment/character-headshots` | `fragments::character_headshots_fragment` |
-| POST | `/action` | `fragments::action_handler` |
-| POST | `/action/check` | `fragments::action_check_handler` |
-| POST | `/action/confirm` | `fragments::action_confirm_handler` |
-| POST | `/check-text` | `fragments::check_text_handler` |
-| GET | `/status/ready` | `fragments::status_ready_handler` |
-| GET | `/status/generating` | `fragments::generating_status_handler` |
-| POST | `/status/reset-generating` | `fragments::reset_generating_handler` |
-| POST | `/history/:id` | `fragments::edit_history_handler` |
-| POST | `/history/delete` | `fragments::delete_history_handler` |
-| POST | `/swipe/new` | `fragments::retry_handler` |
-| POST | `/message/:id/swipe/:index` | `fragments::switch_swipe_handler` |
-| POST | `/retrigger` | `fragments::retrigger_handler` |
-| POST | `/reset` | `fragments::reset_handler` |
-| GET | `/fragment/llm-messages` | `fragments::llm_messages_fragment` |
+| GET | `/` | `index_handler` |
+| POST | `/check-text` | `check_text_handler` |
+| POST | `/swipe/new` | `retry_handler` |
+| POST | `/message/:id/swipe/:index` | `switch_swipe_handler` |
+| POST | `/retrigger` | `retrigger_handler` |
+| POST | `/reset` | `reset_handler` |
+| GET | `/debug/state` | `debug_state_handler` |
+| GET | `/debug/is_generating` | `debug_is_generating_handler` |
+| GET | `/debug/backend` | `debug_backend_handler` |
+
+## Action
+
+| Method | Path | Handler |
+|--------|------|---------|
+| POST | `/action` | `action_handler` |
+| POST | `/action/check` | `action_check_handler` |
+| POST | `/action/confirm` | `action_confirm_handler` |
+
+## History
+
+| Method | Path | Handler |
+|--------|------|---------|
+| POST | `/history/:id` | `edit_history_handler` |
+| POST | `/history/delete` | `delete_history_handler` |
+
+## Layout fragments
+
+| Method | Path | Handler |
+|--------|------|---------|
+| GET | `/fragment/header` | `header_fragment` |
+| GET | `/fragment/story-log` | `story_log_fragment` |
+| GET | `/fragment/visual-sidebar` | `visual_sidebar_fragment` |
+| GET | `/fragment/action-area` | `action_area_fragment` |
+| GET | `/fragment/character-headshots` | `character_headshots_fragment` |
+| GET | `/status/ready` | `status_ready_handler` |
+| GET | `/status/generating` | `generating_status_handler` |
+| POST | `/status/reset-generating` | `reset_generating_handler` |
+| GET | `/fragment/llm-messages` | `llm_messages_fragment` |
 
 ## Games
 
 | Method | Path | Handler |
 |--------|------|---------|
-| POST | `/games` | `games_fragment::create_game_handler` |
-| POST | `/games/:id/switch` | `games_fragment::switch_game_handler` |
-| POST | `/games/:id/delete` | `games_fragment::delete_game_handler` |
-| GET | `/fragment/games` | `games_fragment::list_games_fragment` |
+| POST | `/games` | `create_game_handler` |
+| POST | `/games/:id/switch` | `switch_game_handler` |
+| POST | `/games/:id/delete` | `delete_game_handler` |
+| GET | `/fragment/games` | `list_games_fragment` |
 
 ## Worlds
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/worlds` | `worlds_fragment::list_worlds_fragment` |
-| POST | `/worlds` | `worlds_fragment::create_world_handler` |
-| POST | `/worlds/:key` | `worlds_fragment::update_world_handler` |
-| GET | `/fragment/worlds/new` | `worlds_fragment::new_world_form_handler` |
-| GET | `/worlds/:key/edit` | `worlds_fragment::edit_world_form_handler` |
-| POST | `/worlds/:key/delete` | `worlds_fragment::delete_world_handler` |
+| GET | `/fragment/worlds` | `list_worlds_fragment` |
+| POST | `/worlds` | `create_world_handler` |
+| POST | `/worlds/:key` | `update_world_handler` |
+| GET | `/fragment/worlds/new` | `new_world_form_handler` |
+| GET | `/worlds/:key/edit` | `edit_world_form_handler` |
+| POST | `/worlds/:key/delete` | `delete_world_handler` |
 
 ## Settings & connections
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/settings` | `settings_fragment::settings_panel` |
-| POST | `/settings` | `settings_fragment::save_settings_handler` |
-| POST | `/connections/add` | `settings_fragment::add_connection_handler` |
-| GET | `/fragment/connections/:id` | `settings_fragment::connection_card_fragment` |
-| GET | `/fragment/connections/:id/edit` | `settings_fragment::edit_connection_form` |
-| POST | `/connections/:id/edit` | `settings_fragment::edit_connection_handler` |
-| POST | `/connections/:id/delete` | `settings_fragment::delete_connection_handler` |
-| POST | `/connections/:id/set-narrator` | `settings_fragment::set_narrator_handler` |
-| POST | `/connections/:id/set-quantifier` | `settings_fragment::set_quantifier_handler` |
-| POST | `/settings/text-check` | `settings_fragment::save_text_check_handler` |
+| GET | `/fragment/settings` | `settings_panel` |
+| POST | `/settings` | `save_settings_handler` |
+| POST | `/connections/add` | `add_connection_handler` |
+| GET | `/fragment/connections/:id` | `connection_card_fragment` |
+| GET | `/fragment/connections/:id/edit` | `edit_connection_form` |
+| POST | `/connections/:id/edit` | `edit_connection_handler` |
+| POST | `/connections/:id/delete` | `delete_connection_handler` |
+| POST | `/connections/:id/set-narrator` | `set_narrator_handler` |
+| POST | `/connections/:id/set-quantifier` | `set_quantifier_handler` |
+| POST | `/settings/text-check` | `save_text_check_handler` |
 
 ## Prompt presets
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/prompt-presets` | `prompt_presets_fragment::panel_handler` |
-| POST | `/prompt-presets` | `prompt_presets_fragment::save_preset_handler` |
-| GET | `/fragment/prompt-presets/:id` | `prompt_presets_fragment::preset_card_handler` |
-| GET | `/fragment/prompt-presets/:id/edit` | `prompt_presets_fragment::edit_preset_form_handler` |
-| GET | `/fragment/prompt-presets/:id/view` | `prompt_presets_fragment::view_preset_form_handler` |
-| POST | `/prompt-presets/:id` | `prompt_presets_fragment::update_preset_handler` |
-| POST | `/prompt-presets/:id/delete` | `prompt_presets_fragment::delete_preset_handler` |
-| POST | `/prompt-presets/:id/duplicate` | `prompt_presets_fragment::duplicate_preset_handler` |
-| POST | `/prompt-presets/:id/activate` | `prompt_presets_fragment::activate_preset_handler` |
-
-## Debug
-
-| Method | Path | Handler |
-|--------|------|---------|
-| GET | `/debug/state` | `debug::debug_state_handler` |
-| GET | `/debug/is_generating` | `debug::debug_is_generating_handler` |
-| GET | `/debug/backend` | `debug::debug_backend_handler` |
+| GET | `/fragment/prompt-presets` | `panel_handler` |
+| POST | `/prompt-presets` | `save_preset_handler` |
+| GET | `/fragment/prompt-presets/:id` | `preset_card_handler` |
+| GET | `/fragment/prompt-presets/:id/edit` | `edit_preset_form_handler` |
+| GET | `/fragment/prompt-presets/:id/view` | `view_preset_form_handler` |
+| POST | `/prompt-presets/:id` | `update_preset_handler` |
+| POST | `/prompt-presets/:id/delete` | `delete_preset_handler` |
+| POST | `/prompt-presets/:id/duplicate` | `duplicate_preset_handler` |
+| POST | `/prompt-presets/:id/activate` | `activate_preset_handler` |

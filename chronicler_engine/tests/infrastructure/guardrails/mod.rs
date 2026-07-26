@@ -1,6 +1,7 @@
 //! Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
 
 pub mod enums;
+pub mod free_fn;
 pub mod layers;
 pub mod location;
 pub mod nesting;
@@ -8,6 +9,7 @@ pub mod structure;
 pub mod style;
 
 pub use enums::*;
+pub use free_fn::*;
 pub use layers::*;
 pub use nesting::*;
 pub use structure::{check_no_legacy_test_context, *};
@@ -238,4 +240,9 @@ fn guardrails_enum_variant_docs_tests() {
 #[test]
 fn guardrails_nesting_depth_src() {
     check_src_files("nesting depth (src)", check_nesting_depth);
+}
+
+#[test]
+fn guardrails_free_fn_location() {
+    check_src_files("free fn location", check_free_fn_location);
 }

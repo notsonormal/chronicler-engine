@@ -1,7 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! Textarea field HTML builders.
 
-use crate::adapters::driving::http::fragments::html_escape;
+use crate::adapters::driving::http::utils::response::html_escape;
 
 pub(crate) fn textarea_field(
     id: &str,

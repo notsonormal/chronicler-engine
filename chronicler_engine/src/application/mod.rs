@@ -40,4 +40,7 @@ mod llm_recorder_tests;
 mod application_service_tests;
 
 #[cfg(test)]
+mod generation_guard_tests;
+
+#[cfg(test)]
 mod text_check_service_tests;

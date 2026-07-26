@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::ServerConfig;
-use chronicler_engine::adapters::driving::http::server_impl::run_server_with_config;
+use chronicler_engine::adapters::driving::http::bootstrap::run_server_with_config;
 use chronicler_engine::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use chronicler_engine::domain::model::settings::AppSettings;
 

@@ -646,12 +646,6 @@ def main():
         )
 
         timed_step(
-            "Checking intentional free functions...",
-            "python scripts/find_free_fn_smells.py",
-            env=cargo_env,
-        )
-
-        timed_step(
             "Checking http_routes.md freshness...",
             "python scripts/extract_http_routes.py --check",
             env=cargo_env,

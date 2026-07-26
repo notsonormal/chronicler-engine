@@ -20,7 +20,7 @@ use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
 use chronicler_engine::application::agents::registry::AgentRegistry;
-use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
+use chronicler_engine::application::GenerationGuard;
 use chronicler_engine::application::utils::slot::GenerationSlot;
 use chronicler_engine::test_support::make_test_recorder;
 

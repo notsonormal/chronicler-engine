@@ -1,7 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
 
-use crate::adapters::driving::http::games_fragment::template::GameRowView;
+use crate::adapters::driving::http::games::templates::GameRowView;
 use crate::domain::model::game::Game;
 
 pub fn game_to_view(game: Game) -> GameRowView {

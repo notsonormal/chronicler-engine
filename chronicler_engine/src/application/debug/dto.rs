@@ -1,5 +1,5 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
-//! DebugStateView — debug-state DTO for the HTTP debug endpoint (T2 ticket 04 — extracted from DefaultApplicationService).
+//! DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
 
 use std::collections::HashMap;
 

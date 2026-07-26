@@ -7,7 +7,7 @@ fixtures. The tests cover:
 - Multi-line `.route(...)` calls (e.g. `debug::debug_state_handler`)
 - `:id` / `:key` / `:index` path-parameter preservation
 - Both `get(...)` and `post(...)` verbs
-- Handler-module prefix grouping (the seven-area structure)
+- Handler-module prefix grouping (per-area structure)
 - Doc emission (front-matter, required H2s, table row counts)
 - `use super::...` import normalization (bare handler → qualified)
 - `validate_docs.py --strict` pass on the emitted doc
@@ -48,7 +48,7 @@ def _run_extract(source: str) -> list[er.Route]:
 def _render(routes: list[er.Route]) -> str:
     """Render the doc for `routes`."""
     grouped = er.group_routes_by_area(routes)
-    return er._render_document(routes, grouped)
+    return er._render_document(grouped)
 
 
 def _front_matter() -> str:
@@ -217,23 +217,21 @@ class TestParserUseImportNormalization(unittest.TestCase):
 class TestGrouping(unittest.TestCase):
     """Routes are grouped by handler-module prefix → area."""
 
-    def test_seven_areas_initialized(self) -> None:
+    def test_areas_initialized(self) -> None:
         routes = _run_extract(_single_line_fixture())
         grouped = er.group_routes_by_area(routes)
-        # All seven area names from AREA_GROUPS appear, even if empty.
+        # All area names from AREA_GROUPS appear, even if empty.
         for _prefix, area in er.AREA_GROUPS:
             self.assertIn(area, grouped)
 
     def test_fragments_grouped_together(self) -> None:
         routes = _run_extract(
-            ".route(\"/a\", get(fragments::a))\n"
-            + ".route(\"/b\", get(fragments::b))\n"
-            + ".route(\"/c\", get(fragments::c))\n"
+            ".route(\"/a\", get(layout::a))\n"
+            + ".route(\"/b\", get(layout::b))\n"
+            + ".route(\"/c\", get(layout::c))\n"
         )
         grouped = er.group_routes_by_area(routes)
-        self.assertEqual(
-            len(grouped["Action / Status / History / Lifecycle"]), 3
-        )
+        self.assertEqual(len(grouped["Layout fragments"]), 3)
 
     def test_unknown_prefix_bucketed(self) -> None:
         routes = _run_extract(
@@ -264,9 +262,14 @@ class TestDocEmission(unittest.TestCase):
     def test_overview_h2(self) -> None:
         self.assertIn("## Overview", self.doc)
 
-    def test_seven_area_h2s(self) -> None:
+    def test_empty_areas_no_h2(self) -> None:
+        # Empty areas no longer emit an H2; only areas with routes do.
+        # _single_line_fixture uses prefixes not in AREA_GROUPS, so all
+        # routes land in Unknown and no area H2 is emitted.
+        self.assertIn("## Overview", self.doc)
+        self.assertIn("## Unknown areas", self.doc)
         for _prefix, area in er.AREA_GROUPS:
-            self.assertIn(f"## {area}", self.doc)
+            self.assertNotIn(f"## {area}", self.doc)
 
     def test_table_row_count_matches_routes(self) -> None:
         # Each `.route(...)` call must yield exactly one table row in the
@@ -275,10 +278,8 @@ class TestDocEmission(unittest.TestCase):
         self.assertEqual(len(rows), len(self.routes))
 
     def test_table_renders_backticked_path_and_handler(self) -> None:
-        # Pick the index_handler row specifically.
-        self.assertIn(
-            "| GET | `/` | `handlers::index_handler` |", self.doc
-        )
+        # Handler cell strips module prefix; H2 already names the area.
+        self.assertIn("| GET | `/` | `index_handler` |", self.doc)
 
 
 # ---------------------------------------------------------------------------
@@ -333,7 +334,7 @@ class TestRealRouter(unittest.TestCase):
         source = router_path.read_text(encoding="utf-8")
         routes = er.extract_routes(source)
         grouped = er.group_routes_by_area(routes)
-        rendered = er._render_document(routes, grouped)
+        rendered = er._render_document(grouped)
 
         with tempfile.TemporaryDirectory(
             prefix="http-routes-validate-"
@@ -400,7 +401,7 @@ class TestRealRouter(unittest.TestCase):
         source = router_path.read_text(encoding="utf-8")
         routes = er.extract_routes(source)
         grouped = er.group_routes_by_area(routes)
-        rendered = er._render_document(routes, grouped)
+        rendered = er._render_document(grouped)
 
         rows = re.findall(r"^\| (?:GET|POST) \|", rendered, flags=re.MULTILINE)
         self.assertEqual(len(rows), len(routes))
@@ -420,7 +421,7 @@ class TestWriter(unittest.TestCase):
             tmp = Path(tmp_str)
             routes = _run_extract(_single_line_fixture())
             grouped = er.group_routes_by_area(routes)
-            rendered = er._render_document(routes, grouped)
+            rendered = er._render_document(grouped)
 
             out_path = (
                 tmp / "docs" / "diataxis" / "reference" / "frontend" / "http_routes.md"

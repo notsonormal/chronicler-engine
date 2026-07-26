@@ -1,5 +1,5 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
-//! PersistenceGate — game-storage seam + persistence helpers (T2 façade-first carve-out).
+//! PersistenceGate — game-storage seam + persistence helpers.
 
 pub mod gate;
 

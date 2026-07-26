@@ -1,7 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! LLM-connection card + edit-form HTML builders.
 
-use crate::adapters::driving::http::fragments::html_escape;
+use crate::adapters::driving::http::utils::response::html_escape;
 use crate::adapters::driving::http::utils::template_helpers::provider_options_html;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::LlmProviderConfig;

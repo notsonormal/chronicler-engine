@@ -7,7 +7,7 @@ Integration test structure mirrors `src/` paths **within each test binary**. The
 Examples:
 - `src/application/action_pipeline/pipeline.rs` ↔ `tests/integration/application/action_pipeline/pipeline.rs`
 - `src/application/game_service.rs` ↔ `tests/integration/application/game_service.rs`
-- `src/adapters/driving/http/fragments/actions.rs` ↔ `tests/http/fragments/actions.rs` (http test binary naturally mirrors the http subset)
+- `src/adapters/driving/http/action/handlers/actions.rs` ↔ `tests/http/action/handlers/actions.rs` (http test binary naturally mirrors the http subset)
 - `src/adapters/driven/llm/transport.rs` ↔ `tests/integration/adapters/driven/llm/transport.rs` (or `tests/integration/adapters/driven/llm_client.rs` for legacy reasons)
 
 ## STRUCTURE

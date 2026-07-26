@@ -2,7 +2,7 @@
 //! Prompt-preset card + form HTML builders.
 
 use crate::adapters::driving::http::builders::forms::{textarea_field, textarea_field_readonly};
-use crate::adapters::driving::http::fragments::html_escape;
+use crate::adapters::driving::http::utils::response::html_escape;
 use crate::domain::model::prompt_preset::PromptPreset;
 
 pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
