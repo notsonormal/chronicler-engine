@@ -7,6 +7,7 @@ use crate::application::llm_message::LlmMessage;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::application::ports::text_checker::CheckResult;
+use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
 #[allow(private_interfaces)]
 #[derive(Debug, Clone)]
@@ -18,19 +19,6 @@ impl fmt::Display for SafeHtml {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
-}
-
-pub(crate) fn markdown_to_html(text: &str) -> String {
-    use pulldown_cmark::{Options, Parser, html};
-    let escaped = text.replace('&', "&amp;").replace('<', "&lt;");
-
-    let parser = Parser::new_ext(&escaped, Options::ENABLE_SMART_PUNCTUATION);
-    let mut html_output = String::new();
-    html::push_html(&mut html_output, parser);
-
-    html_output
-        .replace('\u{201C}', "<q>")
-        .replace('\u{201D}', "</q>")
 }
 
 #[derive(Debug, Clone)]

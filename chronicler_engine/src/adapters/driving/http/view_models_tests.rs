@@ -1,4 +1,4 @@
-use crate::adapters::driving::http::view_models::markdown_to_html;
+use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
 #[test]
 fn test_markdown_to_html_headers() {

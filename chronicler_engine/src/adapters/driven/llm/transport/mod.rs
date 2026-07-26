@@ -3,19 +3,11 @@
 
 #![allow(unused_imports)]
 
-mod client;
-mod request;
-mod response;
+mod utils;
 
-pub use response::{extract_content_from_response, handle_response, parse_chat_response};
-pub use client::{call_chat_completions, call_openrouter_with_model, call_ollama};
+pub use utils::response::{extract_content_from_response, handle_response, parse_chat_response};
+pub use utils::client::{call_chat_completions, call_openrouter_with_model, call_ollama};
 
-pub use request::ChatCompletionResult;
+pub use utils::request::ChatCompletionResult;
 
-pub(crate) use request::next_request_id;
-
-#[cfg(test)]
-mod request_tests;
-
-#[cfg(test)]
-mod response_tests;
+pub(crate) use utils::request::next_request_id;

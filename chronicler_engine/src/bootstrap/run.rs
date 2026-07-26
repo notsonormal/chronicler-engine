@@ -4,12 +4,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::adapters::driving::cli::{Args, list_available_worlds, resolve_engine_data_path};
+use crate::utils::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driving::http::ServerConfig;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
-use crate::settings::load_settings;
+use crate::utils::settings::load_settings;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::settings::AppSettings;
@@ -63,7 +63,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     }
 
     let preset_storage = Arc::new(Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID));
-    if let Err(e) = super::load::seed_game_data(&preset_storage, &data_dir) {
+    if let Err(e) = preset_storage.seed_game_data(&data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
 

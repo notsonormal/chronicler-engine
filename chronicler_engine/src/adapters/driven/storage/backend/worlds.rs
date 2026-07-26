@@ -13,18 +13,21 @@ use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::backend::{Backend, Storage, InMemoryWorld};
 use crate::adapters::driven::storage::models::world::{DbWorld, DbMap};
 
-pub(crate) fn world_card_from_db(db: &DbWorld) -> Result<WorldCard, EngineError> {
-    Ok(WorldCard {
-        key: db.key.clone(),
-        name: db.name.clone(),
-        description: db.description.clone(),
-        global_rules: serde_json::from_str(&db.global_rules)
-            .map_err(|e| EngineError::Parse(format!("Failed to deserialize global_rules: {e}")))?,
-        scenarios: serde_json::from_str(&db.scenarios)
-            .map_err(|e| EngineError::Parse(format!("Failed to deserialize scenarios: {e}")))?,
-        default_scenario_id: db.default_scenario_id.clone().filter(|s| !s.is_empty()),
-        default_room_image: db.default_room_image.clone().filter(|s| !s.is_empty()),
-    })
+impl DbWorld {
+    fn to_card(&self) -> Result<WorldCard, EngineError> {
+        Ok(WorldCard {
+            key: self.key.clone(),
+            name: self.name.clone(),
+            description: self.description.clone(),
+            global_rules: serde_json::from_str(&self.global_rules).map_err(|e| {
+                EngineError::Parse(format!("Failed to deserialize global_rules: {e}"))
+            })?,
+            scenarios: serde_json::from_str(&self.scenarios)
+                .map_err(|e| EngineError::Parse(format!("Failed to deserialize scenarios: {e}")))?,
+            default_scenario_id: self.default_scenario_id.clone().filter(|s| !s.is_empty()),
+            default_room_image: self.default_room_image.clone().filter(|s| !s.is_empty()),
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -53,7 +56,7 @@ impl Storage {
                 let rows = stmt.query_map([], DbWorld::from_row)?;
                 rows.map(|r| {
                     let db = r?;
-                    world_card_from_db(&db)
+                    db.to_card()
                 }).collect()
             }
             Backend::InMemory(data) => Ok(data.worlds.iter().map(|w| w.world_card.clone()).collect()),
@@ -83,7 +86,7 @@ impl Storage {
                 let db_map = map_stmt.query_row([db_world.id], DbMap::from_row)
                     .map_err(EngineError::Database)?;
 
-                let world_card = world_card_from_db(&db_world)?;
+                let world_card = db_world.to_card()?;
                 let map: MapDef = serde_json::from_str(&db_map.map_data)
                     .map_err(|e| EngineError::Parse(format!("Failed to deserialize map: {e}")))?;
 
@@ -246,7 +249,7 @@ impl Storage {
                 let db_map = map_stmt.query_row([db_world.id], DbMap::from_row)
                     .map_err(EngineError::Database)?;
 
-                let world_card = world_card_from_db(&db_world)?;
+                let world_card = db_world.to_card()?;
                 let map: MapDef = serde_json::from_str(&db_map.map_data)
                     .map_err(|e| EngineError::Parse(format!("Failed to deserialize map: {e}")))?;
 

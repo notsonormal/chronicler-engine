@@ -25,18 +25,20 @@ pub(crate) fn read_json_file<T: serde::de::DeserializeOwned>(
     })
 }
 
-pub fn seed_game_data(storage: &Storage, data_dir: &std::path::Path) -> crate::error::Result<()> {
-    let worlds_dir = data_dir.join("worlds");
-    if worlds_dir.is_dir() {
-        seed_worlds(storage, data_dir, &worlds_dir)?;
-    }
+impl Storage {
+    pub fn seed_game_data(&self, data_dir: &std::path::Path) -> crate::error::Result<()> {
+        let worlds_dir = data_dir.join("worlds");
+        if worlds_dir.is_dir() {
+            seed_worlds(self, data_dir, &worlds_dir)?;
+        }
 
-    let personas_dir = data_dir.join("personas");
-    if personas_dir.is_dir() {
-        seed_personas(storage, &personas_dir)?;
-    }
+        let personas_dir = data_dir.join("personas");
+        if personas_dir.is_dir() {
+            seed_personas(self, &personas_dir)?;
+        }
 
-    Ok(())
+        Ok(())
+    }
 }
 
 fn seed_worlds(

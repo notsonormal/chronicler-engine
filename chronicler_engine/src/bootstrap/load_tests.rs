@@ -1,11 +1,10 @@
 use crate::adapters::driven::storage::Storage;
-use super::load::seed_game_data;
 
 #[test]
 fn test_seed_game_data_empty_worlds_dir() {
     let storage = Storage::new_in_memory();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let result = seed_game_data(&storage, temp_data.path());
+    let result = storage.seed_game_data(temp_data.path());
     assert!(
         result.is_ok(),
         "Should handle missing worlds dir: {result:?}"
@@ -21,7 +20,7 @@ fn test_seed_game_data_invalid_world_json_skips() {
     let bad_world_dir = worlds_dir.join("bad_world");
     std::fs::create_dir_all(&bad_world_dir).unwrap();
     std::fs::write(bad_world_dir.join("world.json"), "not valid json {").unwrap();
-    let result = seed_game_data(&storage, temp_data.path());
+    let result = storage.seed_game_data(temp_data.path());
     assert!(
         result.is_ok(),
         "Invalid world.json should not abort seeding: {result:?}"
@@ -89,9 +88,9 @@ fn test_seed_game_data_idempotent() {
         }"#,
     )
     .unwrap();
-    let result1 = seed_game_data(&storage, temp_data.path());
+    let result1 = storage.seed_game_data(temp_data.path());
     assert!(result1.is_ok());
-    let result2 = seed_game_data(&storage, temp_data.path());
+    let result2 = storage.seed_game_data(temp_data.path());
     assert!(result2.is_ok());
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1, "Should seed once, not duplicate");
@@ -124,7 +123,7 @@ fn test_seed_game_data_scans_personas_dir() {
     )
     .unwrap();
 
-    let result = seed_game_data(&storage, temp_data.path());
+    let result = storage.seed_game_data(temp_data.path());
     assert!(result.is_ok(), "seeding should succeed without worlds/");
     assert!(
         storage.get_persona("foo").unwrap().is_some(),
@@ -139,7 +138,7 @@ fn test_seed_game_data_no_personas_dir_ok() {
     let worlds_dir = temp_data.path().join("worlds");
     std::fs::create_dir_all(&worlds_dir).unwrap();
 
-    let result = seed_game_data(&storage, temp_data.path());
+    let result = storage.seed_game_data(temp_data.path());
     assert!(
         result.is_ok(),
         "seeding should succeed with no personas/ dir"

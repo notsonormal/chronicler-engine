@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::scenario::StartingScenario;
+use crate::domain::model::utils::world_defaults;
 
 /// Runtime world descriptor sourced from the DB. No filesystem pointers.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -30,7 +31,7 @@ pub struct WorldManifest {
     pub name: String,
     pub description: String,
     pub global_rules: Vec<String>,
-    #[serde(default = "default_map_file")]
+    #[serde(default = "world_defaults::default_map_file")]
     pub map_file: String,
     #[serde(default)]
     pub characters_dir: String,
@@ -46,10 +47,6 @@ impl WorldManifest {
     pub fn default_scenario(&self) -> Option<&StartingScenario> {
         self.scenarios.first()
     }
-}
-
-fn default_map_file() -> String {
-    "map.json".to_string()
 }
 
 impl WorldCard {

@@ -16,6 +16,7 @@ pub mod settings;
 pub mod state;
 pub mod template;
 pub mod trigger;
+pub mod utils;
 pub mod world;
 
 #[cfg(test)]

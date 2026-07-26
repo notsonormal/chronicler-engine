@@ -28,7 +28,7 @@ pub mod application;
 pub mod bootstrap;
 pub mod domain;
 pub mod error;
-pub mod settings;
+pub mod utils;
 
 pub use error::{EngineError, Result};
 
@@ -44,8 +44,4 @@ pub use test_support::test_data_builder::{TestData, TestDataBuilder};
 pub mod test_support;
 
 #[cfg(test)]
-mod cli_tests;
-#[cfg(test)]
 mod error_tests;
-#[cfg(test)]
-mod settings_tests;

@@ -29,7 +29,7 @@ impl AgentRegistry {
         // If no agent configs exist, inject defaults for backward compatibility.
         // This ensures existing settings.toml files without an [agents] section
         // still get the quantifier enabled.
-        let default_configs = crate::domain::model::settings::default_agent_configs();
+        let default_configs = AgentConfig::defaults();
         let effective_configs = if configs.is_empty() {
             &default_configs[..]
         } else {

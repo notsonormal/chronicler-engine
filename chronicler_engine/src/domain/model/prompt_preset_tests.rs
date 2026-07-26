@@ -1,5 +1,4 @@
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 
 #[test]
 fn test_preset_type_system_as_str() {
@@ -72,7 +71,7 @@ fn test_assemble_prompt_text_with_all_sections() {
         ..Default::default()
     };
 
-    let result = assemble_prompt_text(&preset, &["Rule 1".into()], Some("Keep it short."));
+    let result = preset.assemble_text(&["Rule 1".into()], Some("Keep it short."), None);
 
     assert!(result.contains("<role>"));
     assert!(result.contains("You are a narrator."));
@@ -98,7 +97,7 @@ fn test_assemble_prompt_text_skips_empty_sections() {
         ..Default::default()
     };
 
-    let result = assemble_prompt_text(&preset, &[], None);
+    let result = preset.assemble_text(&[], None, None);
 
     assert!(result.contains("<role>"));
     assert!(!result.contains("<instructions>"));
@@ -119,7 +118,7 @@ fn test_assemble_prompt_text_order() {
         ..Default::default()
     };
 
-    let result = assemble_prompt_text(&preset, &["RULE".into()], None);
+    let result = preset.assemble_text(&["RULE".into()], None, None);
 
     let role_pos = result.find("ROLE").unwrap();
     let inst_pos = result.find("INSTRUCTIONS").unwrap();

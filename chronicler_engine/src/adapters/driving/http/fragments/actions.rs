@@ -12,9 +12,11 @@ use serde::{Deserialize, Serialize};
 use crate::application::application_service::ProcessActionResult;
 use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::builders::headers::add_status_swap_headers;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
-use super::renderers::{internal_error, ok, render_error, service_unavailable};
+use crate::adapters::driving::http::utils::error::render_error;
+use crate::adapters::driving::http::utils::response::{internal_error, ok, service_unavailable};
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
@@ -117,18 +119,4 @@ pub async fn action_check_handler(
             response
         }
     }
-}
-
-#[allow(clippy::expect_used)]
-fn add_status_swap_headers(response: &mut Response<Body>) {
-    response.headers_mut().insert(
-        "HX-Retarget",
-        "#status-display"
-            .parse()
-            .expect("static header value is valid"),
-    );
-    response.headers_mut().insert(
-        "HX-Reswap",
-        "innerHTML".parse().expect("static header value is valid"),
-    );
 }

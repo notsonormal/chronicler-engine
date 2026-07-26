@@ -5,11 +5,14 @@ use axum::{Form, extract::State, response::Html};
 
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{LlmProviderConfig, TextCheckMode};
-use crate::settings::save_settings;
+use crate::utils::settings::save_settings;
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::builders::connections::{
+    connection_card_html, connection_edit_form_html,
+};
+use crate::adapters::driving::http::utils::handler_helpers::{opt_string, render_template};
 
-use super::fragments::{connection_card_html, connection_edit_form_html};
-use super::template::{SettingsTemplate, parse_api_key};
+use super::template::SettingsTemplate;
 
 macro_rules! try_lock {
     ($lock:expr) => {
@@ -18,21 +21,6 @@ macro_rules! try_lock {
             p.into_inner()
         })
     };
-}
-
-fn render_template<T: askama::Template>(template: T) -> Html<String> {
-    match template.render() {
-        Ok(html) => Html(html),
-        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
-    }
-}
-
-fn opt_string(value: &str) -> Option<String> {
-    if value.is_empty() {
-        None
-    } else {
-        Some(value.to_string())
-    }
 }
 
 pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
@@ -115,7 +103,7 @@ pub async fn add_connection_handler(
             .as_millis()
     );
 
-    let api_key = parse_api_key(&form.conn_api_key);
+    let api_key = opt_string(&form.conn_api_key);
     let base_url = opt_string(&form.conn_base_url);
 
     let connection = LlmProviderConfig {
@@ -186,7 +174,7 @@ pub async fn edit_connection_handler(
     conn.name = form.conn_name;
     conn.provider = LlmBackendType::from(form.conn_provider.as_str());
     conn.model = form.conn_model;
-    conn.api_key = parse_api_key(&form.conn_api_key);
+    conn.api_key = opt_string(&form.conn_api_key);
     conn.base_url = opt_string(&form.conn_base_url);
     conn.single_user_message = form.single_user_message;
 

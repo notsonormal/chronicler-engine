@@ -14,10 +14,3 @@ impl TemplateVars {
         Self { user: user.into() }
     }
 }
-
-/// Replaces known template placeholders in `text` with values from `vars`.
-/// Placeholder syntax: `{{key}}` — double curly braces, alphanumeric keys.
-/// Unknown placeholders are left as-is (not stripped, not filtered).
-pub fn render_template(text: &str, vars: &TemplateVars) -> String {
-    text.replace("{{user}}", &vars.user)
-}

@@ -201,19 +201,13 @@ impl DefaultApplicationService {
         let messages = match self.load_messages() {
             Ok(m) => m,
             Err(e) => {
-                crate::application::action_pipeline::retry::retry_persist_error(
-                    self,
-                    format!("Retry failed: {e}"),
-                );
+                self.retry_persist_error(format!("Retry failed: {e}"));
                 return;
             }
         };
 
         let Some((anchor_idx, _anchor_msg, snapshot_id)) = self.find_retry_anchor(&messages) else {
-            crate::application::action_pipeline::retry::retry_persist_error(
-                self,
-                "Retry failed: no anchor message",
-            );
+            self.retry_persist_error("Retry failed: no anchor message");
             return;
         };
 
@@ -240,17 +234,13 @@ impl DefaultApplicationService {
         let snapshot = match self.storage().load_snapshot_by_id(snapshot_id) {
             Ok(Some(s)) => s,
             Ok(None) => {
-                crate::application::action_pipeline::retry::retry_persist_error(
-                    self,
-                    format!("Retry failed: no snapshot found for id {snapshot_id}"),
-                );
+                self.retry_persist_error(format!(
+                    "Retry failed: no snapshot found for id {snapshot_id}"
+                ));
                 return;
             }
             Err(e) => {
-                crate::application::action_pipeline::retry::retry_persist_error(
-                    self,
-                    format!("Retry failed: {e}"),
-                );
+                self.retry_persist_error(format!("Retry failed: {e}"));
                 return;
             }
         };
@@ -264,31 +254,25 @@ impl DefaultApplicationService {
         let input_text = match state.narrative.history.last_input_text() {
             Some((_, text)) => text,
             None => {
-                crate::application::action_pipeline::retry::retry_persist_error(
-                    self,
-                    "Retry failed: no input to retry",
-                );
+                self.retry_persist_error("Retry failed: no input to retry");
                 return;
             }
         };
 
         let outcome = if is_event {
-            crate::application::action_pipeline::retry::retry_event_continuation(self, state)
+            self.retry_event_continuation(state)
         } else {
-            crate::application::action_pipeline::retry::retry_main_narration(
-                self, state, input_text,
-            )
+            self.retry_main_narration(state, input_text)
         };
 
-        crate::application::action_pipeline::retry::handle_retry_outcome(self, outcome);
+        self.handle_retry_outcome(outcome);
     }
 
     #[instrument(skip(self))]
     pub fn retrigger_event(&self) {
         let state = self.load_or_fresh();
-        let outcome =
-            crate::application::action_pipeline::retry::retry_event_continuation(self, state);
-        crate::application::action_pipeline::retry::handle_retry_outcome(self, outcome);
+        let outcome = self.retry_event_continuation(state);
+        self.handle_retry_outcome(outcome);
     }
 
     #[allow(dead_code)]

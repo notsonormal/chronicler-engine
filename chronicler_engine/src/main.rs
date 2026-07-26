@@ -8,7 +8,7 @@
 )]
 
 use chronicler_engine::bootstrap::{init_logging, run};
-use chronicler_engine::adapters::driving::cli::parse_args;
+use chronicler_engine::utils::cli::parse_args;
 
 fn main() -> chronicler_engine::Result<()> {
     dotenv::dotenv().ok();

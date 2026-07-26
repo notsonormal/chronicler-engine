@@ -9,7 +9,7 @@ use axum::{
 use crate::application::application_service::ApplicationError;
 use crate::adapters::driving::http::AppState;
 
-use super::renderers::ok;
+use super::ok;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct EditHistoryForm {

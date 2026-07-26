@@ -11,12 +11,12 @@ use crate::error::EngineError;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::quantifier::{QuantifierConfidence, QuantifierResult, compute_npc_events};
+use crate::domain::model::quantifier::{NpcEventList, QuantifierConfidence, QuantifierResult};
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
-use crate::application::narrative_prompt::{NpcContext, make_prompt_context};
+use crate::application::narrative_prompt::{NpcContext, PromptContext};
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
@@ -119,7 +119,7 @@ impl<'a> PipelineRun<'a> {
             Err(msg) => return self.error_return(state, msg),
         };
 
-        let context = make_prompt_context(
+        let context = PromptContext::new(
             &inputs.world,
             room,
             NpcContext {
@@ -334,7 +334,7 @@ impl<'a> PipelineRun<'a> {
 
         state.scene.npcs_in_area = npc_cards;
 
-        let events = compute_npc_events(&previous_ids, &new_ids);
+        let events = NpcEventList::from_diff(&previous_ids, &new_ids);
         match state.clone().apply_npc_events(&events.events, map, npcs) {
             Ok(s) => s,
             Err(e) => {
@@ -373,7 +373,7 @@ impl<'a> PipelineRun<'a> {
 
         let (preset, response_length) = self.load_preset_and_response_length().ok()?;
 
-        let trigger_ctx = make_prompt_context(
+        let trigger_ctx = PromptContext::new(
             &inputs.world,
             room_data,
             NpcContext {

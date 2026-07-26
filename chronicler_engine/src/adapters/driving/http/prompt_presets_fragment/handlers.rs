@@ -4,10 +4,15 @@
 use axum::{Form, extract::State, response::Html};
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::settings::save_settings;
+use crate::utils::settings::save_settings;
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::builders::presets::{
+    preset_card_html, preset_edit_form_html, preset_view_form_html,
+};
+use crate::adapters::driving::http::utils::handler_helpers::{
+    generate_preset_id, parse_preset_type, render_template,
+};
 
-use super::fragments::{preset_card_html, preset_edit_form_html, preset_view_form_html};
 use super::template::PromptPresetsTemplate;
 
 macro_rules! try_lock {
@@ -27,27 +32,6 @@ macro_rules! require_preset {
             Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
         }
     };
-}
-
-fn render_template<T: askama::Template>(template: T) -> Html<String> {
-    match template.render() {
-        Ok(html) => Html(html),
-        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
-    }
-}
-
-fn parse_preset_type(value: &str) -> Option<PresetType> {
-    PresetType::try_from(value).ok()
-}
-
-fn generate_preset_id() -> String {
-    format!(
-        "preset-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
-    )
 }
 
 pub async fn preset_card_handler(

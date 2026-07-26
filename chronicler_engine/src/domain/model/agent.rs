@@ -34,6 +34,18 @@ pub struct AgentConfig {
     pub phase: ExecutionPhase,
 }
 
+impl AgentConfig {
+    pub fn defaults() -> Vec<Self> {
+        vec![Self {
+            name: "quantifier".to_string(),
+            agent_type: "quantifier".to_string(),
+            enabled: true,
+            backend: BackendSelector::UseNamed("quantifier".to_string()),
+            phase: ExecutionPhase::PostGeneration,
+        }]
+    }
+}
+
 impl StatePatch {
     /// Union `npc_ids`; keep first non-None `movement_destination` (warn on conflict); take minimum `confidence`.
     pub fn merge(self, other: StatePatch) -> StatePatch {

@@ -2,6 +2,7 @@
 
 pub mod context;
 pub mod fixtures;
+pub mod quantifier;
 pub mod test_app_builder;
 pub mod test_data_builder;
 

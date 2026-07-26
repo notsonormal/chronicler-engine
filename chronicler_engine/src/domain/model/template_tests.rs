@@ -1,6 +1,7 @@
 //! Tests for template placeholder substitution
 
-use crate::domain::model::template::{render_template, TemplateVars};
+use crate::domain::model::template::TemplateVars;
+use crate::domain::model::utils::template::render_template;
 
 #[test]
 fn render_template_replaces_user() {

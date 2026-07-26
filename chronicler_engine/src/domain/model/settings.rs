@@ -3,7 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::model::agent::AgentConfig;
 use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::utils::settings_defaults;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum TextCheckMode {
@@ -21,28 +23,20 @@ pub enum TextCheckMode {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextCheckSettings {
     pub mode: TextCheckMode,
-    #[serde(default = "default_enable_auto_check")]
+    #[serde(default = "settings_defaults::default_enable_auto_check")]
     pub enable_auto_check: bool,
     #[serde(default)]
     pub ignored_words: Vec<String>,
-}
-
-fn default_enable_auto_check() -> bool {
-    true
 }
 
 impl Default for TextCheckSettings {
     fn default() -> Self {
         Self {
             mode: TextCheckMode::default(),
-            enable_auto_check: default_enable_auto_check(),
+            enable_auto_check: settings_defaults::default_enable_auto_check(),
             ignored_words: Vec::new(),
         }
     }
-}
-
-fn default_ollama_base_url() -> String {
-    "http://localhost:11434/v1".into()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,7 +92,7 @@ impl LlmProviderConfig {
             return url.clone();
         }
         match self.provider {
-            LlmBackendType::Ollama => default_ollama_base_url(),
+            LlmBackendType::Ollama => settings_defaults::default_ollama_base_url(),
             LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => {
                 "https://openrouter.ai/api/v1".into()
             }
@@ -116,44 +110,21 @@ impl LlmProviderConfig {
     }
 }
 
-pub fn default_agent_configs() -> Vec<crate::domain::model::agent::AgentConfig> {
-    use crate::domain::model::agent::{AgentConfig, BackendSelector, ExecutionPhase};
-    vec![AgentConfig {
-        name: "quantifier".to_string(),
-        agent_type: "quantifier".to_string(),
-        enabled: true,
-        backend: BackendSelector::UseNamed("quantifier".to_string()),
-        phase: ExecutionPhase::PostGeneration,
-    }]
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppSettings {
     pub connections: Vec<LlmProviderConfig>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
-    #[serde(default = "default_response_length")]
+    #[serde(default = "settings_defaults::default_response_length")]
     pub response_length: String,
     #[serde(default)]
     pub text_check: TextCheckSettings,
-    #[serde(default = "default_agent_configs")]
-    pub agents: Vec<crate::domain::model::agent::AgentConfig>,
-    #[serde(default = "default_active_system_prompt_preset_id")]
+    #[serde(default = "AgentConfig::defaults")]
+    pub agents: Vec<AgentConfig>,
+    #[serde(default = "settings_defaults::default_active_system_prompt_preset_id")]
     pub active_system_prompt_preset_id: String,
-    #[serde(default = "default_active_quantifier_prompt_preset_id")]
+    #[serde(default = "settings_defaults::default_active_quantifier_prompt_preset_id")]
     pub active_quantifier_prompt_preset_id: String,
-}
-
-fn default_response_length() -> String {
-    "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.".to_string()
-}
-
-fn default_active_system_prompt_preset_id() -> String {
-    "system_default".to_string()
-}
-
-fn default_active_quantifier_prompt_preset_id() -> String {
-    "quantifier_default".to_string()
 }
 
 impl Default for AppSettings {
@@ -195,11 +166,13 @@ impl Default for AppSettings {
             connections: vec![gpt4o, euryale, gemma],
             narration_connection_id: "openrouter-gpt-4o-mini".into(),
             quantifier_connection_id: "openrouter-gpt-4o-mini".into(),
-            response_length: default_response_length(),
+            response_length: settings_defaults::default_response_length(),
             text_check: TextCheckSettings::default(),
-            agents: default_agent_configs(),
-            active_system_prompt_preset_id: default_active_system_prompt_preset_id(),
-            active_quantifier_prompt_preset_id: default_active_quantifier_prompt_preset_id(),
+            agents: AgentConfig::defaults(),
+            active_system_prompt_preset_id:
+                settings_defaults::default_active_system_prompt_preset_id(),
+            active_quantifier_prompt_preset_id:
+                settings_defaults::default_active_quantifier_prompt_preset_id(),
         }
     }
 }

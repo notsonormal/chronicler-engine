@@ -5,6 +5,7 @@ use crate::error::EngineError;
 use crate::domain::model::game::Game;
 use crate::adapters::driven::storage::backend::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
+use crate::adapters::driven::storage::utils::parse_datetime;
 
 impl Storage {
     pub fn list_games(&self) -> Result<Vec<Game>, EngineError> {
@@ -27,7 +28,7 @@ impl Storage {
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e| EngineError::Config(format!("Failed to read game row: {e}")))?;
 
-                db_games.iter().map(db_game_to_game).collect()
+                db_games.iter().map(DbGame::to_game).collect()
             }
             Backend::InMemory(data) => {
                 let mut games = data.games.clone();
@@ -113,7 +114,7 @@ impl Storage {
                 });
 
                 match db_result {
-                    Ok(db) => Ok(Some(db_game_to_game(&db)?)),
+                    Ok(db) => Ok(Some(db.to_game()?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
                     Err(e) => Err(EngineError::Config(format!("Failed to get game: {e}"))),
                 }
@@ -131,24 +132,17 @@ impl Storage {
     }
 }
 
-fn db_game_to_game(db: &DbGame) -> Result<Game, EngineError> {
-    Ok(Game {
-        id: db.id as u64,
-        world_name: db.world_name.clone(),
-        world_key: db.world_key.clone(), // NEW
-        persona_key: db.persona_key.clone(),
-        persona_name: db.persona_name.clone(),
-        name: db.name.clone(),
-        created_at: parse_datetime(&db.created_at, "created_at")?,
-        updated_at: parse_datetime(&db.updated_at, "updated_at")?,
-    })
-}
-
-fn parse_datetime(
-    rfc3339: &str,
-    field: &str,
-) -> Result<chrono::DateTime<chrono::Utc>, EngineError> {
-    chrono::DateTime::parse_from_rfc3339(rfc3339)
-        .map_err(|e| EngineError::Config(format!("Invalid {field}: {e}")))
-        .map(|dt| dt.with_timezone(&chrono::Utc))
+impl DbGame {
+    fn to_game(&self) -> Result<Game, EngineError> {
+        Ok(Game {
+            id: self.id as u64,
+            world_name: self.world_name.clone(),
+            world_key: self.world_key.clone(),
+            persona_key: self.persona_key.clone(),
+            persona_name: self.persona_name.clone(),
+            name: self.name.clone(),
+            created_at: parse_datetime(&self.created_at, "created_at")?,
+            updated_at: parse_datetime(&self.updated_at, "updated_at")?,
+        })
+    }
 }

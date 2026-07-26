@@ -1,7 +1,8 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/narrative/agent_system.md]
 //! Quantifier prompt construction
 
-use crate::domain::model::template::{render_template, TemplateVars};
+use crate::domain::model::template::TemplateVars;
+use crate::domain::model::utils::template::render_template;
 use crate::application::agents::quantifier::types::QuantifierPromptContext;
 
 pub struct QuantifierPromptBuilder<'a> {

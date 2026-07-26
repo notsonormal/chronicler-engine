@@ -252,16 +252,18 @@ impl Storage {
     pub(crate) fn backend_layer_info(&self) -> (&'static str, &'static str) {
         let backend = self.backend.lock().unwrap_or_else(|e| e.into_inner());
         match &*backend {
-            BackendKind::Direct(b) => ("Direct", backend_variant_name(b)),
-            BackendKind::Test { base, .. } => ("Test", backend_variant_name(base.as_ref())),
+            BackendKind::Direct(b) => ("Direct", b.variant_name()),
+            BackendKind::Test { base, .. } => ("Test", base.as_ref().variant_name()),
         }
     }
 }
 
 #[cfg(test)]
-fn backend_variant_name(b: &Backend) -> &'static str {
-    match b {
-        Backend::Sqlite { .. } => "Sqlite",
-        Backend::InMemory(_) => "InMemory",
+impl Backend {
+    fn variant_name(&self) -> &'static str {
+        match self {
+            Backend::Sqlite { .. } => "Sqlite",
+            Backend::InMemory(_) => "InMemory",
+        }
     }
 }

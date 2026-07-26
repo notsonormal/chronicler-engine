@@ -1,7 +1,6 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
 //! Prompt presets fragment module
 
-mod fragments;
 mod handlers;
 mod template;
 
@@ -12,8 +11,6 @@ pub use handlers::{
 };
 pub use template::PromptPresetsTemplate;
 
-#[cfg(test)]
-mod fragments_tests;
 #[cfg(test)]
 mod handlers_tests;
 #[cfg(test)]

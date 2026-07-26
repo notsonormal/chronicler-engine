@@ -47,9 +47,11 @@ pub struct InternalError {
     pub invariant: String,
 }
 
-pub fn internal_error(invariant: impl Into<String>) -> InternalError {
-    InternalError {
-        invariant: invariant.into(),
+impl InternalError {
+    pub fn new(invariant: impl Into<String>) -> Self {
+        Self {
+            invariant: invariant.into(),
+        }
     }
 }
 

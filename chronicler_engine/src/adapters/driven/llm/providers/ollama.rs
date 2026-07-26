@@ -5,7 +5,8 @@ use crate::error::{EngineError, LlmFailure};
 use crate::domain::model::settings::LlmProviderConfig;
 use crate::adapters::driven::llm::transport::call_ollama;
 
-use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult, merge_single_user_message};
+use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
+use crate::application::utils::llm_provider::merge_single_user_message;
 
 #[derive(Clone, Default)]
 pub struct OllamaBackend {

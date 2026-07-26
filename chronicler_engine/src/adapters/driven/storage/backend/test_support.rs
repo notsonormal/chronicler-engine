@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::error::{EngineError, internal_error};
+use crate::error::{EngineError, InternalError};
 
 pub struct TestOverride {
     kind: ErrorKind,
@@ -82,7 +82,7 @@ impl TestOverride {
     pub(crate) fn to_error(&self) -> EngineError {
         match self.kind {
             ErrorKind::Config => EngineError::Config(self.message.clone()),
-            ErrorKind::Internal => EngineError::Internal(internal_error(self.message.clone())),
+            ErrorKind::Internal => EngineError::Internal(InternalError::new(self.message.clone())),
         }
     }
 }

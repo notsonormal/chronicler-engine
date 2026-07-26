@@ -1,4 +1,4 @@
-use crate::domain::model::game::generate_game_name;
+use crate::domain::model::utils::game_name::generate_game_name;
 
 #[test]
 fn test_generate_game_name_first() {

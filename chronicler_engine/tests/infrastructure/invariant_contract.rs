@@ -21,7 +21,7 @@ use chronicler_engine::domain::model::trigger::{
 };
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
-use chronicler_engine::application::generation_gate::slot::GenerationSlot;
+use chronicler_engine::application::utils::slot::GenerationSlot;
 use chronicler_engine::test_support::make_test_recorder;
 
 #[path = "../test_utils/mod.rs"]

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::application::generation_gate::slot::GenerationSlot;
+use crate::application::utils::slot::GenerationSlot;
 
 use super::GenerationGuard;
 

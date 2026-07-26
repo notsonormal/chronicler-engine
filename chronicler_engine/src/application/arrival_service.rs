@@ -6,9 +6,8 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::narrative_prompt::{make_prompt_context, NpcContext};
+use crate::application::narrative_prompt::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
-use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
@@ -89,7 +88,7 @@ impl ArrivalTaskContext {
         let world: Arc<WorldCard> = Arc::new(world_with_map.world_card);
         let map: Arc<MapDef> = Arc::new(world_with_map.map);
         if state.narrative.history.is_empty() {
-            inject_scenario_logs(&mut state, &world, &persona, &map);
+            state.inject_scenario_logs(&world, &persona, &map);
         }
         state.narrative.input_buffer.status = GenerationStatus::Generating;
 
@@ -103,7 +102,7 @@ impl ArrivalTaskContext {
             return Ok(());
         };
 
-        let prompt_context = make_prompt_context(
+        let prompt_context = PromptContext::new(
             &world,
             room,
             NpcContext {

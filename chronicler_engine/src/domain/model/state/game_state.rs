@@ -6,15 +6,15 @@ use std::sync::Arc;
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
-use crate::domain::model::quantifier::{
-    NpcEvent, NpcTransitionType, QuantifierResult, compute_npc_events,
-};
-use crate::domain::model::template::{TemplateVars, render_template};
+use crate::domain::model::quantifier::{NpcEvent, NpcEventList, NpcTransitionType, QuantifierResult};
+use crate::domain::model::template::TemplateVars;
+use crate::domain::model::utils::template::render_template;
 use crate::domain::model::trigger::{NpcEncounterLog, Trigger};
+use crate::domain::model::world::WorldCard;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::error::{EngineError, Result};
 #[cfg(feature = "diagnostics")]
-use crate::error::internal_error;
+use crate::error::InternalError;
 use crate::domain::model::message::{Message, Swipe};
 use super::message_types::MessageType;
 use super::movement::MovementState;
@@ -142,6 +142,29 @@ impl GameState {
 
     pub fn add_message(&mut self, text: String, sender: Option<String>, message_type: MessageType) {
         self.push_message(text, sender, message_type);
+    }
+
+    pub fn inject_scenario_logs(
+        &mut self,
+        world: &WorldCard,
+        player: &PersonaCard,
+        map: &crate::domain::model::map::MapDef,
+    ) {
+        let Some(scenario) = world.default_scenario() else {
+            return;
+        };
+        if scenario.text.is_empty() {
+            return;
+        }
+
+        let room_name = map
+            .get_room_by_id(&scenario.starting_room_id)
+            .map(|r| r.name.clone())
+            .unwrap_or_else(|| scenario.starting_room_id.clone());
+
+        self.narrative.pending_location = Some(room_name);
+        let text = render_template(&scenario.text, &TemplateVars::new(&player.sheet.name));
+        self.add_message(text, None, MessageType::Narration);
     }
 }
 
@@ -324,7 +347,7 @@ impl GameState {
                     ),
                 });
 
-        let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
+        let events = NpcEventList::from_diff(&previous_npc_ids, &current_npc_ids);
         next_state = next_state.apply_npc_events(&events.events, map, npcs)?;
         next_state.assert_state_consistency(map, npcs)?;
 
@@ -435,7 +458,7 @@ impl GameState {
                     .get(&self.movement.current_room_id)
             });
         if current_room.is_none() {
-            return Err(EngineError::Internal(internal_error(format!(
+            return Err(EngineError::Internal(InternalError::new(format!(
                 "current_room_id '{}' not found in map or dynamic_rooms",
                 self.movement.current_room_id
             ))));
@@ -447,7 +470,7 @@ impl GameState {
     fn assert_npc_consistency(&self, npcs: &HashMap<String, NpcCard>) -> Result<()> {
         for npc in &self.scene.npcs_in_area {
             if !npcs.contains_key(&npc.id) {
-                return Err(EngineError::Internal(internal_error(format!(
+                return Err(EngineError::Internal(InternalError::new(format!(
                     "npcs_in_area contains NPC '{}' which is not in the npcs map",
                     npc.id
                 ))));
@@ -460,7 +483,7 @@ impl GameState {
     fn assert_npc_encounter_log_consistency(&self, npcs: &HashMap<String, NpcCard>) -> Result<()> {
         for npc_id in self.npc_encounter_log.npcs.keys() {
             if !npcs.contains_key(npc_id) {
-                return Err(EngineError::Internal(internal_error(format!(
+                return Err(EngineError::Internal(InternalError::new(format!(
                     "npc_encounter_log references unknown NPC '{npc_id}'"
                 ))));
             }
@@ -475,7 +498,7 @@ impl GameState {
 
         if let (Some(ai), Some(input)) = (ai_idx, input_idx) {
             if ai <= input {
-                return Err(EngineError::Internal(internal_error(
+                return Err(EngineError::Internal(InternalError::new(
                     "last AI response is not after last player input",
                 )));
             }

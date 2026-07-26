@@ -4,30 +4,15 @@
 use askama::Template;
 use crate::error::{EngineError, Result};
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::builders::headers::render_header_unlocked;
 use crate::adapters::driving::http::templates::{
-    ActionAreaTemplate, HeaderTemplate, LlmMessagesTemplate, NarrativeLogTemplate,
-    VisualSidebarTemplate,
+    ActionAreaTemplate, LlmMessagesTemplate, NarrativeLogTemplate, VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
     ActionAreaViewModel, NpcPortraitView, VisualSidebarViewModel,
 };
-use super::response::html_escape;
 
 const MAX_LOG_DISPLAY: usize = 50;
-
-pub fn render_error(message: &str) -> String {
-    format!(
-        "<div class=\"error-message\">Error: {}</div>",
-        html_escape(message)
-    )
-}
-
-fn render_header_unlocked(game_name: String) -> Result<String> {
-    let template = HeaderTemplate { game_name };
-    template
-        .render()
-        .map_err(|e| EngineError::Template(e.to_string()))
-}
 
 impl AppState {
     pub fn render_header(&self) -> Result<String> {

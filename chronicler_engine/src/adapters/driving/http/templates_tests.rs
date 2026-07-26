@@ -509,14 +509,14 @@ fn test_action_area_no_exits() {
 #[test]
 fn test_markdown_to_html_basic_quote() {
     let input = "\"Hello\"";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("<q>Hello</q>"));
 }
 
 #[test]
 fn test_markdown_to_html_multiple_quotes() {
     let input = "\"Well, well,\" Gabriella remarks, \"Welcome back\"";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("<q>Well, well,</q>"));
     assert!(output.contains("<q>Welcome back</q>"));
 }
@@ -524,7 +524,7 @@ fn test_markdown_to_html_multiple_quotes() {
 #[test]
 fn test_markdown_to_html_mixed_content() {
     let input = "She said \"Hello there\" and walked away.";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("<q>Hello there</q>"));
     assert!(output.contains("She said"));
     assert!(output.contains("and walked away"));
@@ -533,28 +533,28 @@ fn test_markdown_to_html_mixed_content() {
 #[test]
 fn test_markdown_to_html_italic() {
     let input = "This is *italic* text.";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("<em>italic</em>"));
 }
 
 #[test]
 fn test_markdown_to_html_bold() {
     let input = "This is **bold** text.";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("<strong>bold</strong>"));
 }
 
 #[test]
 fn test_markdown_to_html_blockquote() {
     let input = "> This is a quote";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("<blockquote>"));
 }
 
 #[test]
 fn test_markdown_to_html_mixed_markdown() {
     let input = "**Bold** and *italic* and \"quoted\" text.";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("<strong>Bold</strong>"));
     assert!(output.contains("<em>italic</em>"));
     assert!(output.contains("<q>quoted</q>"));
@@ -563,14 +563,21 @@ fn test_markdown_to_html_mixed_markdown() {
 #[test]
 fn test_markdown_to_html_no_quotes() {
     let input = "Plain text without quotes.";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert_eq!(output, "<p>Plain text without quotes.</p>\n");
+}
+
+#[test]
+fn test_markdown_to_html_ampersand_escaped_once() {
+    let output =
+        crate::adapters::driving::http::utils::view_models::markdown_to_html("salt & pepper");
+    assert_eq!(output, "<p>salt &amp; pepper</p>\n");
 }
 
 #[test]
 fn test_markdown_to_html_xss_prevention() {
     let input = "<script>alert('xss')</script>";
-    let output = crate::adapters::driving::http::view_models::markdown_to_html(input);
+    let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("&lt;script&gt;"));
     assert!(!output.contains("<script>"));
 }

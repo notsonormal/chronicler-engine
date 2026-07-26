@@ -124,35 +124,36 @@ pub struct NpcEventList {
     /// Confidence in the event detection.
     pub confidence: QuantifierConfidence,
 }
-/// Computes NPC transition events by diffing previous and current NPC presence.
-pub fn compute_npc_events(previous_npc_ids: &[String], current_npc_ids: &[String]) -> NpcEventList {
-    let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
-    let current_set: std::collections::HashSet<_> = current_npc_ids.iter().collect();
+impl NpcEventList {
+    pub fn from_diff(previous_npc_ids: &[String], current_npc_ids: &[String]) -> Self {
+        let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
+        let current_set: std::collections::HashSet<_> = current_npc_ids.iter().collect();
 
-    let mut events = Vec::new();
+        let mut events = Vec::new();
 
-    for npc_id in current_npc_ids {
-        if !previous_set.contains(npc_id) {
-            events.push(NpcEvent {
-                npc_id: npc_id.clone(),
-                event_type: NpcTransitionType::Entered,
-            });
+        for npc_id in current_npc_ids {
+            if !previous_set.contains(npc_id) {
+                events.push(NpcEvent {
+                    npc_id: npc_id.clone(),
+                    event_type: NpcTransitionType::Entered,
+                });
+            }
         }
-    }
-    for npc_id in previous_npc_ids {
-        if !current_set.contains(npc_id) {
-            events.push(NpcEvent {
-                npc_id: npc_id.clone(),
-                event_type: NpcTransitionType::Left,
-            });
+        for npc_id in previous_npc_ids {
+            if !current_set.contains(npc_id) {
+                events.push(NpcEvent {
+                    npc_id: npc_id.clone(),
+                    event_type: NpcTransitionType::Left,
+                });
+            }
         }
+
+        let confidence = if !events.is_empty() {
+            QuantifierConfidence::Medium
+        } else {
+            QuantifierConfidence::Low
+        };
+
+        Self { events, confidence }
     }
-
-    let confidence = if !events.is_empty() {
-        QuantifierConfidence::Medium
-    } else {
-        QuantifierConfidence::Low
-    };
-
-    NpcEventList { events, confidence }
 }

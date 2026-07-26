@@ -51,7 +51,7 @@ impl GameService {
         Self {
             llm_recorder,
             prompt_assembler: Arc::new(PromptAssembler::new(
-                crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
+                crate::application::utils::token_budget::MAX_CONTEXT_TOKENS,
             )),
             agent_registry: Arc::new(agent_registry),
         }
@@ -66,7 +66,7 @@ impl GameService {
         Self {
             llm_recorder,
             prompt_assembler: Arc::new(PromptAssembler::new(
-                crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
+                crate::application::utils::token_budget::MAX_CONTEXT_TOKENS,
             )),
             agent_registry: Arc::new(registry),
         }

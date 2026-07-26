@@ -16,7 +16,7 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::adapters::driving::http::router::build_router;
+use crate::adapters::driving::http::builders::router::build_router;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
 use crate::test_support::test_data_builder::TestData;

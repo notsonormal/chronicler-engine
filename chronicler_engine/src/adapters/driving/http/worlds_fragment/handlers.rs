@@ -2,6 +2,7 @@
 //! Worlds management handlers
 
 use axum::{extract::Path, extract::State, response::Response, Form};
+use askama::Template;
 use serde::Deserialize;
 
 use crate::domain::model::map::MapDef;
@@ -9,8 +10,9 @@ use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
 
-use super::fragments::{render_world_edit_form, render_worlds_panel};
+use super::template::{WorldFormTemplate, WorldsPanelTemplate};
 use crate::adapters::driving::http::fragments::{bad_request, internal_error, ok, render_error};
+use crate::adapters::driving::http::utils::view_mappers::games_per_world;
 
 #[derive(Debug, Deserialize)]
 pub struct WorldForm {
@@ -52,16 +54,6 @@ impl WorldForm {
     }
 }
 
-fn games_per_world(
-    games: &[crate::domain::model::game::Game],
-) -> std::collections::HashMap<String, usize> {
-    let mut map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for game in games {
-        *map.entry(game.world_key.clone()).or_insert(0) += 1;
-    }
-    map
-}
-
 pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
     let app = &state.application_service;
     let worlds = match app.list_worlds() {
@@ -72,7 +64,9 @@ pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axu
     let games = app.list_games().unwrap_or_default();
     let games_per_world = games_per_world(&games);
 
-    let html = render_worlds_panel(&worlds, &games_per_world);
+    let html = WorldsPanelTemplate::from_worlds(&worlds, &games_per_world)
+        .render()
+        .unwrap_or_default();
     ok(html)
 }
 
@@ -91,17 +85,20 @@ pub async fn create_world_handler(
             let worlds = app.list_worlds();
             let games = app.list_games().unwrap_or_default();
             let games_per_world = games_per_world(&games);
-            ok(render_worlds_panel(
-                &worlds.unwrap_or_default(),
-                &games_per_world,
-            ))
+            ok(
+                WorldsPanelTemplate::from_worlds(&worlds.unwrap_or_default(), &games_per_world)
+                    .render()
+                    .unwrap_or_default(),
+            )
         }
         Err(e) => bad_request(format!("Failed to create world: {e}")),
     }
 }
 
 pub async fn new_world_form_handler(State(_state): State<AppState>) -> Response<axum::body::Body> {
-    ok(render_world_edit_form(None, None, &[]))
+    ok(WorldFormTemplate::from_world_data(None, None, &[])
+        .render()
+        .unwrap_or_default())
 }
 
 pub async fn edit_world_form_handler(
@@ -114,11 +111,13 @@ pub async fn edit_world_form_handler(
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
     };
 
-    let html = render_world_edit_form(
+    let html = WorldFormTemplate::from_world_data(
         Some(&world_with_map.world_card),
         Some(&world_with_map.map),
         &world_with_map.world_card.scenarios,
-    );
+    )
+    .render()
+    .unwrap_or_default();
     ok(html)
 }
 
@@ -146,10 +145,11 @@ pub async fn update_world_handler(
             let worlds = app.list_worlds();
             let games = app.list_games().unwrap_or_default();
             let games_per_world = games_per_world(&games);
-            ok(render_worlds_panel(
-                &worlds.unwrap_or_default(),
-                &games_per_world,
-            ))
+            ok(
+                WorldsPanelTemplate::from_worlds(&worlds.unwrap_or_default(), &games_per_world)
+                    .render()
+                    .unwrap_or_default(),
+            )
         }
         Err(e) => internal_error(format!("Failed to update world: {e}")),
     }

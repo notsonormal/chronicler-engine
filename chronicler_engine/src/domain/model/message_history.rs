@@ -38,7 +38,7 @@ impl MessageHistory {
             Ok(())
         } else {
             Err(crate::error::EngineError::Internal(
-                crate::error::internal_error(format!("Message entry not found: {id}")),
+                crate::error::InternalError::new(format!("Message entry not found: {id}")),
             ))
         }
     }
@@ -46,7 +46,7 @@ impl MessageHistory {
     pub fn delete_last(&mut self) -> crate::error::Result<()> {
         if self.messages.is_empty() {
             return Err(crate::error::EngineError::Internal(
-                crate::error::internal_error("History is empty".to_string()),
+                crate::error::InternalError::new("History is empty".to_string()),
             ));
         }
 

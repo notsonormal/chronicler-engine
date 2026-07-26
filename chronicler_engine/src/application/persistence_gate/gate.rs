@@ -1,7 +1,5 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
-//!
-//! `save_state`: snapshot only. `save_message_and_snapshot`: snapshot + message + retry-swipe link. Both route through `write_snapshot`.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -16,8 +14,9 @@ use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::template::{render_template, TemplateVars};
-use crate::error::{EngineError, internal_error};
+use crate::domain::model::template::TemplateVars;
+use crate::domain::model::utils::template::render_template;
+use crate::error::EngineError;
 
 #[derive(Clone)]
 pub struct PersistenceGate {
@@ -193,21 +192,21 @@ impl PersistenceGate {
         let target_msg = messages
             .iter()
             .find(|m| m.id == message_id)
-            .ok_or_else(|| app_err_internal("Message not found"))?;
+            .ok_or_else(|| ApplicationError::internal("Message not found"))?;
 
         let target_swipe = target_msg
             .swipes
             .get(swipe_index)
-            .ok_or_else(|| app_err_internal("Swipe index out of bounds"))?;
+            .ok_or_else(|| ApplicationError::internal("Swipe index out of bounds"))?;
 
         let snapshot_id = target_swipe
             .snapshot_id
-            .ok_or_else(|| app_err_internal("Swipe has no associated snapshot"))?;
+            .ok_or_else(|| ApplicationError::internal("Swipe has no associated snapshot"))?;
 
         let mut snapshot = self
             .storage
             .load_snapshot_by_id(snapshot_id)?
-            .ok_or_else(|| app_err_internal("Snapshot not found"))?;
+            .ok_or_else(|| ApplicationError::internal("Snapshot not found"))?;
 
         snapshot.created_at = Utc::now();
         self.storage.save_snapshot(&snapshot)?;
@@ -236,9 +235,7 @@ impl PersistenceGate {
             .history
             .last()
             .map(|m| m.id)
-            .ok_or_else(|| {
-                ApplicationError::Engine(EngineError::Internal(internal_error("History is empty")))
-            })?;
+            .ok_or_else(|| ApplicationError::internal("History is empty"))?;
 
         guard.narrative.history.delete_last()?;
         let snapshot = GameStateSnapshot::from_game_state(&guard);
@@ -274,8 +271,4 @@ impl PersistenceGate {
     pub fn set_game_id(&self, game_id: u64) {
         self.storage.set_game_id(game_id);
     }
-}
-
-fn app_err_internal(msg: impl Into<String>) -> ApplicationError {
-    ApplicationError::Engine(EngineError::Internal(internal_error(msg)))
 }

@@ -3,18 +3,10 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
+use crate::adapters::driven::utils::mock::extract_player_input;
 use crate::error::{EngineError, NarrativeFailure};
 
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
-
-fn extract_player_input(user_prompt: &str) -> Option<String> {
-    const OPEN: &str = "<PlayerInput>\n";
-    const CLOSE: &str = "\n</PlayerInput>";
-    let start = user_prompt.find(OPEN)?;
-    let content_start = start + OPEN.len();
-    let end = user_prompt[content_start..].find(CLOSE)?;
-    Some(user_prompt[content_start..content_start + end].to_string())
-}
 
 #[derive(Default)]
 pub struct MockBackend {

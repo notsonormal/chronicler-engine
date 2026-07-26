@@ -12,7 +12,6 @@ use crate::domain::model::settings::AppSettings;
 
 use crate::application::agents::Agent;
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 #[cfg(feature = "testing")]
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::adapters::driven::storage::Storage;
@@ -88,7 +87,7 @@ impl Agent for QuantifierAgent {
                         .ok()
                         .flatten()
                 })
-                .map(|preset| assemble_prompt_text(&preset, &[], None))
+                .map(|preset| preset.assemble_text(&[], None, None))
         };
 
         let result = determine_npcs_in_room(

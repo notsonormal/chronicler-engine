@@ -1,71 +1,22 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
-//! Multi-stage prompt builder
+//! Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
 
 use crate::error::EngineError;
-use crate::domain::model::character::{NpcCard, Relationship};
+use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::message_types::MessageEntry;
-use crate::domain::model::template::{render_template, TemplateVars};
+use crate::domain::model::template::TemplateVars;
+use crate::domain::model::utils::template::render_template;
 use crate::domain::model::world::WorldCard;
-use crate::application::narrative_prompt::budget;
-use crate::application::narrative_prompt::budget::truncate_to_budget;
-use crate::application::narrative_prompt::context::fit_messages_to_context;
+use crate::application::utils::token_budget as budget;
+use crate::application::utils::token_budget::truncate_to_budget;
+use crate::application::narrative_prompt::builders::assembler::{
+    build_post_history_prompt, build_system_prompt, render_known_npc_entry,
+    render_present_relationships, render_preset_xml_parts, sanitize_for_prompt,
+};
 use crate::application::narrative_prompt::types::{NpcContext, PromptContext};
-
-pub fn assemble_prompt_text(
-    preset: &PromptPreset,
-    global_rules: &[String],
-    response_length: Option<&str>,
-) -> String {
-    let mut parts: Vec<String> = Vec::new();
-
-    push_section(&mut parts, preset.role.as_deref(), "role");
-    push_section(&mut parts, preset.instructions.as_deref(), "instructions");
-    push_section(&mut parts, preset.writing_style.as_deref(), "writing_style");
-
-    if !global_rules.is_empty() {
-        let rules_text = global_rules
-            .iter()
-            .map(|r| format!("- {r}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        parts.push(wrap_xml(&rules_text, "global_rules"));
-    }
-
-    if let Some(output_format) = &preset.output_format {
-        let mut output_text = output_format.clone();
-        if let Some(length) = response_length {
-            output_text.push_str("\n\nResponse Length:\n");
-            output_text.push_str(length);
-        }
-        parts.push(wrap_xml(&output_text, "output_format"));
-    }
-
-    parts.join("\n\n")
-}
-
-#[inline]
-fn push_section(parts: &mut Vec<String>, content: Option<&str>, tag: &str) {
-    if let Some(content) = content {
-        parts.push(wrap_xml(content, tag));
-    }
-}
-
-fn wrap_xml(content: &str, tag: &str) -> String {
-    let indented = content
-        .lines()
-        .map(|line| {
-            if line.is_empty() {
-                line.to_string()
-            } else {
-                format!("    {line}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("<{tag}>\n{indented}\n</{tag}>")
-}
+use crate::application::narrative_prompt::utils::context::fit_messages_to_context;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledPrompt {
@@ -129,6 +80,25 @@ impl PromptAssembler {
 }
 
 impl PromptContext<'_> {
+    pub fn new<'a>(
+        world: &'a WorldCard,
+        room: &'a Room,
+        npcs: NpcContext<'a>,
+        persona: &'a PersonaCard,
+        user_message: &'a str,
+        history: &'a [MessageEntry],
+    ) -> PromptContext<'a> {
+        PromptContext {
+            world,
+            room,
+            npcs,
+            persona,
+            user_message,
+            history,
+            template_vars: TemplateVars::new(&persona.sheet.name),
+        }
+    }
+
     pub fn build_narration_prompt(
         &self,
         preset: &PromptPreset,
@@ -143,58 +113,6 @@ impl PromptContext<'_> {
         }
         assembler.assemble(self, preset, global_rules, response_length)
     }
-}
-
-fn build_system_prompt(
-    preset: &PromptPreset,
-    global_rules: &[String],
-    vars: &TemplateVars,
-) -> String {
-    let mut parts: Vec<String> = Vec::new();
-
-    let role = preset.role.as_ref().map(|r| render_template(r, vars));
-    push_section(&mut parts, role.as_deref(), "role");
-    let instructions = preset
-        .instructions
-        .as_ref()
-        .map(|i| render_template(i, vars));
-    push_section(&mut parts, instructions.as_deref(), "instructions");
-
-    if !global_rules.is_empty() {
-        let rules_text = global_rules
-            .iter()
-            .map(|r| format!("- {}", render_template(r, vars)))
-            .collect::<Vec<_>>()
-            .join("\n");
-        parts.push(wrap_xml(&rules_text, "global_rules"));
-    }
-
-    parts.join("\n\n")
-}
-
-fn build_post_history_prompt(
-    preset: &PromptPreset,
-    response_length: Option<&str>,
-    vars: &TemplateVars,
-) -> String {
-    let mut parts: Vec<String> = Vec::new();
-
-    let writing_style = preset
-        .writing_style
-        .as_ref()
-        .map(|w| render_template(w, vars));
-    push_section(&mut parts, writing_style.as_deref(), "writing_style");
-
-    if let Some(output_format) = &preset.output_format {
-        let mut output_text = render_template(output_format, vars);
-        if let Some(length) = response_length {
-            output_text.push_str("\n\nResponse Length:\n");
-            output_text.push_str(length);
-        }
-        parts.push(wrap_xml(&output_text, "output_format"));
-    }
-
-    parts.join("\n\n")
 }
 
 struct LayerRenderer<'a> {
@@ -389,102 +307,17 @@ impl<'a> LayerRenderer<'a> {
     }
 }
 
-pub(crate) fn sanitize_for_prompt(input: &str) -> String {
-    let chars: Vec<char> = input.chars().collect();
-    let mut result = String::with_capacity(input.len());
-    let mut i = 0;
-
-    while i < chars.len() {
-        if chars[i] == '{' && i + 1 < chars.len() && chars[i + 1] == '{' {
-            if let Some(next) = scan_filtered_block(&chars, i + 2) {
-                result.push_str("[FILTERED]");
-                i = next;
-            } else {
-                result.push('{');
-                result.push('{');
-                i += 2;
-            }
-        } else {
-            result.push(chars[i]);
-            i += 1;
-        }
+impl PromptPreset {
+    pub fn assemble_text(
+        &self,
+        global_rules: &[String],
+        response_length: Option<&str>,
+        template_vars: Option<&TemplateVars>,
+    ) -> String {
+        render_preset_xml_parts(self, global_rules, response_length, template_vars)
+            .into_iter()
+            .map(|(_, rendered)| rendered)
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
-    result
-}
-
-fn scan_filtered_block(chars: &[char], start: usize) -> Option<usize> {
-    let mut k = start;
-    while k + 1 < chars.len() {
-        if chars[k] == '}' && chars[k + 1] == '}' {
-            return if k > start { Some(k + 2) } else { None };
-        }
-        k += 1;
-    }
-    None
-}
-
-fn render_known_npc_entry(
-    npc: &NpcCard,
-    in_area_ids: &std::collections::HashSet<&str>,
-    template_vars: &TemplateVars,
-) -> String {
-    let presence = if in_area_ids.contains(npc.id.as_str()) {
-        "(in room)"
-    } else {
-        "(elsewhere)"
-    };
-    let mut entry = format!("- {} {}\n", npc.sheet.name, presence);
-
-    let summary_text = npc
-        .sheet
-        .summary
-        .clone()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| {
-            npc.sheet
-                .description
-                .lines()
-                .take(3)
-                .collect::<Vec<_>>()
-                .join("\n")
-        });
-    let rendered_summary = render_template(&summary_text, template_vars);
-
-    for line in rendered_summary.lines() {
-        entry.push_str(&format!("  {line}\n"));
-    }
-    entry.push('\n');
-    entry
-}
-
-fn render_present_relationships(
-    npc: &NpcCard,
-    all_npcs: &[NpcCard],
-    in_area_ids: &std::collections::HashSet<&str>,
-    template_vars: &TemplateVars,
-) -> Option<String> {
-    let present_relations: Vec<&Relationship> = npc
-        .relationships
-        .iter()
-        .filter(|r| in_area_ids.contains(r.with.as_str()))
-        .collect();
-
-    if present_relations.is_empty() {
-        return None;
-    }
-
-    let mut block = String::from("Relationships:\n");
-    for rel in present_relations {
-        let partner_name = all_npcs
-            .iter()
-            .find(|n| n.id == rel.with)
-            .map(|n| n.sheet.name.as_str())
-            .unwrap_or(&rel.with);
-        block.push_str(&format!(
-            "  → {}: {}\n",
-            partner_name,
-            render_template(rel.display_text(), template_vars)
-        ));
-    }
-    Some(block)
 }

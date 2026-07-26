@@ -90,7 +90,7 @@ fn test_llm_error_string_maps_user_facing_messages() {
 
 #[test]
 fn test_internal_error_from_helper() {
-    let err: EngineError = crate::error::internal_error("test invariant").into();
+    let err: EngineError = InternalError::new("test invariant").into();
     match err {
         EngineError::Internal(InternalError { invariant }) => {
             assert_eq!(invariant, "test invariant");

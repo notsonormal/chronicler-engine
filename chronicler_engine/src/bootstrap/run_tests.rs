@@ -184,7 +184,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
 
     let map_arc = std::sync::Arc::new(map);
     let mut state = GameState::new(world_card.starting_room_id());
-    crate::application::scenario::inject_scenario_logs(&mut state, &world_card, &player, &map_arc);
+    state.inject_scenario_logs(&world_card, &player, &map_arc);
 
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(

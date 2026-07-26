@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use crate::application::action_pipeline::retry::{retry_event_continuation, retry_main_narration};
-
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
 use crate::adapters::driven::llm::providers::MockBackend;
@@ -357,7 +355,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
     app.cancel_token().cancel();
 
-    let _ = retry_event_continuation(&app, pre_event_state);
+    let _ = app.retry_event_continuation(pre_event_state);
 
     let state = app.load_or_fresh();
     assert!(
@@ -557,7 +555,7 @@ fn test_retry_main_narration_happy_path() {
     let _final_id = add_narration_and_save(&app, "Narration text");
 
     let state = app.load_or_fresh();
-    let _ = retry_main_narration(&app, state, "test input".to_string());
+    let _ = app.retry_main_narration(state, "test input".to_string());
 }
 
 #[test]
@@ -1074,7 +1072,7 @@ fn test_retry_event_continuation_handles_state_without_input_message() {
         MessageType::Narration,
     );
 
-    let _ = crate::application::action_pipeline::retry::retry_event_continuation(&app, state);
+    let _ = app.retry_event_continuation(state);
 }
 
 // Snapshot referenced by the anchor message's swipe no longer exists in

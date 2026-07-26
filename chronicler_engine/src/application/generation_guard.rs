@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 
-use crate::application::generation_gate::slot::GenerationSlot;
-use crate::application::generation_gate::slot::release_owned_slot;
+use crate::application::utils::slot::GenerationSlot;
+use crate::application::utils::slot::release_owned_slot;
 
 /// RAII guard releasing the per-game registry slot on drop.
 /// No-op if superseded by a younger generation (reset/switch_game).

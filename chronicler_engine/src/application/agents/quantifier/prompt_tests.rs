@@ -5,7 +5,7 @@ use crate::domain::model::map::Room;
 use crate::domain::model::state::message_types::MessageEntry;
 
 use super::prompt::QuantifierPromptBuilder;
-use super::test_support::{make_history, make_npc, make_room};
+use crate::test_support::quantifier::{make_history, make_npc, make_room};
 use super::types::{QuantifierPromptContext, RoomInfo};
 
 #[test]

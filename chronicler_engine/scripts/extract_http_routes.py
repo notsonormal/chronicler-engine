@@ -1,7 +1,7 @@
 """Generate `docs/diataxis/reference/http_routes.md` from `router.rs`.
 
 Parses every `.route(<path>, <verb>(<handler>))` call in
-`chronicler_engine/src/adapters/driving/http/router.rs`, groups routes by
+`chronicler_engine/src/adapters/driving/http/builders/router.rs`, groups routes by
 handler-module prefix, and emits a single 7-area Reference doc.
 
 Standalone Python 3.12 — stdlib only (mirrors `validate_docs.py`).
@@ -52,7 +52,7 @@ AREA_GROUPS: tuple[tuple[str, str], ...] = (
 )
 
 # Paths (relative to chronicler_engine/) the script must find.
-ROUTER_REL = "src/adapters/driving/http/router.rs"
+ROUTER_REL = "src/adapters/driving/http/builders/router.rs"
 OUTPUT_REL = "docs/diataxis/reference/frontend/http_routes.md"
 
 
@@ -84,32 +84,39 @@ class Route:
 def _collect_use_imports(source: str) -> dict[str, str]:
     """Build a {local_name: qualified_path} map from `use ...;` lines.
 
-    Only `use` imports of the shape `use super::module::name;` (single-segment
-    trailing path) and `use super::module;` (whole-module import, mapped to
-    `module::`) are honored — those are the shapes that appear in router.rs.
-    `use super::module::{a, b, c};` (grouped) is not currently present and
-    is left as a TODO if it ever shows up.
+    Accepts both `use super::module::name;` and `use crate::...::module::name;`
+    shapes. Router source uses fully-qualified `use crate::...` paths; handler
+    files use `use super::...`. The regex must match both forms. The full
+    path after `super::` / `crate::` is captured, then the last two segments
+    are taken as `module` and `name`; intermediate `crate::` prefixes are
+    discarded because the router's import paths all start from
+    `crate::adapters::driving::http::`. `use ...::module::{a, b, c};`
+    (grouped) is not currently present and is left as a TODO if it ever
+    shows up.
 
     Examples resolved:
-        use super::handlers::index_handler;     -> {"index_handler": "handlers::index_handler"}
-        use super::fragments;                    -> {"fragments": "fragments::"}
-        use super::games_fragment;               -> {"games_fragment": "games_fragment::"}
+        use super::handlers::index_handler;            -> {"index_handler": "handlers::index_handler"}
+        use crate::adapters::driving::http::debug;      -> {"debug": "debug::"}
+        use crate::adapters::driving::http::handlers
+            ::index_handler;                            -> {"index_handler": "handlers::index_handler"}
     """
     imports: dict[str, str] = {}
     pattern = re.compile(
-        r"^\s*use\s+super::([A-Za-z_][A-Za-z0-9_]*)"
-        r"(?:::([A-Za-z_][A-Za-z0-9_]*))?\s*;"
+        r"^\s*use\s+(?:super|crate)::(?P<path>[A-Za-z_][A-Za-z0-9_]*"
+        r"(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*;"
     )
     for line in source.splitlines():
         m = pattern.match(line)
         if not m:
             continue
-        module = m.group(1)
-        name = m.group(2)
-        if name is None:
+        parts = m.group("path").split("::")
+        if len(parts) == 1:
             # Module import: local reference `module` -> `module::`.
+            module = parts[0]
             imports[module] = f"{module}::"
         else:
+            module = parts[-2]
+            name = parts[-1]
             imports[name] = f"{module}::{name}"
     return imports
 
@@ -233,7 +240,7 @@ def group_routes_by_area(routes: list[Route]) -> dict[str, list[Route]]:
 
 
 _OVERVIEW_PROSE = (
-    "This doc is generated from `src/adapters/driving/http/router.rs` and is "
+    "This doc is generated from `src/adapters/driving/http/builders/router.rs` and is "
     "the canonical map of HTTP route to handler for the engine's HTTP server. "
     "Re-run `python scripts/extract_http_routes.py` after any change to "
     "`router.rs`. The seven areas below match the seven handler-module "

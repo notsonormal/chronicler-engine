@@ -11,7 +11,7 @@ use crate::application::application_service::ApplicationError;
 use crate::adapters::driving::http::AppState;
 use crate::error::EngineError;
 
-use crate::adapters::driving::http::fragments::renderers::ok;
+use crate::adapters::driving::http::utils::response::ok;
 
 pub async fn switch_swipe_handler(
     State(state): State<AppState>,

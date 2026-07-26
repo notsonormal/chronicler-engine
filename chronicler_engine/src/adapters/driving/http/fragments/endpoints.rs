@@ -4,19 +4,7 @@
 use axum::{extract::State, response::Html};
 
 use crate::adapters::driving::http::AppState;
-
-fn render_fragment<F>(state: &AppState, render: F, name: &str) -> Html<String>
-where
-    F: FnOnce(&AppState) -> crate::error::Result<String>,
-{
-    match render(state) {
-        Ok(html) => Html(html),
-        Err(e) => {
-            tracing::error!("{name} failed: {e}");
-            Html(super::renderers::render_error(&e.to_string()))
-        }
-    }
-}
+use crate::adapters::driving::http::utils::fragment::render_fragment;
 
 pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
     render_fragment(&state, |s| s.render_header(), "header_fragment")

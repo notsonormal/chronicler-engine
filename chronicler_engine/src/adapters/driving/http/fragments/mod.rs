@@ -21,8 +21,9 @@ pub use history::{EditHistoryForm, delete_history_handler, edit_history_handler}
 pub use misc::{
     check_text_handler, reset_handler, retrigger_handler, retry_handler, switch_swipe_handler,
 };
-pub use renderers::{
-    bad_request, html_escape, internal_error, ok, ok_refresh, render_error, service_unavailable,
+pub use crate::adapters::driving::http::utils::error::render_error;
+pub use crate::adapters::driving::http::utils::response::{
+    bad_request, html_escape, internal_error, ok, ok_refresh, service_unavailable,
     service_unavailable_generating,
 };
 

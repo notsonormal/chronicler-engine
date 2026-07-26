@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::error::EngineError;
 use crate::domain::model::message::Swipe;
-use crate::adapters::driven::storage::backend::{Backend, Storage};
+use crate::adapters::driven::storage::backend::{Backend, InMemoryData, Storage};
 
 impl Storage {
     pub fn insert_swipe(
@@ -61,7 +61,7 @@ impl Storage {
                 Ok(())
             }
             Backend::InMemory(data) => {
-                update_swipe_text_inmemory(&mut data.swipes, message_id, swipe_index, text);
+                data.update_swipe_text(message_id, swipe_index, text);
                 Ok(())
             }
         })
@@ -136,10 +136,7 @@ impl Storage {
                 Ok(result)
             }
             Backend::InMemory(data) => {
-                Ok(load_swipes_for_messages_inmemory(
-                    &data.swipes,
-                    message_ids,
-                ))
+                Ok(data.load_swipes_for_messages(message_ids))
             }
         })
     }
@@ -167,28 +164,32 @@ impl Storage {
             }
         })
     }
-}
 
-fn update_swipe_text_inmemory(
-    swipes: &mut HashMap<u64, Vec<Swipe>>,
-    message_id: u64,
-    swipe_index: usize,
-    text: &str,
-) {
-    if let Some(swipe) = swipes
-        .get_mut(&message_id)
-        .and_then(|vec| vec.get_mut(swipe_index))
-    {
-        swipe.text = text.to_string();
+    /// Insert every swipe for a freshly inserted message. Logs + swallows per-swipe errors.
+    pub fn persist_swipes(&self, msg_id: u64, swipes: &[Swipe]) {
+        for (index, swipe) in swipes.iter().enumerate() {
+            if let Err(e) = self.insert_swipe(msg_id, swipe, index) {
+                tracing::error!("persist_swipes: swipe {index} failed: {e}");
+            }
+        }
     }
 }
 
-fn load_swipes_for_messages_inmemory(
-    swipes: &HashMap<u64, Vec<Swipe>>,
-    message_ids: &[u64],
-) -> HashMap<u64, Vec<Swipe>> {
-    message_ids
-        .iter()
-        .filter_map(|&msg_id| swipes.get(&msg_id).map(|v| (msg_id, v.clone())))
-        .collect()
+impl InMemoryData {
+    fn update_swipe_text(&mut self, message_id: u64, swipe_index: usize, text: &str) {
+        if let Some(swipe) = self
+            .swipes
+            .get_mut(&message_id)
+            .and_then(|vec| vec.get_mut(swipe_index))
+        {
+            swipe.text = text.to_string();
+        }
+    }
+
+    fn load_swipes_for_messages(&self, message_ids: &[u64]) -> HashMap<u64, Vec<Swipe>> {
+        message_ids
+            .iter()
+            .filter_map(|&msg_id| self.swipes.get(&msg_id).map(|v| (msg_id, v.clone())))
+            .collect()
+    }
 }

@@ -7,9 +7,12 @@ use harper_core::linting::{LintGroup, Linter};
 use harper_core::spell::{FstDictionary, MutableDictionary};
 use harper_core::{Document, MergedDictionary};
 
+use crate::adapters::driven::utils::harper::{
+    apply_suggestions, char_span_to_byte_span, lint_kind_to_issue_kind,
+};
 use crate::error::EngineError;
 use crate::domain::model::settings::TextCheckMode;
-use crate::application::ports::text_checker::{CheckIssue, CheckResult, IssueKind, TextChecker};
+use crate::application::ports::text_checker::{CheckIssue, CheckResult, TextChecker};
 
 pub struct HarperTextChecker {
     dictionary: Arc<MergedDictionary>,
@@ -100,54 +103,4 @@ impl TextChecker for HarperTextChecker {
             issues,
         }))
     }
-}
-
-fn lint_kind_to_issue_kind(kind: harper_core::linting::LintKind) -> IssueKind {
-    use harper_core::linting::LintKind as HK;
-    match kind {
-        HK::Spelling => IssueKind::Spelling,
-        HK::Capitalization => IssueKind::Capitalization,
-        HK::Formatting => IssueKind::Formatting,
-        HK::Repetition => IssueKind::Style,
-        HK::Readability => IssueKind::Style,
-        HK::Enhancement => IssueKind::Grammar,
-        HK::WordChoice => IssueKind::Grammar,
-        HK::Style => IssueKind::Style,
-        HK::Miscellaneous => IssueKind::Other,
-    }
-}
-
-fn char_span_to_byte_span(text: &str, char_span: std::ops::Range<usize>) -> std::ops::Range<usize> {
-    let mut byte_start = None;
-    let mut byte_end = None;
-
-    for (char_idx, (byte_idx, _)) in text.char_indices().enumerate() {
-        if char_idx == char_span.start {
-            byte_start = Some(byte_idx);
-        }
-        if char_idx == char_span.end {
-            byte_end = Some(byte_idx);
-            break;
-        }
-    }
-
-    let start = byte_start.unwrap_or(0);
-    let end = byte_end.unwrap_or(text.len());
-    start..end
-}
-
-fn apply_suggestions(text: &str, lints: &[harper_core::linting::Lint]) -> String {
-    let mut chars: Vec<char> = text.chars().collect();
-    let mut sorted_lints: Vec<_> = lints.iter().collect();
-    sorted_lints.sort_by_key(|l| std::cmp::Reverse(l.span.start));
-
-    for lint in sorted_lints {
-        if let Some(suggestion) = lint.suggestions.first() {
-            // Span in the current char vec. Since we're working backwards,
-            // the span hasn't shifted yet.
-            suggestion.apply(lint.span, &mut chars);
-        }
-    }
-
-    chars.into_iter().collect()
 }

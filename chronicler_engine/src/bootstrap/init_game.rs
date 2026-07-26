@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::adapters::driven::storage::Storage;
-use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::Message;
@@ -35,7 +34,10 @@ pub(crate) fn resolve_game_id(
         }
         None => {
             let existing_names = list_game_names_for_world(db_pool, &world.key)?;
-            let name = crate::domain::model::game::generate_game_name(&world.name, &existing_names);
+            let name = crate::domain::model::utils::game_name::generate_game_name(
+                &world.name,
+                &existing_names,
+            );
             let id =
                 db_pool.insert_game(&world.name, &world.key, persona_key, persona_name, &name)?;
             tracing::info!("Created new game '{name}' (id={id}) with persona '{persona_key}'");
@@ -62,7 +64,7 @@ pub(crate) fn load_game_state(
         _ => {
             let starting_room_id = world_arc.starting_room_id();
             let mut new_state = GameState::new(starting_room_id);
-            inject_scenario_logs(&mut new_state, world_arc, player_arc, map_arc);
+            new_state.inject_scenario_logs(world_arc, player_arc, map_arc);
             if let Some(scenario) = world_arc.default_scenario() {
                 new_state.init_scenario_npcs(scenario, npcs_map);
             }

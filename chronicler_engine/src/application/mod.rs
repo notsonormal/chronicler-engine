@@ -14,14 +14,11 @@ pub mod generation_gate;
 pub mod generation_guard;
 pub mod llm_message;
 pub mod llm_recorder;
-pub mod llm_sanitizer;
-pub mod message_editing;
 pub mod narrative_prompt;
 pub mod persistence_gate;
 pub mod ports;
-pub(crate) mod scenario;
-pub(crate) mod spawn;
 pub mod text_check_service;
+pub mod utils;
 pub mod world_catalogue;
 
 pub use application_service::{
@@ -33,14 +30,11 @@ pub use world_catalogue::WorldCatalogue;
 pub use generation_gate::GenerationGate;
 pub use game_service::GameService;
 pub use generation_guard::GenerationGuard;
-pub use message_editing::{retrigger, retry};
-pub(crate) use spawn::spawn_pipeline_task;
+pub use utils::retry::{retrigger, retry};
+pub(crate) use utils::spawn::spawn_pipeline_task;
 
 #[cfg(test)]
 mod llm_recorder_tests;
-
-#[cfg(test)]
-mod llm_sanitizer_tests;
 
 #[cfg(test)]
 mod application_service_tests;

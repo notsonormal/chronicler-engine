@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::fragments::renderers::{bad_request, internal_error, ok};
+use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok};
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
 #[derive(Deserialize)]

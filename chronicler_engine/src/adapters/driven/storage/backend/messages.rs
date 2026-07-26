@@ -1,11 +1,9 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Message storage operations
 
-use std::collections::HashMap;
-
 use crate::error::EngineError;
 use crate::domain::model::message::Message;
-use crate::adapters::driven::storage::backend::{Backend, Storage};
+use crate::adapters::driven::storage::backend::{Backend, InMemoryData, Storage};
 use crate::adapters::driven::storage::models::message::{DbMessage, DbSwipe};
 
 impl Storage {
@@ -151,7 +149,7 @@ impl Storage {
                 Ok(())
             }
             Backend::InMemory(data) => {
-                update_active_swipe_inmemory(&mut data.messages, game_id, message_id, index);
+                data.update_active_swipe(game_id, message_id, index);
                 Ok(())
             }
         })
@@ -170,7 +168,7 @@ impl Storage {
                 Ok(())
             }
             Backend::InMemory(data) => {
-                soft_delete_message_inmemory(&mut data.messages, game_id, id);
+                data.soft_delete_message(game_id, id);
                 Ok(())
             }
         })
@@ -191,7 +189,7 @@ impl Storage {
                 Ok(())
             }
             Backend::InMemory(data) => {
-                restore_soft_deleted_inmemory(&mut data.messages, game_id, ids);
+                data.restore_soft_deleted(game_id, ids);
                 Ok(())
             }
         })
@@ -242,37 +240,32 @@ impl Storage {
     }
 }
 
-fn update_active_swipe_inmemory(
-    messages: &mut HashMap<u64, Vec<Message>>,
-    game_id: u64,
-    message_id: u64,
-    index: usize,
-) {
-    if let Some(msg) = messages
-        .get_mut(&game_id)
-        .and_then(|vec| vec.iter_mut().find(|m| m.id == message_id))
-    {
-        msg.active_swipe_index = index;
+impl InMemoryData {
+    fn update_active_swipe(&mut self, game_id: u64, message_id: u64, index: usize) {
+        if let Some(msg) = self
+            .messages
+            .get_mut(&game_id)
+            .and_then(|vec| vec.iter_mut().find(|m| m.id == message_id))
+        {
+            msg.active_swipe_index = index;
+        }
     }
-}
 
-fn soft_delete_message_inmemory(messages: &mut HashMap<u64, Vec<Message>>, game_id: u64, id: u64) {
-    if let Some(msg) = messages
-        .get_mut(&game_id)
-        .and_then(|vec| vec.iter_mut().find(|m| m.id == id))
-    {
-        msg.is_deleted = true;
+    fn soft_delete_message(&mut self, game_id: u64, id: u64) {
+        if let Some(msg) = self
+            .messages
+            .get_mut(&game_id)
+            .and_then(|vec| vec.iter_mut().find(|m| m.id == id))
+        {
+            msg.is_deleted = true;
+        }
     }
-}
 
-fn restore_soft_deleted_inmemory(
-    messages: &mut HashMap<u64, Vec<Message>>,
-    game_id: u64,
-    ids: &[u64],
-) {
-    if let Some(vec) = messages.get_mut(&game_id) {
-        for m in vec.iter_mut().filter(|m| ids.contains(&m.id)) {
-            m.is_deleted = false;
+    fn restore_soft_deleted(&mut self, game_id: u64, ids: &[u64]) {
+        if let Some(vec) = self.messages.get_mut(&game_id) {
+            for m in vec.iter_mut().filter(|m| ids.contains(&m.id)) {
+                m.is_deleted = false;
+            }
         }
     }
 }

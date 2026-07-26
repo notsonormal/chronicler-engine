@@ -18,7 +18,7 @@ impl Storage {
                 )?;
                 let result = stmt.query_row([], DbSettings::from_row);
                 match result {
-                    Ok(db_settings) => settings_from_db(&db_settings),
+                    Ok(db_settings) => db_settings.to_settings(),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(AppSettings::default()),
                     Err(e) => Err(EngineError::Database(e))
                 }
@@ -70,24 +70,29 @@ impl Storage {
     }
 }
 
-fn settings_from_db(db: &DbSettings) -> Result<AppSettings, EngineError> {
-    let connections: Vec<crate::domain::model::settings::LlmProviderConfig> =
-        serde_json::from_str(&db.connections)
-            .map_err(|e| EngineError::Parse(format!("Failed to deserialize connections: {e}")))?;
-    let text_check: crate::domain::model::settings::TextCheckSettings =
-        serde_json::from_str(&db.text_check)
-            .map_err(|e| EngineError::Parse(format!("Failed to deserialize text_check: {e}")))?;
-    let agents: Vec<crate::domain::model::agent::AgentConfig> = serde_json::from_str(&db.agents)
-        .map_err(|e| EngineError::Parse(format!("Failed to deserialize agents: {e}")))?;
+impl DbSettings {
+    fn to_settings(&self) -> Result<AppSettings, EngineError> {
+        let connections: Vec<crate::domain::model::settings::LlmProviderConfig> =
+            serde_json::from_str(&self.connections).map_err(|e| {
+                EngineError::Parse(format!("Failed to deserialize connections: {e}"))
+            })?;
+        let text_check: crate::domain::model::settings::TextCheckSettings =
+            serde_json::from_str(&self.text_check).map_err(|e| {
+                EngineError::Parse(format!("Failed to deserialize text_check: {e}"))
+            })?;
+        let agents: Vec<crate::domain::model::agent::AgentConfig> =
+            serde_json::from_str(&self.agents)
+                .map_err(|e| EngineError::Parse(format!("Failed to deserialize agents: {e}")))?;
 
-    Ok(AppSettings {
-        connections,
-        narration_connection_id: db.narration_connection_id.clone(),
-        quantifier_connection_id: db.quantifier_connection_id.clone(),
-        response_length: db.response_length.clone(),
-        text_check,
-        agents,
-        active_system_prompt_preset_id: db.active_system_prompt_preset_id.clone(),
-        active_quantifier_prompt_preset_id: db.active_quantifier_prompt_preset_id.clone(),
-    })
+        Ok(AppSettings {
+            connections,
+            narration_connection_id: self.narration_connection_id.clone(),
+            quantifier_connection_id: self.quantifier_connection_id.clone(),
+            response_length: self.response_length.clone(),
+            text_check,
+            agents,
+            active_system_prompt_preset_id: self.active_system_prompt_preset_id.clone(),
+            active_quantifier_prompt_preset_id: self.active_quantifier_prompt_preset_id.clone(),
+        })
+    }
 }

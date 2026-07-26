@@ -20,7 +20,7 @@ impl Storage {
                     .query_map([world_id], DbCharacter::from_row)?
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(EngineError::Database)?;
-                rows.iter().map(character_from_db).collect()
+                rows.iter().map(DbCharacter::to_card).collect()
             }
             Backend::InMemory(data) => Ok(data.characters.iter().filter(|c| c.world_id == world_id).map(|c| c.card.clone()).collect()),
         })
@@ -35,7 +35,7 @@ impl Storage {
                 )?;
                 let result = stmt.query_row(rusqlite::params![world_id, key], DbCharacter::from_row);
                 match result {
-                    Ok(db_char) => Ok(Some(character_from_db(&db_char)?)),
+                    Ok(db_char) => Ok(Some(db_char.to_card()?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
                     Err(e) => Err(EngineError::Database(e))
                 }
@@ -92,30 +92,34 @@ impl Storage {
     }
 }
 
-fn character_from_db(db: &DbCharacter) -> Result<NpcCard, EngineError> {
-    use crate::domain::model::character::CharacterSheet;
-    let inventory: Vec<String> = serde_json::from_str(&db.inventory)
-        .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
-    let triggers: Vec<crate::domain::model::trigger::Trigger> = serde_json::from_str(&db.triggers)
-        .map_err(|e| EngineError::Parse(format!("Failed to deserialize triggers: {e}")))?;
-    let relationships: Vec<crate::domain::model::character::Relationship> =
-        serde_json::from_str(&db.relationships)
-            .map_err(|e| EngineError::Parse(format!("Failed to deserialize relationships: {e}")))?;
+impl DbCharacter {
+    fn to_card(&self) -> Result<NpcCard, EngineError> {
+        use crate::domain::model::character::CharacterSheet;
+        let inventory: Vec<String> = serde_json::from_str(&self.inventory)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
+        let triggers: Vec<crate::domain::model::trigger::Trigger> =
+            serde_json::from_str(&self.triggers)
+                .map_err(|e| EngineError::Parse(format!("Failed to deserialize triggers: {e}")))?;
+        let relationships: Vec<crate::domain::model::character::Relationship> =
+            serde_json::from_str(&self.relationships).map_err(|e| {
+                EngineError::Parse(format!("Failed to deserialize relationships: {e}"))
+            })?;
 
-    Ok(NpcCard {
-        id: db.key.clone(),
-        sheet: CharacterSheet {
-            name: db.name.clone(),
-            description: db.description.clone(),
-            personality: db.personality.clone(),
-            scenario: db.scenario.clone(),
-            example_dialogue: db.example_dialogue.clone(),
-            summary: db.summary.clone().filter(|s| !s.is_empty()),
-            profile_image: db.profile_image.clone().filter(|s| !s.is_empty()),
-            headshot_image: db.headshot_image.clone().filter(|s| !s.is_empty()),
-        },
-        inventory,
-        triggers,
-        relationships,
-    })
+        Ok(NpcCard {
+            id: self.key.clone(),
+            sheet: CharacterSheet {
+                name: self.name.clone(),
+                description: self.description.clone(),
+                personality: self.personality.clone(),
+                scenario: self.scenario.clone(),
+                example_dialogue: self.example_dialogue.clone(),
+                summary: self.summary.clone().filter(|s| !s.is_empty()),
+                profile_image: self.profile_image.clone().filter(|s| !s.is_empty()),
+                headshot_image: self.headshot_image.clone().filter(|s| !s.is_empty()),
+            },
+            inventory,
+            triggers,
+            relationships,
+        })
+    }
 }

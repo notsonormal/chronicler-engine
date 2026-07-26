@@ -4,31 +4,7 @@
 use askama::Template;
 
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
-
-pub fn parse_api_key(s: &str) -> Option<String> {
-    if s.is_empty() {
-        None
-    } else {
-        Some(s.to_string())
-    }
-}
-
-fn provider_option_html(value: &str, label: &str, selected: bool) -> String {
-    let sel = if selected { " selected" } else { "" };
-    format!(r#"<option value="{value}"{sel}>{label}</option>"#)
-}
-
-pub(crate) fn provider_options_html(selected: &str) -> String {
-    [
-        ("openrouter", "OpenRouter"),
-        ("deepseek", "DeepSeek"),
-        ("ollama", "Ollama"),
-    ]
-    .iter()
-    .map(|(v, l)| provider_option_html(v, l, *v == selected))
-    .collect::<Vec<_>>()
-    .join("\n")
-}
+use crate::adapters::driving::http::utils::template_helpers::provider_options_html;
 
 #[derive(Template)]
 #[template(

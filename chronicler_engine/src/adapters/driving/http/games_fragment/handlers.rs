@@ -7,23 +7,12 @@ use axum::{
     response::Response,
 };
 
-use crate::domain::model::game::Game;
 use crate::adapters::driving::http::AppState;
 use crate::application::application_service::ApplicationError;
 
-use crate::adapters::driving::http::fragments::renderers::{internal_error, ok, ok_refresh};
-use crate::adapters::driving::http::games_fragment::template::{
-    GameRowView, GamesPanelTemplate, PersonaRowView,
-};
-
-fn game_to_view(g: Game) -> GameRowView {
-    GameRowView {
-        id: g.id,
-        name: g.name.clone(),
-        world_name: g.world_name.clone(),
-        persona_name: g.persona_name.clone(),
-    }
-}
+use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
+use crate::adapters::driving::http::utils::view_mappers::game_to_view;
+use crate::adapters::driving::http::games_fragment::template::{GamesPanelTemplate, PersonaRowView};
 
 pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
     let app = &state.application_service;

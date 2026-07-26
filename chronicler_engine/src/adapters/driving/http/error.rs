@@ -4,16 +4,9 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use super::fragments::html_escape;
+use super::utils::error::render_error;
 
 use crate::application::application_service::ApplicationError;
-
-fn error_div(message: &str) -> String {
-    format!(
-        "<div class=\"error-message\">Error: {}</div>",
-        html_escape(message)
-    )
-}
 
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
@@ -36,6 +29,6 @@ impl IntoResponse for ApplicationError {
             ),
         };
 
-        (status, error_div(&message)).into_response()
+        (status, render_error(&message)).into_response()
     }
 }

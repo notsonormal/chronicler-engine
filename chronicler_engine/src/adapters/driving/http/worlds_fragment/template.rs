@@ -40,6 +40,27 @@ pub struct WorldsPanelTemplate {
     pub worlds: Vec<WorldRowView>,
 }
 
+impl WorldsPanelTemplate {
+    pub fn from_worlds(
+        worlds: &[WorldCard],
+        games_per_world: &std::collections::HashMap<String, usize>,
+    ) -> Self {
+        let rows: Vec<WorldRowView> = worlds
+            .iter()
+            .map(|w| {
+                let game_count = games_per_world.get(&w.key).copied().unwrap_or(0);
+                WorldRowView {
+                    key: w.key.clone(),
+                    name: w.name.clone(),
+                    description: w.description.clone(),
+                    game_count,
+                }
+            })
+            .collect();
+        Self { worlds: rows }
+    }
+}
+
 #[derive(Template)]
 #[template(
     source = r#"

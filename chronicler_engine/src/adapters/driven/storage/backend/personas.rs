@@ -18,7 +18,7 @@ impl Storage {
                     .query_map([], DbPersona::from_row)?
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(EngineError::Database)?;
-                rows.iter().map(persona_from_db).collect()
+                rows.iter().map(DbPersona::to_card).collect()
             }
             Backend::InMemory(data) => Ok(data.personas.iter().map(|p| p.card.clone()).collect()),
         })
@@ -33,7 +33,7 @@ impl Storage {
                 )?;
                 let result = stmt.query_row([key], DbPersona::from_row);
                 match result {
-                    Ok(db_persona) => Ok(Some(persona_from_db(&db_persona)?)),
+                    Ok(db_persona) => Ok(Some(db_persona.to_card()?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
                     Err(e) => Err(EngineError::Database(e))
                 }
@@ -91,23 +91,25 @@ impl Storage {
     }
 }
 
-fn persona_from_db(db: &DbPersona) -> Result<PersonaCard, EngineError> {
-    use crate::domain::model::character::CharacterSheet;
-    let inventory: Vec<String> = serde_json::from_str(&db.inventory)
-        .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
+impl DbPersona {
+    fn to_card(&self) -> Result<PersonaCard, EngineError> {
+        use crate::domain::model::character::CharacterSheet;
+        let inventory: Vec<String> = serde_json::from_str(&self.inventory)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
 
-    Ok(PersonaCard {
-        key: db.key.clone(),
-        sheet: CharacterSheet {
-            name: db.name.clone(),
-            description: db.description.clone(),
-            personality: db.personality.clone(),
-            scenario: db.scenario.clone(),
-            example_dialogue: db.example_dialogue.clone(),
-            summary: db.summary.clone().filter(|s| !s.is_empty()),
-            profile_image: db.profile_image.clone().filter(|s| !s.is_empty()),
-            headshot_image: db.headshot_image.clone().filter(|s| !s.is_empty()),
-        },
-        inventory,
-    })
+        Ok(PersonaCard {
+            key: self.key.clone(),
+            sheet: CharacterSheet {
+                name: self.name.clone(),
+                description: self.description.clone(),
+                personality: self.personality.clone(),
+                scenario: self.scenario.clone(),
+                example_dialogue: self.example_dialogue.clone(),
+                summary: self.summary.clone().filter(|s| !s.is_empty()),
+                profile_image: self.profile_image.clone().filter(|s| !s.is_empty()),
+                headshot_image: self.headshot_image.clone().filter(|s| !s.is_empty()),
+            },
+            inventory,
+        })
+    }
 }

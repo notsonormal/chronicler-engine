@@ -4,7 +4,7 @@
 use axum::{body::Body, extract::State};
 
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::fragments::renderers::{internal_error, ok_refresh};
+use crate::adapters::driving::http::utils::response::{internal_error, ok_refresh};
 use crate::application::application_service::ApplicationError;
 
 pub async fn reset_handler(

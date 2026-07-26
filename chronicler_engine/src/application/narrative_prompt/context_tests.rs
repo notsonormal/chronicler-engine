@@ -1,7 +1,7 @@
-use crate::application::narrative_prompt::budget;
-use crate::application::narrative_prompt::budget::estimate_tokens;
-use crate::application::narrative_prompt::context::{
-    fit_messages_to_context, make_prompt_context, trim_history_to_budget,
+use crate::application::utils::token_budget as budget;
+use crate::application::utils::token_budget::estimate_tokens;
+use crate::application::narrative_prompt::utils::context::{
+    fit_messages_to_context, trim_history_to_budget,
 };
 use crate::application::narrative_prompt::types::{NpcContext, PromptContext};
 
@@ -101,7 +101,7 @@ fn test_make_prompt_context() {
     let npcs = vec![crate::test_support::TestNpc::named("npc1", "Npc")];
     let history = vec![];
 
-    let context: PromptContext = make_prompt_context(
+    let context: PromptContext = PromptContext::new(
         &world,
         &room,
         NpcContext {

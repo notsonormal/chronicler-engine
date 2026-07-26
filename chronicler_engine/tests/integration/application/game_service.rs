@@ -314,7 +314,7 @@ async fn test_retrigger_happy_path() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
     use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
-    use chronicler_engine::application::message_editing;
+    use chronicler_engine::application::retrigger;
 
     let msg = Message::new(
         None,
@@ -339,7 +339,7 @@ async fn test_retrigger_happy_path() {
         .build_service()
         .unwrap();
 
-    let result = message_editing::retrigger(Arc::clone(&app));
+    let result = retrigger(Arc::clone(&app));
     assert!(result.is_ok());
 }
 
@@ -348,7 +348,7 @@ async fn test_retrigger_storage_operations() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
     use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
-    use chronicler_engine::application::message_editing;
+    use chronicler_engine::application::retrigger;
 
     let msg = Message::new(None, "Test narration", MessageType::Narration, None, None);
     let app = SqliteTestAppBuilder::default_test()
@@ -370,7 +370,7 @@ async fn test_retrigger_storage_operations() {
     let initial_snapshot = app.storage().load_latest_snapshot().unwrap();
     assert!(initial_snapshot.is_some());
 
-    let result = message_editing::retrigger(Arc::clone(&app));
+    let result = retrigger(Arc::clone(&app));
     assert!(result.is_ok());
 
     let final_snapshot = app.storage().load_latest_snapshot().unwrap();
@@ -398,7 +398,7 @@ fn test_delete_last_storage_failure() {
 async fn test_retry_cancellation() {
     use chronicler_engine::domain::model::message::Message;
     use chronicler_engine::domain::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing;
+    use chronicler_engine::application::retry;
     let msg = Message::new(
         Some("Player".to_string()),
         "Input to retry",
@@ -412,7 +412,7 @@ async fn test_retry_cancellation() {
         .build_service()
         .unwrap();
     app.cancel_token().cancel();
-    let result = message_editing::retry(Arc::clone(&app));
+    let result = retry(Arc::clone(&app));
     assert!(result.is_err());
 }
 

@@ -1,15 +1,10 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! GameViewQuery — read-side queries that don't mutate game state.
-//!
-//! Storage access routes through `PersistenceGate` (symmetric with
-//! `GameCatalogue`) to avoid a third `Arc<Storage>` holder. `preset_store`
-//! reaches through `persistence_gate.preset_store()`.
 
 use std::sync::{Arc, RwLock};
 
 use crate::application::errors::ApplicationError;
 use crate::application::llm_message::LlmMessage;
-use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -190,7 +185,7 @@ impl GameViewQuery {
             settings.active_quantifier_prompt_preset_id.clone()
         };
         match self.persistence_gate.preset_store().get_preset(&preset_id) {
-            Ok(Some(preset)) => assemble_prompt_text(&preset, &[], None),
+            Ok(Some(preset)) => preset.assemble_text(&[], None, None),
             Ok(None) => {
                 tracing::error!(
                     "active quantifier preset '{preset_id}' not found — defaults not seeded?"

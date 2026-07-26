@@ -4,14 +4,14 @@
 use axum::{body::Body, extract::State, response::Response};
 
 use crate::application::application_service::ApplicationError;
-use crate::application::message_editing;
+use crate::application::retry;
 use crate::adapters::driving::http::AppState;
 
-use crate::adapters::driving::http::fragments::renderers::ok;
+use crate::adapters::driving::http::utils::response::ok;
 
 pub async fn retry_handler(
     State(state): State<AppState>,
 ) -> Result<Response<Body>, ApplicationError> {
-    message_editing::retry(state.application_service.clone())?;
+    retry(state.application_service.clone())?;
     Ok(ok("<span class=\"status ready\">Retrying...</span>"))
 }

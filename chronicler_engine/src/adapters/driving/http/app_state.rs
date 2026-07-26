@@ -11,7 +11,7 @@ use crate::application::text_check_service::TextCheckService;
 use crate::bootstrap::wiring::WiredApp;
 use crate::domain::model::settings::AppSettings;
 
-use super::locks::read_lock_or_recover;
+use super::utils::read_lock_or_recover;
 
 #[derive(Clone)]
 pub struct AppState {

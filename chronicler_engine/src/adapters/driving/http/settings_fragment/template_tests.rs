@@ -2,7 +2,8 @@ use askama::Template;
 
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
-use crate::adapters::driving::http::settings_fragment::{SettingsTemplate, parse_api_key};
+use crate::adapters::driving::http::settings_fragment::SettingsTemplate;
+use crate::adapters::driving::http::utils::handler_helpers::opt_string;
 
 #[test]
 fn test_deepseek_returns_deepseek() {
@@ -37,14 +38,14 @@ fn test_ollama_returns_ollama() {
 }
 
 #[test]
-fn test_parse_api_key_empty_returns_none() {
-    assert_eq!(parse_api_key(""), None);
+fn test_opt_string_empty_returns_none() {
+    assert_eq!(opt_string(""), None);
 }
 
 #[test]
-fn test_parse_api_key_non_empty_returns_some() {
-    assert_eq!(parse_api_key("sk-test123"), Some("sk-test123".to_string()));
-    assert_eq!(parse_api_key("   "), Some("   ".to_string()));
+fn test_opt_string_non_empty_returns_some() {
+    assert_eq!(opt_string("sk-test123"), Some("sk-test123".to_string()));
+    assert_eq!(opt_string("   "), Some("   ".to_string()));
 }
 
 #[test]
