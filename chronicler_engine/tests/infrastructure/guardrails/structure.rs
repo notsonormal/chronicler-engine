@@ -248,6 +248,45 @@ fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
+/// Flags `.rs` files that contain only comments and blank lines.
+/// A line is "code" if, after trimming, it is non-empty and does not start
+/// with `//`, `//!`, `/*`, `*`, or `*/`. Belt-and-suspenders with `syn`: also
+/// require the file parses cleanly with zero items, so a file that opens a
+/// block comment and never closes it (which would fool the text scan) is not
+/// wrongly flagged.
+pub fn check_empty_rust_file(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    let has_code_line = content.lines().any(|line| {
+        let trimmed = line.trim_start();
+        !trimmed.is_empty()
+            && !trimmed.starts_with("//")
+            && !trimmed.starts_with("/*")
+            && !trimmed.starts_with("*")
+    });
+
+    if has_code_line {
+        return violations;
+    }
+
+    // No code lines by text scan. Confirm with syn: an empty file with a
+    // dangling block comment could parse to a stream of `None` tokens (Err)
+    // rather than a clean empty file; in that case it's a real parse error
+    // and another guardrail will surface it.
+    let Ok(ast) = syn::parse_file(content) else {
+        return violations;
+    };
+    if ast.items.is_empty() {
+        violations.push(Violation::error(
+            path,
+            1,
+            "File is empty: only comments and blank lines. Delete it or add real code.".to_string(),
+        ));
+    }
+
+    violations
+}
+
 pub fn check_no_std_thread_all(path: &str, content: &str) -> Vec<Violation> {
     check_no_std_thread(path, content)
 }

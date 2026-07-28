@@ -507,7 +507,7 @@ async fn test_p4_concurrent_happy_path() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
-            || !app.is_generating().load(Ordering::SeqCst),
+            || !app.is_generating_now(),
         ),
         "gen A's pipeline must complete (slot released) within timeout"
     );
@@ -541,7 +541,7 @@ async fn test_p4_concurrent_happy_path() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
-            || !app.is_generating().load(Ordering::SeqCst),
+            || !app.is_generating_now(),
         ),
         "gen B's pipeline must complete within timeout"
     );
@@ -573,7 +573,7 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     assert!(
-        !app.is_generating().load(Ordering::SeqCst),
+        !app.is_generating_now(),
         "is_generating projection must be false after both pipelines complete (registry clean)"
     );
 
@@ -654,7 +654,7 @@ async fn test_p4_concurrent_triple_overlap() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(10),
             std::time::Duration::from_millis(100),
-            || !app.is_generating().load(Ordering::SeqCst),
+            || !app.is_generating_now(),
         ),
         "all three pipelines must complete within timeout"
     );
@@ -690,7 +690,7 @@ async fn test_p4_concurrent_triple_overlap() {
     );
 
     assert!(
-        !app.is_generating().load(Ordering::SeqCst),
+        !app.is_generating_now(),
         "is_generating projection must be false (no stale slots for games 1/2/3)"
     );
 

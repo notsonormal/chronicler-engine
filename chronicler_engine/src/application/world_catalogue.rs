@@ -1,5 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! WorldCatalogue — worlds/personas CRUD pass-through façade over `Storage`.
+//! Takes `Arc<Storage>` directly (not `Arc<PersistenceGate>` like `GameCatalogue`):
+//! Storage-direct CRUD only — no preset/snapshot/set_game_id needs. Narrowest collaborator.
 
 use std::sync::Arc;
 

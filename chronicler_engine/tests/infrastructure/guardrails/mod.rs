@@ -246,3 +246,13 @@ fn guardrails_nesting_depth_src() {
 fn guardrails_free_fn_location() {
     check_src_files("free fn location", check_free_fn_location);
 }
+
+#[test]
+fn guardrails_empty_rust_files_src() {
+    check_src_files("empty rust file", check_empty_rust_file);
+}
+
+#[test]
+fn guardrails_empty_rust_files_tests() {
+    check_tests_files("empty rust file (tests)", check_empty_rust_file);
+}

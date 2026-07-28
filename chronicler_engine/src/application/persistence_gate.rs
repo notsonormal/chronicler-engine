@@ -1,7 +1,6 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -171,11 +170,11 @@ impl PersistenceGate {
 
     pub fn switch_swipe(
         &self,
-        is_generating: &Arc<AtomicBool>,
+        is_generating: bool,
         message_id: u64,
         swipe_index: usize,
     ) -> Result<(), ApplicationError> {
-        if is_generating.load(Ordering::SeqCst) {
+        if is_generating {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 

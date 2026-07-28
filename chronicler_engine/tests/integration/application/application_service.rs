@@ -170,11 +170,7 @@ async fn test_process_action_self_heals_stale_generating_status() {
         .build_service()
         .unwrap();
 
-    assert!(
-        !app_service
-            .is_generating()
-            .load(std::sync::atomic::Ordering::SeqCst)
-    );
+    assert!(!app_service.is_generating_now());
 
     let result = app_service.process_action("look around".to_string());
     assert!(

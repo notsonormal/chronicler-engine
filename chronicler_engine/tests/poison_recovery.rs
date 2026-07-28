@@ -9,7 +9,7 @@ use chronicler_engine::application::text_check_service::TextCheckService;
 use chronicler_engine::application::ports::text_checker::TextChecker;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::settings::TextCheckMode;
-use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::adapters::driving::http::{AppState, write_lock_or_recover};
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::error::EngineError;
 use chronicler_engine::application::ports::text_checker::CheckResult;
@@ -111,4 +111,19 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
         !recovered.is_cancelled(),
         "current_shutdown_token() should recover the actual token from poisoned RwLock"
     );
+}
+
+#[test]
+fn test_write_lock_recover_from_poisoned_rwlock() {
+    let lock = Arc::new(std::sync::RwLock::new(0));
+    let lock_clone = Arc::clone(&lock);
+    let _ = std::thread::spawn(move || {
+        let mut guard = lock_clone.write().unwrap();
+        *guard = 42;
+        panic!("intentional panic to poison lock");
+    })
+    .join();
+
+    let recovered = write_lock_or_recover(&lock, "test");
+    assert_eq!(*recovered, 42);
 }

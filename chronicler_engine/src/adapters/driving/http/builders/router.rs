@@ -19,7 +19,42 @@ use crate::adapters::driving::http::worlds;
 
 pub(crate) fn build_router(app_state: AppState) -> Router {
     Router::new()
+        // --- Core ---
         .route("/", get(core::handlers::index_handler))
+        .route("/check-text", post(core::handlers::check_text_handler))
+        .route("/swipe/new", post(core::handlers::retry_handler))
+        .route(
+            "/message/:id/swipe/:index",
+            post(core::handlers::switch_swipe_handler),
+        )
+        .route("/retrigger", post(core::handlers::retrigger_handler))
+        .route("/reset", post(core::handlers::reset_handler))
+        .route("/debug/state", get(core::handlers::debug_state_handler))
+        .route(
+            "/debug/is_generating",
+            get(core::handlers::debug_is_generating_handler),
+        )
+        .route("/debug/backend", get(core::handlers::debug_backend_handler))
+        // --- Action ---
+        .route("/action", post(action::handlers::action_handler))
+        .route(
+            "/action/check",
+            post(action::handlers::action_check_handler),
+        )
+        .route(
+            "/action/confirm",
+            post(action::handlers::action_confirm_handler),
+        )
+        // --- History ---
+        .route(
+            "/history/:id",
+            post(history::handlers::edit_history_handler),
+        )
+        .route(
+            "/history/delete",
+            post(history::handlers::delete_history_handler),
+        )
+        // --- Layout fragments ---
         .route("/fragment/header", get(layout::handlers::header_fragment))
         .route(
             "/fragment/story-log",
@@ -37,16 +72,6 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             "/fragment/character-headshots",
             get(layout::handlers::character_headshots_fragment),
         )
-        .route("/action", post(action::handlers::action_handler))
-        .route(
-            "/action/check",
-            post(action::handlers::action_check_handler),
-        )
-        .route(
-            "/action/confirm",
-            post(action::handlers::action_confirm_handler),
-        )
-        .route("/check-text", post(core::handlers::check_text_handler))
         .route("/status/ready", get(layout::handlers::status_ready_handler))
         .route(
             "/status/generating",
@@ -57,20 +82,10 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             post(layout::handlers::reset_generating_handler),
         )
         .route(
-            "/history/:id",
-            post(history::handlers::edit_history_handler),
+            "/fragment/llm-messages",
+            get(layout::handlers::llm_messages_fragment),
         )
-        .route(
-            "/history/delete",
-            post(history::handlers::delete_history_handler),
-        )
-        .route("/swipe/new", post(core::handlers::retry_handler))
-        .route(
-            "/message/:id/swipe/:index",
-            post(core::handlers::switch_swipe_handler),
-        )
-        .route("/retrigger", post(core::handlers::retrigger_handler))
-        .route("/reset", post(core::handlers::reset_handler))
+        // --- Games ---
         .route("/games", post(games::handlers::create_game_handler))
         .route(
             "/games/:id/switch",
@@ -81,10 +96,7 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             post(games::handlers::delete_game_handler),
         )
         .route("/fragment/games", get(games::handlers::list_games_fragment))
-        .route(
-            "/fragment/llm-messages",
-            get(layout::handlers::llm_messages_fragment),
-        )
+        // --- Worlds ---
         .route(
             "/fragment/worlds",
             get(worlds::handlers::list_worlds_fragment),
@@ -103,6 +115,7 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             "/worlds/:key/delete",
             post(worlds::handlers::delete_world_handler),
         )
+        // --- Settings & connections ---
         .route(
             "/fragment/settings",
             get(settings::handlers::settings_panel),
@@ -140,6 +153,7 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             "/settings/text-check",
             post(settings::handlers::save_text_check_handler),
         )
+        // --- Prompt presets ---
         .route(
             "/fragment/prompt-presets",
             get(prompt_presets::handlers::panel_handler),
@@ -176,12 +190,6 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             "/prompt-presets/:id/activate",
             post(prompt_presets::handlers::activate_preset_handler),
         )
-        .route("/debug/state", get(core::handlers::debug_state_handler))
-        .route(
-            "/debug/is_generating",
-            get(core::handlers::debug_is_generating_handler),
-        )
-        .route("/debug/backend", get(core::handlers::debug_backend_handler))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))

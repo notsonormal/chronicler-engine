@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::ApplicationError;
-use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 
+// TODO: I suspect that this method shouldn't be a free function, should probably be in the
+//  application service directory or one of the related services, or maybe the action pipeline
 pub fn retry(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError> {
     let game_state = app.load_or_fresh();
 
@@ -36,6 +36,8 @@ pub fn retry(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError
     Ok(())
 }
 
+// TODO: I suspect that this method shouldn't be a free function, should probably be in the
+//  application service directory or one of the related services, or maybe the action pipeline
 pub fn retrigger(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError> {
     let game_state = app.load_or_fresh();
 
@@ -74,21 +76,4 @@ pub fn retrigger(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationE
     });
 
     Ok(())
-}
-
-impl DefaultApplicationService {
-    /// Returns `cancelled=true` if shutdown was requested mid-call.
-    pub(crate) fn prepare_retry_state(
-        &self,
-        mut game_state: GameState,
-        status: GenerationStatus,
-        phase: GenerationPhase,
-    ) -> Result<(GameState, bool), ApplicationError> {
-        game_state.narrative.input_buffer.status = status;
-        game_state.narrative.input_buffer.phase = phase;
-        let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        self.storage().save_snapshot(&snapshot)?;
-        let cancelled = self.is_shutting_down();
-        Ok((game_state, cancelled))
-    }
 }

@@ -7,9 +7,11 @@ pub use test_utils::TEST_PERSONA;
 
 mod actions;
 mod connections;
+mod core;
 mod debug;
 mod fragment;
 mod games_fragment_handlers;
+mod index_handler;
 mod test_helpers;
 mod worlds_fragment_handlers;
 

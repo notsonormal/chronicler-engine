@@ -39,7 +39,7 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 
 ## 3. Custom syn-Based Convention Tests
 
-`tests/infrastructure/guardrails/` holds the AST walkers and the registered convention set (21 rules). The full set of registered tests lives in `tests/infrastructure/guardrails/mod.rs`; per-rule details (which patterns are checked, which scopes apply, which exemptions exist) live in the individual rule files alongside the walker code. The walker code is the source for each rule's standard and severity — this section is a navigation pointer, not a content restatement.
+`tests/infrastructure/guardrails/` holds the AST walkers and the registered convention set (22 rules). The full set of registered tests lives in `tests/infrastructure/guardrails/mod.rs`; per-rule details (which patterns are checked, which scopes apply, which exemptions exist) live in the individual rule files alongside the walker code. The walker code is the source for each rule's standard and severity — this section is a navigation pointer, not a content restatement.
 
 ## 4. Coverage Exclusion Policy
 

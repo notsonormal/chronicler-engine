@@ -171,7 +171,7 @@ fn test_reset_generating_status_sets_idle() {
 // ---------------------------------------------------------------------------
 
 fn cached_flag(app: &DefaultApplicationService) -> bool {
-    app.is_generating().load(Ordering::SeqCst)
+    app.is_generating_now()
 }
 
 fn persisted_flag(app: &DefaultApplicationService) -> bool {
@@ -232,7 +232,9 @@ fn test_is_generating_invariant_helper_detects_divergence() {
         persisted_flag(&app)
     );
 
-    app.is_generating().store(true, Ordering::SeqCst);
+    app.generation_gate
+        .is_generating()
+        .store(true, Ordering::SeqCst);
 
     assert!(
         !invariant_holds(&app),
@@ -256,7 +258,9 @@ async fn test_wait_until_idle_fails_fast_on_cached_false_persisted_generating() 
     let snapshot_id = app
         .save_state(&gs)
         .expect("save_state should persist Generating");
-    app.is_generating().store(false, Ordering::SeqCst);
+    app.generation_gate
+        .is_generating()
+        .store(false, Ordering::SeqCst);
     let _ = snapshot_id;
 
     let _ = wait_until_idle(&app, Duration::from_secs(2)).await;
@@ -307,7 +311,7 @@ async fn test_projection_invariant_under_interleaved_release() {
         "gen A claim should return Started, got {result_a:?}"
     );
     assert!(
-        app.is_generating().load(Ordering::SeqCst),
+        app.is_generating_now(),
         "projection must be true after A claim"
     );
 
@@ -346,7 +350,7 @@ async fn test_projection_invariant_under_interleaved_release() {
     // here when A's release_owned_slot clobbered B's store(true).
     let projection_held =
         wait_for_condition(Duration::from_secs(5), Duration::from_millis(25), || {
-            app.is_generating().load(Ordering::SeqCst)
+            app.is_generating_now()
         })
         .await;
     assert!(
@@ -361,12 +365,12 @@ async fn test_projection_invariant_under_interleaved_release() {
     // projection back to `false` once the registry is empty.
     let b_completed =
         wait_for_condition(Duration::from_secs(10), Duration::from_millis(50), || {
-            !app.is_generating().load(Ordering::SeqCst)
+            !app.is_generating_now()
         })
         .await;
     assert!(b_completed, "gen B's pipeline must complete within timeout");
     assert!(
-        !app.is_generating().load(Ordering::SeqCst),
+        !app.is_generating_now(),
         "projection must be false after B completes"
     );
 

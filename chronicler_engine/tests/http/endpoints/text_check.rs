@@ -5,11 +5,30 @@ use std::sync::Arc;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
+    routing::post,
+    Router,
 };
 use tower::util::ServiceExt;
 
-use chronicler_engine::TestAppBuilder;
+use chronicler_engine::adapters::driving::http::core::handlers::check_text_handler;
+use chronicler_engine::application::ports::text_checker::{CheckResult, TextChecker};
+use chronicler_engine::application::text_check_service::TextCheckService;
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
+use chronicler_engine::error::EngineError;
+use chronicler_engine::TestAppBuilder;
+
+struct FailingTextChecker;
+
+impl TextChecker for FailingTextChecker {
+    fn check(
+        &self,
+        _text: &str,
+        _mode: TextCheckMode,
+        _ignored_words: &[String],
+    ) -> Result<Option<CheckResult>, EngineError> {
+        Err(EngineError::Io("simulated text check failure".to_string()))
+    }
+}
 
 async fn story_log_contains(app: &axum::Router, needle: &str) -> bool {
     for _ in 0..100 {
@@ -253,4 +272,28 @@ async fn test_action_check_no_issues() {
         hx_retarget.is_some(),
         "Expected HX-Retarget header when no issues and forwarding to action"
     );
+}
+
+#[tokio::test]
+async fn test_check_text_handler_failure_returns_internal_server_error() {
+    let mut state = TestAppBuilder::default_test()
+        .settings(text_check_settings(TextCheckMode::Spell))
+        .build_app_state();
+    state.text_check_service = Arc::new(TextCheckService::new(Arc::new(FailingTextChecker)));
+
+    let app = Router::new()
+        .route("/check-text", post(check_text_handler))
+        .with_state(state);
+    let req = Request::builder()
+        .uri("/check-text")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=anything"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }

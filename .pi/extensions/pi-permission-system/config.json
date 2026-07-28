@@ -17,6 +17,10 @@
    },
     "bash": {
       "*": "allow",
+      "xargs": "deny",
+      "xargs *": "deny",
+      "timeout": "deny",
+      "timeout *": "deny",      
       "git tag": "deny",
       "git tag *": "deny",
       "git merge": "deny",

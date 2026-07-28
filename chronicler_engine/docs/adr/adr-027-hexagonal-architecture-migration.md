@@ -1,7 +1,7 @@
 # ADR-027: Hexagonal Architecture Migration
 
 **Date:** 2026-06-30
-**Status:** Accepted
+**Status:** Accepted — the `domain/engine/ Subfolder Kept` block (§88-90) is superseded by [ADR-033](./adr-033-domain-engine-dissolution.md) (folder dissolved); the 3 grandfathered `*/gate.rs` paths (§72-74) were corrected to single-file modules by ticket 03 of the post-free-fn-cleanup effort, path drift recorded in ADR-033.
 
 ## Context
 

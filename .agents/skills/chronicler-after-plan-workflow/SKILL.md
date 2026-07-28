@@ -9,6 +9,8 @@ metadata:
 
 # What I do
 
+Create a task list using `pi-tasks`.
+
 1. Verify that the implemention matches the existing plan. This is a post implementation verification so you MUST read the plan and actively check changed files. Any missing deferred, missing or changed features MUST be clearly presented to the user, with the reasoning included.
 2. Archive the recently used plan for the session. The plan might be in `chronicler_engine/docs/plans`. The archive folder is `chronicler_engine/old-docs/archived-plans`.
 3. If the plan was created through the skill `/wayfinder` (`.agents/skills/wayfinder/SKILL.md`) , it will be associated with a ticket in `.scratch`. Rather than being archived, you need to follow the workflow in the wayfinder skill. 

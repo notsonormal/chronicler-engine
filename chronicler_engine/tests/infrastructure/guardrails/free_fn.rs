@@ -56,7 +56,7 @@ pub fn check_free_fn_location(path: &str, content: &str) -> Vec<Violation> {
                 path,
                 line,
                 format!(
-                    "free fn `{}` outside allowed category folder — relocate to method or move to a folder named {allowed}/ (see Free fn Doctrine)",
+                    "free fn `{}` outside allowed category folder — relocate to method or move to a folder named {allowed}/",
                     f.sig.ident
                 ),
             ));

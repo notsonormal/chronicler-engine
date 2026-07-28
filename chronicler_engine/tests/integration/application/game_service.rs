@@ -452,8 +452,7 @@ fn test_continue_narration_with_stale_is_generating_flag() {
         .backends(MockBackend::default)
         .build_service()
         .unwrap();
-    app.is_generating()
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+    app.set_is_generating(true);
 
     app.execute_action(String::new());
 

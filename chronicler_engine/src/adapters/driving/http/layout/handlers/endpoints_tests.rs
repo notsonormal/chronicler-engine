@@ -66,6 +66,7 @@ async fn test_generating_status_generating() {
     let state = TestAppBuilder::default_test().build_app_state();
     state
         .application_service
+        .generation_gate
         .is_generating()
         .store(true, std::sync::atomic::Ordering::SeqCst);
 

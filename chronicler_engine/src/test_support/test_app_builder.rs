@@ -132,7 +132,7 @@ impl TestAppBuilder {
             Arc::clone(base.preset_storage().inner()),
             Arc::clone(base.settings()),
             base.cancel_token().clone(),
-            Arc::clone(base.is_generating()),
+            Arc::clone(base.generation_gate.is_generating()),
             game_service,
         ))
     }
@@ -206,6 +206,7 @@ impl TestAppBuilder {
         if self.is_generating {
             wired
                 .application_service
+                .generation_gate
                 .is_generating()
                 .store(true, Ordering::SeqCst);
         }

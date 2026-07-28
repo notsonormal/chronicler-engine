@@ -7,9 +7,9 @@ const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
     "application/application_service.rs",
     "application/agents/registry.rs",
     "application/agents/quantifier/agent.rs",
-    "application/persistence_gate/gate.rs",
-    "application/game_catalogue/gate.rs",
-    "application/world_catalogue/gate.rs",
+    "application/persistence_gate.rs",
+    "application/game_catalogue.rs",
+    "application/world_catalogue.rs",
 ];
 
 // Guardrail: application/ may not import `Storage` directly except the grandfathered files (ADR-027).

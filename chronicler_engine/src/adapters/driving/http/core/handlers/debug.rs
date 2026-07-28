@@ -23,11 +23,7 @@ pub async fn debug_state_handler(
 }
 
 pub async fn debug_is_generating_handler(State(state): State<AppState>) -> String {
-    state
-        .application_service
-        .is_generating()
-        .load(std::sync::atomic::Ordering::SeqCst)
-        .to_string()
+    state.application_service.is_generating_now().to_string()
 }
 
 pub async fn debug_backend_handler(State(state): State<AppState>) -> Json<DebugBackendResponse> {

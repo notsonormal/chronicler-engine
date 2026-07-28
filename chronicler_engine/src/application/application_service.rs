@@ -1,7 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! DefaultApplicationService — façade over application collaborators.
 
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 use tokio_util::sync::CancellationToken;
@@ -25,6 +25,7 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::world::WorldCard;
@@ -64,7 +65,9 @@ impl DefaultApplicationService {
         let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
         let game_view_query =
             GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
-        // WorldCatalogue owns worlds persistence directly (asymmetric vs GameCatalogue) to keep seams independent.
+        // WorldCatalogue takes Arc<Storage> directly (not Arc<PersistenceGate> like GameCatalogue)
+        // because it does only Storage-direct worlds/personas CRUD — no preset_store, snapshots,
+        // set_game_id, or build_fresh_initial_state needs. Storage is the narrowest collaborator.
         let world_catalogue = WorldCatalogue::new(storage);
         Self {
             persistence_gate,
@@ -86,8 +89,20 @@ impl DefaultApplicationService {
         self.persistence_gate.storage()
     }
 
-    pub fn is_generating(&self) -> &Arc<AtomicBool> {
-        self.generation_gate.is_generating()
+    /// Cached projection of `GenerationStatus::Generating`. Read-only on the facade;
+    /// the underlying `Arc<AtomicBool>` stays internal to `GenerationGate`
+    /// (ADR-030) so callers can't mutate generation flag state through the API boundary.
+    pub fn is_generating_now(&self) -> bool {
+        self.generation_gate.is_generating().load(Ordering::SeqCst)
+    }
+
+    /// Test seam: force the cached projection flag. Production reads should go
+    /// through `is_generating_now()`; this exists so tests can simulate an
+    /// in-flight generation without exposing `GenerationGate`'s internal atomic.
+    pub fn set_is_generating(&self, value: bool) {
+        self.generation_gate
+            .is_generating()
+            .store(value, Ordering::SeqCst);
     }
 
     pub fn cancel_token(&self) -> &CancellationToken {
@@ -156,7 +171,7 @@ impl DefaultApplicationService {
         swipe_index: usize,
     ) -> Result<(), ApplicationError> {
         self.persistence_gate
-            .switch_swipe(self.is_generating(), message_id, swipe_index)
+            .switch_swipe(self.is_generating_now(), message_id, swipe_index)
     }
 
     pub fn edit_history(&self, id: u64, text: String) -> Result<(), ApplicationError> {
@@ -380,5 +395,20 @@ impl DefaultApplicationService {
 
     pub fn get_debug_state(&self) -> Result<DebugStateView, ApplicationError> {
         self.game_view_query.get_debug_state()
+    }
+
+    /// Returns `cancelled=true` if shutdown was requested mid-call.
+    pub(crate) fn prepare_retry_state(
+        &self,
+        mut game_state: GameState,
+        status: GenerationStatus,
+        phase: GenerationPhase,
+    ) -> Result<(GameState, bool), ApplicationError> {
+        game_state.narrative.input_buffer.status = status;
+        game_state.narrative.input_buffer.phase = phase;
+        let snapshot = GameStateSnapshot::from_game_state(&game_state);
+        self.storage().save_snapshot(&snapshot)?;
+        let cancelled = self.is_shutting_down();
+        Ok((game_state, cancelled))
     }
 }
