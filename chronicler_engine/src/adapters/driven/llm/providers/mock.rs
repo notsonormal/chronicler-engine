@@ -1,7 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
 //! Mock LLM provider for testing
 
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
 use crate::adapters::driven::utils::mock::extract_player_input;
 use crate::error::{EngineError, NarrativeFailure};
@@ -11,6 +11,7 @@ use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 #[derive(Default)]
 pub struct MockBackend {
     pub(crate) should_fail: AtomicBool,
+    pub(crate) fail_first_n: AtomicU32,
     pub(crate) should_return_empty: AtomicBool,
     pub(crate) trigger_narration_should_fail: AtomicBool,
     pub(crate) delay_ms: AtomicU64,
@@ -31,6 +32,12 @@ impl MockBackend {
 
     pub fn with_fail(mut self) -> Self {
         self.should_fail = AtomicBool::new(true);
+        self
+    }
+
+    /// Trigger and quantifier calls never consume this failure budget.
+    pub fn with_fail_first_n(mut self, n: u32) -> Self {
+        self.fail_first_n = AtomicU32::new(n);
         self
     }
 
@@ -90,6 +97,10 @@ impl MockBackend {
     }
 
     fn guard(&self) -> Result<(), EngineError> {
+        if self.fail_first_n.load(Ordering::SeqCst) > 0 {
+            self.fail_first_n.fetch_sub(1, Ordering::SeqCst);
+            return Err(self.make_error());
+        }
         if self.should_fail.load(Ordering::SeqCst) {
             return Err(self.make_error());
         }

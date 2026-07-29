@@ -220,15 +220,13 @@ fn test_inv004_cancellable_at_boundaries() {
         })
         .build_service()
         .unwrap();
-    // Phase boundaries abort on game_id mismatch (α-check), not token cancellation — switch active game mid-pipeline so the next boundary sees the mismatch.
     let started_for = app.current_game_id();
     let switched_to = started_for.wrapping_add(99);
-    let pipeline = app.game_service().pipeline();
+    let pipeline = app.pipeline().clone();
     let state_for_thread = app.latest_state();
 
     let outcome = std::thread::scope(|s| {
-        let handle =
-            s.spawn(|| pipeline.run_from_input(&app, state_for_thread, "look".to_string()));
+        let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
         assert!(
             test_utils::wait::wait_for_condition_sync(
                 std::time::Duration::from_secs(5),
@@ -453,8 +451,6 @@ fn test_inv002_mutation_order_property() {
         }
     });
 }
-
-// Per-game generation tracking: α-check at phase boundaries discards in-flight generations whose game_id no longer matches `started_for`; per-game registry slot is cleaned up so next claim succeeds.
 
 #[tokio::test]
 async fn test_p4_concurrent_happy_path() {

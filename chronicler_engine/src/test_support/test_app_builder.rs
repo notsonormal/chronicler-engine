@@ -123,20 +123,6 @@ impl TestAppBuilder {
         Arc::clone(&app_state.application_service)
     }
 
-    pub fn from_base(
-        base: &DefaultApplicationService,
-        game_service: Arc<GameService>,
-    ) -> Arc<DefaultApplicationService> {
-        Arc::new(DefaultApplicationService::new(
-            Arc::clone(base.storage()),
-            Arc::clone(base.preset_storage().inner()),
-            Arc::clone(base.settings()),
-            base.cancel_token().clone(),
-            Arc::clone(base.generation_gate.is_generating()),
-            game_service,
-        ))
-    }
-
     pub fn build_app_state(mut self) -> AppState {
         let test_data = self.test_data.expect(
             "test setup: TestAppBuilder requires test_data (use default_test() or with_data())",

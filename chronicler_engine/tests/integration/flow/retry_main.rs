@@ -11,7 +11,7 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
-use chronicler_engine::{TestAppBuilder, TestDataBuilder};
+use chronicler_engine::TestDataBuilder;
 
 use crate::make_test_recorder_with_storage;
 use crate::fixtures::create_minimal_test_state;
@@ -30,33 +30,24 @@ fn base_data(npcs: Vec<NpcCard>) -> chronicler_engine::test_support::TestData {
 #[test]
 fn test_retry_main_narration_applies_new_quantifier_result() {
     let data = base_data(vec![]);
-    let app = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-                Arc::new(MockBackend::default()),
-            ))
-        })
-        .build_service()
-        .unwrap();
-
-    app.add_input_and_save("walk around");
-
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
         ]));
+    let app = SqliteTestAppBuilder::with_data(data)
+        .game_service_fn(move |storage| {
+            let quantifier = Arc::clone(&quantifier);
+            Arc::new(GameService::with_mock_quantifier(
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                quantifier,
+            ))
+        })
+        .build_service()
+        .unwrap();
 
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(app.storage()),
-        ),
-        quantifier,
-    );
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
+    app.add_input_and_save("walk around");
     app.execute_action("walk around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -89,10 +80,17 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
 #[test]
 fn test_retry_with_different_narration_text_reruns_quantifier() {
     let data = base_data(vec![]);
+    let narration_backend: Arc<
+        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+    > = Arc::new(MockBackend::default().with_narrations(vec![
+        "You look around the empty room.".to_string(),
+        "The Innkeeper greets you warmly.".to_string(),
+    ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
+            let narration_backend = Arc::clone(&narration_backend);
             Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                make_test_recorder_with_storage(narration_backend, Arc::clone(storage)),
                 Arc::new(MockBackend::default()),
             ))
         })
@@ -100,15 +98,6 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         .unwrap();
 
     app.add_input_and_save("approach the innkeeper");
-
-    let llm_backend =
-        crate::make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
-            "You look around the empty room.".to_string(),
-            "The Innkeeper greets you warmly.".to_string(),
-        ])));
-
-    let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
     app.execute_action("approach the innkeeper".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -150,18 +139,6 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 #[test]
 fn test_double_retry_increments_swipe_and_reruns_quantifier() {
     let data = base_data(vec![]);
-    let app = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-                Arc::new(MockBackend::default()),
-            ))
-        })
-        .build_service()
-        .unwrap();
-
-    app.add_input_and_save("walk around");
-
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
@@ -169,15 +146,18 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
                 .to_string(),
             r#"{"npcs_in_room": []}"#.to_string(),
         ]));
+    let app = SqliteTestAppBuilder::with_data(data)
+        .game_service_fn(move |storage| {
+            let quantifier = Arc::clone(&quantifier);
+            Arc::new(GameService::with_mock_quantifier(
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                quantifier,
+            ))
+        })
+        .build_service()
+        .unwrap();
 
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(app.storage()),
-        ),
-        quantifier,
-    );
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
+    app.add_input_and_save("walk around");
     app.execute_action("walk around".to_string());
     assert!(app.wait_for_generation_complete(1000));
     let _snap = app.latest_snapshot();
@@ -214,15 +194,6 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         .unwrap();
 
     app.add_input_and_save("walk around");
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(app.storage()),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
     app.execute_action("walk around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -263,15 +234,6 @@ fn test_retry_after_edited_input_uses_new_text() {
         .unwrap();
 
     app.add_input_and_save("walk around");
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(app.storage()),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
     app.execute_action("walk around".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -352,32 +314,23 @@ fn test_main_retry_reevaluates_triggers() {
     };
     let data = base_data(vec![shopkeeper]);
 
-    let app = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-                Arc::new(MockBackend::default()),
-            ))
-        })
-        .build_service()
-        .unwrap();
-    app.add_input_and_save("walk around");
-
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
         ]));
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(app.storage()),
-        ),
-        quantifier,
-    );
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
+    let app = SqliteTestAppBuilder::with_data(data)
+        .game_service_fn(move |storage| {
+            let quantifier = Arc::clone(&quantifier);
+            Arc::new(GameService::with_mock_quantifier(
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                quantifier,
+            ))
+        })
+        .build_service()
+        .unwrap();
+    app.add_input_and_save("walk around");
     app.execute_action("walk around".to_string());
     assert!(app.wait_for_generation_complete(1000));
     let guard = app.latest_state();
@@ -410,32 +363,23 @@ fn test_main_retry_reevaluates_triggers() {
 #[test]
 fn test_retry_completes_when_quantifier_returns_none() {
     let data = base_data(vec![]);
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
+            r#"{"npcs_in_room": []}"#.to_string(),
+            r#"{"npcs_in_room": []}"#.to_string(),
+        ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
+            let quantifier = Arc::clone(&quantifier);
             Arc::new(GameService::with_mock_quantifier(
                 make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-                Arc::new(MockBackend::default()),
+                quantifier,
             ))
         })
         .build_service()
         .unwrap();
 
     app.add_input_and_save("walk around");
-
-    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
-        Arc::new(MockBackend::default().with_prompt_responses(vec![
-            r#"{"npcs_in_room": []}"#.to_string(),
-            r#"{"npcs_in_room": []}"#.to_string(),
-        ]));
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(app.storage()),
-        ),
-        quantifier,
-    );
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
     app.execute_action("walk around".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -495,41 +439,18 @@ fn test_retry_no_pre_main_snapshot() {
         Arc::new(ps)
     };
 
-    let setup_app: std::sync::Arc<DefaultApplicationService> =
-        std::sync::Arc::new(DefaultApplicationService::new(
+    let app: std::sync::Arc<DefaultApplicationService> =
+        chronicler_engine::test_support::build_test_service(
             std::sync::Arc::clone(&storage),
             std::sync::Arc::clone(&preset_storage),
-            std::sync::Arc::new(std::sync::RwLock::new(
-                chronicler_engine::domain::model::settings::AppSettings::default(),
-            )),
-            tokio_util::sync::CancellationToken::new(),
-            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             std::sync::Arc::new(GameService::with_mock_quantifier(
                 crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
                 std::sync::Arc::new(MockBackend::default()),
             )),
-        ));
+        )
+        .expect("build_test_service: build_app_graph_for_tests should succeed");
 
-    setup_app.add_input_and_save("examine room");
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            std::sync::Arc::clone(&storage),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app: std::sync::Arc<DefaultApplicationService> =
-        std::sync::Arc::new(DefaultApplicationService::new(
-            std::sync::Arc::clone(&storage),
-            std::sync::Arc::clone(&preset_storage),
-            std::sync::Arc::new(std::sync::RwLock::new(
-                chronicler_engine::domain::model::settings::AppSettings::default(),
-            )),
-            tokio_util::sync::CancellationToken::new(),
-            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            std::sync::Arc::new(service),
-        ));
+    app.add_input_and_save("examine room");
     app.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -555,32 +476,23 @@ fn test_retry_no_pre_main_snapshot() {
 #[test]
 fn test_movement_with_arrival_narration_retry() {
     let data = base_data(vec![]);
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
+            r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+                .to_string(),
+        ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
+            let quantifier = Arc::clone(&quantifier);
             Arc::new(GameService::with_mock_quantifier(
                 make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-                Arc::new(MockBackend::default()),
+                quantifier,
             ))
         })
         .build_service()
         .unwrap();
 
     app.add_input_and_save("walk to room2");
-
-    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
-        Arc::new(MockBackend::default().with_prompt_responses(vec![
-            r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
-                .to_string(),
-        ]));
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(app.storage()),
-        ),
-        quantifier,
-    );
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
     app.execute_action("walk to room2".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -617,10 +529,17 @@ fn test_movement_with_arrival_narration_retry() {
 #[test]
 fn test_retry_appends_swipe_to_existing_narration() {
     let data = base_data(vec![]);
+    let narration_backend: Arc<
+        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+    > = Arc::new(MockBackend::default().with_narrations(vec![
+        "First narration text.".to_string(),
+        "Second narration text.".to_string(),
+    ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
+            let narration_backend = Arc::clone(&narration_backend);
             Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                make_test_recorder_with_storage(narration_backend, Arc::clone(storage)),
                 Arc::new(MockBackend::default()),
             ))
         })
@@ -628,15 +547,6 @@ fn test_retry_appends_swipe_to_existing_narration() {
         .unwrap();
 
     app.add_input_and_save("examine room");
-
-    let llm_backend =
-        crate::make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
-            "First narration text.".to_string(),
-            "Second narration text.".to_string(),
-        ])));
-
-    let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-    let app = TestAppBuilder::from_base(&app, Arc::new(service));
     app.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 

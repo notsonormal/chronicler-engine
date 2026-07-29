@@ -15,7 +15,6 @@ use chronicler_engine::domain::model::state::trigger_context::StoredTriggerConte
 use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::make_test_app_without_snapshot;
-use chronicler_engine::TestAppBuilder;
 use crate::application_ext::PipelineHelpers;
 
 fn trigger_data() -> TestData {
@@ -99,7 +98,10 @@ fn test_retry_after_llm_failure_succeeds() {
     );
     let failing_app = SqliteTestAppBuilder::default_test()
         .message(msg)
-        .separate_backends(|| MockBackend::default().with_fail(), MockBackend::default)
+        .separate_backends(
+            || MockBackend::default().with_fail_first_n(1),
+            MockBackend::default,
+        )
         .build_service()
         .unwrap();
 
@@ -114,16 +116,9 @@ fn test_retry_after_llm_failure_succeeds() {
             .is_some()
     );
 
-    let working_app = TestAppBuilder::from_base(
-        &failing_app,
-        Arc::new(GameService::with_backends(
-            crate::make_test_recorder(Arc::new(MockBackend::default())),
-            chronicler_engine::application::agents::registry::AgentRegistry::default(),
-        )),
-    );
-    working_app.retry_last_response();
+    failing_app.retry_last_response();
 
-    let after_retry = working_app.latest_state();
+    let after_retry = failing_app.latest_state();
     assert!(
         !after_retry.narrative.input_buffer.status.is_generating(),
         "Retry should complete: {:?}",

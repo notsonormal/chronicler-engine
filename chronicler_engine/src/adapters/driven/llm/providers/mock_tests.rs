@@ -136,6 +136,19 @@ fn test_mock_backend_logs_multiple_calls() {
 }
 
 #[test]
+fn mock_backend_fail_first_n_then_succeeds() {
+    use crate::application::ports::llm_provider::{LlmProvider, AGENT_NARRATOR};
+    let backend = MockBackend::default().with_fail_first_n(1);
+    let r0 = backend.complete(AGENT_NARRATOR, "", "x", None);
+    assert!(r0.is_err(), "first narration call should fail");
+    let r1 = backend.complete(AGENT_NARRATOR, "", "x", None);
+    assert!(
+        r1.is_ok(),
+        "second narration call should succeed after fail-first-N decremented"
+    );
+}
+
+#[test]
 fn test_mock_backend_builders_compose() {
     let backend = MockBackend::default()
         .with_empty_response()

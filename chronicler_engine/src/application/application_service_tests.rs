@@ -16,7 +16,6 @@ use crate::application::game_service::GameService;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
-use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -47,14 +46,12 @@ fn minimal_app_no_game() -> Arc<DefaultApplicationService> {
     let _ = storage.save_snapshot(&GameStateSnapshot::from_game_state(&state));
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
     let backend = GameService::with_backends(make_test_recorder(mock), AgentRegistry::default());
-    Arc::new(DefaultApplicationService::new(
+    crate::test_support::build_test_service(
         storage,
         Arc::new(Storage::new_in_memory()),
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
         Arc::new(backend),
-    ))
+    )
+    .expect("build_test_service: build_app_graph_for_tests should succeed")
 }
 
 #[test]
@@ -149,7 +146,6 @@ fn test_get_debug_state_populates_fields() {
 fn test_active_quantifier_prompt_does_not_panic() {
     let app = minimal_app();
     let prompt = app.active_quantifier_prompt();
-    // Method returns String; no panic on either preset-found or preset-missing path.
     let _ = prompt.len();
 }
 
@@ -161,14 +157,6 @@ fn test_reset_generating_status_sets_idle() {
     let (status, _) = app.get_generating_status().unwrap();
     assert_eq!(status, GenerationStatus::Idle);
 }
-
-// ---------------------------------------------------------------------------
-// `is_generating` AtomicBool invariant tests
-//
-// The cached projection in `DefaultApplicationService::is_generating` must
-// agree with the persisted `GenerationStatus`. These tests cover the
-// concurrent invariant (Pattern 5 + Pattern 8).
-// ---------------------------------------------------------------------------
 
 fn cached_flag(app: &DefaultApplicationService) -> bool {
     app.is_generating_now()
@@ -252,7 +240,7 @@ fn test_is_generating_invariant_helper_detects_divergence() {
 async fn test_wait_until_idle_fails_fast_on_cached_false_persisted_generating() {
     let app = std::sync::Arc::new(TestAppBuilder::default_test().build_service());
 
-    // Bypass process_action: production CAS would forbid cached=false with status=Generating.
+    // Construct forbidden state directly to test wait guard.
     let mut gs = app.load_or_fresh();
     gs.narrative.input_buffer.status = GenerationStatus::Generating;
     let snapshot_id = app
@@ -266,9 +254,6 @@ async fn test_wait_until_idle_fails_fast_on_cached_false_persisted_generating() 
     let _ = wait_until_idle(&app, Duration::from_secs(2)).await;
 }
 
-// P4 regression: `is_generating` must stay `true` while any registry slot is
-// `Generating`. Asserts post-fix lock-order holds across an interleaved
-// release + claim cycle.
 #[tokio::test]
 async fn test_projection_invariant_under_interleaved_release() {
     use std::sync::atomic::Ordering;
@@ -280,10 +265,6 @@ async fn test_projection_invariant_under_interleaved_release() {
     use crate::application::game_service::GameService;
     use crate::test_support::make_test_recorder;
 
-    // 300ms LLM delay keeps A in-flight across the reset + drop window.
-    // After reset, A's pipeline hits the α-check at the next phase
-    // boundary, sees the new game id, and aborts via `PhaseError::Cancelled`.
-    // Two narrations queued: A (discarded by α-check) + B (persisted).
     let mock_backend_raw = std::sync::Arc::new(
         MockBackend::default()
             .with_delay(300)
@@ -302,7 +283,6 @@ async fn test_projection_invariant_under_interleaved_release() {
 
     let game_a_id = app.current_game_id();
 
-    // Claim A on the initial game.
     let result_a = app
         .process_action("look".to_string())
         .expect("process_action A should not error");
@@ -315,8 +295,6 @@ async fn test_projection_invariant_under_interleaved_release() {
         "projection must be true after A claim"
     );
 
-    // Wait for A's narration call to begin — α-check that aborts A runs
-    // AFTER this call returns.
     let narration_started =
         wait_for_condition(Duration::from_secs(5), Duration::from_millis(25), || {
             mock_backend_raw.narration_started.load(Ordering::SeqCst)
@@ -327,15 +305,11 @@ async fn test_projection_invariant_under_interleaved_release() {
         "gen A's narration call should start within timeout"
     );
 
-    // Reset → game B; A's pipeline will abort at the next phase boundary
-    // when the α-check sees the game id mismatch.
     let game_b_id = app
         .create_game("test", "test_player")
         .expect("create_game(B) should succeed");
     assert_ne!(game_b_id, game_a_id, "reset must produce distinct game id");
 
-    // Claim B while A's LLM call is still in flight — this is the race window
-    // that exercises the post-fix lock-order invariant.
     let result_b = app
         .process_action("go north".to_string())
         .expect("process_action B should not error");
@@ -344,10 +318,6 @@ async fn test_projection_invariant_under_interleaved_release() {
         "gen B claim should return Started, got {result_b:?}"
     );
 
-    // INVARIANT ASSERTION: projection must be `true` because B's slot is
-    // `Generating` in the registry. Poll to give A's pipeline time to abort
-    // and drop — pre-fix TOCTOU would have flipped projection to `false`
-    // here when A's release_owned_slot clobbered B's store(true).
     let projection_held =
         wait_for_condition(Duration::from_secs(5), Duration::from_millis(25), || {
             app.is_generating_now()
@@ -361,8 +331,6 @@ async fn test_projection_invariant_under_interleaved_release() {
          registry write lock, racing B's claim and clobbering B's store(true)."
     );
 
-    // Wait for B's pipeline to complete + drop. Final assertion:
-    // projection back to `false` once the registry is empty.
     let b_completed =
         wait_for_condition(Duration::from_secs(10), Duration::from_millis(50), || {
             !app.is_generating_now()
@@ -391,10 +359,6 @@ async fn wait_for_condition(
     }
     false
 }
-
-// `execute_action` pipeline behavior tests. Migrated from
-// `action_pipeline/actions_tests.rs` (01 moved `execute_action` onto
-// `DefaultApplicationService`). Lives next to the method it tests.
 
 struct SyncQuantifierAgent {
     inner: QuantifierAgent,

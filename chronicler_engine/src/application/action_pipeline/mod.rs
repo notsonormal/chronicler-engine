@@ -4,7 +4,6 @@
 pub mod phase_error;
 pub mod phases;
 pub mod pipeline;
-pub mod retry;
 
 #[cfg(test)]
 mod pipeline_tests;

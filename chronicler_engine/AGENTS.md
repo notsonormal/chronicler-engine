@@ -192,7 +192,6 @@ You are responsible for the overall health of the Chronicler Engine. It is more 
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
-- **No Regression**: Every code change must eventually pass `python build.py` before a plan is considered complete. *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
 Unit tests go in the `src/` folder beside the class they are testing (e.g. `production_class.rs` -> `production_class_test.rs`).
 
@@ -236,34 +235,32 @@ To install the git pre-commit hook (regenerates index before every commit):
 python scripts/install_git_hooks.py
 ```
 
-## COMMANDS
+## DEVELOPMENT LOOP
 
-### Iteration (use these while fixing)
+Temporary files should be written into tmp folders e.g. `tmp` or `chronicler_engine/tmp`.
+
+`build.py` writes logs to both standard output and to the `chronicler_engine/logs` folder. The standard build should take 2-3 minutes normally. If it times out or fails, check the build logs for failures.
+
+### COMMANDS
+
+#### Iteration (use these while fixing)
 ```bash
 cargo fmt                                       # Check formatting
 cargo clippy --all-targets -- -D warnings       # ~10s — fix warnings here
+cargo test --lib                                # Run the unit tests
+cargo nextest run --test architecture           # Run the architecture tests
+cargo nextest run --test guardrails             # Run the guardrails tests
 cargo nextest run <test_name>                   # Run one test or pattern
 cargo nextest run --tests                       # Run integration test suite (~1–2 min)
 cargo run -- --world redmist_estate --port 3000 # Run the server
 ```
 
-### Final Validation (run once before considering done)
+#### Final Validation (run once before considering done)
 ```bash
-python build.py             # Full gate: fmt + clippy + guardrails + tests (~2-3 mins)
+python build.py                                 # Full gate: fmt + clippy + guardrails + tests (~2-3 mins)
 ```
 
-## DEVELOPMENT LOOP
-
-When fixing a known failure (e.g. clippy warning, single test):
-1. Run only the failing tool until green.
-2. Then run `python build.py` once to confirm nothing else broke.
-
-❌ Inefficient: `build.py` → fix one line → `build.py` → fix one line → `build.py`  
-✅ Efficient: `cargo clippy` → fix all warnings → `python build.py` (once)
-
-For UI bugs or single test failures, use `cargo nextest run <pattern>` or `cargo check` repeatedly. Run `python build.py` only for final validation.
-
-Temporary files should be written into tmp folders e.g. `tmp` or `chronicler_engine/tmp`.
+A majority of the time taken by `build.py` is the integration tests. Running the full integration tests just before running the `build.py` is inefficient. Either run targeted `cargo nextest` or skip them and run `build.py` straight away. 
 
 ## CONCURRENT BUILDS
 Multiple agents building simultaneously can conflict because:
@@ -289,8 +286,6 @@ To clean up lingering processes and build artifacts:
 python build.py --cleanup
 python build.py --cleanup --target-dir target/test_police
 ```
-
-`build.py` writes logs to both standard output and to the `chronicler_engine/logs` folder. The standard build should take 1-2 minutes normally. If it times out, check the build logs for failures.
 
 Tests are already concurrency-safe: they allocate ports dynamically from the range 3010-3050 using file-based locking (`get_available_port` in `tests/test_utils.rs`).
 

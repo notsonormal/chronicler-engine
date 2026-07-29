@@ -3,13 +3,11 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::arrival_service::ArrivalTaskContext;
-use chronicler_engine::application::application_service::DefaultApplicationService;
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::domain::model::character::NpcCard;
-use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     make_test_recorder_with_storage, seed_test_world_into_storage, TestDataBuilder,
@@ -166,14 +164,12 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
         Arc::new(MockBackend::default()),
     ));
 
-    let app = Arc::new(DefaultApplicationService::new(
+    let app = chronicler_engine::test_support::build_test_service(
         Arc::clone(&failing_storage),
         Arc::new(preset_storage),
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
         Arc::clone(&game_service),
-    ));
+    )
+    .expect("build_test_service: build_app_graph_for_tests should succeed");
 
     let task_ctx = ArrivalTaskContext::new_for_test(
         Arc::clone(&app),
@@ -204,8 +200,6 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
         guard.narrative.history().len(),
     );
 }
-
-// B2 fail-loud: `ArrivalTaskContext::run` must bail and emit no narration when `get_world` returns `Err`.
 
 #[test]
 fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
@@ -251,14 +245,12 @@ fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
         Arc::new(MockBackend::default()),
     ));
 
-    let app = Arc::new(DefaultApplicationService::new(
+    let app = chronicler_engine::test_support::build_test_service(
         Arc::clone(&failing_storage),
         Arc::new(preset_storage),
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
         Arc::clone(&game_service),
-    ));
+    )
+    .expect("build_test_service: build_app_graph_for_tests should succeed");
 
     let task_ctx = ArrivalTaskContext::new_for_test(
         Arc::clone(&app),

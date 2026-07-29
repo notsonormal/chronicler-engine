@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
-use chronicler_engine::application::DefaultApplicationService;
 use chronicler_engine::application::text_check_service::TextCheckService;
 use chronicler_engine::application::ports::text_checker::TextChecker;
 use chronicler_engine::domain::model::settings::AppSettings;
@@ -56,14 +55,12 @@ fn test_settings_recover_from_poisoned_rwlock() {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
         game_service: Arc::clone(&game_service),
-        application_service: Arc::new(DefaultApplicationService::new(
+        application_service: chronicler_engine::test_support::build_test_service(
             Arc::new(Storage::new_in_memory()),
             Arc::new(Storage::new_in_memory()),
-            Arc::new(std::sync::RwLock::new(AppSettings::default())),
-            CancellationToken::new(),
-            Arc::new(std::sync::atomic::AtomicBool::new(false)),
             Arc::clone(&game_service),
-        )),
+        )
+        .expect("build_test_service: build_app_graph_for_tests should succeed"),
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings,
         shutdown_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
@@ -93,14 +90,12 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
         game_service: Arc::clone(&game_service),
-        application_service: Arc::new(DefaultApplicationService::new(
+        application_service: chronicler_engine::test_support::build_test_service(
             Arc::new(Storage::new_in_memory()),
             Arc::new(Storage::new_in_memory()),
-            Arc::new(std::sync::RwLock::new(AppSettings::default())),
-            CancellationToken::new(),
-            Arc::new(std::sync::atomic::AtomicBool::new(false)),
             Arc::clone(&game_service),
-        )),
+        )
+        .expect("build_test_service: build_app_graph_for_tests should succeed"),
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         shutdown_token,
@@ -116,6 +111,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
 #[test]
 fn test_write_lock_recover_from_poisoned_rwlock() {
     let lock = Arc::new(std::sync::RwLock::new(0));
+
     let lock_clone = Arc::clone(&lock);
     let _ = std::thread::spawn(move || {
         let mut guard = lock_clone.write().unwrap();

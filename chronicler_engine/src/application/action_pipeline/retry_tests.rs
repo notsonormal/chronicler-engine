@@ -93,10 +93,6 @@ fn save_pre_event(app: &DefaultApplicationService) -> u64 {
     app.storage().save_snapshot(&snapshot).unwrap()
 }
 
-/// Build event-flow state in storage so `find_retry_anchor` + `load_messages`
-/// both succeed; tests then drive the failure mode they care about (fetch
-/// failure, trigger missing, etc.) via `handle.set(...)` or omitting the
-/// `last_trigger` setup.
 fn setup_event_flow(app: &DefaultApplicationService) {
     let _ = add_input_and_save(app, "test input");
     let _ = save_pre_main(app);
@@ -134,10 +130,6 @@ fn setup_event_flow(app: &DefaultApplicationService) {
     }
 }
 
-/// Event-flow state machine with NO `last_trigger` set on the pre-event
-/// snapshot — drives the `PhaseError::TriggerMissing` return in
-/// `retry_event_continuation`. The pre-event snapshot is built from the
-/// state right after `add_input_and_save`, which leaves `last_trigger = None`.
 fn setup_event_flow_without_trigger(app: &DefaultApplicationService) {
     let _ = add_input_and_save(app, "test input");
     let _ = save_pre_main(app);
@@ -198,16 +190,12 @@ fn test_retry_load_messages_error() {
         TestOverride::internal("simulated load_message_rows failure"),
     );
 
-    let app = Arc::new(DefaultApplicationService::new(
+    let app = crate::test_support::build_test_service(
         failing,
         Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        Arc::new(std::sync::RwLock::new(
-            crate::domain::model::settings::AppSettings::default(),
-        )),
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
         Arc::new(make_service()),
-    ));
+    )
+    .expect("build_test_service: build_app_graph_for_tests should succeed");
     app.retry_last_response();
 }
 
@@ -279,16 +267,12 @@ fn test_retry_event_storage_error_on_pre_event() {
         }
     }
 
-    let app = Arc::new(DefaultApplicationService::new(
+    let app = crate::test_support::build_test_service(
         Arc::clone(&storage),
         Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        Arc::new(std::sync::RwLock::new(
-            crate::domain::model::settings::AppSettings::default(),
-        )),
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
         Arc::new(make_service()),
-    ));
+    )
+    .expect("build_test_service: build_app_graph_for_tests should succeed");
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
@@ -355,7 +339,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
     app.cancel_token().cancel();
 
-    let _ = app.retry_event_continuation(pre_event_state);
+    let _ = app.pipeline().retry_event_continuation(pre_event_state);
 
     let state = app.load_or_fresh();
     assert!(
@@ -555,7 +539,9 @@ fn test_retry_main_narration_happy_path() {
     let _final_id = add_narration_and_save(&app, "Narration text");
 
     let state = app.load_or_fresh();
-    let _ = app.retry_main_narration(state, "test input".to_string());
+    let _ = app
+        .pipeline()
+        .retry_main_narration(state, "test input".to_string());
 }
 
 #[test]
@@ -576,16 +562,12 @@ fn test_retry_main_storage_error_on_pre_main() {
         }
     }
 
-    let app = Arc::new(DefaultApplicationService::new(
+    let app = crate::test_support::build_test_service(
         Arc::clone(&storage),
         Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        Arc::new(std::sync::RwLock::new(
-            crate::domain::model::settings::AppSettings::default(),
-        )),
-        tokio_util::sync::CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
         Arc::new(make_service()),
-    ));
+    )
+    .expect("build_test_service: build_app_graph_for_tests should succeed");
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
@@ -797,10 +779,6 @@ fn test_retrigger_event_cancels_cleanly() {
     );
 }
 
-// B2 fail-loud (orchestrator-level, ticket 04 seam): world fetch failure
-// during retry-event must surface as `GenerationStatus::Error` via
-// `ActionPipeline::finalize_phase_error` consuming `PhaseError::FetchFailed(msg)`.
-
 #[test]
 fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
@@ -836,9 +814,6 @@ fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
         "expected the injected storage error to flow through PhaseError::FetchFailed -> finalize_phase_error, got: {msg}"
     );
 }
-
-// B2 fail-loud (orchestrator-level, ticket 04 seam): persona fetch failure,
-// same seam as the world-fetch test above.
 
 #[test]
 fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
@@ -876,22 +851,12 @@ fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
     );
 }
 
-// Required-read migration: missing game row must surface as canonical
-// `EngineError::GameNotFound`. Full chain (ticket 04):
-// `require_game(999)` -> `Err(GameNotFound(999))` -> `PhaseError::FetchFailed(e.to_string())`
-// -> `finalize_phase_error` -> `GenerationStatus::Error(msg)`.
-
 #[test]
 fn retry_records_canonical_game_not_found_when_game_missing() {
     let storage = {
         let base = Storage::new_in_memory();
         let data = TestDataBuilder::default_test().build();
-        // Seed world + persona + npcs so the IIFE bundle-load could proceed past
-        // `require_game` if it ever got that far. The missing-game path is what
-        // we want to lock in here.
         data.seed_into(&base);
-        // Override `seed_into`'s `set_game_id(1)` — there is no game row at id
-        // 999, so `require_game(999)` will return `Err(GameNotFound(999))`.
         base.set_game_id(999);
         base
     };
@@ -918,11 +883,6 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
         "expected canonical 'Game not found: 999' in error message, got: {msg}"
     );
 }
-
-// Cancellation seam coverage: drive the `Err(PhaseError::Cancelled)` arm
-// of `retry_last_response` by flipping `app.set_game_id` mid-pipeline
-// (the α-check in `phase_trigger_continuation_llm_call` returns Cancelled
-// when the game id changes during the LLM call's sleep window).
 
 #[test]
 fn test_retry_last_response_cancelled_at_phase_boundary() {
@@ -969,11 +929,6 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
     );
 }
 
-// Same game-id-flip trick for `retrigger_event`: drives the
-// `Err(PhaseError::Cancelled)` arm in its bottom match block, which the
-// existing `test_retrigger_event_cancels_cleanly` only covered by
-// accident (phase_finalize reset status to Idle after a successful run).
-
 #[test]
 fn test_retrigger_event_cancelled_at_phase_boundary() {
     use std::sync::Arc;
@@ -1013,11 +968,6 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
     );
 }
 
-// `retrigger_event`'s `Err(e) => finalize_phase_error` arm: drives
-// `retry_event_continuation` to return `Err(PhaseError::FetchFailed(msg))`
-// by injecting a `get_world` storage failure and confirming the orchestrator
-// surfaces it as `GenerationStatus::Error` with the underlying message.
-
 #[test]
 fn test_retrigger_event_emits_error_on_world_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
@@ -1056,10 +1006,6 @@ fn test_retrigger_event_emits_error_on_world_fetch_failure() {
     );
 }
 
-// `retry_event_continuation`'s `last_input_text()` None arm: when the
-// loaded state has no Input messages, fall back to an empty string so
-// downstream stages still see a valid value.
-
 #[test]
 fn test_retry_event_continuation_handles_state_without_input_message() {
     let app = TestAppBuilder::default_test().build_service();
@@ -1072,13 +1018,8 @@ fn test_retry_event_continuation_handles_state_without_input_message() {
         MessageType::Narration,
     );
 
-    let _ = app.retry_event_continuation(state);
+    let _ = app.pipeline().retry_event_continuation(state);
 }
-
-// Snapshot referenced by the anchor message's swipe no longer exists in
-// storage — `load_snapshot_by_id` returns `Ok(None)`. The retry
-// orchestrator must record the missing snapshot as a typed error rather
-// than panicking on the unwrap.
 
 #[test]
 fn test_retry_records_missing_snapshot_id() {

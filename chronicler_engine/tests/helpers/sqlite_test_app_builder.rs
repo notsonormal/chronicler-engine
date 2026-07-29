@@ -2,10 +2,7 @@
 #![allow(clippy::expect_used)]
 #![allow(dead_code)]
 
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
-
-use tokio_util::sync::CancellationToken;
 
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::db::DbPool;
@@ -279,14 +276,17 @@ fn finalize_app(
     settings: AppSettings,
     is_generating: bool,
 ) -> Arc<DefaultApplicationService> {
-    let settings_arc = Arc::new(RwLock::new(settings));
     let preset_storage = default_test_preset_storage();
-    Arc::new(DefaultApplicationService::new(
+    let settings_arc = Arc::new(RwLock::new(settings));
+    let app = chronicler_engine::test_support::build_test_service_with_settings(
         storage,
         preset_storage,
         settings_arc,
-        CancellationToken::new(),
-        Arc::new(AtomicBool::new(is_generating)),
         game_service,
-    ))
+    )
+    .expect("build_test_service_with_settings: build_app_graph_for_tests should succeed");
+    if is_generating {
+        app.set_is_generating(true);
+    }
+    app
 }

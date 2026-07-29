@@ -17,7 +17,6 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
 use crate::application::narrative_prompt::{NpcContext, PromptContext};
-use crate::application::application_service::DefaultApplicationService;
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
 use super::phase_error::PhaseError;
@@ -33,25 +32,19 @@ pub struct PipelineInputs {
 
 pub(super) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
-    pub(super) app: &'a DefaultApplicationService,
     pub(super) started_for: u64,
 }
 
 impl<'a> PipelineRun<'a> {
-    pub(super) fn new(
-        pipeline: &'a ActionPipeline,
-        app: &'a DefaultApplicationService,
-        started_for: u64,
-    ) -> Self {
+    pub(super) fn new(pipeline: &'a ActionPipeline, started_for: u64) -> Self {
         Self {
             pipeline,
-            app,
             started_for,
         }
     }
 
     fn check_game_unchanged(&self, started_for: u64) -> Result<(), PhaseError> {
-        let current = self.app.current_game_id();
+        let current = self.pipeline.persistence.storage().current_game_id();
         if current != started_for {
             tracing::info!(
                 started = started_for,
@@ -64,7 +57,7 @@ impl<'a> PipelineRun<'a> {
     }
 
     pub(super) fn persist(&self, state: &GameState) {
-        if let Err(e) = self.app.save_state(state) {
+        if let Err(e) = self.pipeline.persistence.save_state(state) {
             tracing::error!("Failed to persist state: {e}");
         }
     }
@@ -74,7 +67,7 @@ impl<'a> PipelineRun<'a> {
         state: &mut GameState,
         label: &'static str,
     ) -> Result<(), PhaseError> {
-        if let Err(source) = self.app.save_message_and_snapshot(state) {
+        if let Err(source) = self.pipeline.persistence.save_message_and_snapshot(state) {
             tracing::error!("Failed to save {label}: {source}");
             state.narrative.input_buffer.status =
                 GenerationStatus::Error(format!("Failed to save {label}: {source}"));
@@ -162,7 +155,11 @@ impl<'a> PipelineRun<'a> {
         }
 
         state.add_message(narration_text.clone(), None, MessageType::Narration);
-        if let Err(e) = self.app.save_message_and_snapshot(&mut state) {
+        if let Err(e) = self
+            .pipeline
+            .persistence
+            .save_message_and_snapshot(&mut state)
+        {
             tracing::warn!("Failed to save pre-quantifier narration: {e}");
         }
 
@@ -185,7 +182,7 @@ impl<'a> PipelineRun<'a> {
     ) -> QuantifierResult {
         tracing::info!("Pipeline ▶ Quantifying");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
-        if let Err(e) = self.app.save_message_and_snapshot(state) {
+        if let Err(e) = self.pipeline.persistence.save_message_and_snapshot(state) {
             tracing::warn!("Failed to save pre-quantifier phase update: {e}");
         }
 
@@ -257,7 +254,11 @@ impl<'a> PipelineRun<'a> {
                 );
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("Error: {e}"));
-                if let Err(e2) = self.app.save_message_and_snapshot(&mut state) {
+                if let Err(e2) = self
+                    .pipeline
+                    .persistence
+                    .save_message_and_snapshot(&mut state)
+                {
                     tracing::error!("Failed to persist trigger error state: {e2}");
                 }
                 return Ok((state, String::new()));
@@ -409,10 +410,19 @@ impl<'a> PipelineRun<'a> {
     }
 
     pub(super) fn load_preset_and_response_length(&self) -> Result<(PromptPreset, String), String> {
-        let settings = self.app.settings.read().unwrap_or_else(|e| e.into_inner());
+        let settings = self
+            .pipeline
+            .settings
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let preset_id = settings.active_system_prompt_preset_id.clone();
         let response_length = settings.response_length.clone();
-        match self.app.preset_storage().get_preset(&preset_id) {
+        match self
+            .pipeline
+            .persistence
+            .preset_store()
+            .get_preset(&preset_id)
+        {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
                 tracing::error!(

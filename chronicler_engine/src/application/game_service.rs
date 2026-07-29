@@ -78,12 +78,4 @@ impl GameService {
             self.llm_recorder.provider().model(),
         )
     }
-
-    pub fn pipeline(&self) -> crate::application::action_pipeline::pipeline::ActionPipeline {
-        crate::application::action_pipeline::pipeline::ActionPipeline::new(
-            Arc::clone(&self.prompt_assembler),
-            Arc::clone(&self.llm_recorder),
-            Arc::clone(&self.agent_registry),
-        )
-    }
 }

@@ -1,7 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! DefaultApplicationService — façade over application collaborators.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 
 use tokio_util::sync::CancellationToken;
@@ -11,6 +11,7 @@ use tracing::instrument;
 use crate::adapters::driven::storage::worlds::WorldWithMap;
 use crate::adapters::driven::storage::{PresetStore, Storage};
 use crate::application::action_pipeline::phase_error::PhaseError;
+use crate::application::action_pipeline::pipeline::ActionPipeline;
 pub use crate::application::debug::DebugStateView;
 pub use crate::application::errors::{ApplicationError, ProcessActionResult};
 use crate::application::game_catalogue::GameCatalogue;
@@ -18,6 +19,7 @@ use crate::application::game_service::GameService;
 use crate::application::game_view_query::GameViewQuery;
 use crate::application::generation_gate::GenerationGate;
 use crate::application::persistence_gate::PersistenceGate;
+use crate::application::spawn_pipeline_task;
 use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::game::Game;
@@ -43,32 +45,23 @@ pub struct DefaultApplicationService {
     pub(crate) world_catalogue: WorldCatalogue,
     pub(crate) settings: Arc<RwLock<AppSettings>>,
     pub(crate) game_service: Arc<GameService>,
+    pub(crate) pipeline: ActionPipeline,
     pub(crate) shutdown_token: CancellationToken,
 }
 
 impl DefaultApplicationService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        storage: Arc<Storage>,
-        preset_storage: Arc<Storage>,
+        persistence_gate: Arc<PersistenceGate>,
+        generation_gate: GenerationGate,
+        game_catalogue: GameCatalogue,
+        game_view_query: GameViewQuery,
+        world_catalogue: WorldCatalogue,
         settings: Arc<RwLock<AppSettings>>,
-        cancel_token: CancellationToken,
-        is_generating: Arc<AtomicBool>,
         game_service: Arc<GameService>,
+        pipeline: ActionPipeline,
+        cancel_token: CancellationToken,
     ) -> Self {
-        let preset_store = Arc::new(PresetStore::new(preset_storage));
-        let persistence_gate = Arc::new(PersistenceGate::new(
-            Arc::clone(&storage),
-            Arc::clone(&preset_store),
-        ));
-        let generation_gate = GenerationGate::new(Arc::clone(&is_generating));
-        // Direct atomic access per ADR-030 hot-path.
-        let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
-        let game_view_query =
-            GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
-        // WorldCatalogue takes Arc<Storage> directly (not Arc<PersistenceGate> like GameCatalogue)
-        // because it does only Storage-direct worlds/personas CRUD — no preset_store, snapshots,
-        // set_game_id, or build_fresh_initial_state needs. Storage is the narrowest collaborator.
-        let world_catalogue = WorldCatalogue::new(storage);
         Self {
             persistence_gate,
             generation_gate,
@@ -77,12 +70,17 @@ impl DefaultApplicationService {
             world_catalogue,
             settings,
             game_service,
+            pipeline,
             shutdown_token: cancel_token,
         }
     }
 
     pub fn game_service(&self) -> &Arc<GameService> {
         &self.game_service
+    }
+
+    pub fn pipeline(&self) -> &ActionPipeline {
+        &self.pipeline
     }
 
     pub fn storage(&self) -> &Arc<Storage> {
@@ -197,16 +195,55 @@ impl DefaultApplicationService {
         self.persistence_gate.set_game_id(game_id);
     }
 
-    pub fn process_action(&self, input: String) -> Result<ProcessActionResult, EngineError> {
-        self.generation_gate.start_action(self, input)
+    pub fn process_action(
+        self: &Arc<Self>,
+        input: String,
+    ) -> Result<ProcessActionResult, EngineError> {
+        let mut game_state = self.load_or_fresh();
+        let game_id = self.current_game_id();
+
+        self.generation_gate.heal_stale(game_id, &mut game_state);
+
+        let game = self.storage().require_game(game_id)?;
+        let persona = self.storage().require_persona(&game.persona_key)?;
+        let player_name = persona.sheet.name.clone();
+        if !input.is_empty() {
+            game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);
+        }
+
+        let (started_game_id, started_generation_id, claim_result) = self
+            .generation_gate
+            .try_claim(game_id, &mut game_state, &self.persistence_gate)?;
+        match claim_result {
+            ProcessActionResult::ConcurrentGeneration => {
+                return Ok(ProcessActionResult::ConcurrentGeneration);
+            }
+            ProcessActionResult::Started => {}
+            ProcessActionResult::ShuttingDown => {
+                return Ok(ProcessActionResult::ShuttingDown);
+            }
+        }
+
+        let gate = self.generation_gate.clone();
+        spawn_pipeline_task(Arc::clone(self), move |app| {
+            tracing::debug!("spawn_blocking: task started");
+            let _guard = gate.guard(started_game_id, started_generation_id);
+            let shutting = app.is_shutting_down();
+            if shutting {
+                tracing::debug!("spawn_blocking: shutting down before execute_action");
+                return;
+            }
+            app.execute_action(input);
+            tracing::debug!("spawn_blocking: execute_action completed");
+        });
+        Ok(ProcessActionResult::Started)
     }
 
     #[instrument(skip(self), fields(input_length))]
     pub fn execute_action(&self, input: String) {
         let mut state = self.load_or_fresh();
         state.narrative.last_trigger = None;
-        let pipeline = self.game_service().pipeline();
-        if let Err(PhaseError::Cancelled) = pipeline.run_from_input(self, state, input) {
+        if let Err(PhaseError::Cancelled) = self.pipeline.run_from_input(state, input) {
             tracing::debug!("Pipeline cancelled");
         }
     }
@@ -216,13 +253,15 @@ impl DefaultApplicationService {
         let messages = match self.load_messages() {
             Ok(m) => m,
             Err(e) => {
-                self.retry_persist_error(format!("Retry failed: {e}"));
+                self.pipeline
+                    .retry_persist_error(format!("Retry failed: {e}"));
                 return;
             }
         };
 
         let Some((anchor_idx, _anchor_msg, snapshot_id)) = self.find_retry_anchor(&messages) else {
-            self.retry_persist_error("Retry failed: no anchor message");
+            self.pipeline
+                .retry_persist_error("Retry failed: no anchor message");
             return;
         };
 
@@ -249,13 +288,14 @@ impl DefaultApplicationService {
         let snapshot = match self.storage().load_snapshot_by_id(snapshot_id) {
             Ok(Some(s)) => s,
             Ok(None) => {
-                self.retry_persist_error(format!(
+                self.pipeline.retry_persist_error(format!(
                     "Retry failed: no snapshot found for id {snapshot_id}"
                 ));
                 return;
             }
             Err(e) => {
-                self.retry_persist_error(format!("Retry failed: {e}"));
+                self.pipeline
+                    .retry_persist_error(format!("Retry failed: {e}"));
                 return;
             }
         };
@@ -269,33 +309,29 @@ impl DefaultApplicationService {
         let input_text = match state.narrative.history.last_input_text() {
             Some((_, text)) => text,
             None => {
-                self.retry_persist_error("Retry failed: no input to retry");
+                self.pipeline
+                    .retry_persist_error("Retry failed: no input to retry");
                 return;
             }
         };
 
         let outcome = if is_event {
-            self.retry_event_continuation(state)
+            self.pipeline.retry_event_continuation(state)
         } else {
-            self.retry_main_narration(state, input_text)
+            self.pipeline.retry_main_narration(state, input_text)
         };
 
-        self.handle_retry_outcome(outcome);
+        self.pipeline.handle_retry_outcome(outcome);
     }
 
     #[instrument(skip(self))]
     pub fn retrigger_event(&self) {
         let state = self.load_or_fresh();
-        let outcome = self.retry_event_continuation(state);
-        self.handle_retry_outcome(outcome);
+        let outcome = self.pipeline.retry_event_continuation(state);
+        self.pipeline.handle_retry_outcome(outcome);
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn heal_stale_generating(&self, state: &mut GameState) {
-        self.generation_gate.heal_stale_generating(self, state)
-    }
-
-    pub fn continue_narration(&self) -> Result<ProcessActionResult, EngineError> {
+    pub fn continue_narration(self: &Arc<Self>) -> Result<ProcessActionResult, EngineError> {
         self.process_action(String::new())
     }
 

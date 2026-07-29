@@ -4,6 +4,8 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::adapters::driven::storage::Storage;
+use crate::application::application_service::DefaultApplicationService;
+use crate::application::game_service::GameService;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::character::NpcCard;
@@ -26,6 +28,34 @@ pub fn default_test_preset_storage() -> Arc<Storage> {
         preset_type: PresetType::System,
     });
     Arc::new(storage)
+}
+
+#[cfg(feature = "testing")]
+pub fn build_test_service(
+    storage: Arc<Storage>,
+    preset_storage: Arc<Storage>,
+    game_service: Arc<GameService>,
+) -> Result<Arc<DefaultApplicationService>> {
+    Ok(build_app_graph_for_tests(
+        Arc::new(RwLock::new(AppSettings::default())),
+        storage,
+        preset_storage,
+        Some(game_service),
+    )?
+    .application_service)
+}
+
+#[cfg(feature = "testing")]
+pub fn build_test_service_with_settings(
+    storage: Arc<Storage>,
+    preset_storage: Arc<Storage>,
+    settings: Arc<RwLock<AppSettings>>,
+    game_service: Arc<GameService>,
+) -> Result<Arc<DefaultApplicationService>> {
+    Ok(
+        build_app_graph_for_tests(settings, storage, preset_storage, Some(game_service))?
+            .application_service,
+    )
 }
 
 pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {

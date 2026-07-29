@@ -1,7 +1,5 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/startup.md]
-//! Composition root for application orchestrators — wires port impls to
-//! `LlmCallRecorder`, `AgentRegistry`, and `GameService`. This is the only
-//! module that imports both port traits and adapter impls (see ADR-027).
+//! Composition root for application orchestrators
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -11,15 +9,21 @@ use tokio_util::sync::CancellationToken;
 use crate::adapters::driven::llm::providers::{
     DeepSeekBackend, MockBackend, OllamaBackend, OpenRouterBackend,
 };
-use crate::adapters::driven::storage::Storage;
+use crate::adapters::driven::storage::{PresetStore, Storage};
 use crate::adapters::driven::text_check::HarperTextChecker;
+use crate::application::action_pipeline::pipeline::ActionPipeline;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::application_service::DefaultApplicationService;
+use crate::application::game_catalogue::GameCatalogue;
 use crate::application::game_service::GameService;
+use crate::application::game_view_query::GameViewQuery;
+use crate::application::generation_gate::GenerationGate;
 use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
 use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::persistence_gate::PersistenceGate;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::text_check_service::TextCheckService;
+use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::error::Result;
@@ -49,8 +53,58 @@ pub struct WiredApp {
     pub preset_storage: Arc<Storage>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub game_service: Arc<GameService>,
+    pub persistence_gate: Arc<PersistenceGate>,
+    pub generation_gate: GenerationGate,
+    pub game_catalogue: GameCatalogue,
+    pub game_view_query: GameViewQuery,
+    pub world_catalogue: WorldCatalogue,
+    pub pipeline: ActionPipeline,
     pub application_service: Arc<DefaultApplicationService>,
     pub text_check_service: Arc<TextCheckService>,
+}
+
+struct AppCollaborators {
+    pub(crate) persistence_gate: Arc<PersistenceGate>,
+    pub(crate) generation_gate: GenerationGate,
+    pub(crate) game_catalogue: GameCatalogue,
+    pub(crate) game_view_query: GameViewQuery,
+    pub(crate) world_catalogue: WorldCatalogue,
+    pub(crate) pipeline: ActionPipeline,
+}
+
+fn build_app_collaborators(
+    storage: Arc<Storage>,
+    preset_storage: Arc<Storage>,
+    settings: Arc<RwLock<AppSettings>>,
+    is_generating: Arc<AtomicBool>,
+    game_service: &Arc<GameService>,
+) -> AppCollaborators {
+    let preset_store = Arc::new(PresetStore::new(preset_storage));
+    let persistence_gate = Arc::new(PersistenceGate::new(
+        Arc::clone(&storage),
+        Arc::clone(&preset_store),
+    ));
+    let generation_gate = GenerationGate::new(Arc::clone(&is_generating));
+    // Direct atomic access per ADR-030 hot-path.
+    let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
+    let game_view_query = GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
+    // WorldCatalogue only performs worlds/personas CRUD, so Arc<Storage> is the narrowest collaborator.
+    let world_catalogue = WorldCatalogue::new(storage);
+    let pipeline = ActionPipeline::new(
+        Arc::clone(&game_service.prompt_assembler),
+        Arc::clone(&game_service.llm_recorder),
+        Arc::clone(&game_service.agent_registry),
+        Arc::clone(&persistence_gate),
+        Arc::clone(&settings),
+    );
+    AppCollaborators {
+        persistence_gate,
+        generation_gate,
+        game_catalogue,
+        game_view_query,
+        world_catalogue,
+        pipeline,
+    }
 }
 
 pub fn build_app_graph(
@@ -81,20 +135,36 @@ pub fn build_app_graph(
         (game_service, text_check_service)
     };
 
-    let application_service = Arc::new(DefaultApplicationService::new(
+    let collaborators = build_app_collaborators(
         Arc::clone(&storage),
         Arc::clone(&preset_storage),
         Arc::clone(&settings),
-        CancellationToken::new(),
         Arc::new(AtomicBool::new(false)),
+        &game_service,
+    );
+    let application_service = Arc::new(DefaultApplicationService::new(
+        Arc::clone(&collaborators.persistence_gate),
+        collaborators.generation_gate.clone(),
+        collaborators.game_catalogue.clone(),
+        collaborators.game_view_query.clone(),
+        collaborators.world_catalogue.clone(),
+        Arc::clone(&settings),
         Arc::clone(&game_service),
+        collaborators.pipeline.clone(),
+        CancellationToken::new(),
     ));
 
     Ok(WiredApp {
         storage,
         preset_storage,
         settings,
-        game_service,
+        game_service: Arc::clone(&game_service),
+        persistence_gate: collaborators.persistence_gate,
+        generation_gate: collaborators.generation_gate,
+        game_catalogue: collaborators.game_catalogue,
+        game_view_query: collaborators.game_view_query,
+        world_catalogue: collaborators.world_catalogue,
+        pipeline: collaborators.pipeline,
         application_service,
         text_check_service,
     })
@@ -137,20 +207,36 @@ pub fn build_app_graph_for_tests(
         (game_service, text_check_service)
     };
 
-    let application_service = Arc::new(DefaultApplicationService::new(
+    let collaborators = build_app_collaborators(
         Arc::clone(&storage),
         Arc::clone(&preset_storage),
         Arc::clone(&settings),
-        CancellationToken::new(),
         Arc::new(AtomicBool::new(false)),
+        &game_service,
+    );
+    let application_service = Arc::new(DefaultApplicationService::new(
+        Arc::clone(&collaborators.persistence_gate),
+        collaborators.generation_gate.clone(),
+        collaborators.game_catalogue.clone(),
+        collaborators.game_view_query.clone(),
+        collaborators.world_catalogue.clone(),
+        Arc::clone(&settings),
         Arc::clone(&game_service),
+        collaborators.pipeline.clone(),
+        CancellationToken::new(),
     ));
 
     Ok(WiredApp {
         storage,
         preset_storage,
         settings,
-        game_service,
+        game_service: Arc::clone(&game_service),
+        persistence_gate: collaborators.persistence_gate,
+        generation_gate: collaborators.generation_gate,
+        game_catalogue: collaborators.game_catalogue,
+        game_view_query: collaborators.game_view_query,
+        world_catalogue: collaborators.world_catalogue,
+        pipeline: collaborators.pipeline,
         application_service,
         text_check_service,
     })
