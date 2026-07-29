@@ -284,7 +284,7 @@ async fn test_delete_history_handler_empty() {
 
 #[tokio::test]
 async fn test_action_confirm_empty_command() {
-    let (app, service) = TestAppBuilder::default_test().build_with_service();
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
 
     let req = Request::builder()
         .uri("/action/confirm")
@@ -299,14 +299,10 @@ async fn test_action_confirm_empty_command() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    // Empty command triggers continuation; the spawned pipeline must
-    // finalize. Asserting on a transient render ("thinking"/"Generating") was
-    // a race against `phase_finalize`; instead observe `is_generating` once
-    // it has settled.
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(500);
     while start.elapsed() < timeout {
-        let state = service.load_or_fresh();
+        let state = state.persistence_gate.load_or_fresh();
         if !state.narrative.input_buffer.status.is_generating() {
             return;
         }

@@ -51,16 +51,19 @@ fn test_settings_recover_from_poisoned_rwlock() {
     .join();
 
     let game_service = test_game_service();
+    let wired = chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        Arc::new(Storage::new_in_memory()),
+        Arc::new(Storage::new_in_memory()),
+        Some(Arc::clone(&game_service)),
+    )
+    .expect("build_app_graph_for_tests should succeed");
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
         game_service: Arc::clone(&game_service),
-        application_service: chronicler_engine::test_support::build_test_service(
-            Arc::new(Storage::new_in_memory()),
-            Arc::new(Storage::new_in_memory()),
-            Arc::clone(&game_service),
-        )
-        .expect("build_test_service: build_app_graph_for_tests should succeed"),
+        application_service: wired.application_service,
+        persistence_gate: wired.persistence_gate,
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings,
         shutdown_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
@@ -86,16 +89,19 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     .join();
 
     let game_service = test_game_service();
+    let wired = chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        Arc::new(Storage::new_in_memory()),
+        Arc::new(Storage::new_in_memory()),
+        Some(Arc::clone(&game_service)),
+    )
+    .expect("build_app_graph_for_tests should succeed");
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
         game_service: Arc::clone(&game_service),
-        application_service: chronicler_engine::test_support::build_test_service(
-            Arc::new(Storage::new_in_memory()),
-            Arc::new(Storage::new_in_memory()),
-            Arc::clone(&game_service),
-        )
-        .expect("build_test_service: build_app_graph_for_tests should succeed"),
+        application_service: wired.application_service,
+        persistence_gate: wired.persistence_gate,
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         shutdown_token,

@@ -141,26 +141,13 @@ Some local/quantized models ignore or poorly handle the `system` role. Each conn
 - **`false` (default).** The system prompt is sent as the `system` message; the user text is sent as the `user` message.
 - **`true`.** The system and user prompts are merged into a single `user` message with a `[SYSTEM]` prefix. The `system` field is omitted from the API payload.
 
-The mode is per-connection, so different backends can use different strategies within the same `AppSettings`. The merge helper lives in `LlmProvider` (`merge_single_user_message`) and is invoked identically by the OpenRouter and Ollama adapters.
+The mode is per-connection, so different backends can use different strategies within the same `AppSettings`.
 
 ## Prompt Injection Sanitization
 
 User input enters the engine as `<PlayerInput>` content. The assembler passes it through `sanitize_for_prompt`, which replaces any `{{variable}}` pattern (double curly braces enclosing an identifier) with `[FILTERED]`. Legitimate text passes through unchanged; single braces and empty/unclosed brace pairs are preserved.
 
 Sanitization runs at render time only. Substitution of `{{user}}` in author-controlled preset fields happens before user input reaches the assembler. Response sanitization (including the Gemma 4 thinking-channel suffix workaround) is handled downstream after the LLM call returns.
-
-## Token Budget Management
-
-The budget components live in `src/application/narrative_prompt/budget.rs`; the authoritative cap values are there and are not restated here. Six components make up the budget:
-
-- **Context window** — fallback default, overridden per connection via the connection's `max_context_tokens`.
-- **Response cap** — fallback default response length ceiling.
-- **History cap** — the conversation history slice ceiling.
-- **System cap** — the system prompt ceiling.
-- **Safety margin** — reserved against token-estimation error.
-- **Minimum input budget** — the minimum reserved on the input side.
-
-`fit_messages_to_context` is the enforcement function. It estimates tokens with character-based counting (approximately four characters per token), trims oldest history entries first if the assembled input exceeds the budget, caps `max_tokens` dynamically, and returns `EngineError::ContextOverflow` if the system message alone does not fit.
 
 ## Response Length Control
 

@@ -1,4 +1,4 @@
-use crate::adapters::driving::http::core::handlers::debug::debug_state_handler;
+use crate::adapters::driving::http::debug::handlers::debug_state_handler;
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]

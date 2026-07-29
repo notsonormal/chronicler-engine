@@ -168,7 +168,8 @@ fn persisted_flag(app: &DefaultApplicationService) -> bool {
         .ok()
         .flatten()
         .map(|_snap| {
-            app.load_or_fresh()
+            app.persistence_gate
+                .load_or_fresh()
                 .narrative
                 .input_buffer
                 .status
@@ -240,10 +241,10 @@ fn test_is_generating_invariant_helper_detects_divergence() {
 async fn test_wait_until_idle_fails_fast_on_cached_false_persisted_generating() {
     let app = std::sync::Arc::new(TestAppBuilder::default_test().build_service());
 
-    // Construct forbidden state directly to test wait guard.
-    let mut gs = app.load_or_fresh();
+    let mut gs = app.persistence_gate.load_or_fresh();
     gs.narrative.input_buffer.status = GenerationStatus::Generating;
     let snapshot_id = app
+        .persistence_gate
         .save_state(&gs)
         .expect("save_state should persist Generating");
     app.generation_gate
@@ -418,7 +419,7 @@ fn test_execute_action_completes_and_persists_state() {
         .game_service(Arc::new(service))
         .build_service();
     app.execute_action("look".to_string());
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -449,7 +450,7 @@ fn test_execute_action_clears_last_trigger() {
         .game_service(Arc::new(service))
         .build_service();
     app.execute_action("look".to_string());
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared before pipeline runs"
@@ -467,7 +468,7 @@ fn test_execute_action_handles_narration_error() {
         .game_service(Arc::new(service))
         .build_service();
     app.execute_action("look".to_string());
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -489,7 +490,7 @@ fn test_execute_action_handles_cancellation() {
         .build_service();
     app.cancel_token().cancel();
     app.execute_action("look".to_string());
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -508,7 +509,7 @@ fn test_execute_action_preserves_existing_input_log() {
         .game_service(Arc::new(service))
         .build_service();
     app.execute_action("examine room".to_string());
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
@@ -551,7 +552,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     });
 
     entered.wait();
-    let mid_state = app.load_or_fresh();
+    let mid_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,
@@ -560,7 +561,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
 
     release.wait();
     handle.join().expect("Action thread should complete");
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.phase,
         GenerationPhase::default(),
@@ -595,7 +596,7 @@ fn test_narration_saved_before_quantifying_phase() {
     });
 
     entered.wait();
-    let messages = app.load_messages().unwrap();
+    let messages = app.persistence_gate.load_messages().unwrap();
     let narration_count = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -604,7 +605,7 @@ fn test_narration_saved_before_quantifying_phase() {
         narration_count >= 1,
         "Narration should be saved before quantifier completes"
     );
-    let mid_state = app.load_or_fresh();
+    let mid_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,

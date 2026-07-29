@@ -1,4 +1,5 @@
 //! Builds `WiredApp` instances for integration tests.
+#![allow(clippy::expect_used)]
 
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -6,6 +7,7 @@ use std::sync::RwLock;
 use crate::adapters::driven::storage::Storage;
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::game_service::GameService;
+use crate::application::persistence_gate::PersistenceGate;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::character::NpcCard;
@@ -17,16 +19,19 @@ use crate::test_support::TestData;
 
 pub fn default_test_preset_storage() -> Arc<Storage> {
     let storage = Storage::new_in_memory();
-    let _ = storage.save_preset(&PromptPreset {
-        id: "system_default".to_string(),
-        name: "Default Test System".to_string(),
-        role: Some("You are a test narrator.".to_string()),
-        instructions: None,
-        writing_style: None,
-        output_format: None,
-        is_default: true,
-        preset_type: PresetType::System,
-    });
+    storage
+        .save_preset(&PromptPreset {
+            id: "system_default".to_string(),
+            name: "Default Test System".to_string(),
+            role: Some("You are a test narrator.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            is_default: true,
+            preset_type: PresetType::System,
+        })
+        // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+        .expect("test setup: save_preset must succeed for default preset storage");
     Arc::new(storage)
 }
 
@@ -43,6 +48,20 @@ pub fn build_test_service(
         Some(game_service),
     )?
     .application_service)
+}
+
+pub fn build_test_service_with_pg(
+    storage: Arc<Storage>,
+    preset_storage: Arc<Storage>,
+    game_service: Arc<GameService>,
+) -> Result<(Arc<DefaultApplicationService>, Arc<PersistenceGate>)> {
+    let wired = build_app_graph_for_tests(
+        Arc::new(RwLock::new(AppSettings::default())),
+        storage,
+        preset_storage,
+        Some(game_service),
+    )?;
+    Ok((wired.application_service, wired.persistence_gate))
 }
 
 #[cfg(feature = "testing")]
@@ -81,12 +100,20 @@ pub fn make_test_app(state: GameState) -> Result<WiredApp> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(Storage::new_in_memory());
     seed_test_world_into_storage(&storage, &state);
-    let _ = storage.save_snapshot(&snapshot);
+    storage
+        .save_snapshot(&snapshot)
+        // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+        .expect("test setup: save_snapshot must succeed for make_test_app fixture");
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if let Ok(id) = storage.insert_message(&msg) {
-            for (idx, swipe) in msg.swipes.iter().enumerate() {
-                let _ = storage.insert_swipe(id, swipe, idx);
-            }
+        let id = storage
+            .insert_message(&msg)
+            // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+            .expect("test setup: insert_message must succeed to seed narrative history");
+        for (idx, swipe) in msg.swipes.iter().enumerate() {
+            storage
+                .insert_swipe(id, swipe, idx)
+                // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+                .expect("test setup: insert_swipe must succeed to seed narrative swipes");
         }
     }
     build_test_app(storage)
@@ -96,10 +123,15 @@ pub fn make_test_app_without_snapshot(state: GameState) -> Result<WiredApp> {
     let storage = Arc::new(Storage::new_in_memory());
     seed_test_world_into_storage(&storage, &state);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if let Ok(id) = storage.insert_message(&msg) {
-            for (idx, swipe) in msg.swipes.iter().enumerate() {
-                let _ = storage.insert_swipe(id, swipe, idx);
-            }
+        let id = storage
+            .insert_message(&msg)
+            // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+            .expect("test setup: insert_message must succeed to seed narrative history");
+        for (idx, swipe) in msg.swipes.iter().enumerate() {
+            storage
+                .insert_swipe(id, swipe, idx)
+                // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+                .expect("test setup: insert_swipe must succeed to seed narrative swipes");
         }
     }
     build_test_app(storage)

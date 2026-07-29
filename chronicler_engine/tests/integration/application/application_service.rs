@@ -130,9 +130,9 @@ fn test_get_generating_status() {
 async fn test_process_action_persists_input_message() {
     let game_service = create_game_service();
     let data = TestDataBuilder::default_test().build();
-    let app_service = SqliteTestAppBuilder::with_data(data)
+    let (app_service, pg_app_service) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |_storage| Arc::clone(&game_service))
-        .build_service()
+        .build_with_state()
         .unwrap();
 
     let result = app_service.process_action("examine the room".to_string());
@@ -141,10 +141,10 @@ async fn test_process_action_persists_input_message() {
         "process_action should return Started"
     );
 
-    let completed = app_service.wait_for_generation_complete(5000);
+    let completed = app_service.wait_for_generation_complete(&pg_app_service, 5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    let guard = app_service.latest_state();
+    let guard = app_service.latest_state(&pg_app_service);
     let entries = guard.narrative.history();
     let input_idx = entries
         .iter()
@@ -164,10 +164,10 @@ async fn test_process_action_persists_input_message() {
 async fn test_process_action_self_heals_stale_generating_status() {
     let game_service = create_game_service();
     let data = TestDataBuilder::default_test().build();
-    let app_service = SqliteTestAppBuilder::with_data(data)
+    let (app_service, pg_app_service) = SqliteTestAppBuilder::with_data(data)
         .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
         .game_service_fn(move |_storage| Arc::clone(&game_service))
-        .build_service()
+        .build_with_state()
         .unwrap();
 
     assert!(!app_service.is_generating_now());
@@ -178,10 +178,10 @@ async fn test_process_action_self_heals_stale_generating_status() {
         "process_action should return Started"
     );
 
-    let completed = app_service.wait_for_generation_complete(5000);
+    let completed = app_service.wait_for_generation_complete(&pg_app_service, 5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    let guard = app_service.latest_state();
+    let guard = app_service.latest_state(&pg_app_service);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should not be Generating after completion, got {:?}",

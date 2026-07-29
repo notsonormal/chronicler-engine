@@ -23,7 +23,6 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::text_check_service::TextCheckService;
-use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::error::Result;
@@ -57,7 +56,6 @@ pub struct WiredApp {
     pub generation_gate: GenerationGate,
     pub game_catalogue: GameCatalogue,
     pub game_view_query: GameViewQuery,
-    pub world_catalogue: WorldCatalogue,
     pub pipeline: ActionPipeline,
     pub application_service: Arc<DefaultApplicationService>,
     pub text_check_service: Arc<TextCheckService>,
@@ -68,7 +66,6 @@ struct AppCollaborators {
     pub(crate) generation_gate: GenerationGate,
     pub(crate) game_catalogue: GameCatalogue,
     pub(crate) game_view_query: GameViewQuery,
-    pub(crate) world_catalogue: WorldCatalogue,
     pub(crate) pipeline: ActionPipeline,
 }
 
@@ -88,8 +85,6 @@ fn build_app_collaborators(
     // Direct atomic access per ADR-030 hot-path.
     let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
     let game_view_query = GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
-    // WorldCatalogue only performs worlds/personas CRUD, so Arc<Storage> is the narrowest collaborator.
-    let world_catalogue = WorldCatalogue::new(storage);
     let pipeline = ActionPipeline::new(
         Arc::clone(&game_service.prompt_assembler),
         Arc::clone(&game_service.llm_recorder),
@@ -102,7 +97,6 @@ fn build_app_collaborators(
         generation_gate,
         game_catalogue,
         game_view_query,
-        world_catalogue,
         pipeline,
     }
 }
@@ -147,7 +141,6 @@ pub fn build_app_graph(
         collaborators.generation_gate.clone(),
         collaborators.game_catalogue.clone(),
         collaborators.game_view_query.clone(),
-        collaborators.world_catalogue.clone(),
         Arc::clone(&settings),
         Arc::clone(&game_service),
         collaborators.pipeline.clone(),
@@ -163,7 +156,6 @@ pub fn build_app_graph(
         generation_gate: collaborators.generation_gate,
         game_catalogue: collaborators.game_catalogue,
         game_view_query: collaborators.game_view_query,
-        world_catalogue: collaborators.world_catalogue,
         pipeline: collaborators.pipeline,
         application_service,
         text_check_service,
@@ -219,7 +211,6 @@ pub fn build_app_graph_for_tests(
         collaborators.generation_gate.clone(),
         collaborators.game_catalogue.clone(),
         collaborators.game_view_query.clone(),
-        collaborators.world_catalogue.clone(),
         Arc::clone(&settings),
         Arc::clone(&game_service),
         collaborators.pipeline.clone(),
@@ -235,7 +226,6 @@ pub fn build_app_graph_for_tests(
         generation_gate: collaborators.generation_gate,
         game_catalogue: collaborators.game_catalogue,
         game_view_query: collaborators.game_view_query,
-        world_catalogue: collaborators.world_catalogue,
         pipeline: collaborators.pipeline,
         application_service,
         text_check_service,

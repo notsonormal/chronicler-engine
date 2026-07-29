@@ -8,9 +8,6 @@ use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::world::WorldCard;
 
-/// Builder for a [`TestData`] bundle. Defaults to canonical Test World + Test
-/// Map + Test Player + `npc_1`. Override via `.world()`, `.map()`,
-/// `.persona()`, `.npc()`, `.npcs()`, `.room_npc()`.
 pub struct TestDataBuilder {
     world: WorldCard,
     map: MapDef,

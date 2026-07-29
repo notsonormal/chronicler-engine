@@ -38,7 +38,7 @@ fn test_arrival_narration_survives_reload() {
         .npcs(crate::fixtures::create_test_npcs())
         .build();
     let llm_for_closure = Arc::clone(&llm);
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             let recorder = make_test_recorder_with_storage(
                 Arc::clone(&llm_for_closure)
@@ -50,7 +50,7 @@ fn test_arrival_narration_survives_reload() {
                 Arc::new(MockBackend::default()),
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
     let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(app.storage()));
@@ -85,7 +85,7 @@ fn test_arrival_narration_survives_reload() {
         "Narration message should have non-zero id (persisted to llm_messages table)"
     );
 
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     let history_narrations: Vec<_> = guard
         .narrative
         .history()
@@ -164,7 +164,7 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
         Arc::new(MockBackend::default()),
     ));
 
-    let app = chronicler_engine::test_support::build_test_service(
+    let (app, pg) = chronicler_engine::test_support::build_test_service_with_pg(
         Arc::clone(&failing_storage),
         Arc::new(preset_storage),
         Arc::clone(&game_service),
@@ -187,7 +187,7 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
 
     handle.clear("load_latest_snapshot");
 
-    let guard = app.load_or_fresh();
+    let guard = pg.load_or_fresh();
     let narrations: Vec<_> = guard
         .narrative
         .history()
@@ -245,7 +245,7 @@ fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
         Arc::new(MockBackend::default()),
     ));
 
-    let app = chronicler_engine::test_support::build_test_service(
+    let (app, pg) = chronicler_engine::test_support::build_test_service_with_pg(
         Arc::clone(&failing_storage),
         Arc::new(preset_storage),
         Arc::clone(&game_service),
@@ -268,7 +268,7 @@ fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
 
     handle.clear("get_world");
 
-    let guard = app.load_or_fresh();
+    let guard = pg.load_or_fresh();
     let narrations: Vec<_> = guard
         .narrative
         .history()

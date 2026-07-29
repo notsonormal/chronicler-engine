@@ -30,11 +30,11 @@ fn test_pipeline_runs_to_completion() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -55,10 +55,10 @@ fn test_pipeline_saves_narration_to_history() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let _outcome = app.pipeline().run_from_input(state, "look".to_string());
 
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     let has_narration = final_state
         .narrative
         .history()
@@ -77,14 +77,14 @@ fn test_pipeline_returns_error_on_narration_failure() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(
         outcome.is_ok(),
         "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         final_state
             .narrative
@@ -107,14 +107,14 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(
         outcome.is_ok(),
         "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         final_state
             .narrative
@@ -155,11 +155,11 @@ fn test_pipeline_with_custom_quantifier_result() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         final_state.scene.npcs_in_area.len(),
         1,
@@ -250,14 +250,14 @@ fn test_pipeline_trigger_happy_path() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
         "Expected Completed, got {outcome:?}"
     );
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         final_state
             .narrative
@@ -315,13 +315,13 @@ fn test_pipeline_trigger_empty_continuation() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
     );
-    let reloaded = app.load_or_fresh();
+    let reloaded = app.persistence_gate.load_or_fresh();
     assert!(
         reloaded
             .narrative
@@ -376,13 +376,13 @@ fn test_pipeline_trigger_complete_failure() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
     );
-    let reloaded = app.load_or_fresh();
+    let reloaded = app.persistence_gate.load_or_fresh();
     assert!(
         reloaded
             .narrative
@@ -405,10 +405,10 @@ fn test_pipeline_saves_narration_before_quantifier() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let _outcome = app.pipeline().run_from_input(state, "look".to_string());
 
-    let messages = app.load_messages().unwrap();
+    let messages = app.persistence_gate.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -440,12 +440,12 @@ fn test_pipeline_no_duplicate_narration() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let _outcome = app
         .pipeline()
         .run_from_input(state, "test input".to_string());
 
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     let history = final_state.narrative.history();
     let narration_count = history
         .iter()
@@ -474,10 +474,10 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let _outcome = app.pipeline().run_from_input(state, "look".to_string());
 
-    let messages = app.load_messages().unwrap();
+    let messages = app.persistence_gate.load_messages().unwrap();
     let narration = messages
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -507,7 +507,7 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(
@@ -536,10 +536,10 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
         .game_service(Arc::new(service.clone()))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let _outcome = app.pipeline().run_from_input(state, "look".to_string());
 
-    let messages = app.load_messages().unwrap();
+    let messages = app.persistence_gate.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -571,14 +571,14 @@ fn orchestrator_records_error_when_world_missing() {
         .skip_seeding(true)
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
         "Pipeline must return Ok(()) on fetch failure (no panic, no Failed variant), got {outcome:?}"
     );
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -606,14 +606,14 @@ fn orchestrator_records_error_when_persona_missing() {
         .skip_seeding(true)
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
         "Pipeline must return Ok(()) on fetch failure (no panic, no Failed variant), got {outcome:?}"
     );
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -650,7 +650,7 @@ fn load_or_fresh_unchanged_on_world_data_missing() {
         .skip_seeding(true)
         .build_service();
 
-    let loaded = app.load_or_fresh();
+    let loaded = app.persistence_gate.load_or_fresh();
     assert_eq!(
         loaded.movement.current_room_id, "room_1",
         "load_or_fresh must return snapshot-derived GameState when world data is missing, got {loaded:?}"
@@ -667,7 +667,7 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
         .skip_seeding(true)
         .build_service();
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     let dynamic_id = "dynamic_room_alcove".to_string();
     state.movement.dynamic_rooms.insert(
         dynamic_id.clone(),
@@ -689,7 +689,7 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
         matches!(outcome, Ok(())),
         "Pipeline must return Ok(()) when current_room_id is a dynamic room, got {outcome:?}"
     );
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         !matches!(
             final_state.narrative.input_buffer.status,
@@ -729,14 +729,14 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
         .game_service(Arc::new(service))
         .build_service();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let outcome = app.pipeline().run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
         "Pipeline must return Ok(()) (no panic, no Failed variant), got {outcome:?}"
     );
-    let final_state = app.load_or_fresh();
+    let final_state = app.persistence_gate.load_or_fresh();
     let msg = match &final_state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error, got {other:?}"),

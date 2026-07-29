@@ -15,3 +15,9 @@ pub use locks::{read_lock_or_recover, write_lock_or_recover};
 
 #[cfg(test)]
 mod response_tests;
+
+#[cfg(test)]
+mod view_mappers_tests;
+
+#[cfg(test)]
+mod view_models_tests;

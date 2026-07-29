@@ -16,6 +16,12 @@ pub use structure::{check_no_legacy_test_context, *};
 pub use style::*;
 pub use location::*;
 
+#[cfg(test)]
+mod free_fn_tests;
+
+#[cfg(test)]
+mod structure_tests;
+
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {

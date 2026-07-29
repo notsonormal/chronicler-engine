@@ -2,3 +2,6 @@
 //! Narrative prompt builder modules.
 
 pub(crate) mod assembler;
+
+#[cfg(test)]
+mod assembler_tests;

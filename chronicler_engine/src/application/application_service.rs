@@ -20,11 +20,9 @@ use crate::application::game_view_query::GameViewQuery;
 use crate::application::generation_gate::GenerationGate;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::application::spawn_pipeline_task;
-use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::game::Game;
 use crate::domain::model::map::MapDef;
-use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -42,7 +40,6 @@ pub struct DefaultApplicationService {
     pub(crate) generation_gate: GenerationGate,
     pub(crate) game_catalogue: GameCatalogue,
     pub(crate) game_view_query: GameViewQuery,
-    pub(crate) world_catalogue: WorldCatalogue,
     pub(crate) settings: Arc<RwLock<AppSettings>>,
     pub(crate) game_service: Arc<GameService>,
     pub(crate) pipeline: ActionPipeline,
@@ -56,7 +53,6 @@ impl DefaultApplicationService {
         generation_gate: GenerationGate,
         game_catalogue: GameCatalogue,
         game_view_query: GameViewQuery,
-        world_catalogue: WorldCatalogue,
         settings: Arc<RwLock<AppSettings>>,
         game_service: Arc<GameService>,
         pipeline: ActionPipeline,
@@ -67,7 +63,6 @@ impl DefaultApplicationService {
             generation_gate,
             game_catalogue,
             game_view_query,
-            world_catalogue,
             settings,
             game_service,
             pipeline,
@@ -87,16 +82,10 @@ impl DefaultApplicationService {
         self.persistence_gate.storage()
     }
 
-    /// Cached projection of `GenerationStatus::Generating`. Read-only on the facade;
-    /// the underlying `Arc<AtomicBool>` stays internal to `GenerationGate`
-    /// (ADR-030) so callers can't mutate generation flag state through the API boundary.
     pub fn is_generating_now(&self) -> bool {
         self.generation_gate.is_generating().load(Ordering::SeqCst)
     }
 
-    /// Test seam: force the cached projection flag. Production reads should go
-    /// through `is_generating_now()`; this exists so tests can simulate an
-    /// in-flight generation without exposing `GenerationGate`'s internal atomic.
     pub fn set_is_generating(&self, value: bool) {
         self.generation_gate
             .is_generating()
@@ -119,50 +108,6 @@ impl DefaultApplicationService {
         self.persistence_gate.preset_store()
     }
 
-    pub fn load_or_fresh(&self) -> GameState {
-        self.persistence_gate.load_or_fresh()
-    }
-
-    pub fn load_expecting_valid_state(&self) -> Result<GameState, EngineError> {
-        self.persistence_gate.load_expecting_valid_state()
-    }
-
-    pub fn save_state(&self, state: &GameState) -> Result<u64, EngineError> {
-        self.persistence_gate.save_state(state)
-    }
-
-    pub fn save_message_and_snapshot(&self, state: &mut GameState) -> Result<u64, EngineError> {
-        self.persistence_gate.save_message_and_snapshot(state)
-    }
-
-    pub fn delete_and_remove_message(
-        &self,
-        state: &mut GameState,
-        id: u64,
-    ) -> Result<(), EngineError> {
-        self.persistence_gate.delete_and_remove_message(state, id)
-    }
-
-    pub fn load_messages_with_swipes(&self) -> Result<Vec<Message>, EngineError> {
-        self.persistence_gate.load_messages_with_swipes()
-    }
-
-    pub fn load_messages_into_state(&self, state: &mut GameState) {
-        self.persistence_gate.load_messages_into_state(state)
-    }
-
-    pub fn build_fresh_initial_state(&self) -> Result<GameState, EngineError> {
-        self.persistence_gate.build_fresh_initial_state()
-    }
-
-    pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
-        self.persistence_gate.load_messages()
-    }
-
-    pub fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
-        self.persistence_gate.update_message_text(id, text)
-    }
-
     pub fn switch_swipe(
         &self,
         message_id: u64,
@@ -172,34 +117,15 @@ impl DefaultApplicationService {
             .switch_swipe(self.is_generating_now(), message_id, swipe_index)
     }
 
-    pub fn edit_history(&self, id: u64, text: String) -> Result<(), ApplicationError> {
-        self.persistence_gate.edit_history(id, text)
-    }
-
-    pub fn delete_last(&self) -> Result<(), ApplicationError> {
-        self.persistence_gate.delete_last()
-    }
-
     pub fn active_quantifier_prompt(&self) -> String {
         self.game_view_query.active_quantifier_prompt()
-    }
-
-    pub fn find_retry_anchor<'a>(
-        &self,
-        messages: &'a [Message],
-    ) -> Option<(usize, &'a Message, u64)> {
-        self.persistence_gate.find_retry_anchor(messages)
-    }
-
-    pub fn set_game_id(&self, game_id: u64) {
-        self.persistence_gate.set_game_id(game_id);
     }
 
     pub fn process_action(
         self: &Arc<Self>,
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
-        let mut game_state = self.load_or_fresh();
+        let mut game_state = self.persistence_gate.load_or_fresh();
         let game_id = self.current_game_id();
 
         self.generation_gate.heal_stale(game_id, &mut game_state);
@@ -241,7 +167,7 @@ impl DefaultApplicationService {
 
     #[instrument(skip(self), fields(input_length))]
     pub fn execute_action(&self, input: String) {
-        let mut state = self.load_or_fresh();
+        let mut state = self.persistence_gate.load_or_fresh();
         state.narrative.last_trigger = None;
         if let Err(PhaseError::Cancelled) = self.pipeline.run_from_input(state, input) {
             tracing::debug!("Pipeline cancelled");
@@ -250,7 +176,7 @@ impl DefaultApplicationService {
 
     #[instrument(skip(self))]
     pub fn retry_last_response(&self) {
-        let messages = match self.load_messages() {
+        let messages = match self.persistence_gate.load_messages() {
             Ok(m) => m,
             Err(e) => {
                 self.pipeline
@@ -259,7 +185,9 @@ impl DefaultApplicationService {
             }
         };
 
-        let Some((anchor_idx, _anchor_msg, snapshot_id)) = self.find_retry_anchor(&messages) else {
+        let Some((anchor_idx, _anchor_msg, snapshot_id)) =
+            self.persistence_gate.find_retry_anchor(&messages)
+        else {
             self.pipeline
                 .retry_persist_error("Retry failed: no anchor message");
             return;
@@ -326,13 +254,79 @@ impl DefaultApplicationService {
 
     #[instrument(skip(self))]
     pub fn retrigger_event(&self) {
-        let state = self.load_or_fresh();
+        let state = self.persistence_gate.load_or_fresh();
         let outcome = self.pipeline.retry_event_continuation(state);
         self.pipeline.handle_retry_outcome(outcome);
     }
 
     pub fn continue_narration(self: &Arc<Self>) -> Result<ProcessActionResult, EngineError> {
         self.process_action(String::new())
+    }
+
+    pub fn retry(self: &Arc<Self>) -> Result<(), ApplicationError> {
+        let game_state = self.persistence_gate.load_or_fresh();
+
+        if game_state.narrative.history.last_input_text().is_none() {
+            return Err(ApplicationError::validation("No input to retry"));
+        }
+
+        let (_, cancelled) = self.prepare_retry_state(
+            game_state,
+            GenerationStatus::Generating,
+            GenerationPhase::Narrating,
+        )?;
+        if cancelled {
+            return Err(ApplicationError::ShuttingDown);
+        }
+
+        spawn_pipeline_task(Arc::clone(self), move |app_inner| {
+            if app_inner.is_shutting_down() {
+                return;
+            }
+            app_inner.retry_last_response();
+        });
+
+        Ok(())
+    }
+
+    pub fn retrigger(self: &Arc<Self>) -> Result<(), ApplicationError> {
+        let game_state = self.persistence_gate.load_or_fresh();
+
+        if game_state.narrative.last_trigger.is_none() {
+            return Err(ApplicationError::validation("No trigger context available"));
+        }
+
+        let messages = self.persistence_gate.load_messages()?;
+        let Some(last_msg) = messages.last() else {
+            return Err(ApplicationError::validation("No messages to retrigger"));
+        };
+
+        let is_narration = last_msg.message_type == MessageType::Narration
+            || last_msg.message_type == MessageType::Dialogue;
+
+        if !is_narration || last_msg.event_header().is_some() {
+            return Err(ApplicationError::validation(
+                "Last message must be a narration to retrigger",
+            ));
+        }
+
+        let (_, cancelled) = self.prepare_retry_state(
+            game_state,
+            GenerationStatus::Generating,
+            GenerationPhase::Narrating,
+        )?;
+        if cancelled {
+            return Err(ApplicationError::ShuttingDown);
+        }
+
+        spawn_pipeline_task(Arc::clone(self), move |app_inner| {
+            if app_inner.is_shutting_down() {
+                return;
+            }
+            app_inner.retrigger_event();
+        });
+
+        Ok(())
     }
 
     pub fn create_game(&self, world_key: &str, persona_key: &str) -> Result<u64, ApplicationError> {
@@ -360,11 +354,17 @@ impl DefaultApplicationService {
     }
 
     pub fn list_worlds(&self) -> Result<Vec<WorldCard>, ApplicationError> {
-        self.world_catalogue.list_worlds()
+        self.persistence_gate
+            .storage()
+            .list_worlds()
+            .map_err(Into::into)
     }
 
     pub fn get_world(&self, key: &str) -> Result<Option<WorldWithMap>, ApplicationError> {
-        self.world_catalogue.get_world(key)
+        self.persistence_gate
+            .storage()
+            .get_world(key)
+            .map_err(Into::into)
     }
 
     pub fn create_world(
@@ -372,7 +372,10 @@ impl DefaultApplicationService {
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<i64, ApplicationError> {
-        self.world_catalogue.create_world(world_card, map)
+        self.persistence_gate
+            .storage()
+            .create_world(&world_card, &map)
+            .map_err(Into::into)
     }
 
     pub fn update_world(
@@ -381,15 +384,24 @@ impl DefaultApplicationService {
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<(), ApplicationError> {
-        self.world_catalogue.update_world(id, world_card, map)
+        self.persistence_gate
+            .storage()
+            .update_world(id, &world_card, &map)
+            .map_err(Into::into)
     }
 
     pub fn delete_world(&self, key: &str) -> Result<(), ApplicationError> {
-        self.world_catalogue.delete_world(key)
+        self.persistence_gate
+            .storage()
+            .delete_world(key)
+            .map_err(Into::into)
     }
 
     pub fn list_personas(&self) -> Result<Vec<PersonaCard>, ApplicationError> {
-        self.world_catalogue.list_personas()
+        self.persistence_gate
+            .storage()
+            .list_personas()
+            .map_err(Into::into)
     }
 
     pub fn get_generating_status(
@@ -433,7 +445,9 @@ impl DefaultApplicationService {
         self.game_view_query.get_debug_state()
     }
 
-    /// Returns `cancelled=true` if shutdown was requested mid-call.
+    /// Set generation status/phase, persist the resulting snapshot, and return the
+    /// mutated state paired with the current shutdown flag (`cancelled=true` if
+    /// shutdown was requested mid-call).
     pub(crate) fn prepare_retry_state(
         &self,
         mut game_state: GameState,

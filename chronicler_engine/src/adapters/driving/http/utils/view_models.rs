@@ -4,7 +4,6 @@
 use pulldown_cmark::{CowStr, Event, Options, Parser, html};
 
 pub(crate) fn markdown_to_html(text: &str) -> String {
-    // Raw source HTML becomes escaped text; only generated quote tags remain trusted HTML.
     let parser =
         Parser::new_ext(text, Options::ENABLE_SMART_PUNCTUATION).flat_map(sanitize_markdown_event);
     let mut html_output = String::new();
@@ -12,7 +11,7 @@ pub(crate) fn markdown_to_html(text: &str) -> String {
     html_output
 }
 
-fn sanitize_markdown_event(event: Event<'_>) -> Vec<Event<'static>> {
+pub(crate) fn sanitize_markdown_event(event: Event<'_>) -> Vec<Event<'static>> {
     match event {
         Event::Text(text) => render_quote_events(&text),
         Event::Html(raw_html) | Event::InlineHtml(raw_html) => {
@@ -22,7 +21,7 @@ fn sanitize_markdown_event(event: Event<'_>) -> Vec<Event<'static>> {
     }
 }
 
-fn render_quote_events(text: &str) -> Vec<Event<'static>> {
+pub(crate) fn render_quote_events(text: &str) -> Vec<Event<'static>> {
     let mut events = Vec::new();
     let mut text_start = 0;
 

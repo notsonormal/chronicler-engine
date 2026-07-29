@@ -3,3 +3,6 @@
 
 pub mod harper;
 pub mod mock;
+
+#[cfg(test)]
+mod harper_tests;

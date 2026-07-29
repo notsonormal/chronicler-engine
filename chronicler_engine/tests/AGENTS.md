@@ -27,9 +27,11 @@ Examples:
 - **http/**
     - `actions.rs` — HTTP integration tests for the action and action-confirm handlers: graceful degradation when state load or message insert fails, and snapshot-save failure paths.
     - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
+    - `core.rs` — HTTP integration test for reset-handler error handling.
     - `debug.rs` — HTTP integration tests for the debug endpoints: `/debug/state` returns the expected JSON shape and `/debug/is_generating` reflects the actual generation status.
     - `fragment.rs` — HTTP integration tests for fragment rendering: basic fragments return HTML, visual sidebar renders the room image, action area fragment renders, and the action handler accepts commands.
     - `games_fragment_handlers.rs` — Integration tests for games_fragment handlers
+    - `index_handler.rs` — HTTP integration test for the dashboard index handler.
     - `mod.rs` — HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, server wiring, and the per-endpoint text-check suite.
     - `server_impl_wiring.rs` — HTTP wiring tests for `server_impl.rs` (real request routing lives in `tests/http/fragment.rs`).
     - `test_helpers.rs` — Shared test helpers for HTTP tests
@@ -42,11 +44,14 @@ Examples:
     - `invariant_contract.rs` — Runtime invariant contract tests — fast regression guards.
     - **guardrails/**
       - `enums.rs` — Enum variant doc guardrail: every enum variant must carry `///` doc, OR the enum must be marked `/// [TRIVIAL_ENUM]` with all variants bare.
+      - `free_fn.rs` — Free fn location guardrail: top-level free fns must live in a folder named `mappers`, `utils`, `builders`, `test_support`, `bootstrap`, or `handlers`.
+      - `free_fn_tests.rs` — Tests for `free_fn.rs` guardrail.
       - `layers.rs` — Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, and tests-vs-messages/swipes separation.
       - `location.rs` — Location guardrail tests: ensures `#[test]` / `#[cfg(test)]` units live in the correct directory (e.g., unit tests stay in `src/`, integration tests stay in `tests/`).
       - `mod.rs` — Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
       - `nesting.rs` — Nesting depth guardrail — reports function-body control-flow nesting depth violations (probe only; does not gate the build).
       - `structure.rs` — Structure guardrail tests: doc-anchor standards, mod.rs purity, no-std-thread, file length, and the new test module-header rule.
+      - `structure_tests.rs` — Tests for `structure.rs` guardrail.
       - `style.rs` — Style guardrail tests: import ordering, single-letter variable usage, separator comments, long comment runs, and per-file `cfg(test)` tracking.
 - **integration/**
     - `mod.rs` — Integration test binary root: wires shared helpers (`test_utils`, `fixtures`, `storage_ext`, `application_ext`) and re-exports factory helpers (`failing_service`, `working_service`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
@@ -63,7 +68,6 @@ Examples:
         - `pipeline.rs` — Integration tests for the action pipeline: delayed LLM completion, quantifier detection of movement and NPCs (with trigger firing), and graceful handling of empty LLM responses.
         - `retry.rs` — Integration tests for action retry behaviour: re-running the pipeline against the last user input, no-op on empty history, recovery after a previous LLM failure, and the missing-snapshot error path.
     - **bootstrap/**
-      - `mod.rs` — Bootstrap startup-branch smoke tests for `bootstrap::run()`.
       - `run_branches.rs` — Smoke tests covering uncovered startup branches in `bootstrap::run()`.
     - **flow/**
       - `arrival_persistence.rs` — Integration flow tests for arrival narration persistence — confirms the arrival narration survives a state reload, exercising the `ArrivalTaskContext` end-to-end against SQLite storage.

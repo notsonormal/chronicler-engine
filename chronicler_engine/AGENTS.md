@@ -19,7 +19,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
-        - `types.rs` — Text check adapter-specific type definitions
       - **utils/**
         - `harper.rs` — Harper text-check adapter boundary helpers.
         - `mock.rs` — Mock LLM provider utilities.
@@ -36,18 +35,20 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `application_service.rs` — DefaultApplicationService — façade over application collaborators.
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
+    - `game_catalogue.rs` — GameCatalogue — game-lifecycle storage orchestration.
     - `game_service.rs` — Game service handling gameplay operations
     - `game_view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
+    - `generation_gate.rs` — GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
     - `generation_guard.rs` — Generation guard logic
     - `llm_message.rs` — LLM message DTO + recorder save seam
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
+    - `persistence_gate.rs` — PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
     - `text_check_service.rs` — TextCheckService orchestrator for text checking
     - **action_pipeline/**
       - `mod.rs` — Action pipeline for processing game actions
       - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
       - `phases.rs` — Phase implementations for the action pipeline
       - `pipeline.rs` — Action pipeline orchestration and execution
-      - `retry.rs` — Retry logic for action pipeline operations
     - **agents/**
       - `mod.rs` — Agent registry and trait definitions
       - `registry.rs` — Runtime agent lookup and lifecycle
@@ -59,14 +60,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `prompt.rs` — Quantifier prompt construction
         - `types.rs` — Quantifier type definitions
     - **debug/**
-      - `dto.rs` — DebugStateView — debug-state DTO for the HTTP debug endpoint (T2 ticket 04 — extracted from DefaultApplicationService).
-      - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint (T2 ticket 04 — extracted from DefaultApplicationService).
-    - **game_catalogue/**
-      - `gate.rs` — GameCatalogue — game-lifecycle storage orchestration.
-      - `mod.rs` — GameCatalogue — game-lifecycle storage orchestration (T2 ticket 04 — façade-first carve-out).
-    - **generation_gate/**
-      - `gate.rs` — GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
-      - `mod.rs` — GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
+      - `dto.rs` — DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
+      - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint.
     - **narrative_prompt/**
       - `assembler.rs` — Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
       - `mod.rs` — Prompt construction orchestration
@@ -77,9 +72,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **utils/**
         - `context.rs` — Prompt context fitting — message budget enforcement.
         - `mod.rs` — Narrative prompt utility modules.
-    - **persistence_gate/**
-      - `gate.rs` — PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
-      - `mod.rs` — PersistenceGate — game-storage seam + persistence helpers (T2 façade-first carve-out).
     - **ports/**
       - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)
@@ -87,21 +79,17 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **utils/**
       - `llm_provider.rs` — Merge system + user prompts for models that ignore the system role.
       - `mod.rs` — Application-layer utility modules.
-      - `retry.rs` — Retry/retrigger top-level orchestrators (shuttle work to background via spawn_pipeline_task).
       - `sanitize.rs` — LLM input/output sanitization
       - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
       - `spawn.rs` — Shared spawn helper for pipeline tasks
       - `token_budget.rs` — Token budget management
-    - **world_catalogue/**
-      - `gate.rs` — WorldCatalogue — worlds/personas CRUD pass-through (T2 ticket 04 — façade-first carve-out from DefaultApplicationService).
-      - `mod.rs` — WorldCatalogue — worlds/personas CRUD pass-through (T2 ticket 04 — façade-first carve-out).
   - **bootstrap/**
     - `init_game.rs` — Game state initialization and arrival narration spawning
     - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution
     - `validate.rs` — Data validation utilities
-    - `wiring.rs` — Composition root for application orchestrators — wires port impls to
+    - `wiring.rs` — Composition root for application orchestrators
   - **domain/**
     - **model/**
       - `action.rs` — Action enum and semantic command types
@@ -152,7 +140,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.
   - `coverage_summary.py` — Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON.
   - `diagnostic_benchmark.py` — Run the diagnostic benchmark suite and produce an aggregated markdown/JSON report.
-  - `extract_http_routes.py` — Generate `docs/diataxis/reference/http_routes.md` from `router.rs`.
+  - `extract_http_routes.py` — Generate `docs/diataxis/reference/frontend/http_routes.md` from `router.rs`.
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
   - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/AGENTS.md.
@@ -185,7 +173,7 @@ You are responsible for the overall health of the Chronicler Engine. It is more 
    - Line 1: `//! [DOC: chronicler_engine/docs/diataxis/reference/<area>/<name>.md]` (links to reference documentation; `reference/` only — no `explanation/`, `how-to/`, or `tutorials/` targets)
    - Line 2: `//! Human-readable summary` (used for auto-generating STRUCTURE section)
    Function-level anchors removed.
-3. **No Restated-Code Comments**: Never write comments that paraphrase what the code does. If the code isn't clear, rename the symbols rather than comment. Comments explain the WHY only when non-obvious: a hidden constraint, a workaround for a specific bug, behavior that would surprise a reader.
+3. **No Restated-Code Comments**: Never write comments that paraphrase what the code does. If the code isn't clear, rename the symbols rather than comment. Comments explain the WHY only when non-obvious: a hidden constraint, behavior that would surprise a reader.
 4. **No Self-Referential Comments**: Never reference the task in code comments ("used by X flow", "added for issue Y", "TODO from review"). Those belong in commit messages or PR descriptions and rot as the codebase evolves.
 
 ## THE TEST-FIRST PHILOSOPHY

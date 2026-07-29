@@ -62,13 +62,13 @@ impl ArrivalTaskContext {
 
     #[instrument(err, skip(self), fields(room_id = %self.room_id))]
     pub(crate) fn run(self) -> Result<(), EngineError> {
-        let mut state = match self.app.load_expecting_valid_state() {
+        let mut state = match self.app.persistence_gate.load_expecting_valid_state() {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!(
                     "load_expecting_valid_state failed in arrival task: {e}; falling back to fresh initial state"
                 );
-                match self.app.build_fresh_initial_state() {
+                match self.app.persistence_gate.build_fresh_initial_state() {
                     Ok(s) => s,
                     Err(e2) => {
                         tracing::error!("build_fresh_initial_state also failed: {e2}");
@@ -147,12 +147,12 @@ impl ArrivalTaskContext {
                     GenerationStatus::Error(format!("LLM Error: {e}"));
             }
         }
-
-        // Arrival is the only caller that injects scenario logs into
-        // `state.narrative.history` directly before this write, so it uses
-        // `save_message_and_snapshot` (not `save_state`) — the message +
-        // snapshot + swipe wiring matches the unpersisted arrival message.
-        if let Err(e) = self.app.save_message_and_snapshot(&mut state) {
+        
+        if let Err(e) = self
+            .app
+            .persistence_gate
+            .save_message_and_snapshot(&mut state)
+        {
             tracing::error!("Failed to save arrival message and snapshot: {e}");
         }
 

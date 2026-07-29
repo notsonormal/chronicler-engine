@@ -5,14 +5,15 @@ title: Architecture System
 
 ## Overview
 
+The engine is organised as a hexagon.
+
 ## Layer Structure
 
-- `crate::domain::model` — Pure data structures; game state.
+- `crate::domain::model` — Pure data structures AND pure rule methods.
 - `crate::application` — Orchestration.
 - `crate::adapters::driven` — Outbound adapters (storage, LLM providers, text check).
 - `crate::adapters::driving` — Inbound adapters (HTTP, CLI).
 - `crate::bootstrap` — Composition root.
-- `crate::settings` — Settings data model.
 - `crate::test_support` — Shared fixtures.
 
 ## Dependency Invariant
@@ -30,7 +31,7 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 ## Settings
 
-Loaded once at startup in `bootstrap/run.rs::load_settings`. Shared via `Arc<RwLock<AppSettings>>` held on `AppState.settings`. Construction-chain recipients take a reference at wiring time; no business-logic layer reloads from disk. `max_context_tokens` is read dynamically per call (per-call budget). Defaults are authored in `src/domain/model/settings.rs::Default`; `settings.json` is not consulted at startup.
+Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via `Arc<RwLock<AppSettings>>` held on `AppState.settings`. Construction-chain recipients take a reference at wiring time; no business-logic layer reloads from disk. `max_context_tokens` is read dynamically per call (per-call budget).
 
 ## Deployment Contract
 

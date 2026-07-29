@@ -297,7 +297,7 @@ fn test_<method>_failure() {
 
 The two `TestOverride` variants (`internal` and `config`) map to two different `EngineError` arms downstream. Use `internal` for unexpected runtime errors (DB corruption, write failure) and `config` for input-validation failures.
 
-Applied at storage, action-pipeline, and HTTP-fragment tiers (`storage/backend/*_tests.rs`, `application/action_pipeline/{pipeline,retry}_tests.rs`, `adapters/driving/http/{settings_fragment,prompt_presets_fragment}/handlers_tests.rs`).
+Applied at storage, action-pipeline, and HTTP-fragment tiers (`storage/backend/*_tests.rs`, `application/action_pipeline/{pipeline,retry}_tests.rs`, `adapters/driving/http/{settings,prompt_presets}/handlers/*_tests.rs`).
 
 ### Cross-cutting B — XSS regression checks
 

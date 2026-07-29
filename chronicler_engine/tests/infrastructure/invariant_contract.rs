@@ -210,7 +210,7 @@ fn test_inv004_cancellable_at_boundaries() {
 
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(100));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .game_service_fn(move |_storage| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             Arc::new(GameService::with_backends(
@@ -218,12 +218,12 @@ fn test_inv004_cancellable_at_boundaries() {
                 AgentRegistry::default(),
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
     let started_for = app.current_game_id();
     let switched_to = started_for.wrapping_add(99);
     let pipeline = app.pipeline().clone();
-    let state_for_thread = app.latest_state();
+    let state_for_thread = app.latest_state(&pg);
 
     let outcome = std::thread::scope(|s| {
         let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
@@ -239,7 +239,7 @@ fn test_inv004_cancellable_at_boundaries() {
             ),
             "narration should start within timeout"
         );
-        app.set_game_id(switched_to);
+        pg.set_game_id(switched_to);
 
         handle.join().expect("pipeline thread should not panic")
     });
@@ -249,7 +249,7 @@ fn test_inv004_cancellable_at_boundaries() {
         "INV-004: pipeline should return Cancelled on game_id mismatch at boundary, got {outcome:?}"
     );
 
-    let final_state = app.latest_state();
+    let final_state = app.latest_state(&pg);
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -465,7 +465,7 @@ async fn test_p4_concurrent_happy_path() {
             .with_narrations(vec!["GEN_A_OUTPUT".to_string(), "GEN_B_OUTPUT".to_string()]),
     );
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .game_service_fn(move |_storage| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             Arc::new(GameService::with_backends(
@@ -473,7 +473,7 @@ async fn test_p4_concurrent_happy_path() {
                 AgentRegistry::default(),
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
     let game1 = app.current_game_id();
 
@@ -508,7 +508,7 @@ async fn test_p4_concurrent_happy_path() {
         "gen A's pipeline must complete (slot released) within timeout"
     );
 
-    let state_after_a = app.latest_state();
+    let state_after_a = app.latest_state(&pg);
     let a_present = state_after_a
         .narrative
         .history
@@ -542,7 +542,7 @@ async fn test_p4_concurrent_happy_path() {
         "gen B's pipeline must complete within timeout"
     );
 
-    let state_after_b = app.latest_state();
+    let state_after_b = app.latest_state(&pg);
     let b_present = state_after_b
         .narrative
         .history
@@ -589,7 +589,7 @@ async fn test_p4_concurrent_triple_overlap() {
         "GEN_C_OUTPUT".to_string(),
     ]));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .game_service_fn(move |_storage| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             Arc::new(GameService::with_backends(
@@ -597,7 +597,7 @@ async fn test_p4_concurrent_triple_overlap() {
                 AgentRegistry::default(),
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
     let game1 = app.current_game_id();
 
@@ -661,7 +661,7 @@ async fn test_p4_concurrent_triple_overlap() {
         "active game must be game 3 at end of test"
     );
 
-    let state3 = app.latest_state();
+    let state3 = app.latest_state(&pg);
     let history_texts: Vec<String> = state3
         .narrative
         .history

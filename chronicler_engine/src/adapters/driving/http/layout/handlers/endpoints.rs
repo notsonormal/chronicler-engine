@@ -44,7 +44,7 @@ pub async fn status_ready_handler() -> Html<String> {
 
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
     tracing::debug!("generating_status_handler: called");
-    let game_state = state.application_service.load_expecting_valid_state();
+    let game_state = state.persistence_gate.load_expecting_valid_state();
     let (status, phase) = match game_state {
         Ok(gs) => {
             tracing::debug!(

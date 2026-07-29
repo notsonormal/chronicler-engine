@@ -6,6 +6,7 @@ use std::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
+use crate::application::persistence_gate::PersistenceGate;
 use crate::application::GameService;
 use crate::application::text_check_service::TextCheckService;
 use crate::bootstrap::wiring::WiredApp;
@@ -19,6 +20,7 @@ pub struct AppState {
     pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
     pub game_service: Arc<GameService>,
     pub application_service: Arc<DefaultApplicationService>,
+    pub persistence_gate: Arc<PersistenceGate>,
     pub text_check_service: Arc<TextCheckService>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub shutdown_token: Arc<std::sync::RwLock<CancellationToken>>,
@@ -31,6 +33,7 @@ impl AppState {
             preset_storage: wired.preset_storage,
             game_service: wired.game_service,
             application_service: wired.application_service,
+            persistence_gate: wired.persistence_gate,
             text_check_service: wired.text_check_service,
             settings: wired.settings,
             shutdown_token: Arc::new(RwLock::new(shutdown_token)),

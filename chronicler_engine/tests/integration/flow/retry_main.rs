@@ -36,7 +36,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             let quantifier = Arc::clone(&quantifier);
             Arc::new(GameService::with_mock_quantifier(
@@ -44,16 +44,16 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
                 quantifier,
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&pg, "walk around");
     app.execute_action("walk around".to_string());
     assert!(
-        app.wait_for_generation_complete(1000),
+        app.wait_for_generation_complete(&pg, 1000),
         "First execution should complete"
     );
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     assert_eq!(
         guard.movement.current_room_id, "room1",
         "First execution: player should stay in room1"
@@ -61,10 +61,10 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
     app.retry_last_response();
 
     assert!(
-        app.wait_for_generation_complete(1000),
+        app.wait_for_generation_complete(&pg, 1000),
         "Retry should complete"
     );
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Retry should apply NEW quantifier result and move player to room2"
@@ -86,7 +86,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         "You look around the empty room.".to_string(),
         "The Innkeeper greets you warmly.".to_string(),
     ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             let narration_backend = Arc::clone(&narration_backend);
             Arc::new(GameService::with_mock_quantifier(
@@ -94,16 +94,16 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
                 Arc::new(MockBackend::default()),
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
-    app.add_input_and_save("approach the innkeeper");
+    app.add_input_and_save(&pg, "approach the innkeeper");
     app.execute_action("approach the innkeeper".to_string());
     assert!(
-        app.wait_for_generation_complete(1000),
+        app.wait_for_generation_complete(&pg, 1000),
         "First execution should complete"
     );
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     let first_narration = guard
         .narrative
         .history()
@@ -118,10 +118,10 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 
     app.retry_last_response();
     assert!(
-        app.wait_for_generation_complete(1000),
+        app.wait_for_generation_complete(&pg, 1000),
         "Retry should complete"
     );
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     let retry_narration = guard
         .narrative
         .history()
@@ -146,7 +146,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
                 .to_string(),
             r#"{"npcs_in_room": []}"#.to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             let quantifier = Arc::clone(&quantifier);
             Arc::new(GameService::with_mock_quantifier(
@@ -154,25 +154,25 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
                 quantifier,
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&pg, "walk around");
     app.execute_action("walk around".to_string());
-    assert!(app.wait_for_generation_complete(1000));
-    let _snap = app.latest_snapshot();
+    assert!(app.wait_for_generation_complete(&pg, 1000));
+    let _snap = app.latest_snapshot(&pg);
 
     app.retry_last_response();
-    assert!(app.wait_for_generation_complete(1000));
-    let _snap = app.latest_snapshot();
-    let guard = app.latest_state();
+    assert!(app.wait_for_generation_complete(&pg, 1000));
+    let _snap = app.latest_snapshot(&pg);
+    let guard = app.latest_state(&pg);
     assert_eq!(guard.movement.current_room_id, "room2");
 
     app.retry_last_response();
-    assert!(app.wait_for_generation_complete(1000));
-    let _snap = app.latest_snapshot();
+    assert!(app.wait_for_generation_complete(&pg, 1000));
+    let _snap = app.latest_snapshot(&pg);
 
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     let history = guard.narrative.history();
     assert!(
         !history.is_empty(),
@@ -183,30 +183,30 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
 #[test]
 fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     let data = base_data(vec![]);
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
                 Arc::new(MockBackend::default()),
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&pg, "walk around");
     app.execute_action("walk around".to_string());
     assert!(
-        app.wait_for_generation_complete(1000),
+        app.wait_for_generation_complete(&pg, 1000),
         "First execution should complete"
     );
 
     app.retry_last_response();
     assert!(
-        app.wait_for_generation_complete(1000),
+        app.wait_for_generation_complete(&pg, 1000),
         "Retry should complete"
     );
 
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     let input_msg = guard
         .narrative
         .history
@@ -223,21 +223,21 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
 #[test]
 fn test_retry_after_edited_input_uses_new_text() {
     let data = base_data(vec![]);
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             Arc::new(GameService::with_mock_quantifier(
                 make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
                 Arc::new(MockBackend::default()),
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&pg, "walk around");
     app.execute_action("walk around".to_string());
-    assert!(app.wait_for_generation_complete(1000));
+    assert!(app.wait_for_generation_complete(&pg, 1000));
 
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     let first_narration = guard
         .narrative
         .history()
@@ -251,7 +251,7 @@ fn test_retry_after_edited_input_uses_new_text() {
     );
 
     {
-        let mut state = app.latest_state();
+        let mut state = app.latest_state(&pg);
         if let Some(msg) = state
             .narrative
             .history
@@ -263,12 +263,12 @@ fn test_retry_after_edited_input_uses_new_text() {
                 swipe.text = "sprint forward".to_string();
             }
         }
-        app.save_test_state(&state);
+        app.save_test_state(&pg, &state);
     }
 
     app.retry_last_response();
-    assert!(app.wait_for_generation_complete(1000));
-    let guard = app.latest_state();
+    assert!(app.wait_for_generation_complete(&pg, 1000));
+    let guard = app.latest_state(&pg);
     let retry_narration = guard
         .narrative
         .history()
@@ -320,7 +320,7 @@ fn test_main_retry_reevaluates_triggers() {
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             let quantifier = Arc::clone(&quantifier);
             Arc::new(GameService::with_mock_quantifier(
@@ -328,12 +328,12 @@ fn test_main_retry_reevaluates_triggers() {
                 quantifier,
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&pg, "walk around");
     app.execute_action("walk around".to_string());
-    assert!(app.wait_for_generation_complete(1000));
-    let guard = app.latest_state();
+    assert!(app.wait_for_generation_complete(&pg, 1000));
+    let guard = app.latest_state(&pg);
     let events_after_execute = guard
         .narrative
         .history()
@@ -346,8 +346,8 @@ fn test_main_retry_reevaluates_triggers() {
     );
 
     app.retry_last_response();
-    assert!(app.wait_for_generation_complete(1000));
-    let guard = app.latest_state();
+    assert!(app.wait_for_generation_complete(&pg, 1000));
+    let guard = app.latest_state(&pg);
     let events_after_retry = guard
         .narrative
         .history()
@@ -368,7 +368,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": []}"#.to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             let quantifier = Arc::clone(&quantifier);
             Arc::new(GameService::with_mock_quantifier(
@@ -376,16 +376,16 @@ fn test_retry_completes_when_quantifier_returns_none() {
                 quantifier,
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&pg, "walk around");
     app.execute_action("walk around".to_string());
-    assert!(app.wait_for_generation_complete(1000));
+    assert!(app.wait_for_generation_complete(&pg, 1000));
 
     app.retry_last_response();
-    assert!(app.wait_for_generation_complete(1000));
-    let guard = app.latest_state();
+    assert!(app.wait_for_generation_complete(&pg, 1000));
+    let guard = app.latest_state(&pg);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Retry should complete even if quantifier returns None"
@@ -439,8 +439,8 @@ fn test_retry_no_pre_main_snapshot() {
         Arc::new(ps)
     };
 
-    let app: std::sync::Arc<DefaultApplicationService> =
-        chronicler_engine::test_support::build_test_service(
+    let (app, pg): (std::sync::Arc<DefaultApplicationService>, _) =
+        chronicler_engine::test_support::build_test_service_with_pg(
             std::sync::Arc::clone(&storage),
             std::sync::Arc::clone(&preset_storage),
             std::sync::Arc::new(GameService::with_mock_quantifier(
@@ -450,23 +450,23 @@ fn test_retry_no_pre_main_snapshot() {
         )
         .expect("build_test_service: build_app_graph_for_tests should succeed");
 
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&pg, "examine room");
     app.execute_action("examine room".to_string());
-    assert!(app.wait_for_generation_complete(1000));
+    assert!(app.wait_for_generation_complete(&pg, 1000));
 
-    let state_before_reset = app.latest_state();
+    let state_before_reset = app.latest_state(&pg);
 
     {
         let conn = db_pool.conn();
         let _ = conn.execute("DELETE FROM game_state_snapshots WHERE game_id = 1", []);
     }
     {
-        app.save_test_state(&state_before_reset);
+        app.save_test_state(&pg, &state_before_reset);
     }
 
     app.retry_last_response();
 
-    let stable = app.wait_for_generation_complete(500);
+    let stable = app.wait_for_generation_complete(&pg, 500);
     assert!(
         stable,
         "Retry with no pre-main snapshot should complete (possibly with error)"
@@ -481,7 +481,7 @@ fn test_movement_with_arrival_narration_retry() {
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             let quantifier = Arc::clone(&quantifier);
             Arc::new(GameService::with_mock_quantifier(
@@ -489,14 +489,14 @@ fn test_movement_with_arrival_narration_retry() {
                 quantifier,
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
-    app.add_input_and_save("walk to room2");
+    app.add_input_and_save(&pg, "walk to room2");
     app.execute_action("walk to room2".to_string());
-    assert!(app.wait_for_generation_complete(1000));
+    assert!(app.wait_for_generation_complete(&pg, 1000));
 
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     let arrival_count_before = guard
         .narrative
         .history()
@@ -509,9 +509,9 @@ fn test_movement_with_arrival_narration_retry() {
     );
 
     app.retry_last_response();
-    assert!(app.wait_for_generation_complete(1000));
+    assert!(app.wait_for_generation_complete(&pg, 1000));
 
-    let guard = app.latest_state();
+    let guard = app.latest_state(&pg);
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Retry should still end in room2"
@@ -535,7 +535,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
         "First narration text.".to_string(),
         "Second narration text.".to_string(),
     ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, pg) = SqliteTestAppBuilder::with_data(data)
         .game_service_fn(move |storage| {
             let narration_backend = Arc::clone(&narration_backend);
             Arc::new(GameService::with_mock_quantifier(
@@ -543,14 +543,14 @@ fn test_retry_appends_swipe_to_existing_narration() {
                 Arc::new(MockBackend::default()),
             ))
         })
-        .build_service()
+        .build_with_state()
         .unwrap();
 
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&pg, "examine room");
     app.execute_action("examine room".to_string());
-    assert!(app.wait_for_generation_complete(1000));
+    assert!(app.wait_for_generation_complete(&pg, 1000));
 
-    let msgs = app.load_messages().unwrap();
+    let msgs = pg.load_messages().unwrap();
     let narration = msgs
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -559,9 +559,9 @@ fn test_retry_appends_swipe_to_existing_narration() {
     assert_eq!(narration.swipes.len(), 1);
 
     app.retry_last_response();
-    assert!(app.wait_for_generation_complete(1000));
+    assert!(app.wait_for_generation_complete(&pg, 1000));
 
-    let msgs = app.load_messages().unwrap();
+    let msgs = pg.load_messages().unwrap();
     let narrations: Vec<_> = msgs
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)

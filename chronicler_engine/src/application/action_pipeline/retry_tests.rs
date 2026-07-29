@@ -45,7 +45,7 @@ fn insert_message_with_swipe(
 }
 
 fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     let player_name = "Player".to_string();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     let snapshot =
@@ -61,7 +61,7 @@ fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
 }
 
 fn add_narration_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     state.add_message(text.to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -76,7 +76,7 @@ fn add_narration_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
 }
 
 fn save_pre_main(app: &DefaultApplicationService) -> u64 {
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -85,7 +85,7 @@ fn save_pre_main(app: &DefaultApplicationService) -> u64 {
 }
 
 fn save_pre_event(app: &DefaultApplicationService) -> u64 {
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -97,7 +97,7 @@ fn setup_event_flow(app: &DefaultApplicationService) {
     let _ = add_input_and_save(app, "test input");
     let _ = save_pre_main(app);
 
-    let mut pre_event_state = app.load_or_fresh();
+    let mut pre_event_state = app.persistence_gate.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -134,7 +134,7 @@ fn setup_event_flow_without_trigger(app: &DefaultApplicationService) {
     let _ = add_input_and_save(app, "test input");
     let _ = save_pre_main(app);
 
-    let mut pre_event_state = app.load_or_fresh();
+    let mut pre_event_state = app.persistence_gate.load_or_fresh();
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -172,7 +172,7 @@ fn test_retry_no_snapshot() {
     let app = &wired.application_service;
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("Retry failed: no anchor message")),
         "Should record retry error when no anchor message exists, got {:?}",
@@ -211,7 +211,7 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
 
     let _input_id = add_input_and_save(&app, "test input");
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     state.add_message("Event narration".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -232,7 +232,7 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
 fn test_retry_event_with_no_pre_event_and_no_input() {
     let app = TestAppBuilder::default_test().build_service();
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     state.add_message("Event only".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -286,7 +286,7 @@ fn test_retry_event_storage_error_on_pre_event() {
 
     handle.clear("load_snapshot_by_id");
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -305,7 +305,7 @@ fn test_retry_event_missing_trigger_context() {
 
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error on TriggerMissing, got {other:?}"),
@@ -323,7 +323,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app.load_or_fresh();
+    let mut pre_event_state = app.persistence_gate.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -341,7 +341,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
     let _ = app.pipeline().retry_event_continuation(pre_event_state);
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Cancelled retry should reset status to Idle, got {:?}",
@@ -365,7 +365,7 @@ fn test_retry_event_trigger_narration_fails() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -393,7 +393,7 @@ fn test_retry_event_trigger_narration_fails() {
 
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -418,7 +418,7 @@ fn test_retry_event_empty_continuation_text() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -447,7 +447,7 @@ fn test_retry_event_empty_continuation_text() {
 fn test_retry_main_no_pre_main_snapshot() {
     let app = TestAppBuilder::default_test().build_service();
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     let player_name = "Player".to_string();
     state.add_message(
         "test input".to_string(),
@@ -458,7 +458,7 @@ fn test_retry_main_no_pre_main_snapshot() {
         insert_message_with_swipe(&app, last);
     }
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     state.add_message("Narration text".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -471,7 +471,7 @@ fn test_retry_main_no_pre_main_snapshot() {
 
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -488,7 +488,7 @@ fn test_retry_event_continuation_happy_path() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app.load_or_fresh();
+    let mut pre_event_state = app.persistence_gate.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -522,7 +522,7 @@ fn test_retry_event_continuation_happy_path() {
 
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Should finish with Idle status, got {:?}",
@@ -538,7 +538,7 @@ fn test_retry_main_narration_happy_path() {
     let _pre_main_id = save_pre_main(&app);
     let _final_id = add_narration_and_save(&app, "Narration text");
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let _ = app
         .pipeline()
         .retry_main_narration(state, "test input".to_string());
@@ -582,7 +582,7 @@ fn test_retry_main_storage_error_on_pre_main() {
 
     handle.clear("load_snapshot_by_id");
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -635,7 +635,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app.load_or_fresh();
+    let mut pre_event_state = app.persistence_gate.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -667,7 +667,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         insert_message_with_swipe(&app, last);
     }
     app.retry_last_response();
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
         "Should set error status when continuation text is empty, got {:?}",
@@ -683,7 +683,7 @@ fn test_retry_appends_swipe_to_same_message() {
     let _pre_main_id = save_pre_main(&app);
     let _narration_id = add_narration_and_save(&app, "Narration text");
 
-    let msgs = app.load_messages().unwrap();
+    let msgs = app.persistence_gate.load_messages().unwrap();
     let narration_msg = msgs
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -701,7 +701,7 @@ fn test_retry_appends_swipe_to_same_message() {
 
     app.retry_last_response();
 
-    let msgs = app.load_messages().unwrap();
+    let msgs = app.persistence_gate.load_messages().unwrap();
     let narration = msgs
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -729,7 +729,7 @@ fn test_retrigger_event_cancels_cleanly() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app.load_or_fresh();
+    let mut pre_event_state = app.persistence_gate.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -765,7 +765,7 @@ fn test_retrigger_event_cancels_cleanly() {
 
     app.retrigger_event();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -804,7 +804,7 @@ fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
 
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error on world fetch failure, got {other:?}"),
@@ -840,7 +840,7 @@ fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
 
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error on persona fetch failure, got {other:?}"),
@@ -873,7 +873,7 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
 
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error, got {other:?}"),
@@ -904,7 +904,9 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
     let app_for_thread = Arc::clone(&app);
     let flipper = thread::spawn(move || {
         thread::sleep(Duration::from_millis(50));
-        app_for_thread.set_game_id(initial_game_id.wrapping_add(1));
+        app_for_thread
+            .persistence_gate
+            .set_game_id(initial_game_id.wrapping_add(1));
     });
 
     app.retry_last_response();
@@ -913,7 +915,7 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
         .join()
         .expect("game-id flipper thread should complete");
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -949,7 +951,9 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
     let app_for_thread = Arc::clone(&app);
     let flipper = thread::spawn(move || {
         thread::sleep(Duration::from_millis(50));
-        app_for_thread.set_game_id(initial_game_id.wrapping_add(1));
+        app_for_thread
+            .persistence_gate
+            .set_game_id(initial_game_id.wrapping_add(1));
     });
 
     app.retrigger_event();
@@ -958,7 +962,7 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
         .join()
         .expect("game-id flipper thread should complete");
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -993,7 +997,7 @@ fn test_retrigger_event_emits_error_on_world_fetch_failure() {
 
     app.retrigger_event();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => {
@@ -1010,7 +1014,7 @@ fn test_retrigger_event_emits_error_on_world_fetch_failure() {
 fn test_retry_event_continuation_handles_state_without_input_message() {
     let app = TestAppBuilder::default_test().build_service();
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     state.add_message(
         "Narration without prior input".to_string(),
@@ -1027,7 +1031,7 @@ fn test_retry_records_missing_snapshot_id() {
 
     let app = TestAppBuilder::default_test().build_service();
 
-    let mut state = app.load_or_fresh();
+    let mut state = app.persistence_gate.load_or_fresh();
     let player_name = "Player".to_string();
     state.add_message(
         "test input".to_string(),
@@ -1041,7 +1045,7 @@ fn test_retry_records_missing_snapshot_id() {
 
     app.retry_last_response();
 
-    let state = app.load_or_fresh();
+    let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error on missing snapshot, got {other:?}"),

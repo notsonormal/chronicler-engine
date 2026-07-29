@@ -1,4 +1,4 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/frontend/dashboard.md]
-//! Core HTTP handlers (index, debug, retry, retrigger, game_control, swipe, text_check).
+//! Chat window HTTP handlers.
 
 pub mod handlers;

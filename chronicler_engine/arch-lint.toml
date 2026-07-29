@@ -46,10 +46,6 @@ name = "model"
 paths = ["src/domain/model/**"]
 
 [[scopes]]
-name = "engine"
-paths = ["src/domain/engine/**"]
-
-[[scopes]]
 name = "ports"
 paths = ["src/application/ports/**"]
 
@@ -79,14 +75,8 @@ paths = ["src/adapters/driving/http/**"]
 # Model (innermost) must not depend on any outer layer.
 [[deny-scope-dep]]
 from = "model"
-to = ["server", "narrative", "engine", "application"]
+to = ["server", "narrative", "application"]
 message = "Model layer must be pure; cannot depend on outer layers."
-
-# Engine must not depend on outer layers (server, application, or narrative).
-[[deny-scope-dep]]
-from = "engine"
-to = ["server", "application", "narrative"]
-message = "Engine layer must not depend on server, application, or narrative layers."
 
 # Application must not depend on server.
 [[deny-scope-dep]]
@@ -117,11 +107,6 @@ paths = ["src/test_support/**"]
 from = "model"
 to = ["storage-models"]
 message = "Model layer must not depend on storage DB models/mappers."
-
-[[deny-scope-dep]]
-from = "engine"
-to = ["storage-models"]
-message = "Engine layer must not depend on storage DB models/mappers."
 
 [[deny-scope-dep]]
 from = "narrative"
@@ -160,7 +145,7 @@ message = "Server layer must not import from storage directly; use ApplicationSe
 # llm_message_repository used by llm_provider) false-trigger as self-deps.
 [[deny-scope-dep]]
 from = "ports"
-to = ["driven-llm", "driven-text-check", "narrative", "server", "storage", "storage-models", "bootstrap", "test-support", "engine"]
+to = ["driven-llm", "driven-text-check", "narrative", "server", "storage", "storage-models", "bootstrap", "test-support"]
 message = "Port traits must not depend on adapter impls, application services, or outer layers."
 
 # Adapters must not depend on each other.

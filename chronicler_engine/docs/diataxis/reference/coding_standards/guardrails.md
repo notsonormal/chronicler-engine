@@ -30,8 +30,7 @@ Declarative architecture rules in `arch-lint.toml`. Scope/layer enforcement rows
 
 | From Scope | To Scope(s) | Rationale |
 |------------|-------------|----------|
-| `model` | `server`, `narrative`, `engine`, `application` | Domain layer must be pure; no outer layer dependencies |
-| `engine` | `server`, `application`, `narrative` | Engine layer isolated from orchestration and I/O |
+| `model` | `server`, `narrative`, `application` | Domain layer must be pure; no outer layer dependencies |
 | `application` | `server` | Application orchestration independent of driving adapters |
 | `server` | `storage` | Driving adapter must not access storage directly; use application ports |
 
@@ -39,7 +38,7 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 
 ## 3. Custom syn-Based Convention Tests
 
-`tests/infrastructure/guardrails/` holds the AST walkers and the registered convention set (22 rules). The full set of registered tests lives in `tests/infrastructure/guardrails/mod.rs`; per-rule details (which patterns are checked, which scopes apply, which exemptions exist) live in the individual rule files alongside the walker code. The walker code is the source for each rule's standard and severity — this section is a navigation pointer, not a content restatement.
+`tests/infrastructure/guardrails/` holds the AST walkers and the registered convention set (see `tests/infrastructure/guardrails/mod.rs` for the current rule count and per-rule registration). Per-rule details (which patterns are checked, which scopes apply, which exemptions exist) live in the individual rule files alongside the walker code. The walker code is the source for each rule's standard and severity — this section is a navigation pointer, not a content restatement.
 
 ## 4. Coverage Exclusion Policy
 

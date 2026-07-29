@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::game_service::GameService;
+use crate::application::persistence_gate::PersistenceGate;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
@@ -118,9 +119,22 @@ impl TestAppBuilder {
         (build_router(app_state), service)
     }
 
+    pub fn build_with_state(self) -> (Router, AppState) {
+        let app_state = self.build_app_state();
+        (build_router(app_state.clone()), app_state)
+    }
+
     pub fn build_service(self) -> Arc<DefaultApplicationService> {
         let app_state = self.build_app_state();
         Arc::clone(&app_state.application_service)
+    }
+
+    pub fn build_service_with_pg(self) -> (Arc<DefaultApplicationService>, Arc<PersistenceGate>) {
+        let app_state = self.build_app_state();
+        (
+            Arc::clone(&app_state.application_service),
+            Arc::clone(&app_state.persistence_gate),
+        )
     }
 
     pub fn build_app_state(mut self) -> AppState {

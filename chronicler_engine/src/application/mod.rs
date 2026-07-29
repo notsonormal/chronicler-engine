@@ -19,18 +19,15 @@ pub mod persistence_gate;
 pub mod ports;
 pub mod text_check_service;
 pub mod utils;
-pub mod world_catalogue;
 
 pub use application_service::{
     ApplicationError, DebugStateView, DefaultApplicationService, ProcessActionResult,
 };
 pub use game_catalogue::GameCatalogue;
 pub use game_view_query::GameViewQuery;
-pub use world_catalogue::WorldCatalogue;
 pub use generation_gate::GenerationGate;
 pub use game_service::GameService;
 pub use generation_guard::GenerationGuard;
-pub use utils::retry::{retrigger, retry};
 pub(crate) use utils::spawn::spawn_pipeline_task;
 
 #[cfg(test)]

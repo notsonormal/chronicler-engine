@@ -10,7 +10,7 @@ use axum::{
 };
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driving::http::core::handlers::check_text_handler;
+use chronicler_engine::adapters::driving::http::chat_window::handlers::check_text_handler;
 use chronicler_engine::application::ports::text_checker::{CheckResult, TextChecker};
 use chronicler_engine::application::text_check_service::TextCheckService;
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};

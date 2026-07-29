@@ -1,22 +1,6 @@
 """Regression tests for `scripts/extract_http_routes.py`.
 
-Exercises the parser and emitter in isolation against synthetic router.rs
-fixtures. The tests cover:
-
-- Single-line `.route(...)` calls (the common case)
-- Multi-line `.route(...)` calls (e.g. `debug::debug_state_handler`)
-- `:id` / `:key` / `:index` path-parameter preservation
-- Both `get(...)` and `post(...)` verbs
-- Handler-module prefix grouping (per-area structure)
-- Doc emission (front-matter, required H2s, table row counts)
-- `use super::...` import normalization (bare handler → qualified)
-- `validate_docs.py --strict` pass on the emitted doc
-
-Mirrors the `scripts/tests/test_validate_docs.py` pattern: REPO_ROOT
-sys.path insert, `_run_check` style helpers, unittest discoverable.
-
-Run from the ``chronicler_engine/`` directory via
-``python -m unittest discover scripts/tests`` or via ``build.py``.
+Run via ``python -m unittest discover scripts/tests`` or via ``build.py``.
 """
 
 from __future__ import annotations
@@ -35,18 +19,12 @@ import extract_http_routes as er  # noqa: E402
 ENGINE_ROOT = REPO_ROOT / "chronicler_engine"
 
 
-# ---------------------------------------------------------------------------
-# Fixtures: synthetic router.rs content + golden helpers.
-# ---------------------------------------------------------------------------
-
 
 def _run_extract(source: str) -> list[er.Route]:
-    """Run the parser against `source`; return the list of routes."""
     return er.extract_routes(source)
 
 
 def _render(routes: list[er.Route]) -> str:
-    """Render the doc for `routes`."""
     grouped = er.group_routes_by_area(routes)
     return er._render_document(grouped)
 
@@ -56,7 +34,6 @@ def _front_matter() -> str:
 
 
 def _single_line_fixture() -> str:
-    """A synthetic router with only single-line .route(...) calls."""
     return (
         _front_matter()
         + "\n"
@@ -69,7 +46,6 @@ def _single_line_fixture() -> str:
 
 
 def _multi_line_fixture() -> str:
-    """A synthetic router with several multi-line .route(...) calls."""
     return (
         _front_matter()
         + "\n"
@@ -86,7 +62,6 @@ def _multi_line_fixture() -> str:
 
 
 def _bare_handler_fixture() -> str:
-    """A synthetic router that uses bare handler references (no `::`)."""
     return (
         "use super::handlers::index_handler;\n"
         + "use super::fragments;\n"
@@ -98,13 +73,8 @@ def _bare_handler_fixture() -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# Parser tests.
-# ---------------------------------------------------------------------------
-
 
 class TestParserSingleLine(unittest.TestCase):
-    """Single-line `.route(...)` calls — the common shape."""
 
     def test_parses_each_route(self) -> None:
         routes = _run_extract(_single_line_fixture())
@@ -132,11 +102,8 @@ class TestParserSingleLine(unittest.TestCase):
 
 
 class TestParserMultiLine(unittest.TestCase):
-    """Multi-line `.route(...)` calls where args span several lines."""
-
     def test_multi_line_parses_as_single_route(self) -> None:
         routes = _run_extract(_multi_line_fixture())
-        # 3 .route(...) calls, each potentially multi-line.
         self.assertEqual(len(routes), 3)
 
     def test_multi_line_extracts_path(self) -> None:
@@ -155,8 +122,6 @@ class TestParserMultiLine(unittest.TestCase):
 
 
 class TestParserPathParameters(unittest.TestCase):
-    """:id / :key / :index path parameters must be preserved verbatim."""
-
     def test_id_param_preserved(self) -> None:
         routes = _run_extract(
             ".route(\"/history/:id\", post(fragments::edit_history_handler))\n"
@@ -187,21 +152,15 @@ class TestParserPathParameters(unittest.TestCase):
 
 
 class TestParserUseImportNormalization(unittest.TestCase):
-    """Bare handler references are normalized via `use super::...` imports."""
-
     def test_bare_handler_normalized(self) -> None:
         routes = _run_extract(_bare_handler_fixture())
-        # index_handler → handlers::index_handler
         self.assertEqual(routes[0].handler, "handlers::index_handler")
 
     def test_already_qualified_handler_unchanged(self) -> None:
         routes = _run_extract(_bare_handler_fixture())
-        # fragments::header_fragment stays qualified (already has ::).
         self.assertEqual(routes[1].handler, "fragments::header_fragment")
 
     def test_unknown_bare_handler_left_alone(self) -> None:
-        # A bare identifier with no matching `use` import is left as-is
-        # (it will surface in the "Unknown areas" section).
         routes = _run_extract(
             "use super::fragments;\n"
             + ".route(\"/x\", get(some_unknown_handler))\n"
@@ -209,18 +168,11 @@ class TestParserUseImportNormalization(unittest.TestCase):
         self.assertEqual(routes[0].handler, "some_unknown_handler")
 
 
-# ---------------------------------------------------------------------------
-# Grouping tests.
-# ---------------------------------------------------------------------------
-
 
 class TestGrouping(unittest.TestCase):
-    """Routes are grouped by handler-module prefix → area."""
-
     def test_areas_initialized(self) -> None:
         routes = _run_extract(_single_line_fixture())
         grouped = er.group_routes_by_area(routes)
-        # All area names from AREA_GROUPS appear, even if empty.
         for _prefix, area in er.AREA_GROUPS:
             self.assertIn(area, grouped)
 
@@ -241,14 +193,8 @@ class TestGrouping(unittest.TestCase):
         self.assertEqual(len(grouped["_unknown"]), 1)
 
 
-# ---------------------------------------------------------------------------
-# Doc emission tests.
-# ---------------------------------------------------------------------------
-
 
 class TestDocEmission(unittest.TestCase):
-    """The rendered doc has the structure mandated by the ticket."""
-
     def setUp(self) -> None:
         self.routes = _run_extract(_single_line_fixture())
         self.doc = _render(self.routes)
@@ -263,46 +209,35 @@ class TestDocEmission(unittest.TestCase):
         self.assertIn("## Overview", self.doc)
 
     def test_empty_areas_no_h2(self) -> None:
-        # Empty areas no longer emit an H2; only areas with routes do.
-        # _single_line_fixture uses prefixes not in AREA_GROUPS, so all
-        # routes land in Unknown and no area H2 is emitted.
         self.assertIn("## Overview", self.doc)
+        self.assertIn("## Core", self.doc)
+        self.assertEqual(self.doc.count("## Core"), 1)
         self.assertIn("## Unknown areas", self.doc)
         for _prefix, area in er.AREA_GROUPS:
-            self.assertNotIn(f"## {area}", self.doc)
+            if area != "Core":
+                self.assertNotIn(f"## {area}", self.doc)
 
     def test_table_row_count_matches_routes(self) -> None:
-        # Each `.route(...)` call must yield exactly one table row in the
-        # rendered doc. Count by counting `| GET |` and `| POST |` rows.
         rows = re.findall(r"^\| (?:GET|POST) \|", self.doc, flags=re.MULTILINE)
         self.assertEqual(len(rows), len(self.routes))
 
     def test_table_renders_backticked_path_and_handler(self) -> None:
-        # Handler cell strips module prefix; H2 already names the area.
         self.assertIn("| GET | `/` | `index_handler` |", self.doc)
 
 
-# ---------------------------------------------------------------------------
-# End-to-end test against the real router.rs.
-# ---------------------------------------------------------------------------
-
 
 class TestRealRouter(unittest.TestCase):
-    """The script runs end-to-end against the real router.rs file."""
-
     def test_real_router_yields_52_routes(self) -> None:
         router_path = ENGINE_ROOT / er.ROUTER_REL
         if not router_path.exists():
             self.skipTest(f"router.rs not found: {router_path}")
         source = router_path.read_text(encoding="utf-8")
         routes = er.extract_routes(source)
-        # Hard criterion from the ticket: must be 52 routes.
         self.assertEqual(len(routes), 52)
 
     def test_real_router_route_count_matches_grep(self) -> None:
-        # Cross-check the parser's count against `grep -c '\.route('` on
-        # the same file. This guards against drift between the parser and
-        # the file's structure.
+        # Cross-check against `grep -c '\.route('` on the same file —
+        # guards against parser drift from the file's structure.
         router_path = ENGINE_ROOT / er.ROUTER_REL
         if not router_path.exists():
             self.skipTest(f"router.rs not found: {router_path}")
@@ -312,19 +247,14 @@ class TestRealRouter(unittest.TestCase):
         self.assertEqual(len(routes), grep_count)
 
     def test_real_router_doc_passes_validator(self) -> None:
-        """The emitted doc passes validate_docs.py --strict.
-
-        We write the doc to a temp file under a fake engine root and run
-        the validator in single-file mode so the warning from the
-        pre-existing architecture.md does not contaminate the result.
-        The fake engine root includes stub files for the relative links
-        the doc body references (`../../src/...`, `../../chronicler_engine/scripts/...`).
-        """
+        # Write the doc to a temp file under a fake engine root; run the
+        # validator in single-file mode so unrelated warnings from other
+        # docs do not contaminate the result.
         router_path = ENGINE_ROOT / er.ROUTER_REL
         if not router_path.exists():
             self.skipTest(f"router.rs not found: {router_path}")
 
-        # Late import to keep import order clean.
+        # Late import: keep import order clean.
         sys.path.insert(
             0,
             str(REPO_ROOT / "chronicler_engine" / "scripts"),
@@ -340,12 +270,9 @@ class TestRealRouter(unittest.TestCase):
             prefix="http-routes-validate-"
         ) as tmp_str:
             fake_engine_root = Path(tmp_str)
-            # Build the minimum directory structure so the doc's relative
-            # body links resolve to existing files. The validator checks
-            # link existence via the docs_root resolution; for our doc
-            # (under docs/diataxis/reference/), the docs_root it computes
-            # is <engine_root>/docs/diataxis, and the doc's relative links
-            # traverse `../../` back into engine_root territory.
+            # docs_root for a reference doc under docs/diataxis/reference/
+            # is <engine_root>/docs/diataxis; doc's relative links traverse
+            # `../../` back into engine_root territory, so stub those files.
             (
                 fake_engine_root / "docs" / "diataxis" / "reference" / "frontend"
             ).mkdir(parents=True)
@@ -390,17 +317,15 @@ class TestRealRouter(unittest.TestCase):
             )
 
     def test_rendered_doc_table_rows_sum_to_route_count(self) -> None:
-        """Sum of per-area table rows in the emitted doc equals 52.
-
-        This is the ticket's completion criterion #3 — the visible marker
-        that no route was silently dropped.
-        """
+        # Every parsed route appears in the rendered doc and no `_unknown`
+        # bucket remains (no silent drops).
         router_path = ENGINE_ROOT / er.ROUTER_REL
         if not router_path.exists():
             self.skipTest(f"router.rs not found: {router_path}")
         source = router_path.read_text(encoding="utf-8")
         routes = er.extract_routes(source)
         grouped = er.group_routes_by_area(routes)
+        self.assertEqual(grouped["_unknown"], [])
         rendered = er._render_document(grouped)
 
         rows = re.findall(r"^\| (?:GET|POST) \|", rendered, flags=re.MULTILINE)
@@ -408,14 +333,8 @@ class TestRealRouter(unittest.TestCase):
         self.assertEqual(len(rows), 52)
 
 
-# ---------------------------------------------------------------------------
-# CLI / writer tests.
-# ---------------------------------------------------------------------------
-
 
 class TestWriter(unittest.TestCase):
-    """write_document + CLI sanity checks."""
-
     def test_write_document_round_trip(self) -> None:
         with tempfile.TemporaryDirectory(prefix="http-routes-write-") as tmp_str:
             tmp = Path(tmp_str)
@@ -432,8 +351,7 @@ class TestWriter(unittest.TestCase):
             self.assertEqual(out_path.read_text(encoding="utf-8"), rendered)
 
     def test_stdout_flag_does_not_write_file(self) -> None:
-        # Smoke test: --stdout returns 0 (no file written). We capture
-        # stdout via subprocess-style invocation of main().
+        # --stdout returns 0 without writing a file.
         import io
 
         captured = io.StringIO()
@@ -444,7 +362,6 @@ class TestWriter(unittest.TestCase):
         finally:
             sys.stdout = old_stdout
         self.assertEqual(rc, 0)
-        # Output starts with front-matter.
         self.assertTrue(captured.getvalue().startswith("---"))
 
 

@@ -108,16 +108,6 @@ impl PersistenceGate {
         self.storage.save_snapshot(&snapshot)
     }
 
-    pub fn delete_and_remove_message(
-        &self,
-        state: &mut GameState,
-        id: u64,
-    ) -> Result<(), EngineError> {
-        self.storage.delete_message(id)?;
-        state.narrative.history.retain(|m| m.id != id);
-        Ok(())
-    }
-
     pub fn load_messages_with_swipes(&self) -> Result<Vec<Message>, EngineError> {
         self.storage.load_messages_with_swipes()
     }

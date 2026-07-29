@@ -135,7 +135,7 @@ A list of every game in storage (across all worlds), each with its game name, wo
 
 ### Name Generation
 
-New-game names are auto-generated as `{WorldName}_{YYYY-MM-DD}_{N}` (underscores between segments, not spaces) where `{N}` is one greater than the highest existing suffix for that world-and-date base. The format is implemented in `src/domain/model/game.rs::generate_game_name`. Collision handling scans `existing_names` for any prior name with the same `{WorldName}_{YYYY-MM-DD}` prefix and increments.
+New-game names are auto-generated as `{WorldName}_{YYYY-MM-DD}_{N}` (underscores between segments, not spaces) where `{N}` is one greater than the highest existing suffix for that world-and-date base.
 
 ## Document References
 

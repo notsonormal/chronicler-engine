@@ -13,7 +13,7 @@ The convention fits the constraint that Rust 2024 edition makes async-trait disp
 
 ## LLM-call offload via spawn_blocking
 
-Synchronous services (`GameService`, `ActionPipeline`) run inside `tokio::task::spawn_blocking`. The spawn helper lives at `src/application/spawn.rs`; HTTP handlers reach it through `DefaultApplicationService::process_action` and `GenerationGate::start_action` rather than calling it directly. The pipeline instance is built once at startup and shared through an `Arc`, so the handler submits work to the same pipeline across requests.
+Synchronous services (`GameService`, `ActionPipeline`) run inside `tokio::task::spawn_blocking`. The spawn helper lives at `src/application/utils/spawn.rs`; HTTP handlers reach it through `DefaultApplicationService::process_action` and `GenerationGate::start_action` rather than calling it directly. The pipeline instance is built once at startup and shared through an `Arc`, so the handler submits work to the same pipeline across requests.
 
 The offload buys separation between the Axum event loop, which stays responsive, and the LLM network call, which can take seconds. The synchronous service code is unchanged; the handler hands the blocking call to a Tokio blocking pool, returns immediately, and the caller awaits the response on the future the pool returns. The architectural cost is one allocation per request; the operational gain is that latency from one slow LLM call does not back up unrelated handlers.
 
