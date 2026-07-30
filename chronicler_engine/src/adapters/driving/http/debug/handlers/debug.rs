@@ -23,7 +23,11 @@ pub async fn debug_state_handler(
 }
 
 pub async fn debug_is_generating_handler(State(state): State<AppState>) -> String {
-    state.application_service.is_generating_now().to_string()
+    state
+        .application_service
+        .get_generating_status()
+        .map(|(status, _)| status.is_generating().to_string())
+        .unwrap_or_else(|_| "false".to_string())
 }
 
 pub async fn debug_backend_handler(State(state): State<AppState>) -> Json<DebugBackendResponse> {

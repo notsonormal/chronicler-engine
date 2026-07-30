@@ -1,7 +1,6 @@
 //! Test application builder for HTTP and integration tests.
 #![allow(clippy::expect_used)]
 
-use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 
 use axum::Router;
@@ -174,13 +173,18 @@ impl TestAppBuilder {
             state.narrative.last_trigger = Some(trigger);
         }
 
-        if let Some((status, phase)) = self.generation {
+        if let Some((status, phase)) = self.generation.clone() {
             state.narrative.input_buffer.status = status;
             state.narrative.input_buffer.phase = phase;
         }
 
         for (text, sender, log_type) in self.logs {
             state.add_message(text, sender, log_type);
+        }
+
+        if self.is_generating {
+            state.narrative.input_buffer.status = GenerationStatus::Generating;
+            state.narrative.input_buffer.phase = GenerationPhase::Narrating;
         }
 
         if !self.skip_seeding {
@@ -204,11 +208,17 @@ impl TestAppBuilder {
         .expect("build_app_graph_for_tests should succeed");
 
         if self.is_generating {
-            wired
-                .application_service
-                .generation_gate
-                .is_generating()
-                .store(true, Ordering::SeqCst);
+            let mut state = wired.persistence_gate.load_or_fresh();
+            state.narrative.input_buffer.status = GenerationStatus::Generating;
+            state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+            let _ = wired.persistence_gate.save_state(&state);
+        }
+
+        if let Some((status, phase)) = self.generation.clone() {
+            let mut state = wired.persistence_gate.load_or_fresh();
+            state.narrative.input_buffer.status = status;
+            state.narrative.input_buffer.phase = phase;
+            let _ = wired.persistence_gate.save_state(&state);
         }
 
         let shutdown_token = CancellationToken::new();

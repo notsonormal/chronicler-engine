@@ -1,7 +1,6 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! DefaultApplicationService — façade over application collaborators.
 
-use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 
 use tokio_util::sync::CancellationToken;
@@ -9,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use crate::adapters::driven::storage::worlds::WorldWithMap;
-use crate::adapters::driven::storage::{PresetStore, Storage};
+use crate::adapters::driven::storage::Storage;
 use crate::application::action_pipeline::phase_error::PhaseError;
 use crate::application::action_pipeline::pipeline::ActionPipeline;
 pub use crate::application::debug::DebugStateView;
@@ -34,7 +33,6 @@ use crate::error::EngineError;
 use crate::application::llm_message::LlmMessage;
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct DefaultApplicationService {
     pub(crate) persistence_gate: Arc<PersistenceGate>,
     pub(crate) generation_gate: GenerationGate,
@@ -74,22 +72,13 @@ impl DefaultApplicationService {
         &self.game_service
     }
 
+    /// Test seam only — no production callers.
     pub fn pipeline(&self) -> &ActionPipeline {
         &self.pipeline
     }
 
     pub fn storage(&self) -> &Arc<Storage> {
         self.persistence_gate.storage()
-    }
-
-    pub fn is_generating_now(&self) -> bool {
-        self.generation_gate.is_generating().load(Ordering::SeqCst)
-    }
-
-    pub fn set_is_generating(&self, value: bool) {
-        self.generation_gate
-            .is_generating()
-            .store(value, Ordering::SeqCst);
     }
 
     pub fn cancel_token(&self) -> &CancellationToken {
@@ -104,19 +93,18 @@ impl DefaultApplicationService {
         &self.settings
     }
 
-    pub fn preset_storage(&self) -> &Arc<PresetStore> {
-        self.persistence_gate.preset_store()
-    }
-
     pub fn switch_swipe(
         &self,
         message_id: u64,
         swipe_index: usize,
     ) -> Result<(), ApplicationError> {
+        let state = self.persistence_gate.load_or_fresh();
+        let is_generating = state.narrative.input_buffer.status.is_generating();
         self.persistence_gate
-            .switch_swipe(self.is_generating_now(), message_id, swipe_index)
+            .switch_swipe(is_generating, message_id, swipe_index)
     }
 
+    /// Test seam only — no production callers.
     pub fn active_quantifier_prompt(&self) -> String {
         self.game_view_query.active_quantifier_prompt()
     }
@@ -252,6 +240,7 @@ impl DefaultApplicationService {
         self.pipeline.handle_retry_outcome(outcome);
     }
 
+    /// Test seam only — no production callers.
     #[instrument(skip(self))]
     pub fn retrigger_event(&self) {
         let state = self.persistence_gate.load_or_fresh();

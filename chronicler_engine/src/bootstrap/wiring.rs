@@ -1,7 +1,6 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/startup.md]
 //! Composition root for application orchestrators
 
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
 use tokio_util::sync::CancellationToken;
@@ -73,7 +72,6 @@ fn build_app_collaborators(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
     settings: Arc<RwLock<AppSettings>>,
-    is_generating: Arc<AtomicBool>,
     game_service: &Arc<GameService>,
 ) -> AppCollaborators {
     let preset_store = Arc::new(PresetStore::new(preset_storage));
@@ -81,8 +79,7 @@ fn build_app_collaborators(
         Arc::clone(&storage),
         Arc::clone(&preset_store),
     ));
-    let generation_gate = GenerationGate::new(Arc::clone(&is_generating));
-    // Direct atomic access per ADR-030 hot-path.
+    let generation_gate = GenerationGate::new();
     let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
     let game_view_query = GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
     let pipeline = ActionPipeline::new(
@@ -99,6 +96,66 @@ fn build_app_collaborators(
         game_view_query,
         pipeline,
     }
+}
+
+fn wire_application_service(
+    collaborators: AppCollaborators,
+    settings: Arc<RwLock<AppSettings>>,
+    game_service: Arc<GameService>,
+) -> Arc<DefaultApplicationService> {
+    Arc::new(DefaultApplicationService::new(
+        Arc::clone(&collaborators.persistence_gate),
+        collaborators.generation_gate.clone(),
+        collaborators.game_catalogue.clone(),
+        collaborators.game_view_query.clone(),
+        Arc::clone(&settings),
+        Arc::clone(&game_service),
+        collaborators.pipeline.clone(),
+        CancellationToken::new(),
+    ))
+}
+
+fn build_wired_app(
+    storage: Arc<Storage>,
+    preset_storage: Arc<Storage>,
+    settings: Arc<RwLock<AppSettings>>,
+    game_service: Arc<GameService>,
+    text_check_service: Arc<TextCheckService>,
+) -> Result<WiredApp> {
+    let collaborators = build_app_collaborators(
+        Arc::clone(&storage),
+        Arc::clone(&preset_storage),
+        Arc::clone(&settings),
+        &game_service,
+    );
+
+    // Boot heal: a crash/restart may have left the current game persisted as Generating.
+    let current_game_id = storage.current_game_id();
+    let mut boot_state = collaborators.persistence_gate.load_or_fresh();
+    let pre_heal = boot_state.narrative.input_buffer.status.clone();
+    collaborators
+        .generation_gate
+        .heal_stale(current_game_id, &mut boot_state);
+    if boot_state.narrative.input_buffer.status != pre_heal {
+        let _ = collaborators.persistence_gate.save_state(&boot_state);
+    }
+
+    let application_service =
+        wire_application_service(collaborators, Arc::clone(&settings), game_service);
+
+    Ok(WiredApp {
+        storage,
+        preset_storage,
+        settings,
+        game_service: Arc::clone(&application_service.game_service),
+        persistence_gate: Arc::clone(&application_service.persistence_gate),
+        generation_gate: application_service.generation_gate.clone(),
+        game_catalogue: application_service.game_catalogue.clone(),
+        game_view_query: application_service.game_view_query.clone(),
+        pipeline: application_service.pipeline.clone(),
+        application_service,
+        text_check_service,
+    })
 }
 
 pub fn build_app_graph(
@@ -129,37 +186,13 @@ pub fn build_app_graph(
         (game_service, text_check_service)
     };
 
-    let collaborators = build_app_collaborators(
-        Arc::clone(&storage),
-        Arc::clone(&preset_storage),
-        Arc::clone(&settings),
-        Arc::new(AtomicBool::new(false)),
-        &game_service,
-    );
-    let application_service = Arc::new(DefaultApplicationService::new(
-        Arc::clone(&collaborators.persistence_gate),
-        collaborators.generation_gate.clone(),
-        collaborators.game_catalogue.clone(),
-        collaborators.game_view_query.clone(),
-        Arc::clone(&settings),
-        Arc::clone(&game_service),
-        collaborators.pipeline.clone(),
-        CancellationToken::new(),
-    ));
-
-    Ok(WiredApp {
+    build_wired_app(
         storage,
         preset_storage,
         settings,
-        game_service: Arc::clone(&game_service),
-        persistence_gate: collaborators.persistence_gate,
-        generation_gate: collaborators.generation_gate,
-        game_catalogue: collaborators.game_catalogue,
-        game_view_query: collaborators.game_view_query,
-        pipeline: collaborators.pipeline,
-        application_service,
+        game_service,
         text_check_service,
-    })
+    )
 }
 
 #[cfg(feature = "testing")]
@@ -199,35 +232,11 @@ pub fn build_app_graph_for_tests(
         (game_service, text_check_service)
     };
 
-    let collaborators = build_app_collaborators(
-        Arc::clone(&storage),
-        Arc::clone(&preset_storage),
-        Arc::clone(&settings),
-        Arc::new(AtomicBool::new(false)),
-        &game_service,
-    );
-    let application_service = Arc::new(DefaultApplicationService::new(
-        Arc::clone(&collaborators.persistence_gate),
-        collaborators.generation_gate.clone(),
-        collaborators.game_catalogue.clone(),
-        collaborators.game_view_query.clone(),
-        Arc::clone(&settings),
-        Arc::clone(&game_service),
-        collaborators.pipeline.clone(),
-        CancellationToken::new(),
-    ));
-
-    Ok(WiredApp {
+    build_wired_app(
         storage,
         preset_storage,
         settings,
-        game_service: Arc::clone(&game_service),
-        persistence_gate: collaborators.persistence_gate,
-        generation_gate: collaborators.generation_gate,
-        game_catalogue: collaborators.game_catalogue,
-        game_view_query: collaborators.game_view_query,
-        pipeline: collaborators.pipeline,
-        application_service,
+        game_service,
         text_check_service,
-    })
+    )
 }

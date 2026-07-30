@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use chronicler_engine::application::action_pipeline::PhaseError;
 use chronicler_engine::application::game_service::GameService;
@@ -20,6 +19,8 @@ use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
 use chronicler_engine::application::agents::registry::AgentRegistry;
+use std::sync::atomic::Ordering;
+
 use chronicler_engine::application::GenerationGuard;
 use chronicler_engine::application::utils::slot::GenerationSlot;
 use chronicler_engine::test_support::make_test_recorder;
@@ -39,6 +40,17 @@ mod storage_ext;
 use fixtures::create_minimal_test_state;
 use fixtures::create_test_state;
 use application_ext::PipelineHelpers;
+
+fn app_is_generating(
+    app: &chronicler_engine::application::application_service::DefaultApplicationService,
+) -> bool {
+    app.storage()
+        .load_latest_snapshot()
+        .ok()
+        .flatten()
+        .map(|snap| snap.narrative.input_buffer.status.is_generating())
+        .unwrap_or(false)
+}
 
 fn shopkeeper_npc() -> NpcCard {
     NpcCard {
@@ -76,28 +88,25 @@ fn npc_map(npcs: Vec<NpcCard>) -> HashMap<String, NpcCard> {
 
 #[test]
 fn test_inv001_generation_guard_resets_on_drop() {
-    let flag = Arc::new(AtomicBool::new(true));
     let registry = Arc::new(RwLock::new(HashMap::from([(
         1u64,
         GenerationSlot::Generating { generation_id: 1 },
     )])));
     {
-        let _guard = GenerationGuard::new(1, 1, Arc::clone(&registry), Arc::clone(&flag));
+        let _guard = GenerationGuard::new(1, 1, Arc::clone(&registry));
         assert!(
-            flag.load(Ordering::SeqCst),
-            "flag should be true while guard lives"
+            registry.read().unwrap().get(&1).unwrap().is_generating(),
+            "slot should be generating while guard lives"
         );
     }
     assert!(
-        !flag.load(Ordering::SeqCst),
-        "INV-001: GenerationGuard did not reset is_generating on drop"
+        !registry.read().unwrap().get(&1).unwrap().is_generating(),
+        "INV-001: GenerationGuard did not reset registry slot on drop"
     );
 }
 
 #[test]
 fn test_inv001_generation_guard_resets_on_panic() {
-    let flag = Arc::new(AtomicBool::new(true));
-    let flag_clone = Arc::clone(&flag);
     let registry = Arc::new(RwLock::new(HashMap::from([(
         1u64,
         GenerationSlot::Generating { generation_id: 1 },
@@ -105,14 +114,14 @@ fn test_inv001_generation_guard_resets_on_panic() {
     let registry_clone = Arc::clone(&registry);
 
     let result = std::panic::catch_unwind(move || {
-        let _guard = GenerationGuard::new(1, 1, registry_clone, flag_clone);
+        let _guard = GenerationGuard::new(1, 1, registry_clone);
         panic!("intentional panic to test guard drop");
     });
 
     assert!(result.is_err(), "panic should have occurred");
     assert!(
-        !flag.load(Ordering::SeqCst),
-        "INV-001: GenerationGuard did not reset is_generating on panic"
+        !registry.read().unwrap().get(&1).unwrap().is_generating(),
+        "INV-001: GenerationGuard did not reset registry slot on panic"
     );
 }
 #[test]
@@ -259,6 +268,8 @@ fn test_inv004_cancellable_at_boundaries() {
 
 #[test]
 fn test_inv004b_no_concurrent_async_actions() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     let flag = Arc::new(AtomicBool::new(false));
 
     let first = flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
@@ -270,23 +281,11 @@ fn test_inv004b_no_concurrent_async_actions() {
         "INV-004b: second compare_exchange should fail (concurrent action rejected)"
     );
 
-    {
-        let registry = Arc::new(RwLock::new(HashMap::from([(
-            1u64,
-            GenerationSlot::Generating { generation_id: 1 },
-        )])));
-        let _guard = GenerationGuard::new(1, 1, registry, Arc::clone(&flag));
-        assert!(flag.load(Ordering::SeqCst));
-    }
-
-    assert!(
-        !flag.load(Ordering::SeqCst),
-        "flag should be reset after guard drop"
-    );
+    flag.store(false, Ordering::SeqCst);
     let third = flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
     assert!(
         third.is_ok(),
-        "INV-004b: third compare_exchange should succeed after guard drop"
+        "INV-004b: third compare_exchange should succeed after flag reset"
     );
 }
 #[test]
@@ -503,7 +502,7 @@ async fn test_p4_concurrent_happy_path() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
-            || !app.is_generating_now(),
+            || !app_is_generating(&app),
         ),
         "gen A's pipeline must complete (slot released) within timeout"
     );
@@ -537,7 +536,7 @@ async fn test_p4_concurrent_happy_path() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
-            || !app.is_generating_now(),
+            || !app_is_generating(&app),
         ),
         "gen B's pipeline must complete within timeout"
     );
@@ -569,8 +568,8 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     assert!(
-        !app.is_generating_now(),
-        "is_generating projection must be false after both pipelines complete (registry clean)"
+        !app_is_generating(&app),
+        "persisted status must be Idle after both pipelines complete (registry clean)"
     );
 
     app.cancel_token().cancel();
@@ -650,44 +649,27 @@ async fn test_p4_concurrent_triple_overlap() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(10),
             std::time::Duration::from_millis(100),
-            || !app.is_generating_now(),
+            || {
+                let state = app.latest_state(&pg);
+                let history_texts: Vec<String> = state
+                    .narrative
+                    .history
+                    .iter()
+                    .map(|e| e.text().to_string())
+                    .collect();
+                let has_a = history_texts.iter().any(|t| t.contains("GEN_A_OUTPUT"));
+                let has_b = history_texts.iter().any(|t| t.contains("GEN_B_OUTPUT"));
+                let has_c = history_texts.iter().any(|t| t.contains("GEN_C_OUTPUT"));
+                !has_a && !has_b && has_c && !app_is_generating(&app)
+            },
         ),
-        "all three pipelines must complete within timeout"
+        "all three pipelines must complete with only gen C output in game 3"
     );
 
     assert_eq!(
         app.current_game_id(),
         game3,
         "active game must be game 3 at end of test"
-    );
-
-    let state3 = app.latest_state(&pg);
-    let history_texts: Vec<String> = state3
-        .narrative
-        .history
-        .iter()
-        .map(|e| e.text().to_string())
-        .collect();
-    let has_a = history_texts.iter().any(|t| t.contains("GEN_A_OUTPUT"));
-    let has_b = history_texts.iter().any(|t| t.contains("GEN_B_OUTPUT"));
-    let has_c = history_texts.iter().any(|t| t.contains("GEN_C_OUTPUT"));
-
-    assert!(
-        !has_a,
-        "game 3 state must NOT contain gen A's narration; history: {history_texts:?}"
-    );
-    assert!(
-        !has_b,
-        "game 3 state must NOT contain gen B's narration; history: {history_texts:?}"
-    );
-    assert!(
-        has_c,
-        "game 3 state MUST contain gen C's narration; history: {history_texts:?}"
-    );
-
-    assert!(
-        !app.is_generating_now(),
-        "is_generating projection must be false (no stale slots for games 1/2/3)"
     );
 
     let result_after = app

@@ -380,7 +380,15 @@ impl SqliteTestAppBuilder {
         )
         .expect("build_app_graph_for_tests should succeed");
         if is_generating {
-            wired.application_service.set_is_generating(true);
+            let mut snapshot = wired
+                .application_service
+                .storage()
+                .load_latest_snapshot()
+                .expect("load_latest_snapshot must succeed")
+                .expect("snapshot must exist for is_generating");
+            snapshot.narrative.input_buffer.status = GenerationStatus::Generating;
+            snapshot.narrative.input_buffer.phase = GenerationPhase::Narrating;
+            let _ = wired.application_service.storage().save_snapshot(&snapshot);
         }
         Ok((wired.application_service, wired.persistence_gate))
     }
@@ -402,7 +410,14 @@ fn finalize_app(
     )
     .expect("build_test_service_with_settings: build_app_graph_for_tests should succeed");
     if is_generating {
-        app.set_is_generating(true);
+        let mut snapshot = app
+            .storage()
+            .load_latest_snapshot()
+            .expect("load_latest_snapshot must succeed")
+            .expect("snapshot must exist for is_generating");
+        snapshot.narrative.input_buffer.status = GenerationStatus::Generating;
+        snapshot.narrative.input_buffer.phase = GenerationPhase::Narrating;
+        let _ = app.storage().save_snapshot(&snapshot);
     }
     app
 }

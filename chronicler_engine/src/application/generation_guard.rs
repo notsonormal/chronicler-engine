@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
 
 use crate::application::utils::slot::GenerationSlot;
 use crate::application::utils::slot::release_owned_slot;
@@ -15,7 +14,6 @@ pub struct GenerationGuard {
     game_id: u64,
     generation_id: u64,
     registry: Arc<RwLock<HashMap<u64, GenerationSlot>>>,
-    is_generating: Arc<AtomicBool>,
 }
 
 impl GenerationGuard {
@@ -23,24 +21,17 @@ impl GenerationGuard {
         game_id: u64,
         generation_id: u64,
         registry: Arc<RwLock<HashMap<u64, GenerationSlot>>>,
-        is_generating: Arc<AtomicBool>,
     ) -> Self {
         Self {
             game_id,
             generation_id,
             registry,
-            is_generating,
         }
     }
 }
 
 impl Drop for GenerationGuard {
     fn drop(&mut self) {
-        release_owned_slot(
-            &self.registry,
-            &self.is_generating,
-            self.game_id,
-            self.generation_id,
-        );
+        release_owned_slot(&self.registry, self.game_id, self.generation_id);
     }
 }

@@ -1,7 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Application-layer utility modules.
 
-pub mod llm_provider;
+pub mod prompt_merge;
 pub mod sanitize;
 pub mod slot;
 pub mod spawn;

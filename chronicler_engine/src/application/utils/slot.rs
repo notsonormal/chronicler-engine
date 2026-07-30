@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerationSlot {
@@ -25,21 +24,13 @@ impl GenerationSlot {
     }
 }
 
-/// Release a registry slot if the caller still owns it. Used by
-/// `GenerationGuard::drop` and `GenerationGate::release_generation_slot` so
-/// both paths share the same ownership check + projection atomic update.
-///
-/// A caller that no longer owns its slot (e.g. a stale generation whose game
-/// was reset and the slot taken over) is a no-op — it must not clobber the
-/// younger generation's slot or the projection atomic.
+/// Release a registry slot if the caller still owns it.
+/// A caller that no longer owns its slot is a no-op.
 pub fn release_owned_slot(
     registry: &Arc<RwLock<HashMap<u64, GenerationSlot>>>,
-    is_generating: &Arc<AtomicBool>,
     game_id: u64,
     generation_id: u64,
 ) {
-    // Slot clear + projection store share the write lock so the two mutations
-    // are atomic w.r.t. concurrent claims on other games.
     let mut registry = registry.write().unwrap_or_else(|p| {
         tracing::warn!(
             "Generation registry write lock poisoned during release_owned_slot; recovering"
@@ -58,9 +49,5 @@ pub fn release_owned_slot(
             generation_id,
             "release_owned_slot: registry slot not owned by caller; no-op"
         );
-    }
-    let any_other_generating = registry.values().any(|slot| slot.is_generating());
-    if !any_other_generating {
-        is_generating.store(false, Ordering::SeqCst);
     }
 }

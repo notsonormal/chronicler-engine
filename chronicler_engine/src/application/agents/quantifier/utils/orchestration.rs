@@ -7,6 +7,7 @@ use crate::domain::model::character::NpcCard;
 use crate::domain::model::state::game_state::GameState;
 use crate::error::EngineError;
 
+use crate::application::agents::quantifier::parser::parse_with_movement;
 use crate::application::agents::quantifier::prompt::QuantifierPromptBuilder;
 use crate::application::agents::quantifier::types::{
     MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierPromptContext,
@@ -117,7 +118,7 @@ pub(crate) fn quantify_room_with_llm_call(
                     &response[..response.len().min(200)]
                 );
 
-                let result = QuantifierResult::parse_with_movement(response, &known_ids);
+                let result = parse_with_movement(response, &known_ids);
                 tracing::info!(
                     "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
                     result.npcs.npc_ids,

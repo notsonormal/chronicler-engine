@@ -270,6 +270,7 @@ impl ActionPipeline {
     pub(crate) fn retry_persist_error(&self, message: impl Into<String>) {
         let mut state = self.persistence.load_or_fresh();
         state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
+        state.narrative.input_buffer.phase = GenerationPhase::default();
         if let Err(e) = self.persistence.save_state(&state) {
             tracing::error!("Critical: failed to persist retry error state: {e}");
         }

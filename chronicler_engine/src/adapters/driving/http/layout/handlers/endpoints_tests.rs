@@ -3,6 +3,7 @@ use crate::adapters::driving::http::layout::handlers::endpoints::{
     llm_messages_fragment, reset_generating_handler, status_ready_handler, story_log_fragment,
     visual_sidebar_fragment,
 };
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
@@ -64,11 +65,13 @@ async fn test_generating_status_idle() {
 #[tokio::test]
 async fn test_generating_status_generating() {
     let state = TestAppBuilder::default_test().build_app_state();
-    state
+    let mut game_state = state.application_service.persistence_gate.load_or_fresh();
+    game_state.narrative.input_buffer.status = GenerationStatus::Generating;
+    game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    let _ = state
         .application_service
-        .generation_gate
-        .is_generating()
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+        .persistence_gate
+        .save_state(&game_state);
 
     let result = generating_status_handler(axum::extract::State(state)).await;
     assert!(!result.0.is_empty());

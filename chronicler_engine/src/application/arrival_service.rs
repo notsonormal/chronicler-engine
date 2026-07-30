@@ -147,7 +147,7 @@ impl ArrivalTaskContext {
                     GenerationStatus::Error(format!("LLM Error: {e}"));
             }
         }
-        
+
         if let Err(e) = self
             .app
             .persistence_gate

@@ -1,7 +1,7 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/narrative/agent_system.md]
 //! Quantifier agent system
 pub mod agent;
-pub mod parser;
+pub use utils::parser;
 pub mod prompt;
 pub mod types;
 pub(crate) mod utils;

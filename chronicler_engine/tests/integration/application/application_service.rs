@@ -170,7 +170,8 @@ async fn test_process_action_self_heals_stale_generating_status() {
         .build_with_state()
         .unwrap();
 
-    assert!(!app_service.is_generating_now());
+    let (status, _phase) = app_service.get_generating_status().unwrap();
+    assert!(!status.is_generating());
 
     let result = app_service.process_action("look around".to_string());
     assert!(

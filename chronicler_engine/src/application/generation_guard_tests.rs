@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::application::utils::slot::GenerationSlot;
 
@@ -15,21 +14,15 @@ fn test_generation_guard_clears_on_drop() {
         .write()
         .unwrap()
         .insert(1, GenerationSlot::Generating { generation_id: 1 });
-    let flag = Arc::new(AtomicBool::new(true));
     {
-        let _guard = GenerationGuard::new(1, 1, Arc::clone(&registry), Arc::clone(&flag));
+        let _guard = GenerationGuard::new(1, 1, Arc::clone(&registry));
         assert!(
-            flag.load(Ordering::SeqCst),
-            "flag should be true while guard lives"
+            registry.read().unwrap().get(&1).unwrap().is_generating(),
+            "slot should be generating while guard lives"
         );
     }
     assert!(
-        !flag.load(Ordering::SeqCst),
-        "GenerationGuard did not clear flag on drop"
-    );
-    assert_eq!(
-        *registry.read().unwrap().get(&1).unwrap(),
-        GenerationSlot::Idle,
+        !registry.read().unwrap().get(&1).unwrap().is_generating(),
         "GenerationGuard did not clear registry slot on drop"
     );
 }
@@ -41,23 +34,16 @@ fn test_generation_guard_clears_on_panic() {
         .write()
         .unwrap()
         .insert(1, GenerationSlot::Generating { generation_id: 1 });
-    let flag = Arc::new(AtomicBool::new(true));
     let registry_for_thread = Arc::clone(&registry);
-    let flag_clone = Arc::clone(&flag);
 
     let result = panic::catch_unwind(AssertUnwindSafe(move || {
-        let _guard = GenerationGuard::new(1, 1, registry_for_thread, flag_clone);
+        let _guard = GenerationGuard::new(1, 1, registry_for_thread);
         panic!("intentional panic to test guard drop");
     }));
 
     assert!(result.is_err(), "panic should have occurred");
     assert!(
-        !flag.load(Ordering::SeqCst),
-        "GenerationGuard did not clear flag on panic"
-    );
-    assert_eq!(
-        *registry.read().unwrap().get(&1).unwrap(),
-        GenerationSlot::Idle,
+        !registry.read().unwrap().get(&1).unwrap().is_generating(),
         "GenerationGuard did not clear registry slot on panic"
     );
 }

@@ -1,4 +1,5 @@
 //! GameService integration tests
+use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 
@@ -414,7 +415,14 @@ fn test_continue_narration_with_stale_is_generating_flag() {
         .backends(MockBackend::default)
         .build_with_state()
         .unwrap();
-    app.set_is_generating(true);
+    let mut snapshot = app
+        .storage()
+        .load_latest_snapshot()
+        .expect("load_latest_snapshot must succeed")
+        .expect("snapshot must exist");
+    snapshot.narrative.input_buffer.status = GenerationStatus::Generating;
+    snapshot.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    let _ = app.storage().save_snapshot(&snapshot);
 
     app.execute_action(String::new());
 
