@@ -3,9 +3,9 @@ use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::application::utils::slot::GenerationSlot;
+use crate::application::generation::slot::GenerationSlot;
 
-use crate::application::generation_guard::GenerationGuard;
+use crate::application::generation::guard::GenerationGuard;
 
 #[test]
 fn test_generation_guard_clears_on_drop() {

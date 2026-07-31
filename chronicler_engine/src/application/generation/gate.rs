@@ -7,10 +7,10 @@ use std::sync::{Arc, RwLock};
 
 use crate::application::application_service::ProcessActionResult;
 use crate::application::errors::ApplicationError;
-use crate::application::generation_guard::GenerationGuard;
+use crate::application::generation::guard::GenerationGuard;
 use crate::application::persistence_gate::PersistenceGate;
-use crate::application::utils::slot::GenerationSlot;
-use crate::application::utils::slot::release_owned_slot;
+use crate::application::generation::slot::GenerationSlot;
+use crate::application::generation::slot::release_owned_slot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::game_state::GameState;
 use crate::error::EngineError;

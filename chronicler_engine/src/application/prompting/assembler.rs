@@ -9,14 +9,14 @@ use crate::domain::model::state::message_types::MessageEntry;
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::template::render_template;
 use crate::domain::model::world::WorldCard;
-use crate::application::utils::token_budget as budget;
-use crate::application::utils::token_budget::truncate_to_budget;
-use crate::application::narrative_prompt::builders::assembler::{
+use crate::application::prompting::token_budget as budget;
+use crate::application::prompting::token_budget::truncate_to_budget;
+use crate::application::prompting::builders::sections::{
     build_post_history_prompt, build_system_prompt, render_known_npc_entry,
     render_present_relationships, render_preset_xml_parts, sanitize_for_prompt,
 };
-use crate::application::narrative_prompt::types::{NpcContext, PromptContext};
-use crate::application::narrative_prompt::utils::context::fit_messages_to_context;
+use crate::application::prompting::types::{NpcContext, PromptContext};
+use crate::application::prompting::utils::context::fit_messages_to_context;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledPrompt {

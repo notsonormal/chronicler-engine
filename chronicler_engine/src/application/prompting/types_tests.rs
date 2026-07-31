@@ -1,4 +1,4 @@
-use crate::application::narrative_prompt::types::PromptLayer;
+use crate::application::prompting::types::PromptLayer;
 
 #[test]
 fn test_prompt_layer_variants() {

@@ -8,7 +8,7 @@ const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
     "application/agents/registry.rs",
     "application/agents/quantifier/agent.rs",
     "application/persistence_gate.rs",
-    "application/game_catalogue.rs",
+    "application/games/catalogue.rs",
 ];
 
 // Guardrail: application/ may not import `Storage` directly except the grandfathered files (ADR-027).
@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn test_check_application_storage_direct_catches_violation() {
         let violations = check_application_storage_direct(
-            "application/narrative_prompt/assembler.rs",
+            "application/prompting/assembler.rs",
             "use crate::adapters::driven::storage::Storage;\n",
         );
         assert_eq!(violations.len(), 1);
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn test_check_application_storage_direct_skips_comments() {
         let violations = check_application_storage_direct(
-            "application/narrative_prompt/assembler.rs",
+            "application/prompting/assembler.rs",
             "// use crate::adapters::driven::storage::Storage;\n",
         );
         assert_eq!(violations.len(), 0);

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use chronicler_engine::application::action_pipeline::PhaseError;
+use chronicler_engine::application::pipeline::PhaseError;
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::game_state::{FreeActionContext, GameState};
 
@@ -22,7 +22,7 @@ use chronicler_engine::application::agents::registry::AgentRegistry;
 use std::sync::atomic::Ordering;
 
 use chronicler_engine::application::GenerationGuard;
-use chronicler_engine::application::utils::slot::GenerationSlot;
+use chronicler_engine::application::generation::slot::GenerationSlot;
 use chronicler_engine::test_support::make_test_recorder;
 
 #[path = "../test_utils/mod.rs"]

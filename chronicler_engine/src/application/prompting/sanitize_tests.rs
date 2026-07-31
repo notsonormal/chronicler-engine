@@ -1,4 +1,4 @@
-use crate::application::utils::sanitize::sanitize_llm_output;
+use crate::application::prompting::sanitize::sanitize_llm_output;
 
 #[test]
 fn test_sanitize_leading_channel_close() {

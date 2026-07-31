@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::application::utils::slot::GenerationSlot;
-use crate::application::utils::slot::release_owned_slot;
+use crate::application::generation::slot::GenerationSlot;
+use crate::application::generation::slot::release_owned_slot;
 
 /// RAII guard releasing the per-game registry slot on drop.
 /// No-op if superseded by a younger generation (reset/switch_game).

@@ -10,13 +10,13 @@ use crate::adapters::driven::llm::providers::{
 };
 use crate::adapters::driven::storage::{PresetStore, Storage};
 use crate::adapters::driven::text_check::HarperTextChecker;
-use crate::application::action_pipeline::pipeline::ActionPipeline;
+use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::game_catalogue::GameCatalogue;
+use crate::application::games::catalogue::GameCatalogue;
 use crate::application::game_service::GameService;
-use crate::application::game_view_query::GameViewQuery;
-use crate::application::generation_gate::GenerationGate;
+use crate::application::games::view_query::GameViewQuery;
+use crate::application::generation::gate::GenerationGate;
 use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::persistence_gate::PersistenceGate;

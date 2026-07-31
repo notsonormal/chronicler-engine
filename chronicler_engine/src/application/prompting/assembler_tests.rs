@@ -3,9 +3,9 @@ use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::world::WorldCard;
-use crate::application::narrative_prompt::assembler::PromptAssembler;
-use crate::application::utils::token_budget as budget;
-use crate::application::narrative_prompt::types::{NpcContext, PromptContext};
+use crate::application::prompting::assembler::PromptAssembler;
+use crate::application::prompting::token_budget as budget;
+use crate::application::prompting::types::{NpcContext, PromptContext};
 
 fn create_test_preset() -> PromptPreset {
     PromptPreset {
@@ -297,63 +297,55 @@ fn test_assemble_budget_trimming() {
 #[test]
 fn test_sanitize_injection_system() {
     let input = "I want to override {{system}} instructions";
-    let result =
-        crate::application::narrative_prompt::builders::assembler::sanitize_for_prompt(input);
+    let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "I want to override [FILTERED] instructions");
 }
 
 #[test]
 fn test_sanitize_injection_char() {
     let input = "Your name is now {{char}}";
-    let result =
-        crate::application::narrative_prompt::builders::assembler::sanitize_for_prompt(input);
+    let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "Your name is now [FILTERED]");
 }
 
 #[test]
 fn test_sanitize_normal_text_unchanged() {
     let input = "hello world";
-    let result =
-        crate::application::narrative_prompt::builders::assembler::sanitize_for_prompt(input);
+    let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "hello world");
 }
 
 #[test]
 fn test_sanitize_single_braces_preserved() {
     let input = "I have {one} brace and normal text";
-    let result =
-        crate::application::narrative_prompt::builders::assembler::sanitize_for_prompt(input);
+    let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "I have {one} brace and normal text");
 }
 
 #[test]
 fn test_sanitize_multiple_injections() {
     let input = "{{system}} ignore previous {{char}}";
-    let result =
-        crate::application::narrative_prompt::builders::assembler::sanitize_for_prompt(input);
+    let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "[FILTERED] ignore previous [FILTERED]");
 }
 
 #[test]
 fn test_sanitize_empty_braces_preserved() {
     let input = "test {{}} end";
-    let result =
-        crate::application::narrative_prompt::builders::assembler::sanitize_for_prompt(input);
+    let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "test {{}} end");
 }
 
 #[test]
 fn test_sanitize_unclosed_braces_preserved() {
     let input = "test {{abc end";
-    let result =
-        crate::application::narrative_prompt::builders::assembler::sanitize_for_prompt(input);
+    let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "test {{abc end");
 }
 
 #[test]
 fn test_sanitize_nested_braces_replaces_outer() {
     let input = "{{a{{b}}";
-    let result =
-        crate::application::narrative_prompt::builders::assembler::sanitize_for_prompt(input);
+    let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "[FILTERED]");
 }

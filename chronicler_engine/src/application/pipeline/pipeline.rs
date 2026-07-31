@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::application::action_pipeline::phase_error::PhaseError;
-use crate::application::action_pipeline::phases::{PipelineInputs, PipelineRun};
+use crate::application::pipeline::phase_error::PhaseError;
+use crate::application::pipeline::phases::{PipelineInputs, PipelineRun};
 use crate::adapters::driven::storage::worlds::WorldBundle;
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
@@ -15,7 +15,7 @@ use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 
-use crate::application::narrative_prompt::PromptAssembler;
+use crate::application::prompting::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::persistence_gate::PersistenceGate;

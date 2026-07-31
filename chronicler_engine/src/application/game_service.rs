@@ -7,7 +7,7 @@ use std::sync::{Arc, RwLock};
 use crate::domain::model::settings::AppSettings;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
-use crate::application::narrative_prompt::PromptAssembler;
+use crate::application::prompting::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
 
 #[derive(Clone)]
@@ -51,7 +51,7 @@ impl GameService {
         Self {
             llm_recorder,
             prompt_assembler: Arc::new(PromptAssembler::new(
-                crate::application::utils::token_budget::MAX_CONTEXT_TOKENS,
+                crate::application::prompting::token_budget::MAX_CONTEXT_TOKENS,
             )),
             agent_registry: Arc::new(agent_registry),
         }
@@ -66,7 +66,7 @@ impl GameService {
         Self {
             llm_recorder,
             prompt_assembler: Arc::new(PromptAssembler::new(
-                crate::application::utils::token_budget::MAX_CONTEXT_TOKENS,
+                crate::application::prompting::token_budget::MAX_CONTEXT_TOKENS,
             )),
             agent_registry: Arc::new(registry),
         }

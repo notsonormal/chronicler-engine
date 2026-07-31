@@ -1,6 +1,6 @@
-//! Tests for `builders/assembler.rs` prompt-section renderers.
+//! Tests for `builders/sections.rs` prompt-section renderers.
 
-use crate::application::narrative_prompt::builders::assembler::{
+use crate::application::prompting::builders::sections::{
     render_known_npc_entry, render_preset_xml_parts, render_present_relationships, wrap_xml,
     Section,
 };

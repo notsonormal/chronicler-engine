@@ -16,7 +16,7 @@ use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
-use crate::application::narrative_prompt::{NpcContext, PromptContext};
+use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
 use super::phase_error::PhaseError;

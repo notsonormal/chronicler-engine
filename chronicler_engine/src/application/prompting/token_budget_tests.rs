@@ -1,5 +1,5 @@
-use crate::application::utils::token_budget as budget;
-use crate::application::utils::token_budget::{estimate_tokens, truncate_to_budget};
+use crate::application::prompting::token_budget as budget;
+use crate::application::prompting::token_budget::{estimate_tokens, truncate_to_budget};
 
 #[test]
 fn test_token_budgets() {

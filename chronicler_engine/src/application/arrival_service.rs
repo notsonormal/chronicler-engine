@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::narrative_prompt::{NpcContext, PromptContext};
+use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;

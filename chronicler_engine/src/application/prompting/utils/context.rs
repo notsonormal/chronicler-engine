@@ -2,8 +2,8 @@
 //! Prompt context fitting — message budget enforcement.
 
 use crate::error::EngineError;
-use crate::application::utils::token_budget as budget;
-use crate::application::utils::token_budget::estimate_tokens;
+use crate::application::prompting::token_budget as budget;
+use crate::application::prompting::token_budget::estimate_tokens;
 
 pub fn fit_messages_to_context(
     system: &str,

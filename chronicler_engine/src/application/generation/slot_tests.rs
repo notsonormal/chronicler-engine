@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::application::utils::slot::{release_owned_slot, GenerationSlot};
+use crate::application::generation::slot::{release_owned_slot, GenerationSlot};
 
 fn registry_with(game_id: u64, slot: GenerationSlot) -> Arc<RwLock<HashMap<u64, GenerationSlot>>> {
     let mut map = HashMap::new();

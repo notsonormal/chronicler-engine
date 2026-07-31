@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::application::action_pipeline::phase_error::PhaseError;
+use crate::application::pipeline::phase_error::PhaseError;
 use crate::test_support::make_test_recorder;
 use crate::application::game_service::GameService;
 use crate::application::agents::registry::AgentRegistry;

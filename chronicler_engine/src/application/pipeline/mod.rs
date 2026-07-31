@@ -3,7 +3,9 @@
 
 pub mod phase_error;
 pub mod phases;
+#[allow(clippy::module_inception)]
 pub mod pipeline;
+pub mod spawn;
 
 #[cfg(test)]
 mod pipeline_tests;
