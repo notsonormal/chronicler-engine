@@ -1,6 +1,9 @@
+use std::sync::{Arc, RwLock};
+
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::world::WorldCard;
 use crate::application::prompting::assembler::PromptAssembler;
@@ -348,4 +351,68 @@ fn test_sanitize_nested_braces_replaces_outer() {
     let input = "{{a{{b}}";
     let result = crate::application::prompting::builders::sections::sanitize_for_prompt(input);
     assert_eq!(result, "[FILTERED]");
+}
+
+#[test]
+fn test_budget_read_from_settings_per_call() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let preset = create_test_preset();
+
+    let settings = Arc::new(RwLock::new(AppSettings::default()));
+    {
+        let mut guard = settings.write().unwrap();
+        guard.connections[0].max_context_tokens = Some(1024);
+    }
+
+    let assembler =
+        PromptAssembler::new(budget::MAX_CONTEXT_TOKENS).with_settings(settings.clone());
+
+    let long_history: Vec<MessageEntry> = (0..100)
+        .map(|i| MessageEntry {
+            id: i,
+            sender: Some(format!("Speaker {i}")),
+            text: "a".repeat(80),
+            message_type: MessageType::Narration,
+            timestamp: chrono::Utc::now(),
+            ..Default::default()
+        })
+        .collect();
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "Test input.",
+        &long_history,
+    );
+
+    let small = assembler
+        .assemble(&context, &preset, &world.global_rules, Some("Short"))
+        .expect("small budget assemble should succeed");
+    let small_count = small.user_prompt.matches("Speaker ").count();
+
+    {
+        let mut guard = settings.write().unwrap();
+        guard.connections[0].max_context_tokens = Some(16384);
+    }
+
+    let large = assembler
+        .assemble(&context, &preset, &world.global_rules, Some("Short"))
+        .expect("large budget assemble should succeed");
+    let large_count = large.user_prompt.matches("Speaker ").count();
+
+    assert!(
+        large_count > small_count,
+        "larger context budget should keep more history: {large_count} > {small_count}"
+    );
+    assert!(
+        large_count > 50,
+        "large budget should keep most of the 100 history lines"
+    );
 }

@@ -57,7 +57,6 @@ fn test_settings_recover_from_poisoned_rwlock() {
         generation_gate: wired.generation_gate.clone(),
         game_catalogue: wired.game_catalogue.clone(),
         game_view_query: wired.game_view_query.clone(),
-        world_persona: wired.world_persona.clone(),
     };
 
     let recovered = app_state.settings();
@@ -89,7 +88,6 @@ fn test_current_shutdown_token_returns_configured_token() {
         generation_gate: wired.generation_gate.clone(),
         game_catalogue: wired.game_catalogue.clone(),
         game_view_query: wired.game_view_query.clone(),
-        world_persona: wired.world_persona.clone(),
     };
 
     let recovered = app_state.current_shutdown_token();

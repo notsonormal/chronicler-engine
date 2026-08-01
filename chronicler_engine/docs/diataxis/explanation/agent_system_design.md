@@ -23,8 +23,6 @@ The wiring keeps the two paths independent. `AppSettings` carries separate `narr
 
 The two-phase split separates post-narration concerns (NPC detection, movement detection — clearly `PostGeneration`, after the narration LLM has spoken) from pre-narration concerns, which the design did not name in advance.
 
-The quantifier predates the `Agent` trait; it was promoted into the trait abstraction later. Agent constructors carry `Option<Arc<Storage>>` directly. This is the storage-direct exemption — `Agent` is allowed to talk to `Storage` without an indirection port because the agent's whole job is to query persisted state.
-
 ## The quantifier's role
 
 The quantifier prompt returns a JSON object with two fields: `npcs_in_room` (the list of NPC ids present in the current room) and `movement` (entering, leaving, or null). The model reports current presence. NPC `Entered` and `Left` events are derived by the engine, by diffing the previous quantifier result against the current one.
@@ -37,5 +35,5 @@ The orchestration layer couples the quantifier call to the NPC reconciliation st
 
 - [ADR-009: Agent Trait and Registry Architecture](../../docs/adr/adr-009-agent-trait-registry.md) — historical decision record for the agent abstraction.
 - [ADR-006: Quantifier-Driven Game Systems](../../docs/adr/adr-006-quantifier-systems.md) — the quantifier predates the Agent abstraction; the trait later absorbed it.
-- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md) — agent constructors carry `Option<Arc<Storage>>` under the storage-direct exemption.
+- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md)
 - `../reference/agent_system.md` — reference description of the agent machinery.

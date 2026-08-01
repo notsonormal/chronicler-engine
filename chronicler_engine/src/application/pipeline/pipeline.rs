@@ -17,7 +17,6 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 
@@ -84,7 +83,9 @@ impl ActionPipeline {
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         Self {
-            prompt_assembler: Arc::new(PromptAssembler::new(MAX_CONTEXT_TOKENS)),
+            prompt_assembler: Arc::new(
+                PromptAssembler::new(MAX_CONTEXT_TOKENS).with_settings(settings.clone()),
+            ),
             recorder,
             agent_registry: Arc::new(agent_registry),
             persistence,
@@ -103,7 +104,9 @@ impl ActionPipeline {
         let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
         let registry = AgentRegistry::with_agent(Box::new(agent));
         Self {
-            prompt_assembler: Arc::new(PromptAssembler::new(MAX_CONTEXT_TOKENS)),
+            prompt_assembler: Arc::new(
+                PromptAssembler::new(MAX_CONTEXT_TOKENS).with_settings(settings.clone()),
+            ),
             recorder,
             agent_registry: Arc::new(registry),
             persistence,
@@ -215,7 +218,7 @@ impl ActionPipeline {
         let messages = match self.persistence.load_messages() {
             Ok(m) => m,
             Err(e) => {
-                self.retry_persist_error(format!("Retry failed: {e}"));
+                self.persist_generation_error(format!("Retry failed: {e}"));
                 return;
             }
         };
@@ -223,7 +226,7 @@ impl ActionPipeline {
         let Some((anchor_idx, _anchor_msg, snapshot_id)) =
             self.persistence.find_retry_anchor(&messages)
         else {
-            self.retry_persist_error("Retry failed: no anchor message");
+            self.persist_generation_error("Retry failed: no anchor message");
             return;
         };
 
@@ -250,13 +253,13 @@ impl ActionPipeline {
         let snapshot = match self.persistence.storage().load_snapshot_by_id(snapshot_id) {
             Ok(Some(s)) => s,
             Ok(None) => {
-                self.retry_persist_error(format!(
+                self.persist_generation_error(format!(
                     "Retry failed: no snapshot found for id {snapshot_id}"
                 ));
                 return;
             }
             Err(e) => {
-                self.retry_persist_error(format!("Retry failed: {e}"));
+                self.persist_generation_error(format!("Retry failed: {e}"));
                 return;
             }
         };
@@ -270,7 +273,7 @@ impl ActionPipeline {
         let input_text = match state.narrative.history.last_input_text() {
             Some((_, text)) => text,
             None => {
-                self.retry_persist_error("Retry failed: no input to retry");
+                self.persist_generation_error("Retry failed: no input to retry");
                 return;
             }
         };
@@ -377,8 +380,7 @@ impl ActionPipeline {
     ) -> Result<(GameState, bool), ApplicationError> {
         game_state.narrative.input_buffer.status = status;
         game_state.narrative.input_buffer.phase = phase;
-        let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        self.persistence.storage().save_snapshot(&snapshot)?;
+        self.persistence.save_state(&game_state)?;
         let cancelled = self.is_shutting_down();
         Ok((game_state, cancelled))
     }
@@ -397,9 +399,7 @@ impl ActionPipeline {
             Ok(bundle) => bundle,
             Err(e) => {
                 tracing::error!("run_from_input: {e}");
-                let mut state = self.persistence.load_or_fresh();
-                state.narrative.input_buffer.status = GenerationStatus::Error(e.to_string());
-                run.phase_finalize(&mut state);
+                self.persist_generation_error(e.to_string());
                 return Ok(());
             }
         };
@@ -420,9 +420,9 @@ impl ActionPipeline {
             }
         };
 
-        let (mut state, narration_text, backend_name, model_name) =
-            match run.phase_narrate(state, &inputs) {
-                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
+        let (narration_text, backend_name, model_name) =
+            match run.map_cancelled(run.phase_narrate(&mut state, &inputs)) {
+                Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
                 Err(e) => {
                     Self::finalize_phase_error(&run, e);
                     return Ok(());
@@ -432,15 +432,20 @@ impl ActionPipeline {
         state.narrative.last_backend_name = Some(backend_name);
         state.narrative.last_model_name = Some(model_name);
 
-        let quantifier_result =
-            run.phase_post_generation(&mut state, &input, &narration_text, &map, &persona, &npcs);
-        if let Err(e) = run
-            .pipeline
-            .persistence
-            .save_message_and_snapshot(&mut state)
-        {
-            tracing::warn!("Failed to save post-quantifier metadata: {e}");
-        }
+        let quantifier_result = match run.phase_post_generation(
+            &mut state,
+            &input,
+            &narration_text,
+            &map,
+            &persona,
+            &npcs,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                Self::finalize_phase_error(&run, e);
+                return Ok(());
+            }
+        };
 
         let turn_result = match Self::phase_engine_commit(
             &state,
@@ -462,50 +467,59 @@ impl ActionPipeline {
                 return Ok(());
             }
         };
-        let mut next_state = turn_result.next_state;
+        let mut post_commit_state = turn_result.next_state;
 
         let trigger_request = turn_result
             .trigger_match
             .as_ref()
             .and_then(|trigger_match| {
-                run.build_trigger_request(&next_state, &narration_text, &inputs, trigger_match)
+                run.build_trigger_request(
+                    &post_commit_state,
+                    &narration_text,
+                    &inputs,
+                    trigger_match,
+                )
             });
-        if let Some(trigger) = &trigger_request {
-            next_state.narrative.last_trigger = Some(trigger.clone());
-        }
-        if let Err(e) = run.persist_snapshot_or_err(&mut next_state, "post-engine snapshot") {
+        if let Err(e) = run.persist_snapshot_or_err(&mut post_commit_state, "post-engine snapshot")
+        {
             Self::finalize_phase_error(&run, e);
             return Ok(());
         }
-        if let Some(target) = next_state.narrative.retry_target.take() {
-            next_state.narrative.history.append(target);
+        if let Some(target) = post_commit_state.narrative.retry_target.take() {
+            post_commit_state.narrative.history.append(target);
         }
 
         if let Some(request) = trigger_request {
-            let (updated_state, continuation_text) = match run
-                .phase_trigger_continuation_with_cancel_handling(next_state, &request, &map, &npcs)
-            {
-                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
+            let (updated_state, continuation_text) = match run.map_cancelled(
+                run.phase_trigger_continuation_llm_call(post_commit_state, &request, &map, &npcs),
+            ) {
+                Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
                 Err(e) => {
                     Self::finalize_phase_error(&run, e);
                     return Ok(());
                 }
                 Ok(t) => t,
             };
-            next_state = updated_state;
+            post_commit_state = updated_state;
             if !continuation_text.is_empty() {
-                next_state = run.reconcile_post_trigger_npcs(
-                    next_state,
+                post_commit_state = match run.reconcile_post_trigger_npcs(
+                    post_commit_state,
                     &input,
                     &continuation_text,
                     &map,
                     &persona,
                     &npcs,
-                );
+                ) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        Self::finalize_phase_error(&run, e);
+                        return Ok(());
+                    }
+                };
             }
         }
 
-        run.phase_finalize(&mut next_state);
+        run.phase_finalize(&mut post_commit_state);
         tracing::debug!("run_from_input: done");
         Ok(())
     }
@@ -528,9 +542,7 @@ impl ActionPipeline {
                 unreachable!("Cancelled must be handled before calling finalize_phase_error")
             }
         };
-        let mut state = run.pipeline.persistence.load_or_fresh();
-        state.narrative.input_buffer.status = GenerationStatus::Error(msg);
-        run.phase_finalize(&mut state);
+        run.pipeline.persist_generation_error(msg);
     }
 
     pub(crate) fn phase_trigger_continuation(
@@ -542,7 +554,7 @@ impl ActionPipeline {
     ) -> Result<(GameState, String), PhaseError> {
         let started_for = self.persistence.storage().current_game_id();
         let run = PipelineRun::new(self, started_for);
-        run.phase_trigger_continuation_with_cancel_handling(state, trigger, map, npcs)
+        run.map_cancelled(run.phase_trigger_continuation_llm_call(state, trigger, map, npcs))
     }
 
     pub(super) fn run_post_generation_agents(
@@ -601,12 +613,12 @@ impl ActionPipeline {
         result
     }
 
-    pub(crate) fn retry_persist_error(&self, message: impl Into<String>) {
+    pub(crate) fn persist_generation_error(&self, message: impl Into<String>) {
         let mut state = self.persistence.load_or_fresh();
         state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
         state.narrative.input_buffer.phase = GenerationPhase::default();
         if let Err(e) = self.persistence.save_state(&state) {
-            tracing::error!("Critical: failed to persist retry error state: {e}");
+            tracing::error!("Critical: failed to persist generation error state: {e}");
         }
     }
 
@@ -656,7 +668,7 @@ impl ActionPipeline {
                 &map,
                 &persona,
                 &npcs_map,
-            );
+            )?;
         }
         if let Some(target) = state.narrative.retry_target.take() {
             state.narrative.history.append(target);
@@ -690,14 +702,8 @@ impl<'a> PipelineRun<'a> {
         Ok(state)
     }
 
-    fn phase_trigger_continuation_with_cancel_handling(
-        &self,
-        state: GameState,
-        trigger: &StoredTriggerContext,
-        map: &Arc<MapDef>,
-        npcs: &HashMap<String, NpcCard>,
-    ) -> Result<(GameState, String), PhaseError> {
-        match self.phase_trigger_continuation_llm_call(state, trigger, map, npcs) {
+    fn map_cancelled<T>(&self, result: Result<T, PhaseError>) -> Result<T, PhaseError> {
+        match result {
             Err(PhaseError::Cancelled) => Err(self.handle_cancellation()),
             other => other,
         }

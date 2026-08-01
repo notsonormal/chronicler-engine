@@ -46,7 +46,7 @@ app.pipeline.execute_action("enter shop".to_string());
 app.pipeline.retry_last_response();   // second call consumes the next queued response
 ```
 
-**When to use the Service-direct variant.** Use the Service-direct variant when testing collaborator methods that don't flow through `execute_action` — lifecycle ops live on `GameCatalogue` (`create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`), status/cancellation on `GenerationGate`, and read-side queries on `GameViewQuery`; or any test needing explicit pipeline construction with `skip_seeding=true`. Don't use for `execute_action` pipeline tests — those use the primary `SqliteTestAppBuilder::default_test().backends(...).build_service()` form. Don't use for storage-direct tests with no service — that's Pattern 3.
+**When to use the Service-direct variant.** Use the Service-direct variant when testing collaborator methods that don't flow through `execute_action` — lifecycle ops live on `GameCatalogue` (`create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`), status/cancellation on `GenerationGate`, and read-side queries on `GameViewQuery`; or any test needing explicit pipeline construction with `skip_seeding=true`. Don't use for `execute_action` pipeline tests — those use the primary `SqliteTestAppBuilder::default_test().backends(...).build_service()` form. Don't use for direct-storage tests with no service — that's Pattern 3.
 
 **The standard (Service-direct variant).**
 
@@ -291,7 +291,7 @@ There is no equivalent for sync polling in the integration suite (no screenshots
 
 ### Cross-cutting 6 — `SqliteTestAppBuilder` over `TestAppBuilder` for snapshot assertions
 
-When you need to assert state after `execute_action`, the canonical builder is `SqliteTestAppBuilder` (defined in `tests/helpers/sqlite_test_app_builder.rs`). It builds a full `AppState` with collaborators (`ActionPipeline`, `GameCatalogue`, `WorldPersonaCatalogue`, `GameViewQuery`, `GenerationGate`, `PersistenceGate`) backed by in-memory SQLite, persists snapshots + messages the way production does, and exposes `app.storage`, `app.shutdown_token`. The alternative — `TestAppBuilder::default_test().skip_seeding(true)` — only goes through `:memory:` SQLite storage but skips the production service wiring, which is enough for tests that call `app.game_catalogue.create_game(...)` directly but **not** for tests that observe generation phases or assert through the snapshot path.
+When you need to assert state after `execute_action`, the canonical builder is `SqliteTestAppBuilder` (defined in `tests/helpers/sqlite_test_app_builder.rs`). It builds a full `AppState` with collaborators (`ActionPipeline`, `GameCatalogue`, `GameViewQuery`, `GenerationGate`, `PersistenceGate`) backed by in-memory SQLite, persists snapshots + messages the way production does, and exposes `app.storage`, `app.shutdown_token`. The alternative — `TestAppBuilder::default_test().skip_seeding(true)` — only goes through `:memory:` SQLite storage but skips the production service wiring, which is enough for tests that call `app.game_catalogue.create_game(...)` directly but **not** for tests that observe generation phases or assert through the snapshot path.
 
 The decision rule:
 

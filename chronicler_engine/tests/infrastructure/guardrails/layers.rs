@@ -2,25 +2,25 @@
 
 use crate::Violation;
 
-const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
-    // Intentional boundary + deferred agent constructors; see ADR-027.
-    "application/agents/registry.rs",
-    "application/agents/quantifier/agent.rs",
-    "application/persistence_gate.rs",
-];
+const WIREDAPP_SCOPE_ALLOWLIST_PREFIXES: &[&str] =
+    &["bootstrap/", "adapters/driving/http/", "test_support/"];
 
-// Guardrail: application/ may not import `Storage` directly except the grandfathered files (ADR-027).
-// `*_tests.rs` is exempt — may construct `Storage::new_in_memory()` for fixtures.
-pub fn check_application_storage_direct(file_path: &str, content: &str) -> Vec<Violation> {
+// Guardrail: `WiredApp` is consumed only by the composition root, HTTP setup, test support,
+// and integration tests (axis R two-consumer discipline; guardrail-inventory §2).
+// `*_tests.rs` is exempt — unit tests may wire collaborators freely.
+pub fn check_wiredapp_scope(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    if !file_path.starts_with("application/") {
+    if file_path.starts_with("tests/") {
         return violations;
     }
     if file_path.ends_with("_tests.rs") {
         return violations;
     }
-    if APPLICATION_STORAGE_GRANDFATHERED.contains(&file_path) {
+    if WIREDAPP_SCOPE_ALLOWLIST_PREFIXES
+        .iter()
+        .any(|prefix| file_path.starts_with(prefix))
+    {
         return violations;
     }
 
@@ -32,11 +32,15 @@ pub fn check_application_storage_direct(file_path: &str, content: &str) -> Vec<V
             continue;
         }
 
-        if trimmed.starts_with("use ") && trimmed.contains("adapters::driven::storage::Storage") {
+        if (trimmed.starts_with("use ") || trimmed.starts_with("pub use "))
+            && trimmed.contains("WiredApp")
+        {
             violations.push(Violation::error(
                 file_path,
                 line_num,
-                "Application layer imports `Storage` directly — see ADR-027 for the 5 grandfathered files",
+                "Composition-root `WiredApp` is consumed only by `bootstrap/`, \
+                 `adapters/driving/http/`, `test_support/`, and `tests/` — \
+                 take collaborators as `Arc<...>` parameters instead",
             ));
         }
     }
@@ -231,38 +235,58 @@ mod tests {
     }
 
     #[test]
-    fn test_check_application_storage_direct_catches_violation() {
-        let violations = check_application_storage_direct(
-            "application/prompting/assembler.rs",
-            "use crate::adapters::driven::storage::Storage;\n",
+    fn test_check_wiredapp_scope_catches_violation() {
+        let violations = check_wiredapp_scope(
+            "application/pipeline/mod.rs",
+            "use crate::bootstrap::wiring::WiredApp;\n",
         );
         assert_eq!(violations.len(), 1);
-        assert!(violations[0].message.contains("ADR-027"));
+        assert!(violations[0].message.contains("WiredApp"));
     }
 
     #[test]
-    fn test_check_application_storage_direct_skips_tests_files() {
-        let violations = check_application_storage_direct(
-            "application/orchestrator_tests.rs",
-            "use crate::adapters::driven::storage::Storage;\n",
+    fn test_check_wiredapp_scope_catches_pub_use() {
+        let violations = check_wiredapp_scope(
+            "application/mod.rs",
+            "pub use crate::bootstrap::wiring::WiredApp;\n",
+        );
+        assert_eq!(violations.len(), 1);
+    }
+
+    #[test]
+    fn test_check_wiredapp_scope_allows_scoped_consumers() {
+        for path in [
+            "bootstrap/wiring.rs",
+            "bootstrap/run.rs",
+            "adapters/driving/http/app_state.rs",
+            "adapters/driving/http/bootstrap/server.rs",
+            "test_support/context.rs",
+        ] {
+            let violations =
+                check_wiredapp_scope(path, "use crate::bootstrap::wiring::WiredApp;\n");
+            assert_eq!(violations.len(), 0, "expected {path} to be allowed");
+        }
+    }
+
+    #[test]
+    fn test_check_wiredapp_scope_skips_tests() {
+        let violations = check_wiredapp_scope(
+            "tests/http/server_impl_wiring.rs",
+            "use chronicler::bootstrap::wiring::WiredApp;\n",
+        );
+        assert_eq!(violations.len(), 0);
+        let violations = check_wiredapp_scope(
+            "bootstrap/wiring_tests.rs",
+            "use crate::bootstrap::wiring::WiredApp;\n",
         );
         assert_eq!(violations.len(), 0);
     }
 
     #[test]
-    fn test_check_application_storage_direct_skips_non_application() {
-        let violations = check_application_storage_direct(
-            "adapters/driven/storage/backend/core.rs",
-            "use crate::adapters::driven::storage::Storage;\n",
-        );
-        assert_eq!(violations.len(), 0);
-    }
-
-    #[test]
-    fn test_check_application_storage_direct_skips_comments() {
-        let violations = check_application_storage_direct(
-            "application/prompting/assembler.rs",
-            "// use crate::adapters::driven::storage::Storage;\n",
+    fn test_check_wiredapp_scope_skips_comments() {
+        let violations = check_wiredapp_scope(
+            "application/pipeline/mod.rs",
+            "// use crate::bootstrap::wiring::WiredApp;\n",
         );
         assert_eq!(violations.len(), 0);
     }

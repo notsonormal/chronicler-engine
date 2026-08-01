@@ -5,7 +5,7 @@ title: Storage
 
 ## Overview
 
-`Storage` is the engine's persistence boundary for game sessions, narrative content, settings, and LLM call forensics. `Backend` identifies the real storage implementations (`Sqlite` and `InMemory`), while `BackendKind` selects direct access or the `Test` decorator. Storage methods operate on one table; multi-table coordination lives in the application collaborators (`ActionPipeline`, `PersistenceGate`, `GameCatalogue`, `WorldPersonaCatalogue`). The eleven-table schema follows; entity aggregates for worlds, personas, and messages come after.
+`Storage` is the engine's persistence boundary for game sessions, narrative content, settings, and LLM call forensics.
 
 ## Backend and BackendKind
 

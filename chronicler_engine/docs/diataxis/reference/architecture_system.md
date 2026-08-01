@@ -27,7 +27,7 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 ## Storage Direct Access
 
-`arch-lint: storage-direct` markers in `src/application/` permit direct `Storage` access at the persistence boundary. The marker list is canonical at the source; see `## Document References` for the ADR that codifies the intentional/deferred split.
+`Storage` is a concrete adapter with a `Backend` enum (SQLite / InMemory / Test). Application code may call `Storage` directly when the call is part of the persistence boundary; a `StateRepository` port would be a single-impl trait with no real substitution seam, so the boundary is concrete-by-design. Architectural review owns the discipline for which files sit on the boundary.
 
 ## Settings
 
@@ -38,11 +38,10 @@ Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via 
 `AppState` is the handler-facing bundle produced by `bootstrap/wiring.rs` (`WiredApp`) and passed to the Axum router. It exposes the named collaborators directly, with no service façade between HTTP handlers and the application layer:
 
 - `pipeline: Arc<ActionPipeline>` — action execution and phase orchestration.
-- `world_persona: WorldPersonaCatalogue` — world and persona CRUD.
 - `game_catalogue: GameCatalogue` — game lifecycle (create/switch/delete/list/reset/current id).
 - `game_view_query: GameViewQuery` — read-side fragments for the UI and debug state.
 - `generation_gate: GenerationGate` — per-game generation-slot gating and reset.
-- `persistence_gate: Arc<PersistenceGate>` — snapshot/message persistence and multi-table writes.
+- `persistence_gate: Arc<PersistenceGate>` — snapshot/message persistence, world/persona CRUD, and multi-table writes.
 - `text_check_service: Arc<TextCheckService>` — player-command spelling/grammar check.
 - `settings: Arc<RwLock<AppSettings>>` — runtime settings.
 - `shutdown_token: CancellationToken` — request shutdown signal.
@@ -61,4 +60,4 @@ Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via 
 - [`../explanation/architecture.md`](../explanation/architecture.md) — hexagonal architecture and dependency invariant.
 - [`./startup.md`](./startup.md) — bootstrap sequence and settings load point.
 - [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — settings ownership pattern and `AtomicBool` generation gate.
-- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md) — port ownership and the storage direct-access exemption.
+- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md)

@@ -257,11 +257,11 @@ impl GameState {
     }
 
     pub fn apply_npc_events(
-        mut self,
+        &mut self,
         events: &[NpcEvent],
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> Result<Self> {
+    ) -> Result<()> {
         for event in events {
             match event.event_type {
                 NpcTransitionType::Entered => {
@@ -277,18 +277,18 @@ impl GameState {
         }
 
         self.assert_state_consistency(map, npcs)?;
-        Ok(self)
+        Ok(())
     }
 
     pub fn commit_trigger_narration(
-        mut self,
+        &mut self,
         trigger: &StoredTriggerContext,
         continuation_text: &str,
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> Result<Self> {
+    ) -> Result<()> {
         if continuation_text.trim().is_empty() {
-            return Ok(self);
+            return Ok(());
         }
         self.narrative.last_trigger = Some(trigger.clone());
         self.narrative.pending_event = Some(trigger.trigger_name.clone());
@@ -299,7 +299,7 @@ impl GameState {
         }
 
         self.assert_state_consistency(map, npcs)?;
-        Ok(self)
+        Ok(())
     }
 
     pub fn execute_freeaction_impl(
@@ -348,7 +348,7 @@ impl GameState {
                 });
 
         let events = NpcEventList::from_diff(&previous_npc_ids, &current_npc_ids);
-        next_state = next_state.apply_npc_events(&events.events, map, npcs)?;
+        next_state.apply_npc_events(&events.events, map, npcs)?;
         next_state.assert_state_consistency(map, npcs)?;
 
         Ok(ActionResult {

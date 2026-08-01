@@ -58,7 +58,7 @@ impl WorldForm {
 }
 
 pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let worlds = match state.world_persona.list_worlds() {
+    let worlds = match state.persistence_gate.list_worlds() {
         Ok(w) => w,
         Err(e) => return internal_error(format!("Failed to load worlds: {e}")),
     };
@@ -81,9 +81,9 @@ pub async fn create_world_handler(
         Err(e) => return bad_request(e),
     };
 
-    match state.world_persona.create_world(world_card, map) {
+    match state.persistence_gate.create_world(world_card, map) {
         Ok(_) => {
-            let worlds = state.world_persona.list_worlds();
+            let worlds = state.persistence_gate.list_worlds();
             let games = state.game_catalogue.list_games().unwrap_or_default();
             let games_per_world = games_per_world(&games);
             ok(
@@ -106,7 +106,7 @@ pub async fn edit_world_form_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Response<axum::body::Body> {
-    let (_, world_card, map) = match state.world_persona.get_world(&key) {
+    let (_, world_card, map) = match state.persistence_gate.get_world(&key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
@@ -124,7 +124,7 @@ pub async fn update_world_handler(
     Path(key): Path<String>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let (world_id, _, _) = match state.world_persona.get_world(&key) {
+    let (world_id, _, _) = match state.persistence_gate.get_world(&key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
@@ -137,9 +137,12 @@ pub async fn update_world_handler(
 
     world_card.key = key;
 
-    match state.world_persona.update_world(world_id, world_card, map) {
+    match state
+        .persistence_gate
+        .update_world(world_id, world_card, map)
+    {
         Ok(()) => {
-            let worlds = state.world_persona.list_worlds();
+            let worlds = state.persistence_gate.list_worlds();
             let games = state.game_catalogue.list_games().unwrap_or_default();
             let games_per_world = games_per_world(&games);
             ok(
@@ -156,7 +159,7 @@ pub async fn delete_world_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Response<axum::body::Body> {
-    match state.world_persona.delete_world(&key) {
+    match state.persistence_gate.delete_world(&key) {
         Ok(()) => ok(""),
         Err(e) if e.is_user_displayable() => {
             let error_html = render_error(&e.to_string());

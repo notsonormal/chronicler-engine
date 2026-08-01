@@ -78,21 +78,27 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
+    fn set_error(&self, state: &mut GameState, msg: String) -> PhaseError {
+        state.narrative.input_buffer.status = GenerationStatus::Error(msg.clone());
+        if let Err(e) = self.pipeline.persistence.save_message_and_snapshot(state) {
+            tracing::error!("Failed to persist generation error: {e}");
+        }
+        PhaseError::NarratorFailed(msg)
+    }
+
     pub(super) fn error_return(
         &self,
-        mut state: GameState,
+        state: &mut GameState,
         msg: String,
-    ) -> Result<(GameState, String, String, String), PhaseError> {
-        state.narrative.input_buffer.status = GenerationStatus::Error(msg.clone());
-        self.persist(&state);
-        Err(PhaseError::NarratorFailed(msg))
+    ) -> Result<(String, String, String), PhaseError> {
+        Err(self.set_error(state, msg))
     }
 
     pub(super) fn phase_narrate(
         &self,
-        mut state: GameState,
+        state: &mut GameState,
         inputs: &PipelineInputs,
-    ) -> Result<(GameState, String, String, String), PhaseError> {
+    ) -> Result<(String, String, String), PhaseError> {
         let Some(room) = inputs
             .map
             .get_room_by_id(&state.movement.current_room_id)
@@ -124,12 +130,11 @@ impl<'a> PipelineRun<'a> {
             &history,
         );
 
-        let assembled = match context.build_narration_prompt(
+        let assembled = match self.pipeline.prompt_assembler.assemble(
+            &context,
             &preset,
             &inputs.world.global_rules,
             Some(&response_length),
-            self.pipeline.prompt_assembler.max_context_tokens,
-            self.pipeline.prompt_assembler.max_tokens,
         ) {
             Ok(a) => a,
             Err(e) => return self.error_return(state, e.llm_error_string()),
@@ -155,16 +160,9 @@ impl<'a> PipelineRun<'a> {
         }
 
         state.add_message(narration_text.clone(), None, MessageType::Narration);
-        if let Err(e) = self
-            .pipeline
-            .persistence
-            .save_message_and_snapshot(&mut state)
-        {
-            tracing::warn!("Failed to save pre-quantifier narration: {e}");
-        }
+        self.persist_snapshot_or_err(state, "pre-quantifier narration")?;
 
         Ok((
-            state,
             narration_text,
             narration_result.backend_name,
             narration_result.model_name,
@@ -179,12 +177,10 @@ impl<'a> PipelineRun<'a> {
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> QuantifierResult {
+    ) -> Result<QuantifierResult, PhaseError> {
         tracing::info!("Pipeline ▶ Quantifying");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
-        if let Err(e) = self.pipeline.persistence.save_message_and_snapshot(state) {
-            tracing::warn!("Failed to save pre-quantifier phase update: {e}");
-        }
+        self.persist_snapshot_or_err(state, "pre-quantifier phase update")?;
 
         let mut quantifier_result = self.pipeline.run_post_generation_agents(
             state,
@@ -215,7 +211,12 @@ impl<'a> PipelineRun<'a> {
             );
         }
 
-        quantifier_result
+        // Best-effort: quantifier metadata (swipes) is not load-bearing for the turn commit.
+        if let Err(e) = self.pipeline.persistence.save_message_and_snapshot(state) {
+            tracing::warn!("Failed to save post-quantifier metadata: {e}");
+        }
+
+        Ok(quantifier_result)
     }
 
     pub(super) fn phase_trigger_continuation_llm_call(
@@ -252,16 +253,7 @@ impl<'a> PipelineRun<'a> {
                     None,
                     MessageType::System,
                 );
-                state.narrative.input_buffer.status =
-                    GenerationStatus::Error(format!("Error: {e}"));
-                if let Err(e2) = self
-                    .pipeline
-                    .persistence
-                    .save_message_and_snapshot(&mut state)
-                {
-                    tracing::error!("Failed to persist trigger error state: {e2}");
-                }
-                return Ok((state, String::new()));
+                return Err(self.set_error(&mut state, format!("Trigger narration failed: {e}")));
             }
         };
         tracing::info!("Pipeline ✓ Trigger complete");
@@ -270,25 +262,13 @@ impl<'a> PipelineRun<'a> {
         self.check_game_unchanged(self.started_for)?;
 
         if continuation_text.trim().is_empty() {
-            state.narrative.input_buffer.status =
-                GenerationStatus::Error("LLM Error: empty response".to_string());
-            self.persist(&state);
-            return Ok((state, String::new()));
+            return Err(self.set_error(&mut state, "LLM Error: empty response".to_string()));
         }
 
-        state = match state
-            .clone()
-            .commit_trigger_narration(trigger, &continuation_text, map, npcs)
-        {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::error!("Trigger commit failed: {e}");
-                state.narrative.input_buffer.status =
-                    GenerationStatus::Error(format!("Trigger error: {e}"));
-                self.persist(&state);
-                return Ok((state, String::new()));
-            }
-        };
+        if let Err(e) = state.commit_trigger_narration(trigger, &continuation_text, map, npcs) {
+            tracing::error!("Trigger commit failed: {e}");
+            return Err(self.set_error(&mut state, format!("Trigger error: {e}")));
+        }
 
         self.persist_snapshot_or_err(&mut state, "post-trigger snapshot")?;
 
@@ -303,7 +283,7 @@ impl<'a> PipelineRun<'a> {
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> GameState {
+    ) -> Result<GameState, PhaseError> {
         tracing::info!("Pipeline ▶ Post-trigger reconcile");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
 
@@ -336,15 +316,11 @@ impl<'a> PipelineRun<'a> {
         state.scene.npcs_in_area = npc_cards;
 
         let events = NpcEventList::from_diff(&previous_ids, &new_ids);
-        match state.clone().apply_npc_events(&events.events, map, npcs) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::error!("Post-trigger reconcile failed: {e}");
-                state.narrative.input_buffer.status =
-                    GenerationStatus::Error(format!("Trigger reconcile: {e}"));
-                state
-            }
+        if let Err(e) = state.apply_npc_events(&events.events, map, npcs) {
+            tracing::error!("Post-trigger reconcile failed: {e}");
+            return Err(self.set_error(&mut state, format!("Trigger reconcile: {e}")));
         }
+        Ok(state)
     }
 
     pub(super) fn build_trigger_request(

@@ -194,11 +194,8 @@ fn guardrails_server_layer_boundaries() {
 }
 
 #[test]
-fn guardrails_application_storage_direct() {
-    check_src_files(
-        "application storage-direct",
-        check_application_storage_direct,
-    );
+fn guardrails_wiredapp_scope() {
+    check_src_files("WiredApp scope", check_wiredapp_scope);
 }
 
 #[test]

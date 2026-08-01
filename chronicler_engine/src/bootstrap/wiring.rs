@@ -14,7 +14,6 @@ use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
-use crate::application::games::world_persona_catalogue::WorldPersonaCatalogue;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
 use crate::application::llm_recorder::LlmCallRecorder;
@@ -53,7 +52,6 @@ pub struct WiredApp {
     pub generation_gate: GenerationGate,
     pub game_catalogue: GameCatalogue,
     pub game_view_query: GameViewQuery,
-    pub world_persona: WorldPersonaCatalogue,
     pub pipeline: ActionPipeline,
     pub text_check_service: Arc<TextCheckService>,
     pub shutdown_token: CancellationToken,
@@ -78,7 +76,6 @@ fn build_wired_app(
     let generation_gate = GenerationGate::new();
     let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
     let game_view_query = GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
-    let world_persona = WorldPersonaCatalogue::new(Arc::clone(&persistence_gate));
     let pipeline = ActionPipeline::with_storage(
         shutdown_token.clone(),
         recorder,
@@ -104,7 +101,6 @@ fn build_wired_app(
         generation_gate,
         game_catalogue,
         game_view_query,
-        world_persona,
         pipeline,
         text_check_service,
         shutdown_token,

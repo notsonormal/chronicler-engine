@@ -62,7 +62,7 @@ flowchart LR
     bootstrap -. wires .-> app
 ```
 
-Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::llm_factory`). `Storage` is accessed directly by a small set of application-tier seams under a deliberate `arch-lint: storage-direct` exemption — the engine's persistence boundary is concrete-by-design, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
+Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::llm_factory`). `Storage` is concrete-by-design — the engine's persistence boundary may call it directly, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
 
 ## Why one process
 
@@ -81,7 +81,7 @@ A small set of guarantees follow from the shape above. Each is machine-checked o
 
 ## Document References
 
-- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md) — the accepted/rejected port table; the phantom-port heuristic; the storage-direct exemption.
+- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md)
 - [`../reference/architecture_system.md`](../reference/architecture_system.md) — eight-tier map; dependency invariant; port inventory.
 - [`../../reference/storage.md`](../../reference/storage.md) — SQLite schema and the eleven tables.
 - [`./two-state-channels.md`](./two-state-channels.md) — why the engine carries two complementary generation-state signals.

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::adapters::driving::http::AppState;
 use crate::application::pipeline::phase_error::PhaseError;
+use crate::application::pipeline::phases::PipelineRun;
 use crate::test_support::make_test_recorder;
 use crate::application::agents::registry::AgentRegistry;
 use crate::domain::model::quantifier::QuantifierResult;
@@ -219,16 +220,47 @@ fn test_trigger_continuation_save_post_trigger_error() {
         .phase_trigger_continuation(state, &trigger, &map, &npcs);
 
     match result {
-        Ok((_, text)) => {
-            assert!(text.is_empty(), "Expected empty text on snapshot failure");
-        }
-        Err(PhaseError::Cancelled) => {}
         Err(PhaseError::PersistFailed { label, .. }) => {
             assert_eq!(label, "pre-event snapshot");
         }
-        Err(other) => {
-            panic!("Expected empty text or Cancelled/PersistFailed, got {other:?}");
+        other => panic!("Expected Err(PersistFailed pre-event snapshot), got {other:?}"),
+    }
+}
+
+#[test]
+fn phase_post_generation_returns_persist_error_on_pre_quantifier_save_failure() {
+    use crate::domain::model::character::NpcCard;
+
+    let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
+    let failing = Arc::new(failing_storage);
+    handle.set(
+        "save_snapshot",
+        TestOverride::internal("simulated pre-quantifier save failure"),
+    );
+
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let pipeline = make_test_pipeline_with_backends(failing, narrator_recorder, agent_registry);
+
+    let mut state = TestGameState::in_room("start");
+    let map = Arc::new(TestMap::single_room("start"));
+    let persona = Arc::new(crate::test_support::fixtures::TestPersona::standard());
+    let npcs: HashMap<String, NpcCard> = HashMap::new();
+
+    let run = PipelineRun::new(&pipeline, 0);
+    let result = run.phase_post_generation(
+        &mut state,
+        "look",
+        "You look around.",
+        &map,
+        &persona,
+        &npcs,
+    );
+    match result {
+        Err(PhaseError::PersistFailed { label, .. }) => {
+            assert_eq!(label, "pre-quantifier phase update");
         }
+        other => panic!("Expected Err(PersistFailed pre-quantifier phase update), got {other:?}"),
     }
 }
 

@@ -1,10 +1,13 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/narrative/prompt_system.md]
 //! Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
 
+use std::sync::{Arc, RwLock};
+
 use crate::error::EngineError;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::template::render_template;
@@ -26,8 +29,9 @@ pub struct AssembledPrompt {
 }
 
 pub struct PromptAssembler {
-    pub(crate) max_context_tokens: u32,
-    pub(crate) max_tokens: Option<u32>,
+    max_context_tokens: u32,
+    max_tokens: Option<u32>,
+    settings: Option<Arc<RwLock<AppSettings>>>,
 }
 
 impl PromptAssembler {
@@ -35,11 +39,17 @@ impl PromptAssembler {
         Self {
             max_context_tokens,
             max_tokens: None,
+            settings: None,
         }
     }
 
     pub fn with_max_tokens(mut self, max: u32) -> Self {
         self.max_tokens = Some(max);
+        self
+    }
+
+    pub fn with_settings(mut self, settings: Arc<RwLock<AppSettings>>) -> Self {
+        self.settings = Some(settings);
         self
     }
 }
@@ -69,13 +79,22 @@ impl PromptAssembler {
         };
 
         let (system, user, max_tokens) =
-            renderer.render_and_fit(self.max_context_tokens, self.max_tokens)?;
+            renderer.render_and_fit(self.resolve_max_context_tokens(), self.max_tokens)?;
 
         Ok(AssembledPrompt {
             system_prompt: system,
             user_prompt: user,
             max_tokens,
         })
+    }
+
+    fn resolve_max_context_tokens(&self) -> u32 {
+        if let Some(settings) = &self.settings {
+            let guard = settings.read().unwrap_or_else(|e| e.into_inner());
+            let conn = guard.narration_connection();
+            return conn.resolve_max_context_tokens();
+        }
+        self.max_context_tokens
     }
 }
 

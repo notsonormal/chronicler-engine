@@ -6,7 +6,6 @@ use tokio_util::sync::CancellationToken;
 
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
-use crate::application::games::world_persona_catalogue::WorldPersonaCatalogue;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::application::pipeline::pipeline::ActionPipeline;
@@ -28,7 +27,6 @@ pub struct AppState {
     pub generation_gate: GenerationGate,
     pub game_catalogue: GameCatalogue,
     pub game_view_query: GameViewQuery,
-    pub world_persona: WorldPersonaCatalogue,
 }
 
 impl AppState {
@@ -44,7 +42,6 @@ impl AppState {
             generation_gate: wired.generation_gate,
             game_catalogue: wired.game_catalogue,
             game_view_query: wired.game_view_query,
-            world_persona: wired.world_persona,
         }
     }
 

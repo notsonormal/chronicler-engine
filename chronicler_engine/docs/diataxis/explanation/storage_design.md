@@ -5,7 +5,7 @@ title: Storage and Bootstrap Design
 
 ## Overview
 
-The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in the application orchestrator (`ActionPipeline`, `PersistenceGate`, `GameCatalogue`, `WorldPersonaCatalogue`); and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error.
+The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in the application orchestrator (`ActionPipeline`, `PersistenceGate`, `GameCatalogue`, `GameViewQuery`); and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error.
 
 ## The storage struct and its backend decorator
 

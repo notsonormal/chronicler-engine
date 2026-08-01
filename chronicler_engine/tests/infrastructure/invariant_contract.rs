@@ -197,8 +197,8 @@ fn test_inv002_violation_demo() {
     }];
     let map = Arc::new(fixtures::create_test_map());
     let npcs = npc_map(vec![shopkeeper_npc()]);
-    let state_after_events = state
-        .clone()
+    let mut state_after_events = state.clone();
+    state_after_events
         .apply_npc_events(&events, &map, &npcs)
         .expect("apply_npc_events should succeed");
     let triggers_after_swap = state_after_events.evaluate_triggers(&npcs);
