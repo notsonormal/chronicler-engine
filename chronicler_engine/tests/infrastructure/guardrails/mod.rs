@@ -22,6 +22,9 @@ mod free_fn_tests;
 #[cfg(test)]
 mod structure_tests;
 
+
+// TODO: These types and functions should be moved to other folders
+
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {

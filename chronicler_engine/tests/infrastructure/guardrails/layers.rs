@@ -2,6 +2,10 @@
 
 use crate::Violation;
 
+// TODO: We shouldn't be blank allowing the `adapters/driving/http/`
+//  just so that we can use it the create the AppState. We 
+//  can just move app_state.rs into `chronicler_engine/src/adapters/driving/http/bootstrap`
+//  instead, since that counts counts as bootstrap folder too
 const WIREDAPP_SCOPE_ALLOWLIST_PREFIXES: &[&str] =
     &["bootstrap/", "adapters/driving/http/", "test_support/"];
 
@@ -82,6 +86,9 @@ pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violatio
 
     let normalized_path = file_path.replace('\\', "/");
 
+    // TODO: Are these exceptions really valid? Or this a new with
+    //  more exceptions to the rule then actual rules? Or can we 
+    //  get all of these to follow the rule?
     if !normalized_path.starts_with("src/server/")
         || normalized_path.ends_with("mod.rs")
         || normalized_path.ends_with("debug.rs")

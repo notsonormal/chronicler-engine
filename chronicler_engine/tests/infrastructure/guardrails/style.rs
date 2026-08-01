@@ -5,8 +5,6 @@ use syn::{ItemFn, Local};
 
 use crate::Violation;
 
-// ── Import Ordering ──
-
 pub fn check_import_ordering(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let mut last_group = 0u8;
@@ -96,8 +94,6 @@ impl CfgTestTracker {
     }
 }
 
-// ── Long Comment Run Detection ──
-
 fn is_countable_comment(line: &str) -> bool {
     if !line.starts_with("//") {
         return false;
@@ -158,8 +154,6 @@ pub fn check_long_comment_runs(path: &str, content: &str) -> Vec<Violation> {
 
     violations
 }
-
-// ── Single-Letter Variable Detection ──
 
 struct SingleLetterVisitor<'a> {
     file_path: &'a str,
