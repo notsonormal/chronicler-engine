@@ -9,7 +9,7 @@ metadata:
 
 # What I do
 
-Create a task list using `pi-tasks`.
+Create a TODO list for all these steps.
 
 1. Verify that the implemention matches the existing plan. This is a post implementation verification so you MUST read the plan and actively check changed files. Any missing deferred, missing or changed features MUST be clearly presented to the user, with the reasoning included.
 2. Archive the recently used plan for the session. The plan might be in `chronicler_engine/docs/plans`. The archive folder is `chronicler_engine/old-docs/archived-plans`.

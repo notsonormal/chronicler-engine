@@ -1,7 +1,6 @@
 ---
 name: diataxis-doc-review
 description: Break the LLM's status-quo bias when reviewing chronicler_engine docs. Judge whether each diataxis doc earns its place or is merely inherited from what's already there.
-disable-model-invocation: true
 ---
 
 When LLM writes documentation, it tend to write what it knows. Either from it's own knowledgebase or by reading the code. The problem is that this kind of documentation is useless, because it obvious stuff that it already knows and because reading code is a far better way to understand the code.
