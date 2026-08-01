@@ -14,8 +14,9 @@ const PLAN_CONTEXT_MESSAGE_TYPE = "plan-mode-context";
 const PROPOSED_PLAN_MESSAGE_TYPE = "proposed-plan";
 const PLAN_MODE_QUESTION_TOOL_NAME = "plan_mode_question";
 const PLAN_CONTEXT_MARKER = "[CODEX-LIKE PLAN MODE ACTIVE]";
+const PLAN_MODE_TRANSITION_MESSAGE_TYPE = "pi-plan";
 const SAFE_BUILTIN_PLAN_TOOLS = new Set(["read", "bash", "grep", "find", "ls"]);
-const BLOCKED_BUILTIN_TOOLS = new Set(["edit", "write"]);
+const BLOCKED_BUILTIN_TOOLS = new Set<string>();
 const WRITE_EDIT_TOOL_NAMES = ["write", "edit"] as const;
 const DEFAULT_TOOLS = ["read", "bash", "edit", "write"];
 const TOOL_SELECTOR_PAGE_SIZE = 10;
@@ -377,8 +378,19 @@ export default function planMode(pi: ExtensionAPI) {
 		);
 		restoreState(ctx);
 		if (pi.getFlag("plan") === true) state.enabled = true;
-		if (state.enabled) activatePlanModeTools();
-		else deactivatePlanModeQuestionTool();
+		if (state.enabled) {
+			activatePlanModeTools();
+			pi.sendMessage(
+				{
+					customType: PLAN_MODE_TRANSITION_MESSAGE_TYPE,
+					content: "<pi-plan>Entering plan mode</pi-plan>",
+					display: false,
+				},
+				{ triggerTurn: false },
+			);
+		} else {
+			deactivatePlanModeQuestionTool();
+		}
 		updateUi(ctx);
 	});
 
@@ -480,6 +492,14 @@ export default function planMode(pi: ExtensionAPI) {
 		state = { ...state, enabled: true, awaitingAction: false };
 		activatePlanModeTools();
 		persistState();
+		pi.sendMessage(
+			{
+				customType: PLAN_MODE_TRANSITION_MESSAGE_TYPE,
+				content: "<pi-plan>Entering plan mode</pi-plan>",
+				display: false,
+			},
+			{ triggerTurn: false },
+		);
 		updateUi(ctx);
 	}
 
@@ -530,6 +550,14 @@ export default function planMode(pi: ExtensionAPI) {
 		};
 		restoreTools();
 		persistState();
+		pi.sendMessage(
+			{
+				customType: PLAN_MODE_TRANSITION_MESSAGE_TYPE,
+				content: "<pi-plan>Exiting plan mode</pi-plan>",
+				display: false,
+			},
+			{ triggerTurn: false },
+		);
 		updateUi(ctx);
 		if (persistedPath) {
 			ctx.ui.notify(`Plan written to: ${persistedPath}`, "info");
