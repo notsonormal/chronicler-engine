@@ -5,7 +5,7 @@ title: Integration Test Standards
 
 ## Pattern 1 — SQLite-backed app + builder handoff
 
-**Purpose.** Test an application service method end-to-end against a real `:memory:` SQLite database. The service is the system under test; state persists through snapshots and messages the way it does in production. The same `SqliteTestAppBuilder` is the basis for tests that need a *swap-mid-scenario* — a different provider response per call — via per-call mock configuration (`with_narrations(...)` / `with_prompt_responses(...)`) or a `.pipeline_fn(...)` closure.
+**Purpose.** Test an application collaborator method end-to-end against a real `:memory:` SQLite database. The service is the system under test; state persists through snapshots and messages the way it does in production. The same `SqliteTestAppBuilder` is the basis for tests that need a *swap-mid-scenario* — a different provider response per call — via per-call mock configuration (`with_narrations(...)` / `with_prompt_responses(...)`) or a `.pipeline_fn(...)` closure.
 
 **The standard.**
 
@@ -17,7 +17,7 @@ fn test_<scenario>_<expected_outcome>() {
         .build_service()
         .unwrap();
 
-    app.execute_action("<input>".to_string());
+    app.pipeline.execute_action("<input>".to_string());
 
     let state = app.latest_state();                    // via `PipelineHelpers` in tests/helpers/application_ext.rs
     assert_eq!(state.narrative.history().len(), <expected>);
@@ -27,9 +27,10 @@ fn test_<scenario>_<expected_outcome>() {
 For tests that need a different provider behaviour between actions, configure the mock per call — `MockBackend::default().with_narrations(vec![first, second, ...])` (narrator) or `.with_prompt_responses(vec![...])` (quantifier) — or supply the pipeline explicitly via `.pipeline_fn(...)`:
 
 ```rust
-let (app, pg) = SqliteTestAppBuilder::default_test()
-    .pipeline_fn(move |storage, pg, settings| {
+let app = SqliteTestAppBuilder::default_test()
+    .pipeline_fn(move |storage, pg, settings, _token| {
         ActionPipeline::with_mock_quantifier(
+            CancellationToken::new(),
             make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
             Arc::new(MockBackend::default().with_prompt_responses(vec![
                 r#"{"npcs_in_room": []}"#.to_string(),
@@ -41,16 +42,16 @@ let (app, pg) = SqliteTestAppBuilder::default_test()
     })
     .build_with_state()
     .unwrap();
-app.execute_action("enter shop".to_string());
-app.retry_last_response();   // second call consumes the next queued response
+app.pipeline.execute_action("enter shop".to_string());
+app.pipeline.retry_last_response();   // second call consumes the next queued response
 ```
 
-**When to use the Service-direct variant.** Use the Service-direct variant when testing `ApplicationService` methods that don't flow through `execute_action` — lifecycle ops (`create_game`, `switch_game`, `delete_game`, `list_games`, `get_generating_status`), or any test needing explicit pipeline construction with `skip_seeding=true`. Don't use for `execute_action` pipeline tests — those use the primary `SqliteTestAppBuilder::default_test().backends(...).build_service()` form. Don't use for storage-direct tests with no service — that's Pattern 3.
+**When to use the Service-direct variant.** Use the Service-direct variant when testing collaborator methods that don't flow through `execute_action` — lifecycle ops live on `GameCatalogue` (`create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`), status/cancellation on `GenerationGate`, and read-side queries on `GameViewQuery`; or any test needing explicit pipeline construction with `skip_seeding=true`. Don't use for `execute_action` pipeline tests — those use the primary `SqliteTestAppBuilder::default_test().backends(...).build_service()` form. Don't use for storage-direct tests with no service — that's Pattern 3.
 
 **The standard (Service-direct variant).**
 
 ```rust
-let app_service = TestAppBuilder::with_data(data)
+let app = TestAppBuilder::with_data(data)
     .storage(storage.clone())
     .pipeline(make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
@@ -60,7 +61,7 @@ let app_service = TestAppBuilder::with_data(data)
     .skip_seeding(true)
     .build_service();
 
-let result = app_service.create_game(&world_key, "hero");
+let result = app.game_catalogue.create_game(&world_key, "hero");
 assert!(result.is_ok(), "create_game should succeed: {:?}", result.err());
 ```
 
@@ -99,7 +100,7 @@ The `TestServer::Drop` impl calls `self.child.kill()` (i.e., `std::process::Chil
 
 ## Pattern 3 — Storage-direct round-trip
 
-**Purpose.** Exercise a `Storage` method directly against a real SQLite (or in-memory) backend, with no `ActionPipeline` and no `DefaultApplicationService`. The persistence layer is the system under test.
+**Purpose.** Exercise a `Storage` method directly against a real SQLite (or in-memory) backend, with no `ActionPipeline` and no application collaborators. The persistence layer is the system under test.
 
 **The standard.**
 
@@ -290,7 +291,7 @@ There is no equivalent for sync polling in the integration suite (no screenshots
 
 ### Cross-cutting 6 — `SqliteTestAppBuilder` over `TestAppBuilder` for snapshot assertions
 
-When you need to assert state after `execute_action`, the canonical builder is `SqliteTestAppBuilder` (defined in `tests/helpers/sqlite_test_app_builder.rs`). It builds a full `DefaultApplicationService` backed by in-memory SQLite, persists snapshots + messages the way production does, and exposes `app.storage()`, `app.cancel_token()`. The alternative — `TestAppBuilder::default_test().skip_seeding(true)` — only goes through `:memory:` SQLite storage but skips the production service wiring, which is enough for tests that call `app_service.create_game(...)` directly but **not** for tests that observe generation phases or assert through the snapshot path.
+When you need to assert state after `execute_action`, the canonical builder is `SqliteTestAppBuilder` (defined in `tests/helpers/sqlite_test_app_builder.rs`). It builds a full `AppState` with collaborators (`ActionPipeline`, `GameCatalogue`, `WorldPersonaCatalogue`, `GameViewQuery`, `GenerationGate`, `PersistenceGate`) backed by in-memory SQLite, persists snapshots + messages the way production does, and exposes `app.storage`, `app.shutdown_token`. The alternative — `TestAppBuilder::default_test().skip_seeding(true)` — only goes through `:memory:` SQLite storage but skips the production service wiring, which is enough for tests that call `app.game_catalogue.create_game(...)` directly but **not** for tests that observe generation phases or assert through the snapshot path.
 
 The decision rule:
 

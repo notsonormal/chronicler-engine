@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use tracing::instrument;
 
-use crate::application::application_service::DefaultApplicationService;
+use crate::application::persistence_gate::PersistenceGate;
 use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::domain::model::character::{NpcCard, PersonaCard};
@@ -17,7 +17,7 @@ use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
 pub struct ArrivalTaskContext {
-    pub(crate) app: Arc<DefaultApplicationService>,
+    pub(crate) persistence_gate: Arc<PersistenceGate>,
     pub(crate) room_id: String,
     pub(crate) arrival_preset: Option<PromptPreset>,
     pub(crate) response_length: String,
@@ -29,21 +29,20 @@ pub struct ArrivalTaskContext {
 }
 
 impl ArrivalTaskContext {
-    #[doc(hidden)]
     #[allow(clippy::too_many_arguments)]
-    pub fn new_for_test(
-        app: Arc<DefaultApplicationService>,
+    pub fn new(
+        persistence_gate: Arc<PersistenceGate>,
         room_id: String,
-        nearby_npcs: Vec<NpcCard>,
-        all_npcs: Vec<NpcCard>,
         arrival_preset: Option<PromptPreset>,
         response_length: String,
         max_context_tokens: u32,
         max_tokens: Option<u32>,
+        nearby_npcs: Vec<NpcCard>,
+        all_npcs: Vec<NpcCard>,
         recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
     ) -> Self {
         Self {
-            app,
+            persistence_gate,
             room_id,
             arrival_preset,
             response_length,
@@ -56,19 +55,46 @@ impl ArrivalTaskContext {
     }
 
     #[doc(hidden)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_for_test(
+        persistence_gate: Arc<PersistenceGate>,
+        room_id: String,
+        nearby_npcs: Vec<NpcCard>,
+        all_npcs: Vec<NpcCard>,
+        arrival_preset: Option<PromptPreset>,
+        response_length: String,
+        max_context_tokens: u32,
+        max_tokens: Option<u32>,
+        recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
+    ) -> Self {
+        Self::new(
+            persistence_gate,
+            room_id,
+            arrival_preset,
+            response_length,
+            max_context_tokens,
+            max_tokens,
+            nearby_npcs,
+            all_npcs,
+            recorder,
+        )
+    }
+
+    #[doc(hidden)]
     pub fn run_sync(self) {
         let _ = self.run();
     }
 
     #[instrument(err, skip(self), fields(room_id = %self.room_id))]
     pub(crate) fn run(self) -> Result<(), EngineError> {
-        let mut state = match self.app.persistence_gate.load_expecting_valid_state() {
+        let storage = self.persistence_gate.storage();
+        let mut state = match self.persistence_gate.load_expecting_valid_state() {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!(
                     "load_expecting_valid_state failed in arrival task: {e}; falling back to fresh initial state"
                 );
-                match self.app.persistence_gate.build_fresh_initial_state() {
+                match self.persistence_gate.build_fresh_initial_state() {
                     Ok(s) => s,
                     Err(e2) => {
                         tracing::error!("build_fresh_initial_state also failed: {e2}");
@@ -78,13 +104,10 @@ impl ArrivalTaskContext {
             }
         };
 
-        let game = self
-            .app
-            .storage()
-            .require_game(self.app.current_game_id())?;
-        let world_with_map = self.app.storage().require_world(&game.world_key)?;
-        let persona: Arc<PersonaCard> =
-            Arc::new(self.app.storage().require_persona(&game.persona_key)?);
+        let current_game_id = storage.current_game_id();
+        let game = storage.require_game(current_game_id)?;
+        let world_with_map = storage.require_world(&game.world_key)?;
+        let persona: Arc<PersonaCard> = Arc::new(storage.require_persona(&game.persona_key)?);
         let world: Arc<WorldCard> = Arc::new(world_with_map.world_card);
         let map: Arc<MapDef> = Arc::new(world_with_map.map);
         if state.narrative.history.is_empty() {
@@ -148,11 +171,7 @@ impl ArrivalTaskContext {
             }
         }
 
-        if let Err(e) = self
-            .app
-            .persistence_gate
-            .save_message_and_snapshot(&mut state)
-        {
+        if let Err(e) = self.persistence_gate.save_message_and_snapshot(&mut state) {
             tracing::error!("Failed to save arrival message and snapshot: {e}");
         }
 

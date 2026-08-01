@@ -17,7 +17,7 @@ const MAX_LOG_DISPLAY: usize = 50;
 impl AppState {
     pub fn render_header(&self) -> Result<String> {
         let game_name = self
-            .application_service
+            .game_view_query
             .get_current_game_name()
             .unwrap_or_else(|_| "Unknown".to_string());
         render_header_unlocked(game_name)
@@ -25,7 +25,7 @@ impl AppState {
 
     pub fn render_story_log(&self) -> Result<String> {
         let (entries, has_last_trigger) = self
-            .application_service
+            .game_view_query
             .get_story_log_entries()
             .map_err(|e| EngineError::Config(e.to_string()))?;
 
@@ -38,12 +38,12 @@ impl AppState {
 
     pub fn render_visual_sidebar(&self) -> Result<String> {
         let (room_name, image_path) = self
-            .application_service
+            .game_view_query
             .get_current_room_view()
             .map_err(|e| EngineError::Config(e.to_string()))?;
 
         let npc_data = self
-            .application_service
+            .game_view_query
             .get_npc_headshots(true)
             .map_err(|e| EngineError::Config(e.to_string()))?;
 
@@ -61,7 +61,7 @@ impl AppState {
 
     pub fn render_action_area(&self) -> Result<String> {
         let (status, phase) = self
-            .application_service
+            .game_view_query
             .get_generating_status()
             .map_err(|e| EngineError::Config(e.to_string()))?;
 
@@ -77,7 +77,7 @@ impl AppState {
         use askama::Template;
 
         let npc_data = self
-            .application_service
+            .game_view_query
             .get_npc_headshots(false)
             .map_err(|e| EngineError::Config(e.to_string()))?;
 
@@ -94,7 +94,7 @@ impl AppState {
 
     pub fn render_llm_messages(&self) -> Result<String> {
         let messages = self
-            .application_service
+            .game_view_query
             .list_latest_llm_messages(50)
             .map_err(|e| EngineError::Config(e.to_string()))?;
 

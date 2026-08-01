@@ -58,12 +58,12 @@ fn trigger_npc_test_data() -> TestData {
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {
     let data = trigger_npc_test_data();
 
-    let (app1, pg1) = SqliteTestAppBuilder::with_data(data.clone())
+    let app1 = SqliteTestAppBuilder::with_data(data.clone())
         .mock_backend(MockBackend::new)
         .build_with_state()
         .unwrap();
 
-    app1.add_input_and_save(&pg1, "enter shop");
+    app1.add_input_and_save("enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -71,10 +71,11 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
                 .to_string(),
         ]));
 
-    let (app2, pg2) = SqliteTestAppBuilder::with_data(data)
-        .pipeline_fn(move |storage, pg, settings| {
+    let app2 = SqliteTestAppBuilder::with_data(data)
+        .pipeline_fn(move |storage, pg, settings, token| {
     chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-        make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+        token,
+    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
         quantifier.clone(),
         Arc::clone(pg),
         Arc::clone(settings),
@@ -83,19 +84,19 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         .build_with_state()
         .unwrap();
 
-    app2.execute_action("enter shop".to_string());
+    app2.pipeline.execute_action("enter shop".to_string());
     assert!(
-        app2.wait_for_generation_complete(&pg2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Execute should complete"
     );
 
-    app2.retry_last_response();
+    app2.pipeline.retry_last_response();
     assert!(
-        app2.wait_for_generation_complete(&pg2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Event retry should complete"
     );
 
-    let guard = app2.latest_state(&pg2);
+    let guard = app2.latest_state();
     let narration_msgs: Vec<_> = guard
         .narrative
         .history
@@ -117,12 +118,12 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 fn test_retry_event_continuation_preserves_quantifier_result() {
     let data = trigger_npc_test_data();
 
-    let (app1, pg1) = SqliteTestAppBuilder::with_data(data.clone())
+    let app1 = SqliteTestAppBuilder::with_data(data.clone())
         .mock_backend(MockBackend::new)
         .build_with_state()
         .unwrap();
 
-    app1.add_input_and_save(&pg1, "enter shop");
+    app1.add_input_and_save("enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -130,10 +131,11 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
                 .to_string(),
         ]));
 
-    let (app2, pg2) = SqliteTestAppBuilder::with_data(data)
-        .pipeline_fn(move |storage, pg, settings| {
+    let app2 = SqliteTestAppBuilder::with_data(data)
+        .pipeline_fn(move |storage, pg, settings, token| {
     chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-        make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+        token,
+    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
         quantifier.clone(),
         Arc::clone(pg),
         Arc::clone(settings),
@@ -142,12 +144,12 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         .build_with_state()
         .unwrap();
 
-    app2.execute_action("enter shop".to_string());
+    app2.pipeline.execute_action("enter shop".to_string());
     assert!(
-        app2.wait_for_generation_complete(&pg2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Execute should complete"
     );
-    let guard = app2.latest_state(&pg2);
+    let guard = app2.latest_state();
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Execute: player should have moved to room2"
@@ -163,18 +165,18 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         "Trigger should have fired and added an Event"
     );
 
-    app2.retry_last_response();
+    app2.pipeline.retry_last_response();
     assert!(
-        app2.wait_for_generation_complete(&pg2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Event retry should complete"
     );
-    let guard = app2.latest_state(&pg2);
+    let guard = app2.latest_state();
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Event retry: room should be unchanged (quantifier not rerun)"
     );
 
-    let messages = app2.storage().list_latest_llm_messages(50).unwrap();
+    let messages = app2.storage.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
         "LLM messages should be logged during gameplay"
@@ -262,12 +264,12 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         room_npcs: vec!["gabriella".to_string()],
     };
 
-    let (app1, pg1) = SqliteTestAppBuilder::with_data(data.clone())
+    let app1 = SqliteTestAppBuilder::with_data(data.clone())
         .mock_backend(MockBackend::new)
         .build_with_state()
         .unwrap();
 
-    app1.add_input_and_save(&pg1, "enter shop");
+    app1.add_input_and_save("enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -280,23 +282,24 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         "Gabriella emerges from the shadows behind the counter.".to_string(),
     ])));
 
-    let (app2, pg2) = SqliteTestAppBuilder::with_data(data)
-        .pipeline_fn(move |_storage, pg, settings| {
+    let app2 = SqliteTestAppBuilder::with_data(data)
+        .pipeline_fn(move |_storage, pg, settings, token| {
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-                llm_backend.clone(),
+                token,
+    llm_backend.clone(),
                 quantifier.clone(),
                 Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
 
-    app2.execute_action("enter shop".to_string());
+    app2.pipeline.execute_action("enter shop".to_string());
     assert!(
-        app2.wait_for_generation_complete(&pg2, 1000),
+        app2.wait_for_generation_complete(1000),
         "Execute should complete"
     );
 
-    let guard = app2.latest_state(&pg2);
+    let guard = app2.latest_state();
 
     let event_count = guard
         .narrative

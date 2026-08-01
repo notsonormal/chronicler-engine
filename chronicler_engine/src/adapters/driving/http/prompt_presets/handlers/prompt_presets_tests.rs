@@ -30,10 +30,7 @@ fn make_test_app_state_with_storage(
         None,
     )
     .expect("build_app_graph_for_tests should succeed");
-    crate::adapters::driving::http::AppState::from_wired(
-        wired,
-        tokio_util::sync::CancellationToken::new(),
-    )
+    crate::adapters::driving::http::AppState::from_wired(wired)
 }
 
 #[tokio::test]
@@ -274,10 +271,7 @@ fn make_test_app_state_with_failing_storage(
         None,
     )
     .expect("build_app_graph_for_tests should succeed");
-    crate::adapters::driving::http::AppState::from_wired(
-        wired,
-        tokio_util::sync::CancellationToken::new(),
-    )
+    crate::adapters::driving::http::AppState::from_wired(wired)
 }
 
 #[tokio::test]

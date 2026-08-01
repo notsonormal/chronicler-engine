@@ -4,7 +4,7 @@ use axum::body::to_bytes;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 
-use crate::application::application_service::ApplicationError;
+use crate::application::errors::ApplicationError;
 use crate::error::EngineError;
 
 async fn body_string(resp: axum::response::Response) -> String {

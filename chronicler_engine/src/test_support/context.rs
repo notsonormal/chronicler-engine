@@ -4,9 +4,10 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::adapters::driven::storage::{PresetStore, Storage};
 use crate::application::agents::registry::AgentRegistry;
-use crate::application::application_service::DefaultApplicationService;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::persistence_gate::PersistenceGate;
@@ -50,7 +51,13 @@ pub fn make_test_pipeline_with_backends(
 ) -> ActionPipeline {
     let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
     let settings = Arc::new(RwLock::new(AppSettings::default()));
-    ActionPipeline::with_backends(recorder, agent_registry, persistence_gate, settings)
+    ActionPipeline::with_backends(
+        CancellationToken::new(),
+        recorder,
+        agent_registry,
+        persistence_gate,
+        settings,
+    )
 }
 
 pub fn make_test_pipeline_with_mock_quantifier(
@@ -60,49 +67,37 @@ pub fn make_test_pipeline_with_mock_quantifier(
 ) -> ActionPipeline {
     let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
     let settings = Arc::new(RwLock::new(AppSettings::default()));
-    ActionPipeline::with_mock_quantifier(recorder, quantifier_provider, persistence_gate, settings)
+    ActionPipeline::with_mock_quantifier(
+        CancellationToken::new(),
+        recorder,
+        quantifier_provider,
+        persistence_gate,
+        settings,
+    )
 }
 
-#[cfg(feature = "testing")]
-pub fn build_test_service(
+/// Build a full `WiredApp` for the supplied pipeline.
+pub fn build_test_wired_app(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
     pipeline: ActionPipeline,
-) -> Result<Arc<DefaultApplicationService>> {
-    Ok(build_app_graph_for_tests(
+) -> Result<WiredApp> {
+    build_app_graph_for_tests(
         Arc::new(RwLock::new(AppSettings::default())),
         storage,
         preset_storage,
         Some(pipeline),
-    )?
-    .application_service)
+    )
 }
 
-pub fn build_test_service_with_pg(
-    storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
-    pipeline: ActionPipeline,
-) -> Result<(Arc<DefaultApplicationService>, Arc<PersistenceGate>)> {
-    let wired = build_app_graph_for_tests(
-        Arc::new(RwLock::new(AppSettings::default())),
-        storage,
-        preset_storage,
-        Some(pipeline),
-    )?;
-    Ok((wired.application_service, wired.persistence_gate))
-}
-
-#[cfg(feature = "testing")]
-pub fn build_test_service_with_settings(
+/// Build a full `WiredApp` with custom settings.
+pub fn build_test_wired_app_with_settings(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
     settings: Arc<RwLock<AppSettings>>,
     pipeline: ActionPipeline,
-) -> Result<Arc<DefaultApplicationService>> {
-    Ok(
-        build_app_graph_for_tests(settings, storage, preset_storage, Some(pipeline))?
-            .application_service,
-    )
+) -> Result<WiredApp> {
+    build_app_graph_for_tests(settings, storage, preset_storage, Some(pipeline))
 }
 
 pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {

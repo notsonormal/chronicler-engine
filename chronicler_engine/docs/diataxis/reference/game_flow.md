@@ -63,7 +63,7 @@ Phase failures route to finalization. Cancellation exits through the separate co
 
 ## Cancellation
 
-`DefaultApplicationService` and the Action Pipeline are synchronous. HTTP entry points offload the work with `tokio::task::spawn_blocking`, so one blocking task owns the synchronous pipeline run.
+`ActionPipeline` and its collaborators are synchronous. HTTP entry points offload the work with `tokio::task::spawn_blocking`, so one blocking task owns the synchronous pipeline run.
 
 `GenerationGate` owns the per-Game slot registry (`Arc<RwLock<HashMap<u64, GenerationSlot>>>`). Claiming a slot assigns a generation id, persists the initial `Generating` state, and then spawns the task. A claimed slot rejects a concurrent Action for the same Game. Shutdown checks bound task entry: retry and retrigger check before spawning, and every spawned closure checks again before running pipeline work.
 

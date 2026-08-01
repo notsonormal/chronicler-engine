@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::application::DefaultApplicationService;
+use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
@@ -14,11 +14,11 @@ use crate::fixtures::{create_test_world_with_scenario};
 use crate::storage_ext::TestWorldFixture;
 
 #[allow(dead_code)]
-fn create_app_service() -> Arc<DefaultApplicationService> {
+fn create_app_service() -> AppState {
     create_app_service_with_storage(Arc::new(Storage::new_in_memory()))
 }
 
-fn create_app_service_with_storage(storage: Arc<Storage>) -> Arc<DefaultApplicationService> {
+fn create_app_service_with_storage(storage: Arc<Storage>) -> AppState {
     let pipeline = make_test_pipeline_with_backends(
         Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
         crate::make_test_recorder(Arc::new(MockBackend::default())),
@@ -49,7 +49,7 @@ fn test_create_game_with_scenario() {
         .skip_seeding(true)
         .build_service();
 
-    let result = app_service.create_game(&world_key, "hero");
+    let result = app_service.game_catalogue.create_game(&world_key, "hero");
     assert!(
         result.is_ok(),
         "create_game should succeed: {:?}",
@@ -57,7 +57,7 @@ fn test_create_game_with_scenario() {
     );
     let new_id = result.unwrap();
 
-    let current_id = app_service.storage().current_game_id();
+    let current_id = app_service.storage.current_game_id();
     assert_eq!(current_id, new_id, "Should have switched to new game");
 
     let latest = storage.load_latest_snapshot().unwrap();
@@ -100,9 +100,12 @@ fn test_reset_creates_scenario_message() {
         .skip_seeding(true)
         .build_service();
 
-    app_service.create_game(&world_key, "hero").unwrap();
+    app_service
+        .game_catalogue
+        .create_game(&world_key, "hero")
+        .unwrap();
 
-    app_service.reset().unwrap();
+    app_service.game_catalogue.reset().unwrap();
 
     let messages_after = storage.load_message_rows().unwrap();
     assert!(
@@ -142,21 +145,27 @@ fn test_switch_game_loads_correct_state() {
         .skip_seeding(true)
         .build_service();
 
-    app_service.create_game(&world_key, "hero").unwrap();
-    let game1_id = app_service.storage().current_game_id();
+    app_service
+        .game_catalogue
+        .create_game(&world_key, "hero")
+        .unwrap();
+    let game1_id = app_service.storage.current_game_id();
 
-    app_service.create_game(&world_key, "hero").unwrap();
-    let game2_id = app_service.storage().current_game_id();
+    app_service
+        .game_catalogue
+        .create_game(&world_key, "hero")
+        .unwrap();
+    let game2_id = app_service.storage.current_game_id();
     assert_ne!(game1_id, game2_id, "Should have different game IDs");
 
-    let switch_result = app_service.switch_game(game1_id);
+    let switch_result = app_service.game_catalogue.switch_game(game1_id);
     assert!(
         switch_result.is_ok(),
         "switch_game should succeed: {:?}",
         switch_result.err()
     );
     assert_eq!(
-        app_service.storage().current_game_id(),
+        app_service.storage.current_game_id(),
         game1_id,
         "Should have switched to game 1"
     );
@@ -166,14 +175,14 @@ fn test_switch_game_loads_correct_state() {
         "Game 1 should have a snapshot after switching"
     );
 
-    let switch_result = app_service.switch_game(game2_id);
+    let switch_result = app_service.game_catalogue.switch_game(game2_id);
     assert!(
         switch_result.is_ok(),
         "switch_game should succeed: {:?}",
         switch_result.err()
     );
     assert_eq!(
-        app_service.storage().current_game_id(),
+        app_service.storage.current_game_id(),
         game2_id,
         "Should have switched to game 2"
     );
@@ -200,7 +209,7 @@ fn test_switch_to_nonexistent_game() {
         .skip_seeding(true)
         .build_service();
 
-    let result = app_service.switch_game(99999);
+    let result = app_service.game_catalogue.switch_game(99999);
     assert!(
         result.is_err(),
         "switch_game should fail for nonexistent game"
@@ -225,9 +234,12 @@ fn test_reset_without_existing_game() {
         .skip_seeding(true)
         .build_service();
 
-    let _ = app_service.create_game(&world_key, "hero").unwrap();
+    let _ = app_service
+        .game_catalogue
+        .create_game(&world_key, "hero")
+        .unwrap();
 
-    let result = app_service.reset();
+    let result = app_service.game_catalogue.reset();
     assert!(
         result.is_ok(),
         "reset should succeed with default game: {:?}",
@@ -253,13 +265,13 @@ fn test_create_game_name_uniqueness() {
         .skip_seeding(true)
         .build_service();
 
-    let result1 = app_service.create_game(&world_key, "hero");
+    let result1 = app_service.game_catalogue.create_game(&world_key, "hero");
     assert!(result1.is_ok(), "First create_game should succeed");
 
-    let result2 = app_service.create_game(&world_key, "hero");
+    let result2 = app_service.game_catalogue.create_game(&world_key, "hero");
     assert!(result2.is_ok(), "Second create_game should succeed");
 
-    let games = app_service.list_games().unwrap();
+    let games = app_service.game_catalogue.list_games().unwrap();
     let non_default_games: Vec<_> = games.iter().filter(|g| g.name != "default").collect();
 
     assert_eq!(
@@ -299,9 +311,9 @@ fn test_switch_game_world_mismatch() {
         .skip_seeding(true)
         .build_service();
 
-    let create_result = app_service.create_game(&world_key, "hero");
+    let create_result = app_service.game_catalogue.create_game(&world_key, "hero");
     assert!(create_result.is_ok(), "create_game should succeed");
-    let game_id = app_service.storage().current_game_id();
+    let game_id = app_service.storage.current_game_id();
 
     let mut world_b = create_test_world_with_scenario();
     world_b.name = "World B".to_string();
@@ -316,7 +328,7 @@ fn test_switch_game_world_mismatch() {
         .skip_seeding(true)
         .build_service();
 
-    let result = app_service.switch_game(game_id);
+    let result = app_service.game_catalogue.switch_game(game_id);
     assert!(
         result.is_ok(),
         "switch_game should succeed even for different worlds"
@@ -341,18 +353,24 @@ fn test_delete_game_removes() {
         .skip_seeding(true)
         .build_service();
 
-    app_service.create_game(&world_key, "hero").unwrap();
-    let game_id_1 = app_service.storage().current_game_id();
+    app_service
+        .game_catalogue
+        .create_game(&world_key, "hero")
+        .unwrap();
+    let game_id_1 = app_service.storage.current_game_id();
 
-    app_service.create_game(&world_key, "hero").unwrap();
-    let game_id_2 = app_service.storage().current_game_id();
+    app_service
+        .game_catalogue
+        .create_game(&world_key, "hero")
+        .unwrap();
+    let game_id_2 = app_service.storage.current_game_id();
 
     assert_ne!(game_id_1, game_id_2, "Should have different game IDs");
 
-    let delete_result = app_service.delete_game(game_id_1);
+    let delete_result = app_service.game_catalogue.delete_game(game_id_1);
     assert!(delete_result.is_ok(), "delete_game should succeed");
 
-    let games = app_service.list_games().unwrap();
+    let games = app_service.game_catalogue.list_games().unwrap();
     assert_eq!(games.len(), 1, "Should have exactly 1 game after deletion");
     assert!(
         games.iter().any(|g| g.id == game_id_2),
@@ -382,10 +400,13 @@ fn test_delete_game_active_rejected() {
         .skip_seeding(true)
         .build_service();
 
-    app_service.create_game(&world_key, "hero").unwrap();
-    let active_game_id = app_service.storage().current_game_id();
+    app_service
+        .game_catalogue
+        .create_game(&world_key, "hero")
+        .unwrap();
+    let active_game_id = app_service.storage.current_game_id();
 
-    let result = app_service.delete_game(active_game_id);
+    let result = app_service.game_catalogue.delete_game(active_game_id);
     assert!(
         result.is_err(),
         "delete_game should fail for the active game"
@@ -414,7 +435,7 @@ fn test_delete_game_nonexistent() {
         .skip_seeding(true)
         .build_service();
 
-    let result = app_service.delete_game(99999);
+    let result = app_service.game_catalogue.delete_game(99999);
     assert!(
         result.is_ok(),
         "delete_game should succeed silently for nonexistent game"

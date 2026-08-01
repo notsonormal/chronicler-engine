@@ -4,11 +4,8 @@
 use std::sync::{Arc, RwLock};
 
 use axum::Router;
-use tokio_util::sync::CancellationToken;
 
-use crate::application::application_service::DefaultApplicationService;
 use crate::application::pipeline::pipeline::ActionPipeline;
-use crate::application::persistence_gate::PersistenceGate;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
@@ -112,28 +109,15 @@ impl TestAppBuilder {
         build_router(app_state)
     }
 
-    pub fn build_with_service(self) -> (Router, Arc<DefaultApplicationService>) {
-        let app_state = self.build_app_state();
-        let service = Arc::clone(&app_state.application_service);
-        (build_router(app_state), service)
-    }
-
+    /// Build returning `(Router, AppState)`.
     pub fn build_with_state(self) -> (Router, AppState) {
         let app_state = self.build_app_state();
         (build_router(app_state.clone()), app_state)
     }
 
-    pub fn build_service(self) -> Arc<DefaultApplicationService> {
-        let app_state = self.build_app_state();
-        Arc::clone(&app_state.application_service)
-    }
-
-    pub fn build_service_with_pg(self) -> (Arc<DefaultApplicationService>, Arc<PersistenceGate>) {
-        let app_state = self.build_app_state();
-        (
-            Arc::clone(&app_state.application_service),
-            Arc::clone(&app_state.persistence_gate),
-        )
+    /// Build returning the `AppState`.
+    pub fn build_service(self) -> AppState {
+        self.build_app_state()
     }
 
     pub fn build_app_state(mut self) -> AppState {
@@ -212,6 +196,12 @@ impl TestAppBuilder {
             state.narrative.input_buffer.status = GenerationStatus::Generating;
             state.narrative.input_buffer.phase = GenerationPhase::Narrating;
             let _ = wired.persistence_gate.save_state(&state);
+            // Mirror the persisted Generating status into the in-memory gate so
+            // handlers that consult `is_busy` see the same truth.
+            let game_id = wired.persistence_gate.storage().current_game_id();
+            let _ = wired
+                .generation_gate
+                .try_claim(game_id, &mut state, &wired.persistence_gate);
         }
 
         if let Some((status, phase)) = self.generation.clone() {
@@ -221,7 +211,6 @@ impl TestAppBuilder {
             let _ = wired.persistence_gate.save_state(&state);
         }
 
-        let shutdown_token = CancellationToken::new();
-        AppState::from_wired(wired, shutdown_token)
+        AppState::from_wired(wired)
     }
 }

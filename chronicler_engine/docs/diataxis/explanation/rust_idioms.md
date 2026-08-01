@@ -5,7 +5,7 @@ title: Rust Idioms
 
 ## Concrete services and backend enum dispatch
 
-`DefaultApplicationService` and `ActionPipeline` are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum — `Sqlite` or `InMemory` — plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the agent registry's `Box<dyn Agent>` for heterogeneous agent dispatch).
+`ActionPipeline` and the catalogue/gate collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum — `Sqlite` or `InMemory` — plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the agent registry's `Box<dyn Agent>` for heterogeneous agent dispatch).
 
 Backend switching travels through enum-variant dispatch. Tests construct an in-memory backend by selecting the enum variant; production constructs the SQLite backend the same way; the surrounding code is the same struct. Each call site reads the same concrete type; the polymorphism lives at the switch sites that consume the enum, which avoids threading a type parameter through the application to make storage polymorphic.
 
@@ -13,7 +13,7 @@ The convention fits the constraint that Rust 2024 edition makes async-trait disp
 
 ## LLM-call offload via spawn_blocking
 
-Synchronous services (`DefaultApplicationService`, `ActionPipeline`) run inside `tokio::task::spawn_blocking`. The spawn helper lives at `src/application/pipeline/spawn.rs`; HTTP handlers reach it through `DefaultApplicationService::process_action` rather than calling it directly. The pipeline instance is built once at startup and shared through an `Arc`, so the handler submits work to the same pipeline across requests.
+Synchronous services (`ActionPipeline` and its collaborators) run inside `tokio::task::spawn_blocking`. The spawn helper lives at `src/application/pipeline/spawn.rs`; HTTP handlers reach it through `ActionPipeline::process_action` on the `AppState.pipeline` field. The pipeline instance is built once at startup and shared through an `Arc`, so the handler submits work to the same pipeline across requests.
 
 The offload buys separation between the Axum event loop, which stays responsive, and the LLM network call, which can take seconds. The synchronous service code is unchanged; the handler hands the blocking call to a Tokio blocking pool, returns immediately, and the caller awaits the response on the future the pool returns. Latency from one slow LLM call does not back up unrelated handlers; the synchronous service code runs unchanged inside the blocking pool.
 

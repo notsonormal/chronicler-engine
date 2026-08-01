@@ -2,11 +2,14 @@
 //! Application state management
 
 use std::sync::Arc;
-use std::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
-use crate::application::application_service::DefaultApplicationService;
+use crate::application::games::catalogue::GameCatalogue;
+use crate::application::games::view_query::GameViewQuery;
+use crate::application::games::world_persona_catalogue::WorldPersonaCatalogue;
+use crate::application::generation::gate::GenerationGate;
 use crate::application::persistence_gate::PersistenceGate;
+use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::text_check_service::TextCheckService;
 use crate::bootstrap::wiring::WiredApp;
 use crate::domain::model::settings::AppSettings;
@@ -17,28 +20,36 @@ use super::utils::read_lock_or_recover;
 pub struct AppState {
     pub storage: Arc<crate::adapters::driven::storage::Storage>,
     pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
-    pub application_service: Arc<DefaultApplicationService>,
     pub persistence_gate: Arc<PersistenceGate>,
     pub text_check_service: Arc<TextCheckService>,
-    pub settings: Arc<RwLock<AppSettings>>,
-    pub shutdown_token: Arc<std::sync::RwLock<CancellationToken>>,
+    pub settings: Arc<std::sync::RwLock<AppSettings>>,
+    pub shutdown_token: CancellationToken,
+    pub pipeline: Arc<ActionPipeline>,
+    pub generation_gate: GenerationGate,
+    pub game_catalogue: GameCatalogue,
+    pub game_view_query: GameViewQuery,
+    pub world_persona: WorldPersonaCatalogue,
 }
 
 impl AppState {
-    pub fn from_wired(wired: WiredApp, shutdown_token: CancellationToken) -> Self {
+    pub fn from_wired(wired: WiredApp) -> Self {
         AppState {
             storage: wired.storage,
             preset_storage: wired.preset_storage,
-            application_service: wired.application_service,
             persistence_gate: wired.persistence_gate,
             text_check_service: wired.text_check_service,
             settings: wired.settings,
-            shutdown_token: Arc::new(RwLock::new(shutdown_token)),
+            shutdown_token: wired.shutdown_token,
+            pipeline: Arc::new(wired.pipeline),
+            generation_gate: wired.generation_gate,
+            game_catalogue: wired.game_catalogue,
+            game_view_query: wired.game_view_query,
+            world_persona: wired.world_persona,
         }
     }
 
     pub fn current_shutdown_token(&self) -> CancellationToken {
-        read_lock_or_recover(&self.shutdown_token, "shutdown_token")
+        self.shutdown_token.clone()
     }
 
     pub fn settings(&self) -> AppSettings {

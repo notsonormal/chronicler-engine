@@ -33,11 +33,12 @@ fn trigger_data() -> TestData {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.3
 #[test]
 fn test_delayed_llm_completes_without_deadlock() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
-        .pipeline_fn(|storage, pg, settings| {
+        .pipeline_fn(|storage, pg, settings, token| {
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-                crate::make_test_recorder_with_storage(
+                token,
+    crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::default().with_delay(200)),
                     Arc::clone(storage),
                 ),
@@ -49,9 +50,9 @@ fn test_delayed_llm_completes_without_deadlock() {
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look around".to_string());
+    app.pipeline.execute_action("look around".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after delayed action completes"
@@ -79,18 +80,19 @@ fn test_quantifier_detects_movement() {
             quantifier_recorder,
         ),
     );
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
-        .pipeline_fn(move |_storage, _pg, _settings| backend.as_ref().clone())
+        .pipeline_fn(move |_storage, _pg, _settings, _token| backend.as_ref().clone())
         .build_with_state()
         .unwrap();
 
-    app.execute_action("walk to the village square".to_string());
+    app.pipeline
+        .execute_action("walk to the village square".to_string());
 
-    let completed = app.wait_for_generation_complete(&pg, 500);
+    let completed = app.wait_for_generation_complete(500);
     assert!(completed, "Movement action should complete within timeout");
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after movement action"
@@ -105,7 +107,7 @@ fn test_quantifier_detects_movement() {
 #[test]
 fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     let data = trigger_data();
-    let (app, pg) = SqliteTestAppBuilder::with_data(data)
+    let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(|state| {
             state.narrative.history.clear();
             state.narrative.input_buffer.status = GenerationStatus::Generating;
@@ -113,7 +115,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
                 encounter.times_met = 0;
             }
         })
-        .pipeline_fn(|_storage, pg, settings| {
+        .pipeline_fn(|_storage, pg, settings, token| {
             let quantifier_recorder: Arc<
                 dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
             > =
@@ -121,7 +123,8 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
                     r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
                 ]));
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-                crate::make_test_recorder(Arc::new(MockBackend::default())),
+                token,
+    crate::make_test_recorder(Arc::new(MockBackend::default())),
                 quantifier_recorder,
                 Arc::clone(pg),
                 Arc::clone(settings),
@@ -130,9 +133,9 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         .build_with_state()
         .unwrap();
 
-    app.execute_action("enter the shop".to_string());
+    app.pipeline.execute_action("enter the shop".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after trigger action"
@@ -160,11 +163,12 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.3
 #[test]
 fn test_empty_llm_response_handled_gracefully() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
-        .pipeline_fn(|storage, pg, settings| {
+        .pipeline_fn(|storage, pg, settings, token| {
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-                crate::make_test_recorder_with_storage(
+                token,
+    crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::default().with_empty_response()),
                     Arc::clone(storage),
                 ),
@@ -176,9 +180,9 @@ fn test_empty_llm_response_handled_gracefully() {
         .build_with_state()
         .unwrap();
 
-    app.execute_action("examine the room".to_string());
+    app.pipeline.execute_action("examine the room".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -203,7 +207,7 @@ fn test_empty_llm_response_handled_gracefully() {
 #[test]
 fn test_failing_trigger_narration_does_not_crash() {
     let data = trigger_data();
-    let (app, pg) = SqliteTestAppBuilder::with_data(data)
+    let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(|state| {
             state.narrative.history.clear();
             state.narrative.input_buffer.status = GenerationStatus::Generating;
@@ -211,7 +215,7 @@ fn test_failing_trigger_narration_does_not_crash() {
                 encounter.times_met = 0;
             }
         })
-        .pipeline_fn(|storage, pg, settings| {
+        .pipeline_fn(|storage, pg, settings, token| {
             let quantifier_recorder: Arc<
                 dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
             > =
@@ -219,7 +223,8 @@ fn test_failing_trigger_narration_does_not_crash() {
                     r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
                 ]));
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-                crate::make_test_recorder_with_storage(
+                token,
+    crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::default().with_trigger_narration_fail()),
                     Arc::clone(storage),
                 ),
@@ -231,9 +236,10 @@ fn test_failing_trigger_narration_does_not_crash() {
         .build_with_state()
         .unwrap();
 
-    app.execute_action("examine the shopkeeper".to_string());
+    app.pipeline
+        .execute_action("examine the shopkeeper".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after trigger narration failure"
@@ -261,15 +267,16 @@ fn test_failing_trigger_narration_does_not_crash() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.1
 #[test]
 fn test_pipeline_cancels_when_token_cancelled() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .backends(MockBackend::default)
         .build_with_state()
         .unwrap();
-    app.cancel_token().cancel();
 
-    app.execute_action("look".to_string());
+    app.shutdown_token.cancel();
 
-    let final_state = app.latest_state(&pg);
+    app.pipeline.execute_action("look".to_string());
+
+    let final_state = app.latest_state();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -280,11 +287,12 @@ fn test_pipeline_cancels_when_token_cancelled() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.1
 #[tokio::test]
 async fn test_cancellation_resets_state_to_idle() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
-        .pipeline_fn(|storage, pg, settings| {
+        .pipeline_fn(|storage, pg, settings, token| {
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-                crate::make_test_recorder_with_storage(
+                token,
+    crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::default().with_delay(50)),
                     Arc::clone(storage),
                 ),
@@ -295,12 +303,13 @@ async fn test_cancellation_resets_state_to_idle() {
         })
         .build_with_state()
         .unwrap();
-    let token = app.cancel_token().clone();
+
+    let token = app.shutdown_token.clone().clone();
 
     token.cancel();
-    app.execute_action("look around".to_string());
+    app.pipeline.execute_action("look around".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation"
@@ -323,16 +332,17 @@ async fn test_pipeline_cancels_after_main_narration() {
             quantifier_recorder,
         ),
     );
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
-        .pipeline_fn(move |_storage, _pg, _settings| backend.as_ref().clone())
+        .pipeline_fn(move |_storage, _pg, _settings, _token| backend.as_ref().clone())
         .build_with_state()
         .unwrap();
-    let token = app.cancel_token().clone();
 
-    let app_clone = Arc::clone(&app);
+    let token = app.shutdown_token.clone().clone();
+
+    let app_clone = app.clone();
     let handle = tokio::task::spawn_blocking(move || {
-        app_clone.execute_action("look around".to_string());
+        app_clone.pipeline.execute_action("look around".to_string());
     });
 
     assert!(
@@ -352,7 +362,7 @@ async fn test_pipeline_cancels_after_main_narration() {
 
     handle.await.unwrap();
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation at post-narration checkpoint"
@@ -379,7 +389,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
             quantifier_recorder,
         ),
     );
-    let (app, pg) = SqliteTestAppBuilder::with_data(data)
+    let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(|state| {
             state.narrative.history.clear();
             state.narrative.input_buffer.status = GenerationStatus::Generating;
@@ -387,14 +397,17 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
                 encounter.times_met = 0;
             }
         })
-        .pipeline_fn(move |_storage, _pg, _settings| backend.as_ref().clone())
+        .pipeline_fn(move |_storage, _pg, _settings, _token| backend.as_ref().clone())
         .build_with_state()
         .unwrap();
-    let token = app.cancel_token().clone();
 
-    let app_clone = Arc::clone(&app);
+    let token = app.shutdown_token.clone().clone();
+
+    let app_clone = app.clone();
     let handle = tokio::task::spawn_blocking(move || {
-        app_clone.execute_action("enter the shop".to_string());
+        app_clone
+            .pipeline
+            .execute_action("enter the shop".to_string());
     });
 
     assert!(
@@ -414,7 +427,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
 
     handle.await.unwrap();
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation at post-trigger checkpoint"
@@ -431,18 +444,18 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 5.1
 #[test]
 fn test_pre_main_snapshot_saved_before_narration() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Idle, GenerationPhase::default())
         .mock_backend(MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("examine the room".to_string());
+    app.pipeline.execute_action("examine the room".to_string());
 
-    let completed = app.wait_for_generation_complete(&pg, 1000);
+    let completed = app.wait_for_generation_complete(1000);
     assert!(completed, "FreeAction should complete within timeout");
 
-    let latest = app.storage().load_latest_snapshot().unwrap().unwrap();
+    let latest = app.storage.load_latest_snapshot().unwrap().unwrap();
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
@@ -450,7 +463,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
 #[test]
 fn test_pre_event_snapshot_saved_before_continuation() {
     let data = trigger_data();
-    let (app, pg) = SqliteTestAppBuilder::with_data(data)
+    let app = SqliteTestAppBuilder::with_data(data)
         .state_mut(|state| {
             state.narrative.history.clear();
             state.narrative.input_buffer.status = GenerationStatus::Idle;
@@ -458,7 +471,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
                 encounter.times_met = 0;
             }
         })
-        .pipeline_fn(|_storage, pg, settings| {
+        .pipeline_fn(|_storage, pg, settings, token| {
             let quantifier_recorder: Arc<
                 dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
             > =
@@ -466,7 +479,8 @@ fn test_pre_event_snapshot_saved_before_continuation() {
                     r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
                 ]));
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-                crate::make_test_recorder(Arc::new(MockBackend::default())),
+                token,
+    crate::make_test_recorder(Arc::new(MockBackend::default())),
                 quantifier_recorder,
                 Arc::clone(pg),
                 Arc::clone(settings),
@@ -475,30 +489,31 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         .build_with_state()
         .unwrap();
 
-    app.execute_action("examine the shopkeeper".to_string());
+    app.pipeline
+        .execute_action("examine the shopkeeper".to_string());
 
-    let completed = app.wait_for_generation_complete(&pg, 1000);
+    let completed = app.wait_for_generation_complete(1000);
     assert!(
         completed,
         "FreeAction with trigger should complete within timeout"
     );
 
-    let latest = app.storage().load_latest_snapshot().unwrap().unwrap();
+    let latest = app.storage.load_latest_snapshot().unwrap().unwrap();
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.1
 #[test]
 fn test_pipeline_with_quantifier() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
         .mock_backend(MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look around".to_string());
+    app.pipeline.execute_action("look around".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Should complete with quantifier backend"
@@ -532,17 +547,19 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         ),
     );
     let backend_arc = Arc::clone(&backend_for_builder);
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
-        .pipeline_fn(move |_storage, _pg, _settings| backend_for_builder.as_ref().clone())
+        .pipeline_fn(move |_storage, _pg, _settings, _token| backend_for_builder.as_ref().clone())
         .build_with_state()
         .unwrap();
 
+    let pg = &app.persistence_gate;
+
     let backend_clone = Arc::clone(&backend_arc);
-    let app_clone = Arc::clone(&app);
+    let app_clone = app.clone();
     let handle = thread::spawn(move || {
         let _ = backend_clone;
-        app_clone.execute_action("look around".to_string());
+        app_clone.pipeline.execute_action("look around".to_string());
     });
 
     let narration_found = wait_for_condition_sync(
@@ -565,7 +582,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
 
     handle.join().expect("Action thread should complete");
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Should complete after quantifier finishes"
@@ -586,15 +603,17 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.2
 #[test]
 fn test_narration_no_duplicate_with_real_quantifier_flow() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
         .mock_backend(MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("test action".to_string());
+    let pg = &app.persistence_gate;
 
-    let guard = app.latest_state(&pg);
+    app.pipeline.execute_action("test action".to_string());
+
+    let guard = app.latest_state();
 
     let history = guard.narrative.history();
     let narration_count = history
@@ -622,15 +641,15 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.1
 #[test]
 fn test_pipeline_continues_when_quantifier_save_warns() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
         .mock_backend(MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Pipeline should complete even if quantifier save has warnings"

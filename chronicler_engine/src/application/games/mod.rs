@@ -3,6 +3,8 @@
 
 pub mod catalogue;
 pub mod view_query;
+pub mod world_persona_catalogue;
 
 pub use catalogue::GameCatalogue;
 pub use view_query::GameViewQuery;
+pub use world_persona_catalogue::WorldPersonaCatalogue;

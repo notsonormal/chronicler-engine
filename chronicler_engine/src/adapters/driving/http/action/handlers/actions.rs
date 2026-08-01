@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::application::application_service::ProcessActionResult;
+use crate::application::errors::ProcessActionResult;
 use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::headers::add_status_swap_headers;
@@ -25,9 +25,11 @@ pub struct ActionForm {
 
 async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
     let action_result = if command.is_empty() {
-        state.application_service.continue_narration()
+        state.pipeline.continue_narration(&state.generation_gate)
     } else {
-        state.application_service.process_action(command)
+        state
+            .pipeline
+            .process_action(&state.generation_gate, command)
     };
 
     match action_result {

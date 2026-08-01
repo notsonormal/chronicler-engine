@@ -13,9 +13,10 @@ async fn test_list_games_empty() {
 #[tokio::test]
 async fn test_switch_game_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let app = state.application_service.clone();
-    let _ = app.create_game("test-world", "test-persona");
-    let games = app.list_games().unwrap();
+    let _ = state
+        .game_catalogue
+        .create_game("test-world", "test-persona");
+    let games = state.game_catalogue.list_games().unwrap();
     if let Some(game) = games.first() {
         let result =
             switch_game_handler(axum::extract::State(state), axum::extract::Path(game.id)).await;

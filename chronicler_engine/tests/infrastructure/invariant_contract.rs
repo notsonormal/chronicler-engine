@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use tokio_util::sync::CancellationToken;
+
 use chronicler_engine::application::pipeline::PhaseError;
 use chronicler_engine::domain::model::state::game_state::{FreeActionContext, GameState};
 
@@ -40,10 +42,8 @@ use fixtures::create_minimal_test_state;
 use fixtures::create_test_state;
 use application_ext::PipelineHelpers;
 
-fn app_is_generating(
-    app: &chronicler_engine::application::application_service::DefaultApplicationService,
-) -> bool {
-    app.storage()
+fn app_is_generating(app: &chronicler_engine::adapters::driving::http::AppState) -> bool {
+    app.storage
         .load_latest_snapshot()
         .ok()
         .flatten()
@@ -218,10 +218,11 @@ fn test_inv004_cancellable_at_boundaries() {
 
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(100));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .pipeline_fn(move |_storage, _pg, _settings| {
+    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .pipeline_fn(move |_storage, _pg, _settings, _token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
+                CancellationToken::new(),
                 recorder,
                 AgentRegistry::default(),
                 Arc::clone(_pg),
@@ -230,10 +231,12 @@ fn test_inv004_cancellable_at_boundaries() {
         })
         .build_with_state()
         .unwrap();
-    let started_for = app.current_game_id();
+
+    let pg = &app.persistence_gate;
+    let started_for = app.game_catalogue.current_game_id();
     let switched_to = started_for.wrapping_add(99);
-    let pipeline = app.pipeline().clone();
-    let state_for_thread = app.latest_state(&pg);
+    let pipeline = app.pipeline.clone();
+    let state_for_thread = app.latest_state();
 
     let outcome = std::thread::scope(|s| {
         let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
@@ -259,7 +262,7 @@ fn test_inv004_cancellable_at_boundaries() {
         "INV-004: pipeline should return Cancelled on game_id mismatch at boundary, got {outcome:?}"
     );
 
-    let final_state = app.latest_state(&pg);
+    let final_state = app.latest_state();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -464,10 +467,11 @@ async fn test_p4_concurrent_happy_path() {
             .with_narrations(vec!["GEN_A_OUTPUT".to_string(), "GEN_B_OUTPUT".to_string()]),
     );
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .pipeline_fn(move |_storage, _pg, _settings| {
+    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .pipeline_fn(move |_storage, _pg, _settings, _token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
+                CancellationToken::new(),
                 recorder,
                 AgentRegistry::default(),
                 Arc::clone(_pg),
@@ -476,10 +480,12 @@ async fn test_p4_concurrent_happy_path() {
         })
         .build_with_state()
         .unwrap();
-    let game1 = app.current_game_id();
+
+    let game1 = app.game_catalogue.current_game_id();
 
     let result_a = app
-        .process_action("look".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "look".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_a, ProcessActionResult::Started),
@@ -496,6 +502,7 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     let game2 = app
+        .game_catalogue
         .create_game("test", "test_player")
         .expect("create_game(game2) should succeed");
     assert_ne!(game2, game1, "reset must produce a distinct game id");
@@ -509,7 +516,7 @@ async fn test_p4_concurrent_happy_path() {
         "gen A's pipeline must complete (slot released) within timeout"
     );
 
-    let state_after_a = app.latest_state(&pg);
+    let state_after_a = app.latest_state();
     let a_present = state_after_a
         .narrative
         .history
@@ -527,7 +534,8 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     let result_b = app
-        .process_action("go north".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "go north".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_b, ProcessActionResult::Started),
@@ -543,7 +551,7 @@ async fn test_p4_concurrent_happy_path() {
         "gen B's pipeline must complete within timeout"
     );
 
-    let state_after_b = app.latest_state(&pg);
+    let state_after_b = app.latest_state();
     let b_present = state_after_b
         .narrative
         .history
@@ -574,7 +582,7 @@ async fn test_p4_concurrent_happy_path() {
         "persisted status must be Idle after both pipelines complete (registry clean)"
     );
 
-    app.cancel_token().cancel();
+    app.shutdown_token.cancel();
 }
 
 #[tokio::test]
@@ -589,10 +597,11 @@ async fn test_p4_concurrent_triple_overlap() {
         "GEN_C_OUTPUT".to_string(),
     ]));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .pipeline_fn(move |_storage, _pg, _settings| {
+    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .pipeline_fn(move |_storage, _pg, _settings, _token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
+                CancellationToken::new(),
                 recorder,
                 AgentRegistry::default(),
                 Arc::clone(_pg),
@@ -601,10 +610,12 @@ async fn test_p4_concurrent_triple_overlap() {
         })
         .build_with_state()
         .unwrap();
-    let game1 = app.current_game_id();
+
+    let game1 = app.game_catalogue.current_game_id();
 
     let result_a = app
-        .process_action("look".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "look".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_a, ProcessActionResult::Started),
@@ -621,12 +632,14 @@ async fn test_p4_concurrent_triple_overlap() {
     );
 
     let game2 = app
+        .game_catalogue
         .create_game("test", "test_player")
         .expect("create_game(game2) should succeed");
     assert_ne!(game2, game1, "reset must produce a distinct game id");
 
     let result_b = app
-        .process_action("go north".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "go north".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_b, ProcessActionResult::Started),
@@ -635,12 +648,14 @@ async fn test_p4_concurrent_triple_overlap() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     let game3 = app
+        .game_catalogue
         .create_game("test", "test_player")
         .expect("create_game(game3) should succeed");
     assert_ne!(game3, game2, "second reset must produce a distinct game id");
 
     let result_c = app
-        .process_action("look around".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "look around".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_c, ProcessActionResult::Started),
@@ -653,7 +668,7 @@ async fn test_p4_concurrent_triple_overlap() {
             std::time::Duration::from_secs(10),
             std::time::Duration::from_millis(100),
             || {
-                let state = app.latest_state(&pg);
+                let state = app.latest_state();
                 let history_texts: Vec<String> = state
                     .narrative
                     .history
@@ -670,18 +685,19 @@ async fn test_p4_concurrent_triple_overlap() {
     );
 
     assert_eq!(
-        app.current_game_id(),
+        app.game_catalogue.current_game_id(),
         game3,
         "active game must be game 3 at end of test"
     );
 
     let result_after = app
-        .process_action("examine".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "examine".to_string())
         .expect("process_action should not error after all gens complete");
     assert!(
         matches!(result_after, ProcessActionResult::Started),
         "fresh claim after triple-overlap must succeed (slot registry clean), got {result_after:?}"
     );
 
-    app.cancel_token().cancel();
+    app.shutdown_token.cancel();
 }

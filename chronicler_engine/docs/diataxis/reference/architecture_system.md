@@ -33,6 +33,21 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via `Arc<RwLock<AppSettings>>` held on `AppState.settings`. Construction-chain recipients take a reference at wiring time; no business-logic layer reloads from disk. `max_context_tokens` is read dynamically per call (per-call budget).
 
+## AppState collaborators
+
+`AppState` is the handler-facing bundle produced by `bootstrap/wiring.rs` (`WiredApp`) and passed to the Axum router. It exposes the named collaborators directly, with no service façade between HTTP handlers and the application layer:
+
+- `pipeline: Arc<ActionPipeline>` — action execution and phase orchestration.
+- `world_persona: WorldPersonaCatalogue` — world and persona CRUD.
+- `game_catalogue: GameCatalogue` — game lifecycle (create/switch/delete/list/reset/current id).
+- `game_view_query: GameViewQuery` — read-side fragments for the UI and debug state.
+- `generation_gate: GenerationGate` — per-game generation-slot gating and reset.
+- `persistence_gate: Arc<PersistenceGate>` — snapshot/message persistence and multi-table writes.
+- `text_check_service: Arc<TextCheckService>` — player-command spelling/grammar check.
+- `settings: Arc<RwLock<AppSettings>>` — runtime settings.
+- `shutdown_token: CancellationToken` — request shutdown signal.
+- `storage` / `preset_storage` — `Arc<Storage>` for the game and preset databases.
+
 ## Deployment Contract
 
 - **HTTP port** — binds a single HTTP port (configurable); serves dashboard + action + polling endpoints. TLS termination and reverse proxying are workspace-operator concerns.

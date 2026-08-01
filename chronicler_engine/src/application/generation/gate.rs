@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::application::application_service::ProcessActionResult;
-use crate::application::errors::ApplicationError;
+use crate::application::errors::{ProcessActionResult};
 use crate::application::generation::guard::GenerationGuard;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::application::generation::slot::GenerationSlot;
@@ -115,22 +114,34 @@ impl GenerationGate {
         release_owned_slot(&self.registry, game_id, generation_id);
     }
 
-    pub fn reset_generating_status(
-        &self,
-        persistence_gate: &PersistenceGate,
-    ) -> Result<(), ApplicationError> {
-        let current_game_id = persistence_gate.storage().current_game_id();
-        {
-            let mut registry = self.registry.write().unwrap_or_else(|p| {
-                tracing::warn!("Generation registry write lock poisoned during reset; recovering");
-                p.into_inner()
-            });
-            registry.insert(current_game_id, GenerationSlot::Idle);
+    /// Release any active generation slot for the given game and return its
+    /// generation id. This is the caller-driven reset path; the persisted status
+    /// is reset separately by the pipeline so the gate does not own persistence.
+    pub fn release_generation_slot_for_game(&self, game_id: u64) -> Option<u64> {
+        let mut registry = self.registry.write().unwrap_or_else(|p| {
+            tracing::warn!(
+                "Generation registry write lock poisoned during release for game; recovering"
+            );
+            p.into_inner()
+        });
+        match registry.get(&game_id) {
+            Some(GenerationSlot::Generating { generation_id }) => {
+                let id = *generation_id;
+                registry.insert(game_id, GenerationSlot::Idle);
+                Some(id)
+            }
+            _ => None,
         }
-        let mut game_state = persistence_gate.load_or_fresh();
-        game_state.narrative.input_buffer.status = GenerationStatus::Idle;
-        game_state.narrative.input_buffer.phase = GenerationPhase::default();
-        persistence_gate.save_state(&game_state)?;
-        Ok(())
+    }
+
+    pub fn is_busy(&self, game_id: u64) -> bool {
+        let registry = self.registry.read().unwrap_or_else(|p| {
+            tracing::warn!("Generation registry read lock poisoned during is_busy; recovering");
+            p.into_inner()
+        });
+        registry
+            .get(&game_id)
+            .map(|slot| slot.is_generating())
+            .unwrap_or(false)
     }
 }

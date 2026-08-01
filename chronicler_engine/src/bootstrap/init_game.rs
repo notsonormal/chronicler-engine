@@ -109,7 +109,8 @@ pub struct ArrivalSpawnRequest {
 pub fn spawn_arrival_task_if_needed(
     runtime: &tokio::runtime::Runtime,
     settings: &Arc<RwLock<AppSettings>>,
-    app: &Arc<crate::application::application_service::DefaultApplicationService>,
+    persistence_gate: Arc<crate::application::persistence_gate::PersistenceGate>,
+    pipeline: Arc<crate::application::pipeline::pipeline::ActionPipeline>,
     _storage: &Arc<crate::adapters::driven::storage::Storage>,
     db_pool: &crate::adapters::driven::storage::db::DbPool,
     request: ArrivalSpawnRequest,
@@ -142,10 +143,10 @@ pub fn spawn_arrival_task_if_needed(
             (preset, response_length, max_context_tokens, max_tokens)
         });
 
-    let recorder = Arc::clone(app.pipeline().recorder());
+    let recorder = Arc::clone(pipeline.recorder());
 
-    let task_ctx = crate::application::arrival_service::ArrivalTaskContext {
-        app: Arc::clone(app),
+    let task_ctx = crate::application::arrival_service::ArrivalTaskContext::new(
+        persistence_gate,
         room_id,
         arrival_preset,
         response_length,
@@ -154,7 +155,7 @@ pub fn spawn_arrival_task_if_needed(
         nearby_npcs,
         all_npcs,
         recorder,
-    };
+    );
 
     runtime.spawn_blocking(move || {
         let _ = task_ctx.run();

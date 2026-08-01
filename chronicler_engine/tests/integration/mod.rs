@@ -56,8 +56,8 @@ mod bootstrap;
 
 mod storage;
 
-#[path = "application/application_service.rs"]
-mod application_service;
+#[path = "application/collaborators.rs"]
+mod application_collaborators;
 #[path = "application/lifecycle.rs"]
 mod lifecycle;
 #[path = "adapters/driven/llm/llm_client.rs"]

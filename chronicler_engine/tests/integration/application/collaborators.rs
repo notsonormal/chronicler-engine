@@ -1,6 +1,6 @@
-//! Integration tests for DefaultApplicationService
+//! Integration tests for application collaborators
 
-use chronicler_engine::application::application_service::ProcessActionResult;
+use chronicler_engine::application::errors::ProcessActionResult;
 use chronicler_engine::application::pipeline::pipeline::ActionPipeline;
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
@@ -23,13 +23,14 @@ fn test_create_game_integration() {
     let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
-    let app_service = TestAppBuilder::with_data(data)
+    let app = TestAppBuilder::with_data(data)
         .storage(storage.clone())
         .pipeline(pipeline)
         .skip_seeding(true)
         .build_service();
 
-    let game_id = app_service
+    let game_id = app
+        .game_catalogue
         .create_game(&world_key, "hero")
         .expect("create_game should succeed");
     assert!(game_id > 0, "Game ID should be positive");
@@ -45,23 +46,25 @@ fn test_switch_game_integration() {
     let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
-    let app_service = TestAppBuilder::with_data(data)
+    let app = TestAppBuilder::with_data(data)
         .storage(storage.clone())
         .pipeline(pipeline)
         .skip_seeding(true)
         .build_service();
 
-    let id1 = app_service
+    let id1 = app
+        .game_catalogue
         .create_game(&world_key, "hero")
         .expect("create_game 1");
-    let id2 = app_service
+    let id2 = app
+        .game_catalogue
         .create_game(&world_key, "hero")
         .expect("create_game 2");
 
-    app_service.switch_game(id1).expect("switch_game");
+    app.game_catalogue.switch_game(id1).expect("switch_game");
     assert_eq!(storage.current_game_id(), id1);
 
-    app_service.switch_game(id2).expect("switch_game");
+    app.game_catalogue.switch_game(id2).expect("switch_game");
     assert_eq!(storage.current_game_id(), id2);
 }
 
@@ -72,20 +75,21 @@ fn test_delete_game_integration() {
     let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
-    let app_service = TestAppBuilder::with_data(data)
+    let app = TestAppBuilder::with_data(data)
         .storage(storage.clone())
         .pipeline(pipeline)
         .skip_seeding(true)
         .build_service();
 
-    let id1 = app_service
+    let id1 = app
+        .game_catalogue
         .create_game(&world_key, "hero")
         .expect("create_game 1");
-    app_service
+    app.game_catalogue
         .create_game(&world_key, "hero")
         .expect("create_game 2");
 
-    app_service.delete_game(id1).expect("delete_game");
+    app.game_catalogue.delete_game(id1).expect("delete_game");
 
     let deleted = storage.get_game(id1).unwrap();
     assert!(deleted.is_none(), "Deleted game should not exist");
@@ -98,29 +102,29 @@ fn test_list_games_integration() {
     let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
-    let app_service = TestAppBuilder::with_data(data)
+    let app = TestAppBuilder::with_data(data)
         .storage(storage.clone())
         .pipeline(pipeline)
         .skip_seeding(true)
         .build_service();
 
-    app_service.create_game(&world_key, "hero").unwrap();
-    app_service.create_game(&world_key, "hero").unwrap();
+    app.game_catalogue.create_game(&world_key, "hero").unwrap();
+    app.game_catalogue.create_game(&world_key, "hero").unwrap();
 
-    let games = app_service.list_games().unwrap();
+    let games = app.game_catalogue.list_games().unwrap();
     assert!(games.len() >= 2, "Should list all games");
 }
 
 #[test]
 fn test_get_generating_status() {
     let storage = create_storage(1);
-    let app_service = TestAppBuilder::default_test()
+    let app = TestAppBuilder::default_test()
         .storage(storage)
         .pipeline(create_pipeline())
         .skip_seeding(true)
         .build_service();
 
-    let (status, phase) = app_service.get_generating_status().unwrap();
+    let (status, phase) = app.game_view_query.get_generating_status().unwrap();
     assert_eq!(status, GenerationStatus::Idle);
     assert_eq!(phase, GenerationPhase::default());
 }
@@ -129,21 +133,23 @@ fn test_get_generating_status() {
 async fn test_process_action_persists_input_message() {
     let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
-    let (app_service, pg_app_service) = SqliteTestAppBuilder::with_data(data)
-        .pipeline_fn(move |_storage, _pg, _settings| pipeline.clone())
+    let app = SqliteTestAppBuilder::with_data(data)
+        .pipeline_fn(move |_storage, _pg, _settings, _token| pipeline.clone())
         .build_with_state()
         .unwrap();
 
-    let result = app_service.process_action("examine the room".to_string());
+    let result = app
+        .pipeline
+        .process_action(&app.generation_gate, "examine the room".to_string());
     assert!(
         matches!(result, Ok(ProcessActionResult::Started)),
         "process_action should return Started"
     );
 
-    let completed = app_service.wait_for_generation_complete(&pg_app_service, 5000);
+    let completed = app.wait_for_generation_complete(5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    let guard = app_service.latest_state(&pg_app_service);
+    let guard = app.latest_state();
     let entries = guard.narrative.history();
     let input_idx = entries
         .iter()
@@ -163,25 +169,27 @@ async fn test_process_action_persists_input_message() {
 async fn test_process_action_self_heals_stale_generating_status() {
     let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
-    let (app_service, pg_app_service) = SqliteTestAppBuilder::with_data(data)
+    let app = SqliteTestAppBuilder::with_data(data)
         .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
-        .pipeline_fn(move |_storage, _pg, _settings| pipeline.clone())
+        .pipeline_fn(move |_storage, _pg, _settings, _token| pipeline.clone())
         .build_with_state()
         .unwrap();
 
-    let (status, _phase) = app_service.get_generating_status().unwrap();
+    let (status, _phase) = app.game_view_query.get_generating_status().unwrap();
     assert!(!status.is_generating());
 
-    let result = app_service.process_action("look around".to_string());
+    let result = app
+        .pipeline
+        .process_action(&app.generation_gate, "look around".to_string());
     assert!(
         matches!(result, Ok(ProcessActionResult::Started)),
         "process_action should return Started"
     );
 
-    let completed = app_service.wait_for_generation_complete(&pg_app_service, 5000);
+    let completed = app.wait_for_generation_complete(5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    let guard = app_service.latest_state(&pg_app_service);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should not be Generating after completion, got {:?}",

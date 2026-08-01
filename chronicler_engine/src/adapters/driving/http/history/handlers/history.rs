@@ -6,7 +6,7 @@ use axum::{
     response::Response,
 };
 
-use crate::application::application_service::ApplicationError;
+use crate::application::errors::ApplicationError;
 use crate::adapters::driving::http::AppState;
 
 use crate::adapters::driving::http::utils::response::ok;

@@ -13,14 +13,14 @@ use crate::application_ext::PipelineHelpers;
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.1
 #[test]
 fn test_pipeline_executes_and_persists_narration() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .backends(MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
 
-    let final_state = app.latest_state(&pg);
+    let final_state = app.latest_state();
     let has_narration = final_state
         .narrative
         .history()
@@ -46,15 +46,15 @@ fn test_pipeline_persists_input_before_narration() {
         None,
         None,
     );
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .message(msg)
         .backends(MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("examine the room".to_string());
+    app.pipeline.execute_action("examine the room".to_string());
 
-    let final_state = app.latest_state(&pg);
+    let final_state = app.latest_state();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
@@ -74,7 +74,7 @@ fn test_pipeline_persists_input_before_narration() {
 #[test]
 fn test_pipeline_handles_room_not_found() {
     let data = TestDataBuilder::default_test().build();
-    let (app, pg) = SqliteTestAppBuilder::with_data(data)
+    let app = SqliteTestAppBuilder::with_data(data)
         .backends(MockBackend::default)
         .state_mut(|state| {
             state.movement.current_room_id = "non_existent_room".to_string();
@@ -82,9 +82,9 @@ fn test_pipeline_handles_room_not_found() {
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
 
-    let final_state = app.latest_state(&pg);
+    let final_state = app.latest_state();
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Should reset generating status when room not found"
@@ -94,14 +94,14 @@ fn test_pipeline_handles_room_not_found() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.2
 #[test]
 fn test_pipeline_handles_llm_failure() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .separate_backends(|| MockBackend::default().with_fail(), MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
 
-    let final_state = app.latest_state(&pg);
+    let final_state = app.latest_state();
     assert!(
         final_state
             .narrative
@@ -116,7 +116,7 @@ fn test_pipeline_handles_llm_failure() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.1
 #[test]
 fn test_pipeline_clears_last_trigger() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .last_trigger(StoredTriggerContext {
             trigger_name: "Old".to_string(),
             npc_id: "npc1".to_string(),
@@ -131,9 +131,9 @@ fn test_pipeline_clears_last_trigger() {
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
 
-    let final_state = app.latest_state(&pg);
+    let final_state = app.latest_state();
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared"
@@ -143,15 +143,15 @@ fn test_pipeline_clears_last_trigger() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.4
 #[test]
 fn test_pipeline_phase_transitions() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Idle, GenerationPhase::default())
         .backends(MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert_eq!(
         guard.narrative.input_buffer.phase,
         GenerationPhase::default(),
@@ -162,15 +162,15 @@ fn test_pipeline_phase_transitions() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.4
 #[test]
 fn test_pipeline_phase_stays_narrating_on_error() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Idle, GenerationPhase::default())
         .separate_backends(|| MockBackend::default().with_fail(), MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert_eq!(
         guard.narrative.input_buffer.phase,
         GenerationPhase::Narrating,
@@ -181,14 +181,14 @@ fn test_pipeline_phase_stays_narrating_on_error() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.5
 #[test]
 fn test_pipeline_empty_input() {
-    let (app, pg) = SqliteTestAppBuilder::default_test()
+    let app = SqliteTestAppBuilder::default_test()
         .backends(MockBackend::default)
         .build_with_state()
         .unwrap();
 
-    app.execute_action(String::new());
+    app.pipeline.execute_action(String::new());
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Empty input should complete generation: {:?}",

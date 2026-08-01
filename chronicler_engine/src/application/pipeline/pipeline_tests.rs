@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::adapters::driving::http::AppState;
 use crate::application::pipeline::phase_error::PhaseError;
 use crate::test_support::make_test_recorder;
 use crate::application::agents::registry::AgentRegistry;
@@ -34,7 +35,7 @@ fn test_pipeline_runs_to_completion() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
     let final_state = app.persistence_gate.load_or_fresh();
@@ -63,7 +64,7 @@ fn test_pipeline_saves_narration_to_history() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let _outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     let final_state = app.persistence_gate.load_or_fresh();
     let has_narration = final_state
@@ -89,7 +90,7 @@ fn test_pipeline_returns_error_on_narration_failure() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(
         outcome.is_ok(),
@@ -123,7 +124,7 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(
         outcome.is_ok(),
@@ -175,7 +176,7 @@ fn test_pipeline_with_custom_quantifier_result() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
     let final_state = app.persistence_gate.load_or_fresh();
@@ -202,17 +203,19 @@ fn test_trigger_continuation_save_post_trigger_error() {
         narrator_recorder,
         agent_registry,
     );
-    let app = crate::test_support::build_test_service(
-        failing,
-        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        service,
-    )
-    .expect("build_test_service: build_app_graph_for_tests should succeed");
+    let app = AppState::from_wired(
+        crate::test_support::build_test_wired_app(
+            failing,
+            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+            service,
+        )
+        .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
+    );
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
     let map = Arc::new(TestMap::single_room("start"));
     let npcs = HashMap::from([("npc1".to_string(), TestNpc::named("npc1", "Test NPC"))]);
     let result = app
-        .pipeline()
+        .pipeline
         .phase_trigger_continuation(state, &trigger, &map, &npcs);
 
     match result {
@@ -278,7 +281,7 @@ fn test_pipeline_trigger_happy_path() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
@@ -347,7 +350,7 @@ fn test_pipeline_trigger_empty_continuation() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
@@ -412,7 +415,7 @@ fn test_pipeline_trigger_complete_failure() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
@@ -445,7 +448,7 @@ fn test_pipeline_saves_narration_before_quantifier() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let _outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     let messages = app.persistence_gate.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
@@ -484,9 +487,7 @@ fn test_pipeline_no_duplicate_narration() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let _outcome = app
-        .pipeline()
-        .run_from_input(state, "test input".to_string());
+    let _outcome = app.pipeline.run_from_input(state, "test input".to_string());
 
     let final_state = app.persistence_gate.load_or_fresh();
     let history = final_state.narrative.history();
@@ -522,7 +523,7 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let _outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     let messages = app.persistence_gate.load_messages().unwrap();
     let narration = messages
@@ -559,7 +560,7 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
@@ -592,7 +593,7 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let _outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     let messages = app.persistence_gate.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
@@ -627,7 +628,7 @@ fn orchestrator_records_error_when_world_missing() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
@@ -662,7 +663,7 @@ fn orchestrator_records_error_when_persona_missing() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
@@ -738,7 +739,7 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
     );
     state.movement.current_room_id = dynamic_id.clone();
 
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
@@ -789,7 +790,7 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
-    let outcome = app.pipeline().run_from_input(state, "look".to_string());
+    let outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),

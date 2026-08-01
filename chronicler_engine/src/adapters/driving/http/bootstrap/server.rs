@@ -2,7 +2,6 @@
 //! Server implementation
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tracing;
 
@@ -33,9 +32,8 @@ pub async fn run_server_with_config(
     app: WiredApp,
     config: ServerConfig,
 ) -> Result<(SocketAddr, JoinHandle<std::io::Result<()>>)> {
-    let shutdown_token = tokio_util::sync::CancellationToken::new();
-    let app_state = AppState::from_wired(app, shutdown_token.clone());
-    let shutdown_token_arc = Arc::clone(&app_state.shutdown_token);
+    let app_state = AppState::from_wired(app);
+    let shutdown_token = app_state.shutdown_token.clone();
 
     let app = build_router(app_state);
 
@@ -55,14 +53,7 @@ pub async fn run_server_with_config(
     let shutdown_signal = async move {
         let _ = tokio::signal::ctrl_c().await;
         tracing::info!("Shutdown signal received, cancelling in-flight tasks...");
-        let token = shutdown_token_arc
-            .read()
-            .map(|g| g.clone())
-            .unwrap_or_else(|p| {
-                tracing::warn!("Poisoned shutdown_token read lock recovered during shutdown");
-                p.into_inner().clone()
-            });
-        token.cancel();
+        shutdown_token.cancel();
     };
 
     let handle = tokio::spawn(async move {

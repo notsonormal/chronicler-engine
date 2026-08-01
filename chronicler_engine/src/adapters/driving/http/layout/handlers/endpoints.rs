@@ -76,7 +76,11 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 }
 
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
-    match state.application_service.reset_generating_status() {
+    let game_id = state.persistence_gate.storage().current_game_id();
+    let _ = state
+        .generation_gate
+        .release_generation_slot_for_game(game_id);
+    match state.pipeline.reset_persisted_status() {
         Ok(()) => Html("reset".to_string()),
         Err(e) => {
             tracing::error!("reset_generating_handler: {e}");

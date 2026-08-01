@@ -1,15 +1,18 @@
+//! Unit tests for action-pipeline orchestration and collaborator behaviour.
 use std::sync::Arc;
 use std::sync::Barrier;
+
+use tokio_util::sync::CancellationToken;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::Agent;
-use crate::application::application_service::DefaultApplicationService;
 use crate::application::errors::ApplicationError;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::LlmProvider;
+use crate::adapters::driving::http::AppState;
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -17,8 +20,6 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
 use crate::test_support::fixtures::{TestMap, TestWorld};
-use crate::test_support::make_test_app;
-use crate::test_support::make_test_pipeline_with_backends;
 use crate::test_support::make_test_recorder;
 use crate::test_support::TestAppBuilder;
 use crate::test_support::TestDataBuilder;
@@ -27,13 +28,13 @@ fn minimal_state() -> GameState {
     GameState::new("start")
 }
 
-fn minimal_app() -> Arc<DefaultApplicationService> {
-    make_test_app(minimal_state())
-        .map(|wired| Arc::clone(&wired.application_service))
-        .expect("minimal_app: make_test_app should succeed")
+fn minimal_app() -> AppState {
+    AppState::from_wired(
+        crate::test_support::make_test_app(minimal_state()).expect("minimal_app should build"),
+    )
 }
 
-fn minimal_app_no_game() -> Arc<DefaultApplicationService> {
+fn minimal_app_no_game() -> AppState {
     let state = minimal_state();
     let world_arc = Arc::new(TestWorld::minimal());
     let map_arc = Arc::new(TestMap::single_room("start"));
@@ -41,40 +42,53 @@ fn minimal_app_no_game() -> Arc<DefaultApplicationService> {
     storage.seed_world(&world_arc, &map_arc).unwrap();
     let _ = storage.save_snapshot(&GameStateSnapshot::from_game_state(&state));
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
-    let pipeline = make_test_pipeline_with_backends(
-        Arc::clone(&storage),
-        make_test_recorder(mock),
-        AgentRegistry::default(),
+    let narrator_recorder = make_test_recorder(Arc::clone(&mock));
+    let registry = AgentRegistry::default();
+    let persistence_gate = crate::test_support::build_test_persistence_gate(Arc::clone(&storage));
+    let settings = Arc::new(std::sync::RwLock::new(
+        crate::domain::model::settings::AppSettings::default(),
+    ));
+    let pipeline = crate::application::pipeline::pipeline::ActionPipeline::with_backends(
+        CancellationToken::new(),
+        narrator_recorder,
+        registry,
+        persistence_gate,
+        settings,
     );
-    crate::test_support::build_test_service(storage, Arc::new(Storage::new_in_memory()), pipeline)
-        .expect("build_test_service: build_app_graph_for_tests should succeed")
+    let wired = crate::test_support::build_test_wired_app(
+        Arc::clone(&storage),
+        Arc::new(Storage::new_in_memory()),
+        pipeline,
+    )
+    .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
+    AppState::from_wired(wired)
 }
 
 #[test]
 fn test_get_generating_status_returns_current_state() {
     let app = minimal_app();
-    let (status, _phase) = app.get_generating_status().unwrap();
+    let (status, _phase) = app.game_view_query.get_generating_status().unwrap();
     assert_eq!(status, GenerationStatus::Idle);
 }
 
 #[test]
 fn test_get_current_game_name_unknown_when_no_game() {
     let app = minimal_app_no_game();
-    let name = app.get_current_game_name().unwrap();
-    assert_eq!(name, "Unknown"); // No default game anymore
+    let name = app.game_view_query.get_current_game_name().unwrap();
+    assert_eq!(name, "Unknown");
 }
 
 #[test]
 fn test_list_latest_llm_messages_empty() {
     let app = minimal_app_no_game();
-    let messages = app.list_latest_llm_messages(10).unwrap();
+    let messages = app.game_view_query.list_latest_llm_messages(10).unwrap();
     assert!(messages.is_empty());
 }
 
 #[test]
 fn test_get_story_log_entries_empty() {
     let app = minimal_app_no_game();
-    let (entries, has_trigger) = app.get_story_log_entries().unwrap();
+    let (entries, has_trigger) = app.game_view_query.get_story_log_entries().unwrap();
     assert!(entries.is_empty());
     assert!(!has_trigger);
 }
@@ -82,7 +96,7 @@ fn test_get_story_log_entries_empty() {
 #[test]
 fn test_get_current_room_view_succeeds_with_valid_state() {
     let app = minimal_app();
-    let result = app.get_current_room_view();
+    let result = app.game_view_query.get_current_room_view();
     assert!(result.is_ok());
     let (room_name, _image_path) = result.unwrap();
     assert_eq!(room_name, "Room start");
@@ -91,7 +105,7 @@ fn test_get_current_room_view_succeeds_with_valid_state() {
 #[test]
 fn test_get_current_room_view_returns_typed_error_when_game_missing() {
     let app = minimal_app_no_game();
-    let err = app.get_current_room_view().unwrap_err();
+    let err = app.game_view_query.get_current_room_view().unwrap_err();
     assert!(
         matches!(
             &err,
@@ -104,7 +118,7 @@ fn test_get_current_room_view_returns_typed_error_when_game_missing() {
 #[test]
 fn test_get_npc_headshots_returns_typed_error_when_game_missing() {
     let app = minimal_app_no_game();
-    let err = app.get_npc_headshots(true).unwrap_err();
+    let err = app.game_view_query.get_npc_headshots(true).unwrap_err();
     assert!(
         matches!(
             &err,
@@ -117,21 +131,21 @@ fn test_get_npc_headshots_returns_typed_error_when_game_missing() {
 #[test]
 fn test_get_npc_headshots_scene_only_empty() {
     let app = minimal_app();
-    let headshots = app.get_npc_headshots(true).unwrap();
+    let headshots = app.game_view_query.get_npc_headshots(true).unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
 fn test_get_npc_headshots_all_empty() {
     let app = minimal_app();
-    let headshots = app.get_npc_headshots(false).unwrap();
+    let headshots = app.game_view_query.get_npc_headshots(false).unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
 fn test_get_debug_state_populates_fields() {
     let app = minimal_app_no_game();
-    let debug = app.get_debug_state().unwrap();
+    let debug = app.game_view_query.get_debug_state().unwrap();
     assert_eq!(debug.narration_history_length, 0);
     assert!(debug.dynamic_rooms.is_empty());
     assert_eq!(debug.dynamic_room_count, 0);
@@ -141,16 +155,20 @@ fn test_get_debug_state_populates_fields() {
 #[test]
 fn test_active_quantifier_prompt_does_not_panic() {
     let app = minimal_app();
-    let prompt = app.active_quantifier_prompt();
+    let prompt = app.game_view_query.active_quantifier_prompt();
     let _ = prompt.len();
 }
 
 #[test]
 fn test_reset_generating_status_sets_idle() {
     let app = minimal_app_no_game();
-    let result = app.reset_generating_status();
+    let game_id = app.game_catalogue.current_game_id();
+    let _ = app
+        .generation_gate
+        .release_generation_slot_for_game(game_id);
+    let result = app.pipeline.reset_persisted_status();
     assert!(result.is_ok());
-    let (status, _) = app.get_generating_status().unwrap();
+    let (status, _) = app.game_view_query.get_generating_status().unwrap();
     assert_eq!(status, GenerationStatus::Idle);
 }
 
@@ -196,6 +214,7 @@ fn make_test_service(
         crate::domain::model::settings::AppSettings::default(),
     ));
     crate::application::pipeline::pipeline::ActionPipeline::with_backends(
+        CancellationToken::new(),
         narrator_recorder,
         registry,
         persistence_gate,
@@ -216,19 +235,28 @@ fn test_boot_heal_resets_stale_generating_status() {
     let _ = storage.save_snapshot(&GameStateSnapshot::from_game_state(&state));
 
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
-    let pipeline = make_test_pipeline_with_backends(
-        Arc::clone(&storage),
-        make_test_recorder(mock),
-        AgentRegistry::default(),
+    let narrator_recorder = make_test_recorder(Arc::clone(&mock));
+    let agent_registry = AgentRegistry::default();
+    let persistence_gate = crate::test_support::build_test_persistence_gate(Arc::clone(&storage));
+    let settings = Arc::new(std::sync::RwLock::new(
+        crate::domain::model::settings::AppSettings::default(),
+    ));
+    let pipeline = crate::application::pipeline::pipeline::ActionPipeline::with_backends(
+        CancellationToken::new(),
+        narrator_recorder,
+        agent_registry,
+        Arc::clone(&persistence_gate),
+        Arc::clone(&settings),
     );
-    let app = crate::test_support::build_test_service(
+    let wired = crate::test_support::build_test_wired_app(
         storage,
         Arc::new(Storage::new_in_memory()),
         pipeline,
     )
-    .expect("build_test_service should succeed");
+    .expect("build_test_wired_app should succeed");
+    let app = AppState::from_wired(wired);
 
-    let (status, phase) = app.get_generating_status().unwrap();
+    let (status, phase) = app.game_view_query.get_generating_status().unwrap();
     assert_eq!(status, GenerationStatus::Idle);
     assert_eq!(phase, GenerationPhase::default());
 }
@@ -244,6 +272,7 @@ fn make_test_service_with_agent(
         crate::domain::model::settings::AppSettings::default(),
     ));
     crate::application::pipeline::pipeline::ActionPipeline::with_backends(
+        CancellationToken::new(),
         narrator_recorder,
         registry,
         persistence_gate,
@@ -261,7 +290,7 @@ fn test_execute_action_completes_and_persists_state() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
     let final_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -292,7 +321,7 @@ fn test_execute_action_clears_last_trigger() {
         ))
         .pipeline(service)
         .build_service();
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
     let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         final_state.narrative.last_trigger.is_none(),
@@ -310,7 +339,7 @@ fn test_execute_action_handles_narration_error() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    app.execute_action("look".to_string());
+    app.pipeline.execute_action("look".to_string());
     let final_state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(
@@ -331,8 +360,8 @@ fn test_execute_action_handles_cancellation() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    app.cancel_token().cancel();
-    app.execute_action("look".to_string());
+    app.shutdown_token.cancel();
+    app.pipeline.execute_action("look".to_string());
     let final_state = app.persistence_gate.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -351,7 +380,7 @@ fn test_execute_action_preserves_existing_input_log() {
         .log("examine room", Some("Player"), MessageType::Input)
         .pipeline(service)
         .build_service();
-    app.execute_action("examine room".to_string());
+    app.pipeline.execute_action("examine room".to_string());
     let final_state = app.persistence_gate.load_or_fresh();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
@@ -385,13 +414,13 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
         release: release.clone(),
     });
     let service = make_test_service_with_agent(narrator_recorder, sync_agent);
-    let app: Arc<DefaultApplicationService> = TestAppBuilder::default_test()
+    let app = TestAppBuilder::default_test()
         .pipeline(service)
         .build_service();
-    let app_for_thread = Arc::clone(&app);
+    let app_for_thread = app.clone();
 
     let handle = thread::spawn(move || {
-        app_for_thread.execute_action("look".to_string());
+        app_for_thread.pipeline.execute_action("look".to_string());
     });
 
     entered.wait();
@@ -429,13 +458,13 @@ fn test_narration_saved_before_quantifying_phase() {
         release: release.clone(),
     });
     let service = make_test_service_with_agent(narrator_recorder, sync_agent);
-    let app: Arc<DefaultApplicationService> = TestAppBuilder::default_test()
+    let app = TestAppBuilder::default_test()
         .pipeline(service)
         .build_service();
-    let app_for_thread = Arc::clone(&app);
+    let app_for_thread = app.clone();
 
     let handle = thread::spawn(move || {
-        app_for_thread.execute_action("test".to_string());
+        app_for_thread.pipeline.execute_action("test".to_string());
     });
 
     entered.wait();

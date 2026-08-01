@@ -58,13 +58,12 @@ impl WorldForm {
 }
 
 pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let app = &state.application_service;
-    let worlds = match app.list_worlds() {
+    let worlds = match state.world_persona.list_worlds() {
         Ok(w) => w,
         Err(e) => return internal_error(format!("Failed to load worlds: {e}")),
     };
 
-    let games = app.list_games().unwrap_or_default();
+    let games = state.game_catalogue.list_games().unwrap_or_default();
     let games_per_world = games_per_world(&games);
 
     let html = WorldsPanelTemplate::from_worlds(&worlds, &games_per_world)
@@ -77,16 +76,15 @@ pub async fn create_world_handler(
     State(state): State<AppState>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let app = &state.application_service;
     let (world_card, map) = match form.into_world_card() {
         Ok(w) => w,
         Err(e) => return bad_request(e),
     };
 
-    match app.create_world(world_card, map) {
+    match state.world_persona.create_world(world_card, map) {
         Ok(_) => {
-            let worlds = app.list_worlds();
-            let games = app.list_games().unwrap_or_default();
+            let worlds = state.world_persona.list_worlds();
+            let games = state.game_catalogue.list_games().unwrap_or_default();
             let games_per_world = games_per_world(&games);
             ok(
                 WorldsPanelTemplate::from_worlds(&worlds.unwrap_or_default(), &games_per_world)
@@ -108,19 +106,16 @@ pub async fn edit_world_form_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Response<axum::body::Body> {
-    let world_with_map = match state.application_service.get_world(&key) {
+    let (_, world_card, map) = match state.world_persona.get_world(&key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
     };
 
-    let html = WorldFormTemplate::from_world_data(
-        Some(&world_with_map.world_card),
-        Some(&world_with_map.map),
-        &world_with_map.world_card.scenarios,
-    )
-    .render()
-    .unwrap_or_default();
+    let html =
+        WorldFormTemplate::from_world_data(Some(&world_card), Some(&map), &world_card.scenarios)
+            .render()
+            .unwrap_or_default();
     ok(html)
 }
 
@@ -129,8 +124,7 @@ pub async fn update_world_handler(
     Path(key): Path<String>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let app = &state.application_service;
-    let world_with_map = match app.get_world(&key) {
+    let (world_id, _, _) = match state.world_persona.get_world(&key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
@@ -143,10 +137,10 @@ pub async fn update_world_handler(
 
     world_card.key = key;
 
-    match app.update_world(world_with_map.world_id, world_card, map) {
+    match state.world_persona.update_world(world_id, world_card, map) {
         Ok(()) => {
-            let worlds = app.list_worlds();
-            let games = app.list_games().unwrap_or_default();
+            let worlds = state.world_persona.list_worlds();
+            let games = state.game_catalogue.list_games().unwrap_or_default();
             let games_per_world = games_per_world(&games);
             ok(
                 WorldsPanelTemplate::from_worlds(&worlds.unwrap_or_default(), &games_per_world)
@@ -162,7 +156,7 @@ pub async fn delete_world_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Response<axum::body::Body> {
-    match state.application_service.delete_world(&key) {
+    match state.world_persona.delete_world(&key) {
         Ok(()) => ok(""),
         Err(e) if e.is_user_displayable() => {
             let error_html = render_error(&e.to_string());

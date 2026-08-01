@@ -3,11 +3,10 @@
 use crate::Violation;
 
 const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
-    "application/application_service.rs",
+    // Intentional boundary + deferred agent constructors; see ADR-027.
     "application/agents/registry.rs",
     "application/agents/quantifier/agent.rs",
     "application/persistence_gate.rs",
-    "application/games/catalogue.rs",
 ];
 
 // Guardrail: application/ may not import `Storage` directly except the grandfathered files (ADR-027).
@@ -244,7 +243,7 @@ mod tests {
     #[test]
     fn test_check_application_storage_direct_skips_tests_files() {
         let violations = check_application_storage_direct(
-            "application/application_service_tests.rs",
+            "application/orchestrator_tests.rs",
             "use crate::adapters::driven::storage::Storage;\n",
         );
         assert_eq!(violations.len(), 0);

@@ -3,13 +3,13 @@
 
 use std::sync::Arc;
 
-use crate::application::application_service::DefaultApplicationService;
+use crate::application::pipeline::pipeline::ActionPipeline;
 
-pub(crate) fn spawn_pipeline_task<F>(app: Arc<DefaultApplicationService>, f: F)
+pub(crate) fn spawn_pipeline_task<F>(pipeline: Arc<ActionPipeline>, f: F)
 where
-    F: FnOnce(&DefaultApplicationService) + Send + 'static,
+    F: FnOnce(&ActionPipeline) + Send + 'static,
 {
     tokio::task::spawn_blocking(move || {
-        f(&app);
+        f(&pipeline);
     });
 }

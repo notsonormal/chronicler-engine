@@ -1,4 +1,4 @@
-//! Tests for poison-recovery behaviour: confirms that a poisoned `RwLock` inside the settings layer and `CancellationToken` machinery does not crash subsequent operations.
+//! Tests for poison-recovery behaviour: confirms that a poisoned `RwLock` inside the settings layer does not crash subsequent operations, and that the configured shutdown token is reachable through `AppState`.
 
 use std::sync::Arc;
 
@@ -49,11 +49,15 @@ fn test_settings_recover_from_poisoned_rwlock() {
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        application_service: wired.application_service,
         persistence_gate: wired.persistence_gate,
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings,
-        shutdown_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
+        shutdown_token: wired.shutdown_token.clone(),
+        pipeline: Arc::new(wired.pipeline),
+        generation_gate: wired.generation_gate.clone(),
+        game_catalogue: wired.game_catalogue.clone(),
+        game_view_query: wired.game_view_query.clone(),
+        world_persona: wired.world_persona.clone(),
     };
 
     let recovered = app_state.settings();
@@ -64,16 +68,8 @@ fn test_settings_recover_from_poisoned_rwlock() {
 }
 
 #[test]
-fn test_cancel_token_recover_from_poisoned_rwlock() {
+fn test_current_shutdown_token_returns_configured_token() {
     let token = CancellationToken::new();
-    let shutdown_token = Arc::new(std::sync::RwLock::new(token.clone()));
-
-    let cancel_clone = Arc::clone(&shutdown_token);
-    let _ = std::thread::spawn(move || {
-        let _guard = cancel_clone.write().unwrap();
-        panic!("intentional panic to poison lock");
-    })
-    .join();
 
     let wired = chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
@@ -85,17 +81,21 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        application_service: wired.application_service,
         persistence_gate: wired.persistence_gate,
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        shutdown_token,
+        shutdown_token: token.clone(),
+        pipeline: Arc::new(wired.pipeline),
+        generation_gate: wired.generation_gate.clone(),
+        game_catalogue: wired.game_catalogue.clone(),
+        game_view_query: wired.game_view_query.clone(),
+        world_persona: wired.world_persona.clone(),
     };
 
     let recovered = app_state.current_shutdown_token();
     assert!(
         !recovered.is_cancelled(),
-        "current_shutdown_token() should recover the actual token from poisoned RwLock"
+        "current_shutdown_token() should return the configured token"
     );
 }
 

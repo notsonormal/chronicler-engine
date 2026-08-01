@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-#[allow(unused_imports)]
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
-use crate::application::application_service::DefaultApplicationService;
+use crate::adapters::driving::http::AppState;
 use crate::application::ports::llm_provider::LlmCallResult;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -32,22 +31,19 @@ fn make_service() -> crate::application::pipeline::pipeline::ActionPipeline {
     )
 }
 
-fn insert_message_with_swipe(
-    app: &DefaultApplicationService,
-    msg: &crate::domain::model::message::Message,
-) {
-    let id = app.storage().insert_message(msg).unwrap();
+fn insert_message_with_swipe(app: &AppState, msg: &crate::domain::model::message::Message) {
+    let id = app.storage.insert_message(msg).unwrap();
     if let Some(swipe) = msg.swipes.first() {
         let mut swipe = swipe.clone();
         swipe.text = msg.text().to_string();
         swipe.snapshot_id = msg.snapshot_id();
         swipe.location_header = msg.location_header().map(|s| s.to_string());
         swipe.event_header = msg.event_header().map(|s| s.to_string());
-        let _ = app.storage().insert_swipe(id, &swipe, 0);
+        let _ = app.storage.insert_swipe(id, &swipe, 0);
     }
 }
 
-fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
+fn add_input_and_save(app: &AppState, text: &str) -> u64 {
     let mut state = app.persistence_gate.load_or_fresh();
     let player_name = "Player".to_string();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
@@ -55,7 +51,7 @@ fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    let id = app.storage().save_snapshot(&snapshot).unwrap();
+    let id = app.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(id));
         insert_message_with_swipe(app, last);
@@ -63,14 +59,14 @@ fn add_input_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
     id
 }
 
-fn add_narration_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
+fn add_narration_and_save(app: &AppState, text: &str) -> u64 {
     let mut state = app.persistence_gate.load_or_fresh();
     state.add_message(text.to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    let id = app.storage().save_snapshot(&snapshot).unwrap();
+    let id = app.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(id));
         insert_message_with_swipe(app, last);
@@ -78,25 +74,25 @@ fn add_narration_and_save(app: &DefaultApplicationService, text: &str) -> u64 {
     id
 }
 
-fn save_pre_main(app: &DefaultApplicationService) -> u64 {
+fn save_pre_main(app: &AppState) -> u64 {
     let state = app.persistence_gate.load_or_fresh();
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    app.storage().save_snapshot(&snapshot).unwrap()
+    app.storage.save_snapshot(&snapshot).unwrap()
 }
 
-fn save_pre_event(app: &DefaultApplicationService) -> u64 {
+fn save_pre_event(app: &AppState) -> u64 {
     let state = app.persistence_gate.load_or_fresh();
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    app.storage().save_snapshot(&snapshot).unwrap()
+    app.storage.save_snapshot(&snapshot).unwrap()
 }
 
-fn setup_event_flow(app: &DefaultApplicationService) {
+fn setup_event_flow(app: &AppState) {
     let _ = add_input_and_save(app, "test input");
     let _ = save_pre_main(app);
 
@@ -108,7 +104,7 @@ fn setup_event_flow(app: &DefaultApplicationService) {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
-    let pre_event_id = app.storage().save_snapshot(&snapshot).unwrap();
+    let pre_event_id = app.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(pre_event_id));
         insert_message_with_swipe(app, last);
@@ -126,14 +122,14 @@ fn setup_event_flow(app: &DefaultApplicationService) {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let final_id = app.storage().save_snapshot(&final_snapshot).unwrap();
+    let final_id = app.storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(app, last);
     }
 }
 
-fn setup_event_flow_without_trigger(app: &DefaultApplicationService) {
+fn setup_event_flow_without_trigger(app: &AppState) {
     let _ = add_input_and_save(app, "test input");
     let _ = save_pre_main(app);
 
@@ -143,7 +139,7 @@ fn setup_event_flow_without_trigger(app: &DefaultApplicationService) {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
-    let pre_event_id = app.storage().save_snapshot(&snapshot).unwrap();
+    let pre_event_id = app.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(pre_event_id));
         insert_message_with_swipe(app, last);
@@ -161,7 +157,7 @@ fn setup_event_flow_without_trigger(app: &DefaultApplicationService) {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let final_id = app.storage().save_snapshot(&final_snapshot).unwrap();
+    let final_id = app.storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(app, last);
@@ -172,8 +168,8 @@ fn setup_event_flow_without_trigger(app: &DefaultApplicationService) {
 fn test_retry_no_snapshot() {
     let state = make_test_state();
     let wired = make_test_app_without_snapshot(state).unwrap();
-    let app = &wired.application_service;
-    app.retry_last_response();
+    let app = AppState::from_wired(wired);
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     assert!(
@@ -193,19 +189,21 @@ fn test_retry_load_messages_error() {
         TestOverride::internal("simulated load_message_rows failure"),
     );
 
-    let app = crate::test_support::build_test_service(
-        failing,
-        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        make_service(),
-    )
-    .expect("build_test_service: build_app_graph_for_tests should succeed");
-    app.retry_last_response();
+    let app = AppState::from_wired(
+        crate::test_support::build_test_wired_app(
+            failing,
+            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+            make_service(),
+        )
+        .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
+    );
+    app.pipeline.retry_last_response();
 }
 
 #[test]
 fn test_retry_no_input() {
     let app = TestAppBuilder::default_test().build_service();
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 }
 
 #[test]
@@ -226,9 +224,9 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    let _ = app.storage().save_snapshot(&snapshot);
+    let _ = app.storage.save_snapshot(&snapshot);
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 }
 
 #[test]
@@ -247,9 +245,9 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    let _ = app.storage().save_snapshot(&snapshot);
+    let _ = app.storage.save_snapshot(&snapshot);
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 }
 
 #[test]
@@ -270,12 +268,14 @@ fn test_retry_event_storage_error_on_pre_event() {
         }
     }
 
-    let app = crate::test_support::build_test_service(
-        Arc::clone(&storage),
-        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        make_service(),
-    )
-    .expect("build_test_service: build_app_graph_for_tests should succeed");
+    let app = AppState::from_wired(
+        crate::test_support::build_test_wired_app(
+            Arc::clone(&storage),
+            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+            make_service(),
+        )
+        .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
+    );
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
@@ -285,7 +285,7 @@ fn test_retry_event_storage_error_on_pre_event() {
         TestOverride::internal("simulated load_by_id failure"),
     );
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     handle.clear("load_snapshot_by_id");
 
@@ -306,7 +306,7 @@ fn test_retry_event_missing_trigger_context() {
 
     setup_event_flow_without_trigger(&app);
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -334,15 +334,15 @@ fn test_retry_event_continuation_cancels_before_llm() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
-    let pre_event_id = app.storage().save_snapshot(&snapshot).unwrap();
+    let pre_event_id = app.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(pre_event_id));
         insert_message_with_swipe(&app, last);
     }
 
-    app.cancel_token().cancel();
+    app.shutdown_token.cancel();
 
-    let _ = app.pipeline().retry_event_continuation(pre_event_state);
+    let _ = app.pipeline.retry_event_continuation(pre_event_state);
 
     let state = app.persistence_gate.load_or_fresh();
     assert!(
@@ -375,7 +375,7 @@ fn test_retry_event_trigger_narration_fails() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    let _pre_event_with_trigger_id = app.storage().save_snapshot(&snapshot).unwrap();
+    let _pre_event_with_trigger_id = app.storage.save_snapshot(&snapshot).unwrap();
 
     let mut final_state = state;
     final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
@@ -389,13 +389,13 @@ fn test_retry_event_trigger_narration_fails() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let final_id = app.storage().save_snapshot(&final_snapshot).unwrap();
+    let final_id = app.storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&app, last);
     }
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     assert!(
@@ -429,7 +429,7 @@ fn test_retry_event_empty_continuation_text() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    let _pre_event_with_trigger_id = app.storage().save_snapshot(&snapshot).unwrap();
+    let _pre_event_with_trigger_id = app.storage.save_snapshot(&snapshot).unwrap();
 
     let mut final_state = state;
     final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
@@ -443,9 +443,9 @@ fn test_retry_event_empty_continuation_text() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let _ = app.storage().save_snapshot(&final_snapshot);
+    let _ = app.storage.save_snapshot(&final_snapshot);
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 }
 
 #[test]
@@ -469,12 +469,12 @@ fn test_retry_main_no_pre_main_snapshot() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    let _ = app.storage().save_snapshot(&snapshot);
+    let _ = app.storage.save_snapshot(&snapshot);
     if let Some(last) = state.narrative.history.last_mut() {
         insert_message_with_swipe(&app, last);
     }
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     assert!(
@@ -501,7 +501,7 @@ fn test_retry_event_continuation_happy_path() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
-    let pre_event_id = app.storage().save_snapshot(&snapshot).unwrap();
+    let pre_event_id = app.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(pre_event_id));
         insert_message_with_swipe(&app, last);
@@ -519,13 +519,13 @@ fn test_retry_event_continuation_happy_path() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let _ = app.storage().save_snapshot(&final_snapshot);
+    let _ = app.storage.save_snapshot(&final_snapshot);
     if let Some(last) = final_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(final_snapshot.db_id.unwrap_or(0)));
         insert_message_with_swipe(&app, last);
     }
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     assert!(
@@ -545,7 +545,7 @@ fn test_retry_main_narration_happy_path() {
 
     let state = app.persistence_gate.load_or_fresh();
     let _ = app
-        .pipeline()
+        .pipeline
         .retry_main_narration(state, "test input".to_string());
 }
 
@@ -567,12 +567,14 @@ fn test_retry_main_storage_error_on_pre_main() {
         }
     }
 
-    let app = crate::test_support::build_test_service(
-        Arc::clone(&storage),
-        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        make_service(),
-    )
-    .expect("build_test_service: build_app_graph_for_tests should succeed");
+    let app = AppState::from_wired(
+        crate::test_support::build_test_wired_app(
+            Arc::clone(&storage),
+            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+            make_service(),
+        )
+        .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
+    );
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
@@ -583,7 +585,7 @@ fn test_retry_main_storage_error_on_pre_main() {
         TestOverride::internal("simulated load_by_id failure"),
     );
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     handle.clear("load_snapshot_by_id");
 
@@ -649,7 +651,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
-    let pre_event_id = app.storage().save_snapshot(&snapshot).unwrap();
+    let pre_event_id = app.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(pre_event_id));
         insert_message_with_swipe(&app, last);
@@ -667,12 +669,12 @@ fn test_retry_event_empty_continuation_triggers_error() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let final_id = app.storage().save_snapshot(&final_snapshot).unwrap();
+    let final_id = app.storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&app, last);
     }
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
     let state = app.persistence_gate.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
@@ -701,11 +703,11 @@ fn test_retry_appends_swipe_to_same_message() {
         location_header: None,
         event_header: None,
     };
-    app.storage()
+    app.storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
         .unwrap();
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let msgs = app.persistence_gate.load_messages().unwrap();
     let narration = msgs
@@ -743,7 +745,7 @@ fn test_retrigger_event_cancels_cleanly() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
-    let pre_event_id = app.storage().save_snapshot(&snapshot).unwrap();
+    let pre_event_id = app.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(pre_event_id));
         insert_message_with_swipe(&app, last);
@@ -761,15 +763,15 @@ fn test_retrigger_event_cancels_cleanly() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let final_id = app.storage().save_snapshot(&final_snapshot).unwrap();
+    let final_id = app.storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&app, last);
     }
 
-    app.cancel_token().cancel();
+    app.shutdown_token.cancel();
 
-    app.retrigger_event();
+    app.pipeline.retrigger_event();
 
     let state = app.persistence_gate.load_or_fresh();
     assert_eq!(
@@ -812,7 +814,7 @@ fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
 
     setup_event_flow(&app);
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -852,7 +854,7 @@ fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
 
     setup_event_flow(&app);
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -889,7 +891,7 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
 
     setup_event_flow(&app);
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -922,8 +924,8 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
 
     setup_event_flow(&app);
 
-    let initial_game_id = app.current_game_id();
-    let app_for_thread = Arc::clone(&app);
+    let initial_game_id = app.game_catalogue.current_game_id();
+    let app_for_thread = app.clone();
     let flipper = thread::spawn(move || {
         thread::sleep(Duration::from_millis(50));
         app_for_thread
@@ -931,7 +933,7 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
             .set_game_id(initial_game_id.wrapping_add(1));
     });
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     flipper
         .join()
@@ -973,8 +975,8 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
 
     setup_event_flow(&app);
 
-    let initial_game_id = app.current_game_id();
-    let app_for_thread = Arc::clone(&app);
+    let initial_game_id = app.game_catalogue.current_game_id();
+    let app_for_thread = app.clone();
     let flipper = thread::spawn(move || {
         thread::sleep(Duration::from_millis(50));
         app_for_thread
@@ -982,7 +984,7 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
             .set_game_id(initial_game_id.wrapping_add(1));
     });
 
-    app.retrigger_event();
+    app.pipeline.retrigger_event();
 
     flipper
         .join()
@@ -1025,7 +1027,7 @@ fn test_retrigger_event_emits_error_on_world_fetch_failure() {
 
     setup_event_flow(&app);
 
-    app.retrigger_event();
+    app.pipeline.retrigger_event();
 
     let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
@@ -1052,7 +1054,7 @@ fn test_retry_event_continuation_handles_state_without_input_message() {
         MessageType::Narration,
     );
 
-    let _ = app.pipeline().retry_event_continuation(state);
+    let _ = app.pipeline.retry_event_continuation(state);
 }
 
 #[test]
@@ -1073,7 +1075,7 @@ fn test_retry_records_missing_snapshot_id() {
         insert_message_with_swipe(&app, last);
     }
 
-    app.retry_last_response();
+    app.pipeline.retry_last_response();
 
     let state = app.persistence_gate.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {

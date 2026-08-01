@@ -4,12 +4,13 @@
 
 use std::sync::{Arc, RwLock};
 
+use tokio_util::sync::CancellationToken;
+
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::db::DbPool;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::application::agents::registry::AgentRegistry;
-use chronicler_engine::application::application_service::DefaultApplicationService;
-use chronicler_engine::application::persistence_gate::PersistenceGate;
 use chronicler_engine::application::pipeline::pipeline::ActionPipeline;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::settings::AppSettings;
@@ -20,13 +21,19 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
 use chronicler_engine::error::Result;
 use chronicler_engine::test_support::{
-    build_test_persistence_gate, default_test_preset_storage, make_test_recorder,
-    seed_default_game_row, TestData, TestDataBuilder,
+    build_test_persistence_gate, build_test_wired_app, build_test_wired_app_with_settings,
+    default_test_preset_storage, make_test_recorder, seed_default_game_row, TestData,
+    TestDataBuilder,
 };
 
 type MockBackendFn = Box<dyn Fn() -> MockBackend>;
 type PipelineBuilder = Box<
-    dyn FnOnce(&Arc<Storage>, &Arc<PersistenceGate>, &Arc<RwLock<AppSettings>>) -> ActionPipeline,
+    dyn FnOnce(
+        &Arc<Storage>,
+        &Arc<chronicler_engine::application::persistence_gate::PersistenceGate>,
+        &Arc<RwLock<AppSettings>>,
+        CancellationToken,
+    ) -> ActionPipeline,
 >;
 
 enum BackendSpec {
@@ -45,7 +52,8 @@ enum BackendSpec {
 
 type StateMut = Box<dyn FnOnce(&mut GameState)>;
 
-/// SQLite-backed `DefaultApplicationService` builder for integration tests. Emits the service directly (no HTTP router), backed by in-memory SQLite with full snapshot + message persistence.
+/// SQLite-backed application builder for integration tests. Emits an `AppState`
+/// directly (no HTTP router), backed by in-memory SQLite with full snapshot + message persistence.
 pub struct SqliteTestAppBuilder {
     test_data: TestData,
     logs: Vec<(String, Option<String>, MessageType)>,
@@ -154,8 +162,9 @@ impl SqliteTestAppBuilder {
     where
         F: FnOnce(
                 &Arc<Storage>,
-                &Arc<PersistenceGate>,
+                &Arc<chronicler_engine::application::persistence_gate::PersistenceGate>,
                 &Arc<RwLock<AppSettings>>,
+                CancellationToken,
             ) -> ActionPipeline
             + 'static,
     {
@@ -172,8 +181,8 @@ impl SqliteTestAppBuilder {
         self
     }
 
-    /// Build the `DefaultApplicationService`: seed sqlite storage, persist snapshot + messages, dispatch to `BackendSpec`.
-    pub fn build_service(mut self) -> Result<Arc<DefaultApplicationService>> {
+    /// Build the application state: seed sqlite storage, persist snapshot + messages, dispatch to `BackendSpec`.
+    pub fn build_service(mut self) -> Result<AppState> {
         let (storage, settings_arc) = self.seed_storage_and_settings()?;
         let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
         let pipeline = self.build_pipeline(&storage, &persistence_gate, &settings_arc);
@@ -182,34 +191,28 @@ impl SqliteTestAppBuilder {
         Ok(finalize_app(storage, pipeline, settings_arc, is_generating))
     }
 
-    pub fn build_with_state(
-        mut self,
-    ) -> Result<(Arc<DefaultApplicationService>, Arc<PersistenceGate>)> {
+    pub fn build_with_state(mut self) -> Result<AppState> {
         let (storage, settings_arc) = self.seed_storage_and_settings()?;
         let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
         let pipeline = self.build_pipeline(&storage, &persistence_gate, &settings_arc);
         let is_generating = self.is_generating;
         let preset_storage = default_test_preset_storage();
 
-        let wired = chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
-            settings_arc,
-            storage,
-            preset_storage,
-            Some(pipeline),
-        )
-        .expect("build_app_graph_for_tests should succeed");
+        let wired = build_test_wired_app(storage, preset_storage, pipeline)
+            .expect("build_test_wired_app should succeed");
         if is_generating {
-            let mut snapshot = wired
-                .application_service
-                .storage()
+            let app_state = AppState::from_wired(wired);
+            let mut snapshot = app_state
+                .storage
                 .load_latest_snapshot()
                 .expect("load_latest_snapshot must succeed")
                 .expect("snapshot must exist for is_generating");
             snapshot.narrative.input_buffer.status = GenerationStatus::Generating;
             snapshot.narrative.input_buffer.phase = GenerationPhase::Narrating;
-            let _ = wired.application_service.storage().save_snapshot(&snapshot);
+            let _ = app_state.storage.save_snapshot(&snapshot);
+            return Ok(app_state);
         }
-        Ok((wired.application_service, wired.persistence_gate))
+        Ok(AppState::from_wired(wired))
     }
 
     fn seed_storage_and_settings(&mut self) -> Result<(Arc<Storage>, Arc<RwLock<AppSettings>>)> {
@@ -292,20 +295,23 @@ impl SqliteTestAppBuilder {
     fn build_pipeline(
         &mut self,
         storage: &Arc<Storage>,
-        persistence_gate: &Arc<PersistenceGate>,
+        persistence_gate: &Arc<chronicler_engine::application::persistence_gate::PersistenceGate>,
         settings_arc: &Arc<RwLock<AppSettings>>,
     ) -> ActionPipeline {
+        let shutdown_token = CancellationToken::new();
         match self.backend.take() {
             None => panic!(
                 "SqliteTestAppBuilder: no backend set; call .pipeline_fn(...) or .mock_backend(...) before .build_service()"
             ),
             Some(BackendSpec::MockBackend(f)) => ActionPipeline::with_mock_quantifier(
+                shutdown_token,
                 make_test_recorder(Arc::new(f())),
                 Arc::new(f()),
                 Arc::clone(persistence_gate),
                 Arc::clone(settings_arc),
             ),
             Some(BackendSpec::Backends(f)) => ActionPipeline::with_backends(
+                shutdown_token,
                 make_test_recorder(Arc::new(f())),
                 AgentRegistry::default(),
                 Arc::clone(persistence_gate),
@@ -315,12 +321,15 @@ impl SqliteTestAppBuilder {
                 narrator,
                 quantifier,
             }) => ActionPipeline::with_mock_quantifier(
+                shutdown_token,
                 make_test_recorder(Arc::new(narrator())),
                 Arc::new(quantifier()),
                 Arc::clone(persistence_gate),
                 Arc::clone(settings_arc),
             ),
-            Some(BackendSpec::PipelineFn(f)) => f(storage, persistence_gate, settings_arc),
+            Some(BackendSpec::PipelineFn(f)) => {
+                f(storage, persistence_gate, settings_arc, shutdown_token)
+            }
         }
     }
 }
@@ -330,24 +339,20 @@ fn finalize_app(
     pipeline: ActionPipeline,
     settings_arc: Arc<RwLock<AppSettings>>,
     is_generating: bool,
-) -> Arc<DefaultApplicationService> {
+) -> AppState {
     let preset_storage = default_test_preset_storage();
-    let app = chronicler_engine::test_support::build_test_service_with_settings(
-        storage,
-        preset_storage,
-        settings_arc,
-        pipeline,
-    )
-    .expect("build_test_service_with_settings: build_app_graph_for_tests should succeed");
+    let wired = build_test_wired_app_with_settings(storage, preset_storage, settings_arc, pipeline)
+        .expect("build_test_wired_app_with_settings: build_app_graph_for_tests should succeed");
+    let app_state = AppState::from_wired(wired);
     if is_generating {
-        let mut snapshot = app
-            .storage()
+        let mut snapshot = app_state
+            .storage
             .load_latest_snapshot()
             .expect("load_latest_snapshot must succeed")
             .expect("snapshot must exist for is_generating");
         snapshot.narrative.input_buffer.status = GenerationStatus::Generating;
         snapshot.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        let _ = app.storage().save_snapshot(&snapshot);
+        let _ = app_state.storage.save_snapshot(&snapshot);
     }
-    app
+    app_state
 }

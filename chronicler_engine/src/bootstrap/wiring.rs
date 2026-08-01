@@ -12,9 +12,9 @@ use crate::adapters::driven::storage::{PresetStore, Storage};
 use crate::adapters::driven::text_check::HarperTextChecker;
 use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::agents::registry::AgentRegistry;
-use crate::application::application_service::DefaultApplicationService;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
+use crate::application::games::world_persona_catalogue::WorldPersonaCatalogue;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
 use crate::application::llm_recorder::LlmCallRecorder;
@@ -53,64 +53,10 @@ pub struct WiredApp {
     pub generation_gate: GenerationGate,
     pub game_catalogue: GameCatalogue,
     pub game_view_query: GameViewQuery,
+    pub world_persona: WorldPersonaCatalogue,
     pub pipeline: ActionPipeline,
-    pub application_service: Arc<DefaultApplicationService>,
     pub text_check_service: Arc<TextCheckService>,
-}
-
-fn build_collaborators(
-    storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
-    settings: Arc<RwLock<AppSettings>>,
-    recorder: Arc<LlmCallRecorder>,
-    agent_registry: AgentRegistry,
-) -> (
-    Arc<PersistenceGate>,
-    GenerationGate,
-    GameCatalogue,
-    GameViewQuery,
-    ActionPipeline,
-) {
-    let preset_store = Arc::new(PresetStore::new(preset_storage));
-    let persistence_gate = Arc::new(PersistenceGate::new(
-        Arc::clone(&storage),
-        Arc::clone(&preset_store),
-    ));
-    let generation_gate = GenerationGate::new();
-    let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
-    let game_view_query = GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
-    let pipeline = ActionPipeline::with_storage(
-        recorder,
-        agent_registry,
-        Arc::clone(&persistence_gate),
-        Arc::clone(&settings),
-    );
-    (
-        persistence_gate,
-        generation_gate,
-        game_catalogue,
-        game_view_query,
-        pipeline,
-    )
-}
-
-fn wire_application_service(
-    persistence_gate: Arc<PersistenceGate>,
-    generation_gate: GenerationGate,
-    game_catalogue: GameCatalogue,
-    game_view_query: GameViewQuery,
-    settings: Arc<RwLock<AppSettings>>,
-    pipeline: ActionPipeline,
-) -> Arc<DefaultApplicationService> {
-    Arc::new(DefaultApplicationService::new(
-        persistence_gate,
-        generation_gate,
-        game_catalogue,
-        game_view_query,
-        Arc::clone(&settings),
-        pipeline,
-        CancellationToken::new(),
-    ))
+    pub shutdown_token: CancellationToken,
 }
 
 fn build_wired_app(
@@ -121,14 +67,25 @@ fn build_wired_app(
     agent_registry: AgentRegistry,
     text_check_service: Arc<TextCheckService>,
 ) -> Result<WiredApp> {
-    let (persistence_gate, generation_gate, game_catalogue, game_view_query, pipeline) =
-        build_collaborators(
-            Arc::clone(&storage),
-            Arc::clone(&preset_storage),
-            Arc::clone(&settings),
-            recorder,
-            agent_registry,
-        );
+    let shutdown_token = CancellationToken::new();
+
+    // ponytail: single-call collaborator unpack — could be inlined into build_wired_app if it grows.
+    let preset_store = Arc::new(PresetStore::new(Arc::clone(&preset_storage)));
+    let persistence_gate = Arc::new(PersistenceGate::new(
+        Arc::clone(&storage),
+        Arc::clone(&preset_store),
+    ));
+    let generation_gate = GenerationGate::new();
+    let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
+    let game_view_query = GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
+    let world_persona = WorldPersonaCatalogue::new(Arc::clone(&persistence_gate));
+    let pipeline = ActionPipeline::with_storage(
+        shutdown_token.clone(),
+        recorder,
+        agent_registry,
+        Arc::clone(&persistence_gate),
+        Arc::clone(&settings),
+    );
 
     // Boot heal: a crash/restart may have left the current game persisted as Generating.
     let current_game_id = storage.current_game_id();
@@ -139,26 +96,18 @@ fn build_wired_app(
         let _ = persistence_gate.save_state(&boot_state);
     }
 
-    let application_service = wire_application_service(
-        persistence_gate,
-        generation_gate.clone(),
-        game_catalogue.clone(),
-        game_view_query.clone(),
-        Arc::clone(&settings),
-        pipeline.clone(),
-    );
-
     Ok(WiredApp {
         storage,
         preset_storage,
         settings,
-        persistence_gate: Arc::clone(&application_service.persistence_gate),
-        generation_gate: application_service.generation_gate.clone(),
-        game_catalogue: application_service.game_catalogue.clone(),
-        game_view_query: application_service.game_view_query.clone(),
-        pipeline: application_service.pipeline.clone(),
-        application_service,
+        persistence_gate,
+        generation_gate,
+        game_catalogue,
+        game_view_query,
+        world_persona,
+        pipeline,
         text_check_service,
+        shutdown_token,
     })
 }
 
@@ -239,20 +188,11 @@ pub fn build_app_graph_for_tests(
 
     if let Some(pipeline) = pipeline_override {
         // Override backends must use this graph's persistence and live settings.
-        let pipeline = pipeline.rebind_for_test(
+        wired.pipeline = pipeline.rebind_for_test(
             Arc::clone(&wired.persistence_gate),
             Arc::clone(&wired.settings),
+            wired.shutdown_token.clone(),
         );
-        wired.pipeline = pipeline.clone();
-        wired.application_service = Arc::new(DefaultApplicationService::new(
-            Arc::clone(&wired.persistence_gate),
-            wired.generation_gate.clone(),
-            wired.game_catalogue.clone(),
-            wired.game_view_query.clone(),
-            Arc::clone(&wired.settings),
-            pipeline,
-            CancellationToken::new(),
-        ));
     }
 
     Ok(wired)

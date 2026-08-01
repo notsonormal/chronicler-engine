@@ -38,24 +38,27 @@ fn test_arrival_narration_survives_reload() {
         .npcs(crate::fixtures::create_test_npcs())
         .build();
     let llm_for_closure = Arc::clone(&llm);
-    let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .pipeline_fn(move |storage, pg, settings| {
+    let app = SqliteTestAppBuilder::with_data(data)
+        .pipeline_fn(move |storage, pg, settings, token| {
             let recorder = make_test_recorder_with_storage(
                 Arc::clone(&llm_for_closure)
                     as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
                 Arc::clone(storage),
             );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-                Arc::clone(&recorder),
+                token,
+    Arc::clone(&recorder),
                 Arc::new(MockBackend::default()),
                 Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
 
-    let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(app.storage()));
+    let pg = &app.persistence_gate;
+
+    let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(&app.storage));
     let task_ctx = ArrivalTaskContext::new_for_test(
-        Arc::clone(&app),
+        Arc::clone(pg),
         "room1".to_string(),
         nearby_npcs,
         all_npcs,
@@ -68,7 +71,7 @@ fn test_arrival_narration_survives_reload() {
 
     task_ctx.run_sync();
 
-    let messages = app.storage().list_latest_llm_messages(50).unwrap();
+    let messages = app.storage.list_latest_llm_messages(50).unwrap();
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.agent_name == "narrator")
@@ -85,7 +88,7 @@ fn test_arrival_narration_survives_reload() {
         "Narration message should have non-zero id (persisted to llm_messages table)"
     );
 
-    let guard = app.latest_state(&pg);
+    let guard = app.latest_state();
     let history_narrations: Vec<_> = guard
         .narrative
         .history()
@@ -101,7 +104,7 @@ fn test_arrival_narration_survives_reload() {
     let history_narration = history_narrations.first().unwrap();
     let history_narration_text = history_narration.text.clone();
 
-    let reloaded_messages = app.storage().load_messages_with_swipes().unwrap();
+    let reloaded_messages = app.storage.load_messages_with_swipes().unwrap();
 
     assert!(
         !reloaded_messages.is_empty(),
@@ -165,15 +168,17 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
         Arc::new(MockBackend::default()),
     );
 
-    let (app, pg) = chronicler_engine::test_support::build_test_service_with_pg(
+    let wired = chronicler_engine::test_support::build_test_wired_app(
         Arc::clone(&failing_storage),
         Arc::new(preset_storage),
         pipeline,
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
+    let app = chronicler_engine::adapters::driving::http::AppState::from_wired(wired);
+    let pg = &app.persistence_gate;
 
     let task_ctx = ArrivalTaskContext::new_for_test(
-        Arc::clone(&app),
+        Arc::clone(pg),
         "room1".to_string(),
         Vec::<NpcCard>::new(),
         Vec::<NpcCard>::new(),
@@ -247,15 +252,17 @@ fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
         Arc::new(MockBackend::default()),
     );
 
-    let (app, pg) = chronicler_engine::test_support::build_test_service_with_pg(
+    let wired = chronicler_engine::test_support::build_test_wired_app(
         Arc::clone(&failing_storage),
         Arc::new(preset_storage),
         pipeline,
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
+    let app = chronicler_engine::adapters::driving::http::AppState::from_wired(wired);
+    let pg = &app.persistence_gate;
 
     let task_ctx = ArrivalTaskContext::new_for_test(
-        Arc::clone(&app),
+        Arc::clone(pg),
         "room1".to_string(),
         Vec::<NpcCard>::new(),
         Vec::<NpcCard>::new(),
