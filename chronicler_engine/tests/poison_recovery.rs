@@ -13,17 +13,6 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::error::EngineError;
 use chronicler_engine::application::ports::text_checker::CheckResult;
 
-fn test_game_service() -> Arc<chronicler_engine::application::game_service::GameService> {
-    chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        Arc::new(Storage::new_in_memory()),
-        Arc::new(Storage::new_in_memory()),
-        None,
-    )
-    .expect("build_app_graph_for_tests should succeed")
-    .game_service
-}
-
 struct NoopTextChecker;
 impl TextChecker for NoopTextChecker {
     fn check(
@@ -50,18 +39,16 @@ fn test_settings_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service = test_game_service();
     let wired = chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
         Arc::new(Storage::new_in_memory()),
         Arc::new(Storage::new_in_memory()),
-        Some(Arc::clone(&game_service)),
+        None,
     )
     .expect("build_app_graph_for_tests should succeed");
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        game_service: Arc::clone(&game_service),
         application_service: wired.application_service,
         persistence_gate: wired.persistence_gate,
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
@@ -88,18 +75,16 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service = test_game_service();
     let wired = chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
         Arc::new(Storage::new_in_memory()),
         Arc::new(Storage::new_in_memory()),
-        Some(Arc::clone(&game_service)),
+        None,
     )
     .expect("build_app_graph_for_tests should succeed");
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        game_service: Arc::clone(&game_service),
         application_service: wired.application_service,
         persistence_gate: wired.persistence_gate,
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),

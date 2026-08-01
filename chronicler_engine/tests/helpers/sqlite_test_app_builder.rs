@@ -9,7 +9,8 @@ use chronicler_engine::adapters::driven::storage::db::DbPool;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::application::application_service::DefaultApplicationService;
-use chronicler_engine::application::game_service::GameService;
+use chronicler_engine::application::persistence_gate::PersistenceGate;
+use chronicler_engine::application::pipeline::pipeline::ActionPipeline;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::game_state::GameState;
@@ -19,12 +20,14 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
 use chronicler_engine::error::Result;
 use chronicler_engine::test_support::{
-    default_test_preset_storage, make_test_recorder, seed_default_game_row, TestData,
-    TestDataBuilder,
+    build_test_persistence_gate, default_test_preset_storage, make_test_recorder,
+    seed_default_game_row, TestData, TestDataBuilder,
 };
 
 type MockBackendFn = Box<dyn Fn() -> MockBackend>;
-type GameServiceBuilder = Box<dyn FnOnce(&Arc<Storage>) -> Arc<GameService>>;
+type PipelineBuilder = Box<
+    dyn FnOnce(&Arc<Storage>, &Arc<PersistenceGate>, &Arc<RwLock<AppSettings>>) -> ActionPipeline,
+>;
 
 enum BackendSpec {
     /// `with_mock_quantifier(make_recorder(backend()), backend())`. Closure invoked twice.
@@ -36,8 +39,8 @@ enum BackendSpec {
         narrator: MockBackendFn,
         quantifier: MockBackendFn,
     },
-    /// Caller builds the full `GameService` from the seeded `Storage`.
-    GameServiceFn(GameServiceBuilder),
+    /// Caller builds the full `ActionPipeline` from the seeded `Storage`.
+    PipelineFn(PipelineBuilder),
 }
 
 type StateMut = Box<dyn FnOnce(&mut GameState)>;
@@ -147,11 +150,16 @@ impl SqliteTestAppBuilder {
         self
     }
 
-    pub fn game_service_fn<F>(mut self, build: F) -> Self
+    pub fn pipeline_fn<F>(mut self, build: F) -> Self
     where
-        F: FnOnce(&Arc<Storage>) -> Arc<GameService> + 'static,
+        F: FnOnce(
+                &Arc<Storage>,
+                &Arc<PersistenceGate>,
+                &Arc<RwLock<AppSettings>>,
+            ) -> ActionPipeline
+            + 'static,
     {
-        self.backend = Some(BackendSpec::GameServiceFn(Box::new(build)));
+        self.backend = Some(BackendSpec::PipelineFn(Box::new(build)));
         self
     }
 
@@ -166,217 +174,28 @@ impl SqliteTestAppBuilder {
 
     /// Build the `DefaultApplicationService`: seed sqlite storage, persist snapshot + messages, dispatch to `BackendSpec`.
     pub fn build_service(mut self) -> Result<Arc<DefaultApplicationService>> {
-        let starting_room = self
-            .test_data
-            .map
-            .overworld
-            .regions
-            .first()
-            .and_then(|r| r.rooms.first())
-            .map(|r| r.id.clone())
-            .unwrap_or_else(|| "room_1".to_string());
+        let (storage, settings_arc) = self.seed_storage_and_settings()?;
+        let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
+        let pipeline = self.build_pipeline(&storage, &persistence_gate, &settings_arc);
+        let is_generating = self.is_generating;
 
-        let mut state = GameState::new(starting_room);
-
-        for npc in self
-            .test_data
-            .npcs
-            .iter()
-            .filter(|n| self.test_data.room_npcs.contains(&n.id))
-        {
-            state.scene.npcs_in_area.push(npc.clone());
-        }
-
-        if let Some(trigger) = self.last_trigger {
-            state.narrative.last_trigger = Some(trigger);
-        }
-
-        if let Some((status, phase)) = self.generation {
-            state.narrative.input_buffer.status = status;
-            state.narrative.input_buffer.phase = phase;
-        }
-
-        for (text, sender, log_type) in self.logs {
-            state.add_message(text, sender, log_type);
-        }
-
-        for msg in self.messages {
-            state.narrative.history.append(msg);
-        }
-
-        let db_pool = DbPool::new(":memory:")?;
-        seed_default_game_row(&db_pool, 1)?;
-        let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-
-        let _world_id = self.test_data.seed_into(&storage);
-
-        if let Some(state_mut) = self.state_mut.take() {
-            state_mut(&mut state);
-        }
-
-        let snapshot = GameStateSnapshot::from_game_state(&state);
-        let pre_main_id = storage
-            .save_snapshot(&snapshot)
-            .expect("snapshot save must succeed in test builder");
-
-        let mut messages: Vec<_> = state.narrative.history.iter().cloned().collect();
-        for msg in messages.iter_mut() {
-            if msg.message_type == MessageType::Input {
-                msg.set_snapshot_id(Some(pre_main_id));
-                if let Some(swipe) = msg.swipes.first_mut() {
-                    swipe.snapshot_id = Some(pre_main_id);
-                }
-            }
-        }
-        for msg in messages {
-            if let Ok(id) = storage.insert_message(&msg) {
-                for (idx, swipe) in msg.swipes.iter().enumerate() {
-                    let _ = storage.insert_swipe(id, swipe, idx);
-                }
-            }
-        }
-
-        let _ = storage.save_snapshot(&snapshot);
-
-        let game_service = match self.backend {
-            None => panic!(
-                "SqliteTestAppBuilder: no backend set; call .game_service_fn(...) or .mock_backend(...) before .build_service()"
-            ),
-            Some(BackendSpec::MockBackend(f)) => Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder(Arc::new(f())),
-                Arc::new(f()),
-            )),
-            Some(BackendSpec::Backends(f)) => Arc::new(GameService::with_backends(
-                make_test_recorder(Arc::new(f())),
-                AgentRegistry::default(),
-            )),
-            Some(BackendSpec::SeparateBackends {
-                narrator,
-                quantifier,
-            }) => Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder(Arc::new(narrator())),
-                Arc::new(quantifier()),
-            )),
-            Some(BackendSpec::GameServiceFn(f)) => f(&storage),
-        };
-
-        Ok(finalize_app(
-            storage,
-            game_service,
-            self.settings,
-            self.is_generating,
-        ))
+        Ok(finalize_app(storage, pipeline, settings_arc, is_generating))
     }
 
     pub fn build_with_state(
         mut self,
-    ) -> Result<(
-        Arc<DefaultApplicationService>,
-        Arc<chronicler_engine::application::persistence_gate::PersistenceGate>,
-    )> {
-        let starting_room = self
-            .test_data
-            .map
-            .overworld
-            .regions
-            .first()
-            .and_then(|r| r.rooms.first())
-            .map(|r| r.id.clone())
-            .unwrap_or_else(|| "room_1".to_string());
-
-        let mut state = GameState::new(starting_room);
-
-        for npc in self
-            .test_data
-            .npcs
-            .iter()
-            .filter(|n| self.test_data.room_npcs.contains(&n.id))
-        {
-            state.scene.npcs_in_area.push(npc.clone());
-        }
-
-        if let Some(trigger) = self.last_trigger {
-            state.narrative.last_trigger = Some(trigger);
-        }
-
-        if let Some((status, phase)) = self.generation {
-            state.narrative.input_buffer.status = status;
-            state.narrative.input_buffer.phase = phase;
-        }
-
-        for (text, sender, log_type) in self.logs {
-            state.add_message(text, sender, log_type);
-        }
-
-        for msg in self.messages {
-            state.narrative.history.append(msg);
-        }
-
-        let db_pool = DbPool::new(":memory:")?;
-        seed_default_game_row(&db_pool, 1)?;
-        let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-
-        let _world_id = self.test_data.seed_into(&storage);
-
-        if let Some(state_mut) = self.state_mut.take() {
-            state_mut(&mut state);
-        }
-
-        let snapshot = GameStateSnapshot::from_game_state(&state);
-        let pre_main_id = storage
-            .save_snapshot(&snapshot)
-            .expect("snapshot save must succeed in test builder");
-
-        let mut messages: Vec<_> = state.narrative.history.iter().cloned().collect();
-        for msg in messages.iter_mut() {
-            if msg.message_type == MessageType::Input {
-                msg.set_snapshot_id(Some(pre_main_id));
-                if let Some(swipe) = msg.swipes.first_mut() {
-                    swipe.snapshot_id = Some(pre_main_id);
-                }
-            }
-        }
-        for msg in messages {
-            if let Ok(id) = storage.insert_message(&msg) {
-                for (idx, swipe) in msg.swipes.iter().enumerate() {
-                    let _ = storage.insert_swipe(id, swipe, idx);
-                }
-            }
-        }
-
-        let _ = storage.save_snapshot(&snapshot);
-
-        let game_service = match self.backend {
-            None => panic!(
-                "SqliteTestAppBuilder: no backend set; call .game_service_fn(...) or .mock_backend(...) before .build_with_state()"
-            ),
-            Some(BackendSpec::MockBackend(f)) => Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder(Arc::new(f())),
-                Arc::new(f()),
-            )),
-            Some(BackendSpec::Backends(f)) => Arc::new(GameService::with_backends(
-                make_test_recorder(Arc::new(f())),
-                AgentRegistry::default(),
-            )),
-            Some(BackendSpec::SeparateBackends {
-                narrator,
-                quantifier,
-            }) => Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder(Arc::new(narrator())),
-                Arc::new(quantifier()),
-            )),
-            Some(BackendSpec::GameServiceFn(f)) => f(&storage),
-        };
-
+    ) -> Result<(Arc<DefaultApplicationService>, Arc<PersistenceGate>)> {
+        let (storage, settings_arc) = self.seed_storage_and_settings()?;
+        let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
+        let pipeline = self.build_pipeline(&storage, &persistence_gate, &settings_arc);
         let is_generating = self.is_generating;
-        let settings = self.settings;
         let preset_storage = default_test_preset_storage();
-        let settings_arc = Arc::new(RwLock::new(settings));
+
         let wired = chronicler_engine::bootstrap::wiring::build_app_graph_for_tests(
             settings_arc,
             storage,
             preset_storage,
-            Some(game_service),
+            Some(pipeline),
         )
         .expect("build_app_graph_for_tests should succeed");
         if is_generating {
@@ -392,21 +211,132 @@ impl SqliteTestAppBuilder {
         }
         Ok((wired.application_service, wired.persistence_gate))
     }
+
+    fn seed_storage_and_settings(&mut self) -> Result<(Arc<Storage>, Arc<RwLock<AppSettings>>)> {
+        let starting_room = self
+            .test_data
+            .map
+            .overworld
+            .regions
+            .first()
+            .and_then(|r| r.rooms.first())
+            .map(|r| r.id.clone())
+            .unwrap_or_else(|| "room_1".to_string());
+
+        let mut state = GameState::new(starting_room);
+
+        for npc in self
+            .test_data
+            .npcs
+            .iter()
+            .filter(|n| self.test_data.room_npcs.contains(&n.id))
+        {
+            state.scene.npcs_in_area.push(npc.clone());
+        }
+
+        if let Some(trigger) = self.last_trigger.clone() {
+            state.narrative.last_trigger = Some(trigger);
+        }
+
+        if let Some((status, phase)) = self.generation.clone() {
+            state.narrative.input_buffer.status = status;
+            state.narrative.input_buffer.phase = phase;
+        }
+
+        for (text, sender, log_type) in self.logs.clone() {
+            state.add_message(text, sender, log_type);
+        }
+
+        for msg in self.messages.clone() {
+            state.narrative.history.append(msg);
+        }
+
+        let db_pool = DbPool::new(":memory:")?;
+        seed_default_game_row(&db_pool, 1)?;
+        let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+
+        let _world_id = self.test_data.seed_into(&storage);
+
+        if let Some(state_mut) = self.state_mut.take() {
+            state_mut(&mut state);
+        }
+
+        let snapshot = GameStateSnapshot::from_game_state(&state);
+        let pre_main_id = storage
+            .save_snapshot(&snapshot)
+            .expect("snapshot save must succeed in test builder");
+
+        let mut messages: Vec<_> = state.narrative.history.iter().cloned().collect();
+        for msg in messages.iter_mut() {
+            if msg.message_type == MessageType::Input {
+                msg.set_snapshot_id(Some(pre_main_id));
+                if let Some(swipe) = msg.swipes.first_mut() {
+                    swipe.snapshot_id = Some(pre_main_id);
+                }
+            }
+        }
+        for msg in messages {
+            if let Ok(id) = storage.insert_message(&msg) {
+                for (idx, swipe) in msg.swipes.iter().enumerate() {
+                    let _ = storage.insert_swipe(id, swipe, idx);
+                }
+            }
+        }
+
+        let _ = storage.save_snapshot(&snapshot);
+
+        let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
+        Ok((storage, settings_arc))
+    }
+
+    fn build_pipeline(
+        &mut self,
+        storage: &Arc<Storage>,
+        persistence_gate: &Arc<PersistenceGate>,
+        settings_arc: &Arc<RwLock<AppSettings>>,
+    ) -> ActionPipeline {
+        match self.backend.take() {
+            None => panic!(
+                "SqliteTestAppBuilder: no backend set; call .pipeline_fn(...) or .mock_backend(...) before .build_service()"
+            ),
+            Some(BackendSpec::MockBackend(f)) => ActionPipeline::with_mock_quantifier(
+                make_test_recorder(Arc::new(f())),
+                Arc::new(f()),
+                Arc::clone(persistence_gate),
+                Arc::clone(settings_arc),
+            ),
+            Some(BackendSpec::Backends(f)) => ActionPipeline::with_backends(
+                make_test_recorder(Arc::new(f())),
+                AgentRegistry::default(),
+                Arc::clone(persistence_gate),
+                Arc::clone(settings_arc),
+            ),
+            Some(BackendSpec::SeparateBackends {
+                narrator,
+                quantifier,
+            }) => ActionPipeline::with_mock_quantifier(
+                make_test_recorder(Arc::new(narrator())),
+                Arc::new(quantifier()),
+                Arc::clone(persistence_gate),
+                Arc::clone(settings_arc),
+            ),
+            Some(BackendSpec::PipelineFn(f)) => f(storage, persistence_gate, settings_arc),
+        }
+    }
 }
 
 fn finalize_app(
     storage: Arc<Storage>,
-    game_service: Arc<GameService>,
-    settings: AppSettings,
+    pipeline: ActionPipeline,
+    settings_arc: Arc<RwLock<AppSettings>>,
     is_generating: bool,
 ) -> Arc<DefaultApplicationService> {
     let preset_storage = default_test_preset_storage();
-    let settings_arc = Arc::new(RwLock::new(settings));
     let app = chronicler_engine::test_support::build_test_service_with_settings(
         storage,
         preset_storage,
         settings_arc,
-        game_service,
+        pipeline,
     )
     .expect("build_test_service_with_settings: build_app_graph_for_tests should succeed");
     if is_generating {

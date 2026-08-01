@@ -14,7 +14,6 @@ use crate::application::pipeline::pipeline::ActionPipeline;
 pub use crate::application::debug::DebugStateView;
 pub use crate::application::errors::{ApplicationError, ProcessActionResult};
 use crate::application::games::catalogue::GameCatalogue;
-use crate::application::game_service::GameService;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::persistence_gate::PersistenceGate;
@@ -39,20 +38,17 @@ pub struct DefaultApplicationService {
     pub(crate) game_catalogue: GameCatalogue,
     pub(crate) game_view_query: GameViewQuery,
     pub(crate) settings: Arc<RwLock<AppSettings>>,
-    pub(crate) game_service: Arc<GameService>,
     pub(crate) pipeline: ActionPipeline,
     pub(crate) shutdown_token: CancellationToken,
 }
 
 impl DefaultApplicationService {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         persistence_gate: Arc<PersistenceGate>,
         generation_gate: GenerationGate,
         game_catalogue: GameCatalogue,
         game_view_query: GameViewQuery,
         settings: Arc<RwLock<AppSettings>>,
-        game_service: Arc<GameService>,
         pipeline: ActionPipeline,
         cancel_token: CancellationToken,
     ) -> Self {
@@ -62,17 +58,11 @@ impl DefaultApplicationService {
             game_catalogue,
             game_view_query,
             settings,
-            game_service,
             pipeline,
             shutdown_token: cancel_token,
         }
     }
 
-    pub fn game_service(&self) -> &Arc<GameService> {
-        &self.game_service
-    }
-
-    /// Test seam only — no production callers.
     pub fn pipeline(&self) -> &ActionPipeline {
         &self.pipeline
     }
@@ -240,7 +230,6 @@ impl DefaultApplicationService {
         self.pipeline.handle_retry_outcome(outcome);
     }
 
-    /// Test seam only — no production callers.
     #[instrument(skip(self))]
     pub fn retrigger_event(&self) {
         let state = self.persistence_gate.load_or_fresh();

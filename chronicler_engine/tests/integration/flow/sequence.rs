@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::TestDataBuilder;
@@ -24,14 +23,14 @@ fn base_data() -> chronicler_engine::test_support::TestData {
 fn test_sequential_execute_retry_execute() {
     let data = base_data();
     let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
@@ -87,14 +86,14 @@ fn test_sequential_execute_retry_execute() {
 fn test_sequential_execute_delete_execute() {
     let data = base_data();
     let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
@@ -144,14 +143,14 @@ fn test_sequential_execute_delete_execute() {
 fn test_async_action_sequence_then_retry() {
     let data = base_data();
     let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
@@ -181,14 +180,14 @@ fn test_async_action_sequence_then_retry() {
 fn test_three_actions_in_sequence() {
     let data = base_data();
     let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
@@ -235,14 +234,14 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
     let data2 = base_data();
     let (app2, pg2) = SqliteTestAppBuilder::with_data(data2)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
@@ -280,14 +279,14 @@ fn test_reset_clears_history_and_state() {
 
     let data2 = base_data();
     let (app2, pg2) = SqliteTestAppBuilder::with_data(data2)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 quantifier.clone(),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
@@ -316,14 +315,14 @@ fn test_reset_clears_history_and_state() {
 fn test_reset_then_execute_works() {
     let data = base_data();
     let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
@@ -360,14 +359,14 @@ fn test_reset_then_execute_works() {
 fn test_delete_mid_sequence() {
     let data = base_data();
     let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();

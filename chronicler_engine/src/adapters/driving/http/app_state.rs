@@ -7,7 +7,6 @@ use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::persistence_gate::PersistenceGate;
-use crate::application::GameService;
 use crate::application::text_check_service::TextCheckService;
 use crate::bootstrap::wiring::WiredApp;
 use crate::domain::model::settings::AppSettings;
@@ -18,7 +17,6 @@ use super::utils::read_lock_or_recover;
 pub struct AppState {
     pub storage: Arc<crate::adapters::driven::storage::Storage>,
     pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
-    pub game_service: Arc<GameService>,
     pub application_service: Arc<DefaultApplicationService>,
     pub persistence_gate: Arc<PersistenceGate>,
     pub text_check_service: Arc<TextCheckService>,
@@ -31,7 +29,6 @@ impl AppState {
         AppState {
             storage: wired.storage,
             preset_storage: wired.preset_storage,
-            game_service: wired.game_service,
             application_service: wired.application_service,
             persistence_gate: wired.persistence_gate,
             text_check_service: wired.text_check_service,

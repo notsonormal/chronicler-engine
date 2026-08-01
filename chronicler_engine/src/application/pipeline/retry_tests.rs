@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 #[allow(unused_imports)]
-use crate::application::game_service::GameService;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::application::application_service::DefaultApplicationService;
@@ -12,6 +11,8 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
 use crate::application::agents::registry::AgentRegistry;
 use crate::test_support::fixtures::TestGameState;
+use crate::test_support::make_test_pipeline_with_backends;
+use crate::test_support::make_test_pipeline_with_mock_quantifier;
 use crate::test_support::make_test_recorder;
 use crate::test_support::TestAppBuilder;
 use crate::test_support::TestDataBuilder;
@@ -21,8 +22,10 @@ fn make_test_state() -> GameState {
     TestGameState::in_room("start")
 }
 
-fn make_service() -> GameService {
-    GameService::with_mock_quantifier(
+fn make_service() -> crate::application::pipeline::pipeline::ActionPipeline {
+    let storage = Arc::new(Storage::new_in_memory());
+    crate::test_support::make_test_pipeline_with_mock_quantifier(
+        storage,
         make_test_recorder(Arc::new(MockBackend::default())),
         Arc::new(MockBackend::default())
             as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
@@ -193,7 +196,7 @@ fn test_retry_load_messages_error() {
     let app = crate::test_support::build_test_service(
         failing,
         Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        Arc::new(make_service()),
+        make_service(),
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
     app.retry_last_response();
@@ -270,7 +273,7 @@ fn test_retry_event_storage_error_on_pre_event() {
     let app = crate::test_support::build_test_service(
         Arc::clone(&storage),
         Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        Arc::new(make_service()),
+        make_service(),
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
 
@@ -351,15 +354,16 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
 #[test]
 fn test_retry_event_trigger_narration_fails() {
-    let game_service = Arc::new(GameService::with_mock_quantifier(
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
         make_test_recorder(Arc::new(
             MockBackend::default().with_trigger_narration_fail(),
         )),
         Arc::new(MockBackend::default())
             as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    ));
+    );
     let app = TestAppBuilder::default_test()
-        .game_service(game_service)
+        .pipeline(pipeline)
         .build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
@@ -406,13 +410,14 @@ fn test_retry_event_trigger_narration_fails() {
 
 #[test]
 fn test_retry_event_empty_continuation_text() {
-    let game_service = Arc::new(GameService::with_mock_quantifier(
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
         make_test_recorder(Arc::new(MockBackend::new())),
         Arc::new(MockBackend::default())
             as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    ));
+    );
     let app = TestAppBuilder::default_test()
-        .game_service(game_service)
+        .pipeline(pipeline)
         .build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
@@ -565,7 +570,7 @@ fn test_retry_main_storage_error_on_pre_main() {
     let app = crate::test_support::build_test_service(
         Arc::clone(&storage),
         Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        Arc::new(make_service()),
+        make_service(),
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
 
@@ -623,13 +628,14 @@ impl crate::application::ports::llm_provider::LlmProvider for EmptyTriggerBacken
 
 #[test]
 fn test_retry_event_empty_continuation_triggers_error() {
-    let game_service = Arc::new(GameService::with_mock_quantifier(
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
         make_test_recorder(Arc::new(EmptyTriggerBackend)),
         Arc::new(MockBackend::default())
             as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    ));
+    );
     let app = TestAppBuilder::default_test()
-        .game_service(game_service)
+        .pipeline(pipeline)
         .build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
@@ -793,11 +799,15 @@ fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
     );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
         .storage(Arc::new(storage))
         .skip_seeding(true)
-        .game_service(Arc::new(service))
+        .pipeline(service)
         .build_service();
 
     setup_event_flow(&app);
@@ -829,11 +839,15 @@ fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
     );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
         .storage(Arc::new(storage))
         .skip_seeding(true)
-        .game_service(Arc::new(service))
+        .pipeline(service)
         .build_service();
 
     setup_event_flow(&app);
@@ -862,11 +876,15 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
     };
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(TestDataBuilder::default_test().build())
         .storage(Arc::new(storage))
         .skip_seeding(true)
-        .game_service(Arc::new(service))
+        .pipeline(service)
         .build_service();
 
     setup_event_flow(&app);
@@ -893,9 +911,13 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
     let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::default_test()
-        .game_service(Arc::new(service))
+        .pipeline(service)
         .build_service();
 
     setup_event_flow(&app);
@@ -940,9 +962,13 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
     let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::default_test()
-        .game_service(Arc::new(service))
+        .pipeline(service)
         .build_service();
 
     setup_event_flow(&app);
@@ -986,11 +1012,15 @@ fn test_retrigger_event_emits_error_on_world_fetch_failure() {
     );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
         .storage(Arc::new(storage))
         .skip_seeding(true)
-        .game_service(Arc::new(service))
+        .pipeline(service)
         .build_service();
 
     setup_event_flow(&app);

@@ -4,9 +4,11 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::adapters::driven::storage::Storage;
+use crate::adapters::driven::storage::{PresetStore, Storage};
+use crate::application::agents::registry::AgentRegistry;
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::game_service::GameService;
+use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
@@ -35,17 +37,43 @@ pub fn default_test_preset_storage() -> Arc<Storage> {
     Arc::new(storage)
 }
 
+pub fn build_test_persistence_gate(storage: Arc<Storage>) -> Arc<PersistenceGate> {
+    let preset_storage = default_test_preset_storage();
+    let preset_store = Arc::new(PresetStore::new(preset_storage));
+    Arc::new(PersistenceGate::new(storage, preset_store))
+}
+
+pub fn make_test_pipeline_with_backends(
+    storage: Arc<Storage>,
+    recorder: Arc<LlmCallRecorder>,
+    agent_registry: AgentRegistry,
+) -> ActionPipeline {
+    let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
+    let settings = Arc::new(RwLock::new(AppSettings::default()));
+    ActionPipeline::with_backends(recorder, agent_registry, persistence_gate, settings)
+}
+
+pub fn make_test_pipeline_with_mock_quantifier(
+    storage: Arc<Storage>,
+    recorder: Arc<LlmCallRecorder>,
+    quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+) -> ActionPipeline {
+    let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
+    let settings = Arc::new(RwLock::new(AppSettings::default()));
+    ActionPipeline::with_mock_quantifier(recorder, quantifier_provider, persistence_gate, settings)
+}
+
 #[cfg(feature = "testing")]
 pub fn build_test_service(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
-    game_service: Arc<GameService>,
+    pipeline: ActionPipeline,
 ) -> Result<Arc<DefaultApplicationService>> {
     Ok(build_app_graph_for_tests(
         Arc::new(RwLock::new(AppSettings::default())),
         storage,
         preset_storage,
-        Some(game_service),
+        Some(pipeline),
     )?
     .application_service)
 }
@@ -53,13 +81,13 @@ pub fn build_test_service(
 pub fn build_test_service_with_pg(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
-    game_service: Arc<GameService>,
+    pipeline: ActionPipeline,
 ) -> Result<(Arc<DefaultApplicationService>, Arc<PersistenceGate>)> {
     let wired = build_app_graph_for_tests(
         Arc::new(RwLock::new(AppSettings::default())),
         storage,
         preset_storage,
-        Some(game_service),
+        Some(pipeline),
     )?;
     Ok((wired.application_service, wired.persistence_gate))
 }
@@ -69,10 +97,10 @@ pub fn build_test_service_with_settings(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
     settings: Arc<RwLock<AppSettings>>,
-    game_service: Arc<GameService>,
+    pipeline: ActionPipeline,
 ) -> Result<Arc<DefaultApplicationService>> {
     Ok(
-        build_app_graph_for_tests(settings, storage, preset_storage, Some(game_service))?
+        build_app_graph_for_tests(settings, storage, preset_storage, Some(pipeline))?
             .application_service,
     )
 }

@@ -98,39 +98,36 @@ Use `MockBackend::default()` for the deterministic default response. Use `MockBa
 
 ## Pattern 5 — Application service-layer
 
-**Purpose.** Test an application service method (`execute_action`, `commit_trigger_narration`, query handlers, etc.) end-to-end through the `GameService` seam. The service is the system under test; the LLM is mocked.
+**Purpose.** Test an application service method (`execute_action`, `commit_trigger_narration`, query handlers, etc.) end-to-end through the pipeline-override seam. The service is the system under test; the LLM is mocked.
 
 **The standard.**
 
 ```rust
 use std::sync::Arc;
 use crate::test_support::{TestAppBuilder, TestDataBuilder, TestStoredTriggerContext};
-use crate::test_support::{make_test_recorder};
+use crate::test_support::{make_test_pipeline_with_mock_quantifier, make_test_recorder};
 use crate::adapters::driven::llm::providers::MockBackend;
-
-fn make_test_service(
-    narrator_recorder: Arc<LlmCallRecorder>,
-    quantifier_provider: Arc<dyn LlmProvider>,
-) -> GameService {
-    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let registry = AgentRegistry::with_agent(Box::new(agent));
-    GameService::with_backends(narrator_recorder, registry)
-}
 
 #[test]
 fn test_<method>_<expected_outcome>() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier_provider = Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>;
-    let service = make_test_service(narrator_recorder, quantifier_provider);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        quantifier_provider,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service))
+        .pipeline(pipeline)
         .build_service();
 
     <call app.<method>(<args>)>;
-    <assert final_state via app.load_or_fresh() or service observable>;
+    <assert final_state via app.persistence_gate.load_or_fresh() or service observable>;
 }
 ```
+
+The override supplies recorder / assembler / agent registry; `build_app_graph_for_tests` rebinds the pipeline's persistence and settings to the app graph, so the pipeline and the seeded storage always agree.
 
 The service method under test is invoked directly on the built `app` (e.g., `app.process_action(input)` or `app.execute_action(input)`). To exercise the public `process_action` API path end-to-end against real SQLite, use Pattern 1 (`SqliteTestAppBuilder`) and place the test under `tests/integration/application/`.
 
@@ -182,66 +179,7 @@ fn test_<renderer>_escapes_hostile_input() {
 }
 ```
 
-## Pattern 8 — Concurrency invariant
-
-**Purpose.** Test an invariant between two states that must hold even under concurrent access (typically the `is_generating` cached atomic vs. the persisted `GenerationStatus`). The invariant is the system under test; concurrency is how you stress it.
-
-**The standard.**
-
-```rust
-use std::sync::atomic::Ordering;
-use std::sync::{Arc, Barrier};
-use tokio::sync::Notify;
-
-#[tokio::test]
-async fn test_<invariant>_<expected_outcome>() {
-    let app = TestAppBuilder::default_test()
-        .with_data(TestDataBuilder::default_test().build())
-        .game_service(<mock service>)
-        .build_service();
-
-    let barrier = Arc::new(Barrier::new(2));
-
-    let task1 = {
-        let barrier = barrier.clone();
-        let app = app.clone();
-        tokio::spawn(async move {
-            barrier.wait();
-            app.is_generating().store(true, Ordering::SeqCst);
-            barrier.wait();
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            app.is_generating().store(false, Ordering::SeqCst);
-        })
-    };
-
-    barrier.wait();
-    let result = wait_for_condition(
-        Duration::from_secs(5),
-        Duration::from_millis(25),
-        || app.is_generating().load(Ordering::SeqCst),
-    ).await;
-
-    task1.await.unwrap();
-    <assert invariant holds>;
-}
-
-async fn wait_for_condition(
-    timeout: Duration,
-    interval: Duration,
-    predicate: impl Fn() -> bool,
-) -> bool {
-    let start = std::time::Instant::now();
-    while start.elapsed() < timeout {
-        if predicate() { return true; }
-        tokio::time::sleep(interval).await;
-    }
-    false
-}
-```
-
-The `wait_for_condition` helper is **file-local** in `src/application/application_service_tests.rs` (within the `is_generating` invariant section) — single-site helper, kept local to the test that needs it.
-
-## Pattern 9 — Property-based (proptest!)
+## Pattern 8 — Property-based (proptest!)
 
 **Purpose.** Cover the input-space of a transformation function (`handle_movement`, `apply_npc_events`, `commit_trigger_narration`, etc.) where specific inputs wouldn't cover all relevant cases. The state-consistency invariant is the system under test.
 

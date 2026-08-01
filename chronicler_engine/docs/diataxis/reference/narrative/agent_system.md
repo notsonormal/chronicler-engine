@@ -7,7 +7,7 @@ title: Agent System
 
 The engine has an agent architecture. An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in `AgentRegistry`. The pipeline iterates registered agents at each `ExecutionPhase` and dispatches them in registration order. The engine works with **zero agents** — all agent execution is optional.
 
-The single agent in production today is `QuantifierAgent` (post-generation, scene analysis). It detects NPCs that appeared in the narration and any movement destination, returning a `StatePatch` that `GameService` translates back into a `QuantifierResult` for the action pipeline. The body of this document covers the quantifier prompt shape.
+The single agent in production today is `QuantifierAgent` (post-generation, scene analysis). It detects NPCs that appeared in the narration and any movement destination, returning a `StatePatch` that the pipeline translates back into a `QuantifierResult`. The body of this document covers the quantifier prompt shape.
 
 ## Trait Contract
 
@@ -39,7 +39,7 @@ The pipeline shape today:
 An agent's `execute` returns one of three `AgentResult` variants:
 
 - **`PromptDirective(String)`** — inject text into a future prompt. Not constructed by any registered agent today.
-- **`StatePatch(StatePatch)`** — propose a state mutation. `QuantifierAgent` returns this with the NPCs it detected in the narration and any movement destination. `GameService` translates the patch back into a `QuantifierResult` for the action pipeline.
+- **`StatePatch(StatePatch)`** — propose a state mutation. `QuantifierAgent` returns this with the NPCs it detected in the narration and any movement destination. The pipeline translates the patch back into a `QuantifierResult`.
 - **`NoOp`** — the agent ran but has nothing to report.
 
 `StatePatch` carries a `confidence` field rated `High`, `Medium`, or `Low`. This rating reflects how certain the agent's LLM call is about its detected entities.

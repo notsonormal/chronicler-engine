@@ -7,7 +7,6 @@ use crate::{
     sqlite_test_app_builder::SqliteTestAppBuilder,
 };
 use chronicler_engine::test_support::TestData;
-use chronicler_engine::application::GameService;
 use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -313,7 +312,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
     };
 
     let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
+        .pipeline_fn(move |storage, pg, settings| {
             let pre_event = GameStateSnapshot::from_game_state(&state_for_closure);
             let pre_event_id = storage.save_snapshot(&pre_event).unwrap();
 
@@ -332,10 +331,10 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
                 let _ = storage.insert_message(&msg);
             }
 
-            Arc::new(GameService::with_mock_quantifier(
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 crate::make_test_recorder(Arc::new(MockBackend::default())),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();

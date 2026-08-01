@@ -142,7 +142,7 @@ pub fn spawn_arrival_task_if_needed(
             (preset, response_length, max_context_tokens, max_tokens)
         });
 
-    let recorder = Arc::clone(&app.game_service().llm_recorder);
+    let recorder = Arc::clone(app.pipeline().recorder());
 
     let task_ctx = crate::application::arrival_service::ArrivalTaskContext {
         app: Arc::clone(app),

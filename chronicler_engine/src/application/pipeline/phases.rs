@@ -128,8 +128,8 @@ impl<'a> PipelineRun<'a> {
             &preset,
             &inputs.world.global_rules,
             Some(&response_length),
-            self.pipeline.assembler.max_context_tokens,
-            self.pipeline.assembler.max_tokens,
+            self.pipeline.prompt_assembler.max_context_tokens,
+            self.pipeline.prompt_assembler.max_tokens,
         ) {
             Ok(a) => a,
             Err(e) => return self.error_return(state, e.llm_error_string()),
@@ -388,7 +388,7 @@ impl<'a> PipelineRun<'a> {
 
         let assembled = self
             .pipeline
-            .assembler
+            .prompt_assembler
             .assemble(
                 &trigger_ctx,
                 &preset,

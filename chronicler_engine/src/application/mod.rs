@@ -6,7 +6,6 @@ pub mod application_service;
 pub mod arrival_service;
 pub mod debug;
 pub mod errors;
-pub mod game_service;
 pub mod games;
 pub mod generation;
 pub mod llm_message;
@@ -20,7 +19,6 @@ pub mod text_check_service;
 pub use application_service::{
     ApplicationError, DebugStateView, DefaultApplicationService, ProcessActionResult,
 };
-pub use game_service::GameService;
 pub use games::{GameCatalogue, GameViewQuery};
 pub use generation::{GenerationGate, GenerationGuard};
 pub(crate) use pipeline::spawn::spawn_pipeline_task;

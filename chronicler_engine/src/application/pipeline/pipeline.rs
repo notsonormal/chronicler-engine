@@ -16,37 +16,111 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 
 use crate::application::prompting::PromptAssembler;
+use crate::application::prompting::token_budget::MAX_CONTEXT_TOKENS;
 use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::persistence_gate::PersistenceGate;
+use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::EngineError;
 
 #[derive(Clone)]
 pub struct ActionPipeline {
-    pub(super) assembler: Arc<PromptAssembler>,
+    pub(super) prompt_assembler: Arc<PromptAssembler>,
     pub(super) recorder: Arc<LlmCallRecorder>,
-    pub(super) agents: Arc<AgentRegistry>,
+    pub(super) agent_registry: Arc<AgentRegistry>,
     pub(super) persistence: Arc<PersistenceGate>,
     pub(super) settings: Arc<RwLock<AppSettings>>,
 }
 
 impl ActionPipeline {
-    pub fn new(
-        assembler: Arc<PromptAssembler>,
+    pub fn with_storage(
         recorder: Arc<LlmCallRecorder>,
-        agents: Arc<AgentRegistry>,
+        agent_registry: AgentRegistry,
+        persistence: Arc<PersistenceGate>,
+        settings: Arc<RwLock<AppSettings>>,
+    ) -> Self {
+        let (max_context_tokens, max_tokens) = {
+            let guard = settings.read().unwrap_or_else(|e| e.into_inner());
+            let conn = guard.narration_connection();
+            (conn.resolve_max_context_tokens(), conn.max_tokens)
+        };
+        let mut assembler = PromptAssembler::new(max_context_tokens);
+        if let Some(max) = max_tokens {
+            assembler = assembler.with_max_tokens(max);
+        }
+        tracing::info!(
+            "ActionPipeline: backend={}, model={}",
+            recorder.provider().name(),
+            recorder.provider().model()
+        );
+        Self {
+            prompt_assembler: Arc::new(assembler),
+            recorder,
+            agent_registry: Arc::new(agent_registry),
+            persistence,
+            settings,
+        }
+    }
+
+    pub fn with_backends(
+        recorder: Arc<LlmCallRecorder>,
+        agent_registry: AgentRegistry,
         persistence: Arc<PersistenceGate>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         Self {
-            assembler,
+            prompt_assembler: Arc::new(PromptAssembler::new(MAX_CONTEXT_TOKENS)),
             recorder,
-            agents,
+            agent_registry: Arc::new(agent_registry),
             persistence,
             settings,
         }
+    }
+
+    pub fn with_mock_quantifier(
+        recorder: Arc<LlmCallRecorder>,
+        quantifier_provider: Arc<dyn LlmProvider>,
+        persistence: Arc<PersistenceGate>,
+        settings: Arc<RwLock<AppSettings>>,
+    ) -> Self {
+        let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
+        let registry = AgentRegistry::with_agent(Box::new(agent));
+        Self {
+            prompt_assembler: Arc::new(PromptAssembler::new(MAX_CONTEXT_TOKENS)),
+            recorder,
+            agent_registry: Arc::new(registry),
+            persistence,
+            settings,
+        }
+    }
+
+    pub fn backend_info(&self) -> (&str, &str) {
+        (
+            self.recorder.provider().name(),
+            self.recorder.provider().model(),
+        )
+    }
+
+    pub fn recorder(&self) -> &Arc<LlmCallRecorder> {
+        &self.recorder
+    }
+
+    pub fn prompt_assembler(&self) -> &Arc<PromptAssembler> {
+        &self.prompt_assembler
+    }
+
+    /// Aligns injected pipeline with seeded application state.
+    pub fn rebind_for_test(
+        mut self,
+        persistence: Arc<PersistenceGate>,
+        settings: Arc<RwLock<AppSettings>>,
+    ) -> Self {
+        self.persistence = persistence;
+        self.settings = settings;
+        self
     }
 
     pub fn run_from_input(&self, mut state: GameState, input: String) -> Result<(), PhaseError> {
@@ -241,7 +315,7 @@ impl ActionPipeline {
         };
 
         let patches: Vec<_> = self
-            .agents
+            .agent_registry
             .agents_for_phase(ExecutionPhase::PostGeneration)
             .filter_map(|agent| match agent.execute(&agent_ctx) {
                 Ok(AgentResult::StatePatch(patch)) => Some(patch),

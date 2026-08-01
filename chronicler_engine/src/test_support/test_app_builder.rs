@@ -7,7 +7,7 @@ use axum::Router;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::game_service::GameService;
+use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::persistence_gate::PersistenceGate;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::settings::AppSettings;
@@ -28,7 +28,7 @@ pub struct TestAppBuilder {
     generation: Option<(GenerationStatus, GenerationPhase)>,
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
-    game_service: Option<Arc<GameService>>,
+    pipeline: Option<ActionPipeline>,
     skip_seeding: bool,
     is_generating: bool,
 }
@@ -44,7 +44,7 @@ impl TestAppBuilder {
             generation: None,
             settings: AppSettings::default(),
             storage: None,
-            game_service: None,
+            pipeline: None,
             skip_seeding: false,
             is_generating: false,
         }
@@ -92,8 +92,8 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn game_service(mut self, service: Arc<GameService>) -> Self {
-        self.game_service = Some(service);
+    pub fn pipeline(mut self, pipeline: ActionPipeline) -> Self {
+        self.pipeline = Some(pipeline);
         self
     }
 
@@ -197,13 +197,13 @@ impl TestAppBuilder {
 
         let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
         let preset_storage = crate::test_support::default_test_preset_storage();
-        let game_service_override = self.game_service.take();
+        let pipeline_override = self.pipeline.take();
 
         let wired = build_app_graph_for_tests(
             Arc::clone(&settings_arc),
             Arc::clone(&storage),
             Arc::clone(&preset_storage),
-            game_service_override,
+            pipeline_override,
         )
         .expect("build_app_graph_for_tests should succeed");
 

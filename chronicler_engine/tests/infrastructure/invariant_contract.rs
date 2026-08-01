@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use chronicler_engine::application::pipeline::PhaseError;
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::game_state::{FreeActionContext, GameState};
 
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
@@ -220,12 +219,14 @@ fn test_inv004_cancellable_at_boundaries() {
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(100));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
     let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .game_service_fn(move |_storage| {
+        .pipeline_fn(move |_storage, _pg, _settings| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            Arc::new(GameService::with_backends(
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
                 recorder,
                 AgentRegistry::default(),
-            ))
+                Arc::clone(_pg),
+                Arc::clone(_settings),
+            )
         })
         .build_with_state()
         .unwrap();
@@ -456,7 +457,6 @@ async fn test_p4_concurrent_happy_path() {
     use chronicler_engine::adapters::driven::llm::providers::MockBackend;
     use chronicler_engine::application::agents::registry::AgentRegistry;
     use chronicler_engine::application::errors::ProcessActionResult;
-    use chronicler_engine::application::game_service::GameService;
 
     let mock_backend_raw = Arc::new(
         MockBackend::default()
@@ -465,12 +465,14 @@ async fn test_p4_concurrent_happy_path() {
     );
     let backend_for_closure = Arc::clone(&mock_backend_raw);
     let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .game_service_fn(move |_storage| {
+        .pipeline_fn(move |_storage, _pg, _settings| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            Arc::new(GameService::with_backends(
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
                 recorder,
                 AgentRegistry::default(),
-            ))
+                Arc::clone(_pg),
+                Arc::clone(_settings),
+            )
         })
         .build_with_state()
         .unwrap();
@@ -580,7 +582,6 @@ async fn test_p4_concurrent_triple_overlap() {
     use chronicler_engine::adapters::driven::llm::providers::MockBackend;
     use chronicler_engine::application::agents::registry::AgentRegistry;
     use chronicler_engine::application::errors::ProcessActionResult;
-    use chronicler_engine::application::game_service::GameService;
 
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(300).with_narrations(vec![
         "GEN_A_OUTPUT".to_string(),
@@ -589,12 +590,14 @@ async fn test_p4_concurrent_triple_overlap() {
     ]));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
     let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .game_service_fn(move |_storage| {
+        .pipeline_fn(move |_storage, _pg, _settings| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            Arc::new(GameService::with_backends(
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
                 recorder,
                 AgentRegistry::default(),
-            ))
+                Arc::clone(_pg),
+                Arc::clone(_settings),
+            )
         })
         .build_with_state()
         .unwrap();

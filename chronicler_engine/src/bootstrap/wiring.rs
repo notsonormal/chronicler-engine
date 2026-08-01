@@ -14,7 +14,6 @@ use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::games::catalogue::GameCatalogue;
-use crate::application::game_service::GameService;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
@@ -50,7 +49,6 @@ pub struct WiredApp {
     pub storage: Arc<Storage>,
     pub preset_storage: Arc<Storage>,
     pub settings: Arc<RwLock<AppSettings>>,
-    pub game_service: Arc<GameService>,
     pub persistence_gate: Arc<PersistenceGate>,
     pub generation_gate: GenerationGate,
     pub game_catalogue: GameCatalogue,
@@ -60,20 +58,19 @@ pub struct WiredApp {
     pub text_check_service: Arc<TextCheckService>,
 }
 
-struct AppCollaborators {
-    pub(crate) persistence_gate: Arc<PersistenceGate>,
-    pub(crate) generation_gate: GenerationGate,
-    pub(crate) game_catalogue: GameCatalogue,
-    pub(crate) game_view_query: GameViewQuery,
-    pub(crate) pipeline: ActionPipeline,
-}
-
-fn build_app_collaborators(
+fn build_collaborators(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
     settings: Arc<RwLock<AppSettings>>,
-    game_service: &Arc<GameService>,
-) -> AppCollaborators {
+    recorder: Arc<LlmCallRecorder>,
+    agent_registry: AgentRegistry,
+) -> (
+    Arc<PersistenceGate>,
+    GenerationGate,
+    GameCatalogue,
+    GameViewQuery,
+    ActionPipeline,
+) {
     let preset_store = Arc::new(PresetStore::new(preset_storage));
     let persistence_gate = Arc::new(PersistenceGate::new(
         Arc::clone(&storage),
@@ -82,35 +79,36 @@ fn build_app_collaborators(
     let generation_gate = GenerationGate::new();
     let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
     let game_view_query = GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
-    let pipeline = ActionPipeline::new(
-        Arc::clone(&game_service.prompt_assembler),
-        Arc::clone(&game_service.llm_recorder),
-        Arc::clone(&game_service.agent_registry),
+    let pipeline = ActionPipeline::with_storage(
+        recorder,
+        agent_registry,
         Arc::clone(&persistence_gate),
         Arc::clone(&settings),
     );
-    AppCollaborators {
+    (
         persistence_gate,
         generation_gate,
         game_catalogue,
         game_view_query,
         pipeline,
-    }
+    )
 }
 
 fn wire_application_service(
-    collaborators: AppCollaborators,
+    persistence_gate: Arc<PersistenceGate>,
+    generation_gate: GenerationGate,
+    game_catalogue: GameCatalogue,
+    game_view_query: GameViewQuery,
     settings: Arc<RwLock<AppSettings>>,
-    game_service: Arc<GameService>,
+    pipeline: ActionPipeline,
 ) -> Arc<DefaultApplicationService> {
     Arc::new(DefaultApplicationService::new(
-        Arc::clone(&collaborators.persistence_gate),
-        collaborators.generation_gate.clone(),
-        collaborators.game_catalogue.clone(),
-        collaborators.game_view_query.clone(),
+        persistence_gate,
+        generation_gate,
+        game_catalogue,
+        game_view_query,
         Arc::clone(&settings),
-        Arc::clone(&game_service),
-        collaborators.pipeline.clone(),
+        pipeline,
         CancellationToken::new(),
     ))
 }
@@ -119,35 +117,41 @@ fn build_wired_app(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
     settings: Arc<RwLock<AppSettings>>,
-    game_service: Arc<GameService>,
+    recorder: Arc<LlmCallRecorder>,
+    agent_registry: AgentRegistry,
     text_check_service: Arc<TextCheckService>,
 ) -> Result<WiredApp> {
-    let collaborators = build_app_collaborators(
-        Arc::clone(&storage),
-        Arc::clone(&preset_storage),
-        Arc::clone(&settings),
-        &game_service,
-    );
+    let (persistence_gate, generation_gate, game_catalogue, game_view_query, pipeline) =
+        build_collaborators(
+            Arc::clone(&storage),
+            Arc::clone(&preset_storage),
+            Arc::clone(&settings),
+            recorder,
+            agent_registry,
+        );
 
     // Boot heal: a crash/restart may have left the current game persisted as Generating.
     let current_game_id = storage.current_game_id();
-    let mut boot_state = collaborators.persistence_gate.load_or_fresh();
+    let mut boot_state = persistence_gate.load_or_fresh();
     let pre_heal = boot_state.narrative.input_buffer.status.clone();
-    collaborators
-        .generation_gate
-        .heal_stale(current_game_id, &mut boot_state);
+    generation_gate.heal_stale(current_game_id, &mut boot_state);
     if boot_state.narrative.input_buffer.status != pre_heal {
-        let _ = collaborators.persistence_gate.save_state(&boot_state);
+        let _ = persistence_gate.save_state(&boot_state);
     }
 
-    let application_service =
-        wire_application_service(collaborators, Arc::clone(&settings), game_service);
+    let application_service = wire_application_service(
+        persistence_gate,
+        generation_gate.clone(),
+        game_catalogue.clone(),
+        game_view_query.clone(),
+        Arc::clone(&settings),
+        pipeline.clone(),
+    );
 
     Ok(WiredApp {
         storage,
         preset_storage,
         settings,
-        game_service: Arc::clone(&application_service.game_service),
         persistence_gate: Arc::clone(&application_service.persistence_gate),
         generation_gate: application_service.generation_gate.clone(),
         game_catalogue: application_service.game_catalogue.clone(),
@@ -163,7 +167,7 @@ pub fn build_app_graph(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
 ) -> Result<WiredApp> {
-    let (game_service, text_check_service) = {
+    let (recorder, agent_registry, text_check_service) = {
         let guard = settings.read().unwrap_or_else(|e| e.into_inner());
         let narration_recorder = recorder_for(&guard.narration_connection(), Arc::clone(&storage))?;
         let quantifier_recorder =
@@ -176,21 +180,17 @@ pub fn build_app_graph(
         )
         .unwrap_or_default();
         drop(quantifier_recorder);
-        let game_service = Arc::new(GameService::with_storage(
-            narration_recorder,
-            registry,
-            Arc::clone(&settings),
-        ));
         let checker = Arc::new(HarperTextChecker::new(&guard.text_check.ignored_words));
         let text_check_service = Arc::new(TextCheckService::new(checker));
-        (game_service, text_check_service)
+        (narration_recorder, registry, text_check_service)
     };
 
     build_wired_app(
         storage,
         preset_storage,
         settings,
-        game_service,
+        recorder,
+        agent_registry,
         text_check_service,
     )
 }
@@ -200,43 +200,60 @@ pub fn build_app_graph_for_tests(
     settings: Arc<RwLock<AppSettings>>,
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
-    game_service_override: Option<Arc<GameService>>,
+    pipeline_override: Option<ActionPipeline>,
 ) -> Result<WiredApp> {
-    let (game_service, text_check_service) = {
+    let (recorder, agent_registry, text_check_service) = {
         let guard = settings.read().unwrap_or_else(|e| e.into_inner());
         let checker = Arc::new(HarperTextChecker::new(&guard.text_check.ignored_words));
         let text_check_service = Arc::new(TextCheckService::new(checker));
 
-        let game_service = if let Some(override_) = game_service_override {
-            override_
+        let mock_provider: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
+        let recorder = crate::test_support::make_test_recorder_with_storage(
+            Arc::clone(&mock_provider),
+            Arc::clone(&storage),
+        );
+        // Build placeholder collaborators; a pipeline override replaces them below.
+        let registry = if pipeline_override.is_some() {
+            AgentRegistry::default()
         } else {
-            let mock_provider: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
-            let recorder = crate::test_support::make_test_recorder_with_storage(
-                Arc::clone(&mock_provider),
-                Arc::clone(&storage),
-            );
-            let registry = AgentRegistry::from_configs_with_storage(
+            AgentRegistry::from_configs_with_storage(
                 &guard.agents,
                 Arc::clone(&recorder),
                 Some(Arc::clone(&preset_storage)),
                 Arc::clone(&settings),
             )
-            .unwrap_or_default();
-            drop(mock_provider);
-            Arc::new(GameService::with_storage(
-                recorder,
-                registry,
-                Arc::clone(&settings),
-            ))
+            .unwrap_or_default()
         };
-        (game_service, text_check_service)
+        drop(mock_provider);
+        (recorder, registry, text_check_service)
     };
 
-    build_wired_app(
+    let mut wired = build_wired_app(
         storage,
         preset_storage,
         settings,
-        game_service,
+        recorder,
+        agent_registry,
         text_check_service,
-    )
+    )?;
+
+    if let Some(pipeline) = pipeline_override {
+        // Override backends must use this graph's persistence and live settings.
+        let pipeline = pipeline.rebind_for_test(
+            Arc::clone(&wired.persistence_gate),
+            Arc::clone(&wired.settings),
+        );
+        wired.pipeline = pipeline.clone();
+        wired.application_service = Arc::new(DefaultApplicationService::new(
+            Arc::clone(&wired.persistence_gate),
+            wired.generation_gate.clone(),
+            wired.game_catalogue.clone(),
+            wired.game_view_query.clone(),
+            Arc::clone(&wired.settings),
+            pipeline,
+            CancellationToken::new(),
+        ));
+    }
+
+    Ok(wired)
 }

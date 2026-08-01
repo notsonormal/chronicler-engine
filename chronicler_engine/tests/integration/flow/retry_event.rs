@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::{
@@ -73,12 +72,14 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         ]));
 
     let (app2, pg2) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-                quantifier.clone(),
-            ))
-        })
+        .pipeline_fn(move |storage, pg, settings| {
+    chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
+        make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+        quantifier.clone(),
+        Arc::clone(pg),
+        Arc::clone(settings),
+    )
+})
         .build_with_state()
         .unwrap();
 
@@ -130,12 +131,14 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         ]));
 
     let (app2, pg2) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
-            Arc::new(GameService::with_mock_quantifier(
-                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-                quantifier.clone(),
-            ))
-        })
+        .pipeline_fn(move |storage, pg, settings| {
+    chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
+        make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+        quantifier.clone(),
+        Arc::clone(pg),
+        Arc::clone(settings),
+    )
+})
         .build_with_state()
         .unwrap();
 
@@ -278,11 +281,11 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
     ])));
 
     let (app2, pg2) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |_storage| {
-            Arc::new(GameService::with_mock_quantifier(
+        .pipeline_fn(move |_storage, pg, settings| {
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 llm_backend.clone(),
                 quantifier.clone(),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();

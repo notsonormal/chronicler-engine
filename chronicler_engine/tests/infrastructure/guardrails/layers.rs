@@ -3,7 +3,6 @@
 use crate::Violation;
 
 const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
-    "application/game_service.rs",
     "application/application_service.rs",
     "application/agents/registry.rs",
     "application/agents/quantifier/agent.rs",

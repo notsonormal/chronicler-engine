@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::application::pipeline::phase_error::PhaseError;
 use crate::test_support::make_test_recorder;
-use crate::application::game_service::GameService;
 use crate::application::agents::registry::AgentRegistry;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;
@@ -13,7 +12,7 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
-use crate::test_support::{TestAppBuilder, TestDataBuilder};
+use crate::test_support::{make_test_pipeline_with_backends, TestAppBuilder, TestDataBuilder};
 use crate::test_support::fixtures::{TestGameState, TestMap, TestNpc};
 
 fn make_test_state() -> GameState {
@@ -25,9 +24,13 @@ fn test_pipeline_runs_to_completion() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -50,9 +53,13 @@ fn test_pipeline_saves_narration_to_history() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -72,9 +79,13 @@ fn test_pipeline_returns_error_on_narration_failure() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -102,9 +113,13 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -150,9 +165,13 @@ fn test_pipeline_with_custom_quantifier_result() {
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -178,11 +197,15 @@ fn test_trigger_continuation_save_post_trigger_error() {
     );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = crate::test_support::build_test_service(
         failing,
         Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        Arc::new(service),
+        service,
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
@@ -245,9 +268,13 @@ fn test_pipeline_trigger_happy_path() {
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["The NPC greets you warmly.".to_string()]),
     ));
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -310,9 +337,13 @@ fn test_pipeline_trigger_empty_continuation() {
     let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -371,9 +402,13 @@ fn test_pipeline_trigger_complete_failure() {
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -400,9 +435,13 @@ fn test_pipeline_saves_narration_before_quantifier() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -435,9 +474,13 @@ fn test_pipeline_no_duplicate_narration() {
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -469,9 +512,13 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -502,9 +549,13 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -531,9 +582,13 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::with_data(data)
-        .game_service(Arc::new(service.clone()))
+        .pipeline(service.clone())
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();
@@ -722,11 +777,15 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     };
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
     let app = TestAppBuilder::default_test()
         .storage(Arc::new(storage))
         .skip_seeding(true)
-        .game_service(Arc::new(service))
+        .pipeline(service)
         .build_service();
 
     let state = app.persistence_gate.load_or_fresh();

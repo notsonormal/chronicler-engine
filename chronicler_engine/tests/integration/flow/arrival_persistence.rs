@@ -3,14 +3,14 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::arrival_service::ArrivalTaskContext;
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::domain::model::character::NpcCard;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    make_test_recorder_with_storage, seed_test_world_into_storage, TestDataBuilder,
+    make_test_pipeline_with_mock_quantifier, make_test_recorder_with_storage,
+    seed_test_world_into_storage, TestDataBuilder,
 };
 
 use crate::fixtures::create_minimal_test_state;
@@ -39,16 +39,16 @@ fn test_arrival_narration_survives_reload() {
         .build();
     let llm_for_closure = Arc::clone(&llm);
     let (app, pg) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |storage| {
+        .pipeline_fn(move |storage, pg, settings| {
             let recorder = make_test_recorder_with_storage(
                 Arc::clone(&llm_for_closure)
                     as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
                 Arc::clone(storage),
             );
-            Arc::new(GameService::with_mock_quantifier(
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 Arc::clone(&recorder),
                 Arc::new(MockBackend::default()),
-            ))
+                Arc::clone(pg), Arc::clone(settings))
         })
         .build_with_state()
         .unwrap();
@@ -159,15 +159,16 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
     let llm: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
     let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(&failing_storage));
-    let game_service = Arc::new(GameService::with_mock_quantifier(
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
         Arc::clone(&recorder),
         Arc::new(MockBackend::default()),
-    ));
+    );
 
     let (app, pg) = chronicler_engine::test_support::build_test_service_with_pg(
         Arc::clone(&failing_storage),
         Arc::new(preset_storage),
-        Arc::clone(&game_service),
+        pipeline,
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
 
@@ -240,15 +241,16 @@ fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
     let llm: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
     let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(&failing_storage));
-    let game_service = Arc::new(GameService::with_mock_quantifier(
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
         Arc::clone(&recorder),
         Arc::new(MockBackend::default()),
-    ));
+    );
 
     let (app, pg) = chronicler_engine::test_support::build_test_service_with_pg(
         Arc::clone(&failing_storage),
         Arc::new(preset_storage),
-        Arc::clone(&game_service),
+        pipeline,
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
 

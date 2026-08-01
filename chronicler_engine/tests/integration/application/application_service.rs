@@ -1,8 +1,7 @@
 //! Integration tests for DefaultApplicationService
-use std::sync::Arc;
 
 use chronicler_engine::application::application_service::ProcessActionResult;
-use chronicler_engine::application::game_service::GameService;
+use chronicler_engine::application::pipeline::pipeline::ActionPipeline;
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -13,20 +12,20 @@ use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 use crate::application_ext::PipelineHelpers;
 use crate::storage_ext::TestWorldFixture;
 
-fn create_game_service() -> Arc<GameService> {
-    Arc::new(crate::working_service())
+fn create_pipeline() -> ActionPipeline {
+    crate::working_pipeline()
 }
 
 #[test]
 fn test_create_game_integration() {
     let storage = create_storage(1);
     storage.seed_test_world_fixture();
-    let game_service = create_game_service();
+    let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(game_service)
+        .pipeline(pipeline)
         .skip_seeding(true)
         .build_service();
 
@@ -43,12 +42,12 @@ fn test_create_game_integration() {
 fn test_switch_game_integration() {
     let storage = create_storage(1);
     storage.seed_test_world_fixture();
-    let game_service = create_game_service();
+    let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(game_service)
+        .pipeline(pipeline)
         .skip_seeding(true)
         .build_service();
 
@@ -70,12 +69,12 @@ fn test_switch_game_integration() {
 fn test_delete_game_integration() {
     let storage = create_storage(1);
     storage.seed_test_world_fixture();
-    let game_service = create_game_service();
+    let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(game_service)
+        .pipeline(pipeline)
         .skip_seeding(true)
         .build_service();
 
@@ -96,12 +95,12 @@ fn test_delete_game_integration() {
 fn test_list_games_integration() {
     let storage = create_storage(1);
     storage.seed_test_world_fixture();
-    let game_service = create_game_service();
+    let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(game_service)
+        .pipeline(pipeline)
         .skip_seeding(true)
         .build_service();
 
@@ -117,7 +116,7 @@ fn test_get_generating_status() {
     let storage = create_storage(1);
     let app_service = TestAppBuilder::default_test()
         .storage(storage)
-        .game_service(create_game_service())
+        .pipeline(create_pipeline())
         .skip_seeding(true)
         .build_service();
 
@@ -128,10 +127,10 @@ fn test_get_generating_status() {
 
 #[tokio::test]
 async fn test_process_action_persists_input_message() {
-    let game_service = create_game_service();
+    let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let (app_service, pg_app_service) = SqliteTestAppBuilder::with_data(data)
-        .game_service_fn(move |_storage| Arc::clone(&game_service))
+        .pipeline_fn(move |_storage, _pg, _settings| pipeline.clone())
         .build_with_state()
         .unwrap();
 
@@ -162,11 +161,11 @@ async fn test_process_action_persists_input_message() {
 
 #[tokio::test]
 async fn test_process_action_self_heals_stale_generating_status() {
-    let game_service = create_game_service();
+    let pipeline = create_pipeline();
     let data = TestDataBuilder::default_test().build();
     let (app_service, pg_app_service) = SqliteTestAppBuilder::with_data(data)
         .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
-        .game_service_fn(move |_storage| Arc::clone(&game_service))
+        .pipeline_fn(move |_storage, _pg, _settings| pipeline.clone())
         .build_with_state()
         .unwrap();
 

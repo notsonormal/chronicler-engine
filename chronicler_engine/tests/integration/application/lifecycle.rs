@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::test_support::make_test_pipeline_with_backends;
 use chronicler_engine::{TestAppBuilder, TestDataBuilder};
 
 use crate::fixtures::{create_test_world_with_scenario};
@@ -19,13 +19,14 @@ fn create_app_service() -> Arc<DefaultApplicationService> {
 }
 
 fn create_app_service_with_storage(storage: Arc<Storage>) -> Arc<DefaultApplicationService> {
-    let game_service = Arc::new(GameService::with_backends(
+    let pipeline = make_test_pipeline_with_backends(
+        Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         AgentRegistry::default(),
-    ));
+    );
     TestAppBuilder::default_test()
         .storage(storage)
-        .game_service(game_service)
+        .pipeline(pipeline)
         .skip_seeding(true)
         .build_service()
 }
@@ -40,10 +41,11 @@ fn test_create_game_with_scenario() {
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -90,10 +92,11 @@ fn test_reset_creates_scenario_message() {
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -131,10 +134,11 @@ fn test_switch_game_loads_correct_state() {
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -188,10 +192,11 @@ fn test_switch_to_nonexistent_game() {
     storage.seed_test_world_fixture();
     let app_service = TestAppBuilder::default_test()
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -212,10 +217,11 @@ fn test_reset_without_existing_game() {
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -239,10 +245,11 @@ fn test_create_game_name_uniqueness() {
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -284,10 +291,11 @@ fn test_switch_game_world_mismatch() {
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -300,10 +308,11 @@ fn test_switch_game_world_mismatch() {
     let data_b = TestDataBuilder::default_test().world(world_b).build();
     let _app2 = TestAppBuilder::with_data(data_b)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -324,10 +333,11 @@ fn test_delete_game_removes() {
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -364,10 +374,11 @@ fn test_delete_game_active_rejected() {
     let world_key = data.world_key();
     let app_service = TestAppBuilder::with_data(data)
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
@@ -395,10 +406,11 @@ fn test_delete_game_nonexistent() {
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let app_service = TestAppBuilder::default_test()
         .storage(storage.clone())
-        .game_service(Arc::new(GameService::with_backends(
+        .pipeline(make_test_pipeline_with_backends(
+            Arc::new(chronicler_engine::adapters::driven::storage::Storage::new_in_memory()),
             crate::make_test_recorder(Arc::new(MockBackend::default())),
             AgentRegistry::default(),
-        )))
+        ))
         .skip_seeding(true)
         .build_service();
 
