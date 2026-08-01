@@ -182,15 +182,15 @@ pub struct TriggerMatch {
 }
 
 pub struct ActionResult {
-    pub next_state: GameState,
+    pub post_commit_state: GameState,
     pub narration: String,
     pub trigger_match: Option<TriggerMatch>,
 }
 
 impl GameState {
-    pub fn attempt_movement(mut self, destination: &str, map: &MapDef) -> Result<Self> {
+    pub fn attempt_movement(&mut self, destination: &str, map: &MapDef) -> Result<()> {
         match self.attempt_semantic_walk(map, destination) {
-            Ok(_) => Ok(self),
+            Ok(_) => Ok(()),
             Err(e) => {
                 tracing::debug!("Semantic walk failed for '{destination}': {e}");
                 let dynamic_room =
@@ -204,25 +204,24 @@ impl GameState {
                     .dynamic_rooms
                     .insert(dynamic_room.id.clone(), dynamic_room.clone());
                 self.movement.current_room_id = dynamic_room.id.clone();
-                Ok(self)
+                Ok(())
             }
         }
     }
 
     pub fn update_npc_encounters_on_room_change(
-        mut self,
+        &mut self,
         previous_room_id: &str,
         new_npc_ids: &[String],
-    ) -> Self {
+    ) {
         if previous_room_id != self.movement.current_room_id {
             for npc_id in new_npc_ids {
                 self.npc_encounter_log.set_currently_meeting(npc_id, true);
             }
         }
-        self
     }
 
-    pub fn log_movement_completion(mut self, map: &MapDef) -> Self {
+    pub fn log_movement_completion(&mut self, map: &MapDef) {
         let room = map
             .get_room_by_id(&self.movement.current_room_id)
             .or_else(|| {
@@ -233,27 +232,26 @@ impl GameState {
         if let Some(current_room) = room {
             self.narrative.pending_location = Some(current_room.name.clone());
         }
-        self
     }
 
     pub fn handle_movement(
-        self,
+        &mut self,
         destination: Option<&str>,
         new_npc_ids: &[String],
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> Result<Self> {
+    ) -> Result<()> {
         let Some(destination) = destination else {
-            return Ok(self);
+            return Ok(());
         };
 
         let previous_room_id = self.movement.current_room_id.clone();
-        let state = self.attempt_movement(destination, map.as_ref())?;
-        let state = state.update_npc_encounters_on_room_change(&previous_room_id, new_npc_ids);
-        let state = state.log_movement_completion(map.as_ref());
+        self.attempt_movement(destination, map.as_ref())?;
+        self.update_npc_encounters_on_room_change(&previous_room_id, new_npc_ids);
+        self.log_movement_completion(map.as_ref());
 
-        state.assert_state_consistency(map, npcs)?;
-        Ok(state)
+        self.assert_state_consistency(map, npcs)?;
+        Ok(())
     }
 
     pub fn apply_npc_events(
@@ -303,7 +301,7 @@ impl GameState {
     }
 
     pub fn execute_freeaction_impl(
-        &self,
+        self,
         ctx: &FreeActionContext<'_>,
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
@@ -313,7 +311,8 @@ impl GameState {
         let previous_npc_ids: Vec<String> =
             previous_room_npcs.iter().map(|n| n.id.clone()).collect();
 
-        let mut next_state = self.clone().handle_movement(
+        let mut next_state = self;
+        next_state.handle_movement(
             ctx.quantifier_result.movement.destination.as_deref(),
             &ctx.quantifier_result.npcs.npc_ids,
             map,
@@ -352,7 +351,7 @@ impl GameState {
         next_state.assert_state_consistency(map, npcs)?;
 
         Ok(ActionResult {
-            next_state,
+            post_commit_state: next_state,
             narration: ctx.narration_text.to_string(),
             trigger_match,
         })

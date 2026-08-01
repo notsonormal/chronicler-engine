@@ -168,11 +168,14 @@ fn test_inv002_state_mutation_order() {
         "INV-002: trigger should have fired (evaluated before times_met increment)"
     );
     assert_eq!(
-        result.next_state.npc_encounter_log.get_times_met(npc_id),
+        result
+            .post_commit_state
+            .npc_encounter_log
+            .get_times_met(npc_id),
         1,
         "INV-002: times_met should be 1 after NPC events are applied"
     );
-    let history = &result.next_state.narrative.history;
+    let history = &result.post_commit_state.narrative.history;
     let narration_idx = history
         .iter()
         .position(|e| e.message_type == MessageType::Narration && e.text().contains("look around"))
@@ -355,17 +358,17 @@ fn test_inv005_handle_movement_runs_before_narration() {
         .expect("execute_freeaction_impl should succeed");
 
     assert_eq!(
-        result.next_state.movement.current_room_id, target_room,
+        result.post_commit_state.movement.current_room_id, target_room,
         "INV-005: current_room_id should be updated by handle_movement before narration is logged"
     );
     assert_ne!(
-        result.next_state.movement.current_room_id, original_room,
+        result.post_commit_state.movement.current_room_id, original_room,
         "INV-005: handle_movement should have changed the room"
     );
 }
 #[test]
 fn test_inv007_dynamic_room_creation_on_invalid_destination() {
-    let state = create_test_state();
+    let mut state = create_test_state();
     let invalid_destination = "nonexistent_place_xyz";
 
     let map = Arc::new(fixtures::create_test_map());
@@ -380,18 +383,18 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
         "precondition: invalid_destination should not exist in map"
     );
 
-    let result = state
+    state
         .handle_movement(Some(invalid_destination), &[], &map, &npcs)
         .unwrap();
     assert!(
-        !result.movement.dynamic_rooms.is_empty(),
+        !state.movement.dynamic_rooms.is_empty(),
         "INV-007: dynamic room should be created for invalid destination"
     );
     assert!(
-        result.movement.current_room_id.starts_with("dynamic_"),
+        state.movement.current_room_id.starts_with("dynamic_"),
         "INV-007: current_room_id should be set to a dynamic room"
     );
-    let history = result.narrative.history();
+    let history = state.narrative.history();
     let system_messages: Vec<_> = history
         .iter()
         .filter(|m| m.message_type == MessageType::System)
@@ -437,7 +440,7 @@ fn test_inv002_mutation_order_property() {
             &player,
             &npcs,
         ).expect("execute_freeaction_impl should succeed");
-        let history = &result.next_state.narrative.history;
+        let history = &result.post_commit_state.narrative.history;
         let search_len = 20.min(narration_text.chars().count());
         let search_text: String = narration_text.chars().take(search_len).collect();
         let has_narration = history.iter().any(|e| {
@@ -447,7 +450,7 @@ fn test_inv002_mutation_order_property() {
         if has_npc {
             prop_assert!(result.trigger_match.is_some(), "trigger should fire when NPC appears");
             prop_assert_eq!(
-                result.next_state.npc_encounter_log.get_times_met(npc_id),
+                result.post_commit_state.npc_encounter_log.get_times_met(npc_id),
                 1,
                 "times_met should be 1 after apply_npc_events"
             );

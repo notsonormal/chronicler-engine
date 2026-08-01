@@ -78,23 +78,24 @@ impl PromptAssembler {
             template_vars: &context.template_vars,
         };
 
-        let (system, user, max_tokens) =
-            renderer.render_and_fit(self.resolve_max_context_tokens(), self.max_tokens)?;
+        let (max_context_tokens, requested_max_tokens) = self.resolve_budget();
+        let (system, user, actual_max_tokens) =
+            renderer.render_and_fit(max_context_tokens, requested_max_tokens)?;
 
         Ok(AssembledPrompt {
             system_prompt: system,
             user_prompt: user,
-            max_tokens,
+            max_tokens: actual_max_tokens,
         })
     }
 
-    fn resolve_max_context_tokens(&self) -> u32 {
-        if let Some(settings) = &self.settings {
-            let guard = settings.read().unwrap_or_else(|e| e.into_inner());
-            let conn = guard.narration_connection();
-            return conn.resolve_max_context_tokens();
-        }
-        self.max_context_tokens
+    fn resolve_budget(&self) -> (u32, Option<u32>) {
+        let Some(settings) = &self.settings else {
+            return (self.max_context_tokens, self.max_tokens);
+        };
+        let guard = settings.read().unwrap_or_else(|e| e.into_inner());
+        let conn = guard.narration_connection();
+        (conn.resolve_max_context_tokens(), conn.max_tokens)
     }
 }
 

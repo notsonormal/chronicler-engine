@@ -415,4 +415,35 @@ fn test_budget_read_from_settings_per_call() {
         large_count > 50,
         "large budget should keep most of the 100 history lines"
     );
+
+    // Per-call `max_tokens`: flip the response cap and observe the assembled
+    // prompt's `max_tokens` change. Use a large context window so `max_tokens`
+    // is the binding constraint (not the available-context floor).
+    {
+        let mut guard = settings.write().unwrap();
+        guard.connections[0].max_context_tokens = Some(32768);
+        guard.connections[0].max_tokens = Some(50);
+    }
+    let small_max = assembler
+        .assemble(&context, &preset, &world.global_rules, Some("Short"))
+        .expect("small max_tokens assemble should succeed");
+    let small_budget = small_max.max_tokens;
+
+    {
+        let mut guard = settings.write().unwrap();
+        guard.connections[0].max_tokens = Some(500);
+    }
+    let large_max = assembler
+        .assemble(&context, &preset, &world.global_rules, Some("Short"))
+        .expect("large max_tokens assemble should succeed");
+    let large_budget = large_max.max_tokens;
+
+    assert!(
+        large_budget > small_budget,
+        "larger max_tokens should yield larger budget: {large_budget} > {small_budget}"
+    );
+    assert!(
+        small_budget <= 50,
+        "small budget should be bounded by requested max_tokens=50: {small_budget}"
+    );
 }

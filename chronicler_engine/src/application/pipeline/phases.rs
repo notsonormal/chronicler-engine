@@ -80,18 +80,7 @@ impl<'a> PipelineRun<'a> {
 
     fn set_error(&self, state: &mut GameState, msg: String) -> PhaseError {
         state.narrative.input_buffer.status = GenerationStatus::Error(msg.clone());
-        if let Err(e) = self.pipeline.persistence.save_message_and_snapshot(state) {
-            tracing::error!("Failed to persist generation error: {e}");
-        }
         PhaseError::NarratorFailed(msg)
-    }
-
-    pub(super) fn error_return(
-        &self,
-        state: &mut GameState,
-        msg: String,
-    ) -> Result<(String, String, String), PhaseError> {
-        Err(self.set_error(state, msg))
     }
 
     pub(super) fn phase_narrate(
@@ -109,13 +98,13 @@ impl<'a> PipelineRun<'a> {
                     .get(&state.movement.current_room_id)
             })
         else {
-            return self.error_return(state, "Room not found".to_string());
+            return Err(self.set_error(state, "Room not found".to_string()));
         };
         let history = state.narrative.history();
 
         let (preset, response_length) = match self.load_preset_and_response_length() {
             Ok(p) => p,
-            Err(msg) => return self.error_return(state, msg),
+            Err(msg) => return Err(self.set_error(state, msg)),
         };
 
         let context = PromptContext::new(
@@ -137,7 +126,7 @@ impl<'a> PipelineRun<'a> {
             Some(&response_length),
         ) {
             Ok(a) => a,
-            Err(e) => return self.error_return(state, e.llm_error_string()),
+            Err(e) => return Err(self.set_error(state, e.llm_error_string())),
         };
 
         tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
@@ -148,7 +137,7 @@ impl<'a> PipelineRun<'a> {
             Some(assembled.max_tokens),
         ) {
             Ok(result) => result,
-            Err(e) => return self.error_return(state, e.llm_error_string()),
+            Err(e) => return Err(self.set_error(state, e.llm_error_string())),
         };
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;
@@ -156,7 +145,7 @@ impl<'a> PipelineRun<'a> {
         self.check_game_unchanged(self.started_for)?;
 
         if narration_text.trim().is_empty() {
-            return self.error_return(state, "LLM Error: empty response".to_string());
+            return Err(self.set_error(state, "LLM Error: empty response".to_string()));
         }
 
         state.add_message(narration_text.clone(), None, MessageType::Narration);
@@ -221,11 +210,11 @@ impl<'a> PipelineRun<'a> {
 
     pub(super) fn phase_trigger_continuation_llm_call(
         &self,
-        mut state: GameState,
+        state: &mut GameState,
         trigger: &StoredTriggerContext,
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> Result<(GameState, String), PhaseError> {
+    ) -> Result<String, PhaseError> {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
         state.narrative.last_trigger = Some(trigger.clone());
@@ -236,7 +225,7 @@ impl<'a> PipelineRun<'a> {
 
         self.check_game_unchanged(self.started_for)?;
 
-        self.persist_snapshot_or_err(&mut state, "pre-event snapshot")?;
+        self.persist_snapshot_or_err(state, "pre-event snapshot")?;
 
         tracing::info!("Pipeline ▶ Trigger LLM call (agent=trigger)");
         let continuation_result = match self.pipeline.recorder.complete(
@@ -253,7 +242,7 @@ impl<'a> PipelineRun<'a> {
                     None,
                     MessageType::System,
                 );
-                return Err(self.set_error(&mut state, format!("Trigger narration failed: {e}")));
+                return Err(self.set_error(state, format!("Trigger narration failed: {e}")));
             }
         };
         tracing::info!("Pipeline ✓ Trigger complete");
@@ -262,28 +251,28 @@ impl<'a> PipelineRun<'a> {
         self.check_game_unchanged(self.started_for)?;
 
         if continuation_text.trim().is_empty() {
-            return Err(self.set_error(&mut state, "LLM Error: empty response".to_string()));
+            return Err(self.set_error(state, "LLM Error: empty response".to_string()));
         }
 
         if let Err(e) = state.commit_trigger_narration(trigger, &continuation_text, map, npcs) {
             tracing::error!("Trigger commit failed: {e}");
-            return Err(self.set_error(&mut state, format!("Trigger error: {e}")));
+            return Err(self.set_error(state, format!("Trigger error: {e}")));
         }
 
-        self.persist_snapshot_or_err(&mut state, "post-trigger snapshot")?;
+        self.persist_snapshot_or_err(state, "post-trigger snapshot")?;
 
-        Ok((state, continuation_text))
+        Ok(continuation_text)
     }
 
     pub(super) fn reconcile_post_trigger_npcs(
         &self,
-        mut state: GameState,
+        state: &mut GameState,
         player_input: &str,
         continuation_text: &str,
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> Result<GameState, PhaseError> {
+    ) -> Result<(), PhaseError> {
         tracing::info!("Pipeline ▶ Post-trigger reconcile");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
 
@@ -294,7 +283,7 @@ impl<'a> PipelineRun<'a> {
             .map(|n| n.id.clone())
             .collect();
         let post_trigger_result = self.pipeline.run_post_generation_agents(
-            &state,
+            state,
             player_input,
             continuation_text,
             map,
@@ -318,9 +307,9 @@ impl<'a> PipelineRun<'a> {
         let events = NpcEventList::from_diff(&previous_ids, &new_ids);
         if let Err(e) = state.apply_npc_events(&events.events, map, npcs) {
             tracing::error!("Post-trigger reconcile failed: {e}");
-            return Err(self.set_error(&mut state, format!("Trigger reconcile: {e}")));
+            return Err(self.set_error(state, format!("Trigger reconcile: {e}")));
         }
-        Ok(state)
+        Ok(())
     }
 
     pub(super) fn build_trigger_request(
@@ -416,7 +405,7 @@ impl<'a> PipelineRun<'a> {
 
 impl ActionPipeline {
     pub(super) fn phase_engine_commit(
-        state: &GameState,
+        state: GameState,
         narration_text: &str,
         quantifier_result: &QuantifierResult,
         map: &Arc<MapDef>,

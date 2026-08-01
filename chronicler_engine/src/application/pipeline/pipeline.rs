@@ -51,15 +51,7 @@ impl ActionPipeline {
         persistence: Arc<PersistenceGate>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
-        let (max_context_tokens, max_tokens) = {
-            let guard = settings.read().unwrap_or_else(|e| e.into_inner());
-            let conn = guard.narration_connection();
-            (conn.resolve_max_context_tokens(), conn.max_tokens)
-        };
-        let mut assembler = PromptAssembler::new(max_context_tokens);
-        if let Some(max) = max_tokens {
-            assembler = assembler.with_max_tokens(max);
-        }
+        let assembler = PromptAssembler::new(MAX_CONTEXT_TOKENS).with_settings(settings.clone());
         tracing::info!(
             "ActionPipeline: backend={}, model={}",
             recorder.provider().name(),
@@ -412,19 +404,16 @@ impl ActionPipeline {
             all_npcs,
         };
 
-        state = match run.phase_pre_main_snapshot(state) {
-            Ok(s) => s,
-            Err(e) => {
-                Self::finalize_phase_error(&run, e);
-                return Ok(());
-            }
-        };
+        if let Err(e) = run.phase_pre_main_snapshot(&mut state) {
+            Self::finalize_phase_error(&run, Some(&mut state), e);
+            return Ok(());
+        }
 
         let (narration_text, backend_name, model_name) =
             match run.map_cancelled(run.phase_narrate(&mut state, &inputs)) {
                 Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
                 Err(e) => {
-                    Self::finalize_phase_error(&run, e);
+                    Self::finalize_phase_error(&run, Some(&mut state), e);
                     return Ok(());
                 }
                 Ok(t) => t,
@@ -442,13 +431,13 @@ impl ActionPipeline {
         ) {
             Ok(r) => r,
             Err(e) => {
-                Self::finalize_phase_error(&run, e);
+                Self::finalize_phase_error(&run, Some(&mut state), e);
                 return Ok(());
             }
         };
 
         let turn_result = match Self::phase_engine_commit(
-            &state,
+            state,
             &narration_text,
             &quantifier_result,
             &map,
@@ -459,6 +448,7 @@ impl ActionPipeline {
             Err(e) => {
                 Self::finalize_phase_error(
                     &run,
+                    None,
                     PhaseError::PersistFailed {
                         label: "engine commit",
                         source: e,
@@ -467,7 +457,7 @@ impl ActionPipeline {
                 return Ok(());
             }
         };
-        let mut post_commit_state = turn_result.next_state;
+        let mut post_commit_state = turn_result.post_commit_state;
 
         let trigger_request = turn_result
             .trigger_match
@@ -482,7 +472,7 @@ impl ActionPipeline {
             });
         if let Err(e) = run.persist_snapshot_or_err(&mut post_commit_state, "post-engine snapshot")
         {
-            Self::finalize_phase_error(&run, e);
+            Self::finalize_phase_error(&run, Some(&mut post_commit_state), e);
             return Ok(());
         }
         if let Some(target) = post_commit_state.narrative.retry_target.take() {
@@ -490,32 +480,32 @@ impl ActionPipeline {
         }
 
         if let Some(request) = trigger_request {
-            let (updated_state, continuation_text) = match run.map_cancelled(
-                run.phase_trigger_continuation_llm_call(post_commit_state, &request, &map, &npcs),
-            ) {
-                Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
-                Err(e) => {
-                    Self::finalize_phase_error(&run, e);
-                    return Ok(());
-                }
-                Ok(t) => t,
-            };
-            post_commit_state = updated_state;
+            let continuation_text =
+                match run.map_cancelled(run.phase_trigger_continuation_llm_call(
+                    &mut post_commit_state,
+                    &request,
+                    &map,
+                    &npcs,
+                )) {
+                    Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
+                    Err(e) => {
+                        Self::finalize_phase_error(&run, Some(&mut post_commit_state), e);
+                        return Ok(());
+                    }
+                    Ok(t) => t,
+                };
             if !continuation_text.is_empty() {
-                post_commit_state = match run.reconcile_post_trigger_npcs(
-                    post_commit_state,
+                if let Err(e) = run.reconcile_post_trigger_npcs(
+                    &mut post_commit_state,
                     &input,
                     &continuation_text,
                     &map,
                     &persona,
                     &npcs,
                 ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        Self::finalize_phase_error(&run, e);
-                        return Ok(());
-                    }
-                };
+                    Self::finalize_phase_error(&run, Some(&mut post_commit_state), e);
+                    return Ok(());
+                }
             }
         }
 
@@ -528,7 +518,11 @@ impl ActionPipeline {
         self.persistence.storage().world_bundle_for(started_for)
     }
 
-    pub(super) fn finalize_phase_error(run: &PipelineRun<'_>, e: PhaseError) {
+    pub(super) fn finalize_phase_error(
+        run: &PipelineRun<'_>,
+        state: Option<&mut GameState>,
+        e: PhaseError,
+    ) {
         let msg = match e {
             PhaseError::NarratorFailed(msg) => msg,
             PhaseError::FetchFailed(msg) => msg,
@@ -542,19 +536,32 @@ impl ActionPipeline {
                 unreachable!("Cancelled must be handled before calling finalize_phase_error")
             }
         };
-        run.pipeline.persist_generation_error(msg);
+
+        match state {
+            Some(state) => {
+                state.narrative.input_buffer.status = GenerationStatus::Error(msg);
+                state.narrative.input_buffer.phase = GenerationPhase::default();
+                if let Err(e) = run.pipeline.persistence.save_message_and_snapshot(state) {
+                    tracing::error!("Failed to persist error state: {e}");
+                }
+            }
+            None => run.pipeline.persist_generation_error(msg),
+        }
     }
 
     pub(crate) fn phase_trigger_continuation(
         &self,
-        state: GameState,
+        mut state: GameState,
         trigger: &StoredTriggerContext,
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
     ) -> Result<(GameState, String), PhaseError> {
         let started_for = self.persistence.storage().current_game_id();
         let run = PipelineRun::new(self, started_for);
-        run.map_cancelled(run.phase_trigger_continuation_llm_call(state, trigger, map, npcs))
+        let continuation_text = run.map_cancelled(
+            run.phase_trigger_continuation_llm_call(&mut state, trigger, map, npcs),
+        )?;
+        Ok((state, continuation_text))
     }
 
     pub(super) fn run_post_generation_agents(
@@ -633,7 +640,7 @@ impl ActionPipeline {
             Err(e) => {
                 let started_for = self.persistence.storage().current_game_id();
                 let run = PipelineRun::new(self, started_for);
-                Self::finalize_phase_error(&run, e);
+                Self::finalize_phase_error(&run, None, e);
             }
             Ok(()) => {}
         }
@@ -661,8 +668,8 @@ impl ActionPipeline {
         if !continuation_text.is_empty() {
             let started_for = self.persistence.storage().current_game_id();
             let run = PipelineRun::new(self, started_for);
-            state = run.reconcile_post_trigger_npcs(
-                state,
+            run.reconcile_post_trigger_npcs(
+                &mut state,
                 &input_text,
                 &continuation_text,
                 &map,
@@ -691,15 +698,12 @@ impl ActionPipeline {
 }
 
 impl<'a> PipelineRun<'a> {
-    pub(super) fn phase_pre_main_snapshot(
-        &self,
-        mut state: GameState,
-    ) -> Result<GameState, PhaseError> {
+    pub(super) fn phase_pre_main_snapshot(&self, state: &mut GameState) -> Result<(), PhaseError> {
         tracing::info!("Pipeline ▶ Narrating");
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        self.persist_snapshot_or_err(&mut state, "pre-main snapshot")?;
-        Ok(state)
+        self.persist_snapshot_or_err(state, "pre-main snapshot")?;
+        Ok(())
     }
 
     fn map_cancelled<T>(&self, result: Result<T, PhaseError>) -> Result<T, PhaseError> {

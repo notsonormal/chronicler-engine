@@ -5,9 +5,6 @@ use crate::Violation;
 const WIREDAPP_SCOPE_ALLOWLIST_PREFIXES: &[&str] =
     &["bootstrap/", "adapters/driving/http/", "test_support/"];
 
-// Guardrail: `WiredApp` is consumed only by the composition root, HTTP setup, test support,
-// and integration tests (axis R two-consumer discipline; guardrail-inventory §2).
-// `*_tests.rs` is exempt — unit tests may wire collaborators freely.
 pub fn check_wiredapp_scope(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
