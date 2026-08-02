@@ -17,7 +17,9 @@ use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::persistence_gate::PersistenceGate;
+use crate::application::persona_catalogue::PersonaCatalogue;
+use crate::application::message_service::MessageService;
+use crate::application::world_catalogue::WorldCatalogue;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::text_check_service::TextCheckService;
 use crate::domain::model::llm_backend::LlmBackendType;
@@ -48,10 +50,12 @@ pub struct WiredApp {
     pub storage: Arc<Storage>,
     pub preset_storage: Arc<Storage>,
     pub settings: Arc<RwLock<AppSettings>>,
-    pub persistence_gate: Arc<PersistenceGate>,
+    pub message_service: Arc<MessageService>,
     pub generation_gate: GenerationGate,
     pub game_catalogue: GameCatalogue,
     pub game_view_query: GameViewQuery,
+    pub world_catalogue: WorldCatalogue,
+    pub persona_catalogue: PersonaCatalogue,
     pub pipeline: ActionPipeline,
     pub text_check_service: Arc<TextCheckService>,
     pub shutdown_token: CancellationToken,
@@ -69,38 +73,46 @@ fn build_wired_app(
 
     // ponytail: single-call collaborator unpack — could be inlined into build_wired_app if it grows.
     let preset_store = Arc::new(PresetStore::new(Arc::clone(&preset_storage)));
-    let persistence_gate = Arc::new(PersistenceGate::new(
-        Arc::clone(&storage),
-        Arc::clone(&preset_store),
-    ));
+    let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
+    let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
+    let persona_catalogue = PersonaCatalogue::new(Arc::clone(&storage));
     let generation_gate = GenerationGate::new();
-    let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate));
-    let game_view_query = GameViewQuery::new(Arc::clone(&persistence_gate), Arc::clone(&settings));
+    let game_catalogue = GameCatalogue::new(Arc::clone(&storage), Arc::clone(&message_service));
+    let game_view_query = GameViewQuery::new(
+        Arc::clone(&storage),
+        Arc::clone(&message_service),
+        Arc::clone(&preset_store),
+        Arc::clone(&settings),
+    );
     let pipeline = ActionPipeline::with_storage(
         shutdown_token.clone(),
         recorder,
         agent_registry,
-        Arc::clone(&persistence_gate),
+        Arc::clone(&message_service),
+        Arc::clone(&storage),
+        Arc::clone(&preset_store),
         Arc::clone(&settings),
     );
 
     // Boot heal: a crash/restart may have left the current game persisted as Generating.
     let current_game_id = storage.current_game_id();
-    let mut boot_state = persistence_gate.load_or_fresh();
+    let mut boot_state = message_service.load_or_fresh();
     let pre_heal = boot_state.narrative.input_buffer.status.clone();
     generation_gate.heal_stale(current_game_id, &mut boot_state);
     if boot_state.narrative.input_buffer.status != pre_heal {
-        let _ = persistence_gate.save_state(&boot_state);
+        let _ = message_service.save_state(&boot_state);
     }
 
     Ok(WiredApp {
         storage,
         preset_storage,
         settings,
-        persistence_gate,
+        message_service,
         generation_gate,
         game_catalogue,
         game_view_query,
+        world_catalogue,
+        persona_catalogue,
         pipeline,
         text_check_service,
         shutdown_token,
@@ -184,8 +196,11 @@ pub fn build_app_graph_for_tests(
 
     if let Some(pipeline) = pipeline_override {
         // Override backends must use this graph's persistence and live settings.
+        let preset_store = Arc::new(PresetStore::new(Arc::clone(&wired.preset_storage)));
         wired.pipeline = pipeline.rebind_for_test(
-            Arc::clone(&wired.persistence_gate),
+            Arc::clone(&wired.message_service),
+            Arc::clone(&wired.storage),
+            Arc::clone(&preset_store),
             Arc::clone(&wired.settings),
             wired.shutdown_token.clone(),
         );

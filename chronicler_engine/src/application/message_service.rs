@@ -1,17 +1,15 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
-//! PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
+//! MessageService — owns `Arc<Storage>` and the deep game-state lifecycle seam:
+//! message history + snapshot operations (load, save, retry anchor, swipes,
+//! edit, delete).
 
 use std::sync::Arc;
 
 use chrono::Utc;
 
-use crate::adapters::driven::storage::PresetStore;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::application::errors::ApplicationError;
-use crate::domain::model::character::PersonaCard;
-use crate::domain::model::map::MapDef;
-use crate::domain::model::world::WorldCard;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -20,26 +18,13 @@ use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::template::render_template;
 use crate::error::EngineError;
 
-#[derive(Clone)]
-pub struct PersistenceGate {
+pub struct MessageService {
     storage: Arc<Storage>,
-    preset_store: Arc<PresetStore>,
 }
 
-impl PersistenceGate {
-    pub fn new(storage: Arc<Storage>, preset_store: Arc<PresetStore>) -> Self {
-        Self {
-            storage,
-            preset_store,
-        }
-    }
-
-    pub fn storage(&self) -> &Arc<Storage> {
-        &self.storage
-    }
-
-    pub fn preset_store(&self) -> &Arc<PresetStore> {
-        &self.preset_store
+impl MessageService {
+    pub fn new(storage: Arc<Storage>) -> Self {
+        Self { storage }
     }
 
     pub fn load_or_fresh(&self) -> GameState {
@@ -90,7 +75,7 @@ impl PersistenceGate {
             }
         }
 
-        if let Some(msg) = state.narrative.history.last_mut() {
+        for msg in state.narrative.history.iter_mut() {
             if msg.is_unpersisted() {
                 msg.set_snapshot_id(Some(snapshot_id));
                 if let Some(swipe) = msg.swipes.first_mut() {
@@ -111,7 +96,7 @@ impl PersistenceGate {
         self.storage.save_snapshot(&snapshot)
     }
 
-    pub fn load_messages_with_swipes(&self) -> Result<Vec<Message>, EngineError> {
+    pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
         self.storage.load_messages_with_swipes()
     }
 
@@ -152,11 +137,7 @@ impl PersistenceGate {
         Ok(initial_state)
     }
 
-    pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
-        self.storage.load_messages_with_swipes()
-    }
-
-    pub fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
+    fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
         let index = self.storage.require_active_swipe_index(id)?;
         self.storage.update_swipe_text(id, index, text)
     }
@@ -258,52 +239,5 @@ impl PersistenceGate {
         let anchor_msg = &messages[anchor_idx];
         let snapshot_id = *anchor_msg.snapshot_id().as_ref()?;
         Some((anchor_idx, anchor_msg, snapshot_id))
-    }
-
-    pub fn set_game_id(&self, game_id: u64) {
-        self.storage.set_game_id(game_id);
-    }
-
-    pub fn list_worlds(&self) -> Result<Vec<WorldCard>, ApplicationError> {
-        self.storage.list_worlds().map_err(Into::into)
-    }
-
-    pub fn get_world(
-        &self,
-        key: &str,
-    ) -> Result<Option<(i64, WorldCard, MapDef)>, ApplicationError> {
-        self.storage
-            .get_world(key)
-            .map(|opt| opt.map(|w| (w.world_id, w.world_card, w.map)))
-            .map_err(Into::into)
-    }
-
-    pub fn create_world(
-        &self,
-        world_card: WorldCard,
-        map: MapDef,
-    ) -> Result<i64, ApplicationError> {
-        self.storage
-            .create_world(&world_card, &map)
-            .map_err(Into::into)
-    }
-
-    pub fn update_world(
-        &self,
-        id: i64,
-        world_card: WorldCard,
-        map: MapDef,
-    ) -> Result<(), ApplicationError> {
-        self.storage
-            .update_world(id, &world_card, &map)
-            .map_err(Into::into)
-    }
-
-    pub fn delete_world(&self, key: &str) -> Result<(), ApplicationError> {
-        self.storage.delete_world(key).map_err(Into::into)
-    }
-
-    pub fn list_personas(&self) -> Result<Vec<PersonaCard>, ApplicationError> {
-        self.storage.list_personas().map_err(Into::into)
     }
 }

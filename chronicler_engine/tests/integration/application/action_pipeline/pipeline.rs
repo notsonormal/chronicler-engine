@@ -36,15 +36,22 @@ fn test_delayed_llm_completes_without_deadlock() {
     let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
         .pipeline_fn(|storage, pg, settings, token| {
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::default().with_delay(200)),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
                 Arc::clone(pg),
-                Arc::clone(settings),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
             )
         })
         .build_with_state()
@@ -115,7 +122,12 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
                 encounter.times_met = 0;
             }
         })
-        .pipeline_fn(|_storage, pg, settings, token| {
+        .pipeline_fn(|storage, pg, settings, token| {
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             let quantifier_recorder: Arc<
                 dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
             > =
@@ -124,10 +136,12 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
                 ]));
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder(Arc::new(MockBackend::default())),
+                crate::make_test_recorder(Arc::new(MockBackend::default())),
                 quantifier_recorder,
                 Arc::clone(pg),
-                Arc::clone(settings),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
             )
         })
         .build_with_state()
@@ -166,15 +180,22 @@ fn test_empty_llm_response_handled_gracefully() {
     let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
         .pipeline_fn(|storage, pg, settings, token| {
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::default().with_empty_response()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
                 Arc::clone(pg),
-                Arc::clone(settings),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
             )
         })
         .build_with_state()
@@ -216,6 +237,11 @@ fn test_failing_trigger_narration_does_not_crash() {
             }
         })
         .pipeline_fn(|storage, pg, settings, token| {
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             let quantifier_recorder: Arc<
                 dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
             > =
@@ -224,13 +250,15 @@ fn test_failing_trigger_narration_does_not_crash() {
                 ]));
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::default().with_trigger_narration_fail()),
                     Arc::clone(storage),
                 ),
                 quantifier_recorder,
                 Arc::clone(pg),
-                Arc::clone(settings),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
             )
         })
         .build_with_state()
@@ -290,15 +318,22 @@ async fn test_cancellation_resets_state_to_idle() {
     let app = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::default())
         .pipeline_fn(|storage, pg, settings, token| {
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::default().with_delay(50)),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
                 Arc::clone(pg),
-                Arc::clone(settings),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
             )
         })
         .build_with_state()
@@ -471,7 +506,12 @@ fn test_pre_event_snapshot_saved_before_continuation() {
                 encounter.times_met = 0;
             }
         })
-        .pipeline_fn(|_storage, pg, settings, token| {
+        .pipeline_fn(|storage, pg, settings, token| {
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             let quantifier_recorder: Arc<
                 dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
             > =
@@ -480,10 +520,12 @@ fn test_pre_event_snapshot_saved_before_continuation() {
                 ]));
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder(Arc::new(MockBackend::default())),
+                crate::make_test_recorder(Arc::new(MockBackend::default())),
                 quantifier_recorder,
                 Arc::clone(pg),
-                Arc::clone(settings),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
             )
         })
         .build_with_state()
@@ -553,7 +595,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         .build_with_state()
         .unwrap();
 
-    let pg = &app.persistence_gate;
+    let pg = &app.message_service;
 
     let backend_clone = Arc::clone(&backend_arc);
     let app_clone = app.clone();
@@ -609,7 +651,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
         .build_with_state()
         .unwrap();
 
-    let pg = &app.persistence_gate;
+    let pg = &app.message_service;
 
     app.pipeline.execute_action("test action".to_string());
 

@@ -1394,6 +1394,7 @@ You are in Plan Mode. Chat your way to a decision-complete implementation plan, 
 - Do not use update_plan/TODO tooling in Plan Mode; Plan Mode is conversational planning.
 - ${allowedDescription}
 - Use /grill-me-with-docs to stress-test the plan before finalizing if the user wants grilling. Mention it; do not auto-invoke.
+- Create "TaskCreate" to create a list of tasks once you exit plan mode and start implementing the plan
 
 ### Story points
 

@@ -36,12 +36,21 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let quantifier = Arc::clone(&quantifier);
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
                 quantifier,
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -87,12 +96,21 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let narration_backend = Arc::clone(&narration_backend);
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    make_test_recorder_with_storage(narration_backend, Arc::clone(storage)),
+                make_test_recorder_with_storage(narration_backend, Arc::clone(storage)),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -149,12 +167,21 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let quantifier = Arc::clone(&quantifier);
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
                 quantifier,
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -187,13 +214,20 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
     chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-        token,
-    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-        Arc::new(MockBackend::default()),
-        Arc::clone(pg),
-        Arc::clone(settings),
-    )
+                token,
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                Arc::new(MockBackend::default()),
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
 })
         .build_with_state()
         .unwrap();
@@ -230,13 +264,20 @@ fn test_retry_after_edited_input_uses_new_text() {
     let data = base_data(vec![]);
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
     chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
-        token,
-    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
-        Arc::new(MockBackend::default()),
-        Arc::clone(pg),
-        Arc::clone(settings),
-    )
+                token,
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                Arc::new(MockBackend::default()),
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
 })
         .build_with_state()
         .unwrap();
@@ -330,12 +371,21 @@ fn test_main_retry_reevaluates_triggers() {
         ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let quantifier = Arc::clone(&quantifier);
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
                 quantifier,
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -380,12 +430,21 @@ fn test_retry_completes_when_quantifier_returns_none() {
         ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let quantifier = Arc::clone(&quantifier);
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
                 quantifier,
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -496,12 +555,21 @@ fn test_movement_with_arrival_narration_retry() {
         ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let quantifier = Arc::clone(&quantifier);
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+                make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
                 quantifier,
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -551,17 +619,26 @@ fn test_retry_appends_swipe_to_existing_narration() {
     ]));
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let narration_backend = Arc::clone(&narration_backend);
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    make_test_recorder_with_storage(narration_backend, Arc::clone(storage)),
+                make_test_recorder_with_storage(narration_backend, Arc::clone(storage)),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
 
-    let pg = &app.persistence_gate;
+    let pg = &app.message_service;
 
     app.add_input_and_save("examine room");
     app.pipeline.execute_action("examine room".to_string());

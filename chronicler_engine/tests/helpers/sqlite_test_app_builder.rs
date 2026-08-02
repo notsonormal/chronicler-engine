@@ -21,7 +21,7 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
 use chronicler_engine::error::Result;
 use chronicler_engine::test_support::{
-    build_test_persistence_gate, build_test_wired_app, build_test_wired_app_with_settings,
+    build_test_message_service, build_test_wired_app, build_test_wired_app_with_settings,
     default_test_preset_storage, make_test_recorder, seed_default_game_row, TestData,
     TestDataBuilder,
 };
@@ -30,7 +30,7 @@ type MockBackendFn = Box<dyn Fn() -> MockBackend>;
 type PipelineBuilder = Box<
     dyn FnOnce(
         &Arc<Storage>,
-        &Arc<chronicler_engine::application::persistence_gate::PersistenceGate>,
+        &Arc<chronicler_engine::application::message_service::MessageService>,
         &Arc<RwLock<AppSettings>>,
         CancellationToken,
     ) -> ActionPipeline,
@@ -162,7 +162,7 @@ impl SqliteTestAppBuilder {
     where
         F: FnOnce(
                 &Arc<Storage>,
-                &Arc<chronicler_engine::application::persistence_gate::PersistenceGate>,
+                &Arc<chronicler_engine::application::message_service::MessageService>,
                 &Arc<RwLock<AppSettings>>,
                 CancellationToken,
             ) -> ActionPipeline
@@ -184,8 +184,8 @@ impl SqliteTestAppBuilder {
     /// Build the application state: seed sqlite storage, persist snapshot + messages, dispatch to `BackendSpec`.
     pub fn build_service(mut self) -> Result<AppState> {
         let (storage, settings_arc) = self.seed_storage_and_settings()?;
-        let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
-        let pipeline = self.build_pipeline(&storage, &persistence_gate, &settings_arc);
+        let message_service = build_test_message_service(Arc::clone(&storage));
+        let pipeline = self.build_pipeline(&storage, &message_service, &settings_arc);
         let is_generating = self.is_generating;
 
         Ok(finalize_app(storage, pipeline, settings_arc, is_generating))
@@ -193,8 +193,8 @@ impl SqliteTestAppBuilder {
 
     pub fn build_with_state(mut self) -> Result<AppState> {
         let (storage, settings_arc) = self.seed_storage_and_settings()?;
-        let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
-        let pipeline = self.build_pipeline(&storage, &persistence_gate, &settings_arc);
+        let message_service = build_test_message_service(Arc::clone(&storage));
+        let pipeline = self.build_pipeline(&storage, &message_service, &settings_arc);
         let is_generating = self.is_generating;
         let preset_storage = default_test_preset_storage();
 
@@ -295,10 +295,15 @@ impl SqliteTestAppBuilder {
     fn build_pipeline(
         &mut self,
         storage: &Arc<Storage>,
-        persistence_gate: &Arc<chronicler_engine::application::persistence_gate::PersistenceGate>,
+        message_service: &Arc<chronicler_engine::application::message_service::MessageService>,
         settings_arc: &Arc<RwLock<AppSettings>>,
     ) -> ActionPipeline {
         let shutdown_token = CancellationToken::new();
+        let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                default_test_preset_storage(),
+            ),
+        );
         match self.backend.take() {
             None => panic!(
                 "SqliteTestAppBuilder: no backend set; call .pipeline_fn(...) or .mock_backend(...) before .build_service()"
@@ -307,14 +312,18 @@ impl SqliteTestAppBuilder {
                 shutdown_token,
                 make_test_recorder(Arc::new(f())),
                 Arc::new(f()),
-                Arc::clone(persistence_gate),
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
                 Arc::clone(settings_arc),
             ),
             Some(BackendSpec::Backends(f)) => ActionPipeline::with_backends(
                 shutdown_token,
                 make_test_recorder(Arc::new(f())),
                 AgentRegistry::default(),
-                Arc::clone(persistence_gate),
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
                 Arc::clone(settings_arc),
             ),
             Some(BackendSpec::SeparateBackends {
@@ -324,11 +333,13 @@ impl SqliteTestAppBuilder {
                 shutdown_token,
                 make_test_recorder(Arc::new(narrator())),
                 Arc::new(quantifier()),
-                Arc::clone(persistence_gate),
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
                 Arc::clone(settings_arc),
             ),
             Some(BackendSpec::PipelineFn(f)) => {
-                f(storage, persistence_gate, settings_arc, shutdown_token)
+                f(storage, message_service, settings_arc, shutdown_token)
             }
         }
     }

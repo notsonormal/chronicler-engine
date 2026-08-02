@@ -50,7 +50,7 @@ pub async fn switch_swipe_handler(
     let current_game_id = state.game_catalogue.current_game_id();
     let is_generating = state.generation_gate.is_busy(current_game_id);
     state
-        .persistence_gate
+        .message_service
         .switch_swipe(is_generating, message_id, swipe_index)?;
     let html = state
         .render_story_log()

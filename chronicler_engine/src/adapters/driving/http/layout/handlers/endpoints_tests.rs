@@ -65,10 +65,10 @@ async fn test_generating_status_idle() {
 #[tokio::test]
 async fn test_generating_status_generating() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let mut game_state = state.persistence_gate.load_or_fresh();
+    let mut game_state = state.message_service.load_or_fresh();
     game_state.narrative.input_buffer.status = GenerationStatus::Generating;
     game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-    let _ = state.persistence_gate.save_state(&game_state);
+    let _ = state.message_service.save_state(&game_state);
 
     let result = generating_status_handler(axum::extract::State(state)).await;
     assert!(!result.0.is_empty());

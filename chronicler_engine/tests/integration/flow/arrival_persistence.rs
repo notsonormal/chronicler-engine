@@ -40,6 +40,11 @@ fn test_arrival_narration_survives_reload() {
     let llm_for_closure = Arc::clone(&llm);
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let recorder = make_test_recorder_with_storage(
                 Arc::clone(&llm_for_closure)
                     as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
@@ -47,18 +52,23 @@ fn test_arrival_narration_survives_reload() {
             );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    Arc::clone(&recorder),
+                Arc::clone(&recorder),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
 
-    let pg = &app.persistence_gate;
+    let pg = &app.message_service;
 
     let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(&app.storage));
     let task_ctx = ArrivalTaskContext::new_for_test(
         Arc::clone(pg),
+        Arc::clone(&app.storage),
         "room1".to_string(),
         nearby_npcs,
         all_npcs,
@@ -175,10 +185,11 @@ fn arrival_service_tests_falls_back_to_fresh_state_on_load_error() {
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
     let app = chronicler_engine::adapters::driving::http::AppState::from_wired(wired);
-    let pg = &app.persistence_gate;
+    let pg = &app.message_service;
 
     let task_ctx = ArrivalTaskContext::new_for_test(
         Arc::clone(pg),
+        Arc::clone(&app.storage),
         "room1".to_string(),
         Vec::<NpcCard>::new(),
         Vec::<NpcCard>::new(),
@@ -259,10 +270,11 @@ fn arrival_service_returns_early_without_narration_on_world_fetch_failure() {
     )
     .expect("build_test_service: build_app_graph_for_tests should succeed");
     let app = chronicler_engine::adapters::driving::http::AppState::from_wired(wired);
-    let pg = &app.persistence_gate;
+    let pg = &app.message_service;
 
     let task_ctx = ArrivalTaskContext::new_for_test(
         Arc::clone(pg),
+        Arc::clone(&app.storage),
         "room1".to_string(),
         Vec::<NpcCard>::new(),
         Vec::<NpcCard>::new(),

@@ -192,23 +192,23 @@ impl TestAppBuilder {
         .expect("build_app_graph_for_tests should succeed");
 
         if self.is_generating {
-            let mut state = wired.persistence_gate.load_or_fresh();
+            let mut state = wired.message_service.load_or_fresh();
             state.narrative.input_buffer.status = GenerationStatus::Generating;
             state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-            let _ = wired.persistence_gate.save_state(&state);
+            let _ = wired.message_service.save_state(&state);
             // Mirror the persisted Generating status into the in-memory gate so
             // handlers that consult `is_busy` see the same truth.
-            let game_id = wired.persistence_gate.storage().current_game_id();
+            let game_id = wired.storage.current_game_id();
             let _ = wired
                 .generation_gate
-                .try_claim(game_id, &mut state, &wired.persistence_gate);
+                .try_claim(game_id, &mut state, &wired.message_service);
         }
 
         if let Some((status, phase)) = self.generation.clone() {
-            let mut state = wired.persistence_gate.load_or_fresh();
+            let mut state = wired.message_service.load_or_fresh();
             state.narrative.input_buffer.status = status;
             state.narrative.input_buffer.phase = phase;
-            let _ = wired.persistence_gate.save_state(&state);
+            let _ = wired.message_service.save_state(&state);
         }
 
         AppState::from_wired(wired)

@@ -44,7 +44,7 @@ impl<'a> PipelineRun<'a> {
     }
 
     fn check_game_unchanged(&self, started_for: u64) -> Result<(), PhaseError> {
-        let current = self.pipeline.persistence.storage().current_game_id();
+        let current = self.pipeline.storage.current_game_id();
         if current != started_for {
             tracing::info!(
                 started = started_for,
@@ -57,7 +57,7 @@ impl<'a> PipelineRun<'a> {
     }
 
     pub(super) fn persist(&self, state: &GameState) {
-        if let Err(e) = self.pipeline.persistence.save_state(state) {
+        if let Err(e) = self.pipeline.message_service.save_state(state) {
             tracing::error!("Failed to persist state: {e}");
         }
     }
@@ -67,7 +67,11 @@ impl<'a> PipelineRun<'a> {
         state: &mut GameState,
         label: &'static str,
     ) -> Result<(), PhaseError> {
-        if let Err(source) = self.pipeline.persistence.save_message_and_snapshot(state) {
+        if let Err(source) = self
+            .pipeline
+            .message_service
+            .save_message_and_snapshot(state)
+        {
             tracing::error!("Failed to save {label}: {source}");
             state.narrative.input_buffer.status =
                 GenerationStatus::Error(format!("Failed to save {label}: {source}"));
@@ -201,7 +205,11 @@ impl<'a> PipelineRun<'a> {
         }
 
         // Best-effort: quantifier metadata (swipes) is not load-bearing for the turn commit.
-        if let Err(e) = self.pipeline.persistence.save_message_and_snapshot(state) {
+        if let Err(e) = self
+            .pipeline
+            .message_service
+            .save_message_and_snapshot(state)
+        {
             tracing::warn!("Failed to save post-quantifier metadata: {e}");
         }
 
@@ -382,12 +390,7 @@ impl<'a> PipelineRun<'a> {
             .unwrap_or_else(|e| e.into_inner());
         let preset_id = settings.active_system_prompt_preset_id.clone();
         let response_length = settings.response_length.clone();
-        match self
-            .pipeline
-            .persistence
-            .preset_store()
-            .get_preset(&preset_id)
-        {
+        match self.pipeline.preset_store.get_preset(&preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
                 tracing::error!(

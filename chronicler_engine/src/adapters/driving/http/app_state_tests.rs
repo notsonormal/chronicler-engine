@@ -37,7 +37,9 @@ fn build_app_state(settings: Arc<std::sync::RwLock<AppSettings>>) -> AppState {
     AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        persistence_gate: wired.persistence_gate,
+        message_service: wired.message_service,
+        world_catalogue: wired.world_catalogue,
+        persona_catalogue: wired.persona_catalogue,
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings,
         shutdown_token: wired.shutdown_token.clone(),
@@ -86,7 +88,9 @@ fn test_current_shutdown_token_returns_configured_token() {
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        persistence_gate: wired.persistence_gate,
+        message_service: wired.message_service,
+        world_catalogue: wired.world_catalogue,
+        persona_catalogue: wired.persona_catalogue,
         text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         shutdown_token: token.clone(),

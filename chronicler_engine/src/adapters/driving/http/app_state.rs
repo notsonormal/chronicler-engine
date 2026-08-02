@@ -7,9 +7,11 @@ use tokio_util::sync::CancellationToken;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
-use crate::application::persistence_gate::PersistenceGate;
+use crate::application::persona_catalogue::PersonaCatalogue;
+use crate::application::message_service::MessageService;
 use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::text_check_service::TextCheckService;
+use crate::application::world_catalogue::WorldCatalogue;
 use crate::bootstrap::wiring::WiredApp;
 use crate::domain::model::settings::AppSettings;
 
@@ -19,7 +21,9 @@ use super::utils::read_lock_or_recover;
 pub struct AppState {
     pub storage: Arc<crate::adapters::driven::storage::Storage>,
     pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
-    pub persistence_gate: Arc<PersistenceGate>,
+    pub message_service: Arc<MessageService>,
+    pub world_catalogue: WorldCatalogue,
+    pub persona_catalogue: PersonaCatalogue,
     pub text_check_service: Arc<TextCheckService>,
     pub settings: Arc<std::sync::RwLock<AppSettings>>,
     pub shutdown_token: CancellationToken,
@@ -34,7 +38,9 @@ impl AppState {
         AppState {
             storage: wired.storage,
             preset_storage: wired.preset_storage,
-            persistence_gate: wired.persistence_gate,
+            message_service: wired.message_service,
+            world_catalogue: wired.world_catalogue,
+            persona_catalogue: wired.persona_catalogue,
             text_check_service: wired.text_check_service,
             settings: wired.settings,
             shutdown_token: wired.shutdown_token,

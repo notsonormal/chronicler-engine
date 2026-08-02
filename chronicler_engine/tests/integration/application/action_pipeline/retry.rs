@@ -314,6 +314,11 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
 
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             let pre_event = GameStateSnapshot::from_game_state(&state_for_closure);
             let pre_event_id = storage.save_snapshot(&pre_event).unwrap();
 
@@ -334,9 +339,13 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
 
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder(Arc::new(MockBackend::default())),
+                crate::make_test_recorder(Arc::new(MockBackend::default())),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();

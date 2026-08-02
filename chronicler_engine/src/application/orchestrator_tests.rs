@@ -44,15 +44,20 @@ fn minimal_app_no_game() -> AppState {
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
     let narrator_recorder = make_test_recorder(Arc::clone(&mock));
     let registry = AgentRegistry::default();
-    let persistence_gate = crate::test_support::build_test_persistence_gate(Arc::clone(&storage));
+    let message_service = crate::test_support::build_test_message_service(Arc::clone(&storage));
     let settings = Arc::new(std::sync::RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
+    ));
+    let preset_store = Arc::new(crate::adapters::driven::storage::PresetStore::new(
+        crate::test_support::default_test_preset_storage(),
     ));
     let pipeline = crate::application::pipeline::pipeline::ActionPipeline::with_backends(
         CancellationToken::new(),
         narrator_recorder,
         registry,
-        persistence_gate,
+        message_service,
+        Arc::clone(&storage),
+        preset_store,
         settings,
     );
     let wired = crate::test_support::build_test_wired_app(
@@ -209,7 +214,10 @@ fn make_test_service(
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let registry = AgentRegistry::with_agent(Box::new(agent));
     let storage = Arc::new(Storage::new_in_memory());
-    let persistence_gate = crate::test_support::build_test_persistence_gate(Arc::clone(&storage));
+    let message_service = crate::test_support::build_test_message_service(Arc::clone(&storage));
+    let preset_store = Arc::new(crate::adapters::driven::storage::PresetStore::new(
+        crate::test_support::default_test_preset_storage(),
+    ));
     let settings = Arc::new(std::sync::RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
@@ -217,7 +225,9 @@ fn make_test_service(
         CancellationToken::new(),
         narrator_recorder,
         registry,
-        persistence_gate,
+        message_service,
+        Arc::clone(&storage),
+        preset_store,
         settings,
     )
 }
@@ -237,7 +247,10 @@ fn test_boot_heal_resets_stale_generating_status() {
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
     let narrator_recorder = make_test_recorder(Arc::clone(&mock));
     let agent_registry = AgentRegistry::default();
-    let persistence_gate = crate::test_support::build_test_persistence_gate(Arc::clone(&storage));
+    let message_service = crate::test_support::build_test_message_service(Arc::clone(&storage));
+    let preset_store = Arc::new(crate::adapters::driven::storage::PresetStore::new(
+        crate::test_support::default_test_preset_storage(),
+    ));
     let settings = Arc::new(std::sync::RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
@@ -245,7 +258,9 @@ fn test_boot_heal_resets_stale_generating_status() {
         CancellationToken::new(),
         narrator_recorder,
         agent_registry,
-        Arc::clone(&persistence_gate),
+        Arc::clone(&message_service),
+        Arc::clone(&storage),
+        Arc::clone(&preset_store),
         Arc::clone(&settings),
     );
     let wired = crate::test_support::build_test_wired_app(
@@ -267,7 +282,10 @@ fn make_test_service_with_agent(
 ) -> crate::application::pipeline::pipeline::ActionPipeline {
     let registry = AgentRegistry::with_agent(agent);
     let storage = Arc::new(Storage::new_in_memory());
-    let persistence_gate = crate::test_support::build_test_persistence_gate(Arc::clone(&storage));
+    let message_service = crate::test_support::build_test_message_service(Arc::clone(&storage));
+    let preset_store = Arc::new(crate::adapters::driven::storage::PresetStore::new(
+        crate::test_support::default_test_preset_storage(),
+    ));
     let settings = Arc::new(std::sync::RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
@@ -275,7 +293,9 @@ fn make_test_service_with_agent(
         CancellationToken::new(),
         narrator_recorder,
         registry,
-        persistence_gate,
+        message_service,
+        Arc::clone(&storage),
+        preset_store,
         settings,
     )
 }
@@ -291,7 +311,7 @@ fn test_execute_action_completes_and_persists_state() {
         .pipeline(service)
         .build_service();
     app.pipeline.execute_action("look".to_string());
-    let final_state = app.persistence_gate.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -322,7 +342,7 @@ fn test_execute_action_clears_last_trigger() {
         .pipeline(service)
         .build_service();
     app.pipeline.execute_action("look".to_string());
-    let final_state = app.persistence_gate.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh();
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared before pipeline runs"
@@ -340,7 +360,7 @@ fn test_execute_action_handles_narration_error() {
         .pipeline(service)
         .build_service();
     app.pipeline.execute_action("look".to_string());
-    let final_state = app.persistence_gate.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh();
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -362,7 +382,7 @@ fn test_execute_action_handles_cancellation() {
         .build_service();
     app.shutdown_token.cancel();
     app.pipeline.execute_action("look".to_string());
-    let final_state = app.persistence_gate.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -381,7 +401,7 @@ fn test_execute_action_preserves_existing_input_log() {
         .pipeline(service)
         .build_service();
     app.pipeline.execute_action("examine room".to_string());
-    let final_state = app.persistence_gate.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
@@ -424,7 +444,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     });
 
     entered.wait();
-    let mid_state = app.persistence_gate.load_or_fresh();
+    let mid_state = app.message_service.load_or_fresh();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,
@@ -433,7 +453,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
 
     release.wait();
     handle.join().expect("Action thread should complete");
-    let final_state = app.persistence_gate.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.phase,
         GenerationPhase::default(),
@@ -468,7 +488,7 @@ fn test_narration_saved_before_quantifying_phase() {
     });
 
     entered.wait();
-    let messages = app.persistence_gate.load_messages().unwrap();
+    let messages = app.message_service.load_messages().unwrap();
     let narration_count = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -477,7 +497,7 @@ fn test_narration_saved_before_quantifying_phase() {
         narration_count >= 1,
         "Narration should be saved before quantifier completes"
     );
-    let mid_state = app.persistence_gate.load_or_fresh();
+    let mid_state = app.message_service.load_or_fresh();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,

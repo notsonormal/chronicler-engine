@@ -7,7 +7,7 @@ pub mod test_app_builder;
 pub mod test_data_builder;
 
 pub use context::{
-    build_test_persistence_gate, build_test_wired_app, build_test_wired_app_with_settings,
+    build_test_message_service, build_test_wired_app, build_test_wired_app_with_settings,
     default_test_preset_storage, make_test_app, make_test_app_without_snapshot,
     make_test_pipeline_with_backends, make_test_pipeline_with_mock_quantifier,
     seed_test_world_into_storage,

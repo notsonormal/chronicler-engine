@@ -44,7 +44,7 @@ pub async fn status_ready_handler() -> Html<String> {
 
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
     tracing::debug!("generating_status_handler: called");
-    let game_state = state.persistence_gate.load_expecting_valid_state();
+    let game_state = state.message_service.load_expecting_valid_state();
     let (status, phase) = match game_state {
         Ok(gs) => {
             tracing::debug!(
@@ -76,7 +76,7 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 }
 
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
-    let game_id = state.persistence_gate.storage().current_game_id();
+    let game_id = state.game_catalogue.current_game_id();
     let _ = state
         .generation_gate
         .release_generation_slot_for_game(game_id);

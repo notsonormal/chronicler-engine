@@ -24,14 +24,23 @@ fn test_sequential_execute_retry_execute() {
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -88,14 +97,23 @@ fn test_sequential_execute_delete_execute() {
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -146,14 +164,23 @@ fn test_async_action_sequence_then_retry() {
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -184,14 +211,23 @@ fn test_three_actions_in_sequence() {
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -239,14 +275,23 @@ fn test_delete_input_then_retry_fails_gracefully() {
     let data2 = base_data();
     let app2 = SqliteTestAppBuilder::with_data(data2)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -286,14 +331,23 @@ fn test_reset_clears_history_and_state() {
     let data2 = base_data();
     let app2 = SqliteTestAppBuilder::with_data(data2)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 quantifier.clone(),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -323,14 +377,23 @@ fn test_reset_then_execute_works() {
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();
@@ -368,14 +431,23 @@ fn test_delete_mid_sequence() {
     let data = base_data();
     let app = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
+            let preset_store = Arc::new(
+            chronicler_engine::adapters::driven::storage::PresetStore::new(
+                chronicler_engine::test_support::default_test_preset_storage(),
+            ),
+        );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_mock_quantifier(
                 token,
-    crate::make_test_recorder_with_storage(
+                crate::make_test_recorder_with_storage(
                     Arc::new(MockBackend::new()),
                     Arc::clone(storage),
                 ),
                 Arc::new(MockBackend::default()),
-                Arc::clone(pg), Arc::clone(settings))
+                Arc::clone(pg),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings)
+            )
         })
         .build_with_state()
         .unwrap();

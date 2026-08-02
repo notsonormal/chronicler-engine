@@ -7,7 +7,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::application::errors::{ProcessActionResult};
 use crate::application::generation::guard::GenerationGuard;
-use crate::application::persistence_gate::PersistenceGate;
+use crate::application::message_service::MessageService;
 use crate::application::generation::slot::GenerationSlot;
 use crate::application::generation::slot::release_owned_slot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -73,7 +73,7 @@ impl GenerationGate {
         &self,
         game_id: u64,
         state: &mut GameState,
-        persistence: &PersistenceGate,
+        message_service: &MessageService,
     ) -> Result<(u64, u64, ProcessActionResult), EngineError> {
         let generation_id = self.next_generation_id();
 
@@ -97,7 +97,7 @@ impl GenerationGate {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
 
-        if let Err(e) = persistence.save_message_and_snapshot(state) {
+        if let Err(e) = message_service.save_message_and_snapshot(state) {
             tracing::debug!("try_claim: save failed; releasing slot");
             release_owned_slot(&self.registry, game_id, generation_id);
             return Err(e);

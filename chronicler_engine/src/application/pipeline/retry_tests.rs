@@ -44,7 +44,7 @@ fn insert_message_with_swipe(app: &AppState, msg: &crate::domain::model::message
 }
 
 fn add_input_and_save(app: &AppState, text: &str) -> u64 {
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     let player_name = "Player".to_string();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     let snapshot =
@@ -60,7 +60,7 @@ fn add_input_and_save(app: &AppState, text: &str) -> u64 {
 }
 
 fn add_narration_and_save(app: &AppState, text: &str) -> u64 {
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     state.add_message(text.to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -75,7 +75,7 @@ fn add_narration_and_save(app: &AppState, text: &str) -> u64 {
 }
 
 fn save_pre_main(app: &AppState) -> u64 {
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -84,7 +84,7 @@ fn save_pre_main(app: &AppState) -> u64 {
 }
 
 fn save_pre_event(app: &AppState) -> u64 {
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -96,7 +96,7 @@ fn setup_event_flow(app: &AppState) {
     let _ = add_input_and_save(app, "test input");
     let _ = save_pre_main(app);
 
-    let mut pre_event_state = app.persistence_gate.load_or_fresh();
+    let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -133,7 +133,7 @@ fn setup_event_flow_without_trigger(app: &AppState) {
     let _ = add_input_and_save(app, "test input");
     let _ = save_pre_main(app);
 
-    let mut pre_event_state = app.persistence_gate.load_or_fresh();
+    let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -164,14 +164,14 @@ fn setup_event_flow_without_trigger(app: &AppState) {
     }
 }
 
-#[test]
-fn test_retry_no_snapshot() {
+#[tokio::test]
+async fn test_retry_no_snapshot() {
     let state = make_test_state();
     let wired = make_test_app_without_snapshot(state).unwrap();
     let app = AppState::from_wired(wired);
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("Retry failed: no anchor message")),
         "Should record retry error when no anchor message exists, got {:?}",
@@ -179,8 +179,8 @@ fn test_retry_no_snapshot() {
     );
 }
 
-#[test]
-fn test_retry_load_messages_error() {
+#[tokio::test]
+async fn test_retry_load_messages_error() {
     let _state = make_test_state();
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing = Arc::new(failing_storage);
@@ -200,19 +200,19 @@ fn test_retry_load_messages_error() {
     app.pipeline.retry_last_response();
 }
 
-#[test]
-fn test_retry_no_input() {
+#[tokio::test]
+async fn test_retry_no_input() {
     let app = TestAppBuilder::default_test().build_service();
     app.pipeline.retry_last_response();
 }
 
-#[test]
-fn test_retry_event_with_no_pre_event_fallback_to_main() {
+#[tokio::test]
+async fn test_retry_event_with_no_pre_event_fallback_to_main() {
     let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
 
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     state.add_message("Event narration".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -229,11 +229,11 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
     app.pipeline.retry_last_response();
 }
 
-#[test]
-fn test_retry_event_with_no_pre_event_and_no_input() {
+#[tokio::test]
+async fn test_retry_event_with_no_pre_event_and_no_input() {
     let app = TestAppBuilder::default_test().build_service();
 
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     state.add_message("Event only".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -250,8 +250,8 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
     app.pipeline.retry_last_response();
 }
 
-#[test]
-fn test_retry_event_storage_error_on_pre_event() {
+#[tokio::test]
+async fn test_retry_event_storage_error_on_pre_event() {
     let state = make_test_state();
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(storage);
@@ -289,7 +289,7 @@ fn test_retry_event_storage_error_on_pre_event() {
 
     handle.clear("load_snapshot_by_id");
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -300,15 +300,15 @@ fn test_retry_event_storage_error_on_pre_event() {
     );
 }
 
-#[test]
-fn test_retry_event_missing_trigger_context() {
+#[tokio::test]
+async fn test_retry_event_missing_trigger_context() {
     let app = TestAppBuilder::default_test().build_service();
 
     setup_event_flow_without_trigger(&app);
 
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error on TriggerMissing, got {other:?}"),
@@ -319,14 +319,14 @@ fn test_retry_event_missing_trigger_context() {
     );
 }
 
-#[test]
-fn test_retry_event_continuation_cancels_before_llm() {
+#[tokio::test]
+async fn test_retry_event_continuation_cancels_before_llm() {
     let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app.persistence_gate.load_or_fresh();
+    let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -344,7 +344,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
     let _ = app.pipeline.retry_event_continuation(pre_event_state);
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Cancelled retry should reset status to Idle, got {:?}",
@@ -352,8 +352,8 @@ fn test_retry_event_continuation_cancels_before_llm() {
     );
 }
 
-#[test]
-fn test_retry_event_trigger_narration_fails() {
+#[tokio::test]
+async fn test_retry_event_trigger_narration_fails() {
     let pipeline = make_test_pipeline_with_mock_quantifier(
         Arc::new(Storage::new_in_memory()),
         make_test_recorder(Arc::new(
@@ -369,7 +369,7 @@ fn test_retry_event_trigger_narration_fails() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
 
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -397,7 +397,7 @@ fn test_retry_event_trigger_narration_fails() {
 
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -408,8 +408,8 @@ fn test_retry_event_trigger_narration_fails() {
     );
 }
 
-#[test]
-fn test_retry_event_empty_continuation_text() {
+#[tokio::test]
+async fn test_retry_event_empty_continuation_text() {
     let pipeline = make_test_pipeline_with_mock_quantifier(
         Arc::new(Storage::new_in_memory()),
         make_test_recorder(Arc::new(MockBackend::new())),
@@ -423,7 +423,7 @@ fn test_retry_event_empty_continuation_text() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_event_id = save_pre_event(&app);
 
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -448,11 +448,11 @@ fn test_retry_event_empty_continuation_text() {
     app.pipeline.retry_last_response();
 }
 
-#[test]
-fn test_retry_main_no_pre_main_snapshot() {
+#[tokio::test]
+async fn test_retry_main_no_pre_main_snapshot() {
     let app = TestAppBuilder::default_test().build_service();
 
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     let player_name = "Player".to_string();
     state.add_message(
         "test input".to_string(),
@@ -463,7 +463,7 @@ fn test_retry_main_no_pre_main_snapshot() {
         insert_message_with_swipe(&app, last);
     }
 
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     state.add_message("Narration text".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -476,7 +476,7 @@ fn test_retry_main_no_pre_main_snapshot() {
 
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -486,14 +486,14 @@ fn test_retry_main_no_pre_main_snapshot() {
     );
 }
 
-#[test]
-fn test_retry_event_continuation_happy_path() {
+#[tokio::test]
+async fn test_retry_event_continuation_happy_path() {
     let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app.persistence_gate.load_or_fresh();
+    let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -527,7 +527,7 @@ fn test_retry_event_continuation_happy_path() {
 
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Should finish with Idle status, got {:?}",
@@ -535,22 +535,22 @@ fn test_retry_event_continuation_happy_path() {
     );
 }
 
-#[test]
-fn test_retry_main_narration_happy_path() {
+#[tokio::test]
+async fn test_retry_main_narration_happy_path() {
     let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
     let _final_id = add_narration_and_save(&app, "Narration text");
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let _ = app
         .pipeline
         .retry_main_narration(state, "test input".to_string());
 }
 
-#[test]
-fn test_retry_main_storage_error_on_pre_main() {
+#[tokio::test]
+async fn test_retry_main_storage_error_on_pre_main() {
     let state = make_test_state();
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(storage);
@@ -589,7 +589,7 @@ fn test_retry_main_storage_error_on_pre_main() {
 
     handle.clear("load_snapshot_by_id");
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -628,8 +628,8 @@ impl crate::application::ports::llm_provider::LlmProvider for EmptyTriggerBacken
     }
 }
 
-#[test]
-fn test_retry_event_empty_continuation_triggers_error() {
+#[tokio::test]
+async fn test_retry_event_empty_continuation_triggers_error() {
     let pipeline = make_test_pipeline_with_mock_quantifier(
         Arc::new(Storage::new_in_memory()),
         make_test_recorder(Arc::new(EmptyTriggerBackend)),
@@ -643,7 +643,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app.persistence_gate.load_or_fresh();
+    let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -675,7 +675,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         insert_message_with_swipe(&app, last);
     }
     app.pipeline.retry_last_response();
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
         "Should set error status when continuation text is empty, got {:?}",
@@ -683,15 +683,15 @@ fn test_retry_event_empty_continuation_triggers_error() {
     );
 }
 
-#[test]
-fn test_retry_appends_swipe_to_same_message() {
+#[tokio::test]
+async fn test_retry_appends_swipe_to_same_message() {
     let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
     let _narration_id = add_narration_and_save(&app, "Narration text");
 
-    let msgs = app.persistence_gate.load_messages().unwrap();
+    let msgs = app.message_service.load_messages().unwrap();
     let narration_msg = msgs
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -709,7 +709,7 @@ fn test_retry_appends_swipe_to_same_message() {
 
     app.pipeline.retry_last_response();
 
-    let msgs = app.persistence_gate.load_messages().unwrap();
+    let msgs = app.message_service.load_messages().unwrap();
     let narration = msgs
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -730,14 +730,14 @@ fn test_retry_appends_swipe_to_same_message() {
     );
 }
 
-#[test]
-fn test_retrigger_event_cancels_cleanly() {
+#[tokio::test]
+async fn test_retrigger_event_cancels_cleanly() {
     let app = TestAppBuilder::default_test().build_service();
 
     let _input_id = add_input_and_save(&app, "test input");
     let _pre_main_id = save_pre_main(&app);
 
-    let mut pre_event_state = app.persistence_gate.load_or_fresh();
+    let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -773,7 +773,7 @@ fn test_retrigger_event_cancels_cleanly() {
 
     app.pipeline.retrigger_event();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert_eq!(
         state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -787,8 +787,8 @@ fn test_retrigger_event_cancels_cleanly() {
     );
 }
 
-#[test]
-fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
+#[tokio::test]
+async fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
     let (storage, handle) = {
         let base = Storage::new_in_memory();
@@ -816,7 +816,7 @@ fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
 
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error on world fetch failure, got {other:?}"),
@@ -827,8 +827,8 @@ fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
     );
 }
 
-#[test]
-fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
+#[tokio::test]
+async fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
     let (storage, handle) = {
         let base = Storage::new_in_memory();
@@ -856,7 +856,7 @@ fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
 
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error on persona fetch failure, got {other:?}"),
@@ -867,8 +867,8 @@ fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
     );
 }
 
-#[test]
-fn retry_records_canonical_game_not_found_when_game_missing() {
+#[tokio::test]
+async fn retry_records_canonical_game_not_found_when_game_missing() {
     let storage = {
         let base = Storage::new_in_memory();
         let data = TestDataBuilder::default_test().build();
@@ -893,7 +893,7 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
 
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error, got {other:?}"),
@@ -904,8 +904,8 @@ fn retry_records_canonical_game_not_found_when_game_missing() {
     );
 }
 
-#[test]
-fn test_retry_last_response_cancelled_at_phase_boundary() {
+#[tokio::test]
+async fn test_retry_last_response_cancelled_at_phase_boundary() {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
@@ -929,7 +929,7 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
     let flipper = thread::spawn(move || {
         thread::sleep(Duration::from_millis(50));
         app_for_thread
-            .persistence_gate
+            .storage
             .set_game_id(initial_game_id.wrapping_add(1));
     });
 
@@ -939,7 +939,7 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
         .join()
         .expect("game-id flipper thread should complete");
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert_eq!(
         state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -955,8 +955,8 @@ fn test_retry_last_response_cancelled_at_phase_boundary() {
     );
 }
 
-#[test]
-fn test_retrigger_event_cancelled_at_phase_boundary() {
+#[tokio::test]
+async fn test_retrigger_event_cancelled_at_phase_boundary() {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
@@ -980,7 +980,7 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
     let flipper = thread::spawn(move || {
         thread::sleep(Duration::from_millis(50));
         app_for_thread
-            .persistence_gate
+            .storage
             .set_game_id(initial_game_id.wrapping_add(1));
     });
 
@@ -990,7 +990,7 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
         .join()
         .expect("game-id flipper thread should complete");
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     assert_eq!(
         state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -1000,8 +1000,8 @@ fn test_retrigger_event_cancelled_at_phase_boundary() {
     );
 }
 
-#[test]
-fn test_retrigger_event_emits_error_on_world_fetch_failure() {
+#[tokio::test]
+async fn test_retrigger_event_emits_error_on_world_fetch_failure() {
     let data = TestDataBuilder::default_test().build();
     let (storage, handle) = {
         let base = Storage::new_in_memory();
@@ -1029,7 +1029,7 @@ fn test_retrigger_event_emits_error_on_world_fetch_failure() {
 
     app.pipeline.retrigger_event();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => {
@@ -1042,11 +1042,11 @@ fn test_retrigger_event_emits_error_on_world_fetch_failure() {
     );
 }
 
-#[test]
-fn test_retry_event_continuation_handles_state_without_input_message() {
+#[tokio::test]
+async fn test_retry_event_continuation_handles_state_without_input_message() {
     let app = TestAppBuilder::default_test().build_service();
 
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     state.add_message(
         "Narration without prior input".to_string(),
@@ -1057,13 +1057,13 @@ fn test_retry_event_continuation_handles_state_without_input_message() {
     let _ = app.pipeline.retry_event_continuation(state);
 }
 
-#[test]
-fn test_retry_records_missing_snapshot_id() {
+#[tokio::test]
+async fn test_retry_records_missing_snapshot_id() {
     const MISSING_ID: u64 = 99_999;
 
     let app = TestAppBuilder::default_test().build_service();
 
-    let mut state = app.persistence_gate.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh();
     let player_name = "Player".to_string();
     state.add_message(
         "test input".to_string(),
@@ -1077,7 +1077,7 @@ fn test_retry_records_missing_snapshot_id() {
 
     app.pipeline.retry_last_response();
 
-    let state = app.persistence_gate.load_or_fresh();
+    let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
         GenerationStatus::Error(m) => m.clone(),
         other => panic!("expected GenerationStatus::Error on missing snapshot, got {other:?}"),

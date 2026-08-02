@@ -4,8 +4,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use tokio_util::sync::CancellationToken;
-
 use chronicler_engine::application::pipeline::PhaseError;
 use chronicler_engine::domain::model::state::game_state::{FreeActionContext, GameState};
 
@@ -42,13 +40,11 @@ use fixtures::create_minimal_test_state;
 use fixtures::create_test_state;
 use application_ext::PipelineHelpers;
 
-fn app_is_generating(app: &chronicler_engine::adapters::driving::http::AppState) -> bool {
-    app.storage
-        .load_latest_snapshot()
-        .ok()
-        .flatten()
-        .map(|snap| snap.narrative.input_buffer.status.is_generating())
-        .unwrap_or(false)
+fn app_is_generating(
+    app: &chronicler_engine::adapters::driving::http::AppState,
+    game_id: u64,
+) -> bool {
+    app.generation_gate.is_busy(game_id)
 }
 
 fn shopkeeper_npc() -> NpcCard {
@@ -222,20 +218,27 @@ fn test_inv004_cancellable_at_boundaries() {
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(100));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
     let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .pipeline_fn(move |_storage, _pg, _settings, _token| {
+        .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
-                CancellationToken::new(),
+                token,
                 recorder,
                 AgentRegistry::default(),
-                Arc::clone(_pg),
-                Arc::clone(_settings),
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings),
             )
         })
         .build_with_state()
         .unwrap();
 
-    let pg = &app.persistence_gate;
+    let game_storage = &app.storage;
     let started_for = app.game_catalogue.current_game_id();
     let switched_to = started_for.wrapping_add(99);
     let pipeline = app.pipeline.clone();
@@ -255,7 +258,7 @@ fn test_inv004_cancellable_at_boundaries() {
             ),
             "narration should start within timeout"
         );
-        pg.set_game_id(switched_to);
+        game_storage.set_game_id(switched_to);
 
         handle.join().expect("pipeline thread should not panic")
     });
@@ -372,7 +375,23 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
     let invalid_destination = "nonexistent_place_xyz";
 
     let map = Arc::new(fixtures::create_test_map());
-    let npcs = HashMap::new();
+    let test_npc = NpcCard {
+        id: "test_npc".into(),
+        sheet: CharacterSheet {
+            name: "Innkeeper".into(),
+            description: "A friendly innkeeper".into(),
+            personality: "Helpful".into(),
+            scenario: "Runs the tavern".into(),
+            example_dialogue: "Welcome!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![],
+    };
+    let npcs = npc_map(vec![test_npc]);
 
     assert!(
         !map.overworld
@@ -471,14 +490,21 @@ async fn test_p4_concurrent_happy_path() {
     );
     let backend_for_closure = Arc::clone(&mock_backend_raw);
     let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .pipeline_fn(move |_storage, _pg, _settings, _token| {
+        .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
-                CancellationToken::new(),
+                token,
                 recorder,
                 AgentRegistry::default(),
-                Arc::clone(_pg),
-                Arc::clone(_settings),
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings),
             )
         })
         .build_with_state()
@@ -514,7 +540,7 @@ async fn test_p4_concurrent_happy_path() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
-            || !app_is_generating(&app),
+            || !app_is_generating(&app, game1),
         ),
         "gen A's pipeline must complete (slot released) within timeout"
     );
@@ -549,7 +575,7 @@ async fn test_p4_concurrent_happy_path() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
-            || !app_is_generating(&app),
+            || !app_is_generating(&app, game2),
         ),
         "gen B's pipeline must complete within timeout"
     );
@@ -581,7 +607,7 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     assert!(
-        !app_is_generating(&app),
+        !app_is_generating(&app, game2),
         "persisted status must be Idle after both pipelines complete (registry clean)"
     );
 
@@ -601,14 +627,21 @@ async fn test_p4_concurrent_triple_overlap() {
     ]));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
     let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .pipeline_fn(move |_storage, _pg, _settings, _token| {
+        .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
-                CancellationToken::new(),
+                token,
                 recorder,
                 AgentRegistry::default(),
-                Arc::clone(_pg),
-                Arc::clone(_settings),
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings),
             )
         })
         .build_with_state()
@@ -681,7 +714,7 @@ async fn test_p4_concurrent_triple_overlap() {
                 let has_a = history_texts.iter().any(|t| t.contains("GEN_A_OUTPUT"));
                 let has_b = history_texts.iter().any(|t| t.contains("GEN_B_OUTPUT"));
                 let has_c = history_texts.iter().any(|t| t.contains("GEN_C_OUTPUT"));
-                !has_a && !has_b && has_c && !app_is_generating(&app)
+                !has_a && !has_b && has_c && !app_is_generating(&app, game3)
             },
         ),
         "all three pipelines must complete with only gen C output in game 3"

@@ -21,7 +21,7 @@ impl PipelineHelpers for AppState {
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_millis(timeout_ms);
         while start.elapsed() < timeout {
-            let state = self.persistence_gate.load_or_fresh();
+            let state = self.message_service.load_or_fresh();
             if !state.narrative.input_buffer.status.is_generating() {
                 return true;
             }
@@ -31,8 +31,8 @@ impl PipelineHelpers for AppState {
     }
 
     fn latest_state(&self) -> GameState {
-        let mut state = self.persistence_gate.load_or_fresh();
-        self.persistence_gate.load_messages_into_state(&mut state);
+        let mut state = self.message_service.load_or_fresh();
+        self.message_service.load_messages_into_state(&mut state);
         state
     }
 
@@ -40,7 +40,7 @@ impl PipelineHelpers for AppState {
         use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
         let snapshot = GameStateSnapshot::from_game_state(state);
         let snapshot_id = self.storage.save_snapshot(&snapshot).unwrap();
-        let existing = self.persistence_gate.load_messages().unwrap_or_default();
+        let existing = self.message_service.load_messages().unwrap_or_default();
         for msg in existing {
             let _ = self.storage.delete_message(msg.id);
         }
@@ -75,7 +75,7 @@ impl PipelineHelpers for AppState {
     fn latest_snapshot(
         &self,
     ) -> chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot {
-        let state = self.persistence_gate.load_or_fresh();
+        let state = self.message_service.load_or_fresh();
         chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         )

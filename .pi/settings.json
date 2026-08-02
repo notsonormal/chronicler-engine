@@ -8,6 +8,6 @@
   },
   "packages": [
     "extensions/pi-plan-mode",
-    "npm:@juicesharp/rpiv-todo"
+    "npm:@agnishc/edb-todo"
   ]
 }

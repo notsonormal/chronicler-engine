@@ -3,9 +3,10 @@
 
 use std::sync::{Arc, RwLock};
 
+use crate::adapters::driven::storage::{PresetStore, Storage};
 use crate::application::errors::ApplicationError;
 use crate::application::llm_message::LlmMessage;
-use crate::application::persistence_gate::PersistenceGate;
+use crate::application::message_service::MessageService;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageEntry;
@@ -15,21 +16,30 @@ pub use crate::application::debug::DebugStateView;
 
 #[derive(Clone)]
 pub struct GameViewQuery {
-    persistence_gate: Arc<PersistenceGate>,
+    storage: Arc<Storage>,
+    message_service: Arc<MessageService>,
+    preset_store: Arc<PresetStore>,
     settings: Arc<RwLock<AppSettings>>,
 }
 
 impl GameViewQuery {
-    pub fn new(persistence_gate: Arc<PersistenceGate>, settings: Arc<RwLock<AppSettings>>) -> Self {
+    pub fn new(
+        storage: Arc<Storage>,
+        message_service: Arc<MessageService>,
+        preset_store: Arc<PresetStore>,
+        settings: Arc<RwLock<AppSettings>>,
+    ) -> Self {
         Self {
-            persistence_gate,
+            storage,
+            message_service,
+            preset_store,
             settings,
         }
     }
 
     pub fn get_current_room_view(&self) -> Result<(String, Option<String>), ApplicationError> {
-        let game_state = self.persistence_gate.load_or_fresh();
-        let storage = self.persistence_gate.storage();
+        let game_state = self.message_service.load_or_fresh();
+        let storage = &self.storage;
         let game_id = storage.current_game_id();
         let game = storage.require_game(game_id)?;
         let world_with_map = storage.require_world(&game.world_key)?;
@@ -61,8 +71,8 @@ impl GameViewQuery {
         &self,
         scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
-        let game_state = self.persistence_gate.load_or_fresh();
-        let storage = self.persistence_gate.storage();
+        let game_state = self.message_service.load_or_fresh();
+        let storage = &self.storage;
         let game_id = storage.current_game_id();
         let game = storage.require_game(game_id)?;
         let world_with_map = storage.require_world(&game.world_key)?;
@@ -100,7 +110,7 @@ impl GameViewQuery {
     }
 
     pub fn get_debug_state(&self) -> Result<DebugStateView, ApplicationError> {
-        let game_state = self.persistence_gate.load_or_fresh();
+        let game_state = self.message_service.load_or_fresh();
 
         let history_tail: Vec<MessageEntry> = game_state
             .narrative
@@ -145,14 +155,14 @@ impl GameViewQuery {
     }
 
     pub fn get_story_log_entries(&self) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-        let game_state = self.persistence_gate.load_or_fresh();
+        let game_state = self.message_service.load_or_fresh();
         let entries: Vec<_> = game_state.narrative.history().to_vec();
         let has_last_trigger = game_state.narrative.last_trigger.is_some();
         Ok((entries, has_last_trigger))
     }
 
     pub fn get_current_game_name(&self) -> Result<String, ApplicationError> {
-        let storage = self.persistence_gate.storage();
+        let storage = &self.storage;
         match storage.get_game(storage.current_game_id())? {
             Some(g) => Ok(g.name),
             None => Ok("Unknown".to_string()),
@@ -163,8 +173,7 @@ impl GameViewQuery {
         &self,
         limit: usize,
     ) -> Result<Vec<LlmMessage>, ApplicationError> {
-        self.persistence_gate
-            .storage()
+        self.storage
             .list_latest_llm_messages(limit)
             .map_err(Into::into)
     }
@@ -172,7 +181,7 @@ impl GameViewQuery {
     pub fn get_generating_status(
         &self,
     ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-        let game_state = self.persistence_gate.load_or_fresh();
+        let game_state = self.message_service.load_or_fresh();
         Ok((
             game_state.narrative.input_buffer.status.clone(),
             game_state.narrative.input_buffer.phase.clone(),
@@ -184,7 +193,7 @@ impl GameViewQuery {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
             settings.active_quantifier_prompt_preset_id.clone()
         };
-        match self.persistence_gate.preset_store().get_preset(&preset_id) {
+        match self.preset_store.get_preset(&preset_id) {
             Ok(Some(preset)) => preset.assemble_text(&[], None, None),
             Ok(None) => {
                 tracing::error!(

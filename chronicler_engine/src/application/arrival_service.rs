@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use tracing::instrument;
 
-use crate::application::persistence_gate::PersistenceGate;
+use crate::adapters::driven::storage::Storage;
+use crate::application::message_service::MessageService;
 use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::domain::model::character::{NpcCard, PersonaCard};
@@ -17,7 +18,8 @@ use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
 pub struct ArrivalTaskContext {
-    pub(crate) persistence_gate: Arc<PersistenceGate>,
+    pub(crate) message_service: Arc<MessageService>,
+    pub(crate) storage: Arc<Storage>,
     pub(crate) room_id: String,
     pub(crate) arrival_preset: Option<PromptPreset>,
     pub(crate) response_length: String,
@@ -31,7 +33,8 @@ pub struct ArrivalTaskContext {
 impl ArrivalTaskContext {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        persistence_gate: Arc<PersistenceGate>,
+        message_service: Arc<MessageService>,
+        storage: Arc<Storage>,
         room_id: String,
         arrival_preset: Option<PromptPreset>,
         response_length: String,
@@ -42,7 +45,8 @@ impl ArrivalTaskContext {
         recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
     ) -> Self {
         Self {
-            persistence_gate,
+            message_service,
+            storage,
             room_id,
             arrival_preset,
             response_length,
@@ -57,7 +61,8 @@ impl ArrivalTaskContext {
     #[doc(hidden)]
     #[allow(clippy::too_many_arguments)]
     pub fn new_for_test(
-        persistence_gate: Arc<PersistenceGate>,
+        message_service: Arc<MessageService>,
+        storage: Arc<Storage>,
         room_id: String,
         nearby_npcs: Vec<NpcCard>,
         all_npcs: Vec<NpcCard>,
@@ -68,7 +73,8 @@ impl ArrivalTaskContext {
         recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
     ) -> Self {
         Self::new(
-            persistence_gate,
+            message_service,
+            storage,
             room_id,
             arrival_preset,
             response_length,
@@ -87,14 +93,14 @@ impl ArrivalTaskContext {
 
     #[instrument(err, skip(self), fields(room_id = %self.room_id))]
     pub(crate) fn run(self) -> Result<(), EngineError> {
-        let storage = self.persistence_gate.storage();
-        let mut state = match self.persistence_gate.load_expecting_valid_state() {
+        let storage = &self.storage;
+        let mut state = match self.message_service.load_expecting_valid_state() {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!(
                     "load_expecting_valid_state failed in arrival task: {e}; falling back to fresh initial state"
                 );
-                match self.persistence_gate.build_fresh_initial_state() {
+                match self.message_service.build_fresh_initial_state() {
                     Ok(s) => s,
                     Err(e2) => {
                         tracing::error!("build_fresh_initial_state also failed: {e2}");
@@ -171,7 +177,7 @@ impl ArrivalTaskContext {
             }
         }
 
-        if let Err(e) = self.persistence_gate.save_message_and_snapshot(&mut state) {
+        if let Err(e) = self.message_service.save_message_and_snapshot(&mut state) {
             tracing::error!("Failed to save arrival message and snapshot: {e}");
         }
 

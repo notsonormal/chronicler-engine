@@ -33,11 +33,11 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
         })
         .collect();
 
-    let Ok(worlds) = state.persistence_gate.list_worlds() else {
+    let Ok(worlds) = state.world_catalogue.list_worlds() else {
         return internal_error("Failed to list worlds");
     };
 
-    let personas: Vec<PersonaRowView> = match state.persistence_gate.list_personas() {
+    let personas: Vec<PersonaRowView> = match state.persona_catalogue.list_personas() {
         Ok(p) => p,
         Err(e) => {
             tracing::warn!("Failed to load personas: {e}");

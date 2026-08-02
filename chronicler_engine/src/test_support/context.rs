@@ -10,7 +10,7 @@ use crate::adapters::driven::storage::{PresetStore, Storage};
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::pipeline::pipeline::ActionPipeline;
-use crate::application::persistence_gate::PersistenceGate;
+use crate::application::message_service::MessageService;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::character::NpcCard;
@@ -38,10 +38,8 @@ pub fn default_test_preset_storage() -> Arc<Storage> {
     Arc::new(storage)
 }
 
-pub fn build_test_persistence_gate(storage: Arc<Storage>) -> Arc<PersistenceGate> {
-    let preset_storage = default_test_preset_storage();
-    let preset_store = Arc::new(PresetStore::new(preset_storage));
-    Arc::new(PersistenceGate::new(storage, preset_store))
+pub fn build_test_message_service(storage: Arc<Storage>) -> Arc<MessageService> {
+    Arc::new(MessageService::new(storage))
 }
 
 pub fn make_test_pipeline_with_backends(
@@ -49,13 +47,16 @@ pub fn make_test_pipeline_with_backends(
     recorder: Arc<LlmCallRecorder>,
     agent_registry: AgentRegistry,
 ) -> ActionPipeline {
-    let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
+    let message_service = build_test_message_service(Arc::clone(&storage));
+    let preset_store = Arc::new(PresetStore::new(default_test_preset_storage()));
     let settings = Arc::new(RwLock::new(AppSettings::default()));
     ActionPipeline::with_backends(
         CancellationToken::new(),
         recorder,
         agent_registry,
-        persistence_gate,
+        message_service,
+        Arc::clone(&storage),
+        preset_store,
         settings,
     )
 }
@@ -65,13 +66,16 @@ pub fn make_test_pipeline_with_mock_quantifier(
     recorder: Arc<LlmCallRecorder>,
     quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
 ) -> ActionPipeline {
-    let persistence_gate = build_test_persistence_gate(Arc::clone(&storage));
+    let message_service = build_test_message_service(Arc::clone(&storage));
+    let preset_store = Arc::new(PresetStore::new(default_test_preset_storage()));
     let settings = Arc::new(RwLock::new(AppSettings::default()));
     ActionPipeline::with_mock_quantifier(
         CancellationToken::new(),
         recorder,
         quantifier_provider,
-        persistence_gate,
+        message_service,
+        Arc::clone(&storage),
+        preset_store,
         settings,
     )
 }
