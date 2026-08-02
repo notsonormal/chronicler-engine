@@ -25,7 +25,7 @@ impl PipelineHelpers for AppState {
             if !state.narrative.input_buffer.status.is_generating() {
                 return true;
             }
-            std::thread::sleep(std::time::Duration::from_millis(200));
+            std::thread::sleep(std::time::Duration::from_millis(15));
         }
         false
     }

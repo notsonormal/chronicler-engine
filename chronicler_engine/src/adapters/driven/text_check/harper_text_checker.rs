@@ -15,25 +15,33 @@ use crate::domain::model::settings::TextCheckMode;
 use crate::application::ports::text_checker::{CheckIssue, CheckResult, TextChecker};
 
 pub struct HarperTextChecker {
-    dictionary: Arc<MergedDictionary>,
+    ignored_words: Vec<String>,
+    dictionary: std::sync::OnceLock<Arc<MergedDictionary>>,
 }
 
 impl HarperTextChecker {
     pub fn new(ignored_words: &[String]) -> Self {
-        let mut merged = MergedDictionary::new();
-        merged.add_dictionary(FstDictionary::curated());
-
-        if !ignored_words.is_empty() {
-            let mut user_dict = MutableDictionary::new();
-            for word in ignored_words {
-                user_dict.append_word_str(word, harper_core::WordMetadata::default());
-            }
-            merged.add_dictionary(Arc::new(user_dict));
-        }
-
         Self {
-            dictionary: Arc::new(merged),
+            ignored_words: ignored_words.to_vec(),
+            dictionary: std::sync::OnceLock::new(),
         }
+    }
+
+    fn merged(&self) -> Arc<MergedDictionary> {
+        self.dictionary
+            .get_or_init(|| {
+                let mut merged = MergedDictionary::new();
+                merged.add_dictionary(FstDictionary::curated());
+                if !self.ignored_words.is_empty() {
+                    let mut user_dict = MutableDictionary::new();
+                    for word in &self.ignored_words {
+                        user_dict.append_word_str(word, harper_core::WordMetadata::default());
+                    }
+                    merged.add_dictionary(Arc::new(user_dict));
+                }
+                Arc::new(merged)
+            })
+            .clone()
     }
 }
 
@@ -48,8 +56,9 @@ impl TextChecker for HarperTextChecker {
             return Ok(None);
         }
 
-        let document = Document::new_plain_english(text, self.dictionary.as_ref());
-        let mut linter = LintGroup::new_curated(self.dictionary.clone());
+        let dictionary = self.merged();
+        let document = Document::new_plain_english(text, dictionary.as_ref());
+        let mut linter = LintGroup::new_curated(dictionary);
         linter.config.set_rule_enabled("AvoidCurses", false);
 
         match mode {

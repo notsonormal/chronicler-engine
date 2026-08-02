@@ -17,8 +17,8 @@ const ALLOWED_FREE_FN_FOLDERS: &[&str] = &[
 /// Composition-root entry points that are filename-exempt regardless of folder.
 const PATH_EXEMPT_FILES: &[&str] = &["main.rs"];
 
-// TODO: WE shouldn't have these random path extensions (excluding main.rs), 
-// these should all be moved in one of the allowed free folders. There's 
+// TODO: WE shouldn't have these random path extensions (excluding main.rs),
+// these should all be moved in one of the allowed free folders. There's
 // no reason we can't just move them into a utils or builders subfolders
 
 /// Domain-owned utility modules whose free-function APIs are intentional.

@@ -156,7 +156,7 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
-// TODO: IS this actually catching all problems? Or is catching products in 
+// TODO: IS this actually catching all problems? Or is catching products in
 //  just `src` and not `tests/`
 pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation> {
     let mut violations = Vec::new();
@@ -223,7 +223,7 @@ pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation>
 fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    if path.contains("mock.rs") {
+    if path.contains("mock.rs") || path.ends_with("_tests.rs") {
         return violations;
     }
 

@@ -1,6 +1,6 @@
 //! Unit tests for StatePatch merge semantics
 
-use chronicler_engine::domain::model::agent::{Confidence, StatePatch};
+use crate::domain::model::agent::{Confidence, StatePatch};
 
 fn scene_patch(
     npc_ids: Vec<&str>,

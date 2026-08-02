@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::Violation;
 
 // TODO: There should be a guardrail making sure there are no inline tests
-//  And tests should be in a separate file. I think this is being enforced 
+//  And tests should be in a separate file. I think this is being enforced
 //  for the `src/` files (unless the guardrail has been removed) but it
 //  is definitely nto being enforced in the `test/` folder
 

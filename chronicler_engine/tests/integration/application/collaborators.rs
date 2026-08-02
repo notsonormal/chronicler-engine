@@ -12,12 +12,12 @@ use crate::sqlite_test_app_builder::SqliteTestAppBuilder;
 use crate::application_ext::PipelineHelpers;
 use crate::storage_ext::TestWorldFixture;
 
-// TODO: I'm not sure what these integration tests are really 
+// TODO: I'm not sure what these integration tests are really
 //  about. We had a `collaborators` method in the bootstrap folder
 //  before but that was removed. So I don't know if we should really
-//  have a tested class around a similar concept. 
+//  have a tested class around a similar concept.
 
-// TODO: If we need these tests, then we should move them into 
+// TODO: If we need these tests, then we should move them into
 //  more targeted tests
 
 fn create_pipeline() -> ActionPipeline {
