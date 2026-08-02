@@ -4,7 +4,6 @@
 use axum::{Form, extract::State, response::Html};
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::utils::settings::save_settings;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{
     preset_card_html, preset_edit_form_html, preset_view_form_html,
@@ -38,7 +37,7 @@ pub async fn preset_card_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = require_preset!(app_state.preset_storage, &id);
+    let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     let settings = try_lock!(app_state.settings.read());
     let is_active = match preset.preset_type {
@@ -53,18 +52,18 @@ pub async fn view_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = require_preset!(app_state.preset_storage, &id);
+    let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     Html(preset_view_form_html(&preset))
 }
 
 pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
     let system_presets = app_state
-        .preset_storage
+        .prompt_preset_service
         .list_presets(PresetType::System)
         .unwrap_or_default();
     let quantifier_presets = app_state
-        .preset_storage
+        .prompt_preset_service
         .list_presets(PresetType::Quantifier)
         .unwrap_or_default();
 
@@ -116,7 +115,7 @@ pub async fn save_preset_handler(
 
     let preset = form.into_preset(generate_preset_id(), preset_type);
 
-    if let Err(e) = app_state.preset_storage.save_preset(&preset) {
+    if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
@@ -127,7 +126,7 @@ pub async fn edit_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = require_preset!(app_state.preset_storage, &id);
+    let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     if preset.is_default {
         return Html("<span class='error'>Cannot edit default presets</span>".to_string());
@@ -151,7 +150,7 @@ pub async fn update_preset_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<PresetForm>,
 ) -> Html<String> {
-    let existing = require_preset!(app_state.preset_storage, &id);
+    let existing = require_preset!(app_state.prompt_preset_service, &id);
 
     if existing.is_default {
         return Html("<span class='error'>Cannot edit default presets</span>".to_string());
@@ -166,7 +165,7 @@ pub async fn update_preset_handler(
 
     let updated = form.into_preset(id, preset_type);
 
-    if let Err(e) = app_state.preset_storage.save_preset(&updated) {
+    if let Err(e) = app_state.prompt_preset_service.save_preset(&updated) {
         return Html(format!("<span class='error'>Update failed: {e}</span>"));
     }
 
@@ -182,13 +181,13 @@ pub async fn delete_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = require_preset!(app_state.preset_storage, &id);
+    let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     if preset.is_default {
         return Html("<span class='error'>Cannot delete default presets</span>".to_string());
     }
 
-    if let Err(e) = app_state.preset_storage.delete_preset(&id) {
+    if let Err(e) = app_state.prompt_preset_service.delete_preset(&id) {
         return Html(format!("<span class='error'>Delete failed: {e}</span>"));
     }
 
@@ -199,14 +198,14 @@ pub async fn duplicate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = require_preset!(app_state.preset_storage, &id);
+    let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     let mut copy = preset.clone();
     copy.id = generate_preset_id();
     copy.name = format!("{} (Copy)", copy.name);
     copy.is_default = false;
 
-    if let Err(e) = app_state.preset_storage.save_preset(&copy) {
+    if let Err(e) = app_state.prompt_preset_service.save_preset(&copy) {
         return Html(format!("<span class='error'>Duplicate failed: {e}</span>"));
     }
 
@@ -217,7 +216,7 @@ pub async fn activate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = require_preset!(app_state.preset_storage, &id);
+    let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     let mut settings = try_lock!(app_state.settings.write());
 
@@ -229,16 +228,16 @@ pub async fn activate_preset_handler(
             settings.active_quantifier_prompt_preset_id = id.clone();
         }
     }
-    if let Err(e) = save_settings(&settings, &app_state.storage) {
+    if let Err(e) = app_state.settings_service.save_settings(&settings) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
     let system_presets = app_state
-        .preset_storage
+        .prompt_preset_service
         .list_presets(PresetType::System)
         .unwrap_or_default();
     let quantifier_presets = app_state
-        .preset_storage
+        .prompt_preset_service
         .list_presets(PresetType::Quantifier)
         .unwrap_or_default();
 

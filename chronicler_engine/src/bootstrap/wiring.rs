@@ -18,6 +18,8 @@ use crate::application::generation::gate::GenerationGate;
 use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::persona_catalogue::PersonaCatalogue;
+use crate::application::prompt_preset_service::PromptPresetService;
+use crate::application::settings_service::SettingsService;
 use crate::application::message_service::MessageService;
 use crate::application::world_catalogue::WorldCatalogue;
 use crate::application::ports::llm_provider::LlmProvider;
@@ -47,6 +49,8 @@ fn recorder_for(config: &LlmProviderConfig, storage: Arc<Storage>) -> Result<Arc
 }
 
 pub struct WiredApp {
+    pub settings_service: SettingsService,
+    pub prompt_preset_service: PromptPresetService,
     pub storage: Arc<Storage>,
     pub preset_storage: Arc<Storage>,
     pub settings: Arc<RwLock<AppSettings>>,
@@ -71,7 +75,8 @@ fn build_wired_app(
 ) -> Result<WiredApp> {
     let shutdown_token = CancellationToken::new();
 
-    // ponytail: single-call collaborator unpack — could be inlined into build_wired_app if it grows.
+    let settings_service = SettingsService::new(Arc::clone(&storage));
+    let prompt_preset_service = PromptPresetService::new(Arc::clone(&preset_storage));
     let preset_store = Arc::new(PresetStore::new(Arc::clone(&preset_storage)));
     let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
     let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
@@ -104,6 +109,8 @@ fn build_wired_app(
     }
 
     Ok(WiredApp {
+        settings_service,
+        prompt_preset_service,
         storage,
         preset_storage,
         settings,

@@ -1394,19 +1394,13 @@ You are in Plan Mode. Chat your way to a decision-complete implementation plan, 
 - Do not use update_plan/TODO tooling in Plan Mode; Plan Mode is conversational planning.
 - ${allowedDescription}
 - Use /grill-me-with-docs to stress-test the plan before finalizing if the user wants grilling. Mention it; do not auto-invoke.
-- Create "TaskCreate" to create a list of tasks once you exit plan mode and start implementing the plan
+- Create "TaskCreate" to create a list of tasks/subtasks once you exit plan mode and start implementing the plan
 
 ### Story points
 
 - Sizes: 1, 3, 5, 8, 13
 - 8 SP or larger → must break into subtasks
-- 5 SP = single worker session; primary agent must verify output
-- Sub tasks optional for atomic tasks ≤5 SP; required for tasks >5 SP
 - SP mandatory on every Task line
-
-### Subagents
-
-When using subagents to execute tasks, you need to make sure that task has proper per task validation criteria. Running cargo check and cargo test at minimum for code changes, or running build.py for more complex tasks. It is extremely disruptive if the primary agent has to cleanup after the subagent.
 
 ## Phase 1 — Ground in the environment
 

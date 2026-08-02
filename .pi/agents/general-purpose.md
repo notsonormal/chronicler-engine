@@ -1,6 +1,6 @@
 ---
 description: General-purpose agent for complex, multi-step implementation tasks
-model: kimi-for-coding
+model: synthetic/hf:zai-org/GLM-5.2
 permission:
   bash:
     "git *": deny

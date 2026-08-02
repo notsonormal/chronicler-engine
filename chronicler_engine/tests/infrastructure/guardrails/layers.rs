@@ -150,6 +150,42 @@ pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Viol
     violations
 }
 
+// Guardrail: HTTP layer files must not directly reference the driven `Storage` namespace.
+// This catches fully-qualified paths such as `crate::adapters::driven::storage::Storage`
+// that arch-lint's import-based deny cannot see.
+pub fn check_http_storage_leak(file_path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    if !file_path.starts_with("adapters/driving/http/") {
+        return violations;
+    }
+    if file_path.ends_with("_tests.rs") || file_path.ends_with("mod.rs") {
+        return violations;
+    }
+
+    for (line_no, line) in content.lines().enumerate() {
+        let line_num = line_no + 1;
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("//") || trimmed.starts_with("*") {
+            continue;
+        }
+
+        if trimmed.contains("adapters::driven::storage::Storage")
+            || trimmed.contains("driven::storage::Storage")
+            || trimmed.contains("storage::Storage")
+        {
+            violations.push(Violation::error(
+                file_path,
+                line_num,
+                "HTTP layer file references driven `Storage` directly — use an application-layer service instead",
+            ));
+        }
+    }
+
+    violations
+}
+
 pub fn check_test_layer_boundaries(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -287,10 +323,56 @@ mod tests {
     }
 
     #[test]
-    fn test_check_wiredapp_scope_skips_comments() {
-        let violations = check_wiredapp_scope(
-            "application/pipeline/mod.rs",
-            "// use crate::bootstrap::wiring::WiredApp;\n",
+    fn test_check_http_storage_leak_catches_fully_qualified_path() {
+        let violations = check_http_storage_leak(
+            "adapters/driving/http/settings.rs",
+            "let s: crate::adapters::driven::storage::Storage = app.storage.clone();\n",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("Storage"));
+    }
+
+    #[test]
+    fn test_check_http_storage_leak_catches_relative_path() {
+        let violations = check_http_storage_leak(
+            "adapters/driving/http/prompt_presets.rs",
+            "fn f(s: storage::Storage) {}\n",
+        );
+        assert_eq!(violations.len(), 1);
+    }
+
+    #[test]
+    fn test_check_http_storage_leak_allows_application_service() {
+        let violations = check_http_storage_leak(
+            "adapters/driving/http/settings.rs",
+            "app.settings_service.save_settings(&settings).unwrap();\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_http_storage_leak_skips_tests() {
+        let violations = check_http_storage_leak(
+            "adapters/driving/http/app_state_tests.rs",
+            "let s: crate::adapters::driven::storage::Storage;\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_http_storage_leak_skips_other_layers() {
+        let violations = check_http_storage_leak(
+            "bootstrap/wiring.rs",
+            "let s: crate::adapters::driven::storage::Storage;\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_http_storage_leak_skips_comments() {
+        let violations = check_http_storage_leak(
+            "adapters/driving/http/settings.rs",
+            "// crate::adapters::driven::storage::Storage\n",
         );
         assert_eq!(violations.len(), 0);
     }

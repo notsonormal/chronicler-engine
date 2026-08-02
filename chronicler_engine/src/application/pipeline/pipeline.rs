@@ -426,8 +426,8 @@ impl ActionPipeline {
         }
 
         let (narration_text, backend_name, model_name) =
-            match run.map_cancelled(run.phase_narrate(&mut state, &inputs)) {
-                Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
+            match run.phase_narrate(&mut state, &inputs) {
+                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
                 Err(e) => {
                     Self::finalize_phase_error(&run, Some(&mut state), e);
                     return Ok(());
@@ -496,20 +496,19 @@ impl ActionPipeline {
         }
 
         if let Some(request) = trigger_request {
-            let continuation_text =
-                match run.map_cancelled(run.phase_trigger_continuation_llm_call(
-                    &mut post_commit_state,
-                    &request,
-                    &map,
-                    &npcs,
-                )) {
-                    Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
-                    Err(e) => {
-                        Self::finalize_phase_error(&run, Some(&mut post_commit_state), e);
-                        return Ok(());
-                    }
-                    Ok(t) => t,
-                };
+            let continuation_text = match run.phase_trigger_continuation_llm_call(
+                &mut post_commit_state,
+                &request,
+                &map,
+                &npcs,
+            ) {
+                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
+                Err(e) => {
+                    Self::finalize_phase_error(&run, Some(&mut post_commit_state), e);
+                    return Ok(());
+                }
+                Ok(t) => t,
+            };
             if !continuation_text.is_empty() {
                 if let Err(e) = run.reconcile_post_trigger_npcs(
                     &mut post_commit_state,
@@ -578,9 +577,11 @@ impl ActionPipeline {
     ) -> Result<(GameState, String), PhaseError> {
         let started_for = self.storage.current_game_id();
         let run = PipelineRun::new(self, started_for);
-        let continuation_text = run.map_cancelled(
-            run.phase_trigger_continuation_llm_call(&mut state, trigger, map, npcs),
-        )?;
+        let continuation_text =
+            match run.phase_trigger_continuation_llm_call(&mut state, trigger, map, npcs) {
+                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
+                other => other,
+            }?;
         Ok((state, continuation_text))
     }
 
@@ -724,13 +725,6 @@ impl<'a> PipelineRun<'a> {
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
         self.persist_snapshot_or_err(state, "pre-main snapshot")?;
         Ok(())
-    }
-
-    fn map_cancelled<T>(&self, result: Result<T, PhaseError>) -> Result<T, PhaseError> {
-        match result {
-            Err(PhaseError::Cancelled) => Err(self.handle_cancellation()),
-            other => other,
-        }
     }
 
     pub(super) fn phase_finalize(&self, state: &mut GameState) {

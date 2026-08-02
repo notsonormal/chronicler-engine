@@ -1,6 +1,6 @@
 ---
 description: Read-only codebase exploration
-model: kimi-for-coding
+model: synthetic/hf:zai-org/GLM-5.2
 tools: read, bash, grep, find, ls
 permission:
   bash:

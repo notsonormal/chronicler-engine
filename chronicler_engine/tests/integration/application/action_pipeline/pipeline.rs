@@ -479,10 +479,10 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
 // [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 5.1
 #[test]
 fn test_pre_main_snapshot_saved_before_narration() {
-    let app = SqliteTestAppBuilder::default_test()
+    let (app, storage) = SqliteTestAppBuilder::default_test()
         .generation_status(GenerationStatus::Idle, GenerationPhase::default())
         .mock_backend(MockBackend::default)
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     app.pipeline.execute_action("examine the room".to_string());
@@ -490,7 +490,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
     let completed = app.wait_for_generation_complete(1000);
     assert!(completed, "FreeAction should complete within timeout");
 
-    let latest = app.storage.load_latest_snapshot().unwrap().unwrap();
+    let latest = storage.load_latest_snapshot().unwrap().unwrap();
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
@@ -498,7 +498,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
 #[test]
 fn test_pre_event_snapshot_saved_before_continuation() {
     let data = trigger_data();
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .state_mut(|state| {
             state.narrative.history.clear();
             state.narrative.input_buffer.status = GenerationStatus::Idle;
@@ -528,7 +528,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     app.pipeline
@@ -540,7 +540,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         "FreeAction with trigger should complete within timeout"
     );
 
-    let latest = app.storage.load_latest_snapshot().unwrap().unwrap();
+    let latest = storage.load_latest_snapshot().unwrap().unwrap();
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 

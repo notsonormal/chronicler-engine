@@ -217,7 +217,7 @@ fn test_inv004_cancellable_at_boundaries() {
 
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(100));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+    let (app, storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             let preset_store = Arc::new(
@@ -235,10 +235,10 @@ fn test_inv004_cancellable_at_boundaries() {
                 Arc::clone(settings),
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    let game_storage = &app.storage;
+    let game_storage = &storage;
     let started_for = app.game_catalogue.current_game_id();
     let switched_to = started_for.wrapping_add(99);
     let pipeline = app.pipeline.clone();
@@ -489,7 +489,7 @@ async fn test_p4_concurrent_happy_path() {
             .with_narrations(vec!["GEN_A_OUTPUT".to_string(), "GEN_B_OUTPUT".to_string()]),
     );
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+    let (app, _storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             let preset_store = Arc::new(
@@ -507,7 +507,7 @@ async fn test_p4_concurrent_happy_path() {
                 Arc::clone(settings),
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     let game1 = app.game_catalogue.current_game_id();
@@ -626,7 +626,7 @@ async fn test_p4_concurrent_triple_overlap() {
         "GEN_C_OUTPUT".to_string(),
     ]));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let app = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+    let (app, _storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
             let preset_store = Arc::new(
@@ -644,7 +644,7 @@ async fn test_p4_concurrent_triple_overlap() {
                 Arc::clone(settings),
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     let game1 = app.game_catalogue.current_game_id();

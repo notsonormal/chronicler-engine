@@ -23,7 +23,3 @@ pub fn load_settings(storage: &Storage) -> Result<AppSettings> {
         }
     }
 }
-
-pub fn save_settings(settings: &AppSettings, storage: &Storage) -> Result<()> {
-    storage.save_settings(settings)
-}

@@ -58,12 +58,12 @@ fn trigger_npc_test_data() -> TestData {
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {
     let data = trigger_npc_test_data();
 
-    let app1 = SqliteTestAppBuilder::with_data(data.clone())
+    let (app1, storage1) = SqliteTestAppBuilder::with_data(data.clone())
         .mock_backend(MockBackend::new)
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app1.add_input_and_save("enter shop");
+    app1.add_input_and_save(&storage1, "enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -71,7 +71,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
                 .to_string(),
         ]));
 
-    let app2 = SqliteTestAppBuilder::with_data(data)
+    let (app2, _storage2) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -88,7 +88,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
                 Arc::clone(settings)
             )
 })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     app2.pipeline.execute_action("enter shop".to_string());
@@ -125,12 +125,12 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 fn test_retry_event_continuation_preserves_quantifier_result() {
     let data = trigger_npc_test_data();
 
-    let app1 = SqliteTestAppBuilder::with_data(data.clone())
+    let (app1, storage1) = SqliteTestAppBuilder::with_data(data.clone())
         .mock_backend(MockBackend::new)
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app1.add_input_and_save("enter shop");
+    app1.add_input_and_save(&storage1, "enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -138,7 +138,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
                 .to_string(),
         ]));
 
-    let app2 = SqliteTestAppBuilder::with_data(data)
+    let (app2, storage2) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -155,7 +155,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
                 Arc::clone(settings)
             )
 })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     app2.pipeline.execute_action("enter shop".to_string());
@@ -190,7 +190,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         "Event retry: room should be unchanged (quantifier not rerun)"
     );
 
-    let messages = app2.storage.list_latest_llm_messages(50).unwrap();
+    let messages = storage2.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
         "LLM messages should be logged during gameplay"
@@ -278,12 +278,12 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         room_npcs: vec!["gabriella".to_string()],
     };
 
-    let app1 = SqliteTestAppBuilder::with_data(data.clone())
+    let (app1, storage1) = SqliteTestAppBuilder::with_data(data.clone())
         .mock_backend(MockBackend::new)
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app1.add_input_and_save("enter shop");
+    app1.add_input_and_save(&storage1, "enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -296,7 +296,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         "Gabriella emerges from the shadows behind the counter.".to_string(),
     ])));
 
-    let app2 = SqliteTestAppBuilder::with_data(data)
+    let (app2, _storage2) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -313,7 +313,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     app2.pipeline.execute_action("enter shop".to_string());

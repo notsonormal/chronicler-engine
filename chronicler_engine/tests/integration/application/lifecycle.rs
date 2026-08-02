@@ -57,7 +57,7 @@ fn test_create_game_with_scenario() {
     );
     let new_id = result.unwrap();
 
-    let current_id = app_service.storage.current_game_id();
+    let current_id = storage.current_game_id();
     assert_eq!(current_id, new_id, "Should have switched to new game");
 
     let latest = storage.load_latest_snapshot().unwrap();
@@ -149,13 +149,13 @@ fn test_switch_game_loads_correct_state() {
         .game_catalogue
         .create_game(&world_key, "hero")
         .unwrap();
-    let game1_id = app_service.storage.current_game_id();
+    let game1_id = storage.current_game_id();
 
     app_service
         .game_catalogue
         .create_game(&world_key, "hero")
         .unwrap();
-    let game2_id = app_service.storage.current_game_id();
+    let game2_id = storage.current_game_id();
     assert_ne!(game1_id, game2_id, "Should have different game IDs");
 
     let switch_result = app_service.game_catalogue.switch_game(game1_id);
@@ -165,7 +165,7 @@ fn test_switch_game_loads_correct_state() {
         switch_result.err()
     );
     assert_eq!(
-        app_service.storage.current_game_id(),
+        storage.current_game_id(),
         game1_id,
         "Should have switched to game 1"
     );
@@ -182,7 +182,7 @@ fn test_switch_game_loads_correct_state() {
         switch_result.err()
     );
     assert_eq!(
-        app_service.storage.current_game_id(),
+        storage.current_game_id(),
         game2_id,
         "Should have switched to game 2"
     );
@@ -313,7 +313,7 @@ fn test_switch_game_world_mismatch() {
 
     let create_result = app_service.game_catalogue.create_game(&world_key, "hero");
     assert!(create_result.is_ok(), "create_game should succeed");
-    let game_id = app_service.storage.current_game_id();
+    let game_id = storage.current_game_id();
 
     let mut world_b = create_test_world_with_scenario();
     world_b.name = "World B".to_string();
@@ -357,13 +357,13 @@ fn test_delete_game_removes() {
         .game_catalogue
         .create_game(&world_key, "hero")
         .unwrap();
-    let game_id_1 = app_service.storage.current_game_id();
+    let game_id_1 = storage.current_game_id();
 
     app_service
         .game_catalogue
         .create_game(&world_key, "hero")
         .unwrap();
-    let game_id_2 = app_service.storage.current_game_id();
+    let game_id_2 = storage.current_game_id();
 
     assert_ne!(game_id_1, game_id_2, "Should have different game IDs");
 
@@ -404,7 +404,7 @@ fn test_delete_game_active_rejected() {
         .game_catalogue
         .create_game(&world_key, "hero")
         .unwrap();
-    let active_game_id = app_service.storage.current_game_id();
+    let active_game_id = storage.current_game_id();
 
     let result = app_service.game_catalogue.delete_game(active_game_id);
     assert!(

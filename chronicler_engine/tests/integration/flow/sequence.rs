@@ -22,7 +22,7 @@ fn base_data() -> chronicler_engine::test_support::TestData {
 #[test]
 fn test_sequential_execute_retry_execute() {
     let data = base_data();
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -42,10 +42,10 @@ fn test_sequential_execute_retry_execute() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&storage, "examine room");
     app.pipeline.execute_action("examine room".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -58,7 +58,7 @@ fn test_sequential_execute_retry_execute() {
         "Retry A should complete"
     );
 
-    app.add_input_and_save("look around");
+    app.add_input_and_save(&storage, "look around");
     app.pipeline.execute_action("look around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -85,7 +85,7 @@ fn test_sequential_execute_retry_execute() {
         "Should have narrations from both actions"
     );
 
-    let messages = app.storage.list_latest_llm_messages(50).unwrap();
+    let messages = storage.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
         "LLM messages should be logged during gameplay"
@@ -95,7 +95,7 @@ fn test_sequential_execute_retry_execute() {
 #[test]
 fn test_sequential_execute_delete_execute() {
     let data = base_data();
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -115,10 +115,10 @@ fn test_sequential_execute_delete_execute() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&storage, "examine room");
     app.pipeline.execute_action("examine room".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -137,10 +137,10 @@ fn test_sequential_execute_delete_execute() {
     {
         let mut state = app.latest_state();
         state.narrative.history.retain(|m| m.id != narration_id);
-        app.save_test_state(&state);
+        app.save_test_state(&storage, &state);
     }
 
-    app.add_input_and_save("look around");
+    app.add_input_and_save(&storage, "look around");
     app.pipeline.execute_action("look around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -162,7 +162,7 @@ fn test_sequential_execute_delete_execute() {
 #[test]
 fn test_async_action_sequence_then_retry() {
     let data = base_data();
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -182,14 +182,14 @@ fn test_async_action_sequence_then_retry() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("hello");
+    app.add_input_and_save(&storage, "hello");
     app.pipeline.execute_action("hello".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&storage, "examine room");
     app.pipeline.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -209,7 +209,7 @@ fn test_async_action_sequence_then_retry() {
 #[test]
 fn test_three_actions_in_sequence() {
     let data = base_data();
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -229,11 +229,11 @@ fn test_three_actions_in_sequence() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     for action in ["examine room", "look around", "check inventory"] {
-        app.add_input_and_save(action);
+        app.add_input_and_save(&storage, action);
         app.pipeline.execute_action(action.to_string());
         assert!(
             app.wait_for_generation_complete(1000),
@@ -265,15 +265,15 @@ fn test_three_actions_in_sequence() {
 #[test]
 fn test_delete_input_then_retry_fails_gracefully() {
     let data1 = base_data();
-    let app1 = SqliteTestAppBuilder::with_data(data1)
+    let (app1, storage1) = SqliteTestAppBuilder::with_data(data1)
         .mock_backend(MockBackend::new)
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app1.add_input_and_save("examine room");
+    app1.add_input_and_save(&storage1, "examine room");
 
     let data2 = base_data();
-    let app2 = SqliteTestAppBuilder::with_data(data2)
+    let (app2, storage2) = SqliteTestAppBuilder::with_data(data2)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -293,7 +293,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     app2.pipeline.execute_action("examine room".to_string());
@@ -302,7 +302,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     {
         let mut state = app2.latest_state();
         state.narrative.history.clear();
-        app2.save_test_state(&state);
+        app2.save_test_state(&storage2, &state);
     }
 
     app2.pipeline.retry_last_response();
@@ -316,12 +316,12 @@ fn test_delete_input_then_retry_fails_gracefully() {
 #[test]
 fn test_reset_clears_history_and_state() {
     let data1 = base_data();
-    let app1 = SqliteTestAppBuilder::with_data(data1)
+    let (app1, storage1) = SqliteTestAppBuilder::with_data(data1)
         .mock_backend(MockBackend::new)
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app1.add_input_and_save("walk to room2");
+    app1.add_input_and_save(&storage1, "walk to room2");
 
     let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
         r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
@@ -329,7 +329,7 @@ fn test_reset_clears_history_and_state() {
     ]));
 
     let data2 = base_data();
-    let app2 = SqliteTestAppBuilder::with_data(data2)
+    let (app2, storage2) = SqliteTestAppBuilder::with_data(data2)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -349,7 +349,7 @@ fn test_reset_clears_history_and_state() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     app2.pipeline.execute_action("walk to room2".to_string());
@@ -359,7 +359,7 @@ fn test_reset_clears_history_and_state() {
     assert!(!guard.narrative.history().is_empty());
 
     let fresh_state = create_minimal_test_state();
-    app2.save_test_state(&fresh_state);
+    app2.save_test_state(&storage2, &fresh_state);
 
     let guard = app2.latest_state();
     assert_eq!(
@@ -375,7 +375,7 @@ fn test_reset_clears_history_and_state() {
 #[test]
 fn test_reset_then_execute_works() {
     let data = base_data();
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -395,17 +395,17 @@ fn test_reset_then_execute_works() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&storage, "examine room");
     app.pipeline.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
     let fresh_state = create_minimal_test_state();
-    app.save_test_state(&fresh_state);
+    app.save_test_state(&storage, &fresh_state);
 
-    app.add_input_and_save("look around");
+    app.add_input_and_save(&storage, "look around");
     app.pipeline.execute_action("look around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -429,7 +429,7 @@ fn test_reset_then_execute_works() {
 #[test]
 fn test_delete_mid_sequence() {
     let data = base_data();
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -449,14 +449,14 @@ fn test_delete_mid_sequence() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&storage, "examine room");
     app.pipeline.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
-    app.add_input_and_save("look around");
+    app.add_input_and_save(&storage, "look around");
     app.pipeline.execute_action("look around".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -473,10 +473,10 @@ fn test_delete_mid_sequence() {
     {
         let mut state = app.latest_state();
         state.narrative.history.retain(|m| m.id != narration_b_id);
-        app.save_test_state(&state);
+        app.save_test_state(&storage, &state);
     }
 
-    app.add_input_and_save("check door");
+    app.add_input_and_save(&storage, "check door");
     app.pipeline.execute_action("check door".to_string());
     assert!(app.wait_for_generation_complete(1000));
 

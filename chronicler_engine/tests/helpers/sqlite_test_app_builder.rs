@@ -182,7 +182,13 @@ impl SqliteTestAppBuilder {
     }
 
     /// Build the application state: seed sqlite storage, persist snapshot + messages, dispatch to `BackendSpec`.
-    pub fn build_service(mut self) -> Result<AppState> {
+    pub fn build_service(self) -> Result<AppState> {
+        let (app, _storage) = self.build_service_and_storage()?;
+        Ok(app)
+    }
+
+    /// Build the application state and return the underlying `Storage` handle.
+    pub fn build_service_and_storage(mut self) -> Result<(AppState, Arc<Storage>)> {
         let (storage, settings_arc) = self.seed_storage_and_settings()?;
         let message_service = build_test_message_service(Arc::clone(&storage));
         let pipeline = self.build_pipeline(&storage, &message_service, &settings_arc);
@@ -191,28 +197,33 @@ impl SqliteTestAppBuilder {
         Ok(finalize_app(storage, pipeline, settings_arc, is_generating))
     }
 
-    pub fn build_with_state(mut self) -> Result<AppState> {
+    pub fn build_with_state(self) -> Result<AppState> {
+        let (app, _storage) = self.build_with_state_and_storage()?;
+        Ok(app)
+    }
+
+    /// Build the application state and return the underlying `Storage` handle.
+    pub fn build_with_state_and_storage(mut self) -> Result<(AppState, Arc<Storage>)> {
         let (storage, settings_arc) = self.seed_storage_and_settings()?;
         let message_service = build_test_message_service(Arc::clone(&storage));
         let pipeline = self.build_pipeline(&storage, &message_service, &settings_arc);
         let is_generating = self.is_generating;
         let preset_storage = default_test_preset_storage();
 
+        let storage_clone = Arc::clone(&storage);
         let wired = build_test_wired_app(storage, preset_storage, pipeline)
             .expect("build_test_wired_app should succeed");
         if is_generating {
-            let app_state = AppState::from_wired(wired);
-            let mut snapshot = app_state
-                .storage
+            let mut snapshot = storage_clone
                 .load_latest_snapshot()
                 .expect("load_latest_snapshot must succeed")
                 .expect("snapshot must exist for is_generating");
             snapshot.narrative.input_buffer.status = GenerationStatus::Generating;
             snapshot.narrative.input_buffer.phase = GenerationPhase::Narrating;
-            let _ = app_state.storage.save_snapshot(&snapshot);
-            return Ok(app_state);
+            let _ = storage_clone.save_snapshot(&snapshot);
+            return Ok((AppState::from_wired(wired), storage_clone));
         }
-        Ok(AppState::from_wired(wired))
+        Ok((AppState::from_wired(wired), storage_clone))
     }
 
     fn seed_storage_and_settings(&mut self) -> Result<(Arc<Storage>, Arc<RwLock<AppSettings>>)> {
@@ -350,20 +361,19 @@ fn finalize_app(
     pipeline: ActionPipeline,
     settings_arc: Arc<RwLock<AppSettings>>,
     is_generating: bool,
-) -> AppState {
+) -> (AppState, Arc<Storage>) {
     let preset_storage = default_test_preset_storage();
+    let storage_clone = Arc::clone(&storage);
     let wired = build_test_wired_app_with_settings(storage, preset_storage, settings_arc, pipeline)
         .expect("build_test_wired_app_with_settings: build_app_graph_for_tests should succeed");
-    let app_state = AppState::from_wired(wired);
     if is_generating {
-        let mut snapshot = app_state
-            .storage
+        let mut snapshot = storage_clone
             .load_latest_snapshot()
             .expect("load_latest_snapshot must succeed")
             .expect("snapshot must exist for is_generating");
         snapshot.narrative.input_buffer.status = GenerationStatus::Generating;
         snapshot.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        let _ = app_state.storage.save_snapshot(&snapshot);
+        let _ = storage_clone.save_snapshot(&snapshot);
     }
-    app_state
+    (AppState::from_wired(wired), storage_clone)
 }

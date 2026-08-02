@@ -7,9 +7,11 @@ use tokio_util::sync::CancellationToken;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
-use crate::application::persona_catalogue::PersonaCatalogue;
 use crate::application::message_service::MessageService;
+use crate::application::persona_catalogue::PersonaCatalogue;
 use crate::application::pipeline::pipeline::ActionPipeline;
+use crate::application::prompt_preset_service::PromptPresetService;
+use crate::application::settings_service::SettingsService;
 use crate::application::text_check_service::TextCheckService;
 use crate::application::world_catalogue::WorldCatalogue;
 use crate::bootstrap::wiring::WiredApp;
@@ -19,8 +21,8 @@ use super::utils::read_lock_or_recover;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub storage: Arc<crate::adapters::driven::storage::Storage>,
-    pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
+    pub settings_service: SettingsService,
+    pub prompt_preset_service: PromptPresetService,
     pub message_service: Arc<MessageService>,
     pub world_catalogue: WorldCatalogue,
     pub persona_catalogue: PersonaCatalogue,
@@ -36,8 +38,8 @@ pub struct AppState {
 impl AppState {
     pub fn from_wired(wired: WiredApp) -> Self {
         AppState {
-            storage: wired.storage,
-            preset_storage: wired.preset_storage,
+            settings_service: wired.settings_service,
+            prompt_preset_service: wired.prompt_preset_service,
             message_service: wired.message_service,
             world_catalogue: wired.world_catalogue,
             persona_catalogue: wired.persona_catalogue,

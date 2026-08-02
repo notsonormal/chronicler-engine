@@ -34,7 +34,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -52,10 +52,10 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&storage, "walk around");
     app.pipeline.execute_action("walk around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -78,7 +78,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         "Retry should apply NEW quantifier result and move player to room2"
     );
 
-    let messages = app.storage.list_latest_llm_messages(50).unwrap();
+    let messages = storage.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
         "LLM messages should be logged during gameplay"
@@ -94,7 +94,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         "You look around the empty room.".to_string(),
         "The Innkeeper greets you warmly.".to_string(),
     ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -112,10 +112,10 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("approach the innkeeper");
+    app.add_input_and_save(&storage, "approach the innkeeper");
     app.pipeline
         .execute_action("approach the innkeeper".to_string());
     assert!(
@@ -165,7 +165,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
                 .to_string(),
             r#"{"npcs_in_room": []}"#.to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -183,10 +183,10 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&storage, "walk around");
     app.pipeline.execute_action("walk around".to_string());
     assert!(app.wait_for_generation_complete(1000));
     let _snap = app.latest_snapshot();
@@ -212,7 +212,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
 #[test]
 fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     let data = base_data(vec![]);
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -229,10 +229,10 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
                 Arc::clone(settings)
             )
 })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&storage, "walk around");
     app.pipeline.execute_action("walk around".to_string());
     assert!(
         app.wait_for_generation_complete(1000),
@@ -262,7 +262,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
 #[test]
 fn test_retry_after_edited_input_uses_new_text() {
     let data = base_data(vec![]);
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -279,10 +279,10 @@ fn test_retry_after_edited_input_uses_new_text() {
                 Arc::clone(settings)
             )
 })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&storage, "walk around");
     app.pipeline.execute_action("walk around".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -312,7 +312,7 @@ fn test_retry_after_edited_input_uses_new_text() {
                 swipe.text = "sprint forward".to_string();
             }
         }
-        app.save_test_state(&state);
+        app.save_test_state(&storage, &state);
     }
 
     app.pipeline.retry_last_response();
@@ -369,7 +369,7 @@ fn test_main_retry_reevaluates_triggers() {
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -387,10 +387,10 @@ fn test_main_retry_reevaluates_triggers() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&storage, "walk around");
     app.pipeline.execute_action("walk around".to_string());
     assert!(app.wait_for_generation_complete(1000));
     let guard = app.latest_state();
@@ -428,7 +428,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": []}"#.to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -446,10 +446,10 @@ fn test_retry_completes_when_quantifier_returns_none() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("walk around");
+    app.add_input_and_save(&storage, "walk around");
     app.pipeline.execute_action("walk around".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -522,7 +522,7 @@ fn test_retry_no_pre_main_snapshot() {
     )
     .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
     let app = chronicler_engine::adapters::driving::http::AppState::from_wired(state);
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&storage, "examine room");
     app.pipeline.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -533,7 +533,7 @@ fn test_retry_no_pre_main_snapshot() {
         let _ = conn.execute("DELETE FROM game_state_snapshots WHERE game_id = 1", []);
     }
     {
-        app.save_test_state(&state_before_reset);
+        app.save_test_state(&storage, &state_before_reset);
     }
 
     app.pipeline.retry_last_response();
@@ -553,7 +553,7 @@ fn test_movement_with_arrival_narration_retry() {
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
         ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -571,10 +571,10 @@ fn test_movement_with_arrival_narration_retry() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
-    app.add_input_and_save("walk to room2");
+    app.add_input_and_save(&storage, "walk to room2");
     app.pipeline.execute_action("walk to room2".to_string());
     assert!(app.wait_for_generation_complete(1000));
 
@@ -617,7 +617,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
         "First narration text.".to_string(),
         "Second narration text.".to_string(),
     ]));
-    let app = SqliteTestAppBuilder::with_data(data)
+    let (app, storage) = SqliteTestAppBuilder::with_data(data)
         .pipeline_fn(move |storage, pg, settings, token| {
             let preset_store = Arc::new(
             chronicler_engine::adapters::driven::storage::PresetStore::new(
@@ -635,12 +635,12 @@ fn test_retry_appends_swipe_to_existing_narration() {
                 Arc::clone(settings)
             )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
 
     let pg = &app.message_service;
 
-    app.add_input_and_save("examine room");
+    app.add_input_and_save(&storage, "examine room");
     app.pipeline.execute_action("examine room".to_string());
     assert!(app.wait_for_generation_complete(1000));
 

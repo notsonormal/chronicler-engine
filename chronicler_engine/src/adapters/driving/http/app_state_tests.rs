@@ -35,8 +35,8 @@ fn build_app_state(settings: Arc<std::sync::RwLock<AppSettings>>) -> AppState {
     .expect("build_app_graph_for_tests should succeed");
 
     AppState {
-        storage: Arc::new(Storage::new_in_memory()),
-        preset_storage: Arc::new(Storage::new_in_memory()),
+        settings_service: wired.settings_service.clone(),
+        prompt_preset_service: wired.prompt_preset_service.clone(),
         message_service: wired.message_service,
         world_catalogue: wired.world_catalogue,
         persona_catalogue: wired.persona_catalogue,
@@ -86,8 +86,8 @@ fn test_current_shutdown_token_returns_configured_token() {
     .expect("build_app_graph_for_tests should succeed");
 
     let app_state = AppState {
-        storage: Arc::new(Storage::new_in_memory()),
-        preset_storage: Arc::new(Storage::new_in_memory()),
+        settings_service: wired.settings_service.clone(),
+        prompt_preset_service: wired.prompt_preset_service.clone(),
         message_service: wired.message_service,
         world_catalogue: wired.world_catalogue,
         persona_catalogue: wired.persona_catalogue,
