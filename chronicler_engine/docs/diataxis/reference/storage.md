@@ -5,7 +5,7 @@ title: Storage
 
 ## Overview
 
-`Storage` is the engine's persistence boundary for game sessions, narrative content, settings, and LLM call forensics. `Backend` identifies the real storage implementations (`Sqlite` and `InMemory`), while `BackendKind` selects direct access or the `Test` decorator. Storage methods operate on one table; multi-table coordination lives in `DefaultApplicationService`. The eleven-table schema follows; entity aggregates for worlds, personas, and messages come after.
+`Storage` is the engine's persistence boundary for game sessions, narrative content, settings, and LLM call forensics.
 
 ## Backend and BackendKind
 
@@ -185,4 +185,4 @@ Two message-specific observations the schema does not say directly:
 - [ADR-024: Migrate Game Data to SQLite with Seed Pattern](../../docs/adr/adr-024-game-data-migration-to-sqlite.md) — historical record of the JSON-to-SQLite seed pattern.
 - [ADR-025: Multi-World Data Foundation](../../docs/adr/adr-025-multi-world-data-foundation.md) — `world_key` logical reference; worlds/maps/characters cluster.
 - [ADR-026: Relocate Persona Binding from World to Game](../../docs/adr/adr-026-persona-relocation-to-game.md) — `persona_key` logical reference; why persona binding moved from world to game.
-- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md) — storage direct-access exemption at `game_service.rs` and `agents/registry.rs`.
+- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md)

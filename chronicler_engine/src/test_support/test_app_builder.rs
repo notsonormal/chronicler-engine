@@ -4,11 +4,8 @@
 use std::sync::{Arc, RwLock};
 
 use axum::Router;
-use tokio_util::sync::CancellationToken;
 
-use crate::application::application_service::DefaultApplicationService;
-use crate::application::game_service::GameService;
-use crate::application::persistence_gate::PersistenceGate;
+use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
@@ -28,7 +25,7 @@ pub struct TestAppBuilder {
     generation: Option<(GenerationStatus, GenerationPhase)>,
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
-    game_service: Option<Arc<GameService>>,
+    pipeline: Option<ActionPipeline>,
     skip_seeding: bool,
     is_generating: bool,
 }
@@ -44,7 +41,7 @@ impl TestAppBuilder {
             generation: None,
             settings: AppSettings::default(),
             storage: None,
-            game_service: None,
+            pipeline: None,
             skip_seeding: false,
             is_generating: false,
         }
@@ -92,8 +89,8 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn game_service(mut self, service: Arc<GameService>) -> Self {
-        self.game_service = Some(service);
+    pub fn pipeline(mut self, pipeline: ActionPipeline) -> Self {
+        self.pipeline = Some(pipeline);
         self
     }
 
@@ -108,35 +105,24 @@ impl TestAppBuilder {
     }
 
     pub fn build(self) -> Router {
-        let app_state = self.build_app_state();
+        let (app_state, _storage) = self.build_service_with_storage();
         build_router(app_state)
     }
 
-    pub fn build_with_service(self) -> (Router, Arc<DefaultApplicationService>) {
-        let app_state = self.build_app_state();
-        let service = Arc::clone(&app_state.application_service);
-        (build_router(app_state), service)
-    }
-
+    /// Build returning `(Router, AppState)`.
     pub fn build_with_state(self) -> (Router, AppState) {
-        let app_state = self.build_app_state();
+        let (app_state, _storage) = self.build_service_with_storage();
         (build_router(app_state.clone()), app_state)
     }
 
-    pub fn build_service(self) -> Arc<DefaultApplicationService> {
-        let app_state = self.build_app_state();
-        Arc::clone(&app_state.application_service)
+    /// Build returning the `AppState`.
+    pub fn build_service(self) -> AppState {
+        let (app_state, _storage) = self.build_service_with_storage();
+        app_state
     }
 
-    pub fn build_service_with_pg(self) -> (Arc<DefaultApplicationService>, Arc<PersistenceGate>) {
-        let app_state = self.build_app_state();
-        (
-            Arc::clone(&app_state.application_service),
-            Arc::clone(&app_state.persistence_gate),
-        )
-    }
-
-    pub fn build_app_state(mut self) -> AppState {
+    /// Build returning `(AppState, Arc<Storage>)`.
+    pub fn build_service_with_storage(mut self) -> (AppState, Arc<Storage>) {
         let test_data = self.test_data.expect(
             "test setup: TestAppBuilder requires test_data (use default_test() or with_data())",
         );
@@ -197,31 +183,36 @@ impl TestAppBuilder {
 
         let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
         let preset_storage = crate::test_support::default_test_preset_storage();
-        let game_service_override = self.game_service.take();
+        let pipeline_override = self.pipeline.take();
 
         let wired = build_app_graph_for_tests(
             Arc::clone(&settings_arc),
             Arc::clone(&storage),
             Arc::clone(&preset_storage),
-            game_service_override,
+            pipeline_override,
         )
         .expect("build_app_graph_for_tests should succeed");
 
         if self.is_generating {
-            let mut state = wired.persistence_gate.load_or_fresh();
+            let mut state = wired.message_service.load_or_fresh();
             state.narrative.input_buffer.status = GenerationStatus::Generating;
             state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-            let _ = wired.persistence_gate.save_state(&state);
+            let _ = wired.message_service.save_state(&state);
+            // Mirror the persisted Generating status into the in-memory gate so
+            // handlers that consult `is_busy` see the same truth.
+            let game_id = wired.storage.current_game_id();
+            let _ = wired
+                .generation_gate
+                .try_claim(game_id, &mut state, &wired.message_service);
         }
 
         if let Some((status, phase)) = self.generation.clone() {
-            let mut state = wired.persistence_gate.load_or_fresh();
+            let mut state = wired.message_service.load_or_fresh();
             state.narrative.input_buffer.status = status;
             state.narrative.input_buffer.phase = phase;
-            let _ = wired.persistence_gate.save_state(&state);
+            let _ = wired.message_service.save_state(&state);
         }
 
-        let shutdown_token = CancellationToken::new();
-        AppState::from_wired(wired, shutdown_token)
+        (AppState::from_wired(wired), storage)
     }
 }

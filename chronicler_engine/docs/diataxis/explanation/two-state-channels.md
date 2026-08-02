@@ -13,11 +13,11 @@ The engine carries two representations of generation state. One answers "is some
 
 The persisted status is the channel debug operators read when a game appears stuck. It is the only signal that survives across processes.
 
-## Channel B — the process-local atomic
+## Channel B — the process-local registry
 
-`is_generating: Arc<AtomicBool>` lives on the application service and is a cached projection of the per-game registry. Handlers and the HTTP poll endpoint read it on every request with a single atomic load — no lock acquired, no storage round-trip. An RAII guard (`GenerationGuard::Drop`) clears the flag on a normal return and on panic alike, so a generation interrupted by a panic still releases the flag the next time it is observed.
+`GenerationGate` owns a per-game slot registry (`Arc<RwLock<HashMap<u64, GenerationSlot>>>`) that tracks which generations are live in this process. Handlers and the HTTP poll endpoint read it through `GenerationGate::is_busy` to reject double-spawn attempts without a storage round-trip. An RAII guard (`GenerationGuard::Drop`) releases the slot on a normal return and on panic alike, so a generation interrupted by a panic still frees the slot the next time it is observed.
 
-The atomic is process-local by design. The engine's deployment contract is one process against one database; a second engine process against the same database would hold its own atomic and would not see the first process's claim through it.
+The registry is process-local by design. The engine's deployment contract is one process against one database; a second engine process against the same database would hold its own registry and would not see the first process's claim through it.
 
 ## Where each channel is read
 
@@ -30,9 +30,9 @@ The two signals answer different questions for different code paths:
 
 ## The single-writer rule
 
-The two signals are kept coherent by restricting who may write each one. Only the registry claim/release path mutates both representations, and it does so under the same write-lock scope so no observer sees them disagree. `GenerationGuard::Drop` is a second writer for the atomic's `false` transition only — the RAII panic-safety fallback. The persisted status's `true` transitions are owned solely by the application service's action path. All other code paths treat both signals as read-only.
+The two signals are kept coherent by restricting who may write each one. Only the registry claim/release path mutates both representations, and it does so under the same write-lock scope so no observer sees them disagree. `GenerationGuard::Drop` is a second writer for the registry slot release only — the RAII panic-safety fallback. The persisted status's `true` transitions are owned solely by the action path in `ActionPipeline`. All other code paths treat both signals as read-only.
 
-A property test (an invariant contract test) verifies the rule: after any mutation, `AtomicBool.load() == (persisted_status == Generating)`. Drift between the two representations fails the test suite rather than shipping. If the property test is ever deleted or weakened, the invariant degrades from machine-checked to convention only.
+An invariant contract test verifies the rule: after any mutation, the registry state agrees with the persisted status (`GenerationGate` has a generating slot for the current game iff `state.narrative.input_buffer.status == Generating`). Drift between the two representations fails the test suite rather than shipping. If the test is ever deleted or weakened, the invariant degrades from machine-checked to convention only.
 
 ## Document References
 

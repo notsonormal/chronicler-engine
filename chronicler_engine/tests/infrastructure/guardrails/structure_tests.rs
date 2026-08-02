@@ -195,6 +195,16 @@ fn test_check_no_std_thread_all_skips_cfg_test_block() {
 }
 
 #[test]
+fn test_check_no_std_thread_all_skips_tests_rs() {
+    let violations = check_no_std_thread_all(
+        "src/worker_tests.rs",
+        "#[test]\n\
+         fn smoke() { std::thread::spawn(|| {}); }\n",
+    );
+    assert_eq!(violations.len(), 0);
+}
+
+#[test]
 fn test_check_file_length_allows_short() {
     let violations = check_file_length("src/foo.rs", "fn x() {}\n");
     assert_eq!(violations.len(), 0);

@@ -1,4 +1,4 @@
-use crate::application::utils::prompt_merge::merge_single_user_message;
+use crate::application::prompting::prompt_merge::merge_single_user_message;
 
 #[test]
 fn test_merge_single_user_message_format() {

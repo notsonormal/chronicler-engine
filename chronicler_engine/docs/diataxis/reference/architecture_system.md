@@ -27,11 +27,28 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 ## Storage Direct Access
 
-`arch-lint: storage-direct` markers in `src/application/` permit direct `Storage` access at the persistence boundary. The marker list is canonical at the source; see `## Document References` for the ADR that codifies the intentional/deferred split.
+`Storage` is a concrete adapter with a `Backend` enum (SQLite / InMemory / Test). Application code may call `Storage` directly when the call is part of the persistence boundary; a `StateRepository` port would be a single-impl trait with no real substitution seam, so the boundary is concrete-by-design. Architectural review owns the discipline for which files sit on the boundary.
 
 ## Settings
 
 Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via `Arc<RwLock<AppSettings>>` held on `AppState.settings`. Construction-chain recipients take a reference at wiring time; no business-logic layer reloads from disk. `max_context_tokens` is read dynamically per call (per-call budget).
+
+## AppState collaborators
+
+`AppState` is the handler-facing bundle produced by `bootstrap/wiring.rs` (`WiredApp`) and passed to the Axum router. It exposes the named collaborators directly, with no service façade between HTTP handlers and the application layer:
+
+- `pipeline: Arc<ActionPipeline>` — action execution and phase orchestration.
+- `message_service: Arc<MessageService>` — snapshot/message persistence and multi-table writes.
+- `game_catalogue: GameCatalogue` — game lifecycle (create/switch/delete/list/reset/current id).
+- `game_view_query: GameViewQuery` — read-side fragments for the UI and debug state.
+- `generation_gate: GenerationGate` — per-game generation-slot gating and reset.
+- `world_catalogue: WorldCatalogue` — world CRUD.
+- `persona_catalogue: PersonaCatalogue` — persona CRUD.
+- `settings_service: SettingsService` — settings persistence.
+- `prompt_preset_service: PromptPresetService` — prompt-preset CRUD.
+- `text_check_service: Arc<TextCheckService>` — player-command spelling/grammar check.
+- `settings: Arc<RwLock<AppSettings>>` — runtime settings.
+- `shutdown_token: CancellationToken` — request shutdown signal.
 
 ## Deployment Contract
 
@@ -46,4 +63,4 @@ Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via 
 - [`../explanation/architecture.md`](../explanation/architecture.md) — hexagonal architecture and dependency invariant.
 - [`./startup.md`](./startup.md) — bootstrap sequence and settings load point.
 - [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — settings ownership pattern and `AtomicBool` generation gate.
-- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md) — port ownership and the storage direct-access exemption.
+- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md)

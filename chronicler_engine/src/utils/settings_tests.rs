@@ -3,7 +3,7 @@ use std::sync::Mutex;
 
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
-use crate::utils::settings::{get_settings_path, load_settings, save_settings};
+use crate::utils::settings::{get_settings_path, load_settings};
 use crate::test_support::sqlite_storage;
 
 static SETTINGS_DB_LOCK: Mutex<()> = Mutex::new(());
@@ -44,7 +44,7 @@ fn test_load_settings_valid_file() {
             response_length: "flexible".into(),
             ..Default::default()
         };
-        save_settings(&custom, &storage).expect("should save");
+        storage.save_settings(&custom).expect("should save");
 
         let loaded = load_settings(&storage).expect("should load");
         assert_eq!(loaded.narration_connection_id, "test");
@@ -74,7 +74,7 @@ fn test_save_settings_roundtrip() {
             response_length: "flexible".into(),
             ..Default::default()
         };
-        save_settings(&settings, &storage).expect("should save");
+        storage.save_settings(&settings).expect("should save");
 
         let loaded = load_settings(&storage).expect("should load");
         assert_eq!(loaded.narration_connection_id, "conn-1");

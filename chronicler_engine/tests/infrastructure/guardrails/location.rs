@@ -3,6 +3,11 @@
 use std::path::Path;
 use crate::Violation;
 
+// TODO: There should be a guardrail making sure there are no inline tests
+//  And tests should be in a separate file. I think this is being enforced
+//  for the `src/` files (unless the guardrail has been removed) but it
+//  is definitely nto being enforced in the `test/` folder
+
 pub fn check_test_file_naming(path: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -37,6 +42,8 @@ pub fn check_test_file_naming(path: &str) -> Vec<Violation> {
     violations
 }
 
+// TODO: This guardrail should be catching `chronicler_engine/src/application/orchestrator_tests.rs`
+//  which is a unit test file without a matching `orchestrator.rs`. It's not catching it.
 pub fn check_test_file_pairing(path: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 

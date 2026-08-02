@@ -1,6 +1,5 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/narrative/agent_system.md]
 //! Quantifier agent implementation.
-//! arch-lint: storage-direct — see ADR-027
 
 use std::sync::{Arc, RwLock};
 

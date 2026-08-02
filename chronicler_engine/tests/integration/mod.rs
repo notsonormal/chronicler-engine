@@ -1,4 +1,4 @@
-//! Integration test binary root: wires shared helpers (`test_utils`, `fixtures`, `storage_ext`, `application_ext`) and re-exports factory helpers (`failing_service`, `working_service`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
+//! Integration test binary root: wires shared helpers (`test_utils`, `fixtures`, `storage_ext`, `application_ext`) and re-exports factory helpers (`failing_pipeline`, `working_pipeline`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
 
 #[path = "../test_utils/mod.rs"]
 mod test_utils;
@@ -19,26 +19,31 @@ pub use sqlite_test_app_builder::SqliteTestAppBuilder;
 
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::agents::registry::AgentRegistry;
+use chronicler_engine::application::pipeline::pipeline::ActionPipeline;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+use chronicler_engine::adapters::driven::storage::Storage;
 
 pub use test_utils::settings_guard::SettingsTestGuard;
 pub use test_utils::make_test_recorder;
 pub use test_utils::make_test_recorder_with_storage;
 pub use test_utils::server::get_available_port;
 
-pub fn failing_service() -> GameService {
+pub fn failing_pipeline() -> ActionPipeline {
+    let storage = Arc::new(Storage::new_in_memory());
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
-    GameService::with_mock_quantifier(
+    chronicler_engine::test_support::make_test_pipeline_with_mock_quantifier(
+        storage,
         make_test_recorder(Arc::new(MockBackend::default().with_fail())),
         quantifier,
     )
 }
 
-pub fn working_service() -> GameService {
-    GameService::with_backends(
+pub fn working_pipeline() -> ActionPipeline {
+    let storage = Arc::new(Storage::new_in_memory());
+    chronicler_engine::test_support::make_test_pipeline_with_backends(
+        storage,
         make_test_recorder(Arc::new(MockBackend::default())),
         AgentRegistry::default(),
     )
@@ -51,10 +56,8 @@ mod bootstrap;
 
 mod storage;
 
-#[path = "application/application_service.rs"]
-mod application_service;
-#[path = "application/game_service.rs"]
-mod game_service;
+#[path = "application/collaborators.rs"]
+mod application_collaborators;
 #[path = "application/lifecycle.rs"]
 mod lifecycle;
 #[path = "adapters/driven/llm/llm_client.rs"]

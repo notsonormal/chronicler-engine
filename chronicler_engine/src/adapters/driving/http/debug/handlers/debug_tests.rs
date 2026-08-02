@@ -3,7 +3,7 @@ use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
 async fn test_debug_state_handler_returns_ok() {
-    let app_state = TestAppBuilder::default_test().build_app_state();
+    let app_state = TestAppBuilder::default_test().build_service();
 
     let result = debug_state_handler(axum::extract::State(app_state)).await;
 
@@ -12,7 +12,7 @@ async fn test_debug_state_handler_returns_ok() {
 
 #[tokio::test]
 async fn test_debug_state_handler_has_current_room() {
-    let app_state = TestAppBuilder::default_test().build_app_state();
+    let app_state = TestAppBuilder::default_test().build_service();
 
     let result = debug_state_handler(axum::extract::State(app_state)).await;
 

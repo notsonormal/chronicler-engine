@@ -15,7 +15,7 @@ fn make_test_app_state(
     if let Some(storage) = llm_storage {
         builder = builder.storage(storage);
     }
-    builder.build_app_state()
+    builder.build_service()
 }
 
 #[test]

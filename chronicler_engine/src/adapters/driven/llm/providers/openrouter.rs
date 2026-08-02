@@ -6,7 +6,7 @@ use crate::domain::model::settings::LlmProviderConfig;
 use crate::adapters::driven::llm::transport::call_openrouter_with_model;
 
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
-use crate::application::utils::prompt_merge::merge_single_user_message;
+use crate::application::prompting::prompt_merge::merge_single_user_message;
 
 #[derive(Clone, Default)]
 pub struct OpenRouterBackend {

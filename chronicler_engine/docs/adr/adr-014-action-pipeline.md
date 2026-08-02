@@ -42,3 +42,7 @@ We extracted an `ActionPipeline` module that explicitly models the game flow pha
 - Chose trait extraction over monolithic function (testability won over locality; partially reversed in ADR-027)
 - Chose phase-based design over event-driven composition (simpler control flow; retry and normal paths share phases)
 - Chose `PipelineRun<'a>` borrow pair over passing `app`/`pipeline` through each phase (avoids borrow duplication; cost is one indirection layer)
+
+## History
+
+- **2026-08-01**: Facade-deletion work completed (`DefaultApplicationService` and `src/application/application_service.rs` removed). The `PipelineRun<'a>` borrow pair now borrows `&ActionPipeline` only; the former `&DefaultApplicationService` half is gone because orchestration methods moved onto `ActionPipeline` and the remaining collaborators (`GameCatalogue`, `GameViewQuery`, `GenerationGate`, `PersistenceGate`) are accessed directly from `AppState` by HTTP handlers. The body of this ADR records the decision at the time it was made; see current source and `docs/diataxis/reference/game_flow.md` for the live shape.

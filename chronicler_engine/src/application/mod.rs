@@ -1,43 +1,53 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
 //! Application layer services and game flow orchestration
 
-pub mod action_pipeline;
 pub mod agents;
-pub mod application_service;
 pub mod arrival_service;
 pub mod debug;
 pub mod errors;
-pub mod game_catalogue;
-pub mod game_service;
-pub mod game_view_query;
-pub mod generation_gate;
-pub mod generation_guard;
+pub mod games;
+pub mod generation;
 pub mod llm_message;
 pub mod llm_recorder;
-pub mod narrative_prompt;
-pub mod persistence_gate;
+pub mod message_service;
+pub mod persona_catalogue;
+pub mod pipeline;
 pub mod ports;
+pub mod prompt_preset_service;
+pub mod prompting;
+pub mod settings_service;
 pub mod text_check_service;
-pub mod utils;
+pub mod world_catalogue;
 
-pub use application_service::{
-    ApplicationError, DebugStateView, DefaultApplicationService, ProcessActionResult,
-};
-pub use game_catalogue::GameCatalogue;
-pub use game_view_query::GameViewQuery;
-pub use generation_gate::GenerationGate;
-pub use game_service::GameService;
-pub use generation_guard::GenerationGuard;
-pub(crate) use utils::spawn::spawn_pipeline_task;
+pub use debug::DebugStateView;
+pub use errors::{ApplicationError, ProcessActionResult};
+pub use games::{GameCatalogue, GameViewQuery};
+pub use generation::{GenerationGate, GenerationGuard};
+pub use message_service::MessageService;
+pub use prompt_preset_service::PromptPresetService;
+pub use settings_service::SettingsService;
+pub use world_catalogue::WorldCatalogue;
 
 #[cfg(test)]
 mod llm_recorder_tests;
 
 #[cfg(test)]
-mod application_service_tests;
+mod message_service_tests;
 
 #[cfg(test)]
-mod generation_guard_tests;
+mod orchestrator_tests;
+
+#[cfg(test)]
+mod persona_catalogue_tests;
+
+#[cfg(test)]
+mod prompt_preset_service_tests;
+
+#[cfg(test)]
+mod settings_service_tests;
 
 #[cfg(test)]
 mod text_check_service_tests;
+
+#[cfg(test)]
+mod world_catalogue_tests;

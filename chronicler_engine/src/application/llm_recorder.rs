@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::error::EngineError;
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 use crate::application::llm_message::SaveLlmMessageFn;
-use crate::application::utils::sanitize::sanitize_llm_output;
+use crate::application::prompting::sanitize::sanitize_llm_output;
 
 pub struct LlmCallRecorder {
     provider: Arc<dyn LlmProvider>,

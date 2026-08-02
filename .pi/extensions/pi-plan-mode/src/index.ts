@@ -14,8 +14,9 @@ const PLAN_CONTEXT_MESSAGE_TYPE = "plan-mode-context";
 const PROPOSED_PLAN_MESSAGE_TYPE = "proposed-plan";
 const PLAN_MODE_QUESTION_TOOL_NAME = "plan_mode_question";
 const PLAN_CONTEXT_MARKER = "[CODEX-LIKE PLAN MODE ACTIVE]";
+const PLAN_MODE_TRANSITION_MESSAGE_TYPE = "pi-plan";
 const SAFE_BUILTIN_PLAN_TOOLS = new Set(["read", "bash", "grep", "find", "ls"]);
-const BLOCKED_BUILTIN_TOOLS = new Set(["edit", "write"]);
+const BLOCKED_BUILTIN_TOOLS = new Set<string>();
 const WRITE_EDIT_TOOL_NAMES = ["write", "edit"] as const;
 const DEFAULT_TOOLS = ["read", "bash", "edit", "write"];
 const TOOL_SELECTOR_PAGE_SIZE = 10;
@@ -377,8 +378,19 @@ export default function planMode(pi: ExtensionAPI) {
 		);
 		restoreState(ctx);
 		if (pi.getFlag("plan") === true) state.enabled = true;
-		if (state.enabled) activatePlanModeTools();
-		else deactivatePlanModeQuestionTool();
+		if (state.enabled) {
+			activatePlanModeTools();
+			pi.sendMessage(
+				{
+					customType: PLAN_MODE_TRANSITION_MESSAGE_TYPE,
+					content: "<pi-plan>Entering plan mode</pi-plan>",
+					display: false,
+				},
+				{ triggerTurn: false },
+			);
+		} else {
+			deactivatePlanModeQuestionTool();
+		}
 		updateUi(ctx);
 	});
 
@@ -480,6 +492,14 @@ export default function planMode(pi: ExtensionAPI) {
 		state = { ...state, enabled: true, awaitingAction: false };
 		activatePlanModeTools();
 		persistState();
+		pi.sendMessage(
+			{
+				customType: PLAN_MODE_TRANSITION_MESSAGE_TYPE,
+				content: "<pi-plan>Entering plan mode</pi-plan>",
+				display: false,
+			},
+			{ triggerTurn: false },
+		);
 		updateUi(ctx);
 	}
 
@@ -530,6 +550,14 @@ export default function planMode(pi: ExtensionAPI) {
 		};
 		restoreTools();
 		persistState();
+		pi.sendMessage(
+			{
+				customType: PLAN_MODE_TRANSITION_MESSAGE_TYPE,
+				content: "<pi-plan>Exiting plan mode</pi-plan>",
+				display: false,
+			},
+			{ triggerTurn: false },
+		);
 		updateUi(ctx);
 		if (persistedPath) {
 			ctx.ui.notify(`Plan written to: ${persistedPath}`, "info");
@@ -1366,18 +1394,13 @@ You are in Plan Mode. Chat your way to a decision-complete implementation plan, 
 - Do not use update_plan/TODO tooling in Plan Mode; Plan Mode is conversational planning.
 - ${allowedDescription}
 - Use /grill-me-with-docs to stress-test the plan before finalizing if the user wants grilling. Mention it; do not auto-invoke.
+- Create "TaskCreate" to create a list of tasks/subtasks once you exit plan mode and start implementing the plan
 
 ### Story points
 
 - Sizes: 1, 3, 5, 8, 13
 - 8 SP or larger → must break into subtasks
-- 5 SP = single worker session; primary agent must verify output
-- Sub tasks optional for atomic tasks ≤5 SP; required for tasks >5 SP
 - SP mandatory on every Task line
-
-### Subagents
-
-When using subagents to execute tasks, you need to make sure that task has proper per task validation criteria. Running cargo check and cargo test at minimum for code changes, or running build.py for more complex tasks. It is extremely disruptive if the primary agent has to cleanup after the subagent.
 
 ## Phase 1 — Ground in the environment
 

@@ -6,7 +6,7 @@ use axum::response::{IntoResponse, Response};
 
 use super::utils::error::render_error;
 
-use crate::application::application_service::ApplicationError;
+use crate::application::errors::ApplicationError;
 
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {

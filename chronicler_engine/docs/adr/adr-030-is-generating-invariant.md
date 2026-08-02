@@ -89,7 +89,7 @@ Ticket 07 refines, but does not discard, the single-writer invariant on `is_gene
 ## Related ADRs
 
 - ADR-010: Concurrency and Generation Gate Model — established the original `AtomicBool` generation gate. ADR-030 extends that decision by adding the persisted-source-of-truth requirement and the single-writer rule.
-- ADR-027: Hexagonal Architecture Migration — parent decision on the storage direct-access exemption (`Storage` is accessed directly by the application persistence boundary). Relevant because the persisted `GenerationStatus` write goes through `Storage`, which is a documented exemption per ADR-027.
+- ADR-027: Hexagonal Architecture Migration — parent decision that `Storage` is concrete and the application persistence boundary may call it directly. Relevant because the persisted `GenerationStatus` write goes through `Storage`.
 
 ## History
 

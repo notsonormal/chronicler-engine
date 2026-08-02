@@ -214,7 +214,7 @@ pub struct TestStoredTriggerContext;
 impl TestStoredTriggerContext {
     pub fn standard() -> StoredTriggerContext {
         StoredTriggerContext {
-            npc_id: "npc1".to_string(),
+            npc_id: "npc_1".to_string(),
             trigger_idx: 0,
             trigger_name: "Test".to_string(),
             trigger_repeat: false,

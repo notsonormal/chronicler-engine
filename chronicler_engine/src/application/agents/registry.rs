@@ -1,6 +1,5 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/narrative/agent_system.md]
 //! Runtime agent lookup and lifecycle
-//! arch-lint: storage-direct — deferred to G1-B (T2 persistence_gate carve-out landed; agents still take `Option<Arc<Storage>>`), see ADR-027
 
 use std::sync::{Arc, RwLock};
 

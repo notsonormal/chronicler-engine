@@ -1,6 +1,6 @@
 ---
 description: Read-only codebase exploration
-model: minimax/MiniMax-M2.7-highspeed
+model: synthetic/hf:zai-org/GLM-5.2
 tools: read, bash, grep, find, ls
 permission:
   bash:

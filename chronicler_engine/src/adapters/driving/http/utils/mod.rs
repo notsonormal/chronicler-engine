@@ -5,6 +5,8 @@ pub mod error;
 pub mod fragment;
 pub mod handler_helpers;
 pub mod locks;
+#[cfg(test)]
+mod locks_tests;
 pub mod port_utils;
 pub mod response;
 pub mod template_helpers;

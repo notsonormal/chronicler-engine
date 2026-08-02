@@ -7,7 +7,7 @@ title: Agent System
 
 The engine has an agent architecture. An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in `AgentRegistry`. The pipeline iterates registered agents at each `ExecutionPhase` and dispatches them in registration order. The engine works with **zero agents** — all agent execution is optional.
 
-The single agent in production today is `QuantifierAgent` (post-generation, scene analysis). It detects NPCs that appeared in the narration and any movement destination, returning a `StatePatch` that `GameService` translates back into a `QuantifierResult` for the action pipeline. The body of this document covers the quantifier prompt shape.
+The single agent in production today is `QuantifierAgent` (post-generation, scene analysis). It detects NPCs that appeared in the narration and any movement destination, returning a `StatePatch` that the pipeline translates back into a `QuantifierResult`. The body of this document covers the quantifier prompt shape.
 
 ## Trait Contract
 
@@ -39,7 +39,7 @@ The pipeline shape today:
 An agent's `execute` returns one of three `AgentResult` variants:
 
 - **`PromptDirective(String)`** — inject text into a future prompt. Not constructed by any registered agent today.
-- **`StatePatch(StatePatch)`** — propose a state mutation. `QuantifierAgent` returns this with the NPCs it detected in the narration and any movement destination. `GameService` translates the patch back into a `QuantifierResult` for the action pipeline.
+- **`StatePatch(StatePatch)`** — propose a state mutation. `QuantifierAgent` returns this with the NPCs it detected in the narration and any movement destination. The pipeline translates the patch back into a `QuantifierResult`.
 - **`NoOp`** — the agent ran but has nothing to report.
 
 `StatePatch` carries a `confidence` field rated `High`, `Medium`, or `Low`. This rating reflects how certain the agent's LLM call is about its detected entities.
@@ -148,7 +148,7 @@ Default presets ship as `data/prompt_presets/quantifier/default.json` and are pr
 
 - [ADR-006: Quantifier-Driven Game Systems](../../../docs/adr/adr-006-quantifier-systems.md) — dual-LLM architecture; quantifier-driven movement + NPC detection + NPC event layer.
 - [ADR-009: Agent Trait and Registry Architecture](../../../docs/adr/adr-009-agent-trait-registry.md) — the `Agent` trait + `AgentRegistry` + the extension procedure for new agents; the `PostGeneration` dispatch that hosts the quantifier.
-- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md) — agent constructors carry `Option<Arc<Storage>>` directly under the storage-direct exemption (deferred to G1-B).
+- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md)
 - [`../../explanation/agent_system_design.md`](../../explanation/agent_system_design.md) — why the agent abstraction is shaped this way and which tradeoffs it encodes.
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — uses the quantifier's NPC + movement output as the precondition for trigger evaluation.
 - [`../game_flow.md#phase-flow`](../game_flow.md#phase-flow) — pipeline home for the `PostGeneration` dispatch.

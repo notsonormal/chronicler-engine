@@ -302,7 +302,7 @@ async fn test_action_confirm_empty_command() {
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(500);
     while start.elapsed() < timeout {
-        let state = state.persistence_gate.load_or_fresh();
+        let state = state.message_service.load_or_fresh();
         if !state.narrative.input_buffer.status.is_generating() {
             return;
         }

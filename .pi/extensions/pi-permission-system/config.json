@@ -19,6 +19,7 @@
       "*": "allow",
       "xargs": "deny",
       "xargs *": "deny",
+      "find *": "deny",
       "timeout": "deny",
       "timeout *": "deny",      
       "git tag": "deny",

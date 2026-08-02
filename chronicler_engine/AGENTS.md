@@ -32,23 +32,12 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `templates.rs` — Template rendering utilities
         - `view_models.rs` — View models decouple templates from domain types.
   - **application/**
-    - `application_service.rs` — DefaultApplicationService — façade over application collaborators.
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
-    - `game_catalogue.rs` — GameCatalogue — game-lifecycle storage orchestration.
-    - `game_service.rs` — Game service handling gameplay operations
-    - `game_view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
-    - `generation_gate.rs` — GenerationGate — `is_generating` cache (ADR-030) + per-game slot orchestration.
-    - `generation_guard.rs` — Generation guard logic
     - `llm_message.rs` — LLM message DTO + recorder save seam
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
     - `persistence_gate.rs` — PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
     - `text_check_service.rs` — TextCheckService orchestrator for text checking
-    - **action_pipeline/**
-      - `mod.rs` — Action pipeline for processing game actions
-      - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
-      - `phases.rs` — Phase implementations for the action pipeline
-      - `pipeline.rs` — Action pipeline orchestration and execution
     - **agents/**
       - `mod.rs` — Agent registry and trait definitions
       - `registry.rs` — Runtime agent lookup and lifecycle
@@ -56,33 +45,44 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **quantifier/**
         - `agent.rs` — Quantifier agent implementation.
         - `mod.rs` — Quantifier agent system
-        - `parser.rs` — Quantifier parse entry points (`QuantifierParseResult::parse`, `QuantifierResult::parse_with_movement`).
         - `prompt.rs` — Quantifier prompt construction
         - `types.rs` — Quantifier type definitions
     - **debug/**
       - `dto.rs` — DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
       - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint.
-    - **narrative_prompt/**
-      - `assembler.rs` — Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
-      - `mod.rs` — Prompt construction orchestration
-      - `types.rs` — Prompt type definitions
-      - **builders/**
-        - `assembler.rs` — Multi-stage prompt builder.
-        - `mod.rs` — Narrative prompt builder modules.
-      - **utils/**
-        - `context.rs` — Prompt context fitting — message budget enforcement.
-        - `mod.rs` — Narrative prompt utility modules.
+    - **games/**
+      - `catalogue.rs` — GameCatalogue — game-lifecycle storage orchestration.
+      - `mod.rs` — Game lifecycle orchestration and read-side queries.
+      - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
+      - `world_persona_catalogue.rs` — WorldPersonaCatalogue — world and persona storage orchestration.
+    - **generation/**
+      - `gate.rs` — GenerationGate — per-game slot orchestration. Generation truth is persisted `GenerationStatus` only.
+      - `guard.rs` — Generation guard logic
+      - `mod.rs` — Generation gating and per-game slot orchestration.
+      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
+    - **pipeline/**
+      - `mod.rs` — Action pipeline for processing game actions
+      - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
+      - `phases.rs` — Phase implementations for the action pipeline
+      - `pipeline.rs` — Action pipeline orchestration and execution
+      - `spawn.rs` — Shared spawn helper for pipeline tasks
     - **ports/**
       - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)
       - `text_checker.rs` — TextChecker port trait and CheckResult DTO
-    - **utils/**
-      - `llm_provider.rs` — Merge system + user prompts for models that ignore the system role.
-      - `mod.rs` — Application-layer utility modules.
+    - **prompting/**
+      - `assembler.rs` — Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
+      - `mod.rs` — Prompt construction orchestration
+      - `prompt_merge.rs` — Prompt merge helper for models that ignore the system role.
       - `sanitize.rs` — LLM input/output sanitization
-      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
-      - `spawn.rs` — Shared spawn helper for pipeline tasks
       - `token_budget.rs` — Token budget management
+      - `types.rs` — Prompt type definitions
+      - **builders/**
+        - `mod.rs` — Narrative prompt builder modules.
+        - `sections.rs` — Multi-stage prompt builder.
+      - **utils/**
+        - `context.rs` — Prompt context fitting — message budget enforcement.
+        - `mod.rs` — Narrative prompt utility modules.
   - **bootstrap/**
     - `init_game.rs` — Game state initialization and arrival narration spawning
     - `load.rs` — Game data seeding and initialization routines
@@ -111,7 +111,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **state/**
         - `game_state.rs` — Main game state and builder
         - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
-        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/action_pipeline/pipeline.rs`.
+        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/pipeline.rs`.
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state

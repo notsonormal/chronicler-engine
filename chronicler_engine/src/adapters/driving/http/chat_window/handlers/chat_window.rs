@@ -12,7 +12,7 @@ use serde::Deserialize;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok, ok_refresh};
-use crate::application::application_service::ApplicationError;
+use crate::application::errors::ApplicationError;
 use crate::domain::model::settings::TextCheckMode;
 use crate::error::EngineError;
 
@@ -23,7 +23,7 @@ pub async fn index_handler() -> Html<String> {
 pub async fn reset_handler(
     State(state): State<AppState>,
 ) -> Result<axum::response::Response<Body>, ApplicationError> {
-    match state.application_service.reset() {
+    match state.game_catalogue.reset() {
         Ok(()) => Ok(ok_refresh()),
         Err(e) => Ok(internal_error(e.to_string())),
     }
@@ -32,14 +32,14 @@ pub async fn reset_handler(
 pub async fn retrigger_handler(
     State(state): State<AppState>,
 ) -> Result<Response<Body>, ApplicationError> {
-    state.application_service.retrigger()?;
+    state.pipeline.retrigger()?;
     Ok(ok("<span class=\"status ready\">Retriggering...</span>"))
 }
 
 pub async fn retry_handler(
     State(state): State<AppState>,
 ) -> Result<Response<Body>, ApplicationError> {
-    state.application_service.retry()?;
+    state.pipeline.retry()?;
     Ok(ok("<span class=\"status ready\">Retrying...</span>"))
 }
 
@@ -47,9 +47,11 @@ pub async fn switch_swipe_handler(
     State(state): State<AppState>,
     Path((message_id, swipe_index)): Path<(u64, usize)>,
 ) -> Result<Response<Body>, ApplicationError> {
+    let current_game_id = state.game_catalogue.current_game_id();
+    let is_generating = state.generation_gate.is_busy(current_game_id);
     state
-        .application_service
-        .switch_swipe(message_id, swipe_index)?;
+        .message_service
+        .switch_swipe(is_generating, message_id, swipe_index)?;
     let html = state
         .render_story_log()
         .map_err(|e| EngineError::Render(format!("Failed to render story log: {e}")))?;

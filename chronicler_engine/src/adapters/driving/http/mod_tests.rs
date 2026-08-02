@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::domain::model::settings::AppSettings;
 use crate::adapters::driving::http::ServerConfig;
-use crate::application::game_service::GameService;
+use crate::application::pipeline::pipeline::ActionPipeline;
 
 #[test]
 fn test_server_config_default() {
@@ -78,13 +78,13 @@ fn test_app_state_struct_fields() {
     )
     .expect("build_app_graph_for_tests should succeed");
 
-    let _app_state = (wired.game_service, settings);
+    let _app_state = (wired.pipeline, settings);
 }
 
 #[test]
-fn test_game_service_trait_bounds() {
+fn test_pipeline_trait_bounds() {
     fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<GameService>();
+    assert_send_sync::<ActionPipeline>();
 }
 
 #[test]

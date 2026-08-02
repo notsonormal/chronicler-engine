@@ -4,10 +4,13 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::adapters::driven::storage::Storage;
-use crate::application::application_service::DefaultApplicationService;
-use crate::application::game_service::GameService;
-use crate::application::persistence_gate::PersistenceGate;
+use tokio_util::sync::CancellationToken;
+
+use crate::adapters::driven::storage::{PresetStore, Storage};
+use crate::application::agents::registry::AgentRegistry;
+use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::pipeline::pipeline::ActionPipeline;
+use crate::application::message_service::MessageService;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::character::NpcCard;
@@ -35,46 +38,70 @@ pub fn default_test_preset_storage() -> Arc<Storage> {
     Arc::new(storage)
 }
 
-#[cfg(feature = "testing")]
-pub fn build_test_service(
+pub fn build_test_message_service(storage: Arc<Storage>) -> Arc<MessageService> {
+    Arc::new(MessageService::new(storage))
+}
+
+pub fn make_test_pipeline_with_backends(
+    storage: Arc<Storage>,
+    recorder: Arc<LlmCallRecorder>,
+    agent_registry: AgentRegistry,
+) -> ActionPipeline {
+    let message_service = build_test_message_service(Arc::clone(&storage));
+    let preset_store = Arc::new(PresetStore::new(default_test_preset_storage()));
+    let settings = Arc::new(RwLock::new(AppSettings::default()));
+    ActionPipeline::with_backends(
+        CancellationToken::new(),
+        recorder,
+        agent_registry,
+        message_service,
+        Arc::clone(&storage),
+        preset_store,
+        settings,
+    )
+}
+
+pub fn make_test_pipeline_with_mock_quantifier(
+    storage: Arc<Storage>,
+    recorder: Arc<LlmCallRecorder>,
+    quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+) -> ActionPipeline {
+    let message_service = build_test_message_service(Arc::clone(&storage));
+    let preset_store = Arc::new(PresetStore::new(default_test_preset_storage()));
+    let settings = Arc::new(RwLock::new(AppSettings::default()));
+    ActionPipeline::with_mock_quantifier(
+        CancellationToken::new(),
+        recorder,
+        quantifier_provider,
+        message_service,
+        Arc::clone(&storage),
+        preset_store,
+        settings,
+    )
+}
+
+/// Build a full `WiredApp` for the supplied pipeline.
+pub fn build_test_wired_app(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
-    game_service: Arc<GameService>,
-) -> Result<Arc<DefaultApplicationService>> {
-    Ok(build_app_graph_for_tests(
+    pipeline: ActionPipeline,
+) -> Result<WiredApp> {
+    build_app_graph_for_tests(
         Arc::new(RwLock::new(AppSettings::default())),
         storage,
         preset_storage,
-        Some(game_service),
-    )?
-    .application_service)
+        Some(pipeline),
+    )
 }
 
-pub fn build_test_service_with_pg(
-    storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
-    game_service: Arc<GameService>,
-) -> Result<(Arc<DefaultApplicationService>, Arc<PersistenceGate>)> {
-    let wired = build_app_graph_for_tests(
-        Arc::new(RwLock::new(AppSettings::default())),
-        storage,
-        preset_storage,
-        Some(game_service),
-    )?;
-    Ok((wired.application_service, wired.persistence_gate))
-}
-
-#[cfg(feature = "testing")]
-pub fn build_test_service_with_settings(
+/// Build a full `WiredApp` with custom settings.
+pub fn build_test_wired_app_with_settings(
     storage: Arc<Storage>,
     preset_storage: Arc<Storage>,
     settings: Arc<RwLock<AppSettings>>,
-    game_service: Arc<GameService>,
-) -> Result<Arc<DefaultApplicationService>> {
-    Ok(
-        build_app_graph_for_tests(settings, storage, preset_storage, Some(game_service))?
-            .application_service,
-    )
+    pipeline: ActionPipeline,
+) -> Result<WiredApp> {
+    build_app_graph_for_tests(settings, storage, preset_storage, Some(pipeline))
 }
 
 pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {

@@ -8,19 +8,18 @@ use axum::{
 };
 
 use crate::adapters::driving::http::AppState;
-use crate::application::application_service::ApplicationError;
+use crate::application::errors::ApplicationError;
 
 use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
 use crate::adapters::driving::http::games::templates::games::{GamesPanelTemplate, PersonaRowView};
 
 pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let app = &state.application_service;
-    let Ok(games) = app.list_games() else {
+    let Ok(games) = state.game_catalogue.list_games() else {
         return internal_error("Failed to list games");
     };
 
-    let active_id = app.current_game_id();
+    let active_id = state.game_catalogue.current_game_id();
     let mut active_game = None;
     let saved_games: Vec<_> = games
         .into_iter()
@@ -34,11 +33,11 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
         })
         .collect();
 
-    let Ok(worlds) = app.list_worlds() else {
+    let Ok(worlds) = state.world_catalogue.list_worlds() else {
         return internal_error("Failed to list worlds");
     };
 
-    let personas: Vec<PersonaRowView> = match app.list_personas() {
+    let personas: Vec<PersonaRowView> = match state.persona_catalogue.list_personas() {
         Ok(p) => p,
         Err(e) => {
             tracing::warn!("Failed to load personas: {e}");
@@ -73,7 +72,7 @@ pub async fn create_game_handler(
     Form(form): Form<CreateGameForm>,
 ) -> Result<Response, ApplicationError> {
     state
-        .application_service
+        .game_catalogue
         .create_game(&form.world_key, &form.persona_key)?;
     Ok(ok_refresh())
 }
@@ -82,7 +81,7 @@ pub async fn switch_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
 ) -> Result<Response, ApplicationError> {
-    state.application_service.switch_game(id)?;
+    state.game_catalogue.switch_game(id)?;
     Ok(ok_refresh())
 }
 
@@ -90,6 +89,6 @@ pub async fn delete_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
 ) -> Result<Response, ApplicationError> {
-    state.application_service.delete_game(id)?;
+    state.game_catalogue.delete_game(id)?;
     Ok(ok(""))
 }

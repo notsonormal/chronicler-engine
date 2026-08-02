@@ -22,6 +22,8 @@ pub mod world;
 #[cfg(test)]
 mod action_tests;
 #[cfg(test)]
+mod agent_tests;
+#[cfg(test)]
 mod character_tests;
 #[cfg(test)]
 mod game_tests;

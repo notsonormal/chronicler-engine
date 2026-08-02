@@ -1,4 +1,4 @@
-//! Unit tests for worlds_fragment handlers
+//! HTTP adapter tests for worlds_fragment handlers
 
 use axum::{
     body::Body,

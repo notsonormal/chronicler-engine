@@ -109,7 +109,7 @@ fn test_execute_freeaction_impl_no_movement() {
         "execute_freeaction_impl failed: {:?}",
         result.err()
     );
-    let next_state = result.unwrap().next_state;
+    let next_state = result.unwrap().post_commit_state;
     assert_eq!(next_state.narrative.history().len(), 1);
     assert_eq!(
         next_state.narrative.history()[0].message_type,
@@ -139,7 +139,7 @@ fn test_execute_freeaction_impl_with_movement() {
         "execute_freeaction_impl failed: {:?}",
         result.err()
     );
-    let next_state = result.unwrap().next_state;
+    let next_state = result.unwrap().post_commit_state;
     assert!(!next_state.narrative.history().is_empty());
     assert!(next_state.movement.current_room_id.starts_with("dynamic_"));
     assert!(
@@ -168,7 +168,7 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
     );
 
     assert!(result.is_ok());
-    let next_state = result.unwrap().next_state;
+    let next_state = result.unwrap().post_commit_state;
     assert_eq!(next_state.scene.npcs_in_area.len(), 1);
     assert_eq!(next_state.scene.npcs_in_area[0].id, "carla");
 }
@@ -190,7 +190,7 @@ fn test_execute_freeaction_impl_npc_events_entered() {
     );
 
     assert!(result.is_ok());
-    let next_state = result.unwrap().next_state;
+    let next_state = result.unwrap().post_commit_state;
     let times_met = next_state
         .npc_encounter_log
         .npcs
@@ -203,13 +203,13 @@ fn test_execute_freeaction_impl_npc_events_entered() {
 #[test]
 fn test_apply_npc_events_entered() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
         event_type: NpcTransitionType::Entered,
     }];
 
-    let state = state
+    state
         .apply_npc_events(&events, &deps.map, &deps.npcs)
         .unwrap();
 
@@ -226,7 +226,7 @@ fn test_apply_npc_events_left() {
         event_type: NpcTransitionType::Left,
     }];
 
-    let state = state
+    state
         .apply_npc_events(&events, &deps.map, &deps.npcs)
         .unwrap();
 
@@ -236,14 +236,14 @@ fn test_apply_npc_events_left() {
 #[test]
 fn test_apply_npc_events_increments_times_met() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
     let initial_times = state.npc_encounter_log.get_times_met("carla");
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
         event_type: NpcTransitionType::Entered,
     }];
 
-    let state = state
+    state
         .apply_npc_events(&events, &deps.map, &deps.npcs)
         .unwrap();
 
@@ -256,10 +256,10 @@ fn test_apply_npc_events_increments_times_met() {
 #[test]
 fn test_handle_movement_no_destination() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
     let original_room = state.movement.current_room_id.clone();
 
-    let state = state
+    state
         .handle_movement(None, &["carla".to_string()], &deps.map, &deps.npcs)
         .unwrap();
 
@@ -273,7 +273,7 @@ fn test_handle_movement_same_room_no_increment() {
     state.movement.current_room_id = "test_room".to_string();
     let initial_times = state.npc_encounter_log.get_times_met("carla");
 
-    let state = state
+    state
         .handle_movement(
             Some("test_room"),
             &["carla".to_string()],
@@ -291,10 +291,10 @@ fn test_handle_movement_same_room_no_increment() {
 #[test]
 fn test_handle_movement_creates_dynamic_room() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
     let original_room = state.movement.current_room_id.clone();
 
-    let state = state
+    state
         .handle_movement(Some("nonexistent_room"), &[], &deps.map, &deps.npcs)
         .unwrap();
 
@@ -310,9 +310,9 @@ fn test_handle_movement_creates_dynamic_room() {
 #[test]
 fn test_handle_movement_sets_pending_location() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
 
-    let state = state
+    state
         .handle_movement(
             Some("test_room"),
             &["carla".to_string()],
@@ -331,9 +331,9 @@ fn test_handle_movement_sets_pending_location() {
 #[test]
 fn test_handle_movement_sets_currently_meeting() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
 
-    let state = state
+    state
         .handle_movement(
             Some("new_room"),
             &["carla".to_string()],
@@ -379,8 +379,8 @@ fn test_trigger_split_architecture_produces_event_header() {
         "Carla appears",
     );
 
-    let state = turn_result
-        .next_state
+    let mut state = turn_result.post_commit_state;
+    state
         .commit_trigger_narration(
             &request,
             "Carla emerges from the shadows.",
@@ -408,7 +408,7 @@ fn test_trigger_split_architecture_produces_event_header() {
 #[test]
 fn test_commit_trigger_narration_adds_event_header_and_narration() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
 
     let request = crate::test_support::TestStoredTriggerContext::for_npc(
         "carla",
@@ -416,7 +416,7 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
         "Carla appears",
     );
 
-    let state = state
+    state
         .commit_trigger_narration(
             &request,
             "Gabriella emerges from the shadows.",
@@ -439,7 +439,7 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
 #[test]
 fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
 
     let request = crate::test_support::TestStoredTriggerContext::for_npc(
         "carla",
@@ -447,7 +447,7 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
         "Carla appears",
     );
 
-    let state = state
+    state
         .commit_trigger_narration(&request, "Some text.", &deps.map, &deps.npcs)
         .unwrap();
 
@@ -460,7 +460,7 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
 #[test]
 fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
 
     let mut stored = crate::test_support::TestStoredTriggerContext::for_npc(
         "carla",
@@ -470,7 +470,7 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
     stored.trigger_repeat = true;
     let request = stored;
 
-    let state = state
+    state
         .commit_trigger_narration(&request, "Some text.", &deps.map, &deps.npcs)
         .unwrap();
 
@@ -483,7 +483,7 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
 #[test]
 fn test_commit_trigger_narration_empty_text_is_noop() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
 
     let request = crate::test_support::TestStoredTriggerContext::for_npc(
         "carla",
@@ -491,12 +491,12 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
         "Carla appears",
     );
 
-    let state = state
+    state
         .commit_trigger_narration(&request, "", &deps.map, &deps.npcs)
         .unwrap();
     assert!(state.narrative.history().is_empty());
 
-    let state = state
+    state
         .commit_trigger_narration(&request, "   ", &deps.map, &deps.npcs)
         .unwrap();
     assert!(state.narrative.history().is_empty());
@@ -505,7 +505,7 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
 #[test]
 fn test_commit_trigger_narration_stores_trigger_context() {
     let deps = deps_with_carla("test_room");
-    let state = make_test_state();
+    let mut state = make_test_state();
 
     let request = crate::test_support::TestStoredTriggerContext::with_max_tokens(
         "carla",
@@ -514,7 +514,7 @@ fn test_commit_trigger_narration_stores_trigger_context() {
         512,
     );
 
-    let state = state
+    state
         .commit_trigger_narration(&request, "Carla emerges.", &deps.map, &deps.npcs)
         .unwrap();
 
@@ -550,8 +550,8 @@ proptest! {
         new_npc_ids in prop::collection::vec("[a-z]{1,10}", 0..3),
     ) {
         let deps = deps_for_npc_ids(TestMap::two_rooms("room1", "room2"), &new_npc_ids);
-        let state = make_two_room_state();
-        let state = state.handle_movement( destination, &new_npc_ids, &deps.map, &deps.npcs).unwrap();
+        let mut state = make_two_room_state();
+        state.handle_movement( destination, &new_npc_ids, &deps.map, &deps.npcs).unwrap();
         state.assert_state_consistency(&deps.map, &deps.npcs).ok();
     }
 
@@ -567,7 +567,7 @@ proptest! {
     ) {
         let npc_ids = events.iter().map(|(npc_id, _)| npc_id.clone()).collect::<Vec<_>>();
         let deps = deps_for_npc_ids(TestMap::single_room("room1"), &npc_ids);
-        let state = TestGameState::in_room("room1");
+        let mut state = TestGameState::in_room("room1");
         let events: Vec<NpcEvent> = events
             .into_iter()
             .map(|(npc_id, event_type)| NpcEvent {
@@ -575,7 +575,7 @@ proptest! {
                 event_type,
             })
             .collect();
-        let state = state.apply_npc_events( &events, &deps.map, &deps.npcs).unwrap();
+        state.apply_npc_events(&events, &deps.map, &deps.npcs).unwrap();
         state.assert_state_consistency(&deps.map, &deps.npcs).ok();
     }
 
@@ -620,7 +620,7 @@ proptest! {
             "execute_freeaction_impl failed: {:?}",
             result.err()
         );
-        let next_state = result.unwrap().next_state;
+        let next_state = result.unwrap().post_commit_state;
         next_state.assert_state_consistency(&deps.map, &deps.npcs).ok();
     }
 }

@@ -42,7 +42,7 @@ fn mock_backend_path_returns_recorder_with_mock_provider() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(mock_connection(), storage);
-    let recorder = &wired.game_service.llm_recorder;
+    let recorder = wired.pipeline.recorder();
 
     assert_eq!(recorder.provider().name(), "Mock");
     assert_eq!(recorder.provider().model(), "mock");
@@ -56,7 +56,7 @@ fn mock_backend_recorder_persists_forensics_to_storage() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(mock_connection(), Arc::clone(&storage));
-    let recorder = &wired.game_service.llm_recorder;
+    let recorder = wired.pipeline.recorder();
 
     recorder
         .complete("wiring-test-agent", "sys", "usr", None)
@@ -90,7 +90,7 @@ fn deepseek_path_returns_recorder() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(connection, storage);
-    let recorder = &wired.game_service.llm_recorder;
+    let recorder = wired.pipeline.recorder();
 
     assert_eq!(recorder.provider().name(), "DeepSeek");
 }
@@ -111,7 +111,7 @@ fn openrouter_path_returns_recorder() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(connection, storage);
-    let recorder = &wired.game_service.llm_recorder;
+    let recorder = wired.pipeline.recorder();
 
     assert_eq!(recorder.provider().name(), "OpenRouter");
 }
@@ -123,8 +123,8 @@ fn ollama_path_returns_recorder() {
         name: "Test Ollama".to_string(),
         provider: LlmBackendType::Ollama,
         model: "llama3".to_string(),
-        base_url: Some("http://localhost:11434".to_string()),
         api_key: None,
+        base_url: Some("http://localhost:11434".to_string()),
         single_user_message: false,
         max_tokens: None,
         max_context_tokens: None,
@@ -132,7 +132,7 @@ fn ollama_path_returns_recorder() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(connection, storage);
-    let recorder = &wired.game_service.llm_recorder;
+    let recorder = wired.pipeline.recorder();
 
     assert_eq!(recorder.provider().name(), "Ollama");
 }
@@ -158,8 +158,5 @@ fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
 
     let wired = wired_app(connection, storage);
 
-    assert_eq!(
-        wired.game_service.llm_recorder.provider().name(),
-        "DeepSeek"
-    );
+    assert_eq!(wired.pipeline.recorder().provider().name(), "DeepSeek");
 }

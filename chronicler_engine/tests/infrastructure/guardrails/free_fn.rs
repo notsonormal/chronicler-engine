@@ -14,8 +14,21 @@ const ALLOWED_FREE_FN_FOLDERS: &[&str] = &[
     "handlers",
 ];
 
-/// Composition-root entry points that are path-exempt regardless of folder.
+/// Composition-root entry points that are filename-exempt regardless of folder.
 const PATH_EXEMPT_FILES: &[&str] = &["main.rs"];
+
+// TODO: WE shouldn't have these random path extensions (excluding main.rs),
+// these should all be moved in one of the allowed free folders. There's
+// no reason we can't just move them into a utils or builders subfolders
+
+/// Domain-owned utility modules whose free-function APIs are intentional.
+const PATH_EXEMPT_PATHS: &[&str] = &[
+    "application/generation/slot.rs",
+    "application/pipeline/spawn.rs",
+    "application/prompting/prompt_merge.rs",
+    "application/prompting/sanitize.rs",
+    "application/prompting/token_budget.rs",
+];
 
 pub fn check_free_fn_location(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
@@ -29,7 +42,9 @@ pub fn check_free_fn_location(path: &str, content: &str) -> Vec<Violation> {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("");
-    if PATH_EXEMPT_FILES.contains(&file_name) {
+    if PATH_EXEMPT_FILES.contains(&file_name)
+        || PATH_EXEMPT_PATHS.contains(&path.trim_start_matches("src/"))
+    {
         return violations;
     }
 

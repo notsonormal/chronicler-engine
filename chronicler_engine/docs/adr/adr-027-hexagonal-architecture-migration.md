@@ -60,32 +60,9 @@ A port is justified only when both clauses hold:
 
 Otherwise, a concrete struct plus closure or a concrete struct plus `Backend` enum covers the seam with less ceremony.
 
-### Storage Direct Access Exemption
+### Storage Direct Access Principle
 
-Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in 7 grandfathered files, split by marker variant:
-
-**Intentional (5 files)** — form the **application persistence boundary**, marked `// arch-lint: storage-direct — intentional, see ADR-027`:
-
-1. `src/application/context.rs`
-2. `src/application/application_service.rs`
-3. `src/application/game_service.rs`
-4. `src/application/persistence_gate.rs` — owns the persistence boundary; Storage import is the seam, not a leak. (T2 ticket 02.)
-5. `src/application/game_catalogue.rs` — game-lifecycle orchestration; reaches Storage via `PersistenceGate::storage()` accessor (no direct import).
-
-**Deferred to G1-B (2 files)** — agent constructors that still take `Option<Arc<Storage>>` directly; T2 carve-out has landed (see `persistence_gate`), but full caller-site migration is tracked by ticket G1-B. Marked `// arch-lint: storage-direct — deferred to G1-B, see ADR-027`:
-
-6. `src/application/agents/registry.rs`
-7. `src/application/agents/quantifier/agent.rs`
-
-The exemption is intentional, not a leak:
-
-- `Storage` is a concrete adapter with no port trait.
-- Substitution happens via the `Backend` enum (SQLite/InMemory/Test), not trait swapping.
-- Wrapping `Storage`'s ~40 methods in a `StateRepository` trait would be YAGNI (one impl, no real substitution seam).
-- The 5 intentional grandfathered files form the application persistence boundary; the 2 deferred agent files still import `Storage` directly pending G1-B. Any other `application/` file importing `Storage` directly is blocked by the `check_application_storage_direct` arch-lint guardrail (arch-lint 0.4.x has no per-file allowlists, so all seven sites must carry a marker comment). Test files (`*_tests.rs`) are excluded from the guardrail because arch-lint cannot distinguish test fakes from production leaks.
-
-The `world_catalogue/gate.rs` module listed in earlier drafts of this ADR was deleted (T2 ticket 04 of the move-refactor-review-debt map): the worlds/personas CRUD pass-through was pure delegation to `Storage`, and the 7 facade methods were re-routed through `self.persistence_gate.storage()` directly.
-
+`Storage` is a concrete adapter with a `Backend` enum (SQLite / InMemory / Test). Application code may call `Storage` directly when the call belongs to the persistence boundary. A `StateRepository` port would be a single-impl trait with no real substitution seam — the `Backend` enum already provides substitution — so the boundary is concrete-by-design. Architectural review owns the discipline for which files sit on the boundary. `*_tests.rs` files may construct `Storage::new_in_memory()` for fixtures.
 ### `domain/engine/` Subfolder Kept
 
 `src/domain/engine/` (7 pure-rule files) stays as-is. It calls `domain/model/` only, no I/O, no port needed at the `engine` ↔ `application` boundary (application calls engine functions directly). Flattening into `domain/` root was rejected as churn for no architectural gain — the subfolder communicates "types (`model/`) vs rules (`engine`)" at zero cost.
@@ -104,12 +81,12 @@ The `world_catalogue/gate.rs` module listed in earlier drafts of this ADR was de
 
 - ✅ Architecture visible at file-tree level. `ls src/` shows hexagonal structure immediately.
 - ✅ Dependency direction enforced. Core depends on ports; adapters implement ports; `bootstrap/` wires both.
-- ✅ LLM, TextChecker, Storage-direct, Recorder-save-closure exemptions documented and marked in code.
+- ✅ LLM, TextChecker, and Recorder-save-closure seams documented and marked in code.
 - ✅ "Phantom port" heuristic is explicit. Future port decisions have clear criteria.
 
 ### Negative
 
-- ⚠️ Storage direct access is a documented exception, not a pure hexagonal implementation. Mitigated: exactly 6 intentional files (plus 2 deferred to G1-B), marked with comments, ADR documents the tradeoff.
+- ⚠️ Storage direct access is a deliberate concrete-by-design boundary, not a pure hexagonal implementation. Mitigated: a `StateRepository` port would be a single-impl trait with no real substitution seam; boundary discipline is owned by architectural review.
 - ⚠️ `LlmProviderConfig` infra fields (`api_key`, `base_url`, `provider`) remain in domain — rides along with persisted `AppSettings` JSON contract.
 - ⚠️ `Swipe::snapshot_id` DB FK remains on domain entity — YAGNI; full DTO split would force duplication across message aggregate.
 
@@ -136,3 +113,5 @@ The `world_catalogue/gate.rs` module listed in earlier drafts of this ADR was de
 - **2026-07-10**: Removed `LlmMessageRepository` port. `LlmCallRecorder` now uses `SaveLlmMessageFn = Arc<dyn Fn(&LlmMessage) -> Result<(), EngineError> + Send + Sync>` closure. Test support types (NoopForensics, SpyForensics, RecordingForensics) deleted — tests now use real `Storage::list_latest_llm_messages` for assertion and inline `SaveLlmMessageFn` closures for error injection; no spy struct needed. Restores symmetry with rejected `StateRepository` decision. Phantom-port heuristic rewritten as two-clause rule.
 - **2026-07-27**: Partial supersession — the `domain/engine/ Subfolder Kept` block (§88-90) is superseded by [ADR-033](./adr-033-domain-engine-dissolution.md) (folder dissolved). The 3 grandfathered `*/gate.rs` paths (§72-74) were corrected to single-file modules by the post-free-fn-cleanup effort.
 - **2026-07-29**: `world_catalogue/gate.rs` deleted (move-refactor-review-debt map, ticket 08). Pure delegation over `Storage`; 7 facade methods re-routed through `self.persistence_gate.storage()` directly. Intentional-grandfathered list drops from 6 to 5; total grandfathered files drops from 8 to 7. Body updated above.
+- **2026-08-01**: Storage-direct policing deleted: `check_application_storage_direct` guardrail, `APPLICATION_STORAGE_GRANDFATHERED` allowlist, and `// arch-lint: storage-direct` marker comments removed. Boundary discipline moves from machine-checked allowlist to architectural review. The `Storage` concrete-by-design principle remains; `src/application/agents/registry.rs` and `src/application/agents/quantifier/agent.rs` still take `Option<Arc<Storage>>` directly (pending G1-B caller-site migration). See execution map `.scratch/arch-exec-wiredapp-pipeline/`.
+

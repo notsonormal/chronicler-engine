@@ -13,7 +13,6 @@ use crate::adapters::driving::http::settings::handlers::{
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
-use tokio_util::sync::CancellationToken;
 
 fn make_test_app_state() -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
@@ -25,7 +24,7 @@ fn make_test_app_state() -> AppState {
         None,
     )
     .expect("build_app_graph_for_tests should succeed");
-    AppState::from_wired(wired, CancellationToken::new())
+    AppState::from_wired(wired)
 }
 
 fn make_app_state_with_settings(settings: AppSettings) -> AppState {
@@ -38,7 +37,7 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
         None,
     )
     .expect("build_app_graph_for_tests should succeed");
-    AppState::from_wired(wired, CancellationToken::new())
+    AppState::from_wired(wired)
 }
 
 #[tokio::test]

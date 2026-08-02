@@ -278,7 +278,7 @@ async fn test_action_check_no_issues() {
 async fn test_check_text_handler_failure_returns_internal_server_error() {
     let mut state = TestAppBuilder::default_test()
         .settings(text_check_settings(TextCheckMode::Spell))
-        .build_app_state();
+        .build_service();
     state.text_check_service = Arc::new(TextCheckService::new(Arc::new(FailingTextChecker)));
 
     let app = Router::new()

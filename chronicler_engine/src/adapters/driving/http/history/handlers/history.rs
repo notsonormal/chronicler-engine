@@ -6,7 +6,7 @@ use axum::{
     response::Response,
 };
 
-use crate::application::application_service::ApplicationError;
+use crate::application::errors::ApplicationError;
 use crate::adapters::driving::http::AppState;
 
 use crate::adapters::driving::http::utils::response::ok;
@@ -21,13 +21,13 @@ pub async fn edit_history_handler(
     Path(id): Path<u64>,
     Form(form): Form<EditHistoryForm>,
 ) -> Result<Response, ApplicationError> {
-    state.persistence_gate.edit_history(id, form.text)?;
+    state.message_service.edit_history(id, form.text)?;
     Ok(ok("<span class=\"status ready\">Edited</span>"))
 }
 
 pub async fn delete_history_handler(
     State(state): State<AppState>,
 ) -> Result<Response, ApplicationError> {
-    state.persistence_gate.delete_last()?;
+    state.message_service.delete_last()?;
     Ok(ok(""))
 }

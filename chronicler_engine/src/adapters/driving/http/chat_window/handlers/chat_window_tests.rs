@@ -7,7 +7,7 @@ use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
 async fn test_retrigger_handler() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
 
     let result = retrigger_handler(axum::extract::State(state)).await;
     let status = match result {
@@ -20,7 +20,7 @@ async fn test_retrigger_handler() {
 
 #[tokio::test]
 async fn test_retry_handler() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
 
     let result = retry_handler(axum::extract::State(state)).await;
     let status = match result {
@@ -33,7 +33,7 @@ async fn test_retry_handler() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
 
     let result = switch_swipe_handler(
         axum::extract::State(state),

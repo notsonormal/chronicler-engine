@@ -62,11 +62,11 @@ flowchart LR
     bootstrap -. wires .-> app
 ```
 
-Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::llm_factory`). `Storage` is accessed directly by a small set of application-tier seams under a deliberate `arch-lint: storage-direct` exemption — the engine's persistence boundary is concrete-by-design, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
+Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::llm_factory`). `Storage` is concrete-by-design — the engine's persistence boundary may call it directly, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
 
 ## Why one process
 
-The engine deploys as one process against one SQLite file. The `is_generating` atomic and the per-game generation registry are both process-local; two engines pointed at the same database would race on the gate and lose updates on the registry. The single-process commitment is the deployment contract — horizontal scaling is not on the table, and the architecture is free to use process-local concurrency primitives (RAII guards, atomic projections, lock-free hot paths) without paying for cross-process coordination. Restarting the engine is safe because the database is the coordination boundary: `is_generating`'s `false` transition is checked against the persisted `GenerationStatus` on the next action, and disagreement heals to `Idle`.
+The engine deploys as one process against one SQLite file. The per-game generation registry is process-local; two engines pointed at the same database would race on the gate and lose updates on the registry. The single-process commitment is the deployment contract — horizontal scaling is not on the table, and the architecture is free to use process-local concurrency primitives (RAII guards, registry projections) without paying for cross-process coordination. Restarting the engine is safe because the database is the coordination boundary: the registry's "no generating slot" state is checked against the persisted `GenerationStatus` on the next action, and disagreement heals to `Idle`.
 
 ## Architectural commitments
 
@@ -76,12 +76,12 @@ A small set of guarantees follow from the shape above. Each is machine-checked o
 - Single-process deployment — one engine, one database; the gate and registry are process-local.
 - Tokio-only concurrency — `spawn_blocking` for synchronous services; no `std::thread::spawn` anywhere in `src/`.
 - Lock-poison recovery — every `Mutex`/`RwLock` site recovers via `into_inner()`; a panic does not corrupt the lock.
-- Generation self-healing — the registry claim/release path mutates both the atomic and the persisted status under one lock; a mid-flight panic leaves the next action with a recoverable `Idle`.
+- Generation self-healing — the registry claim/release path mutates both the process-local slot and the persisted status under one lock; a mid-flight panic leaves the next action with a recoverable `Idle`.
 - One FreeAction at a time — overlapping actions are rejected at the HTTP boundary, matching single-player semantics.
 
 ## Document References
 
-- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md) — the accepted/rejected port table; the phantom-port heuristic; the storage-direct exemption.
+- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md)
 - [`../reference/architecture_system.md`](../reference/architecture_system.md) — eight-tier map; dependency invariant; port inventory.
 - [`../../reference/storage.md`](../../reference/storage.md) — SQLite schema and the eleven tables.
 - [`./two-state-channels.md`](./two-state-channels.md) — why the engine carries two complementary generation-state signals.

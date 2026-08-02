@@ -12,7 +12,7 @@ Examples:
 
 ## STRUCTURE
 <!-- AUTO-STRUCTURE-TESTS START -->
-- `poison_recovery.rs` — Tests for poison-recovery behaviour: confirms that a poisoned `RwLock` inside the settings layer and `CancellationToken` machinery does not crash subsequent operations.
+- `poison_recovery.rs` — Tests for poison-recovery behaviour: confirms that a poisoned `RwLock` inside the settings layer does not crash subsequent operations, and that the configured shutdown token is reachable through `AppState`.
 - **browser/**
     - `editing.rs` — Browser tests for message editing: edit and delete buttons, edit-mode activation on click, cancel-restores-original, and save-persistence through the HTTP API.
     - `interaction.rs` — Browser tests for form submission interactions (e.g., submitting a command via the action form and observing the resulting UI state).
@@ -20,7 +20,7 @@ Examples:
     - `structure.rs` — Browser tests for DOM structure on page load: header shows the game title, connection-status indicator renders, and the action area exposes the expected input affordances.
     - `trigger.rs` — Browser tests for trigger-driven narration: `look` command emits narration entries, subsequent quantifier passes detect NPCs in the current room, and NPCs without triggers produce no narration.
 - **helpers/**
-    - `application_ext.rs` — Test-only `DefaultApplicationService` extension trait for driving pipeline scenarios.
+    - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage, world, character, and game-state instances with deterministic defaults so tests can focus on the behaviour under test.
     - `sqlite_test_app_builder.rs` — Integration-only SQLite-backed application builder for integration tests.
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
@@ -54,14 +54,13 @@ Examples:
       - `structure_tests.rs` — Tests for `structure.rs` guardrail.
       - `style.rs` — Style guardrail tests: import ordering, single-letter variable usage, separator comments, long comment runs, and per-file `cfg(test)` tracking.
 - **integration/**
-    - `mod.rs` — Integration test binary root: wires shared helpers (`test_utils`, `fixtures`, `storage_ext`, `application_ext`) and re-exports factory helpers (`failing_service`, `working_service`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
+    - `mod.rs` — Integration test binary root: wires shared helpers (`test_utils`, `fixtures`, `storage_ext`, `application_ext`) and re-exports factory helpers (`failing_pipeline`, `working_pipeline`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
     - **adapters/**
       - **driven/**
         - **llm/**
           - `llm_client.rs` — Integration tests for LLM client HTTP communication
     - **application/**
-      - `application_service.rs` — Integration tests for DefaultApplicationService
-      - `game_service.rs` — GameService integration tests
+      - `collaborators.rs` — Integration tests for application collaborators
       - `lifecycle.rs` — Integration tests for game lifecycle operations — cross-cutting over `src/application/` rather than a mirror of a single src file; kept here for simplicity until the suite grows enough to split per-module.
       - **action_pipeline/**
         - `actions.rs` — Integration tests for the action pipeline: verifies that user actions are persisted to state, that narrations from the LLM are stored, and that error paths (room not found, LLM failure) are surfaced gracefully.

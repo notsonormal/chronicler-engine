@@ -138,7 +138,7 @@ Do not be satisfied with a merely cleaner version of the same messy idea if ther
 
 ## Extra lens
 
-Load in the following skills to add additional lens to your review. At times this review has introduced antipatterns or suggested bad architecture. So use these to ensure that the suggested improvements are productive and forward thinking.
+Load in the following skills to add additional lens to your review. At times this review have introduced antipatterns or suggested bad architecture. So use these to ensure that the suggested improvements are productive and forward thinking.
 
 - `/code-simplification` (`.agents/skills/code-simplification/SKILL.md`)
 - `/antipattern-checker` (`.agents/skills/antipattern-checker/SKILL.md`)

@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use chronicler_engine::application::action_pipeline::PhaseError;
-use chronicler_engine::application::game_service::GameService;
+use chronicler_engine::application::pipeline::PhaseError;
 use chronicler_engine::domain::model::state::game_state::{FreeActionContext, GameState};
 
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
@@ -22,7 +21,7 @@ use chronicler_engine::application::agents::registry::AgentRegistry;
 use std::sync::atomic::Ordering;
 
 use chronicler_engine::application::GenerationGuard;
-use chronicler_engine::application::utils::slot::GenerationSlot;
+use chronicler_engine::application::generation::slot::GenerationSlot;
 use chronicler_engine::test_support::make_test_recorder;
 
 #[path = "../test_utils/mod.rs"]
@@ -42,14 +41,10 @@ use fixtures::create_test_state;
 use application_ext::PipelineHelpers;
 
 fn app_is_generating(
-    app: &chronicler_engine::application::application_service::DefaultApplicationService,
+    app: &chronicler_engine::adapters::driving::http::AppState,
+    game_id: u64,
 ) -> bool {
-    app.storage()
-        .load_latest_snapshot()
-        .ok()
-        .flatten()
-        .map(|snap| snap.narrative.input_buffer.status.is_generating())
-        .unwrap_or(false)
+    app.generation_gate.is_busy(game_id)
 }
 
 fn shopkeeper_npc() -> NpcCard {
@@ -169,11 +164,14 @@ fn test_inv002_state_mutation_order() {
         "INV-002: trigger should have fired (evaluated before times_met increment)"
     );
     assert_eq!(
-        result.next_state.npc_encounter_log.get_times_met(npc_id),
+        result
+            .post_commit_state
+            .npc_encounter_log
+            .get_times_met(npc_id),
         1,
         "INV-002: times_met should be 1 after NPC events are applied"
     );
-    let history = &result.next_state.narrative.history;
+    let history = &result.post_commit_state.narrative.history;
     let narration_idx = history
         .iter()
         .position(|e| e.message_type == MessageType::Narration && e.text().contains("look around"))
@@ -198,8 +196,8 @@ fn test_inv002_violation_demo() {
     }];
     let map = Arc::new(fixtures::create_test_map());
     let npcs = npc_map(vec![shopkeeper_npc()]);
-    let state_after_events = state
-        .clone()
+    let mut state_after_events = state.clone();
+    state_after_events
         .apply_npc_events(&events, &map, &npcs)
         .expect("apply_npc_events should succeed");
     let triggers_after_swap = state_after_events.evaluate_triggers(&npcs);
@@ -219,20 +217,32 @@ fn test_inv004_cancellable_at_boundaries() {
 
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(100));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .game_service_fn(move |_storage| {
+    let (app, storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            Arc::new(GameService::with_backends(
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
+                token,
                 recorder,
                 AgentRegistry::default(),
-            ))
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings),
+            )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
-    let started_for = app.current_game_id();
+
+    let game_storage = &storage;
+    let started_for = app.game_catalogue.current_game_id();
     let switched_to = started_for.wrapping_add(99);
-    let pipeline = app.pipeline().clone();
-    let state_for_thread = app.latest_state(&pg);
+    let pipeline = app.pipeline.clone();
+    let state_for_thread = app.latest_state();
 
     let outcome = std::thread::scope(|s| {
         let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
@@ -248,7 +258,7 @@ fn test_inv004_cancellable_at_boundaries() {
             ),
             "narration should start within timeout"
         );
-        pg.set_game_id(switched_to);
+        game_storage.set_game_id(switched_to);
 
         handle.join().expect("pipeline thread should not panic")
     });
@@ -258,7 +268,7 @@ fn test_inv004_cancellable_at_boundaries() {
         "INV-004: pipeline should return Cancelled on game_id mismatch at boundary, got {outcome:?}"
     );
 
-    let final_state = app.latest_state(&pg);
+    let final_state = app.latest_state();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -351,21 +361,37 @@ fn test_inv005_handle_movement_runs_before_narration() {
         .expect("execute_freeaction_impl should succeed");
 
     assert_eq!(
-        result.next_state.movement.current_room_id, target_room,
+        result.post_commit_state.movement.current_room_id, target_room,
         "INV-005: current_room_id should be updated by handle_movement before narration is logged"
     );
     assert_ne!(
-        result.next_state.movement.current_room_id, original_room,
+        result.post_commit_state.movement.current_room_id, original_room,
         "INV-005: handle_movement should have changed the room"
     );
 }
 #[test]
 fn test_inv007_dynamic_room_creation_on_invalid_destination() {
-    let state = create_test_state();
+    let mut state = create_test_state();
     let invalid_destination = "nonexistent_place_xyz";
 
     let map = Arc::new(fixtures::create_test_map());
-    let npcs = HashMap::new();
+    let test_npc = NpcCard {
+        id: "test_npc".into(),
+        sheet: CharacterSheet {
+            name: "Innkeeper".into(),
+            description: "A friendly innkeeper".into(),
+            personality: "Helpful".into(),
+            scenario: "Runs the tavern".into(),
+            example_dialogue: "Welcome!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![],
+    };
+    let npcs = npc_map(vec![test_npc]);
 
     assert!(
         !map.overworld
@@ -376,18 +402,18 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
         "precondition: invalid_destination should not exist in map"
     );
 
-    let result = state
+    state
         .handle_movement(Some(invalid_destination), &[], &map, &npcs)
         .unwrap();
     assert!(
-        !result.movement.dynamic_rooms.is_empty(),
+        !state.movement.dynamic_rooms.is_empty(),
         "INV-007: dynamic room should be created for invalid destination"
     );
     assert!(
-        result.movement.current_room_id.starts_with("dynamic_"),
+        state.movement.current_room_id.starts_with("dynamic_"),
         "INV-007: current_room_id should be set to a dynamic room"
     );
-    let history = result.narrative.history();
+    let history = state.narrative.history();
     let system_messages: Vec<_> = history
         .iter()
         .filter(|m| m.message_type == MessageType::System)
@@ -433,7 +459,7 @@ fn test_inv002_mutation_order_property() {
             &player,
             &npcs,
         ).expect("execute_freeaction_impl should succeed");
-        let history = &result.next_state.narrative.history;
+        let history = &result.post_commit_state.narrative.history;
         let search_len = 20.min(narration_text.chars().count());
         let search_text: String = narration_text.chars().take(search_len).collect();
         let has_narration = history.iter().any(|e| {
@@ -443,7 +469,7 @@ fn test_inv002_mutation_order_property() {
         if has_npc {
             prop_assert!(result.trigger_match.is_some(), "trigger should fire when NPC appears");
             prop_assert_eq!(
-                result.next_state.npc_encounter_log.get_times_met(npc_id),
+                result.post_commit_state.npc_encounter_log.get_times_met(npc_id),
                 1,
                 "times_met should be 1 after apply_npc_events"
             );
@@ -456,7 +482,6 @@ async fn test_p4_concurrent_happy_path() {
     use chronicler_engine::adapters::driven::llm::providers::MockBackend;
     use chronicler_engine::application::agents::registry::AgentRegistry;
     use chronicler_engine::application::errors::ProcessActionResult;
-    use chronicler_engine::application::game_service::GameService;
 
     let mock_backend_raw = Arc::new(
         MockBackend::default()
@@ -464,20 +489,32 @@ async fn test_p4_concurrent_happy_path() {
             .with_narrations(vec!["GEN_A_OUTPUT".to_string(), "GEN_B_OUTPUT".to_string()]),
     );
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .game_service_fn(move |_storage| {
+    let (app, _storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            Arc::new(GameService::with_backends(
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
+                token,
                 recorder,
                 AgentRegistry::default(),
-            ))
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings),
+            )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
-    let game1 = app.current_game_id();
+
+    let game1 = app.game_catalogue.current_game_id();
 
     let result_a = app
-        .process_action("look".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "look".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_a, ProcessActionResult::Started),
@@ -494,6 +531,7 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     let game2 = app
+        .game_catalogue
         .create_game("test", "test_player")
         .expect("create_game(game2) should succeed");
     assert_ne!(game2, game1, "reset must produce a distinct game id");
@@ -502,12 +540,12 @@ async fn test_p4_concurrent_happy_path() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
-            || !app_is_generating(&app),
+            || !app_is_generating(&app, game1),
         ),
         "gen A's pipeline must complete (slot released) within timeout"
     );
 
-    let state_after_a = app.latest_state(&pg);
+    let state_after_a = app.latest_state();
     let a_present = state_after_a
         .narrative
         .history
@@ -525,7 +563,8 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     let result_b = app
-        .process_action("go north".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "go north".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_b, ProcessActionResult::Started),
@@ -536,12 +575,12 @@ async fn test_p4_concurrent_happy_path() {
         test_utils::wait::wait_for_condition_sync(
             std::time::Duration::from_secs(5),
             std::time::Duration::from_millis(50),
-            || !app_is_generating(&app),
+            || !app_is_generating(&app, game2),
         ),
         "gen B's pipeline must complete within timeout"
     );
 
-    let state_after_b = app.latest_state(&pg);
+    let state_after_b = app.latest_state();
     let b_present = state_after_b
         .narrative
         .history
@@ -568,11 +607,11 @@ async fn test_p4_concurrent_happy_path() {
     );
 
     assert!(
-        !app_is_generating(&app),
+        !app_is_generating(&app, game2),
         "persisted status must be Idle after both pipelines complete (registry clean)"
     );
 
-    app.cancel_token().cancel();
+    app.shutdown_token.cancel();
 }
 
 #[tokio::test]
@@ -580,7 +619,6 @@ async fn test_p4_concurrent_triple_overlap() {
     use chronicler_engine::adapters::driven::llm::providers::MockBackend;
     use chronicler_engine::application::agents::registry::AgentRegistry;
     use chronicler_engine::application::errors::ProcessActionResult;
-    use chronicler_engine::application::game_service::GameService;
 
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(300).with_narrations(vec![
         "GEN_A_OUTPUT".to_string(),
@@ -588,20 +626,32 @@ async fn test_p4_concurrent_triple_overlap() {
         "GEN_C_OUTPUT".to_string(),
     ]));
     let backend_for_closure = Arc::clone(&mock_backend_raw);
-    let (app, pg) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
-        .game_service_fn(move |_storage| {
+    let (app, _storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
+        .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            Arc::new(GameService::with_backends(
+            let preset_store = Arc::new(
+                chronicler_engine::adapters::driven::storage::PresetStore::new(
+                    chronicler_engine::test_support::default_test_preset_storage(),
+                ),
+            );
+            chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
+                token,
                 recorder,
                 AgentRegistry::default(),
-            ))
+                Arc::clone(message_service),
+                Arc::clone(storage),
+                Arc::clone(&preset_store),
+                Arc::clone(settings),
+            )
         })
-        .build_with_state()
+        .build_with_state_and_storage()
         .unwrap();
-    let game1 = app.current_game_id();
+
+    let game1 = app.game_catalogue.current_game_id();
 
     let result_a = app
-        .process_action("look".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "look".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_a, ProcessActionResult::Started),
@@ -618,12 +668,14 @@ async fn test_p4_concurrent_triple_overlap() {
     );
 
     let game2 = app
+        .game_catalogue
         .create_game("test", "test_player")
         .expect("create_game(game2) should succeed");
     assert_ne!(game2, game1, "reset must produce a distinct game id");
 
     let result_b = app
-        .process_action("go north".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "go north".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_b, ProcessActionResult::Started),
@@ -632,12 +684,14 @@ async fn test_p4_concurrent_triple_overlap() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     let game3 = app
+        .game_catalogue
         .create_game("test", "test_player")
         .expect("create_game(game3) should succeed");
     assert_ne!(game3, game2, "second reset must produce a distinct game id");
 
     let result_c = app
-        .process_action("look around".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "look around".to_string())
         .expect("process_action should not error");
     assert!(
         matches!(result_c, ProcessActionResult::Started),
@@ -650,7 +704,7 @@ async fn test_p4_concurrent_triple_overlap() {
             std::time::Duration::from_secs(10),
             std::time::Duration::from_millis(100),
             || {
-                let state = app.latest_state(&pg);
+                let state = app.latest_state();
                 let history_texts: Vec<String> = state
                     .narrative
                     .history
@@ -660,25 +714,26 @@ async fn test_p4_concurrent_triple_overlap() {
                 let has_a = history_texts.iter().any(|t| t.contains("GEN_A_OUTPUT"));
                 let has_b = history_texts.iter().any(|t| t.contains("GEN_B_OUTPUT"));
                 let has_c = history_texts.iter().any(|t| t.contains("GEN_C_OUTPUT"));
-                !has_a && !has_b && has_c && !app_is_generating(&app)
+                !has_a && !has_b && has_c && !app_is_generating(&app, game3)
             },
         ),
         "all three pipelines must complete with only gen C output in game 3"
     );
 
     assert_eq!(
-        app.current_game_id(),
+        app.game_catalogue.current_game_id(),
         game3,
         "active game must be game 3 at end of test"
     );
 
     let result_after = app
-        .process_action("examine".to_string())
+        .pipeline
+        .process_action(&app.generation_gate, "examine".to_string())
         .expect("process_action should not error after all gens complete");
     assert!(
         matches!(result_after, ProcessActionResult::Started),
         "fresh claim after triple-overlap must succeed (slot registry clean), got {result_after:?}"
     );
 
-    app.cancel_token().cancel();
+    app.shutdown_token.cancel();
 }

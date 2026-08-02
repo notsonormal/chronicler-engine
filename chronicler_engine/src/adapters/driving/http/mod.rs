@@ -3,6 +3,8 @@
 
 pub mod action;
 pub mod app_state;
+#[cfg(test)]
+mod app_state_tests;
 pub mod bootstrap;
 pub mod builders;
 pub mod chat_window;

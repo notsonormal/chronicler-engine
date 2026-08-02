@@ -157,7 +157,8 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,
         &wired.settings,
-        &wired.application_service,
+        Arc::clone(&wired.message_service),
+        Arc::new(wired.pipeline.clone()),
         &data.storage,
         &data.db_pool,
         super::init_game::ArrivalSpawnRequest {

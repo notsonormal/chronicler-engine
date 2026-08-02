@@ -22,6 +22,8 @@ mod free_fn_tests;
 #[cfg(test)]
 mod structure_tests;
 
+// TODO: These types and functions should be moved to other folders
+
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
@@ -194,11 +196,8 @@ fn guardrails_server_layer_boundaries() {
 }
 
 #[test]
-fn guardrails_application_storage_direct() {
-    check_src_files(
-        "application storage-direct",
-        check_application_storage_direct,
-    );
+fn guardrails_wiredapp_scope() {
+    check_src_files("WiredApp scope", check_wiredapp_scope);
 }
 
 #[test]
@@ -226,6 +225,11 @@ fn guardrails_messages_swipes_separation() {
         "messages/swipes separation",
         check_messages_swipes_separation,
     );
+}
+
+#[test]
+fn guardrails_http_storage_leak() {
+    check_src_files("HTTP storage leak", check_http_storage_leak);
 }
 
 #[test]

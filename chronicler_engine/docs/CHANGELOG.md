@@ -2,6 +2,17 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-08-02
+
+### Changed
+
+- **Ceremonyless-hexagon architecture applied** (wayfinder maps: `.scratch/closed/arch-exec-wiredapp-pipeline/`, `.scratch/closed/pipeline-review-hygiene/`). The `DefaultApplicationService` façade is deleted; HTTP handlers take named collaborators off `AppState` directly. `GameService` is folded into `ActionPipeline` (owns the three `Arc` collaborators + `backend_info()`). `WiredApp`/`AppState` carry collaborators directly — no mediating service.
+- **`PersistenceGate` deleted** — split into `MessageService` (snapshot/message persistence + multi-table writes) and focused `WorldCatalogue` / `PersonaCatalogue` (CRUD pass-throughs holding `Arc<Storage>`). `GameCatalogue` and `GameViewQuery` already held `Arc<Storage>` directly.
+- **F2 feature-folder reorg** of `src/application/`: `action_pipeline`→`pipeline`, `narrative_prompt`→`prompting`, new `generation/` and `games/` folders, `utils/` dissolved. Imports, mod declarations, guardrails, and doc anchors updated.
+- **Storage blocked from the HTTP layer** — `SettingsService` and `PromptPresetService` application seams added; `AppState` drops `storage`/`preset_storage`; `utils::settings::save_settings` free function deleted; `check_http_storage_leak` guardrail walker catches fully-qualified `Storage` paths in `src/adapters/driving/http/**`.
+- **Pipeline internal hygiene** (post-review map): `error_return` wrapper inlined and deleted (`set_error` is the single seam); `map_cancelled` inlined at its three call sites; `ActionResult::next_state`→`post_commit_state`; double error-persist removed (`finalize_phase_error` persists once); `GameState` clones removed on the trigger/reconcile path (`&mut self`); phase method ownership standardized to `&mut GameState`; `PromptAssembler` reads `max_context_tokens` + `max_tokens` per call.
+- **Guardrails**: `check_wiredapp_scope` (folder allowlist: `bootstrap/`, `adapters/driving/http/`, `test_support/`, `tests/`) and `check_http_storage_leak` installed with unit tests.
+
 ## 2026-07-23
 
 ### Changed
