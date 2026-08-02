@@ -1,4 +1,4 @@
-//! Integration test binary root: wires shared helpers (`test_utils`, `fixtures`, `storage_ext`, `application_ext`) and re-exports factory helpers (`failing_pipeline`, `working_pipeline`, `SettingsTestGuard`) used by the application / storage / flow / model / adapter sub-suites.
+//! Integration test binary root.
 
 #[path = "../test_utils/mod.rs"]
 mod test_utils;
@@ -56,8 +56,6 @@ mod bootstrap;
 
 mod storage;
 
-#[path = "application/collaborators.rs"]
-mod application_collaborators;
 #[path = "application/lifecycle.rs"]
 mod lifecycle;
 #[path = "adapters/driven/llm/llm_client.rs"]
@@ -71,9 +69,5 @@ mod flow_retry_event;
 mod flow_retry_main;
 #[path = "flow/sequence.rs"]
 mod flow_sequence;
-#[path = "application/action_pipeline/actions.rs"]
-mod pipeline_actions;
 #[path = "application/action_pipeline/retry.rs"]
 mod pipeline_retry;
-#[path = "application/action_pipeline/pipeline.rs"]
-mod pipeline_tests;

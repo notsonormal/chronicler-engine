@@ -1,7 +1,5 @@
 //! [DOC: chronicler_engine/docs/diataxis/reference/game_flow.md]
-//! MessageService — owns `Arc<Storage>` and the deep game-state lifecycle seam:
-//! message history + snapshot operations (load, save, retry anchor, swipes,
-//! edit, delete).
+//! Game-state lifecycle seam for message history and snapshots.
 
 use std::sync::Arc;
 
@@ -218,10 +216,10 @@ impl MessageService {
         Ok(())
     }
 
-    pub fn find_retry_anchor<'a>(
+    pub fn find_retry_anchor_msg<'a>(
         &self,
         messages: &'a [Message],
-    ) -> Option<(usize, &'a Message, u64)> {
+    ) -> Option<(usize, &'a Message)> {
         if messages.is_empty() {
             return None;
         }
@@ -236,8 +234,15 @@ impl MessageService {
                 .iter()
                 .rposition(|m| m.message_type == MessageType::Input)?
         };
-        let anchor_msg = &messages[anchor_idx];
+        Some((anchor_idx, &messages[anchor_idx]))
+    }
+
+    pub fn find_retry_anchor<'a>(
+        &self,
+        messages: &'a [Message],
+    ) -> Option<(usize, &'a Message, u64)> {
+        let (idx, anchor_msg) = self.find_retry_anchor_msg(messages)?;
         let snapshot_id = *anchor_msg.snapshot_id().as_ref()?;
-        Some((anchor_idx, anchor_msg, snapshot_id))
+        Some((idx, anchor_msg, snapshot_id))
     }
 }

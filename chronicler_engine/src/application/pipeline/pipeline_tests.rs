@@ -1,3 +1,5 @@
+//! Unit tests for action pipeline orchestration and execution.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -190,7 +192,7 @@ fn test_pipeline_with_custom_quantifier_result() {
 
 #[test]
 fn test_trigger_continuation_save_post_trigger_error() {
-    let state = make_test_state();
+    let mut state = make_test_state();
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing = Arc::new(failing_storage);
     handle.set(
@@ -217,7 +219,7 @@ fn test_trigger_continuation_save_post_trigger_error() {
     let npcs = HashMap::from([("npc1".to_string(), TestNpc::named("npc1", "Test NPC"))]);
     let result = app
         .pipeline
-        .phase_trigger_continuation(state, &trigger, &map, &npcs);
+        .phase_trigger_continuation(&mut state, &trigger, &map, &npcs);
 
     match result {
         Err(PhaseError::PersistFailed { label, .. }) => {
@@ -331,6 +333,22 @@ fn test_pipeline_trigger_happy_path() {
     assert!(
         final_state.narrative.last_trigger.is_some(),
         "last_trigger should be set"
+    );
+    let has_event = final_state
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.event_header.is_some());
+    assert!(has_event, "Trigger should add an event header");
+    let narration_count = final_state
+        .narrative
+        .history()
+        .iter()
+        .filter(|e| e.message_type == MessageType::Narration)
+        .count();
+    assert!(
+        narration_count >= 2,
+        "Should have main narration + trigger continuation narration, found {narration_count}"
     );
 }
 
@@ -713,6 +731,46 @@ fn orchestrator_records_error_when_persona_missing() {
 }
 
 #[test]
+fn test_pipeline_persists_input_before_narration() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(
+        MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
+    ));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message(
+        "look".to_string(),
+        Some("Test Player".to_string()),
+        MessageType::Input,
+    );
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
+
+    let messages = app.message_service.load_messages().unwrap();
+    let input_idx = messages
+        .iter()
+        .position(|m| m.message_type == MessageType::Input && m.text() == "look");
+    let narration_idx = messages
+        .iter()
+        .position(|m| m.message_type == MessageType::Narration);
+
+    assert!(input_idx.is_some(), "Input message should be persisted");
+    assert!(narration_idx.is_some(), "Narration should be produced");
+    assert!(
+        input_idx.unwrap() < narration_idx.unwrap(),
+        "Input should appear before Narration in history"
+    );
+}
+
+#[test]
 fn load_or_fresh_unchanged_on_world_data_missing() {
     // Snapshot-only read; missing world rows must not panic. `build_fresh_initial_state` fetches world data only as fallback.
     let storage = {
@@ -836,5 +894,603 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     assert!(
         msg.contains("Persona not found: __missing_persona__"),
         "expected canonical 'Persona not found: __missing_persona__' in error message, got: {msg}"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.5
+#[test]
+fn test_pipeline_empty_input_produces_continuation() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app.pipeline.run_from_input(state, String::new());
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        !final_state.narrative.input_buffer.status.is_generating(),
+        "Empty input should complete generation: {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let has_narration = final_state
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.message_type == MessageType::Narration);
+    assert!(
+        has_narration,
+        "Empty input should produce continuation narration"
+    );
+    let has_input = final_state
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.message_type == MessageType::Input);
+    assert!(!has_input, "Empty input should not add an Input message");
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.1
+#[test]
+fn test_pipeline_room_not_found_sets_error_status() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.movement.current_room_id = "non_existent_room".to_string();
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
+
+    let final_state = app.message_service.load_or_fresh();
+    let msg = match &final_state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected Error status, got {other:?}"),
+    };
+    assert!(
+        msg.contains("Room not found"),
+        "expected 'Room not found' in error message, got: {msg}"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.1
+#[test]
+fn test_execute_action_clears_last_trigger() {
+    use crate::test_support::TestStoredTriggerContext;
+
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.narrative.last_trigger = Some(TestStoredTriggerContext::for_npc(
+        "npc_1",
+        "Old",
+        "The old trigger fires.",
+    ));
+    app.message_service
+        .save_state(&state)
+        .expect("save_state should succeed");
+
+    app.pipeline.execute_action("look".to_string());
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        final_state.narrative.last_trigger.is_none(),
+        "last_trigger should be cleared by execute_action"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.4
+#[test]
+fn test_pipeline_phase_stays_narrating_on_narration_failure() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
+
+    let final_state = app.message_service.load_or_fresh();
+    assert_eq!(
+        final_state.narrative.input_buffer.phase,
+        GenerationPhase::Narrating,
+        "Phase should remain Narrating after failed narration"
+    );
+    assert!(
+        final_state
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
+        "Status should be Error after narration failure"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.3
+#[test]
+fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder =
+        make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
+
+    let final_state = app.message_service.load_or_fresh();
+    let msg = match &final_state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected Error status, got {other:?}"),
+    };
+    assert!(
+        msg.contains("empty"),
+        "error message should mention 'empty', got: {msg}"
+    );
+    let has_narration = final_state
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.message_type == MessageType::Narration);
+    assert!(
+        !has_narration,
+        "no narration should be persisted on empty response"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.3
+#[test]
+fn test_pipeline_quantifier_detects_movement() {
+    use crate::application::agents::quantifier::QuantifierAgent;
+
+    let map = TestMap::two_rooms("room_1", "room_2");
+    let data = TestDataBuilder::default_test().map(map).build();
+
+    let quantifier_result =
+        r#"{"npcs_in_room": [], "movement": {"type": "entering", "destination": "room_2"}}"#
+            .to_string();
+    let mock_provider =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]));
+    let quantifier_provider =
+        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app
+        .pipeline
+        .run_from_input(state, "go to room 2".to_string());
+
+    let final_state = app.message_service.load_or_fresh();
+    assert_ne!(
+        final_state.movement.current_room_id, "room_1",
+        "Player should have moved from starting room"
+    );
+    assert_eq!(
+        final_state.movement.current_room_id, "room_2",
+        "Player should be in destination room"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.1
+#[test]
+fn test_pipeline_cancels_when_token_already_cancelled() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    app.shutdown_token.cancel();
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app.pipeline.run_from_input(state, "look".to_string());
+
+    let final_state = app.message_service.load_or_fresh();
+    assert_eq!(
+        final_state.narrative.input_buffer.status,
+        GenerationStatus::Idle,
+        "Should reset to Idle when cancelled"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 5.1
+#[test]
+fn test_pre_main_snapshot_saved_before_narration() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let (app, storage) = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service_with_storage();
+
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app
+        .pipeline
+        .run_from_input(state, "examine the room".to_string());
+
+    let latest = storage
+        .load_latest_snapshot()
+        .expect("load_latest_snapshot should succeed")
+        .expect("a snapshot should exist after action");
+    assert!(
+        latest.db_id.is_some(),
+        "pre-main snapshot should be persisted"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 5.2
+#[test]
+fn test_pre_event_snapshot_saved_before_continuation() {
+    use crate::application::agents::quantifier::QuantifierAgent;
+    use crate::domain::model::character::NpcCard;
+    use crate::domain::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
+
+    let npc = NpcCard {
+        id: "npc1".to_string(),
+        sheet: crate::test_support::fixtures::TestPersona::standard().sheet,
+        inventory: vec![],
+        triggers: vec![Trigger {
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
+            narration: TriggerNarration {
+                name: "Greeting".to_string(),
+                narration_prompt: "The NPC greets you warmly.".to_string(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    };
+
+    let data = TestDataBuilder::default_test().npc(npc).build();
+
+    let quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
+    let mock_provider =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]));
+    let quantifier_provider =
+        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let narrator_recorder = make_test_recorder(Arc::new(
+        MockBackend::default().with_narrations(vec!["The NPC greets you warmly.".to_string()]),
+    ));
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let (app, storage) = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service_with_storage();
+
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app
+        .pipeline
+        .run_from_input(state, "examine the npc".to_string());
+
+    let latest = storage
+        .load_latest_snapshot()
+        .expect("load_latest_snapshot should succeed")
+        .expect("a snapshot should exist after trigger continuation");
+    assert!(
+        latest.db_id.is_some(),
+        "pre-event snapshot should be persisted"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.3
+#[test]
+fn test_delayed_llm_completes_without_deadlock() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_delay(200)));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app
+        .pipeline
+        .run_from_input(state, "look around".to_string());
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        !final_state.narrative.input_buffer.status.is_generating(),
+        "Status should be Idle after delayed action completes"
+    );
+    assert_eq!(
+        final_state.narrative.input_buffer.phase,
+        GenerationPhase::default(),
+        "Phase should be reset after completion"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.1
+#[test]
+fn test_cancellation_resets_state_to_idle() {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_delay(50)));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    app.shutdown_token.cancel();
+    let state = app.message_service.load_or_fresh();
+    let _outcome = app
+        .pipeline
+        .run_from_input(state, "look around".to_string());
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        !final_state.narrative.input_buffer.status.is_generating(),
+        "Status should be Idle after cancellation"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.2
+#[tokio::test]
+async fn test_pipeline_cancels_after_main_narration() {
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    let mock_narrator_backend = Arc::new(MockBackend::default().with_delay(50));
+    let narrator_recorder = make_test_recorder(Arc::clone(&mock_narrator_backend)
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>);
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(TestDataBuilder::default_test().build())
+        .pipeline(service.clone())
+        .build_service();
+
+    let token = app.shutdown_token.clone();
+    let app_clone = app.clone();
+    let handle = tokio::task::spawn_blocking(move || {
+        app_clone.pipeline.execute_action("look around".to_string());
+    });
+
+    let started = tokio::time::timeout(Duration::from_secs(5), async {
+        while !mock_narrator_backend
+            .narration_started
+            .load(Ordering::SeqCst)
+        {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(started.is_ok(), "narration should start within timeout");
+    token.cancel();
+    handle.await.expect("action task should complete");
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        !final_state.narrative.input_buffer.status.is_generating(),
+        "Status should be Idle after cancellation at post-narration checkpoint"
+    );
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.3
+#[tokio::test]
+async fn test_pipeline_cancels_during_trigger_continuation() {
+    use crate::application::agents::quantifier::QuantifierAgent;
+    use crate::domain::model::character::NpcCard;
+    use crate::domain::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    let npc = NpcCard {
+        id: "npc1".to_string(),
+        sheet: crate::test_support::fixtures::TestPersona::standard().sheet,
+        inventory: vec![],
+        triggers: vec![Trigger {
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
+            narration: TriggerNarration {
+                name: "Greeting".to_string(),
+                narration_prompt: "The NPC greets you warmly.".to_string(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    };
+
+    let data = TestDataBuilder::default_test().npc(npc).build();
+
+    let mock_narrator_backend = Arc::new(MockBackend::default().with_trigger_delay(50));
+    let narrator_recorder = make_test_recorder(Arc::clone(&mock_narrator_backend)
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>);
+    let quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
+    let quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]));
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service.clone())
+        .build_service();
+
+    let token = app.shutdown_token.clone();
+    let app_clone = app.clone();
+    let handle = tokio::task::spawn_blocking(move || {
+        app_clone
+            .pipeline
+            .execute_action("enter the shop".to_string());
+    });
+
+    let started = tokio::time::timeout(Duration::from_secs(5), async {
+        while !mock_narrator_backend.trigger_started.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(started.is_ok(), "trigger should start within timeout");
+    token.cancel();
+    handle.await.expect("action task should complete");
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        !final_state.narrative.input_buffer.status.is_generating(),
+        "Status should be Idle after cancellation at post-trigger checkpoint"
+    );
+    let has_narration = final_state
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.message_type == MessageType::Narration);
+    assert!(has_narration, "Main narration should be preserved");
+}
+
+// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.2
+#[test]
+fn test_streaming_narration_saved_before_quantifier_complete() {
+    use std::thread;
+    use std::time::Duration;
+
+    let quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
+        Arc::new(
+            MockBackend::default()
+                .with_prompt_responses(vec![r#"{"npcs_in_room": []}"#.to_string()])
+                .with_delay(500),
+        );
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let service = crate::test_support::make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        quantifier_provider,
+    );
+    let (app, _storage) = TestAppBuilder::with_data(TestDataBuilder::default_test().build())
+        .pipeline(service)
+        .build_service_with_storage();
+
+    let app_clone = app.clone();
+    let message_service = Arc::clone(&app.message_service);
+    let handle = thread::spawn(move || {
+        app_clone.pipeline.execute_action("look around".to_string());
+    });
+
+    let start = std::time::Instant::now();
+    let mut narration_found = false;
+    while start.elapsed() < Duration::from_millis(400) {
+        if message_service
+            .load_messages()
+            .map(|msgs| {
+                msgs.iter()
+                    .any(|m| m.message_type == MessageType::Narration)
+            })
+            .unwrap_or(false)
+        {
+            narration_found = true;
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        narration_found,
+        "Narration should be saved before quantifier completes (quantifier takes 500ms)"
+    );
+
+    handle.join().expect("Action thread should complete");
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        !final_state.narrative.input_buffer.status.is_generating(),
+        "Should complete after quantifier finishes"
+    );
+    let final_narration_count = message_service
+        .load_messages()
+        .unwrap()
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        final_narration_count, 1,
+        "Should have exactly 1 narration (no duplicates), found {final_narration_count}"
     );
 }

@@ -1,9 +1,13 @@
+//! Unit tests for retry and retrigger paths.
+
 use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driving::http::AppState;
 use crate::application::ports::llm_provider::LlmCallResult;
+use crate::application::errors::ApplicationError;
+use crate::application::errors::ProcessActionResult;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
@@ -357,7 +361,7 @@ async fn test_retry_event_continuation_cancels_before_llm() {
 
     app.shutdown_token.cancel();
 
-    let _ = app.pipeline.retry_event_continuation(pre_event_state);
+    let _ = app.pipeline.retry_event_continuation(&mut pre_event_state);
 
     let state = app.message_service.load_or_fresh();
     assert!(
@@ -381,34 +385,7 @@ async fn test_retry_event_trigger_narration_fails() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    let _input_id = add_input_and_save(&app, &storage, "test input");
-    let _pre_event_id = save_pre_event(&app, &storage);
-
-    let mut state = app.message_service.load_or_fresh();
-    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
-    let snapshot =
-        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &state,
-        );
-    let _pre_event_with_trigger_id = storage.save_snapshot(&snapshot).unwrap();
-
-    let mut final_state = state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
-    final_state
-        .narrative
-        .history
-        .last_mut()
-        .unwrap()
-        .set_event_header(Some("Event".to_string()));
-    let final_snapshot =
-        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &final_state,
-        );
-    let final_id = storage.save_snapshot(&final_snapshot).unwrap();
-    if let Some(last) = final_state.narrative.history.last_mut() {
-        last.set_snapshot_id(Some(final_id));
-        insert_message_with_swipe(&app, &storage, last);
-    }
+    setup_event_flow(&app, &storage);
 
     app.pipeline.retry_last_response();
 
@@ -416,10 +393,26 @@ async fn test_retry_event_trigger_narration_fails() {
     assert!(
         matches!(
             state.narrative.input_buffer.status,
-            GenerationStatus::Error(_)
+            GenerationStatus::Error(ref msg) if msg.contains("Trigger narration failed"),
         ),
         "Should set error status when trigger narration fails, got {:?}",
         state.narrative.input_buffer.status
+    );
+
+    // The System message logged by the failed trigger continuation must
+    // survive in history, not be lost to a fresh state load on the error path.
+    let has_system_msg = state.narrative.history.iter().any(|m| {
+        m.message_type == MessageType::System && m.text().contains("Trigger narration failed")
+    });
+    assert!(
+        has_system_msg,
+        "Should persist a System message mentioning 'Trigger narration failed', got history: {:?}",
+        state
+            .narrative
+            .history
+            .iter()
+            .map(|m| (m.message_type.clone(), m.text().to_string()))
+            .collect::<Vec<_>>()
     );
 }
 
@@ -1064,7 +1057,7 @@ async fn test_retry_event_continuation_handles_state_without_input_message() {
         MessageType::Narration,
     );
 
-    let _ = app.pipeline.retry_event_continuation(state);
+    let _ = app.pipeline.retry_event_continuation(&mut state);
 }
 
 #[tokio::test]
@@ -1095,5 +1088,126 @@ async fn test_retry_records_missing_snapshot_id() {
     assert!(
         msg.contains(&format!("no snapshot found for id {MISSING_ID}")),
         "expected typed 'no snapshot found for id {MISSING_ID}' error, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn test_retry_returns_internal_error_when_anchor_has_no_snapshot_id() {
+    // anchor message without snapshot_id is a data-integrity
+    // violation → 500 from retry(), with the reason persisted on status.
+    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message(
+        "test input".to_string(),
+        Some("Player".to_string()),
+        MessageType::Input,
+    );
+    let last = state.narrative.history.last().unwrap();
+    insert_message_with_swipe(&app, &storage, last);
+
+    let result = app.pipeline.retry(&app.generation_gate);
+
+    assert!(
+        matches!(
+            result,
+            Err(ApplicationError::Engine(EngineError::Internal(_)))
+        ),
+        "retry() should return ApplicationError::internal (500) when anchor has no snapshot_id, got {result:?}"
+    );
+
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status,
+            GenerationStatus::Error(ref msg) if msg.contains("no snapshot_id")),
+        "Should persist Error status indicating the snapshot is missing, got {:?}",
+        state.narrative.input_buffer.status
+    );
+}
+
+#[tokio::test]
+async fn test_retry_returns_internal_error_when_snapshot_row_missing() {
+    // anchor's snapshot_id points to a deleted/missing row → 500
+    // from retry(), with the reason persisted on status.
+    const MISSING_ID: u64 = 99_999;
+    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message(
+        "test input".to_string(),
+        Some("Player".to_string()),
+        MessageType::Input,
+    );
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(MISSING_ID));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    let result = app.pipeline.retry(&app.generation_gate);
+
+    assert!(
+        matches!(
+            result,
+            Err(ApplicationError::Engine(EngineError::Internal(_)))
+        ),
+        "retry() should return ApplicationError::internal (500) when snapshot row missing, got {result:?}"
+    );
+
+    let state = app.message_service.load_or_fresh();
+    let msg = match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error on missing snapshot, got {other:?}"),
+    };
+    assert!(
+        msg.contains(&format!("no snapshot found for id {MISSING_ID}")),
+        "expected 'no snapshot found for id {MISSING_ID}' error, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn test_retry_returns_concurrent_generation_when_gate_busy() {
+    // retry() must reject concurrent generation the same way
+    // `process_action` does — Ok(ConcurrentGeneration), no task spawned.
+    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let _input_id = add_input_and_save(&app, &storage, "test input");
+
+    let game_id = storage.current_game_id();
+    let mut state = app.message_service.load_or_fresh();
+    let (_, _, claim) = app
+        .generation_gate
+        .try_claim(game_id, &mut state, app.message_service.as_ref())
+        .expect("pre-claim should succeed");
+    assert!(matches!(claim, ProcessActionResult::Started));
+
+    let result = app.pipeline.retry(&app.generation_gate);
+
+    assert!(
+        matches!(result, Ok(ProcessActionResult::ConcurrentGeneration)),
+        "retry() should return Ok(ConcurrentGeneration) when gate is busy, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_retrigger_returns_concurrent_generation_when_gate_busy() {
+    // retrigger() must reject concurrent generation the same way
+    // `process_action` does — Ok(ConcurrentGeneration), no task spawned.
+    let (app, storage) = TestAppBuilder::default_test()
+        .last_trigger(crate::test_support::TestStoredTriggerContext::standard())
+        .log("Main narration", None, MessageType::Narration)
+        .build_service_with_storage();
+
+    let game_id = storage.current_game_id();
+    let mut state = app.message_service.load_or_fresh();
+    let (_, _, claim) = app
+        .generation_gate
+        .try_claim(game_id, &mut state, app.message_service.as_ref())
+        .expect("pre-claim should succeed");
+    assert!(matches!(claim, ProcessActionResult::Started));
+
+    let result = app.pipeline.retrigger(&app.generation_gate);
+
+    assert!(
+        matches!(result, Ok(ProcessActionResult::ConcurrentGeneration)),
+        "retrigger() should return Ok(ConcurrentGeneration) when gate is busy, got {result:?}"
     );
 }

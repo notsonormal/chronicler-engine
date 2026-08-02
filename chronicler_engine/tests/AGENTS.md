@@ -1,5 +1,9 @@
 # `chronicler_engine/tests/`
 
+### TEST STRATEGY
+
+See [`STRATEGY.md`](STRATEGY.md) for the normative tier-placement rules (unit / HTTP E2E / browser / driven-adapter) and the overlap/SCENARIO-tag conventions.
+
 ### TEST MIRROR CONVENTION
 
 Integration test structure mirrors `src/` paths **within each test binary**. The test **binary** is chosen by fixture weight (integration/http/browser/llm/infrastructure); inside each binary, file paths mirror `src/` subpaths.

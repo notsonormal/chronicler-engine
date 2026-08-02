@@ -9,6 +9,8 @@ pub use gate::GenerationGate;
 pub use guard::GenerationGuard;
 
 #[cfg(test)]
+mod gate_tests;
+#[cfg(test)]
 mod guard_tests;
 #[cfg(test)]
 mod slot_tests;

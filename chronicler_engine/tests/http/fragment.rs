@@ -1,4 +1,4 @@
-//! HTTP integration tests for fragment rendering: basic fragments return HTML, visual sidebar renders the room image, action area fragment renders, and the action handler accepts commands.
+//! HTTP integration tests for fragment rendering.
 
 use std::sync::Arc;
 
@@ -9,6 +9,7 @@ use axum::{
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
+use chronicler_engine::application::errors::ProcessActionResult;
 use chronicler_engine::domain::model::message::{Message, Swipe};
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
@@ -1176,6 +1177,83 @@ async fn test_retrigger_handler_valid_context_error() {
         response.status(),
         StatusCode::BAD_REQUEST,
         "Retrigger with no trigger context should return bad request"
+    );
+}
+
+#[tokio::test]
+async fn test_retry_handler_concurrent_generation() {
+    // POST /swipe/new while a generation is in flight returns
+    // 200 with "Still thinking...", not a new retry.
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+
+    let mut game_state = state.message_service.load_or_fresh();
+    game_state.add_message(
+        "test input".to_string(),
+        Some("Player".to_string()),
+        MessageType::Input,
+    );
+    state
+        .message_service
+        .save_message_and_snapshot(&mut game_state)
+        .expect("seed input message with snapshot");
+
+    let game_id = state.game_catalogue.current_game_id();
+    let (_, _, claim) = state
+        .generation_gate
+        .try_claim(game_id, &mut game_state, state.message_service.as_ref())
+        .expect("pre-claim should succeed");
+    assert!(matches!(claim, ProcessActionResult::Started));
+
+    let req = Request::builder()
+        .uri("/swipe/new")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .expect("read body");
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Still thinking..."),
+        "expected 'Still thinking...' in body, got: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_retrigger_handler_concurrent_generation() {
+    // POST /retrigger while a generation is in flight returns
+    // 200 with "Still thinking...", not a new retrigger.
+    let (app, state) = TestAppBuilder::default_test()
+        .last_trigger(chronicler_engine::test_support::TestStoredTriggerContext::standard())
+        .log("Main narration", None, MessageType::Narration)
+        .build_with_state();
+
+    let game_id = state.game_catalogue.current_game_id();
+    let mut game_state = state.message_service.load_or_fresh();
+    let (_, _, claim) = state
+        .generation_gate
+        .try_claim(game_id, &mut game_state, state.message_service.as_ref())
+        .expect("pre-claim should succeed");
+    assert!(matches!(claim, ProcessActionResult::Started));
+
+    let req = Request::builder()
+        .uri("/retrigger")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .expect("read body");
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Still thinking..."),
+        "expected 'Still thinking...' in body, got: {body_str}"
     );
 }
 

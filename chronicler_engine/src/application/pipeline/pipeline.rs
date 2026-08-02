@@ -132,7 +132,6 @@ impl ActionPipeline {
         &self.prompt_assembler
     }
 
-    /// Aligns injected pipeline with seeded application state.
     pub fn rebind_for_test(
         mut self,
         message_service: Arc<MessageService>,
@@ -153,7 +152,6 @@ impl ActionPipeline {
         self.shutdown_token.is_cancelled()
     }
 
-    /// Reset the persisted generation status/phase to Idle for the current game.
     pub fn reset_persisted_status(&self) -> Result<(), EngineError> {
         let mut game_state = self.message_service.load_or_fresh();
         game_state.narrative.input_buffer.status = GenerationStatus::Idle;
@@ -281,19 +279,19 @@ impl ActionPipeline {
             }
         };
 
-        let outcome = if is_event {
-            self.retry_event_continuation(state)
+        if is_event {
+            let outcome = self.retry_event_continuation(&mut state);
+            self.handle_retry_outcome(outcome);
         } else {
-            self.retry_main_narration(state, input_text)
+            let outcome = self.retry_main_narration(state, input_text);
+            self.handle_retry_outcome(outcome);
         };
-
-        self.handle_retry_outcome(outcome);
     }
 
     #[instrument(skip(self))]
     pub fn retrigger_event(&self) {
-        let state = self.message_service.load_or_fresh();
-        let outcome = self.retry_event_continuation(state);
+        let mut state = self.message_service.load_or_fresh();
+        let outcome = self.retry_event_continuation(&mut state);
         self.handle_retry_outcome(outcome);
     }
 
@@ -304,35 +302,86 @@ impl ActionPipeline {
         self.process_action(generation_gate, String::new())
     }
 
-    pub fn retry(&self) -> Result<(), ApplicationError> {
-        let game_state = self.message_service.load_or_fresh();
+    pub fn retry(
+        &self,
+        generation_gate: &GenerationGate,
+    ) -> Result<ProcessActionResult, ApplicationError> {
+        let mut game_state = self.message_service.load_or_fresh();
+        let game_id = self.storage.current_game_id();
 
         if game_state.narrative.history.last_input_text().is_none() {
             return Err(ApplicationError::validation("No input to retry"));
         }
 
-        let (_, cancelled) = self.prepare_retry_state(
-            game_state,
-            GenerationStatus::Generating,
-            GenerationPhase::Narrating,
-        )?;
-        if cancelled {
-            return Err(ApplicationError::ShuttingDown);
+        generation_gate.heal_stale(game_id, &mut game_state);
+
+        let (started_game_id, started_generation_id, claim_result) =
+            generation_gate.try_claim(game_id, &mut game_state, self.message_service.as_ref())?;
+        match claim_result {
+            ProcessActionResult::ConcurrentGeneration => {
+                return Ok(ProcessActionResult::ConcurrentGeneration);
+            }
+            ProcessActionResult::Started => {}
+            ProcessActionResult::ShuttingDown => {
+                return Ok(ProcessActionResult::ShuttingDown);
+            }
         }
 
+        // Data-integrity check after gate claim (busy gate short-circuits
+        // above) and before spawn — HTTP handler returns 500 with the reason
+        // on `input_buffer.status`, not 200 + async error. Release the slot
+        // on failure: no `guard` drops, so release manually to sync with Error.
+        if let Err(e) = self.check_retry_anchor() {
+            generation_gate.release_generation_slot(started_game_id, started_generation_id);
+            return Err(e);
+        }
+
+        let gate = generation_gate.clone();
         let pipeline_arc = Arc::new(self.clone());
         spawn_pipeline_task(pipeline_arc, move |pipeline| {
+            let _guard = gate.guard(started_game_id, started_generation_id);
             if pipeline.is_shutting_down() {
                 return;
             }
             pipeline.retry_last_response();
         });
-
-        Ok(())
+        Ok(ProcessActionResult::Started)
     }
 
-    pub fn retrigger(&self) -> Result<(), ApplicationError> {
-        let game_state = self.message_service.load_or_fresh();
+    fn check_retry_anchor(&self) -> Result<(), ApplicationError> {
+        let messages = self.message_service.load_messages()?;
+        let Some((_, anchor_msg)) = self.message_service.find_retry_anchor_msg(&messages) else {
+            self.persist_generation_error("Retry failed: no anchor message");
+            return Err(ApplicationError::internal(
+                "Retry failed: no anchor message",
+            ));
+        };
+        let Some(snapshot_id) = anchor_msg.snapshot_id() else {
+            let msg = "Retry failed: anchor message has no snapshot_id";
+            self.persist_generation_error(msg);
+            return Err(ApplicationError::internal(msg));
+        };
+        match self.storage.load_snapshot_by_id(snapshot_id) {
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => {
+                let msg = format!("Retry failed: no snapshot found for id {snapshot_id}");
+                self.persist_generation_error(msg.clone());
+                Err(ApplicationError::internal(msg))
+            }
+            Err(e) => {
+                let msg = format!("Retry failed: {e}");
+                self.persist_generation_error(msg.clone());
+                Err(ApplicationError::internal(msg))
+            }
+        }
+    }
+
+    pub fn retrigger(
+        &self,
+        generation_gate: &GenerationGate,
+    ) -> Result<ProcessActionResult, ApplicationError> {
+        let mut game_state = self.message_service.load_or_fresh();
+        let game_id = self.storage.current_game_id();
 
         if game_state.narrative.last_trigger.is_none() {
             return Err(ApplicationError::validation("No trigger context available"));
@@ -352,40 +401,30 @@ impl ActionPipeline {
             ));
         }
 
-        let (_, cancelled) = self.prepare_retry_state(
-            game_state,
-            GenerationStatus::Generating,
-            GenerationPhase::Narrating,
-        )?;
-        if cancelled {
-            return Err(ApplicationError::ShuttingDown);
+        generation_gate.heal_stale(game_id, &mut game_state);
+
+        let (started_game_id, started_generation_id, claim_result) =
+            generation_gate.try_claim(game_id, &mut game_state, self.message_service.as_ref())?;
+        match claim_result {
+            ProcessActionResult::ConcurrentGeneration => {
+                return Ok(ProcessActionResult::ConcurrentGeneration);
+            }
+            ProcessActionResult::Started => {}
+            ProcessActionResult::ShuttingDown => {
+                return Ok(ProcessActionResult::ShuttingDown);
+            }
         }
 
+        let gate = generation_gate.clone();
         let pipeline_arc = Arc::new(self.clone());
         spawn_pipeline_task(pipeline_arc, move |pipeline| {
+            let _guard = gate.guard(started_game_id, started_generation_id);
             if pipeline.is_shutting_down() {
                 return;
             }
             pipeline.retrigger_event();
         });
-
-        Ok(())
-    }
-
-    /// Set generation status/phase, persist the resulting snapshot, and return the
-    /// mutated state paired with the current shutdown flag (`cancelled=true` if
-    /// shutdown was requested mid-call).
-    pub(crate) fn prepare_retry_state(
-        &self,
-        mut game_state: GameState,
-        status: GenerationStatus,
-        phase: GenerationPhase,
-    ) -> Result<(GameState, bool), ApplicationError> {
-        game_state.narrative.input_buffer.status = status;
-        game_state.narrative.input_buffer.phase = phase;
-        self.message_service.save_state(&game_state)?;
-        let cancelled = self.is_shutting_down();
-        Ok((game_state, cancelled))
+        Ok(ProcessActionResult::Started)
     }
 
     pub fn run_from_input(&self, mut state: GameState, input: String) -> Result<(), PhaseError> {
@@ -565,19 +604,17 @@ impl ActionPipeline {
 
     pub(crate) fn phase_trigger_continuation(
         &self,
-        mut state: GameState,
+        state: &mut GameState,
         trigger: &StoredTriggerContext,
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> Result<(GameState, String), PhaseError> {
+    ) -> Result<String, PhaseError> {
         let started_for = self.storage.current_game_id();
         let run = PipelineRun::new(self, started_for);
-        let continuation_text =
-            match run.phase_trigger_continuation_llm_call(&mut state, trigger, map, npcs) {
-                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
-                other => other,
-            }?;
-        Ok((state, continuation_text))
+        match run.phase_trigger_continuation_llm_call(state, trigger, map, npcs) {
+            Err(PhaseError::Cancelled) => Err(run.handle_cancellation()),
+            other => other,
+        }
     }
 
     pub(super) fn run_post_generation_agents(
@@ -646,25 +683,22 @@ impl ActionPipeline {
     }
 
     pub(crate) fn handle_retry_outcome(&self, outcome: Result<(), PhaseError>) {
-        match outcome {
-            Err(PhaseError::Cancelled) => {
-                let mut state = self.message_service.load_or_fresh();
-                state.narrative.input_buffer.status = GenerationStatus::Idle;
-                state.narrative.input_buffer.phase = GenerationPhase::default();
-                let _ = self.message_service.save_state(&state);
-            }
-            Err(e) => {
-                let started_for = self.storage.current_game_id();
-                let run = PipelineRun::new(self, started_for);
-                Self::finalize_phase_error(&run, None, e);
-            }
-            Ok(()) => {}
+        // Non-Cancelled errors are persisted inside `retry_event_continuation` and
+        // `run_from_input` via `finalize_phase_error(&run, Some(&mut state), e)`,
+        // preserving in-flight state — e.g. the System message from a failed
+        // trigger continuation. Cancelled is reset by `handle_cancellation`.
+        if let Err(PhaseError::Cancelled) = outcome {
+            tracing::debug!("Pipeline cancelled");
         }
     }
 
-    pub(crate) fn retry_event_continuation(&self, state: GameState) -> Result<(), PhaseError> {
+    pub(crate) fn retry_event_continuation(&self, state: &mut GameState) -> Result<(), PhaseError> {
+        let started_for = self.storage.current_game_id();
+        let run = PipelineRun::new(self, started_for);
+
         let Some(trigger) = state.narrative.last_trigger.clone() else {
-            return Err(PhaseError::TriggerMissing);
+            Self::finalize_phase_error(&run, Some(state), PhaseError::TriggerMissing);
+            return Ok(());
         };
         let input_text = match state.narrative.history.last_input_text() {
             Some((_, text)) => text,
@@ -675,32 +709,47 @@ impl ActionPipeline {
             persona,
             npcs: npcs_map,
             ..
-        } = match self.load_world_bundle(self.storage.current_game_id()) {
+        } = match self.load_world_bundle(started_for) {
             Ok(b) => b,
-            Err(e) => return Err(PhaseError::FetchFailed(e.to_string())),
+            Err(e) => {
+                Self::finalize_phase_error(
+                    &run,
+                    Some(state),
+                    PhaseError::FetchFailed(e.to_string()),
+                );
+                return Ok(());
+            }
         };
-        let (mut state, continuation_text) =
-            self.phase_trigger_continuation(state, &trigger, &map, &npcs_map)?;
+        let continuation_text =
+            match self.phase_trigger_continuation(state, &trigger, &map, &npcs_map) {
+                Ok(t) => t,
+                Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
+                Err(e) => {
+                    Self::finalize_phase_error(&run, Some(state), e);
+                    return Ok(());
+                }
+            };
         if !continuation_text.is_empty() {
-            let started_for = self.storage.current_game_id();
-            let run = PipelineRun::new(self, started_for);
-            run.reconcile_post_trigger_npcs(
-                &mut state,
+            match run.reconcile_post_trigger_npcs(
+                state,
                 &input_text,
                 &continuation_text,
                 &map,
                 &persona,
                 &npcs_map,
-            )?;
+            ) {
+                Ok(()) => {}
+                Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
+                Err(e) => {
+                    Self::finalize_phase_error(&run, Some(state), e);
+                    return Ok(());
+                }
+            }
         }
         if let Some(target) = state.narrative.retry_target.take() {
             state.narrative.history.append(target);
         }
-        {
-            let started_for = self.storage.current_game_id();
-            let run = PipelineRun::new(self, started_for);
-            run.phase_finalize(&mut state);
-        }
+        run.phase_finalize(state);
         Ok(())
     }
 

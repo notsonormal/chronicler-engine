@@ -12,7 +12,7 @@ use serde::Deserialize;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok, ok_refresh};
-use crate::application::errors::ApplicationError;
+use crate::application::errors::{ApplicationError, ProcessActionResult};
 use crate::domain::model::settings::TextCheckMode;
 use crate::error::EngineError;
 
@@ -32,15 +32,27 @@ pub async fn reset_handler(
 pub async fn retrigger_handler(
     State(state): State<AppState>,
 ) -> Result<Response<Body>, ApplicationError> {
-    state.pipeline.retrigger()?;
-    Ok(ok("<span class=\"status ready\">Retriggering...</span>"))
+    match state.pipeline.retrigger(&state.generation_gate)? {
+        ProcessActionResult::Started => {
+            Ok(ok("<span class=\"status ready\">Retriggering...</span>"))
+        }
+        ProcessActionResult::ConcurrentGeneration => {
+            Ok(ok("<span class=\"status wait\">Still thinking...</span>"))
+        }
+        ProcessActionResult::ShuttingDown => Err(ApplicationError::ShuttingDown),
+    }
 }
 
 pub async fn retry_handler(
     State(state): State<AppState>,
 ) -> Result<Response<Body>, ApplicationError> {
-    state.pipeline.retry()?;
-    Ok(ok("<span class=\"status ready\">Retrying...</span>"))
+    match state.pipeline.retry(&state.generation_gate)? {
+        ProcessActionResult::Started => Ok(ok("<span class=\"status ready\">Retrying...</span>")),
+        ProcessActionResult::ConcurrentGeneration => {
+            Ok(ok("<span class=\"status wait\">Still thinking...</span>"))
+        }
+        ProcessActionResult::ShuttingDown => Err(ApplicationError::ShuttingDown),
+    }
 }
 
 pub async fn switch_swipe_handler(
