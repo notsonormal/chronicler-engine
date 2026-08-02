@@ -105,34 +105,24 @@ impl TestAppBuilder {
     }
 
     pub fn build(self) -> Router {
-        let (app_state, _storage) = self.build_app_state_with_storage();
+        let (app_state, _storage) = self.build_service_with_storage();
         build_router(app_state)
     }
 
     /// Build returning `(Router, AppState)`.
     pub fn build_with_state(self) -> (Router, AppState) {
-        let (app_state, _storage) = self.build_app_state_with_storage();
+        let (app_state, _storage) = self.build_service_with_storage();
         (build_router(app_state.clone()), app_state)
     }
 
     /// Build returning the `AppState`.
     pub fn build_service(self) -> AppState {
-        let (app_state, _storage) = self.build_app_state_with_storage();
+        let (app_state, _storage) = self.build_service_with_storage();
         app_state
     }
 
     /// Build returning `(AppState, Arc<Storage>)`.
-    pub fn build_service_with_storage(self) -> (AppState, Arc<Storage>) {
-        self.build_app_state_with_storage()
-    }
-
-    /// Build returning the `AppState` (backwards-compatible alias for `build_app_state_with_storage`).
-    pub fn build_app_state(self) -> AppState {
-        let (app_state, _storage) = self.build_app_state_with_storage();
-        app_state
-    }
-
-    pub fn build_app_state_with_storage(mut self) -> (AppState, Arc<Storage>) {
+    pub fn build_service_with_storage(mut self) -> (AppState, Arc<Storage>) {
         let test_data = self.test_data.expect(
             "test setup: TestAppBuilder requires test_data (use default_test() or with_data())",
         );

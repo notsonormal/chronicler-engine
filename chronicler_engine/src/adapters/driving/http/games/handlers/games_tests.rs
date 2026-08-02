@@ -5,14 +5,14 @@ use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
 async fn test_list_games_empty() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let response = list_games_fragment(axum::extract::State(state)).await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
 async fn test_switch_game_ok() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let _ = state
         .game_catalogue
         .create_game("test-world", "test-persona");

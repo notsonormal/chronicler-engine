@@ -5,7 +5,7 @@ title: Storage and Bootstrap Design
 
 ## Overview
 
-The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in the application orchestrator (`ActionPipeline`, `PersistenceGate`, `GameCatalogue`, `GameViewQuery`); and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error.
+The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in the application orchestrator (`ActionPipeline`, `MessageService`, `GameCatalogue`, `GameViewQuery`); and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error.
 
 ## The storage struct and its backend decorator
 
@@ -45,7 +45,7 @@ The seeding order satisfies the foreign-key edges. Worlds and maps are seeded fi
 
 Each `Storage` method touches exactly one table. The rule is structural — every public method on `Storage` opens one row or one query against one table and returns. The rule keeps the storage layer narrow: a reader of any method sees what it reads, and a writer sees what it writes.
 
-Multi-table operations compose one tier up, in the application orchestrator (`ActionPipeline`, `PersistenceGate`, and catalogue collaborators). Save-message-and-snapshot writes the snapshot row first, then appends the message row that references the snapshot's id. Hydrate-messages-with-swipes reads the message rows and attaches the swipe rows. The orchestrator owns the order and the references; the storage layer owns the rows.
+Multi-table operations compose one tier up, in the application orchestrator (`ActionPipeline`, `MessageService`, and catalogue collaborators). Save-message-and-snapshot writes the snapshot row first, then appends the message row that references the snapshot's id. Hydrate-messages-with-swipes reads the message rows and attaches the swipe rows. The orchestrator owns the order and the references; the storage layer owns the rows.
 
 Atomicity within a single multi-table operation comes from sequential SQLite statements on one connection. The window in which a crash can leave the tables partially updated is small — a process exit between the two statements is the only way to land in a half-finished state — and the application treats the operation as atomic for non-critical data. The seed flow itself sits outside this trade-off: it runs at startup, not on user request, and its non-atomicity is bounded by the absence of concurrent readers.
 

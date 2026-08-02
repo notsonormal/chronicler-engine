@@ -2,8 +2,8 @@
 //! Persona catalogue — persona read-side orchestration at the application layer.
 //!
 //! This catalogue is intentionally a one-method seam. It keeps the HTTP layer from
-//! calling `Storage` directly for persona lookups, which is the same isolation
-//! ticket #12 enforces for all other storage access in `src/adapters/driving/http/`.
+//! calling `Storage` directly for persona lookups, mirroring the storage-isolation
+//! discipline enforced for all other storage access in the HTTP layer.
 
 use std::sync::Arc;
 

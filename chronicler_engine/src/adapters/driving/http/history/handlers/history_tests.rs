@@ -35,7 +35,7 @@ fn test_edit_history_form_roundtrip() {
 
 #[tokio::test]
 async fn test_edit_history_handler_ok() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
 
     let form = EditHistoryForm {
         text: "modified text".to_string(),
@@ -56,7 +56,7 @@ async fn test_edit_history_handler_ok() {
 
 #[tokio::test]
 async fn test_delete_history_handler_ok() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
 
     let result = delete_history_handler(axum::extract::State(state)).await;
     let status = match result {

@@ -56,22 +56,20 @@ impl ActionPipeline {
         preset_store: Arc<PresetStore>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
-        let assembler = PromptAssembler::new(MAX_CONTEXT_TOKENS).with_settings(settings.clone());
         tracing::info!(
             "ActionPipeline: backend={}, model={}",
             recorder.provider().name(),
             recorder.provider().model()
         );
-        Self {
-            prompt_assembler: Arc::new(assembler),
+        Self::with_backends(
+            shutdown_token,
             recorder,
-            agent_registry: Arc::new(agent_registry),
+            agent_registry,
             message_service,
             storage,
             preset_store,
             settings,
-            shutdown_token,
-        }
+        )
     }
 
     pub fn with_backends(
@@ -108,18 +106,15 @@ impl ActionPipeline {
     ) -> Self {
         let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
         let registry = AgentRegistry::with_agent(Box::new(agent));
-        Self {
-            prompt_assembler: Arc::new(
-                PromptAssembler::new(MAX_CONTEXT_TOKENS).with_settings(settings.clone()),
-            ),
+        Self::with_backends(
+            shutdown_token,
             recorder,
-            agent_registry: Arc::new(registry),
+            registry,
             message_service,
             storage,
             preset_store,
             settings,
-            shutdown_token,
-        }
+        )
     }
 
     pub fn backend_info(&self) -> (&str, &str) {

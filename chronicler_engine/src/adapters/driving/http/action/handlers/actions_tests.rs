@@ -50,7 +50,7 @@ fn test_action_form_roundtrip() {
 
 #[tokio::test]
 async fn test_action_handler_empty_command() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let form = ActionForm {
         command: String::new(),
     };
@@ -73,7 +73,7 @@ async fn test_action_handler_empty_command() {
 
 #[tokio::test]
 async fn test_action_handler_whitespace_command() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let form = ActionForm {
         command: "   ".to_string(),
     };
@@ -89,7 +89,7 @@ async fn test_action_handler_whitespace_command() {
 
 #[tokio::test]
 async fn test_action_handler_started() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let form = ActionForm {
         command: "look".to_string(),
     };
@@ -101,7 +101,7 @@ async fn test_action_handler_started() {
 
 #[tokio::test]
 async fn test_action_confirm_handler_empty_command() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let form = ActionForm {
         command: String::new(),
     };
@@ -116,7 +116,7 @@ async fn test_action_confirm_handler_empty_command() {
 
 #[tokio::test]
 async fn test_action_confirm_handler_started() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let form = ActionForm {
         command: "look".to_string(),
     };
@@ -127,7 +127,7 @@ async fn test_action_confirm_handler_started() {
 
 #[tokio::test]
 async fn test_action_check_handler_empty_command() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let form = ActionForm {
         command: String::new(),
     };
@@ -143,7 +143,7 @@ async fn test_action_check_handler_empty_command() {
 
 #[tokio::test]
 async fn test_action_check_handler_disabled_mode() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     state.settings.write().unwrap().text_check.mode = TextCheckMode::Disabled;
     let form = ActionForm {
         command: "test".to_string(),
@@ -155,7 +155,7 @@ async fn test_action_check_handler_disabled_mode() {
 
 #[tokio::test]
 async fn test_action_check_handler_auto_check_disabled() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     state.settings.write().unwrap().text_check.enable_auto_check = false;
     let form = ActionForm {
         command: "test".to_string(),
@@ -167,7 +167,7 @@ async fn test_action_check_handler_auto_check_disabled() {
 
 #[tokio::test]
 async fn test_action_check_handler_check_result_none() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let form = ActionForm {
         command: "go north".to_string(),
     };
