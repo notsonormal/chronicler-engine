@@ -57,7 +57,7 @@ function getBuildLogNote(cwd: string): SourceResult | undefined {
   const ageStr = minutes < 60 ? `${minutes}m old` : `${Math.floor(minutes / 60)}h old`;
   const prefix = cwd.endsWith(path.sep) ? cwd : cwd + path.sep;
   const emitPath = newestPath.startsWith(prefix) ? newestPath.substring(prefix.length) : newestPath;
-  return { key: newestPath, line: `Build Log: ${emitPath} (${ageStr})` };
+  return { key: `${newestPath}:${Math.floor(newestMtime)}`, line: `Build Log: ${emitPath} (${ageStr})` };
 }
 
 function getGitNote(cwd: string): SourceResult | undefined {
@@ -106,17 +106,22 @@ const SOURCES = [
 ] as const;
 
 const lastKeys: Record<string, string | undefined> = {};
+let turnCount = 0;
 
 export default function (pi: any): void {
   pi.on("session_start", () => {
     for (const k of Object.keys(lastKeys)) lastKeys[k] = undefined;
+    turnCount = 0;
   });
 
   pi.on("before_agent_start", (_event: unknown, ctx: any) => {
+    turnCount += 1;
+    const forceRefresh = turnCount % 10 === 0;
     const lines: string[] = [];
     for (const src of SOURCES) {
       const result = safeCall(() => src.get(ctx));
-      if (result === undefined || result.key === lastKeys[src.name]) continue;
+      if (result === undefined) continue;
+      if (!forceRefresh && result.key === lastKeys[src.name]) continue;
       lastKeys[src.name] = result.key;
       lines.push(result.line);
     }
