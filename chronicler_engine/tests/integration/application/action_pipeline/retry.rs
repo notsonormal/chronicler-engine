@@ -18,6 +18,9 @@ use crate::application_ext::PipelineHelpers;
 
 fn trigger_data() -> TestData {
     TestData {
+        // TODO: We need a guardrail to just stop full paths to crates being used
+        //  outside of use statements. I suspect the only good reason for it is
+        //  to skip any guardrails
         world: Arc::new(crate::fixtures::create_test_world()),
         map: Arc::new(crate::fixtures::create_test_map()),
         persona: Arc::new(crate::fixtures::create_test_player()),

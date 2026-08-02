@@ -1,6 +1,6 @@
 ---
 description: Software architect for implementation planning
-model: minimax/MiniMax-M3
+model: synthetic/hf:zai-org/GLM-5.2
 tools: read, bash, grep, find, ls
 permission:
   bash:
