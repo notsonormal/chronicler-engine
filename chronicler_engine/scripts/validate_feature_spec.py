@@ -1,15 +1,21 @@
-"""Validate that every scenario in a feature spec has a covering integration
-test, and every annotated test references a declared scenario.
+"""Validate that every scenario in a feature spec has a covering
+integration test, every annotated test references a declared scenario,
+and every Given/When/Then/And line in a spec uses a markdown hard line
+break (exactly two trailing spaces) with no blank line between consecutive
+keyword lines.
 
-Discovers specs in `chronicler_engine/docs/specs/*.md` and walks
-`chronicler_engine/tests/integration/**/*.rs` for `// SCENARIO: X.Y`
-comments that appear immediately before a `#[test]` (or `#[tokio::test]`)
-attribute.
+Discovers specs in `chronicler_engine/docs/specs/*.md` and walks the
+HTTP-tier test directory (`chronicler_engine/tests/http/`) for
+`// SCENARIO: X.Y` comments that appear immediately before a `#[test]`
+(or `#[tokio::test]`) attribute. Per `tests/STRATEGY.md`, SCENARIO tags
+live only in `tests/http/` — not in `src/` (unit tier) or
+`tests/integration/` (the dissolved component tier).
 
 Exit codes:
-    0  all declared scenarios have at least one covering test, no orphans
-    1  gaps (declared scenario with no test) or orphans (annotation with
-       no matching declared scenario)
+    0  all declared scenarios have at least one covering test, no orphans,
+       no format violations
+    1  gaps (declared scenario with no test), orphans (annotation with
+       no matching declared scenario), or format violations
     2  parse error (missing dirs, unreadable files, no specs)
 
 Run from anywhere:
@@ -24,7 +30,12 @@ from pathlib import Path
 
 ENGINE_ROOT = Path(__file__).parent.parent
 SPECS_DIR = ENGINE_ROOT / "docs" / "specs"
-TESTS_DIR = ENGINE_ROOT / "tests" / "integration"
+# Per tests/STRATEGY.md: SCENARIO tags live only in tests/http/ (HTTP E2E).
+# Unit tier (src/) and driven-adapter tier (tests/integration/storage/) don't
+# carry SCENARIO tags. tests/integration/ is the dissolved component tier.
+TEST_DIRS = [
+    ENGINE_ROOT / "tests" / "http",
+]
 
 # Heading-style scenario declarations: `#### Scenario 1.1: Title`.
 # Captures the scenario ID (digits.digits).
@@ -37,6 +48,12 @@ SCENARIO_COMMENT_RE = re.compile(r"^\s*//\s*\[[^\]]+\]\s*SCENARIO:\s*(\d+\.\d+)\
 
 # `#[test]` or `#[tokio::test]` (any attr starting with `#[test`).
 TEST_ATTR_RE = re.compile(r"^\s*#\[(tokio::)?test\b")
+
+# Given/When/Then/And keyword lines in specs. Each must end with exactly
+# two trailing spaces (markdown hard line break) so they render on own
+# lines without paragraph gaps, and no blank line may separate
+# consecutive keyword lines.
+KEYWORD_LINE_RE = re.compile(r"^\s*\*\*(Given|When|Then|And)\*\*")
 
 # How many lines ahead of a // SCENARIO: comment we'll look for a #[test]
 # attribute before declaring the comment orphan.
@@ -88,13 +105,57 @@ def parse_test_annotations(
     return annotations
 
 
+def check_spec_format(spec_path: Path) -> list[tuple[int, str]]:
+    """Check that every Given/When/Then/And line uses a markdown hard line
+    break (exactly two trailing spaces) and that no blank line separates
+    consecutive keyword lines. Returns a list of (lineno, message) for each
+    violation (1-based line numbers)."""
+    try:
+        text = spec_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error reading spec {spec_path}: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    lines = text.splitlines()
+    violations: list[tuple[int, str]] = []
+    prev_kw_idx: int | None = None
+
+    for i, line in enumerate(lines):
+        if not KEYWORD_LINE_RE.match(line):
+            continue
+        # Rule 1: exactly two trailing spaces (hard line break).
+        trailing = len(line) - len(line.rstrip(" "))
+        if trailing != 2:
+            violations.append(
+                (i + 1, f"keyword line must end with exactly two trailing spaces (has {trailing})")
+            )
+        # Rule 2: no blank line between consecutive keyword lines within
+        # the same scenario. A heading between two keyword lines means they
+        # belong to different scenarios — the blank line there is expected.
+        if prev_kw_idx is not None:
+            between = lines[prev_kw_idx + 1:i]
+            has_heading_between = any(l.lstrip().startswith("#") for l in between)
+            if not has_heading_between:
+                for j in range(prev_kw_idx + 1, i):
+                    if lines[j].strip() == "":
+                        violations.append(
+                            (i + 1, "keyword line preceded by blank line — use hard line break, not paragraph gap")
+                        )
+                        break
+        prev_kw_idx = i
+
+    return violations
+
+
 def main() -> int:
     if not SPECS_DIR.exists():
         print(f"Error: specs directory not found: {SPECS_DIR}", file=sys.stderr)
         return 2
-    if not TESTS_DIR.exists():
-        print(f"Error: tests directory not found: {TESTS_DIR}", file=sys.stderr)
-        return 2
+    for test_dir in TEST_DIRS:
+        if not test_dir.exists():
+            rel = test_dir.relative_to(ENGINE_ROOT)
+            print(f"Error: test directory not found: {rel}", file=sys.stderr)
+            return 2
 
     spec_files = sorted(SPECS_DIR.glob("*.md"))
     if not spec_files:
@@ -108,7 +169,9 @@ def main() -> int:
     covered: dict[str, list[tuple[Path, int]]] = {}
     orphans: list[tuple[Path, int, str]] = []
 
-    test_files = sorted(TESTS_DIR.rglob("*.rs"))
+    test_files = sorted(
+        f for test_dir in TEST_DIRS for f in test_dir.rglob("*.rs")
+    )
     for test in test_files:
         for lineno, scenario_id in parse_test_annotations(test):
             if scenario_id in declared:
@@ -122,9 +185,16 @@ def main() -> int:
     gap_count = len(gaps)
     orphan_count = len(orphans)
 
+    format_violations: list[tuple[Path, int, str]] = []
+    for spec in spec_files:
+        for lineno, msg in check_spec_format(spec):
+            format_violations.append((spec, lineno, msg))
+    format_count = len(format_violations)
+
     print(
         f"{declared_count} declared, {covered_count} covered, "
-        f"{gap_count} gap(s), {orphan_count} orphan(s)"
+        f"{gap_count} gap(s), {orphan_count} orphan(s), "
+        f"{format_count} format violation(s)"
     )
 
     if gaps:
@@ -138,7 +208,13 @@ def main() -> int:
             rel = path.relative_to(ENGINE_ROOT)
             print(f"  {rel}:{lineno}  {sid}")
 
-    if gap_count > 0 or orphan_count > 0:
+    if format_violations:
+        print("\nFormat violations (Given/When/Then/And lines):")
+        for path, lineno, msg in format_violations:
+            rel = path.relative_to(ENGINE_ROOT)
+            print(f"  {rel}:{lineno}  {msg}")
+
+    if gap_count > 0 or orphan_count > 0 or format_count > 0:
         return 1
     return 0
 

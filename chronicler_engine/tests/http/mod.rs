@@ -12,6 +12,8 @@ mod debug;
 mod fragment;
 mod games_fragment_handlers;
 mod index_handler;
+mod reset;
+mod story_log;
 mod test_helpers;
 mod worlds_fragment_handlers;
 

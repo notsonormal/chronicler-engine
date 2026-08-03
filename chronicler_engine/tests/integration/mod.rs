@@ -67,7 +67,5 @@ mod flow_arrival_persistence;
 mod flow_retry_event;
 #[path = "flow/retry_main.rs"]
 mod flow_retry_main;
-#[path = "flow/sequence.rs"]
-mod flow_sequence;
 #[path = "application/action_pipeline/retry.rs"]
 mod pipeline_retry;

@@ -42,11 +42,10 @@ Scenarios that can't be expressed through HTTP surfaces — because their Givens
 or Thens touch seams that only exist in-process — live at the unit or
 driven-adapter tier instead:
 
-- **Cancellation** (S4.x) — needs `CancellationToken` → unit (`#[tokio::test]` in `src/` with fakes)
-- **Internal state** (S3.1 `last_trigger`) — assert on `GameState` fields → unit
-- **Mid-flight observation** (S3.2) — needs sync flags → unit
-- **Call sequencing** (I.5) — direct call-count assertion → unit
-- **Snapshots** (S5.1, S5.2) — need real SQLite round-trip → driven-adapter
+- **Cancellation** — needs `CancellationToken` → unit (`#[tokio::test]` in `src/` with fakes)
+- **Internal state** (e.g. `last_trigger`, phase transitions) — assert on `GameState` fields → unit
+- **Mid-flight observation** — needs sync flags → unit
+- **Call sequencing** — direct call-count assertion → unit
 
 These aren't exceptions to the model — they're the unit and driven-adapter
 tiers doing their job. A scenario that can't be expressed through HTTP simply
@@ -80,15 +79,13 @@ the placement rule is the guardrail.
 ## SCENARIO tags
 
 `SCENARIO:` tags (format: `// [spec-path] SCENARIO: N.N`) go on HTTP E2E tests
-in `tests/http/`. For scenarios that live at the unit tier (cancellation,
-internal state, mid-flight, call sequencing), the tag goes on the unit test in
-`src/`. For snapshot scenarios, the tag goes on the driven-adapter test in
-`tests/integration/storage/`. Tags must not appear in `tests/integration/` or
-`tests/browser/`.
+in `tests/http/`. Scenarios that live at the unit or driven-adapter tier don't
+carry SCENARIO tags — they're covered by tests whose names describe the
+behaviour. Tags must not appear in `tests/integration/` or `tests/browser/`.
 
 A mechanical guardrail (in `tests/infrastructure/guardrails/`) enforces
 SCENARIO-tag placement: any test file containing a `SCENARIO:` tag must live in
-`tests/http/`, `src/`, or `tests/integration/storage/`.
+`tests/http/`.
 
 ## Placement test
 

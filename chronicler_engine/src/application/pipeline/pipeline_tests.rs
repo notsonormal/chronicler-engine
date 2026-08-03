@@ -897,7 +897,7 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.5
+// Empty input produces a continuation narration without adding an Input message (spec S1.5, HTTP-covered).
 #[test]
 fn test_pipeline_empty_input_produces_continuation() {
     let data = TestDataBuilder::default_test().build();
@@ -938,7 +938,7 @@ fn test_pipeline_empty_input_produces_continuation() {
     assert!(!has_input, "Empty input should not add an Input message");
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.1
+// Nonexistent room sets generation status to Error (spec S2.1, HTTP-covered).
 #[test]
 fn test_pipeline_room_not_found_sets_error_status() {
     let data = TestDataBuilder::default_test().build();
@@ -968,7 +968,7 @@ fn test_pipeline_room_not_found_sets_error_status() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.1
+// execute_action clears last_trigger at the start of each action (internal state, unit-tier).
 #[test]
 fn test_execute_action_clears_last_trigger() {
     use crate::test_support::TestStoredTriggerContext;
@@ -1004,7 +1004,7 @@ fn test_execute_action_clears_last_trigger() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.4
+// Phase stays Narrating on narration failure (internal state, unit-tier).
 #[test]
 fn test_pipeline_phase_stays_narrating_on_narration_failure() {
     let data = TestDataBuilder::default_test().build();
@@ -1039,7 +1039,7 @@ fn test_pipeline_phase_stays_narrating_on_narration_failure() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 2.3
+// Empty narrator response sets Error status and persists no narration (spec S2.3, HTTP-covered).
 #[test]
 fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
     let data = TestDataBuilder::default_test().build();
@@ -1078,7 +1078,7 @@ fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 1.3
+// Quantifier detects movement and updates current_room_id (unit-tier; room change not HTTP-observable, spec S1.3 dropped).
 #[test]
 fn test_pipeline_quantifier_detects_movement() {
     use crate::application::agents::quantifier::QuantifierAgent;
@@ -1121,7 +1121,7 @@ fn test_pipeline_quantifier_detects_movement() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.1
+// Pipeline cancels when the shutdown token is already cancelled (spec S4.1, unit-tier).
 #[test]
 fn test_pipeline_cancels_when_token_already_cancelled() {
     let data = TestDataBuilder::default_test().build();
@@ -1148,7 +1148,7 @@ fn test_pipeline_cancels_when_token_already_cancelled() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 5.1
+// Pre-main snapshot saved before narration (driven-adapter tier).
 #[test]
 fn test_pre_main_snapshot_saved_before_narration() {
     let data = TestDataBuilder::default_test().build();
@@ -1178,7 +1178,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 5.2
+// Pre-event snapshot saved before trigger continuation (driven-adapter tier).
 #[test]
 fn test_pre_event_snapshot_saved_before_continuation() {
     use crate::application::agents::quantifier::QuantifierAgent;
@@ -1242,7 +1242,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.3
+// Delayed LLM completes without deadlock (spec S3.3, HTTP-covered).
 #[test]
 fn test_delayed_llm_completes_without_deadlock() {
     let data = TestDataBuilder::default_test().build();
@@ -1274,7 +1274,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.1
+// Cancellation resets generation state to Idle (spec S4.1, unit-tier).
 #[test]
 fn test_cancellation_resets_state_to_idle() {
     let data = TestDataBuilder::default_test().build();
@@ -1302,7 +1302,7 @@ fn test_cancellation_resets_state_to_idle() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.2
+// Pipeline cancels after main narration completes (spec S4.2, unit-tier).
 #[tokio::test]
 async fn test_pipeline_cancels_after_main_narration() {
     use std::sync::atomic::Ordering;
@@ -1347,7 +1347,7 @@ async fn test_pipeline_cancels_after_main_narration() {
     );
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 4.3
+// Pipeline cancels during trigger continuation (spec S4.3, unit-tier).
 #[tokio::test]
 async fn test_pipeline_cancels_during_trigger_continuation() {
     use crate::application::agents::quantifier::QuantifierAgent;
@@ -1427,7 +1427,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     assert!(has_narration, "Main narration should be preserved");
 }
 
-// [chronicler_engine/docs/specs/action_pipeline.md] SCENARIO: 3.2
+// Streaming narration saved before quantifier completes (mid-flight observation, unit-tier).
 #[test]
 fn test_streaming_narration_saved_before_quantifier_complete() {
     use std::thread;

@@ -143,7 +143,7 @@ use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
 async fn test_<handler>_<expected_outcome>() {
-    let state = TestAppBuilder::default_test().build_app_state();
+    let state = TestAppBuilder::default_test().build_service();
     let result = <handler_fn>(axum::extract::State(state), <other_args>).await;
     assert_eq!(result.0.status(), StatusCode::OK);
     // OR, for HTML:

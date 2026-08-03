@@ -165,6 +165,9 @@ impl ActionPipeline {
         generation_gate: &GenerationGate,
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
+        if self.is_shutting_down() {
+            return Ok(ProcessActionResult::ShuttingDown);
+        }
         let mut game_state = self.message_service.load_or_fresh();
         let game_id = self.storage.current_game_id();
 
@@ -306,6 +309,9 @@ impl ActionPipeline {
         &self,
         generation_gate: &GenerationGate,
     ) -> Result<ProcessActionResult, ApplicationError> {
+        if self.is_shutting_down() {
+            return Ok(ProcessActionResult::ShuttingDown);
+        }
         let mut game_state = self.message_service.load_or_fresh();
         let game_id = self.storage.current_game_id();
 
@@ -380,6 +386,9 @@ impl ActionPipeline {
         &self,
         generation_gate: &GenerationGate,
     ) -> Result<ProcessActionResult, ApplicationError> {
+        if self.is_shutting_down() {
+            return Ok(ProcessActionResult::ShuttingDown);
+        }
         let mut game_state = self.message_service.load_or_fresh();
         let game_id = self.storage.current_game_id();
 
