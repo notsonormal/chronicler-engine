@@ -9,7 +9,7 @@ use axum::{
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::application::errors::ProcessActionResult;
+
 use chronicler_engine::domain::model::message::{Message, Swipe};
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
@@ -957,54 +957,6 @@ async fn test_check_text_handler_finds_issues() {
 }
 
 #[tokio::test]
-async fn test_retry_handler_requires_context() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let game_id = storage.current_game_id();
-    storage.delete_game(game_id).unwrap();
-
-    let req = Request::builder()
-        .uri("/swipe/new")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "Should fail when game context is missing"
-    );
-}
-
-#[tokio::test]
-async fn test_retrigger_handler_requires_context() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let game_id = storage.current_game_id();
-    storage.delete_game(game_id).unwrap();
-
-    let req = Request::builder()
-        .uri("/retrigger")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "Should fail when game context is missing"
-    );
-}
-
-#[tokio::test]
 async fn test_switch_swipe_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
     let app = TestAppBuilder::default_test()
@@ -1141,119 +1093,6 @@ async fn test_check_text_handler_no_issues() {
     assert!(
         body_str.contains("No issues found"),
         "Expected no-issues response: {body_str}"
-    );
-}
-
-#[tokio::test]
-async fn test_retry_handler_valid_context_error() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/swipe/new")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "Retry with no input should return bad request"
-    );
-}
-
-#[tokio::test]
-async fn test_retrigger_handler_valid_context_error() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/retrigger")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "Retrigger with no trigger context should return bad request"
-    );
-}
-
-#[tokio::test]
-async fn test_retry_handler_concurrent_generation() {
-    // POST /swipe/new while a generation is in flight returns
-    // 200 with "Still thinking...", not a new retry.
-    let (app, state) = TestAppBuilder::default_test().build_with_state();
-
-    let mut game_state = state.message_service.load_or_fresh();
-    game_state.add_message(
-        "test input".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
-    state
-        .message_service
-        .save_message_and_snapshot(&mut game_state)
-        .expect("seed input message with snapshot");
-
-    let game_id = state.game_catalogue.current_game_id();
-    let (_, _, claim) = state
-        .generation_gate
-        .try_claim(game_id, &mut game_state, state.message_service.as_ref())
-        .expect("pre-claim should succeed");
-    assert!(matches!(claim, ProcessActionResult::Started));
-
-    let req = Request::builder()
-        .uri("/swipe/new")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .expect("read body");
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Still thinking..."),
-        "expected 'Still thinking...' in body, got: {body_str}"
-    );
-}
-
-#[tokio::test]
-async fn test_retrigger_handler_concurrent_generation() {
-    // POST /retrigger while a generation is in flight returns
-    // 200 with "Still thinking...", not a new retrigger.
-    let (app, state) = TestAppBuilder::default_test()
-        .last_trigger(chronicler_engine::test_support::TestStoredTriggerContext::standard())
-        .log("Main narration", None, MessageType::Narration)
-        .build_with_state();
-
-    let game_id = state.game_catalogue.current_game_id();
-    let mut game_state = state.message_service.load_or_fresh();
-    let (_, _, claim) = state
-        .generation_gate
-        .try_claim(game_id, &mut game_state, state.message_service.as_ref())
-        .expect("pre-claim should succeed");
-    assert!(matches!(claim, ProcessActionResult::Started));
-
-    let req = Request::builder()
-        .uri("/retrigger")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .expect("read body");
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Still thinking..."),
-        "expected 'Still thinking...' in body, got: {body_str}"
     );
 }
 

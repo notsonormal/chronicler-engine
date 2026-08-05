@@ -222,8 +222,34 @@ async fn test_retry_load_messages_error() {
 
 #[tokio::test]
 async fn test_retry_no_input() {
-    let (app, _storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+
+    let sys = crate::domain::model::message::Message::new(
+        None,
+        "System boot",
+        MessageType::System,
+        None,
+        None,
+    );
+    let nar = crate::domain::model::message::Message::new(
+        None,
+        "You see a room.",
+        MessageType::Narration,
+        None,
+        None,
+    );
+    insert_message_with_swipe(&app, &storage, &sys);
+    insert_message_with_swipe(&app, &storage, &nar);
+
+    let before = app.message_service.load_messages().unwrap().len();
+
     app.pipeline.retry_last_response();
+
+    let after = app.message_service.load_messages().unwrap().len();
+    assert_eq!(
+        after, before,
+        "Retry with no input should be a noop on history (no new messages)"
+    );
 }
 
 #[tokio::test]
@@ -555,6 +581,176 @@ async fn test_retry_main_narration_happy_path() {
     let _ = app
         .pipeline
         .retry_main_narration(state, "test input".to_string());
+
+    // retry_main_narration is sync (pub(crate) fn) — state is final on return.
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "Should finish with Idle status, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let narrations: Vec<_> = final_state
+        .narrative
+        .history
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .collect();
+    assert!(
+        !narrations.is_empty(),
+        "Retry should generate at least one narration (completion), got history: {:?}",
+        final_state
+            .narrative
+            .history
+            .iter()
+            .map(|m| (m.message_type.clone(), m.text().to_string()))
+            .collect::<Vec<_>>()
+    );
+}
+
+// execute_action + retry_last_response are sync (no spawn, no gate) — no wait seam needed.
+// Input is pre-seeded: execute_action runs the pipeline on existing state without adding the input itself.
+#[tokio::test]
+async fn test_retry_recovers_after_llm_failure() {
+    let narrator = Arc::new(MockBackend::default().with_fail_first_n(1));
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let _input_id = add_input_and_save(&app, &storage, "look");
+
+    app.pipeline.execute_action("look".to_string());
+    let after_fail = app.message_service.load_or_fresh();
+    assert!(
+        after_fail
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
+        "First action should fail, got {:?}",
+        after_fail.narrative.input_buffer.status
+    );
+
+    app.pipeline.retry_last_response();
+
+    let after_retry = app.message_service.load_or_fresh();
+    assert!(
+        !after_retry.narrative.input_buffer.status.is_generating(),
+        "Retry should complete, got {:?}",
+        after_retry.narrative.input_buffer.status
+    );
+    let narration_count = app
+        .message_service
+        .load_messages()
+        .unwrap()
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narration_count, 1,
+        "Retry should produce exactly one narration, got {narration_count}"
+    );
+}
+
+#[tokio::test]
+async fn test_retry_room_not_found_sets_error() {
+    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message(
+        "look".to_string(),
+        Some("Player".to_string()),
+        MessageType::Input,
+    );
+    state.movement.current_room_id = "non_existent_room".to_string();
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
+    let id = storage.save_snapshot(&snapshot).unwrap();
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    app.pipeline.retry_last_response();
+
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status,
+            GenerationStatus::Error(ref msg) if msg.contains("Room not found")),
+        "Expected 'Room not found' error, got {:?}",
+        state.narrative.input_buffer.status
+    );
+}
+
+// Main-retry entry path (no event) with a failing narrator → Error. Distinct from
+// test_retry_event_trigger_narration_fails, which covers the event-retry trigger path.
+#[tokio::test]
+async fn test_retry_llm_error_sets_error() {
+    let narrator = Arc::new(MockBackend::default().with_fail());
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let _input_id = add_input_and_save(&app, &storage, "test input");
+    let _pre_main_id = save_pre_main(&app, &storage);
+    let _final_id = add_narration_and_save(&app, &storage, "Narration text");
+
+    app.pipeline.retry_last_response();
+
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            state.narrative.input_buffer.status,
+            GenerationStatus::Error(_)
+        ),
+        "Expected Error status after LLM failure, got {:?}",
+        state.narrative.input_buffer.status
+    );
+}
+
+#[tokio::test]
+async fn test_retry_empty_narration_sets_error() {
+    let narrator = Arc::new(MockBackend::default().with_empty_response());
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let _input_id = add_input_and_save(&app, &storage, "test input");
+    let _pre_main_id = save_pre_main(&app, &storage);
+    let _final_id = add_narration_and_save(&app, &storage, "Narration text");
+
+    app.pipeline.retry_last_response();
+
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status,
+            GenerationStatus::Error(ref msg) if msg.contains("empty")),
+        "Expected 'empty' in error message, got {:?}",
+        state.narrative.input_buffer.status
+    );
 }
 
 #[tokio::test]
@@ -1127,8 +1323,6 @@ async fn test_retry_returns_internal_error_when_anchor_has_no_snapshot_id() {
 
 #[tokio::test]
 async fn test_retry_returns_internal_error_when_snapshot_row_missing() {
-    // anchor's snapshot_id points to a deleted/missing row → 500
-    // from retry(), with the reason persisted on status.
     const MISSING_ID: u64 = 99_999;
     let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
 
@@ -1209,5 +1403,30 @@ async fn test_retrigger_returns_concurrent_generation_when_gate_busy() {
     assert!(
         matches!(result, Ok(ProcessActionResult::ConcurrentGeneration)),
         "retrigger() should return Ok(ConcurrentGeneration) when gate is busy, got {result:?}"
+    );
+}
+
+// The is_shutting_down() guard runs before any state load, so no seeding is needed.
+#[tokio::test]
+async fn test_retry_returns_shutting_down_when_token_cancelled() {
+    let (app, _storage) = TestAppBuilder::default_test().build_service_with_storage();
+    app.shutdown_token.cancel();
+
+    let result = app.pipeline.retry(&app.generation_gate);
+    assert!(
+        matches!(result, Ok(ProcessActionResult::ShuttingDown)),
+        "retry() should return Ok(ShuttingDown) when token is cancelled, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_retrigger_returns_shutting_down_when_token_cancelled() {
+    let (app, _storage) = TestAppBuilder::default_test().build_service_with_storage();
+    app.shutdown_token.cancel();
+
+    let result = app.pipeline.retrigger(&app.generation_gate);
+    assert!(
+        matches!(result, Ok(ProcessActionResult::ShuttingDown)),
+        "retrigger() should return Ok(ShuttingDown) when token is cancelled, got {result:?}"
     );
 }

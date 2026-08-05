@@ -404,3 +404,82 @@ pub fn make_test_recorder_with_storage(
         Arc::new(move |message: &LlmMessage| storage.save_llm_message(message));
     Arc::new(LlmCallRecorder::new(provider, save_fn))
 }
+
+/// The swipe inherits the message's text, snapshot_id, location_header, and
+/// event_header so the row matches what production code writes.
+pub fn insert_message_with_swipe(
+    storage: &Storage,
+    msg: &Message,
+) -> Result<(), crate::error::EngineError> {
+    let id = storage.insert_message(msg)?;
+    if let Some(swipe) = msg.swipes.first() {
+        let mut swipe = swipe.clone();
+        swipe.text = msg.text().to_string();
+        swipe.snapshot_id = msg.snapshot_id();
+        swipe.location_header = msg.location_header().map(|s| s.to_string());
+        swipe.event_header = msg.event_header().map(|s| s.to_string());
+        let _ = storage.insert_swipe(id, &swipe, 0);
+    }
+    Ok(())
+}
+
+/// Event retry flow: Input → Main narration (with `last_trigger`) →
+/// Event narration (with `event_header`). Each message gets its own snapshot.
+pub fn seed_event_flow(
+    state: &crate::adapters::driving::http::AppState,
+    storage: &Storage,
+) -> Result<(), crate::error::EngineError> {
+    use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+
+    let input_snap_id = {
+        let mut gs = state.message_service.load_or_fresh();
+        gs.add_message(
+            "look".to_string(),
+            Some("Player".to_string()),
+            MessageType::Input,
+        );
+        let snap = GameStateSnapshot::from_game_state(&gs);
+        let id = storage.save_snapshot(&snap)?;
+        if let Some(last) = gs.narrative.history.last_mut() {
+            last.set_snapshot_id(Some(id));
+            insert_message_with_swipe(storage, last)?;
+        }
+        id
+    };
+    let _ = input_snap_id;
+
+    let _pre_event_id = {
+        let mut gs = state.message_service.load_or_fresh();
+        gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
+        gs.add_message("Main narration".to_string(), None, MessageType::Narration);
+        let snap = GameStateSnapshot::from_game_state(&gs);
+        let id = storage.save_snapshot(&snap)?;
+        if let Some(last) = gs.narrative.history.last_mut() {
+            last.set_snapshot_id(Some(id));
+            insert_message_with_swipe(storage, last)?;
+        }
+        id
+    };
+
+    let _final_id = {
+        let mut gs = state.message_service.load_or_fresh();
+        gs.narrative.pending_event = Some("Event".to_string());
+        gs.add_message("Event narration".to_string(), None, MessageType::Narration);
+        if let Some(last) = gs.narrative.history.last_mut() {
+            last.set_event_header(Some("Event".to_string()));
+        }
+        let snap = GameStateSnapshot::from_game_state(&gs);
+        let id = storage.save_snapshot(&snap)?;
+        if let Some(last) = gs.narrative.history.last_mut() {
+            last.set_snapshot_id(Some(id));
+            insert_message_with_swipe(storage, last)?;
+        }
+        id
+    };
+
+    // Persist last_trigger on the latest snapshot so retry's `from_snapshot` sees it.
+    let mut gs = state.message_service.load_or_fresh();
+    gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
+    let _ = state.message_service.save_state(&gs);
+    Ok(())
+}

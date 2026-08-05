@@ -199,13 +199,73 @@ async fn test_empty_command_continuation_no_input_http() {
     ));
 }
 
+// [chronicler_engine/docs/specs/actions.md] SCENARIO: 1.6
+#[tokio::test]
+async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
+    use chronicler_engine::domain::model::trigger::ComparisonOperator;
+    use chronicler_engine::test_support::TestNpc;
+
+    // shopkeeper's times_met==0 trigger fires the continuation that re-runs quantifier
+    // (evaluate_triggers iterates all world NPCs, not just npcs_in_area).
+    let shopkeeper = TestNpc::with_times_met_trigger(
+        "shopkeeper",
+        "Shopkeeper Sarah",
+        ComparisonOperator::Eq,
+        0,
+    );
+    let gabriella = TestNpc::named("gabriella", "Gabriella");
+    let data = chronicler_engine::test_support::TestDataBuilder::default_test()
+        .npcs(vec![shopkeeper, gabriella])
+        .room_npc("gabriella")
+        .build();
+
+    let narrator = Arc::new(MockBackend::default().with_narrations(vec![
+        "You step into the shop.".to_string(),
+        "Gabriella emerges from the shadows.".to_string(),
+    ]));
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": []}"#.to_string(),
+        r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
+    ])) as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        recorder,
+        quantifier,
+    );
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .pipeline(pipeline)
+        .build_with_state();
+
+    let resp = post_action(&app, "enter shop").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "action should complete");
+
+    let gs = state.message_service.load_or_fresh();
+    let npc_ids_in_area: Vec<String> = gs.scene.npcs_in_area.iter().map(|n| n.id.clone()).collect();
+    assert!(
+        npc_ids_in_area.contains(&"gabriella".to_string()),
+        "gabriella should be in npcs_in_area after trigger continuation, got: {npc_ids_in_area:?}"
+    );
+    let gabriella_state = gs
+        .npc_encounter_log
+        .npcs
+        .get("gabriella")
+        .expect("gabriella should have encounter-log entry");
+    assert_eq!(gabriella_state.times_met, 1, "times_met should be 1");
+    assert!(
+        gabriella_state.currently_meeting,
+        "currently_meeting should be true"
+    );
+}
+
 // [chronicler_engine/docs/specs/actions.md] SCENARIO: 2.1
 #[tokio::test]
 async fn test_nonexistent_room_sets_error_status_http() {
     let narrator = Arc::new(MockBackend::default());
     let (app, state) = app_with_narrator(narrator);
 
-    // Mutate state to point at a non-existent room.
     {
         let mut gs = state.message_service.load_or_fresh();
         gs.movement.current_room_id = "non_existent_room".to_string();

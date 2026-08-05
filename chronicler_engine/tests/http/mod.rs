@@ -13,7 +13,9 @@ mod fragment;
 mod games_fragment_handlers;
 mod index_handler;
 mod reset;
+mod retrigger;
 mod story_log;
+mod swipe_new;
 mod test_helpers;
 mod worlds_fragment_handlers;
 

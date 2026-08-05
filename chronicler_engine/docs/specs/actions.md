@@ -60,9 +60,19 @@ pilot dedups by ID across `docs/specs/*.md`, so IDs must stay unique.
 **And** the new `Narration` entry's text is `"The scene continues."`  
 **And** `message_service.load_or_fresh().narrative.input_buffer.status` is `Idle`  
 
+#### Scenario 1.6: Action trigger continuation re-runs the quantifier and detects newly-present NPCs  
+**Given** a game state with an NPC `"gabriella"` present in the current room's NPC list  
+**And** a quantifier backend that returns `[]` for the first quantifier call then `["gabriella"]` for the second  
+**And** a narrator backend that returns valid narration for both main and trigger prompts  
+**When** the client `POST /action` with `command="enter shop"`  
+**And** the pipeline returns to idle  
+**Then** `message_service.load_or_fresh().scene.npcs_in_area` contains `"gabriella"`  
+**And** `message_service.load_or_fresh().npc_encounter_log.npcs["gabriella"].times_met` is `1`  
+**And** `message_service.load_or_fresh().npc_encounter_log.npcs["gabriella"].currently_meeting` is `true`  
+
 ### Error recovery
 
-#### Scenario 2.1: Action in a non-existent room sets GenerationStatus to Error
+#### Scenario 2.1: Action in a non-existent room sets GenerationStatus to Error  
 **Given** a game state with `movement.current_room_id == "non_existent_room"`  
 **And** `narrative.history` empty  
 **When** the client `POST /action` with `command="look"`  

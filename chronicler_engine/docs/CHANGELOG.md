@@ -2,6 +2,13 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-08-05
+
+### Changed
+
+- **Component tier dissolved for retry** (wayfinder map: `.scratch/test-strategy-execution/`, tickets 04 + 05). `tests/integration/application/action_pipeline/retry.rs` (component tier, 9 tests), `tests/integration/flow/retry_main.rs` (10 tests), and `tests/integration/flow/retry_event.rs` (3 tests) deleted. Retry branch coverage ported to `src/application/pipeline/retry_tests.rs` (+4 port-down tests, +2 shutdown-guard tests, +1 replace-not-append history-invariant test; 2 existing tests strengthened). `test_pipeline_trigger_complete_failure` in `pipeline_tests.rs` fixed: `with_fail()` → `with_trigger_narration_fail()` + S2.4 assertions (main preserved, System log, Error). Loose `test_retry_handler`/`test_retrigger_handler` in `chat_window_tests.rs` replaced with 4 specific handler tests (503 shutdown + 400 validation, both endpoints).
+- **Retry spec split into endpoint-named specs** (ticket 05, per ticket 11's endpoint-naming rule). `docs/specs/retry.md` deleted; split into `docs/specs/swipe_new.md` (POST /swipe/new, 17 scenarios 9.x–12.x) and `docs/specs/retrigger.md` (POST /retrigger, 9 scenarios 13.x–15.x). R5.1/R5.2 (cancellation mid-flight) dropped from specs — unit-only (needs CancellationToken), covered by `retry_tests.rs`. `tests/http/swipe_new.rs` (17 tests) + `tests/http/retrigger.rs` (9 tests) created; 6 existing `fragment.rs` handler tests moved + retagged (concurrency tests keep deterministic `try_claim` pre-claim pattern, no flake). S1.6 added to `docs/specs/actions.md` + `tests/http/actions.rs` (regression guard for deleted `test_trigger_continuation_runs_quantifier_and_detects_new_npc`). One helper added to `tests/http/test_helpers.rs` (`app_with_narrator_and_quantifier`). Final count: **44 declared / 44 covered / 0 gaps / 0 orphans / 0 format violations**. Build green: 1369 pass, 2 LLM skipped.
+
 ## 2026-08-02
 
 ### Changed

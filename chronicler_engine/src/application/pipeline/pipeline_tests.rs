@@ -454,7 +454,9 @@ fn test_pipeline_trigger_complete_failure() {
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = AgentRegistry::with_agent(Box::new(agent));
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
+    let narrator_recorder = make_test_recorder(Arc::new(
+        MockBackend::default().with_trigger_narration_fail(),
+    ));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
@@ -471,15 +473,31 @@ fn test_pipeline_trigger_complete_failure() {
         "Expected Ok with error status, got: {outcome:?}"
     );
     let reloaded = app.message_service.load_or_fresh();
+    let status_msg = match &reloaded.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error after trigger failure, got {other:?}"),
+    };
     assert!(
-        reloaded
-            .narrative
-            .input_buffer
-            .status
-            .error_message()
-            .is_some(),
-        "Expected error status after trigger failure, got: {:?}",
-        reloaded.narrative.input_buffer.status
+        status_msg.contains("Trigger narration failed"),
+        "expected 'Trigger narration failed' in error message, got: {status_msg}"
+    );
+    let history_dbg: Vec<_> = reloaded
+        .narrative
+        .history
+        .iter()
+        .map(|e| (e.message_type.clone(), e.text().to_string()))
+        .collect();
+    assert!(
+        history_dbg
+            .iter()
+            .any(|(t, _)| *t == MessageType::Narration),
+        "Main narration should be preserved after trigger failure, got history: {history_dbg:?}"
+    );
+    assert!(
+        history_dbg.iter().any(|(t, text)| {
+            *t == MessageType::System && text.contains("Trigger narration failed")
+        }),
+        "Should persist a System message mentioning 'Trigger narration failed', got history: {history_dbg:?}"
     );
 }
 
@@ -772,7 +790,7 @@ fn test_pipeline_persists_input_before_narration() {
 
 #[test]
 fn load_or_fresh_unchanged_on_world_data_missing() {
-    // Snapshot-only read; missing world rows must not panic. `build_fresh_initial_state` fetches world data only as fallback.
+    // `build_fresh_initial_state` fetches world data only as fallback.
     let storage = {
         let base = Storage::new_in_memory();
         let id = base
@@ -851,7 +869,6 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     let data = TestDataBuilder::default_test().build();
     let storage = {
         let base = Storage::new_in_memory();
-        // Seed only the world — persona row intentionally absent.
         base.seed_world(&data.world, &data.map)
             .expect("test setup: seed test world");
         let id = base
@@ -897,7 +914,6 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     );
 }
 
-// Empty input produces a continuation narration without adding an Input message (spec S1.5, HTTP-covered).
 #[test]
 fn test_pipeline_empty_input_produces_continuation() {
     let data = TestDataBuilder::default_test().build();
@@ -938,7 +954,6 @@ fn test_pipeline_empty_input_produces_continuation() {
     assert!(!has_input, "Empty input should not add an Input message");
 }
 
-// Nonexistent room sets generation status to Error (spec S2.1, HTTP-covered).
 #[test]
 fn test_pipeline_room_not_found_sets_error_status() {
     let data = TestDataBuilder::default_test().build();
@@ -968,7 +983,6 @@ fn test_pipeline_room_not_found_sets_error_status() {
     );
 }
 
-// execute_action clears last_trigger at the start of each action (internal state, unit-tier).
 #[test]
 fn test_execute_action_clears_last_trigger() {
     use crate::test_support::TestStoredTriggerContext;
@@ -1004,7 +1018,6 @@ fn test_execute_action_clears_last_trigger() {
     );
 }
 
-// Phase stays Narrating on narration failure (internal state, unit-tier).
 #[test]
 fn test_pipeline_phase_stays_narrating_on_narration_failure() {
     let data = TestDataBuilder::default_test().build();
@@ -1039,7 +1052,6 @@ fn test_pipeline_phase_stays_narrating_on_narration_failure() {
     );
 }
 
-// Empty narrator response sets Error status and persists no narration (spec S2.3, HTTP-covered).
 #[test]
 fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
     let data = TestDataBuilder::default_test().build();
@@ -1078,7 +1090,6 @@ fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
     );
 }
 
-// Quantifier detects movement and updates current_room_id (unit-tier; room change not HTTP-observable, spec S1.3 dropped).
 #[test]
 fn test_pipeline_quantifier_detects_movement() {
     use crate::application::agents::quantifier::QuantifierAgent;
@@ -1121,7 +1132,6 @@ fn test_pipeline_quantifier_detects_movement() {
     );
 }
 
-// Pipeline cancels when the shutdown token is already cancelled (spec S4.1, unit-tier).
 #[test]
 fn test_pipeline_cancels_when_token_already_cancelled() {
     let data = TestDataBuilder::default_test().build();
@@ -1148,7 +1158,6 @@ fn test_pipeline_cancels_when_token_already_cancelled() {
     );
 }
 
-// Pre-main snapshot saved before narration (driven-adapter tier).
 #[test]
 fn test_pre_main_snapshot_saved_before_narration() {
     let data = TestDataBuilder::default_test().build();
@@ -1178,7 +1187,6 @@ fn test_pre_main_snapshot_saved_before_narration() {
     );
 }
 
-// Pre-event snapshot saved before trigger continuation (driven-adapter tier).
 #[test]
 fn test_pre_event_snapshot_saved_before_continuation() {
     use crate::application::agents::quantifier::QuantifierAgent;
@@ -1242,7 +1250,6 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     );
 }
 
-// Delayed LLM completes without deadlock (spec S3.3, HTTP-covered).
 #[test]
 fn test_delayed_llm_completes_without_deadlock() {
     let data = TestDataBuilder::default_test().build();
@@ -1274,7 +1281,6 @@ fn test_delayed_llm_completes_without_deadlock() {
     );
 }
 
-// Cancellation resets generation state to Idle (spec S4.1, unit-tier).
 #[test]
 fn test_cancellation_resets_state_to_idle() {
     let data = TestDataBuilder::default_test().build();
@@ -1302,7 +1308,6 @@ fn test_cancellation_resets_state_to_idle() {
     );
 }
 
-// Pipeline cancels after main narration completes (spec S4.2, unit-tier).
 #[tokio::test]
 async fn test_pipeline_cancels_after_main_narration() {
     use std::sync::atomic::Ordering;
@@ -1347,7 +1352,6 @@ async fn test_pipeline_cancels_after_main_narration() {
     );
 }
 
-// Pipeline cancels during trigger continuation (spec S4.3, unit-tier).
 #[tokio::test]
 async fn test_pipeline_cancels_during_trigger_continuation() {
     use crate::application::agents::quantifier::QuantifierAgent;
@@ -1427,7 +1431,6 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     assert!(has_narration, "Main narration should be preserved");
 }
 
-// Streaming narration saved before quantifier completes (mid-flight observation, unit-tier).
 #[test]
 fn test_streaming_narration_saved_before_quantifier_complete() {
     use std::thread;
