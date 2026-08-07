@@ -4,6 +4,8 @@ This folder contains all documentation for the Chronicler Engine project.
 
 For general engine principles, workflow, and conventions, see [`../AGENTS.md`](../AGENTS.md).
 
+Write documention using Simplified Technical English (STE).
+
 ## Keeping Documentation Clean
 
 **Plan authoring convention:** reference doc issues by quotable phrase, never line numbers — line numbers rot. Use the exact sentence (or a quoted fragment of it) as the anchor.
