@@ -35,22 +35,6 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     Err(())
 }
 
-pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &str) -> String {
-    let locator = page.locator(selector).await;
-    let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(10);
-
-    while start.elapsed() < timeout {
-        match locator.inner_text().await {
-            Ok(text) if !text.is_empty() => return text,
-            _ => sleep(Duration::from_millis(200)).await,
-        }
-    }
-
-    capture_failure_state(page, &format!("wait_for_non_loading_value_{selector}")).await;
-    String::new()
-}
-
 pub async fn wait_for_element_children(
     page: &playwright_rs::Page,
     selector: &str,

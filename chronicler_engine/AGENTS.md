@@ -36,8 +36,12 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
     - `llm_message.rs` — LLM message DTO + recorder save seam
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
-    - `persistence_gate.rs` — PersistenceGate — owns `Arc<Storage>` + `Arc<PresetStore>` and persistence helpers.
+    - `message_service.rs` — Game-state lifecycle seam for message history and snapshots.
+    - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
+    - `prompt_preset_service.rs` — Prompt preset service — prompt preset persistence orchestration at the application layer.
+    - `settings_service.rs` — Settings service — settings persistence orchestration at the application layer.
     - `text_check_service.rs` — TextCheckService orchestrator for text checking
+    - `world_catalogue.rs` — World catalogue — world CRUD orchestration at the application layer.
     - **agents/**
       - `mod.rs` — Agent registry and trait definitions
       - `registry.rs` — Runtime agent lookup and lifecycle
@@ -54,7 +58,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `catalogue.rs` — GameCatalogue — game-lifecycle storage orchestration.
       - `mod.rs` — Game lifecycle orchestration and read-side queries.
       - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
-      - `world_persona_catalogue.rs` — WorldPersonaCatalogue — world and persona storage orchestration.
     - **generation/**
       - `gate.rs` — GenerationGate — per-game slot orchestration. Generation truth is persisted `GenerationStatus` only.
       - `guard.rs` — Generation guard logic
@@ -154,7 +157,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `validate_adrs.py` — Validate ADR files against the standard in docs/adr/README.md.
   - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
   - `validate_docs.py` — Validate markdown docs + DOC anchors under chronicler_engine/.
-  - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration
+  - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
 <!-- AUTO-STRUCTURE END -->
 
 ## YOUR RESPONSIBILITY 

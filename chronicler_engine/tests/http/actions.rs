@@ -165,6 +165,128 @@ async fn test_quantifier_npc_fires_trigger_http() {
     ));
 }
 
+// [chronicler_engine/docs/specs/actions.md] SCENARIO: 1.7
+#[tokio::test]
+async fn test_no_trigger_npc_produces_narration_no_event_http() {
+    use chronicler_engine::test_support::TestNpc;
+
+    let npc = TestNpc::named("bartender", "Bartender");
+    let data = TestDataBuilder::default_test().npcs(vec![npc]).build();
+
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["The bartender nods.".to_string()]),
+    );
+    let quantifier_result = r#"{"npcs_in_room": ["bartender"], "movement": null}"#.to_string();
+    let quantifier_provider =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]))
+            as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        recorder,
+        quantifier_provider,
+    );
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .pipeline(pipeline)
+        .build_with_state();
+
+    let resp = post_action(&app, "talk to bartender").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "action should complete");
+
+    let messages = state.message_service.load_messages().unwrap();
+    let narrations: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .collect();
+    assert!(!narrations.is_empty(), "should have at least one Narration");
+    for n in &narrations {
+        assert!(
+            n.event_header().is_none(),
+            "no trigger should fire (no triggers defined); got event_header = {:?}",
+            n.event_header()
+        );
+    }
+    assert!(matches!(
+        state
+            .message_service
+            .load_or_fresh()
+            .narrative
+            .input_buffer
+            .status,
+        GenerationStatus::Idle
+    ));
+}
+
+// [chronicler_engine/docs/specs/actions.md] SCENARIO: 1.8
+#[tokio::test]
+async fn test_trigger_does_not_refire_on_second_encounter_http() {
+    use chronicler_engine::domain::model::trigger::ComparisonOperator;
+    use chronicler_engine::test_support::TestNpc;
+
+    let shopkeeper = TestNpc::with_times_met_trigger(
+        "shopkeeper",
+        "Shopkeeper Sarah",
+        ComparisonOperator::Eq,
+        0,
+    );
+    let data = TestDataBuilder::default_test().npcs(vec![shopkeeper]).build();
+
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec![
+            "The shopkeeper greets you.".to_string(),
+            "The shopkeeper greets you.".to_string(),
+            "The shopkeeper greets you again.".to_string(),
+            "The shopkeeper greets you again.".to_string(),
+        ]),
+    );
+    let quantifier_provider = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
+        r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
+    ])) as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        recorder,
+        quantifier_provider,
+    );
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .pipeline(pipeline)
+        .build_with_state();
+
+    // First talk: trigger fires (times_met == 0).
+    let resp = post_action(&app, "talk to shopkeeper").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "first action should complete");
+
+    // Second talk: times_met is now 1, trigger should NOT fire.
+    let resp = post_action(&app, "talk to shopkeeper").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "second action should complete");
+
+    let messages = state.message_service.load_messages().unwrap();
+    let trigger_narrations = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .filter(|m| m.event_header().is_some())
+        .count();
+    assert!(
+        trigger_narrations <= 1,
+        "one-shot trigger should fire at most once, got {trigger_narrations} trigger narrations"
+    );
+    assert!(matches!(
+        state
+            .message_service
+            .load_or_fresh()
+            .narrative
+            .input_buffer
+            .status,
+        GenerationStatus::Idle
+    ));
+}
+
 // [chronicler_engine/docs/specs/actions.md] SCENARIO: 1.5
 #[tokio::test]
 async fn test_empty_command_continuation_no_input_http() {
@@ -223,7 +345,7 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
         "You step into the shop.".to_string(),
         "Gabriella emerges from the shadows.".to_string(),
     ]));
-    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+    let quantifier_provider = Arc::new(MockBackend::default().with_prompt_responses(vec![
         r#"{"npcs_in_room": []}"#.to_string(),
         r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
     ])) as Arc<dyn LlmProvider>;
@@ -231,7 +353,7 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
     let pipeline = make_test_pipeline_with_mock_quantifier(
         Arc::new(Storage::new_in_memory()),
         recorder,
-        quantifier,
+        quantifier_provider,
     );
     let (app, state) = TestAppBuilder::default_test()
         .data(data)

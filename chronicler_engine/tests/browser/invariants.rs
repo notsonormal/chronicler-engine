@@ -1,117 +1,6 @@
-//! Browser tests for DOM structure on page load: header shows the game title, connection-status indicator renders, and the action area exposes the expected input affordances.
+//! Rendering invariants (named exemption in STRATEGY.md): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these.
 
 use super::*;
-
-#[tokio::test]
-async fn test_page_loads() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            let title = page.title().await.unwrap();
-            assert_eq!(title, "Chronicler Engine");
-
-            assert!(
-                element_exists(&page, ".header").await,
-                "Header should exist"
-            );
-            assert!(
-                element_exists(&page, "#story-log").await,
-                "Story log should exist"
-            );
-            assert!(
-                element_exists(&page, ".action-area").await,
-                "Action area should exist"
-            );
-        },
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_header_displays_game_title() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            let title: String = page
-                .evaluate::<(), String>(
-                    "document.querySelector('.game-title')?.innerText || ''",
-                    None,
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(
-                title, "Chronicler Engine",
-                "Header should display game title"
-            );
-        },
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_connection_status_indicator() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            assert!(
-                element_exists(&page, "#connection-status").await,
-                "LlmProviderConfig status indicator should exist"
-            );
-        },
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_action_area_elements() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            assert!(
-                element_exists(&page, "#command-form input").await,
-                "Input field should exist"
-            );
-            assert!(
-                element_exists(&page, "#command-form button").await,
-                "Submit button should exist"
-            );
-        },
-    )
-    .await;
-}
-
-/// Input field must not have HTML5 `required` validation.
-#[tokio::test]
-async fn test_input_no_required_attribute() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            let has_required: bool = page
-                .evaluate::<(), bool>(
-                    "document.querySelector('#command-form input')?.hasAttribute('required')",
-                    None,
-                )
-                .await
-                .unwrap();
-            assert!(
-                !has_required,
-                "Input should NOT have required attribute (empty input triggers continuation)"
-            );
-        },
-    )
-    .await;
-}
 
 #[tokio::test]
 async fn test_story_log_scrollable() {
@@ -239,62 +128,6 @@ async fn test_element_positioning() {
 }
 
 #[tokio::test]
-async fn test_visual_sidebar_exists() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            assert!(
-                element_exists(&page, ".visual-sidebar").await,
-                "Visual sidebar should exist"
-            );
-        },
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_form_stays_static_after_submission() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            let form_id_before: String = page
-                .evaluate::<(), String>("document.querySelector('#command-form')?.id || ''", None)
-                .await
-                .unwrap();
-
-            page.evaluate::<(), ()>(
-                "(() => { 
-                const input = document.querySelector('#command-form input');
-                if (input) input.value = 'look';
-                const form = document.querySelector('#command-form');
-                if (form) form.requestSubmit();
-            })()",
-                None,
-            )
-            .await
-            .unwrap();
-
-            let _ = wait_for_element_children(&page, "#story-log .log-entry", 2).await;
-
-            let form_id_after: String = page
-                .evaluate::<(), String>("document.querySelector('#command-form')?.id || ''", None)
-                .await
-                .unwrap();
-
-            assert_eq!(
-                form_id_before, form_id_after,
-                "Form should stay in DOM (static shell)"
-            );
-        },
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn test_npc_portraits_horizontal_layout() {
     with_test_page(
         CONFIG_PATH,
@@ -363,5 +196,68 @@ async fn test_npc_portraits_fixed_width() {
             );
         },
     )
+    .await;
+}
+
+#[tokio::test]
+async fn test_edit_textarea_matches_original_height() {
+    with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
+        let original_height: f64 = page
+            .evaluate::<(), f64>(
+                r#"(() => {
+                    const text = document.querySelector('.log-entry .text');
+                    if (!text) return -1;
+                    const rect = text.getBoundingClientRect();
+                    return rect.height;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            original_height > 0.0,
+            "Original text should have a valid height"
+        );
+
+        page.evaluate::<(), bool>(
+            r#"(() => {
+                const entry = document.querySelector('.log-entry');
+                const btn = entry?.querySelector('.edit-btn');
+                if (btn) { btn.click(); return true; }
+                return false;
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        wait_for_element_exists(&page, "#edit-textarea", 10).await;
+
+        let textarea_height: f64 = page
+            .evaluate::<(), f64>(
+                r#"(() => {
+                    const textarea = document.querySelector('#edit-textarea');
+                    if (!textarea) return -1;
+                    void textarea.offsetHeight;
+                    const rect = textarea.getBoundingClientRect();
+                    return rect.height;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(textarea_height > 0.0, "Textarea should have a valid height");
+
+        assert!(
+            textarea_height >= original_height,
+            "Textarea height ({textarea_height}) should not be smaller than original text height ({original_height})"
+        );
+        assert!(
+            textarea_height <= original_height * 2.0 + 20.0,
+            "Textarea height ({textarea_height}) should not be drastically larger than original text height ({original_height})"
+        );
+    })
     .await;
 }

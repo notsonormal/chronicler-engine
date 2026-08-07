@@ -79,13 +79,23 @@ the placement rule is the guardrail.
 ## SCENARIO tags
 
 `SCENARIO:` tags (format: `// [spec-path] SCENARIO: N.N`) go on HTTP E2E tests
-in `tests/http/`. Scenarios that live at the unit or driven-adapter tier don't
-carry SCENARIO tags — they're covered by tests whose names describe the
-behaviour. Tags must not appear in `tests/integration/` or `tests/browser/`.
+in `tests/http/` and browser behaviour tests in
+`tests/browser/behaviour.rs`. Scenarios that live at the unit or
+driven-adapter tier don't carry SCENARIO tags — they're covered by tests
+whose names describe the behaviour. Tags must not appear in
+`tests/integration/` or `tests/browser/invariants.rs`.
 
-A mechanical guardrail (in `tests/infrastructure/guardrails/`) enforces
-SCENARIO-tag placement: any test file containing a `SCENARIO:` tag must live in
-`tests/http/`.
+`tests/browser/invariants.rs` carries a named exemption: no tags, no
+spec link, test code is the definition (same shape as unit branch tests
+— STRATEGY.md's "every branch needs a unit test" rule doesn't produce a
+per-branch doc; the test is the definition).
+
+Mechanical enforcement lives in `scripts/validate_feature_spec.py` via
+the `TEST_DIRS` list (scans `tests/http/` + `tests/browser/` for
+`// SCENARIO:` comments). The "tags only in `tests/http/` +
+`tests/browser/behaviour.rs`" rule is a social convention layered on top;
+the validator scans the whole browser dir but `invariants.rs` has no
+tags to contribute.
 
 ## Placement test
 

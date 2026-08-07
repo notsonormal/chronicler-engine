@@ -1,61 +1,12 @@
-//! Browser tests for message editing: edit and delete buttons, edit-mode activation on click, cancel-restores-original, and save-persistence through the HTTP API.
+//! Browser behaviour tests: click→DOM change, htmx swap persistence, polling-pause, status wiring. Tagged against `docs/specs/browser.md`.
 
 use std::time::Duration;
 
 use playwright_rs::expect;
 
-use crate::test_utils::browser::{
-    count_log_entries, element_count, send_action, wait_for_element_children,
-    wait_for_status_ready, with_test_page,
-};
-use crate::test_utils::wait::{
-    wait_for_element_exists, wait_for_element_not_exists, wait_for_element_persist,
-};
+use super::*;
 
-const CONFIG_PATH: &str = "tests/test_config.json";
-const TEST_WORLD: &str = "test";
-const TEST_PERSONA: &str = "test_player";
-
-#[tokio::test]
-async fn test_edit_button_exists_on_entries() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            let edit_buttons = element_count(&page, ".log-entry .edit-btn").await;
-            assert!(
-                edit_buttons > 0,
-                "Edit buttons should exist on story entries"
-            );
-        },
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_delete_button_exists_on_entries() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            let initial_entries = element_count(&page, "#story-log .log-entry").await;
-            send_action(&page, "hello").await;
-            wait_for_status_ready(&page).await;
-            wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 1)
-                .await;
-
-            let delete_buttons = element_count(&page, ".log-entry .delete-btn").await;
-            assert!(
-                delete_buttons > 0,
-                "Delete buttons should exist on story entries"
-            );
-        },
-    )
-    .await;
-}
-
+// [chronicler_engine/docs/specs/browser.md] SCENARIO: 16.1
 #[tokio::test]
 async fn test_edit_mode_activates_on_click() {
     with_test_page(
@@ -84,6 +35,8 @@ async fn test_edit_mode_activates_on_click() {
     )
     .await;
 }
+
+// [chronicler_engine/docs/specs/browser.md] SCENARIO: 16.2
 #[tokio::test]
 async fn test_edit_cancel_restores_original() {
     with_test_page(
@@ -128,6 +81,7 @@ async fn test_edit_cancel_restores_original() {
     .await;
 }
 
+// [chronicler_engine/docs/specs/browser.md] SCENARIO: 16.3
 #[tokio::test]
 async fn test_polling_pauses_during_edit() {
     with_test_page(
@@ -159,6 +113,7 @@ async fn test_polling_pauses_during_edit() {
     .await;
 }
 
+// [chronicler_engine/docs/specs/browser.md] SCENARIO: 16.4
 #[tokio::test]
 async fn test_delete_removes_message() {
     with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
@@ -174,7 +129,6 @@ async fn test_delete_removes_message() {
             "Need at least 2 entries for delete button, have {count_before_delete}"
         );
 
-
         page.evaluate::<(), ()>(
             r#"(() => {
                 window.confirm = () => true;
@@ -184,9 +138,7 @@ async fn test_delete_removes_message() {
         .await
         .unwrap();
 
-
         page.locator(".delete-btn").await.click(None).await.unwrap();
-
 
         let mut attempts = 0;
         let max_attempts = 40; // 4 seconds at 100ms intervals
@@ -205,116 +157,48 @@ async fn test_delete_removes_message() {
     .await;
 }
 
+// [chronicler_engine/docs/specs/browser.md] SCENARIO: 16.5
 #[tokio::test]
-async fn test_no_retry_button_on_last_ai_message() {
+async fn test_form_stays_static_after_submission() {
     with_test_page(
         CONFIG_PATH,
         TEST_WORLD,
         TEST_PERSONA,
         |page, _port| async move {
-            let initial_entries = element_count(&page, "#story-log .log-entry").await;
-            send_action(&page, "look").await;
-            wait_for_status_ready(&page).await;
-            wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 2)
-                .await;
+            let form_id_before: String = page
+                .evaluate::<(), String>("document.querySelector('#command-form')?.id || ''", None)
+                .await
+                .unwrap();
 
-            let retry_buttons = element_count(&page, ".retry-btn").await;
+            page.evaluate::<(), ()>(
+                "(() => {
+                const input = document.querySelector('#command-form input');
+                if (input) input.value = 'look';
+                const form = document.querySelector('#command-form');
+                if (form) form.requestSubmit();
+            })()",
+                None,
+            )
+            .await
+            .unwrap();
+
+            let _ = wait_for_element_children(&page, "#story-log .log-entry", 2).await;
+
+            let form_id_after: String = page
+                .evaluate::<(), String>("document.querySelector('#command-form')?.id || ''", None)
+                .await
+                .unwrap();
+
             assert_eq!(
-                retry_buttons, 0,
-                "Should not have retry button — swipe controls replace it"
+                form_id_before, form_id_after,
+                "Form should stay in DOM (static shell)"
             );
         },
     )
     .await;
 }
 
-#[tokio::test]
-async fn test_edit_textarea_matches_original_height() {
-    with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
-        let original_height: f64 = page
-            .evaluate::<(), f64>(
-                r#"(() => {
-                    const text = document.querySelector('.log-entry .text');
-                    if (!text) return -1;
-                    const rect = text.getBoundingClientRect();
-                    return rect.height;
-                })()"#,
-                None,
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            original_height > 0.0,
-            "Original text should have a valid height"
-        );
-
-        page.evaluate::<(), bool>(
-            r#"(() => {
-                const entry = document.querySelector('.log-entry');
-                const btn = entry?.querySelector('.edit-btn');
-                if (btn) { btn.click(); return true; }
-                return false;
-            })()"#,
-            None,
-        )
-        .await
-        .unwrap();
-
-        wait_for_element_exists(&page, "#edit-textarea", 10).await;
-
-        let textarea_height: f64 = page
-            .evaluate::<(), f64>(
-                r#"(() => {
-                    const textarea = document.querySelector('#edit-textarea');
-                    if (!textarea) return -1;
-                    void textarea.offsetHeight;
-                    const rect = textarea.getBoundingClientRect();
-                    return rect.height;
-                })()"#,
-                None,
-            )
-            .await
-            .unwrap();
-
-        assert!(textarea_height > 0.0, "Textarea should have a valid height");
-
-
-        assert!(
-            textarea_height >= original_height,
-            "Textarea height ({textarea_height}) should not be smaller than original text height ({original_height})"
-        );
-        assert!(
-            textarea_height <= original_height * 2.0 + 20.0,
-            "Textarea height ({textarea_height}) should not be drastically larger than original text height ({original_height})"
-        );
-    })
-    .await;
-}
-
-/// Test that delete button appears only on the last entry.
-#[tokio::test]
-async fn test_delete_button_only_on_last_entry() {
-    with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
-        let initial_entries = element_count(&page, "#story-log .log-entry").await;
-        send_action(&page, "first").await;
-        wait_for_status_ready(&page).await;
-        wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 2).await;
-
-        send_action(&page, "second").await;
-        wait_for_status_ready(&page).await;
-        let _total_entries = wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 4).await;
-
-        let delete_buttons = element_count(&page, ".log-entry .delete-btn").await;
-        assert!(
-            delete_buttons <= 2,
-            "Should have at most 2 delete buttons (last narration + last input), found: {delete_buttons}"
-        );
-    })
-    .await;
-}
-
-/// Test status display updates during generation.
+// [chronicler_engine/docs/specs/browser.md] SCENARIO: 16.6
 #[tokio::test]
 async fn test_status_updates_during_generation() {
     with_test_page(

@@ -139,48 +139,12 @@ pub async fn dismiss_text_check_if_present(page: &playwright_rs::Page) {
     }
 }
 
-/// Get current status text from the status display element
-pub async fn get_status(page: &playwright_rs::Page) -> String {
-    page.locator("#status-display")
-        .await
-        .inner_text()
-        .await
-        .unwrap_or_default()
-}
-
-/// Check if a DOM element exists.
-pub async fn element_exists(page: &playwright_rs::Page, selector: &str) -> bool {
-    let s = selector.to_string();
-    page.evaluate::<String, bool>(
-        "(selector) => document.querySelector(selector) !== null",
-        Some(&s),
-    )
-    .await
-    .unwrap()
-}
-
-/// Count elements matching a selector.
-pub async fn element_count(page: &playwright_rs::Page, selector: &str) -> i32 {
-    let s = selector.to_string();
-    page.evaluate::<String, i32>(
-        "(selector) => document.querySelectorAll(selector).length",
-        Some(&s),
-    )
-    .await
-    .unwrap()
-}
-
 /// Count log entries in story log (instant snapshot)
 pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
     page.query_selector_all("#story-log .log-entry")
         .await
         .unwrap_or_default()
         .len()
-}
-
-/// Wait until story log has at least `min_count` entries
-pub async fn wait_for_log_entries(page: &playwright_rs::Page, min_count: usize) -> usize {
-    wait_for_element_children(page, "#story-log .log-entry", min_count as u32).await as usize
 }
 
 /// Capture screenshot and DOM dump when a test fails for debugging.

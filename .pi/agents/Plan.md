@@ -1,6 +1,6 @@
 ---
 description: Software architect for implementation planning
-model: synthetic/hf:zai-org/GLM-5.2
+model: kimi-for-coding
 tools: read, bash, grep, find, ls
 permission:
   bash:

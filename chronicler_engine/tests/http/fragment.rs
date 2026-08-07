@@ -17,8 +17,9 @@ use chronicler_engine::domain::model::state::generation_status::GenerationStatus
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::test_support::TestPersona;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 
-use super::test_helpers::fetch_body;
+use super::test_helpers::{app_with_narrator, fetch_body, post_action, wait_idle};
 use crate::TEST_PERSONA;
 
 #[tokio::test]
@@ -58,6 +59,41 @@ async fn test_action_area_fragment_returns_html() {
     assert!(
         body.contains("id=\"action-area\""),
         "Expected action-area id: {body}"
+    );
+}
+
+#[tokio::test]
+async fn test_story_log_fragment_renders_action_buttons_after_actions() {
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["First.".to_string(), "Second.".to_string()]),
+    );
+    let (app, state) = app_with_narrator(narrator);
+
+    let resp = post_action(&app, "first").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "first action should complete");
+    let resp = post_action(&app, "second").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "second action should complete");
+
+    let body = fetch_body(app.clone(), "/fragment/story-log").await;
+    assert!(body.contains("edit-btn"), "story-log should render edit button: {body}");
+    assert!(body.contains("delete-btn"), "story-log should render delete button: {body}");
+    assert!(!body.contains("retry-btn"), "story-log should not render retry button: {body}");
+    let delete_btn_count = body.matches("delete-btn").count();
+    assert!(
+        delete_btn_count <= 2,
+        "at most 2 delete buttons (last narration + last input), got {delete_btn_count}: {body}"
+    );
+}
+
+#[tokio::test]
+async fn test_header_fragment_displays_game_title() {
+    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/header").await;
+    assert!(body.contains("game-title"), "header should have .game-title element: {body}");
+    assert!(
+        body.contains("Chronicler Engine"),
+        "header should display game title: {body}"
     );
 }
 
@@ -1193,5 +1229,14 @@ async fn test_switch_swipe_handler_concurrent() {
         response.status(),
         StatusCode::SERVICE_UNAVAILABLE,
         "Switching swipe during generation should fail"
+    );
+}
+
+#[tokio::test]
+async fn test_header_fragment_has_connection_status() {
+    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/header").await;
+    assert!(
+        body.contains("id=\"connection-status\""),
+        "header fragment should render connection-status indicator: {body}"
     );
 }
