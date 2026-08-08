@@ -32,22 +32,26 @@ pub async fn reset_handler(
 pub async fn retrigger_handler(
     State(state): State<AppState>,
 ) -> Result<Response<Body>, ApplicationError> {
-    match state.pipeline.retrigger(&state.generation_gate)? {
-        ProcessActionResult::Started => {
-            Ok(ok("<span class=\"status ready\">Retriggering...</span>"))
-        }
-        ProcessActionResult::ConcurrentGeneration => {
-            Ok(ok("<span class=\"status wait\">Still thinking...</span>"))
-        }
-        ProcessActionResult::ShuttingDown => Err(ApplicationError::ShuttingDown),
-    }
+    map_process_action_result(
+        state.pipeline.retrigger(&state.generation_gate)?,
+        "Retriggering...",
+    )
 }
 
 pub async fn retry_handler(
     State(state): State<AppState>,
 ) -> Result<Response<Body>, ApplicationError> {
-    match state.pipeline.retry(&state.generation_gate)? {
-        ProcessActionResult::Started => Ok(ok("<span class=\"status ready\">Retrying...</span>")),
+    map_process_action_result(state.pipeline.retry(&state.generation_gate)?, "Retrying...")
+}
+
+fn map_process_action_result(
+    result: ProcessActionResult,
+    started_label: &str,
+) -> Result<Response<Body>, ApplicationError> {
+    match result {
+        ProcessActionResult::Started => Ok(ok(format!(
+            "<span class=\"status ready\">{started_label}</span>"
+        ))),
         ProcessActionResult::ConcurrentGeneration => {
             Ok(ok("<span class=\"status wait\">Still thinking...</span>"))
         }

@@ -284,10 +284,10 @@ impl ActionPipeline {
 
         if is_event {
             let outcome = self.retry_event_continuation(&mut state);
-            self.handle_retry_outcome(outcome);
+            self.log_cancellation(outcome);
         } else {
             let outcome = self.retry_main_narration(state, input_text);
-            self.handle_retry_outcome(outcome);
+            self.log_cancellation(outcome);
         };
     }
 
@@ -295,7 +295,7 @@ impl ActionPipeline {
     pub fn retrigger_event(&self) {
         let mut state = self.message_service.load_or_fresh();
         let outcome = self.retry_event_continuation(&mut state);
-        self.handle_retry_outcome(outcome);
+        self.log_cancellation(outcome);
     }
 
     pub fn continue_narration(
@@ -691,7 +691,7 @@ impl ActionPipeline {
         }
     }
 
-    pub(crate) fn handle_retry_outcome(&self, outcome: Result<(), PhaseError>) {
+    pub(crate) fn log_cancellation(&self, outcome: Result<(), PhaseError>) {
         // Non-Cancelled errors are persisted inside `retry_event_continuation` and
         // `run_from_input` via `finalize_phase_error(&run, Some(&mut state), e)`,
         // preserving in-flight state — e.g. the System message from a failed

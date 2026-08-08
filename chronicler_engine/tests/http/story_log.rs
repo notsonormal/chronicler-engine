@@ -12,7 +12,6 @@ use crate::test_helpers::{post_action, post_empty, wait_idle};
 async fn test_delete_last_between_actions_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
 
-    // Action A → narration A persisted
     let resp = post_action(&app, "examine room").await;
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action A should complete");
@@ -26,11 +25,9 @@ async fn test_delete_last_between_actions_http() {
         .next()
         .expect("narration A should be persisted");
 
-    // Delete-last removes narration A (the last message)
     let resp = post_empty(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Action B → narration B persisted
     let resp = post_action(&app, "look around").await;
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action B should complete");
@@ -60,10 +57,8 @@ async fn test_delete_last_between_actions_http() {
 async fn test_delete_mid_sequence_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
 
-    // Action A → narration A
     let _ = post_action(&app, "examine room").await;
     assert!(wait_idle(&state, 1000).await);
-    // Action B → narration B (now the last message)
     let _ = post_action(&app, "look around").await;
     assert!(wait_idle(&state, 1000).await);
     let narration_b = state
@@ -76,11 +71,9 @@ async fn test_delete_mid_sequence_http() {
         .next_back()
         .expect("narration B should be the latest narration");
 
-    // Delete-last removes narration B
     let resp = post_empty(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Action C → narration C
     let _ = post_action(&app, "check door").await;
     assert!(wait_idle(&state, 1000).await);
 

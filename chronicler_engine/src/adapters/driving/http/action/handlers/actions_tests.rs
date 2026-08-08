@@ -1,3 +1,4 @@
+//! Unit tests for the action HTTP handler.
 use std::sync::Arc;
 
 use axum::{Form, http::StatusCode};

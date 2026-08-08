@@ -43,7 +43,7 @@ async fn test_list_worlds_fragment_returns_html() {
 #[tokio::test]
 async fn test_list_worlds_fragment_shows_world_count() {
     let app = TestAppBuilder::default_app();
-    let body_str = fetch_body(app.clone(), "/fragment/worlds").await;
+    let body_str = fetch_body(&app, "/fragment/worlds").await;
 
     assert!(
         body_str.contains("Test World"),

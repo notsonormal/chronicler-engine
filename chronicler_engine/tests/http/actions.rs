@@ -255,7 +255,6 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         .pipeline(pipeline)
         .build_with_state();
 
-    // First talk: trigger fires (times_met == 0).
     let resp = post_action(&app, "talk to shopkeeper").await;
     assert!(resp.status().is_success());
     assert!(
@@ -263,7 +262,6 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         "first action should complete"
     );
 
-    // Second talk: times_met is now 1, trigger should NOT fire.
     let resp = post_action(&app, "talk to shopkeeper").await;
     assert!(resp.status().is_success());
     assert!(

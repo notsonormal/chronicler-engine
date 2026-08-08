@@ -68,7 +68,14 @@ And #status-display text contains one of "Thinking", "Narrating", "Generating", 
 
 ```gherkin
 Given the dashboard is loaded and the action form is visible
-When a POST /action returns a 500
+When the client dispatches a synthetic htmx:beforeSwap event with isError=true and a serverResponse of "<p>Internal server error</p>"
 Then #error-notification gains the .visible class
-And #error-notification displays non-empty error text derived from the response body
+And #error-notification displays the response body with HTML tags stripped ("Internal server error")
 ```
+
+Note: the test dispatches the `htmx:beforeSwap` event directly because
+this playwright-rs version's `route.fulfill` is broken for status/body,
+and the real server has no path that returns 500 from `/action` without
+production-code changes. The body-level listener that calls `showError`
+on `isError` is the app code under test; htmx's 500→`isError=true`
+mapping is htmx's contract, not ours.

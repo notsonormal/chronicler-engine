@@ -31,7 +31,7 @@ async fn test_basic_fragments_return_html() {
         ("/fragment/action-area", "id=\"action-area\""),
     ];
     for (uri, expected) in fragments {
-        let body = fetch_body(app.clone(), uri).await;
+        let body = fetch_body(&app, uri).await;
         assert!(
             body.contains(expected),
             "Fragment {uri} should contain '{expected}'"
@@ -41,7 +41,7 @@ async fn test_basic_fragments_return_html() {
 
 #[tokio::test]
 async fn test_visual_sidebar_renders_room_image() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/visual-sidebar").await;
+    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/visual-sidebar").await;
     assert!(
         body.contains("data/images/test_room.png"),
         "Expected room image in sidebar: {body}"
@@ -54,7 +54,7 @@ async fn test_visual_sidebar_renders_room_image() {
 
 #[tokio::test]
 async fn test_action_area_fragment_returns_html() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/action-area").await;
+    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/action-area").await;
     assert!(
         body.contains("id=\"action-area\""),
         "Expected action-area id: {body}"
@@ -81,7 +81,7 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
         "second action should complete"
     );
 
-    let body = fetch_body(app.clone(), "/fragment/story-log").await;
+    let body = fetch_body(&app, "/fragment/story-log").await;
     assert!(
         body.contains("edit-btn"),
         "story-log should render edit button: {body}"
@@ -103,7 +103,7 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
 
 #[tokio::test]
 async fn test_header_fragment_displays_game_title() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/header").await;
+    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/header").await;
     assert!(
         body.contains("game-title"),
         "header should have .game-title element: {body}"
@@ -165,14 +165,14 @@ async fn test_action_handler_empty_command() {
 
 #[tokio::test]
 async fn test_status_ready_handler() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/status/ready").await;
+    let body = fetch_body(&TestAppBuilder::default_app(), "/status/ready").await;
     assert!(body.contains("Ready"));
 }
 
 #[tokio::test]
 async fn test_character_headshots_fragment() {
     let body = fetch_body(
-        TestAppBuilder::default_app(),
+        &TestAppBuilder::default_app(),
         "/fragment/character-headshots",
     )
     .await;
@@ -185,11 +185,11 @@ async fn test_character_headshots_fragment() {
 
 #[tokio::test]
 async fn test_generating_status_variants() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/status/generating").await;
+    let body = fetch_body(&TestAppBuilder::default_app(), "/status/generating").await;
     assert!(body.contains("idle"), "Default status should be idle");
 
     let body = fetch_body(
-        TestAppBuilder::default_test()
+        &TestAppBuilder::default_test()
             .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
             .build(),
         "/status/generating",
@@ -201,7 +201,7 @@ async fn test_generating_status_variants() {
     );
 
     let body = fetch_body(
-        TestAppBuilder::default_test()
+        &TestAppBuilder::default_test()
             .generation_status(GenerationStatus::Generating, GenerationPhase::Quantifying)
             .build(),
         "/status/generating",
@@ -315,7 +315,7 @@ async fn test_delete_history_handler_success() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = fetch_body(app, "/fragment/story-log").await;
+    let body = fetch_body(&app, "/fragment/story-log").await;
     assert!(
         !body.contains("Test message"),
         "Log entry should be deleted from rendered story log"
@@ -965,7 +965,7 @@ async fn test_switch_swipe_handler_concurrent() {
 
 #[tokio::test]
 async fn test_header_fragment_has_connection_status() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/header").await;
+    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/header").await;
     assert!(
         body.contains("id=\"connection-status\""),
         "header fragment should render connection-status indicator: {body}"

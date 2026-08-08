@@ -17,37 +17,10 @@ mod sqlite_test_app_builder;
 
 pub use sqlite_test_app_builder::SqliteTestAppBuilder;
 
-use std::sync::Arc;
-
-use chronicler_engine::application::agents::registry::AgentRegistry;
-use chronicler_engine::application::pipeline::pipeline::ActionPipeline;
-use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::adapters::driven::storage::Storage;
-
 pub use test_utils::settings_guard::SettingsTestGuard;
 pub use test_utils::make_test_recorder;
 pub use test_utils::make_test_recorder_with_storage;
 pub use test_utils::server::get_available_port;
-
-pub fn failing_pipeline() -> ActionPipeline {
-    let storage = Arc::new(Storage::new_in_memory());
-    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
-        Arc::new(MockBackend::default());
-    chronicler_engine::test_support::make_test_pipeline_with_mock_quantifier(
-        storage,
-        make_test_recorder(Arc::new(MockBackend::default().with_fail())),
-        quantifier,
-    )
-}
-
-pub fn working_pipeline() -> ActionPipeline {
-    let storage = Arc::new(Storage::new_in_memory());
-    chronicler_engine::test_support::make_test_pipeline_with_backends(
-        storage,
-        make_test_recorder(Arc::new(MockBackend::default())),
-        AgentRegistry::default(),
-    )
-}
 
 mod model;
 

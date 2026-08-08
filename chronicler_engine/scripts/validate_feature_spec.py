@@ -1,11 +1,14 @@
 """Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
 
 Discovers specs in `chronicler_engine/docs/specs/*.md` and walks the
-HTTP-tier test directory (`chronicler_engine/tests/http/`) for
+HTTP-tier (`chronicler_engine/tests/http/`) and browser-tier
+(`chronicler_engine/tests/browser/`) test directories for
 `// SCENARIO: X.Y` comments that appear immediately before a `#[test]`
 (or `#[tokio::test]`) attribute. Per `tests/STRATEGY.md`, SCENARIO tags
-live only in `tests/http/` — not in `src/` (unit tier) or
-`tests/integration/` (the dissolved component tier).
+live in `tests/http/` and `tests/browser/behaviour.rs` — not in `src/`
+(unit tier) or `tests/integration/` (the dissolved component tier).
+Also fails on duplicate scenario IDs across specs, since the set-based
+coverage check would otherwise hide collisions.
 
 Exit codes:
     0  all declared scenarios have at least one covering test and no orphans
@@ -113,8 +116,15 @@ def main() -> int:
         return 2
 
     declared: set[str] = set()
+    seen: dict[str, Path] = {}
+    duplicates: list[tuple[str, Path, Path]] = []
     for spec in spec_files:
-        declared.update(parse_spec_scenarios(spec))
+        for sid in parse_spec_scenarios(spec):
+            if sid in declared:
+                duplicates.append((sid, seen[sid], spec))
+            else:
+                declared.add(sid)
+                seen[sid] = spec
 
     covered: dict[str, list[tuple[Path, int]]] = {}
     orphans: list[tuple[Path, int, str]] = []
@@ -151,7 +161,15 @@ def main() -> int:
             rel = path.relative_to(ENGINE_ROOT)
             print(f"  {rel}:{lineno}  {sid}")
 
-    if gap_count > 0 or orphan_count > 0:
+    if duplicates:
+        print("\nDuplicate scenario IDs across specs:")
+        for sid, first, second in duplicates:
+            print(
+                f"  {sid} in {first.relative_to(ENGINE_ROOT)} "
+                f"and {second.relative_to(ENGINE_ROOT)}"
+            )
+
+    if gap_count > 0 or orphan_count > 0 or duplicates:
         return 1
     return 0
 

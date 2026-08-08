@@ -10,7 +10,7 @@ use chronicler_engine::test_support::TestPersona;
 
 use super::test_helpers::seeded_storage_with_initial_game;
 
-// [chronicler_engine/docs/specs/games_delete.md] SCENARIO: 11.1
+// [chronicler_engine/docs/specs/games_delete.md] SCENARIO: 19.1
 #[tokio::test]
 async fn test_delete_game_handler_success() {
     let (storage, _world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
@@ -40,7 +40,7 @@ async fn test_delete_game_handler_success() {
     assert!(storage.get_game(other_id).unwrap().is_none());
 }
 
-// [chronicler_engine/docs/specs/games_delete.md] SCENARIO: 11.2
+// [chronicler_engine/docs/specs/games_delete.md] SCENARIO: 19.2
 #[tokio::test]
 async fn test_delete_game_handler_active_game() {
     let (storage, _world_key, _persona_key, _game_id) = seeded_storage_with_initial_game();
@@ -73,7 +73,7 @@ async fn test_delete_game_handler_active_game() {
     );
 }
 
-// [chronicler_engine/docs/specs/games_delete.md] SCENARIO: 11.3
+// [chronicler_engine/docs/specs/games_delete.md] SCENARIO: 19.3
 #[tokio::test]
 async fn test_delete_game_handler_unknown_id_is_idempotent() {
     let app = TestAppBuilder::default_app();

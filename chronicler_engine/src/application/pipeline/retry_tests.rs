@@ -1109,9 +1109,9 @@ async fn retry_records_canonical_game_not_found_when_game_missing() {
 
 #[tokio::test]
 async fn test_retry_last_response_cancelled_at_phase_boundary() {
+    use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use std::thread;
-    use std::time::Duration;
 
     let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
@@ -1129,8 +1129,12 @@ async fn test_retry_last_response_cancelled_at_phase_boundary() {
 
     let initial_game_id = app.game_catalogue.current_game_id();
     let storage_for_thread = Arc::clone(&storage);
+    let backend_for_thread = Arc::clone(&mock_backend);
+
     let flipper = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(50));
+        while !backend_for_thread.trigger_started.load(Ordering::SeqCst) {
+            std::hint::spin_loop();
+        }
         storage_for_thread.set_game_id(initial_game_id.wrapping_add(1));
     });
 
@@ -1158,9 +1162,9 @@ async fn test_retry_last_response_cancelled_at_phase_boundary() {
 
 #[tokio::test]
 async fn test_retrigger_event_cancelled_at_phase_boundary() {
+    use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use std::thread;
-    use std::time::Duration;
 
     let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
@@ -1178,8 +1182,12 @@ async fn test_retrigger_event_cancelled_at_phase_boundary() {
 
     let initial_game_id = app.game_catalogue.current_game_id();
     let storage_for_thread = Arc::clone(&storage);
+    let backend_for_thread = Arc::clone(&mock_backend);
+    
     let flipper = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(50));
+        while !backend_for_thread.trigger_started.load(Ordering::SeqCst) {
+            std::hint::spin_loop();
+        }
         storage_for_thread.set_game_id(initial_game_id.wrapping_add(1));
     });
 

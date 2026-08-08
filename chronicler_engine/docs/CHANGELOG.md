@@ -2,6 +2,27 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-08-08
+
+### Fixed
+
+- **Duplicate scenario IDs across specs** (pre-merge review on `testing-refactor`). `games_create.md`, `games_switch.md`, `games_delete.md` reused `9.x`/`10.x`/`11.x` already owned by `swipe_new.md`. Renumbered to `17.x`/`18.x`/`19.x`; `SCENARIO:` tags in `tests/http/games_*.rs` updated. `validate_feature_spec.py` now detects duplicate IDs across `docs/specs/*.md` (set-based counting previously hid the collision).
+- **Flaky cancellation tests** (`retry_tests.rs`). `test_retry_last_response_cancelled_at_phase_boundary` and `test_retrigger_event_cancelled_at_phase_boundary` raced a 50 ms `thread::sleep` against a 200 ms trigger delay. Replaced the sleep with a spin on `MockBackend::trigger_started` so the game-id flip lands deterministically inside the trigger-delay window. 20/20 repeated runs green.
+
+### Changed
+
+- **`handle_retry_outcome` renamed to `log_cancellation`** (`pipeline.rs`). The function only logs `PhaseError::Cancelled`; non-Cancelled errors are finalized inside `retry_event_continuation` / `run_from_input` via `finalize_phase_error`. Name now matches behaviour.
+- **Shared `ProcessActionResult` mapper** (`chat_window/handlers/chat_window.rs`). `retry_handler` and `retrigger_handler` no longer duplicate the `ConcurrentGeneration` / `ShuttingDown` match arms; a private `map_process_action_result` helper takes the `Started` label as its only parameter.
+- **`fetch_body` signature unified** (`tests/http/test_helpers.rs`). Now takes `&axum::Router` to match `post_action` / `post_empty`; 13 call sites in `tests/http/fragment.rs`, `games_fragment_handlers.rs`, `worlds_fragment_handlers.rs` updated.
+- **`browser.md` 16.7 spec text** rewritten to describe the synthetic `htmx:beforeSwap` event (`isError=true`) the test actually dispatches, instead of claiming a real `POST /action` 500. `route.fulfill` is broken in this playwright-rs version and the server has no 500 path without production-code changes.
+- **`validate_feature_spec.py` docstring** updated to mention `tests/browser/` (TEST_DIRS already included it; the docstring was stale).
+
+### Removed
+
+- **Dead pipeline helpers** `failing_pipeline()` and `working_pipeline()` from `tests/integration/mod.rs` (no callers after the component tier dissolved).
+- **AI-style step-narration comments** in `tests/http/actions.rs` and `tests/http/story_log.rs`.
+- **Duplicate `ticket-8-execute-the-browser-tier-changes.md` plan** archived to `old-docs/archived-plans/`; `ticket-8-browser-tier-execution.md` remains canonical.
+
 ## 2026-08-05
 
 ### Changed

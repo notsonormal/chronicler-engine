@@ -1,3 +1,4 @@
+//! Unit tests for the chat window HTTP handlers.
 use axum::{http::StatusCode, response::IntoResponse};
 
 use crate::adapters::driving::http::chat_window::handlers::{

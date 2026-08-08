@@ -42,14 +42,19 @@ pub fn seeded_storage_with_initial_game() -> (Arc<Storage>, String, String, i64)
         .unwrap();
     storage.set_game_id(initial_game_id);
 
-    (storage, world.key, player.key, initial_game_id.try_into().unwrap())
+    (
+        storage,
+        world.key,
+        player.key,
+        initial_game_id.try_into().unwrap(),
+    )
 }
 
 /// Fetch the response body as a String from the given URI.
 /// Panics if the request fails or returns non-success status.
-pub async fn fetch_body(app: axum::Router, uri: &str) -> String {
+pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
     assert!(response.status().is_success(), "Expected success for {uri}");
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await

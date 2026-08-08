@@ -32,7 +32,7 @@ async fn test_list_games_fragment_returns_html() {
 #[tokio::test]
 async fn test_list_games_fragment_shows_active_game() {
     let app = TestAppBuilder::default_app();
-    let body_str = fetch_body(app.clone(), "/fragment/games").await;
+    let body_str = fetch_body(&app, "/fragment/games").await;
 
     assert!(
         body_str.contains("game-item"),
