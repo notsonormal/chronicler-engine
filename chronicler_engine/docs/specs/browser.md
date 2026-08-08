@@ -1,6 +1,6 @@
 # Feature Spec: Browser
 
-Endpoint: browser DOM. Behavioural authority for the 6 browser-only
+Endpoint: browser DOM. Behavioural authority for the 7 browser-only
 interactions. Each When is a browser action; each Then is a
 DOM-observable outcome. Rendering invariants (CSS computed styles,
 layout measurements) live as test code in `tests/browser/invariants.rs`,
@@ -62,4 +62,13 @@ Given the page is loaded and idle
 When the client sends an action (send_action("wait"))
 Then #status-display text is not "Ready" within 500ms
 And #status-display text contains one of "Thinking", "Narrating", "Generating", or "Quantifying"
+```
+
+#### Scenario 16.7: Action failure renders an error toast
+
+```gherkin
+Given the dashboard is loaded and the action form is visible
+When a POST /action returns a 500
+Then #error-notification gains the .visible class
+And #error-notification displays non-empty error text derived from the response body
 ```

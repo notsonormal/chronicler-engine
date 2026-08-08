@@ -173,9 +173,8 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
     let npc = TestNpc::named("bartender", "Bartender");
     let data = TestDataBuilder::default_test().npcs(vec![npc]).build();
 
-    let narrator = Arc::new(
-        MockBackend::default().with_narrations(vec!["The bartender nods.".to_string()]),
-    );
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["The bartender nods.".to_string()]));
     let quantifier_result = r#"{"npcs_in_room": ["bartender"], "movement": null}"#.to_string();
     let quantifier_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]))
@@ -231,16 +230,16 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         ComparisonOperator::Eq,
         0,
     );
-    let data = TestDataBuilder::default_test().npcs(vec![shopkeeper]).build();
+    let data = TestDataBuilder::default_test()
+        .npcs(vec![shopkeeper])
+        .build();
 
-    let narrator = Arc::new(
-        MockBackend::default().with_narrations(vec![
-            "The shopkeeper greets you.".to_string(),
-            "The shopkeeper greets you.".to_string(),
-            "The shopkeeper greets you again.".to_string(),
-            "The shopkeeper greets you again.".to_string(),
-        ]),
-    );
+    let narrator = Arc::new(MockBackend::default().with_narrations(vec![
+        "The shopkeeper greets you.".to_string(),
+        "The shopkeeper greets you.".to_string(),
+        "The shopkeeper greets you again.".to_string(),
+        "The shopkeeper greets you again.".to_string(),
+    ]));
     let quantifier_provider = Arc::new(MockBackend::default().with_prompt_responses(vec![
         r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
         r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
@@ -259,12 +258,18 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
     // First talk: trigger fires (times_met == 0).
     let resp = post_action(&app, "talk to shopkeeper").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "first action should complete");
+    assert!(
+        wait_idle(&state, 1000).await,
+        "first action should complete"
+    );
 
     // Second talk: times_met is now 1, trigger should NOT fire.
     let resp = post_action(&app, "talk to shopkeeper").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "second action should complete");
+    assert!(
+        wait_idle(&state, 1000).await,
+        "second action should complete"
+    );
 
     let messages = state.message_service.load_messages().unwrap();
     let trigger_narrations = messages

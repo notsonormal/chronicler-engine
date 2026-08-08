@@ -232,3 +232,76 @@ async fn test_status_updates_during_generation() {
     )
     .await;
 }
+
+// [chronicler_engine/docs/specs/browser.md] SCENARIO: 16.7
+#[tokio::test]
+async fn test_error_toast_on_action_failure() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            // Dispatch the `htmx:beforeSwap` event that a 500 from POST /action
+            // produces. The app code under test is the body-level listener that
+            // calls showError on isError — htmx's 500→isError=true mapping is
+            // htmx's contract, not ours.
+            //
+            // serverResponse carries HTML tags so the assertion exercises the
+            // handler's tag-stripping path (`response.replace(/<[^>]*>/g, "")`)
+            // and proves the toast text is *derived from* the response body,
+            // not just non-empty.
+            //
+            // Why synthetic instead of route.fulfill: this playwright-rs
+            // version's route.fulfill is empirically broken for BOTH status and
+            // body (a fulfill with status 500 + non-empty body arrives at the
+            // page as status 200 with empty body — verified via a fetch probe),
+            // so we cannot produce a real 500 through route interception, and
+            // the real server has no path that returns 500 from /action/check
+            // without production-code changes (out of scope for this ticket).
+            // ponytail: skip the 5s auto-hide setTimeout — asserting it would
+            // burn 5s and add flake for no authority gain; the setTimeout is
+            // trivial JS.
+            page.evaluate::<(), ()>(
+                r#"(() => {
+                    const evt = new CustomEvent('htmx:beforeSwap', {
+                        bubbles: true,
+                        cancelable: true,
+                        detail: {
+                            isError: true,
+                            serverResponse: '<p>Internal server error</p>',
+                            target: document.getElementById('action-area'),
+                        },
+                    });
+                    document.body.dispatchEvent(evt);
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+            // Toast update is synchronous in showError (no animation frame).
+            let toast_state: (bool, String) = page
+                .evaluate::<(), (bool, String)>(
+                    r#"(() => {
+                        const el = document.getElementById('error-notification');
+                        if (!el) return [false, ''];
+                        return [el.classList.contains('visible'), el.textContent || ''];
+                    })()"#,
+                    None,
+                )
+                .await
+                .unwrap();
+
+            assert!(
+                toast_state.0,
+                "#error-notification should gain .visible class on a 500 htmx:beforeSwap event"
+            );
+            assert_eq!(
+                toast_state.1, "Internal server error",
+                "#error-notification should display the response body with tags stripped, got {:?}",
+                toast_state.1
+            );
+        },
+    )
+    .await;
+}

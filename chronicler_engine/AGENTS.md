@@ -230,7 +230,7 @@ python scripts/install_git_hooks.py
 
 Temporary files should be written into tmp folders e.g. `tmp` or `chronicler_engine/tmp`.
 
-`build.py` writes logs to both standard output and to the `chronicler_engine/logs` folder. The standard build should take 2-3 minutes normally. If it times out or fails, check the build logs for failures.
+`build.py` writes logs to both standard output and to the `chronicler_engine/logs` folder. The standard build should take about 1 minute normally. If it times out or fails, check the build logs for failures.
 
 ### COMMANDS
 
@@ -248,7 +248,7 @@ cargo run -- --world redmist_estate --port 3000 # Run the server
 
 #### Final Validation (run once before considering done)
 ```bash
-python build.py                                 # Full gate: fmt + clippy + guardrails + tests (~2-3 mins)
+python build.py                                 # Full gate: fmt + clippy + guardrails + tests (~1 min)
 ```
 
 A majority of the time taken by `build.py` is the integration tests. Running the full integration tests just before running the `build.py` is inefficient. Either run targeted `cargo nextest` or skip them and run `build.py` straight away. 

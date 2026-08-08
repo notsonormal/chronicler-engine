@@ -82,7 +82,12 @@ Playwright-driven.
 |---|---|
 |`poison_recovery.rs`|Mutex poison recovery tests|
 |`test_config.json`|Test configuration|
-|`nextest.toml`|Nextest test runner config|
+
+# Test runner configuration
+
+|File|Purpose|
+|---|---|
+|`.config/nextest.toml`|cargo-nextest configuration: threads, retries, timeouts, LLM profile|
 
 # Helpers
 

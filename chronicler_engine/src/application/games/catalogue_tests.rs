@@ -6,6 +6,7 @@ use crate::application::errors::ApplicationError;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::message_service::MessageService;
 use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::TestDataBuilder;
 
 fn seeded_catalogue() -> (GameCatalogue, Arc<Storage>, String, String) {
@@ -24,7 +25,7 @@ fn seeded_catalogue() -> (GameCatalogue, Arc<Storage>, String, String) {
 }
 
 #[test]
-fn create_game_returns_positive_id() {
+fn test_create_game_returns_positive_id() {
     let (catalogue, storage, world_key, persona_key) = seeded_catalogue();
 
     let id = catalogue
@@ -46,7 +47,7 @@ fn create_game_returns_positive_id() {
 }
 
 #[test]
-fn create_game_errors_when_world_missing() {
+fn test_create_game_errors_when_world_missing() {
     let (catalogue, _storage, _world_key, persona_key) = seeded_catalogue();
 
     let result = catalogue.create_game("no_such_world", &persona_key);
@@ -58,7 +59,7 @@ fn create_game_errors_when_world_missing() {
 }
 
 #[test]
-fn create_game_errors_when_persona_missing() {
+fn test_create_game_errors_when_persona_missing() {
     let (catalogue, _storage, world_key, _persona_key) = seeded_catalogue();
 
     let result = catalogue.create_game(&world_key, "no_such_persona");
@@ -70,7 +71,7 @@ fn create_game_errors_when_persona_missing() {
 }
 
 #[test]
-fn create_game_generates_unique_names() {
+fn test_create_game_generates_unique_names() {
     let (catalogue, _storage, world_key, persona_key) = seeded_catalogue();
 
     let id1 = catalogue.create_game(&world_key, &persona_key).unwrap();
@@ -102,7 +103,7 @@ fn create_game_generates_unique_names() {
 }
 
 #[test]
-fn create_game_restores_current_game_on_persist_failure() {
+fn test_create_game_restores_current_game_on_persist_failure() {
     let data = TestDataBuilder::default_test().build();
     let raw_storage = Storage::new_in_memory();
     data.seed_into(&raw_storage);
@@ -130,7 +131,7 @@ fn create_game_restores_current_game_on_persist_failure() {
 }
 
 #[test]
-fn switch_game_changes_current_game() {
+fn test_switch_game_changes_current_game() {
     let (catalogue, _storage, world_key, persona_key) = seeded_catalogue();
     let id1 = catalogue.create_game(&world_key, &persona_key).unwrap();
     let id2 = catalogue.create_game(&world_key, &persona_key).unwrap();
@@ -147,7 +148,7 @@ fn switch_game_changes_current_game() {
 }
 
 #[test]
-fn switch_game_errors_when_game_missing() {
+fn test_switch_game_errors_when_game_missing() {
     let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
 
     let result = catalogue.switch_game(9999);
@@ -159,7 +160,7 @@ fn switch_game_errors_when_game_missing() {
 }
 
 #[test]
-fn delete_game_removes_non_active_game() {
+fn test_delete_game_removes_non_active_game() {
     let (catalogue, storage, world_key, persona_key) = seeded_catalogue();
     let id1 = catalogue.create_game(&world_key, &persona_key).unwrap();
     let id2 = catalogue.create_game(&world_key, &persona_key).unwrap();
@@ -176,7 +177,7 @@ fn delete_game_removes_non_active_game() {
 }
 
 #[test]
-fn delete_game_errors_when_deleting_active_game() {
+fn test_delete_game_errors_when_deleting_active_game() {
     let (catalogue, _storage, world_key, persona_key) = seeded_catalogue();
     let id = catalogue.create_game(&world_key, &persona_key).unwrap();
 
@@ -189,7 +190,7 @@ fn delete_game_errors_when_deleting_active_game() {
 }
 
 #[test]
-fn list_games_returns_all_games() {
+fn test_list_games_returns_all_games() {
     let (catalogue, _storage, world_key, persona_key) = seeded_catalogue();
     let id1 = catalogue.create_game(&world_key, &persona_key).unwrap();
     let id2 = catalogue.create_game(&world_key, &persona_key).unwrap();
@@ -202,7 +203,7 @@ fn list_games_returns_all_games() {
 }
 
 #[test]
-fn reset_replaces_current_game() {
+fn test_reset_replaces_current_game() {
     let (catalogue, storage, world_key, persona_key) = seeded_catalogue();
     catalogue.create_game(&world_key, &persona_key).unwrap();
     let pre_reset_current = catalogue.current_game_id();
@@ -221,7 +222,42 @@ fn reset_replaces_current_game() {
 }
 
 #[test]
-fn current_game_id_matches_storage() {
+fn test_current_game_id_matches_storage() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
     assert_eq!(catalogue.current_game_id(), storage.current_game_id());
+}
+
+#[test]
+fn test_create_game_persists_scenario_message_and_swipe() {
+    let (catalogue, storage, world_key, persona_key) = seeded_catalogue();
+
+    let id = catalogue
+        .create_game(&world_key, &persona_key)
+        .expect("create_game should succeed");
+
+    assert!(id > 0, "Game ID should be positive");
+    let messages = storage.load_message_rows().unwrap();
+    let narrations: Vec<_> = messages
+        .into_iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .collect();
+    assert_eq!(
+        narrations.len(),
+        1,
+        "exactly one scenario Narration should be persisted"
+    );
+    let swipe_count = storage.count_swipes_for_message(narrations[0].id).unwrap();
+    assert!(
+        swipe_count > 0,
+        "scenario message should have at least one swipe"
+    );
+}
+
+#[test]
+fn test_delete_game_succeeds_silently_for_nonexistent_game() {
+    let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
+
+    catalogue
+        .delete_game(99999)
+        .expect("delete_game should succeed silently for nonexistent game");
 }

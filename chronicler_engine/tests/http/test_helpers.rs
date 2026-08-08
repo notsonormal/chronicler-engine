@@ -12,10 +12,38 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::test_support::{
-    make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder,
+    make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder, TestMap, TestPersona,
+    TestWorld,
 };
 
 use crate::test_utils::wait_for_condition_async;
+
+/// Seed an in-memory storage with a world, map, and persona, then create an
+/// initial game and set it current. Returns `(storage, world_key, persona_key,
+/// initial_game_id)`. Shared by the `games_create` / `games_switch` /
+/// `games_delete` HTTP E2E tests to dedupe their setup shape.
+pub fn seeded_storage_with_initial_game() -> (Arc<Storage>, String, String, i64) {
+    let storage = Arc::new(Storage::new_in_memory());
+
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = TestPersona::standard();
+    storage.seed_persona(&player.key, &player).unwrap();
+
+    let initial_game_id = storage
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Initial Game",
+        )
+        .unwrap();
+    storage.set_game_id(initial_game_id);
+
+    (storage, world.key, player.key, initial_game_id.try_into().unwrap())
+}
 
 /// Fetch the response body as a String from the given URI.
 /// Panics if the request fails or returns non-success status.

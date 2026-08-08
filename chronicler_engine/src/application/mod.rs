@@ -3,6 +3,8 @@
 
 pub mod agents;
 pub mod arrival_service;
+#[cfg(test)]
+mod arrival_service_tests;
 pub mod debug;
 pub mod errors;
 pub mod games;

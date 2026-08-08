@@ -131,15 +131,15 @@ def require_nextest():
 
 def get_test_cmd(include_llm=False):
     """Return the test command using nextest."""
-    cmd = "cargo nextest run --no-fail-fast --retries 2 -j 4 --features testing"
+    cmd = "cargo nextest run --no-fail-fast"
     if include_llm:
-        cmd += " --run-ignored all"
+        cmd += " --profile llm --run-ignored all"
     return cmd
 
 
 def get_coverage_cmd():
     """Return the coverage test command using nextest."""
-    return "cargo llvm-cov nextest --no-report --no-fail-fast --retries 2 -j 4 --features testing"
+    return "cargo llvm-cov nextest --no-report --no-fail-fast"
 
 
 def kill_port(port: int):
@@ -584,7 +584,7 @@ def main():
             steps = StepCounter(3)
             steps.next("Building...")
             run(
-                f"cargo build {'--release' if args.release else ''} --features testing".strip(),
+                f"cargo build {'--release' if args.release else ''}".strip(),
                 env=cargo_env,
             )
 

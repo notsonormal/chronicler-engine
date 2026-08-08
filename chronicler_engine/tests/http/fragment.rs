@@ -16,7 +16,6 @@ use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
-use chronicler_engine::test_support::TestPersona;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 
 use super::test_helpers::{app_with_narrator, fetch_body, post_action, wait_idle};
@@ -71,15 +70,30 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
 
     let resp = post_action(&app, "first").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "first action should complete");
+    assert!(
+        wait_idle(&state, 1000).await,
+        "first action should complete"
+    );
     let resp = post_action(&app, "second").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "second action should complete");
+    assert!(
+        wait_idle(&state, 1000).await,
+        "second action should complete"
+    );
 
     let body = fetch_body(app.clone(), "/fragment/story-log").await;
-    assert!(body.contains("edit-btn"), "story-log should render edit button: {body}");
-    assert!(body.contains("delete-btn"), "story-log should render delete button: {body}");
-    assert!(!body.contains("retry-btn"), "story-log should not render retry button: {body}");
+    assert!(
+        body.contains("edit-btn"),
+        "story-log should render edit button: {body}"
+    );
+    assert!(
+        body.contains("delete-btn"),
+        "story-log should render delete button: {body}"
+    );
+    assert!(
+        !body.contains("retry-btn"),
+        "story-log should not render retry button: {body}"
+    );
     let delete_btn_count = body.matches("delete-btn").count();
     assert!(
         delete_btn_count <= 2,
@@ -90,7 +104,10 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
 #[tokio::test]
 async fn test_header_fragment_displays_game_title() {
     let body = fetch_body(TestAppBuilder::default_app(), "/fragment/header").await;
-    assert!(body.contains("game-title"), "header should have .game-title element: {body}");
+    assert!(
+        body.contains("game-title"),
+        "header should have .game-title element: {body}"
+    );
     assert!(
         body.contains("Chronicler Engine"),
         "header should display game title: {body}"
@@ -450,292 +467,6 @@ async fn test_list_games_fragment_escapes_html() {
     assert!(
         html.contains("&#60;script&#62;") || html.contains("&lt;script&gt;"),
         "Should contain escaped script tag: {html}"
-    );
-}
-
-#[tokio::test]
-async fn test_create_game_handler() {
-    let storage = Arc::new(Storage::new_in_memory());
-
-    let mut world = chronicler_engine::test_support::TestWorld::minimal();
-    world.scenarios = vec![
-        chronicler_engine::domain::model::scenario::StartingScenario {
-            id: "test_intro".to_string(),
-            name: "Test Intro".to_string(),
-            description: "Test scenario".to_string(),
-            starting_room_id: "start".to_string(),
-            text: "Welcome to the test world!".to_string(),
-            npcs: vec![],
-        },
-    ];
-    let mut map = chronicler_engine::test_support::TestMap::single_room("start");
-    map.overworld.regions[0].rooms[0].id = "start".to_string();
-    storage.seed_world(&world, &map).unwrap();
-    let player = chronicler_engine::test_support::TestPersona::standard();
-    storage.seed_persona(&player.key, &player).unwrap();
-
-    let initial_game_id = storage
-        .create_game(
-            &world.name,
-            &world.key,
-            &player.key,
-            &player.sheet.name,
-            "Initial Game",
-        )
-        .unwrap();
-    storage.set_game_id(initial_game_id);
-
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let old_id = storage.current_game_id();
-
-    let req = Request::builder()
-        .uri("/games")
-        .method(http::Method::POST)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from(format!(
-            "world_key={}&persona_key={}",
-            world.key, player.key
-        )))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("HX-Refresh").unwrap(),
-        "true",
-        "Should return HX-Refresh header"
-    );
-
-    let new_id = storage.current_game_id();
-    assert_ne!(new_id, old_id, "Should have switched to the new game");
-
-    let latest = storage.load_latest_snapshot().unwrap();
-    assert!(latest.is_some(), "New game should have an initial snapshot");
-    let messages = storage.load_message_rows().unwrap();
-    assert!(
-        !messages.is_empty(),
-        "New game should have at least one message (scenario introduction)"
-    );
-    let scenario_msg = &messages[0];
-    assert_eq!(
-        scenario_msg.message_type,
-        MessageType::Narration,
-        "First message should be Narration type"
-    );
-    let swipe_count = storage.count_swipes_for_message(scenario_msg.id).unwrap();
-    assert!(
-        swipe_count > 0,
-        "Scenario message should have at least one swipe (text content)"
-    );
-}
-#[tokio::test]
-async fn test_switch_game_handler_success() {
-    let storage = Arc::new(Storage::new_in_memory());
-
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
-    let world = TestWorld::minimal();
-    let map = TestMap::single_room("start");
-    storage.seed_world(&world, &map).unwrap();
-    let player = TestPersona::standard();
-    storage.seed_persona(&player.key, &player).unwrap();
-    let initial_game_id = storage
-        .create_game(
-            &world.name,
-            &world.key,
-            &player.key,
-            &player.sheet.name,
-            "Initial Game",
-        )
-        .unwrap();
-    storage.set_game_id(initial_game_id);
-
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let other_id = storage
-        .create_game(
-            "Test World",
-            "Test World",
-            &player.key,
-            &player.sheet.name,
-            "Test World_2026-01-01_1",
-        )
-        .unwrap();
-    assert_ne!(other_id, storage.current_game_id());
-
-    let req = Request::builder()
-        .uri(format!("/games/{other_id}/switch"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("HX-Refresh").unwrap(),
-        "true",
-        "Should return HX-Refresh header"
-    );
-    assert_eq!(storage.current_game_id(), other_id);
-}
-
-#[tokio::test]
-async fn test_switch_game_handler_not_found() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/games/9999/switch")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_switch_game_handler_cross_world_allowed() {
-    let storage = Arc::new(Storage::new_in_memory());
-
-    let world_a = chronicler_engine::test_support::TestWorld::minimal();
-    let map_a = chronicler_engine::test_support::TestMap::single_room("start");
-    storage.seed_world(&world_a, &map_a).unwrap();
-
-    let mut world_b = chronicler_engine::test_support::TestWorld::minimal();
-    world_b.key = "world_b".to_string();
-    world_b.name = "World B".to_string();
-    let map_b = chronicler_engine::test_support::TestMap::single_room("room_b");
-    storage.seed_world(&world_b, &map_b).unwrap();
-
-    let player = TestPersona::standard();
-    storage.seed_persona(&player.key, &player).unwrap();
-    let game_a_id = storage
-        .create_game(
-            &world_a.name,
-            &world_a.key,
-            &player.key,
-            &player.sheet.name,
-            "Game A",
-        )
-        .unwrap();
-    let game_b_id = storage
-        .create_game(
-            &world_b.name,
-            &world_b.key,
-            &player.key,
-            &player.sheet.name,
-            "Game B",
-        )
-        .unwrap();
-
-    storage.set_game_id(game_a_id);
-
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let req = Request::builder()
-        .uri(format!("/games/{game_b_id}/switch"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(
-        response.status(),
-        StatusCode::OK,
-        "Cross-world switch should succeed"
-    );
-    assert_eq!(
-        storage.current_game_id(),
-        game_b_id,
-        "Should switch to game B"
-    );
-}
-
-#[tokio::test]
-async fn test_delete_game_handler_success() {
-    let storage = Arc::new(Storage::new_in_memory());
-
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
-    let world = TestWorld::minimal();
-    let map = TestMap::single_room("start");
-    storage.seed_world(&world, &map).unwrap();
-    let player = TestPersona::standard();
-    storage.seed_persona(&player.key, &player).unwrap();
-    let initial_game_id = storage
-        .create_game(
-            &world.name,
-            &world.key,
-            &player.key,
-            &player.sheet.name,
-            "Initial Game",
-        )
-        .unwrap();
-    storage.set_game_id(initial_game_id);
-
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let other_id = storage
-        .create_game(
-            "Test World",
-            "Test World",
-            &player.key,
-            &player.sheet.name,
-            "Test World_2026-01-01_1",
-        )
-        .unwrap();
-    assert_ne!(other_id, storage.current_game_id());
-
-    let req = Request::builder()
-        .uri(format!("/games/{other_id}/delete"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert!(storage.get_game(other_id).unwrap().is_none());
-}
-
-#[tokio::test]
-async fn test_delete_game_handler_active_game() {
-    let storage = Arc::new(Storage::new_in_memory());
-
-    let world = chronicler_engine::test_support::TestWorld::minimal();
-    let map = chronicler_engine::test_support::TestMap::single_room("start");
-    storage.seed_world(&world, &map).unwrap();
-    let player = chronicler_engine::test_support::TestPersona::standard();
-    storage.seed_persona(&player.key, &player).unwrap();
-
-    let game_id = storage
-        .create_game(
-            &world.name,
-            &world.key,
-            &player.key,
-            &player.sheet.name,
-            "Active Game",
-        )
-        .unwrap();
-    storage.set_game_id(game_id);
-
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let active_game_id = storage.current_game_id();
-
-    let req = Request::builder()
-        .uri(format!("/games/{active_game_id}/delete"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "Cannot delete active game"
     );
 }
 

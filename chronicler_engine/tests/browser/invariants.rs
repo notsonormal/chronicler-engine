@@ -1,5 +1,7 @@
 //! Rendering invariants (named exemption in STRATEGY.md): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these.
 
+use playwright_rs::Viewport;
+
 use super::*;
 
 #[tokio::test]
@@ -257,6 +259,55 @@ async fn test_edit_textarea_matches_original_height() {
         assert!(
             textarea_height <= original_height * 2.0 + 20.0,
             "Textarea height ({textarea_height}) should not be drastically larger than original text height ({original_height})"
+        );
+    })
+    .await;
+}
+
+/// Responsive layout invariant: `styles.css` declares `@media (max-width: 768px)`
+/// which flips `.main-container` to `flex-direction: column` (desktop is the
+/// default `row`). No other test exercises the responsive rules; this one proves
+/// the @media machinery is wired by reading the computed style at a narrow width.
+// ponytail: one breakpoint (< 768px) is the minimum that proves the @media rule
+// applies; the second breakpoint (< 480px) is cosmetic header-wrap detail — add
+// only if this test stops proving the responsive machinery is wired.
+#[tokio::test]
+async fn test_responsive_layout_under_768px() {
+    with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
+        page.set_viewport_size(Viewport {
+            width: 500,
+            height: 800,
+        })
+        .await
+        .unwrap();
+
+        // Poll the computed style until the @media rule applies (reflow is
+        // async at the new viewport) or timeout — avoids a blind sleep.
+        // ponytail: one breakpoint (< 768px) is the minimum that proves the @media rule
+        // applies; the second breakpoint (< 480px) is cosmetic header-wrap detail — add
+        // only if this test stops proving the responsive machinery is wired.
+        let flex_direction = wait_for_condition_async(
+            std::time::Duration::from_secs(2),
+            std::time::Duration::from_millis(50),
+            || async {
+                page.evaluate::<(), String>(
+                    r#"(() => {
+                        const el = document.querySelector('.main-container');
+                        if (!el) return '';
+                        return window.getComputedStyle(el).flexDirection;
+                    })()"#,
+                    None,
+                )
+                .await
+                .unwrap_or_default()
+                    == "column"
+            },
+        )
+        .await;
+
+        assert!(
+            flex_direction,
+            "At <768px viewport, .main-container should switch to flex-direction: column (responsive @media rule)"
         );
     })
     .await;

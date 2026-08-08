@@ -1,4 +1,4 @@
-//! Integration tests for games_fragment handlers
+//! HTTP E2E tests for the games list fragment (GET /fragment/games).
 
 use std::sync::Arc;
 
@@ -41,27 +41,6 @@ async fn test_list_games_fragment_shows_active_game() {
 }
 
 #[tokio::test]
-async fn test_create_game_handler_empty_world_key() {
-    let app = TestAppBuilder::default_app();
-
-    let form_data = "world_key=";
-    let req = Request::builder()
-        .uri("/games")
-        .method(http::Method::POST)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from(form_data))
-        .unwrap();
-
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(
-        response.status().is_client_error() || response.status().is_server_error(),
-        "Expected error for empty world_key: {:?}",
-        response.status()
-    );
-}
-
-#[tokio::test]
 async fn test_list_games_fragment_empty_list() {
     let storage = Arc::new(Storage::new_in_memory());
     let app = TestAppBuilder::default_test().storage(storage).build();
@@ -80,35 +59,5 @@ async fn test_list_games_fragment_empty_list() {
     assert!(
         body_str.contains("games-list") || body_str.contains("No games"),
         "Expected games list container even if empty: {body_str}"
-    );
-}
-
-#[tokio::test]
-async fn test_create_game_handler_validates_persona_key() {
-    let app = TestAppBuilder::default_app();
-
-    let form_data = "world_key=test&persona_key=nonexistent_persona";
-    let req = Request::builder()
-        .uri("/games")
-        .method(http::Method::POST)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from(form_data))
-        .unwrap();
-
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(
-        response.status().as_u16(),
-        400,
-        "Expected 400 for unknown persona_key: {:?}",
-        response.status()
-    );
-
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Persona not found"),
-        "Expected 'Persona not found' in error body: {body_str}"
     );
 }

@@ -1,7 +1,0 @@
-[default]
-# Increase test timeout to 5 minutes for slow e2e tests
-timeout = 300
-
-[profile.flow_mock_tests]
-# Even longer for browser tests
-timeout = 600

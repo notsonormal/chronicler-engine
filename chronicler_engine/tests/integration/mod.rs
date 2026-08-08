@@ -56,10 +56,5 @@ mod bootstrap;
 
 mod storage;
 
-#[path = "application/lifecycle.rs"]
-mod lifecycle;
 #[path = "adapters/driven/llm/llm_client.rs"]
 mod llm_client;
-
-#[path = "flow/arrival_persistence.rs"]
-mod flow_arrival_persistence;
