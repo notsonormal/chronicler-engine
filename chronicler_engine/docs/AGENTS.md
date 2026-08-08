@@ -2,29 +2,35 @@
 
 This folder contains all documentation for the Chronicler Engine project.
 
-For general engine principles, workflow, and conventions, see [`../AGENTS.md`](../AGENTS.md).
+For general engine principles, workflow, and conventions, see `chronicler_engine/AGENTS.md`.
 
-Write documention using Simplified Technical English (STE).
+Write documentation using Simplified Technical English (STE).
 
-## Keeping Documentation Clean
+## Documentation Layers
 
-**Plan authoring convention:** reference doc issues by quotable phrase, never line numbers — line numbers rot. Use the exact sentence (or a quoted fragment of it) as the anchor.
+There are three documentation layers:
 
-### The Per-Edit Gate (for doc edits)
+1. The code and the unit tests (`chronicler_engine/src/`)
+2. The integration tests (`chronicler_engine/tests/`) and the specs (`chronicler_engine/docs/specs`)
+3. The Diátaxis docs (`chronicler_engine/docs/diataxis`)
 
-Docs in this repo are a **Specification**, not a conversation. They state contracts — what the system guarantees — not implementations. Code references in prose are sediment unless they pass the non-removable test.
+They might not traditionally be considered documentation, but reading the code and the unit tests is the most accurate way to understand how the application works.
 
-Spec-Driven Implementation (SDI) means the code reflects the spec. It does **not** mean restating code in the docs. Symbols map 1-to-1 to concepts (SDI principle), so naming the concept in prose IS naming the symbol — no need to also quote the function/type/file.
+The specs describe the behaviour a client observes through HTTP and browser interactions, and are enforced by the integration tests (every spec has an associated integration test).
 
-#### Code Indexer
+The Diátaxis docs are intended to describe the system in ways the code, tests, and specs cannot — explanation and reference the code, tests, and specs do not carry.
 
-Documents should not be code indexers. The principle is that the code is self-documenting and the chronicler engine docs is a layer on top of that. The docs exist because they are more consise and easier to curate than AI generated code comment.
+The specs are a relatively new introduction. They absorb the behavioural contract that used to live in free-form Diátaxis docs, so the Diátaxis tree can focus on explanation and on reference the specs cannot hold.
 
-Docs should not be explaining how the code works, which is what excessive references to modules, classes, methods and types tends to be. Plans (`docs/plans`) is naturally excluded for this.
+## Code Indexer
+
+Documents should not be code indexers. The principle is that the code is self-documenting and the chronicler engine docs is a layer on top of that. The docs exist because they are more concise and easier to curate than AI-generated code comments.
+
+Docs should not be explaining how the code works, which is what excessive references to modules, classes, methods and types tends to be. Plans (`docs/plans` and `.scratch`) are naturally excluded for this.
 
 XML/domain markups (e.g. `<ConversationHistory>`, `<PlayerInput>`) are domain tags, not code references — they don't trigger this test.
 
-Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](../../.agents/skills/chronicler-docs-hygiene/SKILL.md) skill.
+Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-docs-hygiene/SKILL.md` skill.
 
 ## Folder Structure
 
