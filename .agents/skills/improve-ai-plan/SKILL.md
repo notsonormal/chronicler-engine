@@ -11,6 +11,8 @@ Engineering manager-mode review of an implementation plan. The goal is to catch 
 
 When invoked during plan mode, read the current plan file and review it against the sections below. Surface issues one at a time with a concrete recommendation and an option to skip. Do not dump all issues at once.
 
+Simple questions with obvious answers can be answered by the LLM itself. Obvious problems with obvious answers should be fixed by the agent (e.g. missing information in the plan), while geniune decisions should be surfaced to the user.
+
 ---
 
 ## Step 0: Scope Challenge
