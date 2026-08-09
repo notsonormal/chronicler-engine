@@ -75,13 +75,16 @@ name = "invariant_contract"
 path = "tests/infrastructure/invariant_contract.rs"
 required-features = ["testing"]
 
-# Integration test harness - required after test reorganization (commit 77a3350)
-# This is the SINGLE entry point for ALL integration tests under tests/integration/.
-# DO NOT add separate [[test]] entries for submodules (llm_client/, pipeline/, etc.) -
-# they are declared as modules in tests/integration/mod.rs and run under this harness.
+# Integration test harness - temporary home for HTTP-observable tests while ticket 02 moves them to `tests/http/`.
+# Once ticket 02/03 complete, this entry will be removed.
 [[test]]
-name = "integration"
-path = "tests/integration/mod.rs"
+name = "storage"
+path = "tests/storage/mod.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "bootstrap"
+path = "tests/bootstrap/mod.rs"
 required-features = ["testing"]
 
 [[test]]

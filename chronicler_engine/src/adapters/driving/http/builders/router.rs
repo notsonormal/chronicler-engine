@@ -18,7 +18,7 @@ use crate::adapters::driving::http::prompt_presets;
 use crate::adapters::driving::http::settings;
 use crate::adapters::driving::http::worlds;
 
-pub(crate) fn build_router(app_state: AppState) -> Router {
+pub fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(chat_window::handlers::index_handler))
         .route(

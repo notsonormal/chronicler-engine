@@ -8,7 +8,7 @@ use tower::util::ServiceExt;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::adapters::driven::storage::Storage;
 
-use super::test_helpers::fetch_body;
+use crate::test_helpers::fetch_body;
 
 #[tokio::test]
 async fn test_list_games_fragment_returns_html() {

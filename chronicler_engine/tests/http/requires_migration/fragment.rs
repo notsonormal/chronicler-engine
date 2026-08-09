@@ -18,7 +18,7 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 
-use super::test_helpers::{app_with_narrator, fetch_body, post_action, wait_idle};
+use crate::test_helpers::{app_with_narrator, fetch_body, post_action, wait_idle};
 use crate::TEST_PERSONA;
 
 #[tokio::test]

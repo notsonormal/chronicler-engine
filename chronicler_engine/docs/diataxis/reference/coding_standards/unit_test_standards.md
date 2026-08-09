@@ -129,7 +129,7 @@ fn test_<method>_<expected_outcome>() {
 
 The override supplies recorder / assembler / agent registry; `build_app_graph_for_tests` rebinds the pipeline's persistence and settings to the app graph, so the pipeline and the seeded storage always agree.
 
-The service method under test is invoked directly on the built `app` (e.g., `app.process_action(input)` or `app.execute_action(input)`). To exercise the public `process_action` API path end-to-end against real SQLite, use Pattern 1 (`SqliteTestAppBuilder`) and place the test under `tests/integration/application/`.
+The service method under test is invoked directly on the built `app` (e.g., `app.process_action(input)` or `app.execute_action(input)`). To exercise the public `process_action` API path end-to-end against real SQLite, use Pattern 1 (`SqliteTestAppBuilder`) and place the test under `tests/http/`.
 
 ## Pattern 6 — HTTP handler
 

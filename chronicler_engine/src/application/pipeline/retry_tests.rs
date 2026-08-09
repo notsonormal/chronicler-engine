@@ -1183,7 +1183,7 @@ async fn test_retrigger_event_cancelled_at_phase_boundary() {
     let initial_game_id = app.game_catalogue.current_game_id();
     let storage_for_thread = Arc::clone(&storage);
     let backend_for_thread = Arc::clone(&mock_backend);
-    
+
     let flipper = thread::spawn(move || {
         while !backend_for_thread.trigger_started.load(Ordering::SeqCst) {
             std::hint::spin_loop();

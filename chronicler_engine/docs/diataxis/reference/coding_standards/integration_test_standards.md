@@ -247,7 +247,7 @@ Every HTTP test that mutates `AppSettings` (via `connections/add`, `settings`, `
 
 The guard is the near-universal idiom for HTTP tests; assume any HTTP test that mutates settings needs it. Read-only HTTP tests (e.g., `GET /fragment/<x>` against default settings) do not need it but use it anyway as a defensive blanket convention. If a test mutates settings without it, that's a real bug.
 
-**Where.** `tests/test_utils/settings_guard.rs`. Used by every test in `tests/http/connections.rs`, every test in `tests/http/prompt_presets.rs`, 5 of 6 tests in `tests/integration/model/settings.rs`, etc.
+**Where.** `tests/test_utils/settings_guard.rs`. Used by every test in `tests/http/connections.rs`, every test in `tests/http/prompt_presets.rs`, 5 of 6 tests in `tests/http/settings.rs`, etc.
 
 ### Cross-cutting 2 — File-locked port allocation on 3010–3050
 
@@ -255,7 +255,7 @@ The guard is the near-universal idiom for HTTP tests; assume any HTTP test that 
 
 The port range and lock-file path are **deliberately outside the cargo workspace** (`/tmp` rather than `target/`) so concurrent `cargo build` invocations can't see stale locks. When refactoring the helper, do not move the lock path into `target/`.
 
-**Where.** All browser tests (`with_test_page`), `tests/integration/bootstrap/run_branches.rs`, and `tests/llm/flow_llm_tests.rs` use this allocator. Tests that bind `0.0.0.0:0` directly opt out of the 3010–3050 range by design.
+**Where.** All browser tests (`with_test_page`), `tests/bootstrap/mod.rs`, and `tests/llm/flow_llm_tests.rs` use this allocator. Tests that bind `0.0.0.0:0` directly opt out of the 3010–3050 range by design.
 
 ### Cross-cutting 3 — Mock-backend auto-injection via `--settings-path`
 
@@ -299,7 +299,7 @@ The decision rule:
 - Service method under test on a pre-seeded state (read or write)? → `TestAppBuilder` (faster; no SQLite startup).
 - `Storage` method under test (no service at all)? → `create_test_storage(...)` or `Storage::new_in_memory()` (Pattern 3).
 
-This decision rule appears across `tests/integration/application/*.rs`.
+This decision rule appears across `tests/http/*.rs`.
 
 ### Cross-cutting 7 — `MockBackend` factory form vs closure form
 
@@ -310,7 +310,7 @@ Two patterns coexist for the same `MockBackend`; the choice matters when the tes
 
 The factory is invoked twice because `SqliteTestAppBuilder` constructs one `MockBackend` for the narrator and one for the quantifier. This is non-obvious; if you bind `MockBackend` to a `let` and pass the variable, the test will panic with a "consumed twice" error. Pass a factory.
 
-**Where.** Every test in `tests/integration/application/`, `tests/integration/flow/`, and `tests/infrastructure/invariant_contract.rs::test_p4_*`.
+**Where.** Every test in `tests/http/` and `tests/infrastructure/invariant_contract.rs::test_p4_*`.
 
 ### Cross-cutting 8 — `#[ignore]` for real-LLM tests + `--llm-only` invocation
 

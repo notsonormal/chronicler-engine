@@ -9,7 +9,7 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
 
-use super::test_helpers::fetch_body;
+use crate::test_helpers::fetch_body;
 
 fn make_world_form_data(key: &str, name: &str, map_json: &str, scenarios_json: &str) -> String {
     format!(

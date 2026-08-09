@@ -13,7 +13,7 @@ The tier is defined by **what's faked**, not by sync vs async.
 | **Unit** | both (`MockBackend` + in-memory `Storage`) | nothing | `src/`, `*_tests.rs` | branch coverage — every branch in the code gets a test |
 | **HTTP E2E** | LLM (`MockBackend` via pipeline override) | real axum router, real or in-memory storage | `tests/http/` | spec validation — all spec scenarios validated end-to-end through the real driving adapter |
 | **Browser** | LLM | real browser, real server | `tests/browser/` | presentation only — DOM, CSS, JS interaction |
-| **Driven-adapter** | nothing | real SQLite | `tests/integration/storage/` | the storage seam — CRUD, error handling, referential integrity, query correctness |
+| **Driven-adapter** | nothing | real SQLite | `tests/storage/` | the storage seam — CRUD, error handling, referential integrity, query correctness |
 
 `#[tokio::test]` with fakes is a unit test. The unit tier includes async
 scenarios (cancellation, mid-flight timing) that need in-process seams — these
@@ -83,7 +83,7 @@ in `tests/http/` and browser behaviour tests in
 `tests/browser/behaviour.rs`. Scenarios that live at the unit or
 driven-adapter tier don't carry SCENARIO tags — they're covered by tests
 whose names describe the behaviour. Tags must not appear in
-`tests/integration/` or `tests/browser/invariants.rs`.
+`tests/storage/` or `tests/browser/invariants.rs`.
 
 `tests/browser/invariants.rs` carries a named exemption: no tags, no
 spec link, test code is the definition (same shape as unit branch tests

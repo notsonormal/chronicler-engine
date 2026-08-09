@@ -312,3 +312,49 @@ async fn test_responsive_layout_under_768px() {
     })
     .await;
 }
+
+/// Design-token invariant: `:root` declares the core custom-property tokens
+/// used by the UI. This replaces the HTTP-level CSS-content checks from the
+/// deleted `tests/integration/model/css.rs`.
+#[tokio::test]
+async fn test_root_design_tokens() {
+    with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
+        let covered: usize = page
+            .evaluate::<(), usize>(
+                r#"(() => {
+                    const root = window.getComputedStyle(document.documentElement);
+                    const prefixes = [
+                        '--color-bg-',
+                        '--color-text-',
+                        '--color-accent-',
+                        '--color-button-',
+                        '--color-log-',
+                        '--font-',
+                    ];
+                    return prefixes.filter(p => {
+                        const vars = Array.from(document.styleSheets)
+                            .flatMap(s => {
+                                try {
+                                    return Array.from(s.cssRules);
+                                } catch (_) {
+                                    return [];
+                                }
+                            })
+                            .filter(r => r.type === CSSRule.STYLE_RULE && r.selectorText === ':root')
+                            .flatMap(r => Array.from(r.style))
+                            .filter(name => name.startsWith(p));
+                        return vars.length > 0 || root.getPropertyValue(p + '-primary') !== '';
+                    }).length;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            covered >= 5,
+            "CSS :root should define variables in at least 5 of 6 core areas, only {covered}/6 found"
+        );
+    })
+    .await;
+}

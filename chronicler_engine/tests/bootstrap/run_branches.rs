@@ -1,10 +1,11 @@
 //! Smoke tests covering uncovered startup branches in `bootstrap::run()`.
 
+use chronicler_engine::bootstrap::run;
+use chronicler_engine::error::EngineError;
 use chronicler_engine::utils::cli::{
     list_available_worlds, resolve_engine_data_path, scan_worlds, Args,
 };
-use chronicler_engine::bootstrap::run;
-use chronicler_engine::error::EngineError;
+
 use crate::test_utils::server::get_available_port;
 
 fn cleanup_db_for_port(port: u16) {
