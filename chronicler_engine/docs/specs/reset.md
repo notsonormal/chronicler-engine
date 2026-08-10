@@ -2,17 +2,6 @@
 
 Endpoint: `POST /reset`
 
-Behavioural authority for the reset endpoint — what a client observes
-through HTTP. Resets the current game: deletes the current game row and
-creates a fresh game from the world's starting scenario. Each "When" is
-an HTTP request; each "Then" is an HTTP-observable outcome asserted via
-`message_service.load_messages()`. Full state restoration (movement
-room, scene NPCs) is covered at the unit tier — this spec asserts only
-the HTTP-observable history-clearing.
-
-Scenario IDs are `7.x` and stay stable across edits. The pilot dedups by
-ID across `docs/specs/*.md`, so IDs must stay unique.
-
 ## Scenarios
 
 #### Scenario 7.1: Reset clears the previous game's story-log history

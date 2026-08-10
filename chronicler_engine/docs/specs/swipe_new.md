@@ -2,25 +2,6 @@
 
 Endpoint: `POST /swipe/new`
 
-Behavioural authority for the retry endpoint — what a client observes
-through HTTP. Each "When" is an HTTP request; each "Then" is an
-HTTP-observable outcome asserted via `message_service.load_messages()`
-(the same data `/fragment/story-log` renders) or the generation status
-exposed through the `/status/generating` endpoint. Internal-state seams
-(cancellation timing, mid-flight streaming flags, `last_trigger` field,
-phase transitions, snapshots, call sequencing) are not asserted here —
-they live at the unit and driven-adapter tiers.
-
-Retry auto-detects main retry or event retry from the last message. The
-endpoint returns immediately with a status string; the generation runs
-in a background task. The client polls or refreshes to observe the
-outcome.
-
-Scenario IDs are `9.x` through `12.x` (continuing the cross-spec
-sequence owned by `actions.md` 1.x–6.x, `reset.md` 7.x, `story_log.md`
-8.x). The pilot dedups by ID across `docs/specs/*.md`, so IDs must stay
-unique.
-
 ## Scenarios
 
 ### Main retry

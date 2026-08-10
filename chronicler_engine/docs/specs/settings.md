@@ -1,16 +1,8 @@
 # Feature Spec: Settings
 
-Endpoints: `GET /fragment/settings`, `POST /settings`
-
-Behavioural authority for the settings endpoints — what a client
-observes through HTTP. `POST /settings` takes two form fields
-(`narration_connection_id`, `quantifier_connection_id`) and returns
-`Settings saved!` on success; malformed form bodies return 422. Each
-"When" is an HTTP request; each "Then" is an HTTP-observable outcome
-asserted against the response body.
-
-Scenario IDs are `20.x` and stay stable across edits. The pilot dedups
-by ID across `docs/specs/*.md`, so IDs must stay unique.
+Endpoints: 
+ - `GET /fragment/settings`
+ - `POST /settings`
 
 ## Scenarios
 

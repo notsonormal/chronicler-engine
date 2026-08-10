@@ -2,18 +2,6 @@
 
 Endpoint: `POST /action`
 
-Behavioural authority for the action endpoint — what a client observes
-through HTTP. Each "When" is an HTTP request; each "Then" is an
-HTTP-observable outcome asserted via `message_service.load_messages()`
-(the same data `/fragment/story-log` renders) or the generation status
-exposed through the `/status/generating` endpoint. Internal-state seams
-(cancellation timing, mid-flight streaming flags, `last_trigger` field,
-phase transitions, snapshots, call sequencing) are not asserted here —
-they live at the unit and driven-adapter tiers.
-
-Scenario IDs are `1.x` through `6.x` and stay stable across edits. The
-pilot dedups by ID across `docs/specs/*.md`, so IDs must stay unique.
-
 ## Scenarios
 
 ### Normal flow

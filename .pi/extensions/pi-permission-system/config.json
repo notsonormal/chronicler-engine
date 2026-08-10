@@ -43,7 +43,9 @@
       "git clean -f *": "deny",
       "git clean --force *": "deny",
       "git pull": "deny",
-      "git pull *": "deny"
+      "git pull *": "deny",
+      "git commit": "deny",
+      "git commit *": "deny"            
     }
   }
 }

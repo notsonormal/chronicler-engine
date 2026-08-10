@@ -10,7 +10,7 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{TestMap, TestPersona, TestWorld};
 
-// [chronicler_engine/docs/specs/games_create.md] SCENARIO: 17.1
+// [chronicler_engine/docs/specs/games.md] SCENARIO: 17.1
 #[tokio::test]
 async fn test_create_game_handler() {
     // games_create needs a world with a scenario; the shared helper seeds a
@@ -91,7 +91,7 @@ async fn test_create_game_handler() {
     );
 }
 
-// [chronicler_engine/docs/specs/games_create.md] SCENARIO: 17.2
+// [chronicler_engine/docs/specs/games.md] SCENARIO: 17.2
 #[tokio::test]
 async fn test_create_game_handler_unknown_world_key() {
     let app = TestAppBuilder::default_app();
@@ -123,7 +123,7 @@ async fn test_create_game_handler_unknown_world_key() {
     );
 }
 
-// [chronicler_engine/docs/specs/games_create.md] SCENARIO: 17.3
+// [chronicler_engine/docs/specs/games.md] SCENARIO: 17.3
 #[tokio::test]
 async fn test_create_game_handler_unknown_persona_key() {
     let app = TestAppBuilder::default_app();

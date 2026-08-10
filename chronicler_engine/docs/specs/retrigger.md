@@ -2,24 +2,6 @@
 
 Endpoint: `POST /retrigger`
 
-Behavioural authority for the retrigger endpoint — what a client
-observes through HTTP. Each "When" is an HTTP request; each "Then" is
-an HTTP-observable outcome asserted via `message_service.load_messages()`
-or the generation status exposed through the `/status/generating`
-endpoint. Internal-state seams (cancellation timing, `last_trigger`
-field, phase transitions, snapshots, call sequencing) are not asserted
-here — they live at the unit and driven-adapter tiers.
-
-Retrigger re-fires the trigger continuation from the current state.
-The endpoint returns immediately with a status string; the generation
-runs in a background task. The client polls or refreshes to observe the
-outcome.
-
-Scenario IDs are `13.x` through `15.x` (continuing the cross-spec
-sequence owned by `actions.md` 1.x–6.x, `reset.md` 7.x, `story_log.md`
-8.x, `swipe_new.md` 9.x–12.x). The pilot dedups by ID across
-`docs/specs/*.md`, so IDs must stay unique.
-
 ## Scenarios
 
 ### Retrigger

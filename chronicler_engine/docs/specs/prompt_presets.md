@@ -1,28 +1,15 @@
 # Feature Spec: Prompt Presets
 
 Endpoints:
-- `GET /fragment/prompt-presets` — renders the preset panel.
-- `GET /fragment/prompt-presets/{id}` — renders a single preset card.
-- `GET /fragment/prompt-presets/{id}/edit` — renders the edit form.
-- `GET /fragment/prompt-presets/{id}/view` — renders the read-only view form.
-- `POST /prompt-presets` — create a preset (system or quantifier).
-- `POST /prompt-presets/{id}` — update a preset.
-- `POST /prompt-presets/{id}/activate` — activate a preset.
-- `POST /prompt-presets/{id}/delete` — delete a preset.
-- `POST /prompt-presets/{id}/duplicate` — duplicate a preset.
-
-Behavioural authority for the prompt-preset endpoints — what a client
-observes through HTTP. The mutating endpoints return HTML fragments (a
-re-rendered panel, a single card, or an empty body) and signal failure
-with 200 and a `<span class='error'>…</span>` body span; malformed
-form bodies return 422. Presets showing a `Default` badge cannot be
-edited or deleted. The `preset_type` form field must be `system` or
-`quantifier` (anything else yields `Invalid preset type`). Each "When"
-is an HTTP request; each "Then" is an HTTP-observable outcome asserted
-against the response body.
-
-Scenario IDs are `21.x` and stay stable across edits. The pilot dedups
-by ID across `docs/specs/*.md`, so IDs must stay unique.
+- `GET /fragment/prompt-presets`
+- `GET /fragment/prompt-presets/{id}`
+- `GET /fragment/prompt-presets/{id}/edit`
+- `GET /fragment/prompt-presets/{id}/view`
+- `POST /prompt-presets`
+- `POST /prompt-presets/{id}`
+- `POST /prompt-presets/{id}/activate`
+- `POST /prompt-presets/{id}/delete`
+- `POST /prompt-presets/{id}/duplicate`
 
 ## Scenarios
 

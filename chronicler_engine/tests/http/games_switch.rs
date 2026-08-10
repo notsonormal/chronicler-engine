@@ -10,7 +10,7 @@ use chronicler_engine::test_support::TestPersona;
 
 use super::test_helpers::seeded_storage_with_initial_game;
 
-// [chronicler_engine/docs/specs/games_switch.md] SCENARIO: 18.1
+// [chronicler_engine/docs/specs/games.md] SCENARIO: 18.1
 #[tokio::test]
 async fn test_switch_game_handler_success() {
     let (storage, _world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
@@ -45,7 +45,7 @@ async fn test_switch_game_handler_success() {
     assert_eq!(storage.current_game_id(), other_id);
 }
 
-// [chronicler_engine/docs/specs/games_switch.md] SCENARIO: 18.2
+// [chronicler_engine/docs/specs/games.md] SCENARIO: 18.2
 #[tokio::test]
 async fn test_switch_game_handler_not_found() {
     let app = TestAppBuilder::default_app();

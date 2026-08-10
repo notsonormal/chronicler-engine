@@ -2,14 +2,6 @@
 
 Endpoint: `POST /history/delete`
 
-Behavioural authority for the story-log delete endpoint — what a client
-observes through HTTP. Deletes the last message in the history (the
-active swipe's message). Each "When" is an HTTP request; each "Then" is
-an HTTP-observable outcome asserted via `message_service.load_messages()`.
-
-Scenario IDs are `8.x` and stay stable across edits. The pilot dedups by
-ID across `docs/specs/*.md`, so IDs must stay unique.
-
 ## Scenarios
 
 #### Scenario 8.1: Delete-last between actions — deleted narration stays absent

@@ -1,13 +1,6 @@
 # Feature Spec: Browser
 
-Endpoint: browser DOM. Behavioural authority for the 7 browser-only
-interactions. Each When is a browser action; each Then is a
-DOM-observable outcome. Rendering invariants (CSS computed styles,
-layout measurements) live as test code in `tests/browser/invariants.rs`,
-not as spec prose — the test code is the definition.
-
-Scenario IDs are `16.x` and stay stable across edits. The pilot dedups
-by ID across `docs/specs/*.md`, so IDs must stay unique.
+Endpoint: browser DOM.
 
 ## Scenarios
 
