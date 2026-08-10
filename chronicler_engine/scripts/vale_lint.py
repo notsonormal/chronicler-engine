@@ -52,13 +52,7 @@ VALE_INI = ENGINE_ROOT / ".vale.ini"
 # Transient — historical/forward-looking, no prose rules apply.
 TRANSIENT_DIR_NAMES: set[str] = {"plans", "old-docs"}
 
-# Out-of-scope per chronicler-docs-hygiene skill: ADRs are decision records
-# where date stamps, status changes, and PR context are appropriate. Prose
-# tone rules (Phase 1 forum links, Phase 3 tone rot) do not apply to ADRs.
-# validate_docs.py still checks ADR link integrity; Vale skips ADR prose.
-OUT_OF_SCOPE_DIR_NAMES: set[str] = {"adr"}
-
-# Excluded file names — auto-generated indexes, template, AGENTS meta.
+# Excluded file names — auto-generated indexes, AGENTS meta.
 # AGENTS.mdAUTO-INDEX block is auto-regenerated; prose preamble is owned by
 # the per-edit gate, not Vale.
 EXCLUDED_FILE_NAMES: set[str] = {
@@ -66,9 +60,6 @@ EXCLUDED_FILE_NAMES: set[str] = {
     "README.md",
     "CHANGELOG.md",
 }
-
-# Excluded stem prefixes (template files).
-EXCLUDED_STEM_PREFIXES: tuple[str, ...] = ("adr-000-template",)
 
 
 # --- Scope filtering ---------------------------------------------------------
@@ -93,13 +84,7 @@ def is_in_scope(md_file: Path) -> bool:
     if any(part in TRANSIENT_DIR_NAMES for part in parts):
         return False
 
-    if any(part in OUT_OF_SCOPE_DIR_NAMES for part in parts):
-        return False
-
     if parts[-1] in EXCLUDED_FILE_NAMES:
-        return False
-
-    if any(parts[-1].startswith(prefix) for prefix in EXCLUDED_STEM_PREFIXES):
         return False
 
     return True

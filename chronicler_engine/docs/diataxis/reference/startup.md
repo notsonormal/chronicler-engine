@@ -92,8 +92,3 @@ The schema files are authoritative for seed-file fields and validation.
 - [Storage](./storage.md) — seeding contract, storage-layer invariants, eleven-table schema, and entity persistence (worlds, personas, messages).
 - [Game Flow](./game_flow.md) — runtime trigger evaluation, phase pipeline, and event handling.
 - [Agent System](./narrative/agent_system.md) — quantifier-agent processing.
-- [ADR-017: Message Swipes](../../docs/adr/adr-017-message-swipes.md) — historical record of swipe snapshot semantics.
-- [ADR-024: Migrate Game Data to SQLite with Seed Pattern](../../docs/adr/adr-024-game-data-migration-to-sqlite.md) — historical record of the seed pattern.
-- [ADR-025: Multi-World Data Foundation](../../docs/adr/adr-025-multi-world-data-foundation.md) — historical record of the multi-world data foundation.
-- [ADR-026: Relocate Persona Binding from World to Game](../../docs/adr/adr-026-persona-relocation-to-game.md) — historical record of per-game persona binding.
-- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md) — historical record restricting port-trait × adapter-impl imports to the composition root.

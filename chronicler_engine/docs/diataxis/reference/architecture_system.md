@@ -62,5 +62,3 @@ Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via 
 
 - [`../explanation/architecture.md`](../explanation/architecture.md) — hexagonal architecture and dependency invariant.
 - [`./startup.md`](./startup.md) — bootstrap sequence and settings load point.
-- [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — settings ownership pattern and `AtomicBool` generation gate.
-- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md)

@@ -37,8 +37,6 @@ The engine's tags are content labels, not self-referential tags. A self-referent
 
 ## Document References
 
-- [ADR-004: XML-Structured LLM Prompts](../../docs/adr/adr-004-xml-prompt-format.md) — XML-sectioned instructions + XML-wrapped data; tags not objects of analysis.
-- [ADR-005: SillyTavern-Style Layered Prompt System](../../docs/adr/adr-005-layered-prompts.md) — layered prompt architecture.
 - `../reference/prompt_system.md` — reference description of the prompt-system machinery (the companion this doc explains).
 - `../reference/system_prompt.md` — the assembled system prompt structure.
 - `../reference/quantifier_prompt.md` — the quantifier as a separate secondary prompt.

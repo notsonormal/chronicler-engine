@@ -88,7 +88,7 @@ This section is the **writing-convention layer** of a three-layer enforcement mo
 
 | Layer | Where | What it checks |
 |---|---|---|
-| Machine | `chronicler_engine/scripts/validate_docs.py` | Front-matter presence, required keys, mode vocabulary, link integrity, ADR references |
+| Machine | `chronicler_engine/scripts/validate_docs.py` | Front-matter presence, required keys, mode vocabulary, link integrity |
 | Convention | **this section** | How to write a doc in the new frame |
 | Semantic | `chronicler-docs-hygiene` skill | Declared-mode vs. actual-content consistency |
 
@@ -137,7 +137,7 @@ Diátaxis-shape at the top level of `docs/diataxis/`:
 - `explanation/` — Explanation docs.
 - `tutorials/` and `how-to/` — **do not create these directories until content earns its place.** Empty quadrant dirs are noise; create `tutorials/` and `how-to/` only when a doc earns the mode.
 
-`adr/`, `external_applications/`, `plans/`, and `specs/` live under `docs/`, alongside `diataxis/`. They are not part of the diátaxis tree.
+`external_applications/`, `plans/`, and `specs/` live under `docs/`, alongside `diataxis/`. They are not part of the diátaxis tree.
 
 ### Writing posture
 
@@ -162,7 +162,6 @@ What Reference docs **do** carry:
 - What each thing is *for* (prose, one paragraph per table/component/endpoint).
 - The load-bearing invariants the code doesn't say directly ("messages are not stored in the snapshot JSON", "one message history per game", "settings is a singleton row").
 - Relationships and aggregate structure (see "Relationships diagrams" below).
-- Cross-references to ADRs and mechanism docs.
 
 If a reader needs the exact column list, field type, or function signature, they open the source file — one hop. The doc's value is what the source *doesn't* say.
 
@@ -180,15 +179,13 @@ Where aggregate structure isn't obvious from reading the source sequentially, a 
 
 #### Reference
 
-Austere, neutral, authoritative — like a map. Describes *what is*, not *how to use it* and not *why it's that way*. The last two belong in How-to and Explanation respectively. Canonical Diátaxis imperative: **describe and only describe; when tempted to explain, link to an Explanation doc** (per diataxis.fr/reference/). Do not absorb rationale into Reference prose; do not point at ADRs as the home for current-behaviour rationale — ADRs are frozen decision records, possibly Superseded, not living descriptions of how the system works today.
+Austere, neutral, authoritative — like a map. Describes *what is*, not *how to use it* and not *why it's that way*. The last two belong in How-to and Explanation respectively. Canonical Diátaxis imperative: **describe and only describe; when tempted to explain, link to an Explanation doc** (per diataxis.fr/reference/). Do not absorb rationale into Reference prose.
 
 If a Reference doc's content starts answering "why", split the why into an Explanation doc and cross-reference (the `game_flow.md` ↔ `two-state-channels.md`, `agent_system.md` ↔ `agent_system_design.md`, and `storage.md` ↔ `storage_design.md` splits are the canonical patterns in this tree).
 
 #### Explanation
 
 Discursive, understanding-oriented. Answers "why?" — design rationale, tradeoffs, system connections. Can take perspectives and be read away from the product. Per diataxis.fr/explanation/: admit opinion and perspective; consider alternatives; provide background and context. Do not bloat Explanation into mechanism docs — cross-reference mechanism docs rather than re-listing their content.
-
-Explanation carries **current understanding**. ADRs capture decisions as they were made (frozen at decision time, possibly Superseded, possibly deleted per the ADR README). The two overlap on tradeoffs but differ in frame: an Explanation doc can be revised as the system evolves; an ADR cannot. Cite ADRs in Document References as historical decision records; do not duplicate their Consequences prose verbatim — re-frame as current understanding.
 
 The architecture overview (`diataxis/explanation/architecture.md`) is Explanation mode — it answers "why is it structured this way" by showing the structure and the quality tradeoffs.
 
@@ -207,9 +204,9 @@ Discursive means prose that explores design rationale across connected sections.
 
 ##### Explanation unfolds; it does not justify
 
-Explanation docs in this tree explain **what is happening** — they unfold and illuminate their subject. They do not justify the design to a skeptical reviewer; that framing belongs in ADRs.
+Explanation docs in this tree explain **what is happening** — they unfold and illuminate their subject. They do not justify the design to a skeptical reviewer.
 
-The single most common framing failure: an Explanation doc whose sections read as an apologia — "Why an abstraction at all", "Why two and not one", "Why trait objects". Each of those is a defense of a choice against an imagined alternative. The apologia answers "should the design have been different?" — that is the ADRs' question. Explanation answers "what is going on here?".
+The single most common framing failure: an Explanation doc whose sections read as an apologia — "Why an abstraction at all", "Why two and not one", "Why trait objects". Each of those is a defense of a choice against an imagined alternative. Explanation answers "what is going on here?".
 
 The test: a section title phrased as "Why X?" or "Why X instead of Y?" is a justification title; rephrase it as what the section explains ("How X works", "What X does", "The moving parts of X") and rewrite the body to unfold the subject rather than defend it. Comparisons to alternatives still appear where load-bearing — they become "X differs from Y on..." statements inside the unfolding, not the section's reason for existing.
 
@@ -255,7 +252,3 @@ Two forms, both banned:
 - **Defensive scope disclaiming** — e.g. "X is not an external system", "X is not in scope", "State mutation via LLM function calling is out of scope for this reference". Diagrams and Out-of-scope lists are the source of truth for what's external; if something isn't in the diagram, it isn't in scope. Don't keep the disclaimed thing alive in the reader's mind with parallel negation. Inspirations belong in the explanation doc for the thing they inspired, not in negative asides on unrelated docs.
 
 If the negative is genuinely load-bearing — a constraint the reader must know — state it as a **positive constraint**, not a disclaimer. "The LLM cannot call back into the engine" becomes "state mutation is the engine's job, run through the action pipeline after the LLM has spoken." The reader gets the same fact as an assertion about how the system behaves, not as an apology about what it doesn't do.
-
-### What are ADRs for
-
-Up until now we've been using ADRs as a mixture of high-level design, explanation, and reference documentation. This type of multi-purpose doc does not fit in the diátaxis framework. The plan is to migrate much of the ADR content into diátaxis explanation/reference docs. Until this happens the new diátaxis/reference docs will have overlapping information with the ADRs.

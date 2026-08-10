@@ -397,5 +397,3 @@ Hover state for each class also adds a colored glow box-shadow in the matching a
 - [`./dashboard.md`](./dashboard.md) — page layout, tabs, polling cadences, and the per-flow interactions whose visual surface this doc specifies.
 - [`../game_flow.md#text-check-branch`](../game_flow.md#text-check-branch) — text-check settings and the preview UI's data model.
 - [`../narrative/narration_system.md#llm-call-logging--forensics`](../narrative/narration_system.md#llm-call-logging--forensics) — LLM Messages tab content and the 50-row `llm_messages` cap.
-- [ADR-001: HTMX Web Dashboard Architecture](../../../docs/adr/adr-001-htmx-web-dashboard.md) — HTMX + server-rendered HTML architecture.
-- [ADR-003: Askama Template Engine](../../../docs/adr/adr-003-askama-templates.md) — compile-time template validation.

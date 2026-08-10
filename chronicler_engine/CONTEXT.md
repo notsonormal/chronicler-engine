@@ -29,7 +29,7 @@ A semantic command issued by the player that enters the action pipeline for reso
 _Avoid_: Command, input, verb
 
 **Action Pipeline**:
-Ordered sequence of phases that validates and resolves an Action. Trigger evaluation runs **inside** engine commit. Phase methods signal success or one of several failure modes; see ADR-032 for the error vocabulary.
+Ordered sequence of phases that validates and resolves an Action. Trigger evaluation runs **inside** engine commit. Phase methods signal success or one of several failure modes.
 _Avoid_: Pipeline, command processor
 
 **Trigger**:
@@ -63,9 +63,9 @@ _Avoid_: Save, checkpoint, dump
 ## Deprecated Terms
 
 **Turn**:
-Don't use. Use Message + Swipe. (See ADR-012, ADR-013 for history.)
+Don't use. Use Message + Swipe.
 
 ## Notes
 
-- Implementation decisions live in ADRs; this glossary is the single source of truth for term meanings.
-- ADRs may not redefine these terms — they may only use them. Contradictions belong here first.
+- This glossary is the single source of truth for term meanings.
+- Implementation notes and historical decisions may inform term usage, but they do not override definitions here.

@@ -33,7 +33,4 @@ The orchestration layer couples the quantifier call to the NPC reconciliation st
 
 ## Document References
 
-- [ADR-009: Agent Trait and Registry Architecture](../../docs/adr/adr-009-agent-trait-registry.md) — historical decision record for the agent abstraction.
-- [ADR-006: Quantifier-Driven Game Systems](../../docs/adr/adr-006-quantifier-systems.md) — the quantifier predates the Agent abstraction; the trait later absorbed it.
-- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md)
 - `../reference/agent_system.md` — reference description of the agent machinery.

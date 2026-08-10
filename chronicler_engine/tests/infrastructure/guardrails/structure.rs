@@ -45,10 +45,7 @@ fn extract_doc_anchor_path(line: &str) -> Option<&str> {
 }
 
 fn is_forbidden_doc_path(doc_path: &str) -> bool {
-    doc_path == "docs/adr"
-        || doc_path.starts_with("docs/adr/")
-        || doc_path == "docs/plans"
-        || doc_path.starts_with("docs/plans/")
+    doc_path == "docs/plans" || doc_path.starts_with("docs/plans/")
 }
 
 fn is_test_file(path: &str) -> bool {
@@ -68,7 +65,7 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
                     path,
                     1,
                     format!(
-                        "Test file `{path}` has a DOC anchor. Test files must use a plain `//! <summary>` line only (ADR-028)."
+                        "Test file `{path}` has a DOC anchor. Test files must use a plain `//! <summary>` line only."
                     ),
                 ));
             }
@@ -109,7 +106,7 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
                 path,
                 1,
                 format!(
-                    "Module `{path}` DOC anchor `{anchor}` is not allowed. Anchors must point to domain docs, not decisions (`docs/adr/*`) or plans (`docs/plans/*`)."
+                    "Module `{path}` DOC anchor `{anchor}` is not allowed. Anchors must point to domain docs, not plans (`docs/plans/*`)."
                 ),
             ));
         }
@@ -323,7 +320,7 @@ pub fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
 ///   - `//! [DOC: <path>]` on line 1 + `//! <summary>` on line 2.
 ///
 /// Multi-line summary blocks and continuation lines beyond the single summary
-/// line are rejected. See ADR-028 for the rationale.
+/// line are rejected.
 pub fn check_test_module_header(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -423,8 +420,7 @@ pub fn check_test_module_header(path: &str, content: &str) -> Vec<Violation> {
                 summary_line_idx + 2,
                 format!(
                     "Test file `{path}` has a multi-line `//!` summary block. \
-                     Multi-line summaries are not allowed; condense to a single line. \
-                     See ADR-028."
+                     Multi-line summaries are not allowed; condense to a single line."
                 ),
             ));
         }

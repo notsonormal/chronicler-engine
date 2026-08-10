@@ -22,10 +22,10 @@ fn test_check_doc_standards_allows_correct_doc() {
 }
 
 #[test]
-fn test_check_doc_standards_rejects_adr_anchor() {
+fn test_check_doc_standards_rejects_forbidden_anchor() {
     let violations = check_doc_standards(
         "src/narrative/parser.rs",
-        "//! [DOC: docs/adr/adr-027.md]\n\
+        "//! [DOC: docs/plans/architecture.md]\n\
          //! Narrative parser module\n",
     );
     assert_eq!(violations.len(), 2);

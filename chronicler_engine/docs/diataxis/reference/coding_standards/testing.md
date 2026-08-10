@@ -28,4 +28,3 @@ Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_u
 - [`./guardrails.md`](./guardrails.md) — coverage-exclusion policy and the test-module-header convention guardrail.
 - [`tests/AGENTS.md`](../../../tests/AGENTS.md) — live structure index for the integration test tree and the TEST MIRROR CONVENTION.
 - [`scripts/check_test_structure.py`](../../../scripts/check_test_structure.py) — enforces `*_tests.rs` sibling-file layout (no inline `#[cfg(test)]` modules).
-- [ADR-028: Test Module Header Convention](../../../docs/adr/adr-028-test-module-header-convention.md) — the single-line `//! <summary>` convention on every `*_tests.rs` file.

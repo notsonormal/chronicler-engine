@@ -91,8 +91,3 @@ The distinction lives in the last message's `event_header`. The retry path reads
 
 - [Storage](../reference/storage.md) — current contract for the storage layer and entity persistence.
 - [Startup and Bootstrap](../reference/startup.md) — current bootstrap boundary, seeding order, and schema files.
-- [ADR-008: SQLite Snapshot Persistence](../../docs/adr/adr-008-sqlite-snapshot-persistence.md) — supplies the `GameStateSnapshot` that each swipe references for state-consistent switching.
-- [ADR-017: Message Swipes](../../docs/adr/adr-017-message-swipes.md) — historical decision record for the swipe model.
-- [ADR-020: Unified Storage Struct](../../docs/adr/adr-020-storage-consolidation.md) — historical decision record for collapsing the six-trait repository pattern into a single `Storage` struct with the `Backend` enum and `BackendKind` decorator.
-- [ADR-024: Migrate Game Data to SQLite with Seed Pattern](../../docs/adr/adr-024-game-data-migration-to-sqlite.md) — historical decision record for the JSON-to-SQLite migration and the idempotent seed pattern.
-- [ADR-026: Relocate Persona Binding from World to Game](../../docs/adr/adr-026-persona-relocation-to-game.md) — historical decision record for moving the persona binding off the world and onto the game, which made personas a top-level world-independent directory in the seed flow.

@@ -37,5 +37,3 @@ An invariant contract test verifies the rule: after any mutation, the registry s
 ## Document References
 
 - [`../reference/game_flow.md`](../reference/game_flow.md) — the factual phase sequence and the granular status-phase table.
-- [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — the original generation-gate decision (tokio migration + atomic + RAII guard).
-- [ADR-030: `is_generating` Dual-Source Invariant](../../docs/adr/adr-030-is-generating-invariant.md) — the formal dual-source contract, single-writer rule, and verification strategy.

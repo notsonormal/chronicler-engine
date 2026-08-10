@@ -37,7 +37,6 @@ The boundary reading keeps phase functions pure: phases operate on `GameState`, 
 
 ## Document References
 
-- [ADR-010: Concurrency Generation Gate](../../docs/adr/adr-010-concurrency-generation-gate.md) — `spawn_blocking` offload; sync services over async traits; the runtime concurrency frame the engine sits inside.
 - `../reference/architecture_system.md` — tier map (the canonical home for the `Arc<RwLock<AppSettings>>` shape) + invariant identifiers.
 - `../reference/guardrails.md` — INV-NNN *identifiers* (the guarantee for each lives in the invariant contract tests, not the docs).
 - `../reference/llm_processing.md` — LLM transport + the per-call site that reads `max_context_tokens` from settings.

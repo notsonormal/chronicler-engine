@@ -72,12 +72,6 @@ to the user message. OpenRouter backends are unaffected because the backend's na
 
 ## Document References
 
-- [ADR-004: XML-Structured LLM Prompts](../../../docs/adr/adr-004-xml-prompt-format.md) — XML-sectioned instructions + XML-wrapped data; sanitization rationale.
-- [ADR-005: SillyTavern-Style Layered Prompt System](../../../docs/adr/adr-005-layered-prompts.md) — layered prompt architecture and per-layer placement.
-- [ADR-006: Quantifier-Driven Game Systems](../../../docs/adr/adr-006-quantifier-systems.md) — dual-LLM architecture; quantifier detects NPCs and movement after narration.
-- [ADR-007: Settings System Architecture](../../../docs/adr/adr-007-settings-system.md) — `AppSettings` + connection profiles + `OPENROUTER_API_KEY` env-var fallback.
-- [ADR-012: LLM Call Logging and Forensics](../../../docs/adr/adr-012-llm-message-logging.md) — `llm_messages` table + retention + dashboard tab.
-- [ADR-022: PromptAssembler Trait Decoupling](../../../docs/adr/adr-022-prompt-assembler.md) — assembly decoupled from transport; preset-driven system prompt.
 - [`./prompt_system.md`](./prompt_system.md) — layered prompt architecture + token budget constants + system/user separation + single-user-message mode + prompt-injection sanitization.
 - [`./agent_system.md`](./agent_system.md) — post-generation agent that detects NPCs and movement; runs the quantifier's separate prompt.
 - [`../game_flow.md#phase-flow`](../game_flow.md#phase-flow) — full pipeline phase sequence + retry flow + cancellation; home of the α-check + `GenerationGuard::Drop`.

@@ -154,8 +154,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
   - `refine_character_json.py` — Split character card descriptions into structured personality/scenario/description fields.
   - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
-  - `validate_adrs.py` — Validate ADR files against the standard in docs/adr/README.md.
-  - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
+    - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
   - `validate_docs.py` — Validate markdown docs + DOC anchors under chronicler_engine/.
   - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
 <!-- AUTO-STRUCTURE END -->

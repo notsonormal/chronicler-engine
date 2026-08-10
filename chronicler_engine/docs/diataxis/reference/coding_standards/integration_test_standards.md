@@ -337,7 +337,6 @@ The `--llm-only` invocation is the canonical one for the integration-tier LLM te
 
 - [`unit_test_standards.md`](unit_test_standards.md) — unit-test standards (storage backend pair, LLM provider trait, LLM recorder, fragment renderer, concurrency invariant, proptest!; cross-tier alignment).
 - `tests/AGENTS.md` — engine-side test-infrastructure policy; test-mirror convention, structure overview, `[binary] ↔ fixture-weight` mapping.
-- `chronicler_engine/docs/adr/adr-028-test-module-header-convention.md` (ADR-028) — the `check_test_module_header` guardrail; enforces single-line `//! <summary>` on every `*_tests.rs` file.
 - `tests/test_utils/server.rs` — port allocation, `TestServer` lifecycle, `SERVER_MANAGED` PID registry.
 - `tests/test_utils/wait.rs` — smart-waiting helpers (`wait_for_llm_idle`, `wait_for_status_ready`, `wait_for_element_children`, etc.).
 - `tests/test_utils/browser.rs` — Playwright setup, `with_test_page`, `capture_failure_state`, `HEADED` / `SLOW_MO` env-var conventions.

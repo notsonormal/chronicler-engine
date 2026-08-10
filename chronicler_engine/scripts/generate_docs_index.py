@@ -1,10 +1,10 @@
 """Generate an auto-updating index for chronicler_engine/docs/AGENTS.md.
 
 Scans .md files in `docs/diataxis/` only (other docs subfolders are
-intentionally excluded: adr/, external_applications/, plans/, specs/ live
-under docs/ alongside diataxis/ and are not part of the discoverable
-documentation), extracts H1 titles, and regenerates the indexed section of
-AGENTS.md between AUTO-INDEX markers.
+intentionally excluded: external_applications/, plans/, specs/ live under
+docs/ alongside diataxis/ and are not part of the discoverable documentation),
+extracts H1 titles, and regenerates the indexed section of AGENTS.md between
+AUTO-INDEX markers.
 """
 
 import argparse
@@ -48,8 +48,8 @@ def discover_docs() -> dict[str, list[tuple[str, str]]]:
         if md_path.name in EXCLUDED_FROM_NAV:
             continue
         rel = md_path.relative_to(DOCS_DIR)
-        # Index scope: only docs/diataxis/. Other top-level dirs (adr/,
-        # external_applications/, plans/, specs/, plus any newly added
+        # Index scope: only docs/diataxis/. Other top-level dirs
+        # (external_applications/, plans/, specs/, plus any newly added
         # root-level docs) are not part of the auto-generated catalogue.
         if not rel.parts or rel.parts[0] != "diataxis":
             continue

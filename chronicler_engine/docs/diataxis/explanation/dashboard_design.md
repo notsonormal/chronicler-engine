@@ -76,6 +76,3 @@ The rendering pipeline is Askama with compile-time template validation; template
 - [`../reference/storage.md#messages`](../reference/storage.md#messages) — the `Message` / `Swipe` aggregate that the swipe and snapshot-restoration flows operate on.
 - [`../reference/frontend/ui_design.md`](../reference/frontend/ui_design.md) — design tokens and component specs that the server-rendered fragments consume.
 - [`../reference/frontend/http_routes.md`](../reference/frontend/http_routes.md) — full HTTP route topology (52 routes, machine-generated).
-- [ADR-001: HTMX Web Dashboard Architecture](../../docs/adr/adr-001-htmx-web-dashboard.md) — historical decision record for the HTMX + server-rendered HTML architecture.
-- [ADR-002: HTTP Polling for Real-Time Updates](../../docs/adr/adr-002-http-polling.md) — historical decision record for polling over WebSocket/SSE.
-- [ADR-003: Askama Template Engine](../../docs/adr/adr-003-askama-templates.md) — historical decision record for the Askama template engine.

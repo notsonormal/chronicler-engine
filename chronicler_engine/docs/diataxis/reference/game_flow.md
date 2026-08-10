@@ -148,13 +148,5 @@ Only player command text enters the checker. Result DTO and issue categories are
 
 ## Document References
 
-- [ADR-006: Quantifier-Driven Game Systems](../../docs/adr/adr-006-quantifier-systems.md) — post-generation scene analysis, movement detection, and Trigger evaluation.
-- [ADR-008: SQLite Snapshot Persistence](../../docs/adr/adr-008-sqlite-snapshot-persistence.md) — Message-aligned Snapshot persistence used by retry.
-- [ADR-010: Concurrency and Generation Gate Model](../../docs/adr/adr-010-concurrency-generation-gate.md) — `spawn_blocking`, generation-gate, and cooperative-cancellation decision.
-- [ADR-014: Action Pipeline Architecture](../../docs/adr/adr-014-action-pipeline.md) — phase-based Action Pipeline and mutation-order decision.
-- [ADR-017: Message Swipes](../../docs/adr/adr-017-message-swipes.md) — alternate-generation and retry semantics.
-- [ADR-027: Hexagonal Architecture Migration](../../docs/adr/adr-027-hexagonal-architecture-migration.md) — application ownership of Action Pipeline orchestration.
-- [ADR-030: `is_generating` Dual-Source Invariant](../../docs/adr/adr-030-is-generating-invariant.md) — per-Game registry and atomic-projection contract.
-- [ADR-032: PhaseError](../../docs/adr/adr-032-phaseerror.md) — phase error vocabulary and orchestrator disposition.
 - [`../explanation/two-state-channels.md`](../explanation/two-state-channels.md) — rationale for persisted generation status and in-memory generation ownership.
 - [`./narrative/narration_system.md`](./narrative/narration_system.md) — narrator configuration, backend adapters, prompt-side role, response handling, and LLM call forensics.

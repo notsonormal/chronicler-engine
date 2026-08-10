@@ -149,6 +149,3 @@ New-game names are auto-generated as `{WorldName}_{YYYY-MM-DD}_{N}` (underscores
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — trigger evaluation that retrigger re-runs.
 - [`../game_flow.md`](../game_flow.md) — phase pipeline that drives Thinking/Quantifying/Generating status text.
 - [`../../explanation/dashboard_design.md`](../../explanation/dashboard_design.md) — design rationale: SillyTavern lineage, polling cadence choice, polling-pause pattern, snapshot-restoration cascade, empty-input continuation, server-rendered fragments over a SPA.
-- [ADR-001: HTMX Web Dashboard Architecture](../../../docs/adr/adr-001-htmx-web-dashboard.md) — HTMX + server-rendered HTML architecture.
-- [ADR-002: HTTP Polling for Real-Time Updates](../../../docs/adr/adr-002-http-polling.md) — polling-based real-time updates.
-- [ADR-003: Askama Template Engine](../../../docs/adr/adr-003-askama-templates.md) — compile-time template validation.

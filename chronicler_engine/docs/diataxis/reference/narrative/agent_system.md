@@ -146,9 +146,6 @@ Default presets ship as `data/prompt_presets/quantifier/default.json` and are pr
 
 ## Document References
 
-- [ADR-006: Quantifier-Driven Game Systems](../../../docs/adr/adr-006-quantifier-systems.md) — dual-LLM architecture; quantifier-driven movement + NPC detection + NPC event layer.
-- [ADR-009: Agent Trait and Registry Architecture](../../../docs/adr/adr-009-agent-trait-registry.md) — the `Agent` trait + `AgentRegistry` + the extension procedure for new agents; the `PostGeneration` dispatch that hosts the quantifier.
-- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md)
 - [`../../explanation/agent_system_design.md`](../../explanation/agent_system_design.md) — why the agent abstraction is shaped this way and which tradeoffs it encodes.
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — uses the quantifier's NPC + movement output as the precondition for trigger evaluation.
 - [`../game_flow.md#phase-flow`](../game_flow.md#phase-flow) — pipeline home for the `PostGeneration` dispatch.

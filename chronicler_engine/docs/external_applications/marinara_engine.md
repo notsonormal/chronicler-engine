@@ -260,4 +260,4 @@ Game mode uses a completely separate prompt stack:
 
 ## Document References
 
-- [ADR-027: Hexagonal Architecture Migration](../adr/adr-027-hexagonal-architecture-migration.md) — current chronicler architecture; Marinara-Engine is reference only
+- [Hexagonal architecture](../diataxis/explanation/architecture.md) — current chronicler architecture; Marinara-Engine is reference only

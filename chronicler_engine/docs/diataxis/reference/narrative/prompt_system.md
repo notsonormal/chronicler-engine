@@ -189,9 +189,6 @@ Default presets ship as `data/prompt_presets/system/default.json` and are protec
 
 ## Document References
 
-- [ADR-004: XML-Structured LLM Prompts](../../../docs/adr/adr-004-xml-prompt-format.md) — XML-sectioned instructions + XML-wrapped data; tags not objects of analysis.
-- [ADR-005: SillyTavern-Style Layered Prompt System](../../../docs/adr/adr-005-layered-prompts.md) — layered prompt architecture + post-history splice rationale.
-- [ADR-022: PromptAssembler Trait Decoupling](../../../docs/adr/adr-022-prompt-assembler.md) — assembly decoupled from transport.
 - [`../../explanation/prompt_system_design.md`](../../explanation/prompt_system_design.md) — why the prompt system is shaped this way: system/user separation and two-tier NPC cards.
 - [`./agent_system.md`](./agent_system.md) — the quantifier prompt as a separate secondary prompt, hosted by the `QuantifierAgent`.
 - [`./narration_system.md`](./narration_system.md) — LLM transport, sanitization (response side + Gemma 4 workaround), forensics, and runtime tracing.

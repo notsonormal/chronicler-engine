@@ -7,13 +7,12 @@ roles which determine which rules apply:
               under docs/diataxis/). All rules enforced.
   TRANSIENT — historical or forward-looking docs (CHANGELOG, plans). Exempt
               from all checks; they may reference anything historically.
-  EXCLUDED  — auto-generated indexes, ADR standards readme, template, archives,
-              process notes (AGENTS.md, _PILOT_NOTES.md). Exempt from all checks.
+  EXCLUDED  — auto-generated indexes, archives, process notes
+              (AGENTS.md, _PILOT_NOTES.md). Exempt from all checks.
 
 Rules (only enforced on STANDARD docs):
 
   BROKEN_MARKDOWN_LINK     — [text](relative/path.md) where target file missing.
-  BROKEN_ADR_REF           — `ADR-NNN` mention where adr-NNN-*.md file is missing.
   STANDARD_PLAN_LINK       — link into docs/plans/ or old-docs/archived-plans/.
                               Standards must be self-contained; plans are transient
                               and cannot be leaned on as canonical reference.
@@ -25,7 +24,6 @@ Rules (only enforced on STANDARD docs):
                                     is a path-like token ending in `.md`
                                 (c) plain §Section text on a line whose earlier text
                                     contains a `.md` path
-                                (d) `\bADR-NNN\b` plain mentions
                               All forms must appear only in the `## Document
                               References` section at the bottom of the file.
 
@@ -40,7 +38,7 @@ docs/diataxis/):
   FRONTMATTER_INVALID_MODE     — `diataxis:` value not in the vocabulary.
   FRONTMATTER_INVALID_ARC52    — `arc52:` present but not a list of valid sections.
 
-Mirrors `validate_adrs.py` structure (Violation NamedTuple, per-file report,
+Mirrors the validator structure (Violation NamedTuple, per-file report,
 summary line at bottom). Intentionally decoupled from the
 `chronicler-docs-hygiene` skill — skill handles LLM semantic analysis, this
 script handles deterministic checks. CI / pre-commit can run this in <1s.
@@ -53,9 +51,9 @@ DOC anchor rules (applied to src/**/*.rs, tests/**/*.rs, *.toml):
                                   (two message variants of one rule).
   TEST_SUPPORT_ANCHOR_FORBIDDEN  — any `src/test_support/*.rs` carrying a
                                   `[DOC: ...]` line. Test helpers are
-                                  organised by fixture weight (ADR-028).
+                                  organised by fixture weight.
   TEST_FILES_ANCHOR_FORBIDDEN    — any `tests/**/*.rs` carrying a
-                                  `[DOC: ...]` line. Mirrors ADR-028.
+                                  `[DOC: ...]` line.
   TEST_SUPPORT_SUMMARY_REQUIRED  — `src/test_support/*.rs` line 1 is missing
                                   or empty `//! <summary>`.
 
@@ -93,10 +91,6 @@ WARNING = "warning"  # does not fail unless --strict.
 # Markdown link: [text](target). Capture group 1 = target.
 # Excludes images (leading !).
 MARKDOWN_LINK = re.compile(r"(?<!\!)\[[^\]]*\]\(([^)]+)\)")
-
-# ADR cross-reference: ADR-NNN (one or more digits, no leading zeros required).
-# Word boundary on left; not preceded by alphanumerics on right (so ADR-12x fails).
-ADR_REF = re.compile(r"\bADR-(\d+)\b")
 
 # Heading regex for finding the `## Document References` section boundary.
 # Matches `## Document References` at start of line (any leading whitespace).
@@ -168,9 +162,6 @@ EXCLUDED_FILE_NAMES: set[str] = {
     "README.md",
     "_PILOT_NOTES.md",  # process artifact, not a Diátaxis doc
 }
-
-# File patterns exempt from all checks (template, etc.). Matched on stem.
-EXCLUDED_STEM_PREFIXES: tuple[str, ...] = ("adr-000-template",)
 
 # Directories whose entire subtree is exempt (archives, etc.).
 EXCLUDED_DIR_NAMES: set[str] = {"old-docs"}
@@ -253,11 +244,10 @@ def classify_file(path: Path, docs_root: Path) -> str:
 
     Classification rules (first match wins):
       1. File name in EXCLUDED_FILE_NAMES  → EXCLUDED
-      2. Stem starts with EXCLUDED_STEM_PREFIXES → EXCLUDED
-      3. Any path segment in EXCLUDED_DIR_NAMES → EXCLUDED
-      4. First segment is 'plans' OR path is 'CHANGELOG.md' → TRANSIENT
-      5. First segment in STANDARD_DIR_NAMES → STANDARD
-      6. Otherwise → EXCLUDED (unrecognized top-level doc — be permissive)
+      2. Any path segment in EXCLUDED_DIR_NAMES → EXCLUDED
+      3. First segment is 'plans' OR path is 'CHANGELOG.md' → TRANSIENT
+      4. First segment in STANDARD_DIR_NAMES → STANDARD
+      5. Otherwise → EXCLUDED (unrecognized top-level doc — be permissive)
     """
     rel = relative_to(path, docs_root)
     if rel is None:
@@ -268,9 +258,6 @@ def classify_file(path: Path, docs_root: Path) -> str:
         return "EXCLUDED"
 
     if parts[-1] in EXCLUDED_FILE_NAMES:
-        return "EXCLUDED"
-
-    if any(parts[-1].startswith(prefix) for prefix in EXCLUDED_STEM_PREFIXES):
         return "EXCLUDED"
 
     if any(part in EXCLUDED_DIR_NAMES for part in parts):
@@ -465,8 +452,6 @@ def check_markdown_links(report: FileReport, docs_root: Path) -> None:
                 continue
             if not target_path_only.endswith(".md"):
                 continue
-            if target_path_only.endswith("adr-000-template.md"):
-                continue
             resolved = (report.path.parent / target_path_only).resolve()
             try:
                 resolved.relative_to(docs_root.resolve())
@@ -478,46 +463,6 @@ def check_markdown_links(report: FileReport, docs_root: Path) -> None:
                         ERROR,
                         "BROKEN_MARKDOWN_LINK",
                         f"Line {lineno}: target does not exist: {target_path_only}",
-                    )
-                )
-
-
-def check_adr_refs(report: FileReport, adr_dir: Path) -> None:
-    """Flag ADR-NNN mentions where the corresponding ADR file is missing.
-
-    `adr_dir` may be None if the engine has no docs/adr/ directory; in that
-    case the check is a no-op (matches the existing validate_docs.py behavior
-    of silently skipping when the ADR dir is absent).
-    """
-    if adr_dir is None or not adr_dir.exists():
-        return
-
-    text = read_text(report)
-    if text is None:
-        return
-
-    seen: set[int] = set()
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        for match in ADR_REF.finditer(line):
-            number = int(match.group(1))
-            if number in seen:
-                continue
-            seen.add(number)
-            padded = f"{number:03d}"
-            matches = list(adr_dir.glob(f"adr-{padded}-*.md"))
-            if not matches:
-                matches = [
-                    p
-                    for p in adr_dir.iterdir()
-                    if p.is_file() and p.stem.lower().startswith(f"adr-{padded.lower()}-")
-                ]
-            if not matches:
-                report.violations.append(
-                    Violation(
-                        ERROR,
-                        "BROKEN_ADR_REF",
-                        f"Line {lineno}: ADR-{padded} referenced but "
-                        f"adr-{padded}-*.md not found in {adr_dir.name}/",
                     )
                 )
 
@@ -610,9 +555,6 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
     (or the entire file if no such section exists). Fenced code blocks
     inside body prose are exempt.
 
-    ADRs (docs/adr/*.md) are exempt from this rule — they are decision records
-    that link context inline by design.
-
     Fires on any of the following in body prose, when the resolved target is
     inside the docs root:
 
@@ -621,21 +563,16 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
           see _is_md_path_in_backticks).
       (c) Plain §Section text where the same line earlier in the text
           contains a `.md` path token (resolves via that preceding path).
-      (d) `\bADR-NNN\b` plain mention.
 
-    Forms (a) and (b) are primary: if either fires on a line, forms (c) and
-    (d) are skipped for that line to avoid noise (the existing markdown-link
-    dedup is preserved). Forms (c) and (d) can co-fire on a line with each
-    other, and (c) can fire multiple times on a single line when several
-    different § tokens appear with the same preceding path.
+    Forms (a) and (b) are primary: if either fires on a line, form (c) is
+    skipped for that line to avoid noise (the existing markdown-link
+    dedup is preserved). Form (c) can fire multiple times on a single line when
+    several different § tokens appear with the same preceding path.
     """
     try:
         rel_to_docs = report.path.resolve().relative_to(docs_root.resolve())
     except ValueError:
         return
-    if rel_to_docs.parts and rel_to_docs.parts[0] == "adr":
-        return
-
     text = read_text(report)
     if text is None:
         return
@@ -677,8 +614,6 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
             if target_path_only.startswith("#"):
                 continue
             if not target_path_only.endswith(".md"):
-                continue
-            if target_path_only.endswith("adr-000-template.md"):
                 continue
             resolved = (report.path.parent / target_path_only).resolve()
             try:
@@ -723,7 +658,7 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
             )
 
         if _line_has_flag():
-            # Backtick ref already flags this line; skip § and ADR forms.
+            # Backtick ref already flags this line; skip § form.
             continue
 
         # Stage 3: plain §Section text. Only fires when the same line has a
@@ -757,18 +692,6 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
                         f"the file.",
                     )
                 )
-
-        # Stage 4: ADR mention.
-        for match in ADR_REF.finditer(line):
-            report.violations.append(
-                Violation(
-                    ERROR,
-                    "STANDARD_DOC_BODY_REFERENCE",
-                    f"Line {lineno}: ADR-{match.group(1)} mentioned in body "
-                    f"prose. Move to `## Document References` section at the "
-                    f"bottom of the file.",
-                )
-            )
 
 
 # ---------------------------------------------------------------------------
@@ -1033,16 +956,12 @@ def scan_file(
         return report  # not under docs/diataxis/; nothing to check
 
     docs_root = engine_root / "docs" / "diataxis"
-    # Cross-tree ADR lookup: docs/diataxis/ files reference ADRs that live in
-    # docs/adr/.
-    adr_dir = engine_root / "docs" / "adr"
 
     role = classify_file(path, docs_root)
     if role != "STANDARD":
         return report
 
     check_markdown_links(report, docs_root)
-    check_adr_refs(report, adr_dir)
     check_standard_plan_links(report, docs_root)
     check_standard_body_references(report, docs_root)
 

@@ -303,4 +303,4 @@ Critical rule: **scope-guard the test to polymorphism only** — implementation-
 
 - [`./testing.md`](./testing.md) — testing policy (terse, what's required, builder selection).
 - `src/test_support/mod.rs` — entry point for fixture builders.
-- `tests/infrastructure/guardrails/structure.rs` (ADR-028) — the `check_test_module_header` guardrail; enforces single-line `//! <summary>` on every `*_tests.rs` file.
+- `tests/infrastructure/guardrails/structure.rs` — the `check_test_module_header` guardrail; enforces single-line `//! <summary>` on every `*_tests.rs` file.

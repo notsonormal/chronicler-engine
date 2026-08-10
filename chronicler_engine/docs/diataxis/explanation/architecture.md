@@ -81,7 +81,6 @@ A small set of guarantees follow from the shape above. Each is machine-checked o
 
 ## Document References
 
-- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md)
 - [`../reference/architecture_system.md`](../reference/architecture_system.md) — eight-tier map; dependency invariant; port inventory.
 - [`../../reference/storage.md`](../../reference/storage.md) — SQLite schema and the eleven tables.
 - [`./two-state-channels.md`](./two-state-channels.md) — why the engine carries two complementary generation-state signals.

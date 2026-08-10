@@ -70,7 +70,3 @@ cargo nextest run --test guardrails
 
 - [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Quality Story](../../explanation/architecture.md#quality-story) quality-attribute table cites INV-001, INV-003, INV-004, INV-004b, INV-005, INV-006, INV-007.
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — INV-002 mutation sequence is the same one the trigger phase observes.
-- [ADR-010: Concurrency and Generation Gate Model](../../../docs/adr/adr-010-concurrency-generation-gate.md) — tokio migration rationale for INV-003 / INV-004.
-- [ADR-014: Action Pipeline Architecture](../../../docs/adr/adr-014-action-pipeline.md) — phase-based pipeline rationale for INV-002 mutation order.
-- [ADR-027: Hexagonal Architecture Migration](../../../docs/adr/adr-027-hexagonal-architecture-migration.md) — port ownership and the `DebugPort` exemption.
-- [ADR-030: `is_generating` Dual-Source Invariant](../../../docs/adr/adr-030-is-generating-invariant.md) — dual-source consistency rationale for INV-001.

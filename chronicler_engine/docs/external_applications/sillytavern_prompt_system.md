@@ -116,4 +116,4 @@ SillyTavern character cards (Jailbreak format):
 
 ## Document References
 
-- [ADR-005: SillyTavern-Style Layered Prompt System](../adr/adr-005-layered-prompts.md) — chronicler layered prompt design
+- [Prompt System Design](../diataxis/explanation/prompt_system_design.md) — chronicler layered prompt design

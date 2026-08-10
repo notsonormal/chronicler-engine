@@ -10,7 +10,7 @@ fn test_db_creates_empty_games_table() {
     let exists: Result<String, _> = stmt.query_row([], |row| row.get(0));
     assert!(exists.is_ok(), "games table should exist");
 
-    // After ADR-026 fix: no default game is seeded by migrations. The server
+    // After persona relocation: no default game is seeded by migrations. The server
     // auto-creates a game via `resolve_game_id` using the `--persona` CLI flag.
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))

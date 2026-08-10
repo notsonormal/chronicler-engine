@@ -31,7 +31,7 @@ pub async fn debug_is_generating_handler(State(state): State<AppState>) -> Strin
 }
 
 pub async fn debug_backend_handler(State(state): State<AppState>) -> Json<DebugBackendResponse> {
-    // arch-lint: debug-direct — intentional exemption, see ADR-027 §3.2
+    // arch-lint: debug-direct — intentional exemption, see the hexagonal architecture docs.
     let (name, model) = state.pipeline.backend_info();
     Json(DebugBackendResponse {
         backend_name: name.to_string(),

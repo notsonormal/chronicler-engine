@@ -95,7 +95,7 @@ fn test_seed_game_data_idempotent() {
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1, "Should seed once, not duplicate");
 
-    // Personas seeded from data/personas/ scan (ADR-026).
+    // Personas seeded from data/personas/ scan.
     let personas = storage.list_personas().unwrap();
     assert_eq!(personas.len(), 1, "Should seed one persona");
     assert!(
