@@ -80,7 +80,7 @@ cargo run -- --world <world> --port <port>
 
 ```javascript
 browser_navigate(url="http://127.0.0.1:3000")
-browser_wait_for(text="Chronicler")  // Or wait for specific element
+browser_wait_for(text="Chronicler Engine")  // Full title in the header
 ```
 
 ### Step 3: Capture State
@@ -92,7 +92,16 @@ browser_console_messages(level="error", all=true)
 // Accessibility tree (for structural analysis)
 browser_snapshot(depth=3)  // depth adjustable
 
+// Core dashboard fragments
+browser_navigate(url="http://127.0.0.1:3000/fragment/action-area")
+browser_navigate(url="http://127.0.0.1:3000/fragment/character-headshots")
+
+// Status polling endpoints
+browser_navigate(url="http://127.0.0.1:3000/status/ready")
+browser_navigate(url="http://127.0.0.1:3000/status/generating")
+
 // Screenshot (for visual analysis)
+browser_navigate(url="http://127.0.0.1:3000")
 browser_take_screenshot(filename="chronicler-ui.png")
 ```
 
@@ -136,6 +145,7 @@ After making any changes and before claiming verification:
 
 ### Testing - Check element presence
 ```javascript
+browser_navigate(url="http://127.0.0.1:3000")
 browser_snapshot(depth=2)
 // Caller verifies specific elements exist
 ```
@@ -144,12 +154,27 @@ browser_snapshot(depth=2)
 ```javascript
 browser_console_messages(level="error", all=true)
 browser_snapshot(depth=5)  // Deeper for detail
+
+// Check interactive endpoints respond
+browser_navigate(url="http://127.0.0.1:3000/fragment/action-area")
+browser_navigate(url="http://127.0.0.1:3000/status/ready")
 ```
 
 ### Post-Plan - Full capture
 ```javascript
 browser_console_messages(level="error", all=true)
 browser_console_messages(level="warning", all=true)
+
+// Verify all dashboard fragments and status endpoints load
+browser_navigate(url="http://127.0.0.1:3000/fragment/header")
+browser_navigate(url="http://127.0.0.1:3000/fragment/story-log")
+browser_navigate(url="http://127.0.0.1:3000/fragment/visual-sidebar")
+browser_navigate(url="http://127.0.0.1:3000/fragment/action-area")
+browser_navigate(url="http://127.0.0.1:3000/fragment/character-headshots")
+browser_navigate(url="http://127.0.0.1:3000/status/ready")
+browser_navigate(url="http://127.0.0.1:3000/status/generating")
+
+browser_navigate(url="http://127.0.0.1:3000")
 browser_snapshot(depth=4)
 browser_take_screenshot(filename="post-plan-ui.png", fullPage=true)
 ```
@@ -164,6 +189,24 @@ browser_take_screenshot(filename="post-plan-ui.png", fullPage=true)
 | Page not loading | Verify server started, check port |
 | Elements missing | Check world loaded correctly |
 | Console errors | Analyze returned errors |
+| Command form missing | Check `/fragment/action-area` |
+| Status not updating | Check `/status/generating` and `/status/ready` |
+
+---
+
+## Interactive endpoints not covered by default
+
+These are used during gameplay and should be tested separately when validating interactivity:
+
+- `/action` — submit a player command
+- `/action/check` — text-check before submitting
+- `/action/confirm` — confirm a corrected command
+- `/check-text` — standalone text check
+- `/swipe/new` — retry/generate a new swipe
+- `/message/:id/swipe/:index` — switch to a different swipe
+- `/retrigger` — retrigger the last event
+- `/history/:id` — edit a history entry
+- `/history/delete` — delete the last history entry
 
 ---
 
@@ -180,4 +223,4 @@ browser_take_screenshot(filename="post-plan-ui.png", fullPage=true)
 - No expected values hardcoded - caller provides assertions
 - Screenshot saved to current working directory
 - Use `browser_wait_for(text="...")` to wait for dynamic content
-- For WebSocket state, check if "Connected" status appears
+- The `#connection-status` element is rendered server-side in the header fragment and shows "Connected" by default; it is not a live WebSocket state indicator
