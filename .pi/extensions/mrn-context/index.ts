@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const BUILD_LOG_GLOB = "chronicler_engine/logs/build_*.log";
+const BUILD_LOG_GLOB = "logs/build_*.log";
 const MTIME_WINDOW_SECONDS = 300;
 
 type SourceResult = { key: string; line: string };

@@ -417,7 +417,7 @@ test("resolveInitialPlanModeToolNames auto-includes write/edit when folders conf
 	]);
 	const config = {
 		defaultTools: ["read", "bash", "grep", "find", "ls"],
-		planFolder: "chronicler_engine/docs/plans",
+		planFolder: "docs/plans",
 		scratchFolders: ["tmp", ".scratch"],
 	};
 	const names = resolveInitialPlanModeToolNames(tools, config);
@@ -436,7 +436,7 @@ test("resolveInitialPlanModeToolNames auto-includes write/edit when folders conf
 		"edit",
 	]);
 	const config = {
-		planFolder: "chronicler_engine/docs/plans",
+		planFolder: "docs/plans",
 		scratchFolders: ["tmp"],
 	};
 	const names = resolveInitialPlanModeToolNames(tools, config);
