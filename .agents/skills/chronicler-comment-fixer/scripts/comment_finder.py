@@ -32,7 +32,7 @@ class CommentMatch:
 
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-WORKSPACE_ROOT = SCRIPT_DIR.parent.parent.parent.parent  # repo root (mrn-general)
+WORKSPACE_ROOT = SCRIPT_DIR.parent.parent.parent.parent  # repo root
 UNCOMMITTED_EXTENSIONS = {".rs", ".py"}
 
 

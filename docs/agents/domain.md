@@ -4,8 +4,8 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`CONTEXT-MAP.md`** at the repo root — points at one `CONTEXT.md` per context.
-- **`CONTEXT.md`** for each context in scope (e.g. `chronicler_engine/CONTEXT.md`).
+- **`AGENTS.md`** at the repo root — project-wide agent guidelines.
+- **`chronicler_engine/CONTEXT.md`** for the Chronicler Engine context.
 
 There is no system-wide decision-record directory at the root by design — rationale for past decisions lives in the relevant `CONTEXT.md` or in archived plans.
 
@@ -13,19 +13,13 @@ There is no system-wide decision-record directory at the root by design — rati
 
 If a referenced `CONTEXT.md` doesn't exist, **proceed silently**. Don't flag the absence, don't suggest creating it. Files are created lazily via `/domain-modeling` when the work actually needs them.
 
-This repo's `CONTEXT-MAP.md` lists three contexts (Chronicler Engine, Docker, Scripts) but only the engine context has been materialized. Skills reading the Docker or Scripts context should silently treat them as empty until work in those areas forces the glossary into existence.
-
 ## Layout
 
 ```
 /
-├── CONTEXT-MAP.md
-├── chronicler_engine/
-│   └── CONTEXT.md
-├── docker/
-│   └── CONTEXT.md          (created lazily)
-└── scripts/
-    └── CONTEXT.md          (created lazily)
+├── AGENTS.md
+└── chronicler_engine/
+    └── CONTEXT.md
 ```
 
 ## Use the glossary's vocabulary

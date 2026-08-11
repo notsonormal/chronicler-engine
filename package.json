@@ -1,0 +1,12 @@
+{
+  "name": "chronicler-engine",
+  "version": "1.0.0",
+  "description": "AI-driven interactive fiction engine",
+  "private": true,
+  "dependencies": {
+    "jsdom": "^29.1.1",
+    "opencode-browser": "1.2.2",
+    "opencode-pty": "0.3.4"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

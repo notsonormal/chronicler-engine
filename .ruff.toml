@@ -1,4 +1,4 @@
-# Ruff configuration for MRN-General
+# Ruff configuration for Chronicler Engine
 line-length = 100
 target-version = "py312"
 
