@@ -16,7 +16,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path("/home/moridin84/projects/mrn-general")
+REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "chronicler_engine" / "scripts"))
 
 import validate_docs as vd  # noqa: E402

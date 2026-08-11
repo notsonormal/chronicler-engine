@@ -48,7 +48,7 @@ def process_file(file_path):
     print(f"Refined -> {file_path}")
 
 def main():
-    target_dir = Path("/workspaces/mrn-general/chronicler_engine/data/characters")
+    target_dir = Path(__file__).resolve().parent.parent / "data" / "characters"
     for file in target_dir.glob("*.json"):
         process_file(file)
 

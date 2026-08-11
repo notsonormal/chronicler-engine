@@ -290,6 +290,6 @@
     "low: prompt_preset.rs:113 - push_section premature extraction",
     "low: state.rs:24 - MessageEntry thin DTO layering"
   ],
-  "manualNotes": "Report written to E:\\John\\Github\\mrn-general\\reports\\zone-a-model.md. No edits performed on chronicler_engine source files."
+  "manualNotes": "Report written to reports/zone-a-model.md. No edits performed on chronicler_engine source files."
 }
 ```
