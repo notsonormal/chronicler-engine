@@ -4,11 +4,11 @@
 
 When implementing changes, ALWAYS update these documents BEFORE writing code:
 
-1. **Plan** (`chronicler_engine/docs/plans/<name>.md`) - Document problem, solution, files to change
-2. **Architecture** (`chronicler_engine/docs/diataxis/explanation/architecture.md`) - Core module structure changes
-3. **System docs** (`chronicler_engine/docs/diataxis/reference/`) - Domain-specific docs (frontend/dashboard.md, game_flow.md, etc.)
-4. **Reference docs** (`chronicler_engine/docs/diataxis/reference/coding_standards/`) - Data schemas, API specs
-5. **ADRs** (`chronicler_engine/docs/adr/*.md`) - If making architectural decisions
+1. **Plan** (`docs/plans/<name>.md`) - Document problem, solution, files to change
+2. **Architecture** (`docs/diataxis/explanation/architecture.md`) - Core module structure changes
+3. **System docs** (`docs/diataxis/reference/`) - Domain-specific docs (frontend/dashboard.md, game_flow.md, etc.)
+4. **Reference docs** (`docs/diataxis/reference/coding_standards/`) - Data schemas, API specs
+5. **ADRs** (`docs/adr/*.md`) - If making architectural decisions
 6. **CHANGELOG.md** - Record the change (Date the change was made, not released. Also remove concat and eventually remove older entries if the file gets too large)
 
 Example: If adding a new HTMX polling endpoint, update:

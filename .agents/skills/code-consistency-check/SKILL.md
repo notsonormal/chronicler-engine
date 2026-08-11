@@ -24,4 +24,4 @@ Status: [PASS] or [FAIL]
 
 # Note
 
-For comment style checking in chronicler_engine/, use **`chronicler-comment-fixer`** instead.
+For comment style checking in the repo, use **`chronicler-comment-fixer`** instead.

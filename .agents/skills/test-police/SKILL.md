@@ -96,8 +96,8 @@ Gate is **overall ≥80%**, not per-file. Per-file numbers are reference, not ga
 
 - `TEST_INVENTORY.md` — subdir/file purpose tables for `tests/` and unit test layout. File lists drift on every PR — run `ls` for current membership.
 - `WAIT_HELPERS.md` — smart-wait API catalog (`tests/test_utils/wait.rs`, `browser.rs`), with signatures, example usage, and acceptable bare-sleep policy.
-- `chronicler_engine/AGENTS.md` — test-first philosophy, tests-as-documentation, conventions (DOC anchors, `LlmBackend` trait + `MockBackend`), commands, development loop, concurrent-build flags.
+- `AGENTS.md` — test-first philosophy, tests-as-documentation, conventions (DOC anchors, `LlmBackend` trait + `MockBackend`), commands, development loop, concurrent-build flags.
 
 # Development loop (this skill)
 
-Use `--target-dir target/test-police` for isolated builds. Full command reference: `chronicler_engine/AGENTS.md`.
+Use `--target-dir target/test-police` for isolated builds. Full command reference: `AGENTS.md`.

@@ -1,6 +1,6 @@
 # Chronicler Engine Test Inventory
 
-Subdir/file purpose reference for `chronicler_engine/tests/` and unit tests.
+Subdir/file purpose reference for `tests/` and unit tests.
 
 **File lists drift on every PR — run `ls` for current membership.** This file captures *purpose*, not a manifest.
 

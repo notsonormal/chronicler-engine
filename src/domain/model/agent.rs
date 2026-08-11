@@ -1,0 +1,117 @@
+//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
+//! Agent definitions and behavior types
+
+use serde::{Deserialize, Serialize};
+
+use crate::domain::model::state::game_state::GameState;
+
+/// [TRIVIAL_ENUM]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionPhase {
+    #[default]
+    PreGeneration,
+    PostGeneration,
+}
+
+/// [TRIVIAL_ENUM]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case", tag = "type", content = "value")]
+pub enum BackendSelector {
+    #[default]
+    UseMain,
+    UseNamed(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentConfig {
+    pub name: String,
+    pub agent_type: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub backend: BackendSelector,
+    #[serde(default)]
+    pub phase: ExecutionPhase,
+}
+
+impl AgentConfig {
+    pub fn defaults() -> Vec<Self> {
+        vec![Self {
+            name: "quantifier".to_string(),
+            agent_type: "quantifier".to_string(),
+            enabled: true,
+            backend: BackendSelector::UseNamed("quantifier".to_string()),
+            phase: ExecutionPhase::PostGeneration,
+        }]
+    }
+}
+
+impl StatePatch {
+    /// Union `npc_ids`; keep first non-None `movement_destination` (warn on conflict); take minimum `confidence`.
+    pub fn merge(self, other: StatePatch) -> StatePatch {
+        let ids_b_unique: Vec<_> = other
+            .npc_ids
+            .into_iter()
+            .filter(|id| !self.npc_ids.contains(id))
+            .collect();
+        let mut npc_ids = self.npc_ids;
+        npc_ids.extend(ids_b_unique);
+
+        let movement_destination = match self.movement_destination {
+            Some(ref d) => {
+                if let Some(ref db) = other.movement_destination {
+                    tracing::warn!("Movement destination conflict: {d} vs {db}, keeping first",);
+                }
+                Some(d.clone())
+            }
+            None => other.movement_destination,
+        };
+
+        let confidence = match (self.confidence, other.confidence) {
+            (Confidence::High, c) => c,
+            (c, Confidence::High) => c,
+            (Confidence::Medium, c) => c,
+            (c, Confidence::Medium) => c,
+            (Confidence::Low, Confidence::Low) => Confidence::Low,
+        };
+
+        StatePatch {
+            npc_ids,
+            movement_destination,
+            confidence,
+        }
+    }
+}
+
+/// [TRIVIAL_ENUM]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Confidence {
+    High,
+    Medium,
+    Low,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StatePatch {
+    pub npc_ids: Vec<String>,
+    pub movement_destination: Option<String>,
+    pub confidence: Confidence,
+}
+
+/// [TRIVIAL_ENUM]
+#[derive(Debug, Clone, PartialEq)]
+pub enum AgentResult {
+    PromptDirective(String),
+    StatePatch(StatePatch),
+    NoOp,
+}
+
+pub struct AgentContext<'a> {
+    pub state: &'a GameState,
+    pub main_response: Option<&'a str>,
+    pub player_input: &'a str,
+    pub current_room: Option<&'a crate::domain::model::map::Room>,
+    pub map: &'a crate::domain::model::map::MapDef,
+    pub persona: &'a crate::domain::model::character::PersonaCard,
+    pub npcs: &'a std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
+}

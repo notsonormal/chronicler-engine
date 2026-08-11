@@ -1,0 +1,124 @@
+//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
+//! Action fragment handlers
+
+use askama::Template;
+use axum::{
+    body::Body,
+    extract::{Form, State},
+    response::Response,
+};
+use serde::{Deserialize, Serialize};
+
+use crate::application::errors::ProcessActionResult;
+use crate::domain::model::settings::TextCheckMode;
+use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::builders::headers::add_status_swap_headers;
+use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
+
+use crate::adapters::driving::http::utils::error::render_error;
+use crate::adapters::driving::http::utils::response::{internal_error, ok, service_unavailable};
+
+#[derive(Deserialize, Serialize)]
+pub struct ActionForm {
+    pub command: String,
+}
+
+async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
+    let action_result = if command.is_empty() {
+        state.pipeline.continue_narration(&state.generation_gate)
+    } else {
+        state
+            .pipeline
+            .process_action(&state.generation_gate, command)
+    };
+
+    match action_result {
+        Ok(ProcessActionResult::Started) => {
+            ok("<span class=\"status thinking\">Thinking...</span>")
+        }
+        Ok(ProcessActionResult::ConcurrentGeneration) => {
+            ok("<span class=\"status wait\">Still thinking...</span>")
+        }
+        Ok(ProcessActionResult::ShuttingDown) => {
+            service_unavailable(render_error("Server is shutting down"))
+        }
+        Err(e) => internal_error(render_error(&format!("Failed to process action: {e}"))),
+    }
+}
+
+pub async fn action_handler(
+    State(state): State<AppState>,
+    Form(form): Form<ActionForm>,
+) -> Response<Body> {
+    let command = form.command.trim().to_string();
+    dispatch_action(&state, command).await
+}
+
+#[allow(clippy::expect_used)]
+pub async fn action_confirm_handler(
+    State(state): State<AppState>,
+    Form(form): Form<ActionForm>,
+) -> Response<Body> {
+    let command = form.command.trim().to_string();
+
+    let action_response = dispatch_action(&state, command).await;
+    let status = action_response.status();
+
+    let action_area_html = match state.render_action_area() {
+        Ok(html) => html,
+        Err(e) => {
+            tracing::error!("Failed to render action area: {e}");
+            render_error(&e.to_string())
+        }
+    };
+
+    Response::builder()
+        .status(status)
+        .body(Body::from(action_area_html))
+        .expect("static response body is valid")
+}
+
+pub async fn action_check_handler(
+    State(state): State<AppState>,
+    Form(form): Form<ActionForm>,
+) -> Response<Body> {
+    let command = form.command.trim().to_string();
+
+    let settings = state.settings();
+
+    if settings.text_check.mode == TextCheckMode::Disabled || !settings.text_check.enable_auto_check
+    {
+        let mut response = dispatch_action(&state, command).await;
+        add_status_swap_headers(&mut response);
+        return response;
+    }
+
+    let result = match state.text_check_service().check_player_input(
+        &command,
+        settings.text_check.mode,
+        &settings.text_check.ignored_words,
+    ) {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::error!("Text check failed: {e}");
+            let mut response = dispatch_action(&state, command).await;
+            add_status_swap_headers(&mut response);
+            return response;
+        }
+    };
+
+    match result {
+        Some(check_result) => {
+            let template = TextCheckPreviewTemplate::from_check_result(&check_result);
+            match template.render() {
+                Ok(html) => ok(html),
+                Err(e) => internal_error(render_error(&format!("Template error: {e}"))),
+            }
+        }
+        None => {
+            let mut response = dispatch_action(&state, command).await;
+            add_status_swap_headers(&mut response);
+            response
+        }
+    }
+}

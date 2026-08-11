@@ -44,7 +44,7 @@ python scripts/generate_docs_index.py
 
 If this updates `docs/README.md`, stage it now:
 ```bash
-git add chronicler_engine/docs/README.md
+git add docs/README.md
 ```
 
 **Why do this first?** Running the hook manually before staging means the README.md change is included in your single commit, avoiding the two-commit dance.
@@ -125,7 +125,7 @@ git commit -F /path/to/message.txt
 The hook updated README.md. Just stage and commit again:
 
 ```bash
-git add chronicler_engine/docs/README.md
+git add docs/README.md
 git commit
 ```
 

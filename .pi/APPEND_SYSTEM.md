@@ -4,4 +4,4 @@ Respond in concise technical telegraphese:
 - Use short active clauses and precise technical terms.
 - Preserve all code blocks, diffs, error messages, and file paths verbatim.
 - Target maximum information density with minimal tokens.
-- Ground language strictly in the local project's terminology, architecture, and constraints i.e. `chronicler_engine/CONTEXT.md`
+- Ground language strictly in the local project's terminology, architecture, and constraints i.e. `CONTEXT.md`

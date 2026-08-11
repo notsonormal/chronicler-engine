@@ -1,0 +1,160 @@
+# Architecture linting configuration for Chronicler Engine
+# [DOC: docs/diataxis/reference/coding_standards/guardrails.md]
+#
+# This file defines the architectural guardrails that enforce
+# the project's coding standards via arch-lint.
+# Run with: cargo nextest run --test architecture
+
+preset = "recommended"
+fail_on = "error"
+
+[analyzer]
+root = "./src"
+exclude = [
+    "**/target/**",
+    "**/tests/**",
+    "**/*_tests.rs",
+]
+# `*_tests.rs` excluded: arch-lint 0.4.3 cannot distinguish a test fake
+# (e.g. Storage::new_in_memory()) from a production leak.
+
+# ── Built-in rule overrides ──
+
+[rules.no-unwrap-expect]
+enabled = true
+severity = "error"
+allow_in_tests = true
+
+# Project uses `log` + `env_logger`, not `tracing`.
+[rules.require-tracing]
+enabled = false
+
+# Sync I/O is used intentionally in non-async startup / CLI contexts.
+[rules.no-sync-io]
+enabled = false
+
+# Public items should be documented.
+[rules.require-doc-comments]
+enabled = true
+severity = "warning"
+
+# ── Declarative layer rules ──
+# Enforce clean architecture: inner layers must not depend on outer layers.
+
+[[scopes]]
+name = "model"
+paths = ["src/domain/model/**"]
+
+[[scopes]]
+name = "ports"
+paths = ["src/application/ports/**"]
+
+[[scopes]]
+name = "driven-llm"
+paths = ["src/adapters/driven/llm/**"]
+
+[[scopes]]
+name = "driven-text-check"
+paths = ["src/adapters/driven/text_check/**"]
+
+[[scopes]]
+name = "narrative"
+paths = [
+  "src/application/agents/**",
+  "src/application/narrative_prompt/**",
+]
+
+[[scopes]]
+name = "application"
+paths = ["src/application/**"]
+
+[[scopes]]
+name = "server"
+paths = ["src/adapters/driving/http/**"]
+
+# Model (innermost) must not depend on any outer layer.
+[[deny-scope-dep]]
+from = "model"
+to = ["server", "narrative", "application"]
+message = "Model layer must be pure; cannot depend on outer layers."
+
+# Application must not depend on server.
+[[deny-scope-dep]]
+from = "application"
+to = ["server"]
+message = "Application layer must not depend on server layer."
+
+# ── Storage model isolation ──
+# DB models and mappers are an internal storage concern.
+
+[[scopes]]
+name = "storage"
+paths = ["src/adapters/driven/storage/**"]
+
+[[scopes]]
+name = "storage-models"
+paths = ["src/adapters/driven/storage/models/**", "src/adapters/driven/storage/mappers/**"]
+
+[[scopes]]
+name = "bootstrap"
+paths = ["src/bootstrap/**"]
+
+[[scopes]]
+name = "test-support"
+paths = ["src/test_support/**"]
+
+[[deny-scope-dep]]
+from = "model"
+to = ["storage-models"]
+message = "Model layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "narrative"
+to = ["storage-models"]
+message = "Narrative layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "application"
+to = ["storage-models"]
+message = "Application layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "server"
+to = ["storage-models"]
+message = "Server layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "bootstrap"
+to = ["storage-models"]
+message = "Bootstrap layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "test-support"
+to = ["storage-models"]
+message = "Test support must not depend on storage DB models/mappers."
+
+# Server layer must not depend on storage directly; all storage access goes through ApplicationService.
+[[deny-scope-dep]]
+from = "server"
+to = ["storage"]
+message = "Server layer must not import from storage directly; use ApplicationService instead."
+
+# Port traits must not reach into adapter impls or outer layers.
+# `ports` is a subset of `application/**`; do NOT add `application` to the
+# deny list — ports-internal imports (e.g. LlmMessage from
+# llm_message_repository used by llm_provider) false-trigger as self-deps.
+[[deny-scope-dep]]
+from = "ports"
+to = ["driven-llm", "driven-text-check", "narrative", "server", "storage", "storage-models", "bootstrap", "test-support"]
+message = "Port traits must not depend on adapter impls, application services, or outer layers."
+
+# Adapters must not depend on each other.
+[[deny-scope-dep]]
+from = "driven-llm"
+to = ["driven-text-check"]
+message = "driven-llm adapter must not depend on driven-text-check adapter."
+
+[[deny-scope-dep]]
+from = "driven-text-check"
+to = ["driven-llm"]
+message = "driven-text-check adapter must not depend on driven-llm adapter."

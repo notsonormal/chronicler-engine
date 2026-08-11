@@ -21,7 +21,7 @@ Provides browser automation to:
 ## Prerequisites
 
 - Requires a browser automation MCP (e.g. chrome-devtools) configured in the host.
-- Chronicler Engine project at `chronicler_engine/`
+- Chronicler Engine project at the repo root
 
 ## Usage Patterns
 

@@ -5,7 +5,7 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`AGENTS.md`** at the repo root — project-wide agent guidelines.
-- **`chronicler_engine/CONTEXT.md`** for the Chronicler Engine context.
+- **`CONTEXT.md`** for the Chronicler Engine context.
 
 There is no system-wide decision-record directory at the root by design — rationale for past decisions lives in the relevant `CONTEXT.md` or in archived plans.
 
@@ -18,8 +18,7 @@ If a referenced `CONTEXT.md` doesn't exist, **proceed silently**. Don't flag the
 ```
 /
 ├── AGENTS.md
-└── chronicler_engine/
-    └── CONTEXT.md
+└── CONTEXT.md
 ```
 
 ## Use the glossary's vocabulary

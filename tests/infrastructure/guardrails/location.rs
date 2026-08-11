@@ -1,0 +1,110 @@
+//! Location guardrail tests: ensures `#[test]` / `#[cfg(test)]` units live in the correct directory (e.g., unit tests stay in `src/`, integration tests stay in `tests/`).
+
+use std::path::Path;
+use crate::Violation;
+
+// TODO: There should be a guardrail making sure there are no inline tests
+//  And tests should be in a separate file. I think this is being enforced
+//  for the `src/` files (unless the guardrail has been removed) but it
+//  is definitely nto being enforced in the `test/` folder
+
+pub fn check_test_file_naming(path: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    // Windows + Unix separators
+    if !path.contains("src/") && !path.contains("src\\") {
+        return violations;
+    }
+
+    let file_name = Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    if !file_name.ends_with(".rs") {
+        return violations;
+    }
+
+    if file_name.starts_with("test_") {
+        return violations;
+    }
+
+    if file_name.ends_with("_test.rs") {
+        let base = file_name.trim_end_matches("_test.rs");
+        violations.push(Violation::error(
+            path,
+            1,
+            format!("Test file uses singular 'test' suffix, expected {base}_tests.rs"),
+        ));
+        return violations;
+    }
+
+    violations
+}
+
+// TODO: This guardrail should be catching `src/application/orchestrator_tests.rs`
+//  which is a unit test file without a matching `orchestrator.rs`. It's not catching it.
+pub fn check_test_file_pairing(path: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    // Windows + Unix separators
+    if !path.contains("src/") && !path.contains("src\\") {
+        return violations;
+    }
+
+    let file_path = Path::new(path);
+    let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+    if !file_name.ends_with("_tests.rs") {
+        return violations;
+    }
+
+    let base_name = file_name.trim_end_matches("_tests.rs");
+
+    const SPECIAL_FILES: &[&str] = &["integration", "mod", "e2e", "system"];
+    if SPECIAL_FILES.contains(&base_name) {
+        return violations;
+    }
+
+    let source_file_name = format!("{base_name}.rs");
+    let parent_dir = file_path.parent().unwrap_or(Path::new(""));
+    let expected_source = parent_dir.join(&source_file_name);
+
+    let module_dir = parent_dir.join(base_name);
+    let module_mod_rs = module_dir.join("mod.rs");
+    let has_module_dir = module_dir.is_dir() && module_mod_rs.exists();
+
+    let has_source_file = expected_source.exists();
+    let parent_has_mod_rs = parent_dir.join("mod.rs").exists();
+
+    if !has_source_file {
+        if has_module_dir && !parent_has_mod_rs {
+            // Orphan: test outside module dir
+            violations.push(Violation::error(
+                path,
+                1,
+                format!("Test file for module '{base_name}' is outside module directory. Move {file_name} to {base_name}/"),
+            ));
+        } else if !parent_has_mod_rs {
+            violations.push(Violation::error(
+                path,
+                1,
+                format!("Orphan test file - no matching {file_name} or {base_name}/mod.rs found"),
+            ));
+        }
+    }
+
+    violations
+}
+
+pub fn check_test_file_location(path: &str, _content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    // Naming
+    violations.extend(check_test_file_naming(path));
+
+    // Pairing
+    violations.extend(check_test_file_pairing(path));
+
+    violations
+}

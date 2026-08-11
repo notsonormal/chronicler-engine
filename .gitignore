@@ -211,7 +211,6 @@ __marimo__/
 docker/*_data/
 logs/
 tmp
-/chronicler_engine/.sisyphus
 /.sisyphus
 /node_modules
 
@@ -219,18 +218,15 @@ tmp
 vectors.db
 
 .devrag/
-/chronicler_engine/tmp
 *.proptest-regressions
-chronicler_engine/coverage.json
-chronicler_engine/coverage_full.json
-/chronicler_engine/.pi-lens/cache
+/coverage.json
+/coverage_full.json
 /.lean-ctx
 /.pi-lens/cache
 /.pi-lens
 /.pi/tasks
-/chronicler_engine/jscpd-report
-chronicler_engine/report/jscpd-report.json
-chronicler_engine/.pi/task
+/jscpd-report
+/report/jscpd-report.json
 .agents/skills/teach/lessons/0001-inside-outside-ports-adapters.html
 .gitignore
 .gitignore
@@ -245,7 +241,6 @@ chronicler_engine/.pi/task
 # Only ignore regenerable/large state.
 .pi/rag/
 .pi/tasks/
-chronicler_engine/.pi/tasks/
 # Extension build artifacts + dependencies.
 .pi/extensions/**/*.js
 .pi/extensions/**/*.d.ts

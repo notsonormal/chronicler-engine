@@ -68,12 +68,12 @@ The initial tool selection (used before any per-session `/plan tools` choice) ca
     "rag_index", "rag_query", "rag_status",
     "visual_explainer", "web_search"
   ],
-  "planFolder": "chronicler_engine/docs/plans",
+  "planFolder": "docs/plans",
   "scratchFolders": ["tmp"]
 }
 ```
 
-- `planFolder` (string, cwd-relative): where approved plans get written when Plan mode exits. Default: `chronicler_engine/docs/plans`.
+- `planFolder` (string, cwd-relative): where approved plans get written when Plan mode exits. Default: `docs/plans`.
 - `scratchFolders` (string array, cwd-relative): additional folders where `write`/`edit` are allowed during Plan mode (e.g. for draft notes). Default: `["tmp"]`.
 - Both fields reject absolute paths and `..` traversal with a warning.
 

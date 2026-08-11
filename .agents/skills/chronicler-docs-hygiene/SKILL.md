@@ -1,6 +1,6 @@
 ---
 name: chronicler-docs-hygiene
-description: "Use when auditing chronicler_engine/docs/diataxis/ docs against AGENTS.md and src/ for what validate_docs.py can't catch: rule violations, mode drift, stale-source drift. Read-only; reports findings, never edits."
+description: "Use when auditing docs/diataxis/ docs against AGENTS.md and src/ for what validate_docs.py can't catch: rule violations, mode drift, stale-source drift. Read-only; reports findings, never edits."
 ---
 
 # Documentation Hygiene
@@ -20,13 +20,13 @@ Run all phases regardless of earlier outcomes. A clean phase does not end the au
 
 ## Phase 1 — Validator
 
-Run the validator first (`python chronicler_engine/scripts/validate_docs.py --strict`). Surface any overlap in `Findings` rather than re-litigating machine-layer warnings.
+Run the validator first (`python scripts/validate_docs.py --strict`). Surface any overlap in `Findings` rather than re-litigating machine-layer warnings.
 
 ## Phase 2 — Conventions compliance
 
-Per-doc check against `chronicler_engine/docs/AGENTS.md` `Writing Conventions` rules the validator can't enforce. **The phase points at AGENTS.md anchors; it never restates the rule content.**
+Per-doc check against `docs/AGENTS.md` `Writing Conventions` rules the validator can't enforce. **The phase points at AGENTS.md anchors; it never restates the rule content.**
 
-Rules (check body prose against each anchor in `chronicler_engine/docs/AGENTS.md` `## Writing Conventions`):
+Rules (check body prose against each anchor in `docs/AGENTS.md` `## Writing Conventions`):
 
 - **`No negative explaining`** — flag body-prose negation, tautological negative definitions, defensive scope disclaiming. Out-of-scope lists and Diagrams are the canonical home for scope statements (not findings); see the rule's carve-out.
 - **`Explanation unfolds; it does not justify`** — flag section titles phrased as `Why X?` or `Why X instead of Y?`; flag justification-tail framing in body prose (`the design pays that cost in exchange for X`, `the design holds this cost for Y`).

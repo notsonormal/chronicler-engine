@@ -18,6 +18,6 @@
     "web_search",
     "graphify"
   ],
-  "planFolder": "chronicler_engine/docs/plans",
-  "scratchFolders": ["tmp", "chronicler_engine/docs/plans", ".scratch"]
+  "planFolder": "docs/plans",
+  "scratchFolders": ["tmp", "docs/plans", ".scratch"]
 }

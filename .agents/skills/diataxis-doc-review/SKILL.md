@@ -13,7 +13,7 @@ In general, it can be a struggle to get LLM to think about documentation in a sy
 
 # Diátaxis
 
-Read `chronicler_engine/docs/diataxis/explanation/diataxis.md` for the framework's two-axis compass (action/cognition × study/work) and the four modes it produces (Tutorial, How-to, Reference, Explanation). The compass test ("what problem does this solve for the reader?") is the basic existence check — if no reader need registers under any mode, the doc fails the test.
+Read `docs/diataxis/explanation/diataxis.md` for the framework's two-axis compass (action/cognition × study/work) and the four modes it produces (Tutorial, How-to, Reference, Explanation). The compass test ("what problem does this solve for the reader?") is the basic existence check — if no reader need registers under any mode, the doc fails the test.
 
 # What earns a doc's place
 
