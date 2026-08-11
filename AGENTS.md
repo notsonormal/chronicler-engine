@@ -3,6 +3,19 @@
 ## OVERVIEW
 Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
 
+## DECISION-MAKING
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing (e.g. during planning):
+
+- **State your assumptions explicitly.** If uncertain, ask.
+- **If multiple interpretations exist, present them** — Don't pick silently unless obvious.
+- **If a simpler approach exists, say so.** Push back when warranted. That is, suggest a simpler solution to the user. This doesn't mean you should quietly disregard the user's plan and simplify it yourself.
+- **If something is unclear, stop.** Name what's confusing. Ask.
+
+These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
 ## STRUCTURE
 <!-- AUTO-STRUCTURE START -->
 - **src/**
@@ -285,6 +298,38 @@ Tests are already concurrency-safe: they allocate ports dynamically from the ran
 - Read files in full before wide-ranging changes, before editing files you have not fully inspected, and when asked to investigate or audit. Do not rely on search snippets for broad changes.
 - When the user asks a question, answer it first before making edits or running implementation commands.
 - When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
+
+## AGENT SKILLS
+
+### Issue tracker
+
+Local markdown under `.scratch/` (per `docs/agents/issue-tracker.md`). No `gh` CLI dependency.
+
+### Triage labels
+
+Five canonical role strings, used as `Status:` lines in local-markdown files (per `docs/agents/triage-labels.md`).
+
+### Domain docs
+
+Multi-context layout (per `docs/agents/domain.md`). Read `CONTEXT-MAP.md`, then the per-context `CONTEXT.md` for the area in scope. Skills proceed silently if a `CONTEXT.md` is missing.
+
+## SESSION HISTORY SEARCH
+
+Use `session_search` when you need what was  said or done in an **older** session. Use `session_list` to browse by project/date and `session_read` to open the full conversation of a hit.
+
+To see what was said or done in the **current** session (likely after session compacts), use `recall`. 
+
+## PLANNING TASKS AND STORY POINTS
+
+Use standard story points (1,3,5,8,13) to analyse the complexity of tasks. Tasks with 8 story points or higher need to be broken up into subtasks.
+
+## UNIQUE PATTERNS
+
+- Rust 2024 edition bleeding edge (edition 2024 requires Rust 1.85+)
+
+## PERMISSIONS SYSTEM
+
+Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
 
 ## DOING CODE REVIEWS
 
