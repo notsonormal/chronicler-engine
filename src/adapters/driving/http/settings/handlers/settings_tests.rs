@@ -1,3 +1,5 @@
+//! Settings HTTP handler tests.
+
 use std::sync::{Arc, RwLock};
 use axum::Form;
 use axum::extract::Path;
@@ -17,26 +19,16 @@ use crate::bootstrap::wiring::build_app_graph_for_tests;
 fn make_test_app_state() -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(AppSettings::default()));
-    let wired = build_app_graph_for_tests(
-        Arc::clone(&settings),
-        Arc::clone(&storage),
-        Arc::new(Storage::new_in_memory()),
-        None,
-    )
-    .expect("build_app_graph_for_tests should succeed");
+    let wired = build_app_graph_for_tests(Arc::clone(&settings), Arc::clone(&storage), None)
+        .expect("build_app_graph_for_tests should succeed");
     AppState::from_wired(wired)
 }
 
 fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(settings));
-    let wired = build_app_graph_for_tests(
-        Arc::clone(&settings),
-        Arc::clone(&storage),
-        Arc::new(Storage::new_in_memory()),
-        None,
-    )
-    .expect("build_app_graph_for_tests should succeed");
+    let wired = build_app_graph_for_tests(Arc::clone(&settings), Arc::clone(&storage), None)
+        .expect("build_app_graph_for_tests should succeed");
     AppState::from_wired(wired)
 }
 

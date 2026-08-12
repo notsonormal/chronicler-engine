@@ -132,6 +132,8 @@ impl TestAppBuilder {
             None => Arc::new(Storage::new_in_memory()),
         };
 
+        crate::test_support::seed_default_preset(&storage);
+
         if !self.skip_seeding {
             let _ = test_data.seed_into(&storage);
         }
@@ -182,13 +184,11 @@ impl TestAppBuilder {
         }
 
         let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
-        let preset_storage = crate::test_support::default_test_preset_storage();
         let pipeline_override = self.pipeline.take();
 
         let wired = build_app_graph_for_tests(
             Arc::clone(&settings_arc),
             Arc::clone(&storage),
-            Arc::clone(&preset_storage),
             pipeline_override,
         )
         .expect("build_app_graph_for_tests should succeed");

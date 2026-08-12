@@ -1,3 +1,5 @@
+//! Prompt preset HTTP handler tests.
+
 use std::sync::{Arc, RwLock};
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
@@ -25,7 +27,6 @@ fn make_test_app_state_with_storage(
         Arc::new(RwLock::new(
             crate::domain::model::settings::AppSettings::default(),
         )),
-        Arc::new(Storage::new_in_memory()),
         Arc::clone(&storage),
         None,
     )
@@ -266,7 +267,6 @@ fn make_test_app_state_with_failing_storage(
         Arc::new(RwLock::new(
             crate::domain::model::settings::AppSettings::default(),
         )),
-        Arc::new(Storage::new_in_memory()),
         Arc::new(storage),
         None,
     )

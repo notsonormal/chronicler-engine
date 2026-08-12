@@ -20,7 +20,7 @@ use super::determine_npcs_in_room;
 pub struct QuantifierAgent {
     name: String,
     recorder: Arc<LlmCallRecorder>,
-    preset_storage: Option<Arc<Storage>>,
+    storage: Option<Arc<Storage>>,
     settings: Arc<RwLock<AppSettings>>,
 }
 
@@ -36,13 +36,13 @@ impl QuantifierAgent {
     pub fn from_config_with_storage(
         _config: &AgentConfig,
         recorder: Arc<LlmCallRecorder>,
-        preset_storage: Option<Arc<Storage>>,
+        storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
         Ok(Self {
             name: "quantifier".to_string(),
             recorder,
-            preset_storage,
+            storage,
             settings: Arc::clone(&settings),
         })
     }
@@ -53,7 +53,7 @@ impl QuantifierAgent {
         Self {
             name,
             recorder: Arc::new(LlmCallRecorder::new(provider, make_noop_save_fn())),
-            preset_storage: None,
+            storage: None,
             settings: Arc::new(RwLock::new(AppSettings::default())),
         }
     }
@@ -79,7 +79,7 @@ impl Agent for QuantifierAgent {
 
         let quantifier_prompt_override = {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
-            self.preset_storage
+            self.storage
                 .as_ref()
                 .and_then(|s| {
                     s.get_preset(&settings.active_quantifier_prompt_preset_id)

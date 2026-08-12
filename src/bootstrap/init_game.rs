@@ -14,7 +14,7 @@ use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
-use super::run::{PRESET_STORAGE_GAME_ID, find_latest_game_for_world, list_game_names_for_world};
+use super::run::{find_latest_game_for_world, list_game_names_for_world};
 
 fn with_settings<T>(settings: &Arc<RwLock<AppSettings>>, f: impl FnOnce(&AppSettings) -> T) -> T {
     let guard = settings.read().unwrap_or_else(|e| e.into_inner());
@@ -112,7 +112,7 @@ pub fn spawn_arrival_task_if_needed(
     message_service: Arc<crate::application::message_service::MessageService>,
     pipeline: Arc<crate::application::pipeline::pipeline::ActionPipeline>,
     storage: &Arc<crate::adapters::driven::storage::Storage>,
-    db_pool: &crate::adapters::driven::storage::db::DbPool,
+    _db_pool: &crate::adapters::driven::storage::db::DbPool,
     request: ArrivalSpawnRequest,
 ) {
     let ArrivalSpawnRequest {
@@ -128,14 +128,10 @@ pub fn spawn_arrival_task_if_needed(
         return;
     }
 
-    let preset_storage = crate::adapters::driven::storage::Storage::new_sqlite(
-        db_pool.clone(),
-        PRESET_STORAGE_GAME_ID,
-    );
     let (arrival_preset, response_length, max_context_tokens, max_tokens) =
         with_settings(settings, |guard| {
             let preset_id = &guard.active_system_prompt_preset_id;
-            let preset = preset_storage.get_preset(preset_id).ok().flatten();
+            let preset = storage.get_preset(preset_id).ok().flatten();
             let conn = guard.narration_connection();
             let max_context_tokens = conn.resolve_max_context_tokens();
             let max_tokens = conn.max_tokens;

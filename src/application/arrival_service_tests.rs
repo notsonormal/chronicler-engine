@@ -13,7 +13,7 @@ use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{
-    default_test_preset_storage, make_test_recorder_with_storage, seed_test_world_into_storage,
+    make_test_recorder_with_storage, seed_default_preset, seed_test_world_into_storage,
     TestDataBuilder,
 };
 
@@ -21,7 +21,8 @@ fn make_test_arrival_task(
     storage: Arc<Storage>,
     room_id: &str,
 ) -> (ArrivalTaskContext, Arc<MessageService>) {
-    let arrival_preset = default_test_preset_storage()
+    seed_default_preset(&storage);
+    let arrival_preset = storage
         .get_preset("system_default")
         .ok()
         .flatten()

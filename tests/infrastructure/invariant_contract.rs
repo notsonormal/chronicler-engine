@@ -220,18 +220,12 @@ fn test_inv004_cancellable_at_boundaries() {
     let (app, storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            let preset_store = Arc::new(
-                chronicler_engine::adapters::driven::storage::PresetStore::new(
-                    chronicler_engine::test_support::default_test_preset_storage(),
-                ),
-            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
                 token,
                 recorder,
                 AgentRegistry::default(),
                 Arc::clone(message_service),
                 Arc::clone(storage),
-                Arc::clone(&preset_store),
                 Arc::clone(settings),
             )
         })
@@ -492,18 +486,12 @@ async fn test_p4_concurrent_happy_path() {
     let (app, _storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            let preset_store = Arc::new(
-                chronicler_engine::adapters::driven::storage::PresetStore::new(
-                    chronicler_engine::test_support::default_test_preset_storage(),
-                ),
-            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
                 token,
                 recorder,
                 AgentRegistry::default(),
                 Arc::clone(message_service),
                 Arc::clone(storage),
-                Arc::clone(&preset_store),
                 Arc::clone(settings),
             )
         })
@@ -629,18 +617,12 @@ async fn test_p4_concurrent_triple_overlap() {
     let (app, _storage) = sqlite_test_app_builder::SqliteTestAppBuilder::default_test()
         .pipeline_fn(move |storage, message_service, settings, token| {
             let recorder = make_test_recorder(backend_for_closure.clone());
-            let preset_store = Arc::new(
-                chronicler_engine::adapters::driven::storage::PresetStore::new(
-                    chronicler_engine::test_support::default_test_preset_storage(),
-                ),
-            );
             chronicler_engine::application::pipeline::pipeline::ActionPipeline::with_backends(
                 token,
                 recorder,
                 AgentRegistry::default(),
                 Arc::clone(message_service),
                 Arc::clone(storage),
-                Arc::clone(&preset_store),
                 Arc::clone(settings),
             )
         })

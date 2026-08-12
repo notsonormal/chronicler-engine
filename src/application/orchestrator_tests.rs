@@ -48,24 +48,16 @@ fn minimal_app_no_game() -> AppState {
     let settings = Arc::new(std::sync::RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
-    let preset_store = Arc::new(crate::adapters::driven::storage::PresetStore::new(
-        crate::test_support::default_test_preset_storage(),
-    ));
     let pipeline = crate::application::pipeline::pipeline::ActionPipeline::with_backends(
         CancellationToken::new(),
         narrator_recorder,
         registry,
         message_service,
         Arc::clone(&storage),
-        preset_store,
         settings,
     );
-    let wired = crate::test_support::build_test_wired_app(
-        Arc::clone(&storage),
-        Arc::new(Storage::new_in_memory()),
-        pipeline,
-    )
-    .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
+    let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), pipeline)
+        .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
     AppState::from_wired(wired)
 }
 
@@ -215,9 +207,6 @@ fn make_test_service(
     let registry = AgentRegistry::with_agent(Box::new(agent));
     let storage = Arc::new(Storage::new_in_memory());
     let message_service = crate::test_support::build_test_message_service(Arc::clone(&storage));
-    let preset_store = Arc::new(crate::adapters::driven::storage::PresetStore::new(
-        crate::test_support::default_test_preset_storage(),
-    ));
     let settings = Arc::new(std::sync::RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
@@ -227,7 +216,6 @@ fn make_test_service(
         registry,
         message_service,
         Arc::clone(&storage),
-        preset_store,
         settings,
     )
 }
@@ -248,9 +236,6 @@ fn test_boot_heal_resets_stale_generating_status() {
     let narrator_recorder = make_test_recorder(Arc::clone(&mock));
     let agent_registry = AgentRegistry::default();
     let message_service = crate::test_support::build_test_message_service(Arc::clone(&storage));
-    let preset_store = Arc::new(crate::adapters::driven::storage::PresetStore::new(
-        crate::test_support::default_test_preset_storage(),
-    ));
     let settings = Arc::new(std::sync::RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
@@ -260,15 +245,10 @@ fn test_boot_heal_resets_stale_generating_status() {
         agent_registry,
         Arc::clone(&message_service),
         Arc::clone(&storage),
-        Arc::clone(&preset_store),
         Arc::clone(&settings),
     );
-    let wired = crate::test_support::build_test_wired_app(
-        storage,
-        Arc::new(Storage::new_in_memory()),
-        pipeline,
-    )
-    .expect("build_test_wired_app should succeed");
+    let wired = crate::test_support::build_test_wired_app(storage, pipeline)
+        .expect("build_test_wired_app should succeed");
     let app = AppState::from_wired(wired);
 
     let (status, phase) = app.game_view_query.get_generating_status().unwrap();
@@ -283,9 +263,6 @@ fn make_test_service_with_agent(
     let registry = AgentRegistry::with_agent(agent);
     let storage = Arc::new(Storage::new_in_memory());
     let message_service = crate::test_support::build_test_message_service(Arc::clone(&storage));
-    let preset_store = Arc::new(crate::adapters::driven::storage::PresetStore::new(
-        crate::test_support::default_test_preset_storage(),
-    ));
     let settings = Arc::new(std::sync::RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
@@ -295,7 +272,6 @@ fn make_test_service_with_agent(
         registry,
         message_service,
         Arc::clone(&storage),
-        preset_store,
         settings,
     )
 }

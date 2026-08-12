@@ -28,7 +28,6 @@ These guidelines bias toward caution over speed. For trivial tasks, use judgment
       - **storage/**
         - `db.rs` — SQLite database connection pool
         - `mod.rs` — Storage layer and database access
-        - `preset_store.rs` — PresetStore newtype — distinguishes preset storage from game storage
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation

@@ -207,12 +207,8 @@ fn test_trigger_continuation_save_post_trigger_error() {
         agent_registry,
     );
     let app = AppState::from_wired(
-        crate::test_support::build_test_wired_app(
-            failing,
-            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-            service,
-        )
-        .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
+        crate::test_support::build_test_wired_app(failing, service)
+            .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
     );
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
     let map = Arc::new(TestMap::single_room("start"));

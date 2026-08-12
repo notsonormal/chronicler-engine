@@ -29,7 +29,6 @@ fn build_app_state(settings: Arc<std::sync::RwLock<AppSettings>>) -> AppState {
     let wired = build_app_graph_for_tests(
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
         Arc::new(Storage::new_in_memory()),
-        Arc::new(Storage::new_in_memory()),
         None,
     )
     .expect("build_app_graph_for_tests should succeed");
@@ -79,7 +78,6 @@ fn test_current_shutdown_token_returns_configured_token() {
 
     let wired = build_app_graph_for_tests(
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        Arc::new(Storage::new_in_memory()),
         Arc::new(Storage::new_in_memory()),
         None,
     )

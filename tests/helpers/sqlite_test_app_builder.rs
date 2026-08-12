@@ -22,8 +22,7 @@ use chronicler_engine::domain::model::state::trigger_context::StoredTriggerConte
 use chronicler_engine::error::Result;
 use chronicler_engine::test_support::{
     build_test_message_service, build_test_wired_app, build_test_wired_app_with_settings,
-    default_test_preset_storage, make_test_recorder, seed_default_game_row, TestData,
-    TestDataBuilder,
+    make_test_recorder, seed_default_game_row, seed_default_preset, TestData, TestDataBuilder,
 };
 
 type MockBackendFn = Box<dyn Fn() -> MockBackend>;
@@ -208,11 +207,10 @@ impl SqliteTestAppBuilder {
         let message_service = build_test_message_service(Arc::clone(&storage));
         let pipeline = self.build_pipeline(&storage, &message_service, &settings_arc);
         let is_generating = self.is_generating;
-        let preset_storage = default_test_preset_storage();
 
         let storage_clone = Arc::clone(&storage);
-        let wired = build_test_wired_app(storage, preset_storage, pipeline)
-            .expect("build_test_wired_app should succeed");
+        let wired =
+            build_test_wired_app(storage, pipeline).expect("build_test_wired_app should succeed");
         if is_generating {
             let mut snapshot = storage_clone
                 .load_latest_snapshot()
@@ -270,6 +268,7 @@ impl SqliteTestAppBuilder {
         let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
 
         let _world_id = self.test_data.seed_into(&storage);
+        seed_default_preset(&storage);
 
         if let Some(state_mut) = self.state_mut.take() {
             state_mut(&mut state);
@@ -310,11 +309,6 @@ impl SqliteTestAppBuilder {
         settings_arc: &Arc<RwLock<AppSettings>>,
     ) -> ActionPipeline {
         let shutdown_token = CancellationToken::new();
-        let preset_store = Arc::new(
-            chronicler_engine::adapters::driven::storage::PresetStore::new(
-                default_test_preset_storage(),
-            ),
-        );
         match self.backend.take() {
             None => panic!(
                 "SqliteTestAppBuilder: no backend set; call .pipeline_fn(...) or .mock_backend(...) before .build_service()"
@@ -325,7 +319,6 @@ impl SqliteTestAppBuilder {
                 Arc::new(f()),
                 Arc::clone(message_service),
                 Arc::clone(storage),
-                Arc::clone(&preset_store),
                 Arc::clone(settings_arc),
             ),
             Some(BackendSpec::Backends(f)) => ActionPipeline::with_backends(
@@ -334,7 +327,6 @@ impl SqliteTestAppBuilder {
                 AgentRegistry::default(),
                 Arc::clone(message_service),
                 Arc::clone(storage),
-                Arc::clone(&preset_store),
                 Arc::clone(settings_arc),
             ),
             Some(BackendSpec::SeparateBackends {
@@ -346,7 +338,6 @@ impl SqliteTestAppBuilder {
                 Arc::new(quantifier()),
                 Arc::clone(message_service),
                 Arc::clone(storage),
-                Arc::clone(&preset_store),
                 Arc::clone(settings_arc),
             ),
             Some(BackendSpec::PipelineFn(f)) => {
@@ -362,9 +353,8 @@ fn finalize_app(
     settings_arc: Arc<RwLock<AppSettings>>,
     is_generating: bool,
 ) -> (AppState, Arc<Storage>) {
-    let preset_storage = default_test_preset_storage();
     let storage_clone = Arc::clone(&storage);
-    let wired = build_test_wired_app_with_settings(storage, preset_storage, settings_arc, pipeline)
+    let wired = build_test_wired_app_with_settings(storage, settings_arc, pipeline)
         .expect("build_test_wired_app_with_settings: build_app_graph_for_tests should succeed");
     if is_generating {
         let mut snapshot = storage_clone

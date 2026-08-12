@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use crate::adapters::driven::llm::providers::{
     DeepSeekBackend, MockBackend, OllamaBackend, OpenRouterBackend,
 };
-use crate::adapters::driven::storage::{PresetStore, Storage};
+use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::text_check::HarperTextChecker;
 use crate::application::pipeline::pipeline::ActionPipeline;
 use crate::application::agents::registry::AgentRegistry;
@@ -52,7 +52,6 @@ pub struct WiredApp {
     pub settings_service: SettingsService,
     pub prompt_preset_service: PromptPresetService,
     pub storage: Arc<Storage>,
-    pub preset_storage: Arc<Storage>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub message_service: Arc<MessageService>,
     pub generation_gate: GenerationGate,
@@ -67,7 +66,6 @@ pub struct WiredApp {
 
 fn build_wired_app(
     storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
     settings: Arc<RwLock<AppSettings>>,
     recorder: Arc<LlmCallRecorder>,
     agent_registry: AgentRegistry,
@@ -76,8 +74,7 @@ fn build_wired_app(
     let shutdown_token = CancellationToken::new();
 
     let settings_service = SettingsService::new(Arc::clone(&storage));
-    let prompt_preset_service = PromptPresetService::new(Arc::clone(&preset_storage));
-    let preset_store = Arc::new(PresetStore::new(Arc::clone(&preset_storage)));
+    let prompt_preset_service = PromptPresetService::new(Arc::clone(&storage));
     let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
     let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
     let persona_catalogue = PersonaCatalogue::new(Arc::clone(&storage));
@@ -86,7 +83,6 @@ fn build_wired_app(
     let game_view_query = GameViewQuery::new(
         Arc::clone(&storage),
         Arc::clone(&message_service),
-        Arc::clone(&preset_store),
         Arc::clone(&settings),
     );
     let pipeline = ActionPipeline::with_storage(
@@ -95,7 +91,6 @@ fn build_wired_app(
         agent_registry,
         Arc::clone(&message_service),
         Arc::clone(&storage),
-        Arc::clone(&preset_store),
         Arc::clone(&settings),
     );
 
@@ -112,7 +107,6 @@ fn build_wired_app(
         settings_service,
         prompt_preset_service,
         storage,
-        preset_storage,
         settings,
         message_service,
         generation_gate,
@@ -129,7 +123,6 @@ fn build_wired_app(
 pub fn build_app_graph(
     settings: Arc<RwLock<AppSettings>>,
     storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
 ) -> Result<WiredApp> {
     let (recorder, agent_registry, text_check_service) = {
         let guard = settings.read().unwrap_or_else(|e| e.into_inner());
@@ -139,7 +132,7 @@ pub fn build_app_graph(
         let registry = AgentRegistry::from_configs_with_storage(
             &guard.agents,
             Arc::clone(&quantifier_recorder),
-            Some(Arc::clone(&preset_storage)),
+            Some(Arc::clone(&storage)),
             Arc::clone(&settings),
         )
         .unwrap_or_default();
@@ -151,7 +144,6 @@ pub fn build_app_graph(
 
     build_wired_app(
         storage,
-        preset_storage,
         settings,
         recorder,
         agent_registry,
@@ -163,7 +155,6 @@ pub fn build_app_graph(
 pub fn build_app_graph_for_tests(
     settings: Arc<RwLock<AppSettings>>,
     storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
     pipeline_override: Option<ActionPipeline>,
 ) -> Result<WiredApp> {
     let (recorder, agent_registry, text_check_service) = {
@@ -183,7 +174,7 @@ pub fn build_app_graph_for_tests(
             AgentRegistry::from_configs_with_storage(
                 &guard.agents,
                 Arc::clone(&recorder),
-                Some(Arc::clone(&preset_storage)),
+                Some(Arc::clone(&storage)),
                 Arc::clone(&settings),
             )
             .unwrap_or_default()
@@ -194,7 +185,6 @@ pub fn build_app_graph_for_tests(
 
     let mut wired = build_wired_app(
         storage,
-        preset_storage,
         settings,
         recorder,
         agent_registry,
@@ -203,11 +193,9 @@ pub fn build_app_graph_for_tests(
 
     if let Some(pipeline) = pipeline_override {
         // Override backends must use this graph's persistence and live settings.
-        let preset_store = Arc::new(PresetStore::new(Arc::clone(&wired.preset_storage)));
         wired.pipeline = pipeline.rebind_for_test(
             Arc::clone(&wired.message_service),
             Arc::clone(&wired.storage),
-            Arc::clone(&preset_store),
             Arc::clone(&wired.settings),
             wired.shutdown_token.clone(),
         );

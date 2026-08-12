@@ -13,7 +13,6 @@ fn build_test_wired_app() -> WiredApp {
     build_app_graph_for_tests(
         Arc::new(RwLock::new(AppSettings::default())),
         Arc::new(Storage::new_in_memory()),
-        Arc::new(Storage::new_in_memory()),
         None,
     )
     .expect("build_app_graph_for_tests should succeed")

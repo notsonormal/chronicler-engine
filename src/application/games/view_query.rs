@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use crate::adapters::driven::storage::{PresetStore, Storage};
+use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
 use crate::application::llm_message::LlmMessage;
 use crate::application::message_service::MessageService;
@@ -18,7 +18,6 @@ pub use crate::application::debug::DebugStateView;
 pub struct GameViewQuery {
     storage: Arc<Storage>,
     message_service: Arc<MessageService>,
-    preset_store: Arc<PresetStore>,
     settings: Arc<RwLock<AppSettings>>,
 }
 
@@ -26,13 +25,11 @@ impl GameViewQuery {
     pub fn new(
         storage: Arc<Storage>,
         message_service: Arc<MessageService>,
-        preset_store: Arc<PresetStore>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         Self {
             storage,
             message_service,
-            preset_store,
             settings,
         }
     }
@@ -193,7 +190,7 @@ impl GameViewQuery {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
             settings.active_quantifier_prompt_preset_id.clone()
         };
-        match self.preset_store.get_preset(&preset_id) {
+        match self.storage.get_preset(&preset_id) {
             Ok(Some(preset)) => preset.assemble_text(&[], None, None),
             Ok(None) => {
                 tracing::error!(

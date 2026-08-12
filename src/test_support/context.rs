@@ -6,7 +6,7 @@ use std::sync::RwLock;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::adapters::driven::storage::{PresetStore, Storage};
+use crate::adapters::driven::storage::Storage;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::pipeline::pipeline::ActionPipeline;
@@ -20,8 +20,7 @@ use crate::domain::model::settings::AppSettings;
 use crate::error::Result;
 use crate::test_support::TestData;
 
-pub fn default_test_preset_storage() -> Arc<Storage> {
-    let storage = Storage::new_in_memory();
+pub fn seed_default_preset(storage: &Storage) {
     storage
         .save_preset(&PromptPreset {
             id: "system_default".to_string(),
@@ -34,8 +33,7 @@ pub fn default_test_preset_storage() -> Arc<Storage> {
             preset_type: PresetType::System,
         })
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
-        .expect("test setup: save_preset must succeed for default preset storage");
-    Arc::new(storage)
+        .expect("test setup: save_preset must succeed for default preset");
 }
 
 pub fn build_test_message_service(storage: Arc<Storage>) -> Arc<MessageService> {
@@ -47,8 +45,8 @@ pub fn make_test_pipeline_with_backends(
     recorder: Arc<LlmCallRecorder>,
     agent_registry: AgentRegistry,
 ) -> ActionPipeline {
+    seed_default_preset(&storage);
     let message_service = build_test_message_service(Arc::clone(&storage));
-    let preset_store = Arc::new(PresetStore::new(default_test_preset_storage()));
     let settings = Arc::new(RwLock::new(AppSettings::default()));
     ActionPipeline::with_backends(
         CancellationToken::new(),
@@ -56,7 +54,6 @@ pub fn make_test_pipeline_with_backends(
         agent_registry,
         message_service,
         Arc::clone(&storage),
-        preset_store,
         settings,
     )
 }
@@ -66,8 +63,8 @@ pub fn make_test_pipeline_with_mock_quantifier(
     recorder: Arc<LlmCallRecorder>,
     quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
 ) -> ActionPipeline {
+    seed_default_preset(&storage);
     let message_service = build_test_message_service(Arc::clone(&storage));
-    let preset_store = Arc::new(PresetStore::new(default_test_preset_storage()));
     let settings = Arc::new(RwLock::new(AppSettings::default()));
     ActionPipeline::with_mock_quantifier(
         CancellationToken::new(),
@@ -75,21 +72,15 @@ pub fn make_test_pipeline_with_mock_quantifier(
         quantifier_provider,
         message_service,
         Arc::clone(&storage),
-        preset_store,
         settings,
     )
 }
 
 /// Build a full `WiredApp` for the supplied pipeline.
-pub fn build_test_wired_app(
-    storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
-    pipeline: ActionPipeline,
-) -> Result<WiredApp> {
+pub fn build_test_wired_app(storage: Arc<Storage>, pipeline: ActionPipeline) -> Result<WiredApp> {
     build_app_graph_for_tests(
         Arc::new(RwLock::new(AppSettings::default())),
         storage,
-        preset_storage,
         Some(pipeline),
     )
 }
@@ -97,11 +88,10 @@ pub fn build_test_wired_app(
 /// Build a full `WiredApp` with custom settings.
 pub fn build_test_wired_app_with_settings(
     storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
     settings: Arc<RwLock<AppSettings>>,
     pipeline: ActionPipeline,
 ) -> Result<WiredApp> {
-    build_app_graph_for_tests(settings, storage, preset_storage, Some(pipeline))
+    build_app_graph_for_tests(settings, storage, Some(pipeline))
 }
 
 pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
@@ -118,9 +108,9 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
 }
 
 fn build_test_app(storage: Arc<Storage>) -> Result<WiredApp> {
+    seed_default_preset(&storage);
     let settings = Arc::new(RwLock::new(AppSettings::default()));
-    let preset_storage = default_test_preset_storage();
-    build_app_graph_for_tests(settings, storage, preset_storage, None)
+    build_app_graph_for_tests(settings, storage, None)
 }
 
 pub fn make_test_app(state: GameState) -> Result<WiredApp> {

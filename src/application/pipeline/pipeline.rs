@@ -11,7 +11,7 @@ use crate::application::pipeline::phase_error::PhaseError;
 use crate::application::pipeline::phases::{PipelineInputs, PipelineRun};
 use crate::application::pipeline::spawn::spawn_pipeline_task;
 use crate::adapters::driven::storage::worlds::WorldBundle;
-use crate::adapters::driven::storage::{PresetStore, Storage};
+use crate::adapters::driven::storage::Storage;
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
@@ -41,7 +41,7 @@ pub struct ActionPipeline {
     pub(super) agent_registry: Arc<AgentRegistry>,
     pub(super) message_service: Arc<MessageService>,
     pub(super) storage: Arc<Storage>,
-    pub(super) preset_store: Arc<PresetStore>,
+
     pub(super) settings: Arc<RwLock<AppSettings>>,
     pub(super) shutdown_token: CancellationToken,
 }
@@ -53,7 +53,6 @@ impl ActionPipeline {
         agent_registry: AgentRegistry,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
-        preset_store: Arc<PresetStore>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         tracing::info!(
@@ -67,7 +66,6 @@ impl ActionPipeline {
             agent_registry,
             message_service,
             storage,
-            preset_store,
             settings,
         )
     }
@@ -78,7 +76,6 @@ impl ActionPipeline {
         agent_registry: AgentRegistry,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
-        preset_store: Arc<PresetStore>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         Self {
@@ -89,7 +86,6 @@ impl ActionPipeline {
             agent_registry: Arc::new(agent_registry),
             message_service,
             storage,
-            preset_store,
             settings,
             shutdown_token,
         }
@@ -101,7 +97,6 @@ impl ActionPipeline {
         quantifier_provider: Arc<dyn LlmProvider>,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
-        preset_store: Arc<PresetStore>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
@@ -112,7 +107,6 @@ impl ActionPipeline {
             registry,
             message_service,
             storage,
-            preset_store,
             settings,
         )
     }
@@ -136,13 +130,11 @@ impl ActionPipeline {
         mut self,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
-        preset_store: Arc<PresetStore>,
         settings: Arc<RwLock<AppSettings>>,
         shutdown_token: CancellationToken,
     ) -> Self {
         self.message_service = message_service;
         self.storage = storage;
-        self.preset_store = preset_store;
         self.settings = settings;
         self.shutdown_token = shutdown_token;
         self

@@ -210,12 +210,8 @@ async fn test_retry_load_messages_error() {
     );
 
     let app = AppState::from_wired(
-        crate::test_support::build_test_wired_app(
-            failing,
-            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-            make_service(),
-        )
-        .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
+        crate::test_support::build_test_wired_app(failing, make_service())
+            .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
     );
     app.pipeline.retry_last_response();
 }
@@ -314,12 +310,8 @@ async fn test_retry_event_storage_error_on_pre_event() {
         }
     }
 
-    let wired = crate::test_support::build_test_wired_app(
-        Arc::clone(&storage),
-        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        make_service(),
-    )
-    .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
+    let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), make_service())
+        .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
     let app = AppState::from_wired(wired);
 
     let _input_id = add_input_and_save(&app, &storage, "test input");
@@ -771,12 +763,8 @@ async fn test_retry_main_storage_error_on_pre_main() {
         }
     }
 
-    let wired = crate::test_support::build_test_wired_app(
-        Arc::clone(&storage),
-        Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
-        make_service(),
-    )
-    .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
+    let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), make_service())
+        .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
     let app = AppState::from_wired(wired);
 
     let _input_id = add_input_and_save(&app, &storage, "test input");

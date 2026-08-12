@@ -16,12 +16,11 @@ use crate::domain::model::settings::AppSettings;
 use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
-pub(crate) const PRESET_STORAGE_GAME_ID: u64 = 1;
+const BOOTSTRAP_GAME_ID: u64 = 1;
 
 struct PreparedData {
     db_pool: DbPool,
     storage: Arc<Storage>,
-    preset_storage: Arc<Storage>,
     world_card: WorldCard,
     map: Arc<MapDef>,
     player: PersonaCard,
@@ -57,20 +56,20 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
     let db_pool = DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
+    let storage = Arc::new(Storage::new_sqlite(db_pool.clone(), BOOTSTRAP_GAME_ID));
 
-    if let Err(e) = ensure_presets(&db_pool, &data_dir) {
+    if let Err(e) = ensure_presets(&storage, &data_dir) {
         tracing::warn!("Failed to seed prompt presets: {e}");
     }
 
-    let preset_storage = Arc::new(Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID));
-    if let Err(e) = preset_storage.seed_game_data(&data_dir) {
+    if let Err(e) = storage.seed_game_data(&data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
 
-    let world_with_map = match preset_storage.get_world(&args.world)? {
+    let world_with_map = match storage.get_world(&args.world)? {
         Some(w) => w,
         None => {
-            let all_worlds = preset_storage.list_worlds()?;
+            let all_worlds = storage.list_worlds()?;
             if all_worlds.is_empty() {
                 return Err(EngineError::Config(
                     "No worlds available in database".to_string(),
@@ -81,25 +80,24 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
                 args.world,
                 all_worlds[0].key
             );
-            preset_storage.require_world(&all_worlds[0].key)?
+            storage.require_world(&all_worlds[0].key)?
         }
     };
 
-    let npcs: Vec<NpcCard> = preset_storage.list_characters(world_with_map.world_id)?;
+    let npcs: Vec<NpcCard> = storage.list_characters(world_with_map.world_id)?;
     let npcs_map: HashMap<String, NpcCard> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
     let world_arc = Arc::new(world_with_map.world_card.clone());
     let map_arc = Arc::new(world_with_map.map);
 
-    let player = preset_storage.require_persona(&args.persona)?;
+    let player = storage.require_persona(&args.persona)?;
 
     let active_game_id =
         super::init_game::resolve_game_id(&db_pool, &world_arc, &args.persona, &player.sheet.name)?;
-    let storage = Arc::new(Storage::new_sqlite(db_pool.clone(), active_game_id));
+    storage.set_game_id(active_game_id);
 
     Ok(PreparedData {
         db_pool,
         storage,
-        preset_storage,
         world_card: world_with_map.world_card,
         map: map_arc,
         player,
@@ -148,11 +146,7 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
         load_settings(&data.storage).unwrap_or_else(|_| AppSettings::default())
     };
     let settings = Arc::new(RwLock::new(settings));
-    let wired = build_app_graph(
-        settings,
-        Arc::clone(&data.storage),
-        Arc::clone(&data.preset_storage),
-    )?;
+    let wired = build_app_graph(settings, Arc::clone(&data.storage))?;
 
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,
@@ -230,15 +224,10 @@ pub(crate) fn list_game_names_for_world(
 }
 
 pub(crate) fn ensure_presets(
-    db_pool: &crate::adapters::driven::storage::db::DbPool,
+    storage: &crate::adapters::driven::storage::Storage,
     data_dir: &std::path::Path,
 ) -> crate::error::Result<()> {
     use crate::domain::model::prompt_preset::PresetType;
-
-    let storage = crate::adapters::driven::storage::Storage::new_sqlite(
-        db_pool.clone(),
-        PRESET_STORAGE_GAME_ID,
-    );
 
     for preset_type in [PresetType::System, PresetType::Quantifier] {
         let dir = data_dir.join("prompt_presets").join(preset_type.as_str());
@@ -256,7 +245,7 @@ pub(crate) fn ensure_presets(
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
             let path = entry.path();
-            process_preset_file(&storage, &path, &existing_ids, preset_type)?;
+            process_preset_file(storage, &path, &existing_ids, preset_type)?;
         }
     }
 

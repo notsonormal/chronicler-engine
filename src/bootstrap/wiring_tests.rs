@@ -15,12 +15,7 @@ fn settings_with(connection: LlmProviderConfig) -> Arc<RwLock<AppSettings>> {
 }
 
 fn wired_app(connection: LlmProviderConfig, storage: Arc<Storage>) -> WiredApp {
-    build_app_graph(
-        settings_with(connection),
-        storage,
-        Arc::new(Storage::new_in_memory()),
-    )
-    .expect("build_app_graph should succeed")
+    build_app_graph(settings_with(connection), storage).expect("build_app_graph should succeed")
 }
 
 fn mock_connection() -> LlmProviderConfig {

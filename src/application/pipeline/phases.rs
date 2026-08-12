@@ -390,7 +390,7 @@ impl<'a> PipelineRun<'a> {
             .unwrap_or_else(|e| e.into_inner());
         let preset_id = settings.active_system_prompt_preset_id.clone();
         let response_length = settings.response_length.clone();
-        match self.pipeline.preset_store.get_preset(&preset_id) {
+        match self.pipeline.storage.get_preset(&preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
                 tracing::error!(

@@ -20,7 +20,7 @@ impl AgentRegistry {
     pub fn from_configs_with_storage(
         configs: &[AgentConfig],
         quantifier_recorder: Arc<LlmCallRecorder>,
-        preset_storage: Option<Arc<Storage>>,
+        storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
         let mut registry = Self::default();
@@ -43,7 +43,7 @@ impl AgentRegistry {
                 "quantifier" => Box::new(QuantifierAgent::from_config_with_storage(
                     config,
                     Arc::clone(&quantifier_recorder),
-                    preset_storage.clone(),
+                    storage.clone(),
                     Arc::clone(&settings),
                 )?),
                 other => {
