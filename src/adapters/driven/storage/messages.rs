@@ -3,7 +3,7 @@
 
 use crate::error::EngineError;
 use crate::domain::model::message::Message;
-use crate::adapters::driven::storage::backend::{Backend, InMemoryData, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::message::{DbMessage, DbSwipe};
 
 impl Storage {
@@ -237,35 +237,5 @@ impl Storage {
             }
         }
         Ok(messages)
-    }
-}
-
-impl InMemoryData {
-    fn update_active_swipe(&mut self, game_id: u64, message_id: u64, index: usize) {
-        if let Some(msg) = self
-            .messages
-            .get_mut(&game_id)
-            .and_then(|vec| vec.iter_mut().find(|m| m.id == message_id))
-        {
-            msg.active_swipe_index = index;
-        }
-    }
-
-    fn soft_delete_message(&mut self, game_id: u64, id: u64) {
-        if let Some(msg) = self
-            .messages
-            .get_mut(&game_id)
-            .and_then(|vec| vec.iter_mut().find(|m| m.id == id))
-        {
-            msg.is_deleted = true;
-        }
-    }
-
-    fn restore_soft_deleted(&mut self, game_id: u64, ids: &[u64]) {
-        if let Some(vec) = self.messages.get_mut(&game_id) {
-            for m in vec.iter_mut().filter(|m| ids.contains(&m.id)) {
-                m.is_deleted = false;
-            }
-        }
     }
 }

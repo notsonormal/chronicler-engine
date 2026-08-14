@@ -1,7 +1,7 @@
 use crate::domain::model::character::{CharacterSheet, NpcCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
-use crate::adapters::driven::storage::backend::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 #[test]

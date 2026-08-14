@@ -5,7 +5,7 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::domain::model::settings::AppSettings;
-use crate::adapters::driven::storage::backend::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::settings::DbSettings;
 
 impl Storage {

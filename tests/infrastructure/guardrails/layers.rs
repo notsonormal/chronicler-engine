@@ -53,7 +53,7 @@ pub fn check_wiredapp_scope(file_path: &str, content: &str) -> Vec<Violation> {
 pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    if !file_path.ends_with("storage/backend/messages.rs") {
+    if !file_path.ends_with("storage/messages.rs") {
         return violations;
     }
 

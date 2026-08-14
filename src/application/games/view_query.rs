@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
-use crate::application::llm_message::LlmMessage;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::application::message_service::MessageService;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};

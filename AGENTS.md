@@ -13,8 +13,21 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **llm/**
         - `mod.rs` — LLM driven adapters: provider implementations and HTTP transport
       - **storage/**
+        - `characters.rs` — Character storage backend operations
+        - `core.rs` — Storage backend trait and core abstractions
         - `db.rs` — SQLite database connection pool
+        - `games.rs` — Game storage operations
+        - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
+        - `llm_messages.rs` — LLM message storage
+        - `messages.rs` — Message storage operations
         - `mod.rs` — Storage layer and database access
+        - `personas.rs` — Persona storage operations
+        - `presets.rs` — Preset storage operations
+        - `settings.rs` — Settings storage operations
+        - `snapshots.rs` — Snapshot storage operations
+        - `swipes.rs` — Swipe data storage
+        - `test_support.rs` — Test infrastructure types for storage failure injection
+        - `worlds.rs` — World storage backend operations
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -33,7 +46,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - **application/**
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
-    - `llm_message.rs` — LLM message DTO + recorder save seam
+    - `llm_message.rs` — LLM recorder save seam
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
     - `message_service.rs` — Game-state lifecycle seam for message history and snapshots.
     - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
@@ -102,6 +115,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `character.rs` — Character sheet data and NPC card definitions
       - `game.rs` — Game state and session management
       - `llm_backend.rs` — LLM backend provider types
+      - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
       - `message.rs` — Message types and conversation history
       - `message_history.rs` — Message history tracking

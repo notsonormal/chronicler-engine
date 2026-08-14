@@ -2,7 +2,7 @@ use crate::domain::model::{
     agent::{AgentConfig, BackendSelector, ExecutionPhase},
     settings::{AppSettings, LlmProviderConfig, TextCheckMode, TextCheckSettings},
 };
-use crate::adapters::driven::storage::backend::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::storage::db::DbPool;
 
 #[test]

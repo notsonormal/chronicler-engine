@@ -10,7 +10,8 @@ use crate::error::EngineError;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
-use crate::adapters::driven::storage::backend::{Backend, Storage, InMemoryWorld};
+use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::in_memory_data::InMemoryWorld;
 use crate::adapters::driven::storage::models::world::{DbWorld, DbMap};
 
 impl DbWorld {

@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use crate::application::llm_message::LlmMessage;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::application::ports::text_checker::CheckResult;

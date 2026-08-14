@@ -1,5 +1,5 @@
 use crate::domain::model::character::{CharacterSheet, PersonaCard};
-use crate::adapters::driven::storage::backend::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 #[test]

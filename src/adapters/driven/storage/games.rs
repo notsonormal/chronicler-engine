@@ -3,7 +3,7 @@
 
 use crate::error::EngineError;
 use crate::domain::model::game::Game;
-use crate::adapters::driven::storage::backend::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
 use crate::adapters::driven::storage::utils::parse_datetime;
 

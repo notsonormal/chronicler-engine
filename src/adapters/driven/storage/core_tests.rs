@@ -1,4 +1,4 @@
-use crate::adapters::driven::storage::backend::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::{dummy_message, sqlite_storage};
 
 #[test]

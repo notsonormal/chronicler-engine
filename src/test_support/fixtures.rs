@@ -16,7 +16,8 @@ use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarratio
 use crate::domain::model::world::{WorldCard, WorldManifest};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
-use crate::application::llm_message::{LlmMessage, SaveLlmMessageFn};
+use crate::application::llm_message::SaveLlmMessageFn;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::LlmProvider;
 

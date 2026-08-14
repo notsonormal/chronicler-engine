@@ -2,9 +2,9 @@
 //! LLM message storage
 
 use crate::error::EngineError;
-use crate::adapters::driven::storage::backend::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::llm_message::DbLlmMessage;
-use crate::application::llm_message::LlmMessage;
+use crate::domain::model::llm_message::LlmMessage;
 
 impl Storage {
     pub fn save_llm_message(&self, message: &LlmMessage) -> Result<(), EngineError> {

@@ -7,55 +7,15 @@ use std::sync::Mutex;
 #[cfg(feature = "testing")]
 use std::sync::Arc;
 
-use crate::error::EngineError;
-use crate::domain::model::character::{NpcCard, PersonaCard};
-use crate::domain::model::game::Game;
-use crate::application::llm_message::LlmMessage;
-use crate::domain::model::map::MapDef;
-use crate::domain::model::message::{Message, Swipe};
-use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::AppSettings;
-use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::db::DbPool;
+use crate::adapters::driven::storage::in_memory_data::InMemoryData;
+use crate::error::EngineError;
 #[cfg(feature = "testing")]
 use super::test_support::{TestFailureHandle, TestOverride};
 
 pub struct Storage {
     game_id: AtomicU64,
     backend: Mutex<BackendKind>,
-}
-
-pub struct InMemoryData {
-    pub snapshots: HashMap<u64, Vec<GameStateSnapshot>>,
-    pub next_snapshot_id: u64,
-    pub games: Vec<Game>,
-    pub next_game_id: u64,
-    pub messages: HashMap<u64, Vec<Message>>,
-    pub next_message_id: u64,
-    pub swipes: HashMap<u64, Vec<Swipe>>,
-    pub presets: Vec<PromptPreset>,
-    pub llm_messages: Vec<LlmMessage>,
-    pub worlds: Vec<InMemoryWorld>,
-    pub personas: Vec<PersonaCardWithKey>,
-    pub characters: Vec<CharacterSeed>,
-    pub settings: AppSettings,
-}
-
-pub struct InMemoryWorld {
-    pub world_id: i64,
-    pub world_card: WorldCard,
-    pub map: MapDef,
-}
-
-pub struct PersonaCardWithKey {
-    pub key: String,
-    pub card: PersonaCard,
-}
-
-pub struct CharacterSeed {
-    pub world_id: i64,
-    pub card: NpcCard,
 }
 
 /// [TRIVIAL_ENUM]
@@ -73,27 +33,6 @@ pub enum BackendKind {
         base: Box<Backend>,
         overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
     },
-}
-
-impl InMemoryData {
-    // Throwaway backend for `mem::replace` borrow-checker workaround.
-    pub(crate) fn empty() -> Self {
-        Self {
-            snapshots: HashMap::new(),
-            next_snapshot_id: 1,
-            games: Vec::new(),
-            next_game_id: 1,
-            messages: HashMap::new(),
-            next_message_id: 0,
-            swipes: HashMap::new(),
-            presets: Vec::new(),
-            llm_messages: Vec::new(),
-            worlds: Vec::new(),
-            personas: Vec::new(),
-            characters: Vec::new(),
-            settings: AppSettings::default(),
-        }
-    }
 }
 
 impl Storage {

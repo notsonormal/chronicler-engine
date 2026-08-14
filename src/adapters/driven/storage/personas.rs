@@ -5,7 +5,8 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::domain::model::character::PersonaCard;
-use crate::adapters::driven::storage::backend::{Backend, PersonaCardWithKey, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::in_memory_data::PersonaCardWithKey;
 use crate::adapters::driven::storage::models::persona::DbPersona;
 
 impl Storage {

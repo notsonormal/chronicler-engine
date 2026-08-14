@@ -29,7 +29,7 @@ If the function is reused across tests, lift the input construction into a `fn m
 **The standard.**
 
 ```rust
-use crate::adapters::driven::storage::backend::Storage;
+use crate::adapters::driven::storage::Storage;
 use crate::test_support::{dummy_<entity>, sqlite_storage};  // as needed
 
 #[test]
@@ -215,7 +215,7 @@ Co-locate `proptest!` blocks with regular `#[test]`s for the same function — p
 **The standard.**
 
 ```rust
-use crate::adapters::driven::storage::backend::TestOverride;
+use crate::adapters::driven::storage::TestOverride;
 
 #[test]
 fn test_<method>_failure() {
@@ -235,7 +235,7 @@ fn test_<method>_failure() {
 
 The two `TestOverride` variants (`internal` and `config`) map to two different `EngineError` arms downstream. Use `internal` for unexpected runtime errors (DB corruption, write failure) and `config` for input-validation failures.
 
-Applied at storage, action-pipeline, and HTTP-fragment tiers (`storage/backend/*_tests.rs`, `application/action_pipeline/{pipeline,retry}_tests.rs`, `adapters/driving/http/{settings,prompt_presets}/handlers/*_tests.rs`).
+Applied at storage, action-pipeline, and HTTP-fragment tiers (`storage/*_tests.rs`, `application/action_pipeline/{pipeline,retry}_tests.rs`, `adapters/driving/http/{settings,prompt_presets}/handlers/*_tests.rs`).
 
 ### Cross-cutting B — XSS regression checks
 

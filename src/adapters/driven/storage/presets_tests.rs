@@ -1,5 +1,5 @@
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::adapters::driven::storage::backend::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 
 fn dummy_preset(id: &str, preset_type: PresetType) -> PromptPreset {
     PromptPreset {

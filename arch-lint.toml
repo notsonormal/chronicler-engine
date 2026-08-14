@@ -158,3 +158,10 @@ message = "driven-llm adapter must not depend on driven-text-check adapter."
 from = "driven-text-check"
 to = ["driven-llm"]
 message = "driven-text-check adapter must not depend on driven-llm adapter."
+
+# Storage adapter must not depend on the application layer (including ports,
+# which are a subset of application/**). It may depend on domain models only.
+[[deny-scope-dep]]
+from = "storage"
+to = ["application"]
+message = "Storage adapter must not depend on the application layer; depend on domain models only."

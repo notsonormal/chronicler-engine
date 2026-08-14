@@ -1,9 +1,9 @@
 use chrono::Utc;
-use crate::application::llm_message::LlmMessage;
-use crate::adapters::driven::storage::backend::{Storage, TestOverride};
+use crate::domain::model::llm_message::LlmMessage;
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
-fn dummy_llm_message(model: &str) -> crate::application::llm_message::LlmMessage {
+fn dummy_llm_message(model: &str) -> crate::domain::model::llm_message::LlmMessage {
     LlmMessage {
         id: 0,
         agent_name: "narrator".to_string(),

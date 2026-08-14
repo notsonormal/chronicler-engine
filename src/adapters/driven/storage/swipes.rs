@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::error::EngineError;
 use crate::domain::model::message::Swipe;
-use crate::adapters::driven::storage::backend::{Backend, InMemoryData, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
 
 impl Storage {
     pub fn insert_swipe(
@@ -172,24 +172,5 @@ impl Storage {
                 tracing::error!("persist_swipes: swipe {index} failed: {e}");
             }
         }
-    }
-}
-
-impl InMemoryData {
-    fn update_swipe_text(&mut self, message_id: u64, swipe_index: usize, text: &str) {
-        if let Some(swipe) = self
-            .swipes
-            .get_mut(&message_id)
-            .and_then(|vec| vec.get_mut(swipe_index))
-        {
-            swipe.text = text.to_string();
-        }
-    }
-
-    fn load_swipes_for_messages(&self, message_ids: &[u64]) -> HashMap<u64, Vec<Swipe>> {
-        message_ids
-            .iter()
-            .filter_map(|&msg_id| self.swipes.get(&msg_id).map(|v| (msg_id, v.clone())))
-            .collect()
     }
 }

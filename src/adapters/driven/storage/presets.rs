@@ -3,7 +3,7 @@
 
 use crate::error::EngineError;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::adapters::driven::storage::backend::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::prompt_preset::DbPromptPreset;
 
 impl Storage {

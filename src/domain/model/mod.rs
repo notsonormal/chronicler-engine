@@ -6,6 +6,7 @@ pub mod agent;
 pub mod character;
 pub mod game;
 pub mod llm_backend;
+pub mod llm_message;
 pub mod map;
 pub mod message;
 pub mod message_history;

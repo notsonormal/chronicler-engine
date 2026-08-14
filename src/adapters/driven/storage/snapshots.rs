@@ -3,7 +3,7 @@
 
 use crate::error::EngineError;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::adapters::driven::storage::backend::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game_state_snapshot::DbGameStateSnapshot;
 
 impl Storage {

@@ -8,6 +8,7 @@ use crate::utils::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driving::http::ServerConfig;
+use crate::bootstrap::load::seed_game_data;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
 use crate::utils::settings::load_settings;
 use crate::domain::model::character::{NpcCard, PersonaCard};
@@ -62,7 +63,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         tracing::warn!("Failed to seed prompt presets: {e}");
     }
 
-    if let Err(e) = storage.seed_game_data(&data_dir) {
+    if let Err(e) = seed_game_data(&storage, &data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
 

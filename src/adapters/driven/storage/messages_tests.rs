@@ -1,6 +1,6 @@
 use crate::domain::model::message::Message;
 use crate::domain::model::state::message_types::MessageType;
-use crate::adapters::driven::storage::backend::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::{dummy_message, dummy_swipe, sqlite_storage};
 
 #[test]

@@ -5,7 +5,8 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::domain::model::character::NpcCard;
-use crate::adapters::driven::storage::backend::{Backend, CharacterSeed, Storage};
+use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::in_memory_data::CharacterSeed;
 use crate::adapters::driven::storage::models::character::DbCharacter;
 
 impl Storage {
