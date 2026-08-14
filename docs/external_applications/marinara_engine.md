@@ -2,7 +2,7 @@
 
 > **Status:** historical/reference, not authoritative.
 
-**Location:** `D:\John\DevContainer\Marinara-Engine`  
+**Location:** `https://github.com/Pasta-Devs/Marinara-Engine`  
 **Relation:** Sister project with a TypeScript-based engine that includes similar chronicler functionality. Contains relevant LLM infrastructure patterns.
 
 ---

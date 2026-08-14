@@ -20,6 +20,9 @@ pub use location::*;
 mod free_fn_tests;
 
 #[cfg(test)]
+mod location_tests;
+
+#[cfg(test)]
 mod structure_tests;
 
 // TODO: These types and functions should be moved to other folders
@@ -216,7 +219,14 @@ fn guardrails_test_module_header() {
 
 #[test]
 fn guardrails_test_file_location() {
-    check_src_files("test file location (src)", check_test_file_location);
+    let mut errors = Vec::new();
+    for file in discover_rs_files("src") {
+        let content = std::fs::read_to_string(&file).unwrap();
+        // Preserve "src/" prefix so check_test_file_location recognizes these as src files.
+        let rel = file.clone();
+        errors.extend(check_test_file_location(&rel, &content));
+    }
+    assert_violations(&errors, "test file location (src)");
 }
 
 #[test]

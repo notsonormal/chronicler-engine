@@ -6,3 +6,5 @@ pub mod parser;
 
 #[cfg(test)]
 mod orchestration_tests;
+#[cfg(test)]
+mod parser_tests;

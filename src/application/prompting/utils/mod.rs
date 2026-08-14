@@ -2,3 +2,6 @@
 //! Narrative prompt utility modules.
 
 pub mod context;
+
+#[cfg(test)]
+mod context_tests;

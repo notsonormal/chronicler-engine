@@ -16,8 +16,6 @@ pub use utils::context::fit_messages_to_context;
 #[cfg(test)]
 mod assembler_tests;
 #[cfg(test)]
-mod context_tests;
-#[cfg(test)]
 mod sanitize_tests;
 #[cfg(test)]
 mod token_budget_tests;

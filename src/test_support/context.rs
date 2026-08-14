@@ -9,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 use crate::adapters::driven::storage::Storage;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::pipeline::pipeline::ActionPipeline;
+use crate::application::pipeline::ActionPipeline;
 use crate::application::message_service::MessageService;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};

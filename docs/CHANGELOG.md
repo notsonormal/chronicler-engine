@@ -2,6 +2,15 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-08-13
+
+### Changed
+
+- **Action pipeline split into entry modules** (`src/application/pipeline/`). `pipeline.rs` (802 lines) deleted; split into `core.rs` (`ActionPipeline` struct, constructors, shared `claim_and_spawn` gate/spawn helper, `run_from_input`, phase-orchestration helpers), `action.rs` (action entry path), `retry.rs` (retry entry), `retrigger.rs` (retrigger entry). Three `PipelineRun` methods (`phase_pre_main_snapshot`, `phase_finalize`, `handle_cancellation`) moved into `phases.rs`. `pipeline/mod.rs` re-exports `ActionPipeline` from `core.rs`; all callers updated from `pipeline::pipeline::ActionPipeline` to `pipeline::ActionPipeline`. No behavior change.
+- **Orphan test files consolidated** to satisfy the test-file-pairing guardrail. `orchestrator_tests.rs` deleted; its tests redistributed to `view_query_tests.rs`, `gate_tests.rs`, and the pipeline sibling test files; duplicated `make_test_service` / `make_test_service_with_agent` helpers replaced with the canonical `test_support::context` helpers (`make_test_pipeline_with_backends`, `make_test_pipeline_with_mock_quantifier`). `game_state_action_processing_tests.rs`, `game_state_logic_tests.rs`, `game_state_trigger_eval_tests.rs` merged into `game_state_tests.rs`. `parser_tests.rs` and `context_tests.rs` moved into their respective `utils/` directories.
+- **`pipeline_tests.rs` (1495 lines) split** into `core_tests.rs`, `action_tests.rs`, `retrigger_tests.rs`; `retry_tests.rs` retained and now paired with `retry.rs`.
+- **`check_test_file_pairing` guardrail F1 bug fixed** (`tests/infrastructure/guardrails/`). `check_src_files` stripped the `src/` prefix before calling the rule, but the rule returned early unless the path contained `src/`, so it silently skipped every `src/` file. The `guardrails_test_file_location` walker now passes the full `src/`-containing path (mirroring `guardrails_doc_standards_tests`), so the rule actually runs. Removed the `parent_has_mod_rs` escape hatch that had allowed orphan `_tests.rs` files to hide next to a `mod.rs`. Added `location_tests.rs` unit tests. The test-file-pairing guardrail is now enforced in CI with zero orphans.
+
 ## 2026-08-08
 
 ### Fixed

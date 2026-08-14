@@ -20,7 +20,7 @@ use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
 use super::phase_error::PhaseError;
-use super::pipeline::ActionPipeline;
+use super::core::ActionPipeline;
 
 pub struct PipelineInputs {
     pub input: String,
@@ -403,6 +403,44 @@ impl<'a> PipelineRun<'a> {
                 Err("Preset storage inaccessible".to_string())
             }
         }
+    }
+}
+
+impl<'a> PipelineRun<'a> {
+    pub(super) fn phase_pre_main_snapshot(&self, state: &mut GameState) -> Result<(), PhaseError> {
+        tracing::info!("Pipeline ▶ Narrating");
+        state.narrative.input_buffer.status = GenerationStatus::Generating;
+        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+        self.persist_snapshot_or_err(state, "pre-main snapshot")?;
+        Ok(())
+    }
+
+    pub(super) fn phase_finalize(&self, state: &mut GameState) {
+        tracing::info!(
+            "Pipeline ✓ Finalize (status={:?})",
+            state.narrative.input_buffer.status
+        );
+
+        if state
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_none()
+        {
+            state.narrative.input_buffer.status = GenerationStatus::Idle;
+        }
+        state.narrative.input_buffer.phase = GenerationPhase::default();
+        self.persist(state);
+    }
+
+    pub(super) fn handle_cancellation(&self) -> PhaseError {
+        tracing::warn!("Pipeline cancelled — aborting remaining stages");
+        let mut state = self.pipeline.message_service.load_or_fresh();
+        state.narrative.input_buffer.status = GenerationStatus::Idle;
+        state.narrative.input_buffer.phase = GenerationPhase::default();
+        self.persist(&state);
+        PhaseError::Cancelled
     }
 }
 

@@ -10,7 +10,7 @@ use crate::adapters::driven::llm::providers::{
 };
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::text_check::HarperTextChecker;
-use crate::application::pipeline::pipeline::ActionPipeline;
+use crate::application::pipeline::ActionPipeline;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;

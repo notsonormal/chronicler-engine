@@ -3,11 +3,6 @@
 use std::path::Path;
 use crate::Violation;
 
-// TODO: There should be a guardrail making sure there are no inline tests
-//  And tests should be in a separate file. I think this is being enforced
-//  for the `src/` files (unless the guardrail has been removed) but it
-//  is definitely nto being enforced in the `test/` folder
-
 pub fn check_test_file_naming(path: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -42,8 +37,6 @@ pub fn check_test_file_naming(path: &str) -> Vec<Violation> {
     violations
 }
 
-// TODO: This guardrail should be catching `src/application/orchestrator_tests.rs`
-//  which is a unit test file without a matching `orchestrator.rs`. It's not catching it.
 pub fn check_test_file_pairing(path: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -75,23 +68,13 @@ pub fn check_test_file_pairing(path: &str) -> Vec<Violation> {
     let has_module_dir = module_dir.is_dir() && module_mod_rs.exists();
 
     let has_source_file = expected_source.exists();
-    let parent_has_mod_rs = parent_dir.join("mod.rs").exists();
 
-    if !has_source_file {
-        if has_module_dir && !parent_has_mod_rs {
-            // Orphan: test outside module dir
-            violations.push(Violation::error(
-                path,
-                1,
-                format!("Test file for module '{base_name}' is outside module directory. Move {file_name} to {base_name}/"),
-            ));
-        } else if !parent_has_mod_rs {
-            violations.push(Violation::error(
-                path,
-                1,
-                format!("Orphan test file - no matching {file_name} or {base_name}/mod.rs found"),
-            ));
-        }
+    if !has_source_file && !has_module_dir {
+        violations.push(Violation::error(
+            path,
+            1,
+            format!("Orphan test file - no matching {base_name}.rs or {base_name}/mod.rs found"),
+        ));
     }
 
     violations

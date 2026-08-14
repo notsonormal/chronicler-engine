@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::domain::model::settings::AppSettings;
 use crate::adapters::driving::http::ServerConfig;
-use crate::application::pipeline::pipeline::ActionPipeline;
+use crate::application::pipeline::ActionPipeline;
 
 #[test]
 fn test_server_config_default() {

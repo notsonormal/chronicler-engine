@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::application::pipeline::pipeline::ActionPipeline;
+use crate::application::pipeline::core::ActionPipeline;
 
 pub(crate) fn spawn_pipeline_task<F>(pipeline: Arc<ActionPipeline>, f: F)
 where

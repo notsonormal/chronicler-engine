@@ -9,7 +9,7 @@ use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::message_service::MessageService;
 use crate::application::persona_catalogue::PersonaCatalogue;
-use crate::application::pipeline::pipeline::ActionPipeline;
+use crate::application::pipeline::ActionPipeline;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::settings_service::SettingsService;
 use crate::application::text_check_service::TextCheckService;

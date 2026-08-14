@@ -1,21 +1,21 @@
-//! Unit tests for action pipeline orchestration and execution.
+//! Unit tests for shared action-pipeline orchestration (run_from_input and phase internals).
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::adapters::driving::http::AppState;
+use crate::application::agents::registry::AgentRegistry;
 use crate::application::pipeline::phase_error::PhaseError;
 use crate::application::pipeline::phases::PipelineRun;
-use crate::test_support::make_test_recorder;
-use crate::application::agents::registry::AgentRegistry;
+use crate::domain::model::map::Room;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::map::Room;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
+use crate::test_support::make_test_recorder;
 use crate::test_support::{make_test_pipeline_with_backends, TestAppBuilder, TestDataBuilder};
 use crate::test_support::fixtures::{TestGameState, TestMap, TestNpc};
 
@@ -980,41 +980,6 @@ fn test_pipeline_room_not_found_sets_error_status() {
 }
 
 #[test]
-fn test_execute_action_clears_last_trigger() {
-    use crate::test_support::TestStoredTriggerContext;
-
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
-
-    let mut state = app.message_service.load_or_fresh();
-    state.narrative.last_trigger = Some(TestStoredTriggerContext::for_npc(
-        "npc_1",
-        "Old",
-        "The old trigger fires.",
-    ));
-    app.message_service
-        .save_state(&state)
-        .expect("save_state should succeed");
-
-    app.pipeline.execute_action("look".to_string());
-
-    let final_state = app.message_service.load_or_fresh();
-    assert!(
-        final_state.narrative.last_trigger.is_none(),
-        "last_trigger should be cleared by execute_action"
-    );
-}
-
-#[test]
 fn test_pipeline_phase_stays_narrating_on_narration_failure() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
@@ -1425,71 +1390,4 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         .iter()
         .any(|e| e.message_type == MessageType::Narration);
     assert!(has_narration, "Main narration should be preserved");
-}
-
-#[test]
-fn test_streaming_narration_saved_before_quantifier_complete() {
-    use std::thread;
-    use std::time::Duration;
-
-    let quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
-        Arc::new(
-            MockBackend::default()
-                .with_prompt_responses(vec![r#"{"npcs_in_room": []}"#.to_string()])
-                .with_delay(500),
-        );
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let service = crate::test_support::make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        quantifier_provider,
-    );
-    let (app, _storage) = TestAppBuilder::with_data(TestDataBuilder::default_test().build())
-        .pipeline(service)
-        .build_service_with_storage();
-
-    let app_clone = app.clone();
-    let message_service = Arc::clone(&app.message_service);
-    let handle = thread::spawn(move || {
-        app_clone.pipeline.execute_action("look around".to_string());
-    });
-
-    let start = std::time::Instant::now();
-    let mut narration_found = false;
-    while start.elapsed() < Duration::from_millis(400) {
-        if message_service
-            .load_messages()
-            .map(|msgs| {
-                msgs.iter()
-                    .any(|m| m.message_type == MessageType::Narration)
-            })
-            .unwrap_or(false)
-        {
-            narration_found = true;
-            break;
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
-    assert!(
-        narration_found,
-        "Narration should be saved before quantifier completes (quantifier takes 500ms)"
-    );
-
-    handle.join().expect("Action thread should complete");
-
-    let final_state = app.message_service.load_or_fresh();
-    assert!(
-        !final_state.narrative.input_buffer.status.is_generating(),
-        "Should complete after quantifier finishes"
-    );
-    let final_narration_count = message_service
-        .load_messages()
-        .unwrap()
-        .iter()
-        .filter(|m| m.message_type == MessageType::Narration)
-        .count();
-    assert_eq!(
-        final_narration_count, 1,
-        "Should have exactly 1 narration (no duplicates), found {final_narration_count}"
-    );
 }

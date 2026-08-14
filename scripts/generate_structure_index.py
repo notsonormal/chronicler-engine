@@ -171,23 +171,23 @@ def main() -> int:
     rust_bullets = build_bullet_structure(src_dir)
     python_bullets = build_python_bullets(scripts_dir, engine_dir)
 
-    new_structure = f"""## STRUCTURE
+    new_structure = f"""## Structure
 <!-- AUTO-STRUCTURE START -->
 {rust_bullets}
 {python_bullets}
 <!-- AUTO-STRUCTURE END -->"""
 
     structure_match = re.search(
-        r"## STRUCTURE\n<!-- AUTO-STRUCTURE START -->.*?<!-- AUTO-STRUCTURE END -->",
+        r"## Structure\n<!-- AUTO-STRUCTURE START -->.*?<!-- AUTO-STRUCTURE END -->",
         content,
         re.DOTALL,
     )
 
     if not structure_match:
-        structure_match = re.search(r"## STRUCTURE\n```.*?```", content, re.DOTALL)
+        structure_match = re.search(r"## Structure\n```.*?```", content, re.DOTALL)
 
     if not structure_match:
-        structure_match = re.search(r"## STRUCTURE\n", content)
+        structure_match = re.search(r"## Structure\n", content)
 
     if structure_match:
         old_structure = structure_match.group(0)

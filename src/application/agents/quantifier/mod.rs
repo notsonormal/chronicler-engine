@@ -18,6 +18,4 @@ pub use types::{QuantifierPromptContext, RoomInfo};
 #[cfg(test)]
 mod agent_tests;
 #[cfg(test)]
-mod parser_tests;
-#[cfg(test)]
 mod prompt_tests;

@@ -11,7 +11,7 @@ use chronicler_engine::adapters::driven::storage::db::DbPool;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::application::agents::registry::AgentRegistry;
-use chronicler_engine::application::pipeline::pipeline::ActionPipeline;
+use chronicler_engine::application::pipeline::ActionPipeline;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::game_state::GameState;

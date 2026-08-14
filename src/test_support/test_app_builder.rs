@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use axum::Router;
 
-use crate::application::pipeline::pipeline::ActionPipeline;
+use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;

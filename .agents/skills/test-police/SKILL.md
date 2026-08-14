@@ -94,9 +94,11 @@ Gate is **overall ≥80%**, not per-file. Per-file numbers are reference, not ga
 
 # Reference pointers
 
-- `TEST_INVENTORY.md` — subdir/file purpose tables for `tests/` and unit test layout. File lists drift on every PR — run `ls` for current membership.
-- `WAIT_HELPERS.md` — smart-wait API catalog (`tests/test_utils/wait.rs`, `browser.rs`), with signatures, example usage, and acceptable bare-sleep policy.
+- `.agents/skills/test-police/TEST_INVENTORY.md` — subdir/file purpose tables for `tests/` and unit test layout. File lists drift on every PR — run `ls` for current membership.
+- `.agents/skills/test-police/WAIT_HELPERS.md` — smart-wait API catalog (`tests/test_utils/wait.rs`, `browser.rs`), with signatures, example usage, and acceptable bare-sleep policy.
 - `AGENTS.md` — test-first philosophy, tests-as-documentation, conventions (DOC anchors, `LlmBackend` trait + `MockBackend`), commands, development loop, concurrent-build flags.
+- `docs/diataxis/reference/coding_standards/unit_test_standards.md` - Unit test standard patterns
+- `docs/diataxis/reference/coding_standards/integration_test_standards.md` - Integrat test standard patterns
 
 # Development loop (this skill)
 

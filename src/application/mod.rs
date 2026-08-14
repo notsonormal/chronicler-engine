@@ -37,9 +37,6 @@ mod llm_recorder_tests;
 mod message_service_tests;
 
 #[cfg(test)]
-mod orchestrator_tests;
-
-#[cfg(test)]
 mod persona_catalogue_tests;
 
 #[cfg(test)]

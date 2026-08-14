@@ -110,7 +110,7 @@ pub fn spawn_arrival_task_if_needed(
     runtime: &tokio::runtime::Runtime,
     settings: &Arc<RwLock<AppSettings>>,
     message_service: Arc<crate::application::message_service::MessageService>,
-    pipeline: Arc<crate::application::pipeline::pipeline::ActionPipeline>,
+    pipeline: Arc<crate::application::pipeline::ActionPipeline>,
     storage: &Arc<crate::adapters::driven::storage::Storage>,
     _db_pool: &crate::adapters::driven::storage::db::DbPool,
     request: ArrivalSpawnRequest,

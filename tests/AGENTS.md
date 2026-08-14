@@ -61,6 +61,7 @@ Examples:
       - `free_fn_tests.rs` — Tests for `free_fn.rs` guardrail.
       - `layers.rs` — Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, and tests-vs-messages/swipes separation.
       - `location.rs` — Location guardrail tests: ensures `#[test]` / `#[cfg(test)]` units live in the correct directory (e.g., unit tests stay in `src/`, integration tests stay in `tests/`).
+      - `location_tests.rs` — Tests for `location.rs` guardrail.
       - `mod.rs` — Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
       - `nesting.rs` — Nesting depth guardrail — reports function-body control-flow nesting depth violations (probe only; does not gate the build).
       - `structure.rs` — Structure guardrail tests: doc-anchor standards, mod.rs purity, no-std-thread, file length, and the new test module-header rule.

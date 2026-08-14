@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/pipeline.rs`.
+//! Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/` (`core.rs` orchestration, `phases.rs` implementations).
 
 use serde::{Deserialize, Serialize};
 

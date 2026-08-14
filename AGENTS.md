@@ -1,22 +1,9 @@
 # Chronicler Engine Knowledge Base
 
-## OVERVIEW
+## Overview
 Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
 
-## DECISION-MAKING
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing (e.g. during planning):
-
-- **State your assumptions explicitly.** If uncertain, ask.
-- **If multiple interpretations exist, present them** — Don't pick silently unless obvious.
-- **If a simpler approach exists, say so.** Push back when warranted. That is, suggest a simpler solution to the user. This doesn't mean you should quietly disregard the user's plan and simplify it yourself.
-- **If something is unclear, stop.** Name what's confusing. Ask.
-
-These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-## STRUCTURE
+## Structure
 <!-- AUTO-STRUCTURE START -->
 - **src/**
   - `error.rs` — Error types and result aliases
@@ -76,10 +63,13 @@ These guidelines bias toward caution over speed. For trivial tasks, use judgment
       - `mod.rs` — Generation gating and per-game slot orchestration.
       - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
     - **pipeline/**
+      - `action.rs` — Action entry path for the pipeline.
+      - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
       - `mod.rs` — Action pipeline for processing game actions
       - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
       - `phases.rs` — Phase implementations for the action pipeline
-      - `pipeline.rs` — Action pipeline orchestration and execution
+      - `retrigger.rs` — Retrigger entry path for the pipeline.
+      - `retry.rs` — Retry entry path for the pipeline.
       - `spawn.rs` — Shared spawn helper for pipeline tasks
     - **ports/**
       - `llm_provider.rs` — LLM provider port (transport-only)
@@ -126,7 +116,7 @@ These guidelines bias toward caution over speed. For trivial tasks, use judgment
       - **state/**
         - `game_state.rs` — Main game state and builder
         - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
-        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/pipeline.rs`.
+        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/` (`core.rs` orchestration, `phases.rs` implementations).
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state
@@ -171,26 +161,45 @@ These guidelines bias toward caution over speed. For trivial tasks, use judgment
   - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
 <!-- AUTO-STRUCTURE END -->
 
-## YOUR RESPONSIBILITY 
+## Your Responsibility
 
 You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task.
 
-**Surface Hidden Trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
+## Communication
+
+Keep outputs reasonably concise. Length should be matched to need; brevity cuts fluff, not personality. Cut ceremony, not reasoning.
+
+Label epistemic status when it matters: known, inferred, or guessed.
 
 **Honest Status Reporting**: When asked "is X done?", answer based on what is verified, not what was attempted. "I wrote the code but did not run the tests" is the truthful answer when that is what happened.
 
-## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
+### Decision Making
 
-### Core Principles
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing (e.g. during planning):
+
+- **State your assumptions explicitly.** If uncertain or something is unclear, stop, name what's confusing, and ask.
+- **If multiple interpretations exist, present them** — Don't pick silently unless obvious.
+- **Hold a reasoned position.** Push back when a simpler approach exists, and if the user pushes back while your reasoning still holds, say why.
+- **Surface hidden trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
+
+These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+### Progress updates
+Before your first tool call, one sentence on what you're about to do. While working, update only when you find something important or change direction not before each tool call. When done, lead with the outcome: first sentence answers "what happened" or "what did you find", detail after.
+
+## Documentation Strategy: Semantic Mapping
+
 1. **Naming as Documentation**: Symbols (functions, types, variables) must use verbose, domain-aligned names that map 1-to-1 with concepts in the `docs/`.
-2. **Module-Level Two-Line Headers**: Every file in `src/` has:
+2. **Module-Level Two-Line Headers**: Every file in `src/` (excluding `*_tests.rs` unit tests) has:
    - Line 1: `//! [DOC: docs/diataxis/reference/<area>/<name>.md]` (links to reference documentation; `reference/` only — no `explanation/`, `how-to/`, or `tutorials/` targets)
-   - Line 2: `//! Human-readable summary` (used for auto-generating STRUCTURE section)
+   - Line 2: `//! Human-readable summary` (used for auto-generating Structure section)
    Function-level anchors removed.
 3. **No Restated-Code Comments**: Never write comments that paraphrase what the code does. If the code isn't clear, rename the symbols rather than comment. Comments explain the WHY only when non-obvious: a hidden constraint, behavior that would surprise a reader.
 4. **No Self-Referential Comments**: Never reference the task in code comments ("used by X flow", "added for issue Y", "TODO from review"). Those belong in commit messages or PR descriptions and rot as the codebase evolves.
 
-## THE TEST-FIRST PHILOSOPHY
+## The Test-First Philosophy
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
@@ -199,7 +208,7 @@ Unit tests go in the `src/` folder beside the class they are testing (e.g. `prod
 
 Integration tests go in the `test/` folder.
 
-### TEST FAILURE HANDLING
+### Test Failure Handling
 
 When tests fail, you MUST:
 1. **Show the actual test output** - quote the failure message verbatim
@@ -212,18 +221,14 @@ If you're unsure why a test failed, say so and investigate - don't invent explan
 
 You should avoid **analysis paralysis**, that is, spending excessively large amounts of time trying to reason through a problem without ever coming to any conclusion or doing any action. You should read, run, update or write new tests if you are struggling to understand a problem. Or if that doesn't help, check the UI directly via the browser, or to add logging or other diagnostics in the production code.
 
-## LLM TEST POLICY
+### LLM Test Policy
 - `python build.py` runs the fast suite only. LLM tests are `#[ignore]'`d by default.
 - When modifying ANY file in `src/application/narrative_prompt/` or `src/adapters/driven/llm/`, or changing LLM prompt/parsing behavior, you MUST also run `python build.py --llm-only` to verify real LLM integration.
 
-## ANTI-PATTERNS
-- **Never** continue previous reasoning after user says stop, wait, nevermind, or asks a direct question. Halt immediately and answer directly.
-- **Never** defend existing architecture as a reason to keep complicated code. You might need to take a stepback and consider architecture or code holistically.
+## Documentation Index
+The file `docs/AGENTS.md` holds an autogenerated catalogue of all docs in the `docs` folder (excluding docs like `CHANGELOG.md`). This is similar to the file list in the `Structure` section above. Read this when you want to search for or through docs.
 
-## DOCUMENTATION INDEX
-The file `docs/AGENTS.md` holds an autogenerated catalogue of all docs in the `docs` folder (excluding docs like `CHANGELOG.md`). This is similar the file list in the `STRUCTURE` section above. Read this when you want to search for or through docs.
-
-The file `tests/AGENTS.md` holds an autogenerated catalogue of integration test files, similar to the `STUCTURE` section above.
+The file `tests/AGENTS.md` holds an autogenerated catalogue of integration test files, similar to the `Structure` section above.
 
 To regenerate the index after adding, removing, or renaming docs:
 ```bash
@@ -237,13 +242,13 @@ To install the git pre-commit hook (regenerates index before every commit):
 python scripts/install_git_hooks.py
 ```
 
-## DEVELOPMENT LOOP
+## Development Loop
 
 Temporary files should be written into tmp folders e.g. `tmp`.
 
 `build.py` writes logs to both standard output and to the `logs` folder. The standard build should take about 1 minute normally. If it times out or fails, check the build logs for failures.
 
-### COMMANDS
+### Commands
 
 #### Iteration (use these while fixing)
 ```bash
@@ -258,13 +263,14 @@ cargo run -- --world redmist_estate --port 3000 # Run the server
 ```
 
 #### Final Validation (run once before considering done)
+
 ```bash
-python build.py                                 # Full gate: fmt + clippy + guardrails + tests (~1 min)
+python build.py # Full gate: fmt + clippy + guardrails + tests (~1 min)
 ```
 
-A majority of the time taken by `build.py` is the integration tests. Running the full integration tests just before running the `build.py` is inefficient. Either run targeted `cargo nextest` or skip them and run `build.py` straight away. 
+A majority of the time taken by `build.py` is the integration tests. Running the full integration tests just before running the `build.py` is inefficient. Either run targeted `cargo nextest` or skip them and run `build.py` straight away.
 
-## CONCURRENT BUILDS
+## Concurrent Builds
 Multiple agents building simultaneously can conflict because:
 - `cargo fmt` rewrites source files in-place
 - `target/` is shared, causing cargo lock contention
@@ -291,14 +297,14 @@ python build.py --cleanup --target-dir target/test_police
 
 Tests are already concurrency-safe: they allocate ports dynamically from the range 3010-3050 using file-based locking (`get_available_port` in `tests/test_utils.rs`).
 
-## CODE QUALITY
+## Code Quality
 
 - Do not preserve backward compatibility unless the user asks for it.
 - Read files in full before wide-ranging changes, before editing files you have not fully inspected, and when asked to investigate or audit. Do not rely on search snippets for broad changes.
 - When the user asks a question, answer it first before making edits or running implementation commands.
 - When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
 
-## AGENT SKILLS
+## Agent Skills
 
 ### Issue tracker
 
@@ -310,27 +316,23 @@ Five canonical role strings, used as `Status:` lines in local-markdown files (pe
 
 ### Domain docs
 
-Multi-context layout (per `docs/agents/domain.md`). Read `CONTEXT-MAP.md`, then the per-context `CONTEXT.md` for the area in scope. Skills proceed silently if a `CONTEXT.md` is missing.
+Read `CONTEXT.md` for details.
 
-## SESSION HISTORY SEARCH
+## Session History Search
 
 Use `session_search` when you need what was  said or done in an **older** session. Use `session_list` to browse by project/date and `session_read` to open the full conversation of a hit.
 
 To see what was said or done in the **current** session (likely after session compacts), use `recall`. 
 
-## PLANNING TASKS AND STORY POINTS
+## Planning Tasks and Story Points
 
 Use standard story points (1,3,5,8,13) to analyse the complexity of tasks. Tasks with 8 story points or higher need to be broken up into subtasks.
 
-## UNIQUE PATTERNS
-
-- Rust 2024 edition bleeding edge (edition 2024 requires Rust 1.85+)
-
-## PERMISSIONS SYSTEM
+## Permissions System
 
 Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
 
-## DOING CODE REVIEWS
+## Doing Code Reviews
 
 Do not run try to compile, build or test the code when doing code reviews. Unless the review explictly calls for it (e.g. the `test-police` review). 
 
