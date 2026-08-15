@@ -69,30 +69,3 @@ impl Storage {
         self.save_settings(settings)
     }
 }
-
-impl DbSettings {
-    fn to_settings(&self) -> Result<AppSettings, EngineError> {
-        let connections: Vec<crate::domain::model::settings::LlmProviderConfig> =
-            serde_json::from_str(&self.connections).map_err(|e| {
-                EngineError::Parse(format!("Failed to deserialize connections: {e}"))
-            })?;
-        let text_check: crate::domain::model::settings::TextCheckSettings =
-            serde_json::from_str(&self.text_check).map_err(|e| {
-                EngineError::Parse(format!("Failed to deserialize text_check: {e}"))
-            })?;
-        let agents: Vec<crate::domain::model::agent::AgentConfig> =
-            serde_json::from_str(&self.agents)
-                .map_err(|e| EngineError::Parse(format!("Failed to deserialize agents: {e}")))?;
-
-        Ok(AppSettings {
-            connections,
-            narration_connection_id: self.narration_connection_id.clone(),
-            quantifier_connection_id: self.quantifier_connection_id.clone(),
-            response_length: self.response_length.clone(),
-            text_check,
-            agents,
-            active_system_prompt_preset_id: self.active_system_prompt_preset_id.clone(),
-            active_quantifier_prompt_preset_id: self.active_quantifier_prompt_preset_id.clone(),
-        })
-    }
-}

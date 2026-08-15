@@ -1,6 +1,9 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! Persona database model
 
+use crate::error::EngineError;
+use crate::domain::model::character::{CharacterSheet, PersonaCard};
+
 /// Database row for `personas` table (PersonaCard).
 pub struct DbPersona {
     pub id: i64,
@@ -34,6 +37,26 @@ impl DbPersona {
             inventory: row.get(10)?,
             created_at: row.get(11)?,
             updated_at: row.get(12)?,
+        })
+    }
+
+    pub(crate) fn to_card(&self) -> Result<PersonaCard, EngineError> {
+        let inventory: Vec<String> = serde_json::from_str(&self.inventory)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
+
+        Ok(PersonaCard {
+            key: self.key.clone(),
+            sheet: CharacterSheet {
+                name: self.name.clone(),
+                description: self.description.clone(),
+                personality: self.personality.clone(),
+                scenario: self.scenario.clone(),
+                example_dialogue: self.example_dialogue.clone(),
+                summary: self.summary.clone().filter(|s| !s.is_empty()),
+                profile_image: self.profile_image.clone().filter(|s| !s.is_empty()),
+                headshot_image: self.headshot_image.clone().filter(|s| !s.is_empty()),
+            },
+            inventory,
         })
     }
 }

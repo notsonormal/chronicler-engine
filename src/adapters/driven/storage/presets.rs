@@ -28,7 +28,7 @@ impl Storage {
                 for row in rows {
                     let db =
                         row.map_err(|e| EngineError::Config(format!("Failed to read preset row: {e}")))?;
-                    presets.push(db.into_preset());
+                    presets.push(db.into_preset()?);
                 }
                 Ok(presets)
             }
@@ -62,7 +62,7 @@ impl Storage {
                     Some(row) => {
                         let db = row
                             .map_err(|e| EngineError::Config(format!("Failed to read preset row: {e}")))?;
-                        Ok(Some(db.into_preset()))
+                        Ok(Some(db.into_preset()?))
                     }
                     None => Ok(None),
                 }
@@ -133,24 +133,5 @@ impl Storage {
                 Ok(())
             }
         })
-    }
-}
-
-impl DbPromptPreset {
-    fn into_preset(self) -> PromptPreset {
-        let preset_type = match self.preset_type.as_str() {
-            "quantifier" => PresetType::Quantifier,
-            _ => PresetType::System,
-        };
-        PromptPreset {
-            id: self.id,
-            name: self.name,
-            role: self.role,
-            instructions: self.instructions,
-            writing_style: self.writing_style,
-            output_format: self.output_format,
-            is_default: self.is_default != 0,
-            preset_type,
-        }
     }
 }

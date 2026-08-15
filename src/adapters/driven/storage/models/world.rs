@@ -1,5 +1,8 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! Database row structs for world and map tables
+//! Database row struct for the `worlds` table
+
+use crate::error::EngineError;
+use crate::domain::model::world::WorldCard;
 
 pub struct DbWorld {
     pub id: i64,
@@ -29,24 +32,19 @@ impl DbWorld {
             updated_at: row.get(9)?,
         })
     }
-}
 
-pub struct DbMap {
-    pub id: i64,
-    pub world_id: i64,
-    pub map_data: String, // JSON: full MapDef
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-impl DbMap {
-    pub fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
-        Ok(DbMap {
-            id: row.get(0)?,
-            world_id: row.get(1)?,
-            map_data: row.get(2)?,
-            created_at: row.get(3)?,
-            updated_at: row.get(4)?,
+    pub(crate) fn to_card(&self) -> Result<WorldCard, EngineError> {
+        Ok(WorldCard {
+            key: self.key.clone(),
+            name: self.name.clone(),
+            description: self.description.clone(),
+            global_rules: serde_json::from_str(&self.global_rules).map_err(|e| {
+                EngineError::Parse(format!("Failed to deserialize global_rules: {e}"))
+            })?,
+            scenarios: serde_json::from_str(&self.scenarios)
+                .map_err(|e| EngineError::Parse(format!("Failed to deserialize scenarios: {e}")))?,
+            default_scenario_id: self.default_scenario_id.clone().filter(|s| !s.is_empty()),
+            default_room_image: self.default_room_image.clone().filter(|s| !s.is_empty()),
         })
     }
 }

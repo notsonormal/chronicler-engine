@@ -5,7 +5,8 @@ use chrono::{DateTime, Utc};
 
 use crate::error::EngineError;
 use crate::domain::model::message::{Message, Swipe};
-use crate::adapters::driven::storage::models::message::{DbMessage, DbSwipe};
+use crate::adapters::driven::storage::models::message::DbMessage;
+use crate::adapters::driven::storage::models::swipe::DbSwipe;
 
 impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
     type Error = EngineError;

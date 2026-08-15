@@ -92,35 +92,3 @@ impl Storage {
         })
     }
 }
-
-impl DbCharacter {
-    fn to_card(&self) -> Result<NpcCard, EngineError> {
-        use crate::domain::model::character::CharacterSheet;
-        let inventory: Vec<String> = serde_json::from_str(&self.inventory)
-            .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
-        let triggers: Vec<crate::domain::model::trigger::Trigger> =
-            serde_json::from_str(&self.triggers)
-                .map_err(|e| EngineError::Parse(format!("Failed to deserialize triggers: {e}")))?;
-        let relationships: Vec<crate::domain::model::character::Relationship> =
-            serde_json::from_str(&self.relationships).map_err(|e| {
-                EngineError::Parse(format!("Failed to deserialize relationships: {e}"))
-            })?;
-
-        Ok(NpcCard {
-            id: self.key.clone(),
-            sheet: CharacterSheet {
-                name: self.name.clone(),
-                description: self.description.clone(),
-                personality: self.personality.clone(),
-                scenario: self.scenario.clone(),
-                example_dialogue: self.example_dialogue.clone(),
-                summary: self.summary.clone().filter(|s| !s.is_empty()),
-                profile_image: self.profile_image.clone().filter(|s| !s.is_empty()),
-                headshot_image: self.headshot_image.clone().filter(|s| !s.is_empty()),
-            },
-            inventory,
-            triggers,
-            relationships,
-        })
-    }
-}

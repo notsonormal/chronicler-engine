@@ -4,7 +4,7 @@ Source: surfaced by ticket 04's post-plan-workflow analysis (subagent 2 — cove
 
 ## Destination
 
-`phase_trigger_continuation_with_cancel_handling` named honestly (or actually checks the cancel token); two misleading-cancellation tests either deleted or rewritten to drive real cancellation; dead `None` arm at `retry.rs:79-82` removed or asserted. Build green, retry.rs coverage stays ≥ 80%.
+The remaining two sharp items from ticket 04's coverage gap are resolved: the misleading cancellation test in `retry_tests.rs` either drives a real `Err(PhaseError::Cancelled)` or is explicitly deleted with rationale; the dead `None` arm in `retry.rs` is removed or asserted. Build green, `retry.rs` coverage stays ≥ 80%.
 
 ## Notes
 
@@ -12,16 +12,16 @@ Source: surfaced by ticket 04's post-plan-workflow analysis (subagent 2 — cove
 - **Build validation:** `python build.py`.
 - **AFK task ticket.** Single 2 SP task → `general-purpose` subagent, primary agent verifies.
 - **Origin:** items surfaced by closing ticket 04's coverage gap (subagent 2 report). Not in original T4 scope; the tests were latent bad-documentation tests before the coverage pass exposed them.
-- **Touch only:** `phases.rs` (rename or semantically fix `phase_trigger_continuation_with_cancel_handling`) + `retry_tests.rs` (rewrite or delete 2 tests) + `retry.rs` (dead branch removal). No `run_from_input`, no `ActionPipeline` public surface changes.
+- **Touch only:** `src/application/pipeline/action_pipeline/retry_tests.rs` (rewrite/delete misleading cancellation test) + `src/application/pipeline/action_pipeline/retry.rs` (dead `None` arm removal). Optional `///` doc comment in `src/application/pipeline/pipeline_run.rs`. No `run_from_input`, no `ActionPipeline` public surface changes.
 - **Standards:** No `// What` comments. Preserve all existing test contracts (happy-path coverage must not drop).
 
 ## Decisions so far
 
-*(none yet — map freshly charted)*
+- [Ticket 01 — Cleanup misleading cancel-test plumbing + dead arm surfaced by ticket 04 coverage pass](issues/01-cleanup-misleading-cancel-tests-and-dead-arm.md) — `phase_trigger_continuation_with_cancel_handling` was renamed to `phase_trigger_continuation_llm_call` during the `031cf9b` pipeline refactor; the misleading-name concern is resolved. The misleading cancellation test and the dead `None` arm remain and are tracked in the same ticket.
 
 ## Not yet specified
 
-*(none — all 3 items are sharp enough to ticket in one task ticket)*
+*(none — the remaining work is tracked in ticket 01)*
 
 ## Out of scope
 

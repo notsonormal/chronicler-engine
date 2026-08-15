@@ -1,6 +1,9 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! Prompt preset model
 
+use crate::error::EngineError;
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+
 pub struct DbPromptPreset {
     pub id: String,
     pub name: String,
@@ -27,6 +30,21 @@ impl DbPromptPreset {
             is_default: row.get(7)?,
             created_at: row.get(8)?,
             updated_at: row.get(9)?,
+        })
+    }
+
+    pub(crate) fn into_preset(self) -> Result<PromptPreset, EngineError> {
+        let preset_type =
+            PresetType::try_from(self.preset_type.as_str()).map_err(EngineError::Parse)?;
+        Ok(PromptPreset {
+            id: self.id,
+            name: self.name,
+            role: self.role,
+            instructions: self.instructions,
+            writing_style: self.writing_style,
+            output_format: self.output_format,
+            is_default: self.is_default != 0,
+            preset_type,
         })
     }
 }

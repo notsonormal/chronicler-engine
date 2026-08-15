@@ -5,7 +5,6 @@ use crate::error::EngineError;
 use crate::domain::model::game::Game;
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
-use crate::adapters::driven::storage::utils::parse_datetime;
 
 impl Storage {
     pub fn list_games(&self) -> Result<Vec<Game>, EngineError> {
@@ -129,20 +128,5 @@ impl Storage {
     pub fn require_game(&self, id: u64) -> Result<Game, EngineError> {
         self.get_game(id)?
             .ok_or_else(|| EngineError::GameNotFound(id))
-    }
-}
-
-impl DbGame {
-    fn to_game(&self) -> Result<Game, EngineError> {
-        Ok(Game {
-            id: self.id as u64,
-            world_name: self.world_name.clone(),
-            world_key: self.world_key.clone(),
-            persona_key: self.persona_key.clone(),
-            persona_name: self.persona_name.clone(),
-            name: self.name.clone(),
-            created_at: parse_datetime(&self.created_at, "created_at")?,
-            updated_at: parse_datetime(&self.updated_at, "updated_at")?,
-        })
     }
 }

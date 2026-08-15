@@ -12,24 +12,8 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::in_memory_data::InMemoryWorld;
-use crate::adapters::driven::storage::models::world::{DbWorld, DbMap};
-
-impl DbWorld {
-    fn to_card(&self) -> Result<WorldCard, EngineError> {
-        Ok(WorldCard {
-            key: self.key.clone(),
-            name: self.name.clone(),
-            description: self.description.clone(),
-            global_rules: serde_json::from_str(&self.global_rules).map_err(|e| {
-                EngineError::Parse(format!("Failed to deserialize global_rules: {e}"))
-            })?,
-            scenarios: serde_json::from_str(&self.scenarios)
-                .map_err(|e| EngineError::Parse(format!("Failed to deserialize scenarios: {e}")))?,
-            default_scenario_id: self.default_scenario_id.clone().filter(|s| !s.is_empty()),
-            default_room_image: self.default_room_image.clone().filter(|s| !s.is_empty()),
-        })
-    }
-}
+use crate::adapters::driven::storage::models::map::DbMap;
+use crate::adapters::driven::storage::models::world::DbWorld;
 
 #[derive(Debug, Clone)]
 pub struct WorldWithMap {

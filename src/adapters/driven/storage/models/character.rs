@@ -1,6 +1,10 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! Character database model
 
+use crate::error::EngineError;
+use crate::domain::model::character::{CharacterSheet, NpcCard, Relationship};
+use crate::domain::model::trigger::Trigger;
+
 /// Database row for `characters` table (NpcCard).
 pub struct DbCharacter {
     pub id: i64,
@@ -40,6 +44,32 @@ impl DbCharacter {
             relationships: row.get(13)?,
             created_at: row.get(14)?,
             updated_at: row.get(15)?,
+        })
+    }
+
+    pub(crate) fn to_card(&self) -> Result<NpcCard, EngineError> {
+        let inventory: Vec<String> = serde_json::from_str(&self.inventory)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
+        let triggers: Vec<Trigger> = serde_json::from_str(&self.triggers)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize triggers: {e}")))?;
+        let relationships: Vec<Relationship> = serde_json::from_str(&self.relationships)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize relationships: {e}")))?;
+
+        Ok(NpcCard {
+            id: self.key.clone(),
+            sheet: CharacterSheet {
+                name: self.name.clone(),
+                description: self.description.clone(),
+                personality: self.personality.clone(),
+                scenario: self.scenario.clone(),
+                example_dialogue: self.example_dialogue.clone(),
+                summary: self.summary.clone().filter(|s| !s.is_empty()),
+                profile_image: self.profile_image.clone().filter(|s| !s.is_empty()),
+                headshot_image: self.headshot_image.clone().filter(|s| !s.is_empty()),
+            },
+            inventory,
+            triggers,
+            relationships,
         })
     }
 }

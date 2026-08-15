@@ -1,6 +1,10 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! Settings database model
 
+use crate::error::EngineError;
+use crate::domain::model::agent::AgentConfig;
+use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckSettings};
+
 /// Database row for `settings` table (singleton, id=1).
 pub struct DbSettings {
     pub id: i64,
@@ -30,6 +34,26 @@ impl DbSettings {
             active_quantifier_prompt_preset_id: row.get(8)?,
             created_at: row.get(9)?,
             updated_at: row.get(10)?,
+        })
+    }
+
+    pub(crate) fn to_settings(&self) -> Result<AppSettings, EngineError> {
+        let connections: Vec<LlmProviderConfig> = serde_json::from_str(&self.connections)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize connections: {e}")))?;
+        let text_check: TextCheckSettings = serde_json::from_str(&self.text_check)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize text_check: {e}")))?;
+        let agents: Vec<AgentConfig> = serde_json::from_str(&self.agents)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize agents: {e}")))?;
+
+        Ok(AppSettings {
+            connections,
+            narration_connection_id: self.narration_connection_id.clone(),
+            quantifier_connection_id: self.quantifier_connection_id.clone(),
+            response_length: self.response_length.clone(),
+            text_check,
+            agents,
+            active_system_prompt_preset_id: self.active_system_prompt_preset_id.clone(),
+            active_quantifier_prompt_preset_id: self.active_quantifier_prompt_preset_id.clone(),
         })
     }
 }

@@ -4,7 +4,8 @@
 use crate::error::EngineError;
 use crate::domain::model::message::Message;
 use crate::adapters::driven::storage::{Backend, Storage};
-use crate::adapters::driven::storage::models::message::{DbMessage, DbSwipe};
+use crate::adapters::driven::storage::models::message::DbMessage;
+use crate::adapters::driven::storage::models::swipe::DbSwipe;
 
 impl Storage {
     pub fn insert_message(&self, msg: &Message) -> Result<u64, EngineError> {

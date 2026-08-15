@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 
-use super::message::{DbMessage, DbSwipe};
+use super::message::DbMessage;
+use super::swipe::DbSwipe;
 
 #[test]
 fn test_db_message_from_row_maps_columns() {
