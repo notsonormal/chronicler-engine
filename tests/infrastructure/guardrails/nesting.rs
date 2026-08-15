@@ -8,6 +8,7 @@ use crate::Violation;
 
 pub const MAX_NESTING_DEPTH: usize = 3;
 
+/// Warns when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`.
 pub fn check_nesting_depth(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let ast: File = match syn::parse_file(content) {

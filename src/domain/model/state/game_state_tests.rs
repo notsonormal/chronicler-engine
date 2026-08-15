@@ -895,6 +895,53 @@ proptest! {
         let next_state = result.unwrap().post_commit_state;
         next_state.assert_state_consistency(&deps.map, &deps.npcs).ok();
     }
+
+    #[test]
+    fn prop_execute_freeaction_impl_preserves_mutation_order(
+        narration_text in r"[^\s]{10,100}",
+        has_npc in any::<bool>(),
+    ) {
+        let mut state = create_minimal_test_state();
+        let npc_id = "shopkeeper";
+        state.add_message(narration_text.clone(), None, MessageType::Narration);
+        let npc_ids = if has_npc { vec![npc_id.to_string()] } else { vec![] };
+
+        let quantifier = QuantifierResult {
+            npcs: QuantifierParseResult {
+                npc_ids,
+                confidence: QuantifierConfidence::High,
+            },
+            movement: MovementParseResult::default(),
+        };
+
+        let map = Arc::new(create_test_map());
+        let player = Arc::new(create_test_player());
+        let npcs = npc_map(vec![shopkeeper_npc()]);
+        let result = state.execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: &narration_text,
+                quantifier_result: &quantifier,
+            },
+            &map,
+            &player,
+            &npcs,
+        ).expect("execute_freeaction_impl should succeed");
+        let history = &result.post_commit_state.narrative.history;
+        let search_len = 20.min(narration_text.chars().count());
+        let search_text: String = narration_text.chars().take(search_len).collect();
+        let has_narration = history.iter().any(|e| {
+            e.message_type == MessageType::Narration && e.text().contains(&search_text)
+        });
+        prop_assert!(has_narration, "narration should be in history");
+        if has_npc {
+            prop_assert!(result.trigger_match.is_some(), "trigger should fire when NPC appears");
+            prop_assert_eq!(
+                result.post_commit_state.npc_encounter_log.get_times_met(npc_id),
+                1,
+                "times_met should be 1 after apply_npc_events"
+            );
+        }
+    }
 }
 fn setup_test_state() -> (GameState, Arc<MapDef>) {
     let mut exits1 = HashMap::new();
@@ -1404,4 +1451,202 @@ fn test_check_condition_missing_npc_defaults_to_zero() {
         threshold: 0,
     };
     assert!(npc_encounter_log.check_condition("unknown_npc", &condition));
+}
+
+#[test]
+fn test_state_mutation_order() {
+    let mut state = create_minimal_test_state();
+    let npc_id = "shopkeeper";
+
+    state.add_message(
+        "You look around the shop.".to_string(),
+        None,
+        MessageType::Narration,
+    );
+
+    assert_eq!(
+        state.npc_encounter_log.get_times_met(npc_id),
+        0,
+        "pre-condition: times_met should be 0"
+    );
+
+    let quantifier = QuantifierResult {
+        npcs: QuantifierParseResult {
+            npc_ids: vec![npc_id.to_string()],
+            confidence: QuantifierConfidence::High,
+        },
+        movement: MovementParseResult::default(),
+    };
+
+    let map = Arc::new(create_test_map());
+    let player = Arc::new(create_test_player());
+    let npcs = npc_map(vec![shopkeeper_npc()]);
+
+    let result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "You look around the shop.",
+                quantifier_result: &quantifier,
+            },
+            &map,
+            &player,
+            &npcs,
+        )
+        .expect("execute_freeaction_impl should succeed");
+    assert!(
+        result.trigger_match.is_some(),
+        "trigger should have fired (evaluated before times_met increment)"
+    );
+    assert_eq!(
+        result
+            .post_commit_state
+            .npc_encounter_log
+            .get_times_met(npc_id),
+        1,
+        "times_met should be 1 after NPC events are applied"
+    );
+    let history = &result.post_commit_state.narrative.history;
+    let narration_idx = history
+        .iter()
+        .position(|e| e.message_type == MessageType::Narration && e.text().contains("look around"))
+        .expect("narration should be in history");
+    assert!(
+        narration_idx < history.len(),
+        "narration should be logged before trigger-related entries"
+    );
+}
+
+#[test]
+fn test_mutation_order_violation_demo() {
+    let state = create_minimal_test_state();
+    let npc_id = "shopkeeper";
+    assert_eq!(
+        state.npc_encounter_log.get_times_met(npc_id),
+        0,
+        "pre-condition: times_met should be 0"
+    );
+    let events = vec![NpcEvent {
+        npc_id: npc_id.to_string(),
+        event_type: NpcTransitionType::Entered,
+    }];
+    let map = Arc::new(create_test_map());
+    let npcs = npc_map(vec![shopkeeper_npc()]);
+    let mut state_after_events = state.clone();
+    state_after_events
+        .apply_npc_events(&events, &map, &npcs)
+        .expect("apply_npc_events should succeed");
+    let triggers_after_swap = state_after_events.evaluate_triggers(&npcs);
+    assert!(
+        triggers_after_swap.is_empty(),
+        "VIOLATION: trigger should NOT fire when apply_npc_events runs first (times_met == 1)"
+    );
+    let triggers_correct = state.evaluate_triggers(&npcs);
+    assert!(
+        !triggers_correct.is_empty(),
+        "Correct order: trigger SHOULD fire (times_met == 0)"
+    );
+}
+
+#[test]
+fn test_handle_movement_runs_before_narration() {
+    let map = Arc::new(create_test_map());
+    let player = Arc::new(create_test_player());
+    let npcs = HashMap::new();
+    let state = GameState::new("room1".to_string());
+    let original_room = state.movement.current_room_id.clone();
+    let target_room = "room2";
+
+    let quantifier = QuantifierResult {
+        npcs: QuantifierParseResult {
+            npc_ids: vec![],
+            confidence: QuantifierConfidence::High,
+        },
+        movement: MovementParseResult {
+            movement_type: Some(MovementType::Leaving),
+            destination: Some(target_room.to_string()),
+            confidence: QuantifierConfidence::High,
+        },
+    };
+
+    let result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "I walk north.",
+                quantifier_result: &quantifier,
+            },
+            &map,
+            &player,
+            &npcs,
+        )
+        .expect("execute_freeaction_impl should succeed");
+
+    assert_eq!(
+        result.post_commit_state.movement.current_room_id, target_room,
+        "current_room_id should be updated by handle_movement before narration is logged"
+    );
+    assert_ne!(
+        result.post_commit_state.movement.current_room_id, original_room,
+        "handle_movement should have changed the room"
+    );
+}
+
+#[test]
+fn test_dynamic_room_creation_on_invalid_destination() {
+    let mut state = create_test_state();
+    let invalid_destination = "nonexistent_place_xyz";
+
+    let map = Arc::new(create_test_map());
+    let test_npc = NpcCard {
+        id: "test_npc".into(),
+        sheet: CharacterSheet {
+            name: "Innkeeper".into(),
+            description: "A friendly innkeeper".into(),
+            personality: "Helpful".into(),
+            scenario: "Runs the tavern".into(),
+            example_dialogue: "Welcome!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![],
+    };
+    let npcs = npc_map(vec![test_npc]);
+
+    assert!(
+        !map.overworld
+            .regions
+            .iter()
+            .flat_map(|r| r.rooms.iter())
+            .any(|r| r.id == invalid_destination),
+        "precondition: invalid_destination should not exist in map"
+    );
+
+    state
+        .handle_movement(Some(invalid_destination), &[], &map, &npcs)
+        .unwrap();
+    assert!(
+        !state.movement.dynamic_rooms.is_empty(),
+        "dynamic room should be created for invalid destination"
+    );
+    assert!(
+        state.movement.current_room_id.starts_with("dynamic_"),
+        "current_room_id should be set to a dynamic room"
+    );
+    let history = state.narrative.history();
+    let system_messages: Vec<_> = history
+        .iter()
+        .filter(|m| m.message_type == MessageType::System)
+        .collect();
+    assert!(
+        !system_messages.is_empty(),
+        "system message should be logged for dynamic room creation"
+    );
+    assert!(
+        system_messages
+            .iter()
+            .any(|m| m.text.contains("Entered unknown location")),
+        "system message should mention 'Entered unknown location'"
+    );
 }

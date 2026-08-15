@@ -21,8 +21,9 @@ impl TestWorldFixture for Storage {
     }
 
     fn seed_test_world_with_scenario_fixture(&self) {
-        let world = super::fixtures::create_test_world_with_scenario();
-        let map = super::fixtures::create_test_map();
+        use chronicler_engine::test_support::{create_test_map, create_test_world_with_scenario};
+        let world = create_test_world_with_scenario();
+        let map = create_test_map();
         self.seed_world(&world, &map)
             .expect("seed world with scenario");
         let player = chronicler_engine::test_support::TestPersona::standard();

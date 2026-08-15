@@ -55,6 +55,7 @@ fn is_test_file(path: &str) -> bool {
         || path.starts_with("tests\\")
 }
 
+/// Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files.
 pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -153,6 +154,7 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
 
 // TODO: IS this actually catching all problems? Or is catching products in
 //  just `src` and not `tests/`
+/// Enforces mod.rs purity: only module declarations, imports, and module docs are allowed.
 pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -191,6 +193,7 @@ pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation
     violations
 }
 
+/// Rejects legacy test-context helpers in integration tests.
 pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -286,10 +289,12 @@ pub fn check_empty_rust_file(path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
+/// Exposes the internal no-std-thread check for use outside the standard walker.
 pub fn check_no_std_thread_all(path: &str, content: &str) -> Vec<Violation> {
     check_no_std_thread(path, content)
 }
 
+/// Enforces a maximum of 2000 non-blank lines per file.
 pub fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let non_blank_count = content
@@ -319,6 +324,7 @@ pub fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
 ///
 /// Multi-line summary blocks and continuation lines beyond the single summary
 /// line are rejected.
+/// Enforces a single-line `//!` module summary at the start of each test file.
 pub fn check_test_module_header(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 

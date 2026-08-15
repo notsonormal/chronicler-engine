@@ -30,6 +30,7 @@ const PATH_EXEMPT_PATHS: &[&str] = &[
     "application/prompting/token_budget.rs",
 ];
 
+/// Restricts top-level free functions to allowlisted category folders or exempt paths.
 pub fn check_free_fn_location(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 

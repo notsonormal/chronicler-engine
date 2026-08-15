@@ -6,13 +6,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
-use crate::domain::model::map::{MapDef, Overworld, Region, Room};
+use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
+use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::world::{WorldCard, WorldManifest};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
@@ -348,6 +349,238 @@ impl TestCharacterSheet {
             headshot_image: None,
         }
     }
+}
+
+/// Builds a `GameState` with only a starting room.
+pub fn create_minimal_test_state() -> GameState {
+    GameState::new("room1".to_string())
+}
+
+/// Builds a minimal `WorldCard` for tests.
+pub fn create_test_world() -> WorldCard {
+    WorldCard {
+        key: "test".to_string(),
+        name: "Test Realm".to_string(),
+        description: "A small testing kingdom".to_string(),
+        ..Default::default()
+    }
+}
+
+/// Builds a standard `PersonaCard` for tests.
+pub fn create_test_player() -> PersonaCard {
+    PersonaCard {
+        key: "test_player".to_string(),
+        sheet: CharacterSheet {
+            name: "Test Player".to_string(),
+            description: "A brave adventurer".to_string(),
+            personality: "Brave and curious".to_string(),
+            scenario: "Exploring the test realm".to_string(),
+            example_dialogue: "Hello, world!".to_string(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+    }
+}
+
+/// Builds a three-room `MapDef` with deterministic exits for tests.
+pub fn create_test_map() -> MapDef {
+    let mut room1_exits = HashMap::new();
+    room1_exits.insert(Direction::North, "room2".to_string());
+
+    let mut room2_exits = HashMap::new();
+    room2_exits.insert(Direction::South, "room1".to_string());
+    room2_exits.insert(Direction::East, "room3".to_string());
+
+    let room3_exits = HashMap::new();
+
+    let room1 = Room {
+        id: "room1".to_string(),
+        name: "Test Tavern".to_string(),
+        description: "A cozy tavern with wooden beams and warm fire.".to_string(),
+        exits: room1_exits,
+        items: vec![],
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let room2 = Room {
+        id: "room2".to_string(),
+        name: "Village Square".to_string(),
+        description: "A bustling village square with a fountain.".to_string(),
+        exits: room2_exits,
+        items: vec![],
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let room3 = Room {
+        id: "room3".to_string(),
+        name: "Forest Path".to_string(),
+        description: "A quiet path through the woods.".to_string(),
+        exits: room3_exits,
+        items: vec![],
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let region = Region {
+        id: "test_region".to_string(),
+        name: "Test Region".to_string(),
+        rooms: vec![room1, room2, room3],
+    };
+
+    let overworld = Overworld {
+        id: "test_overworld".to_string(),
+        name: "Test World".to_string(),
+        regions: vec![region],
+    };
+
+    MapDef { overworld }
+}
+
+/// Builds a single test NPC.
+pub fn create_test_npcs() -> Vec<NpcCard> {
+    vec![NpcCard {
+        id: "test_npc".to_string(),
+        sheet: CharacterSheet {
+            name: "Innkeeper".to_string(),
+            description: "A friendly innkeeper".to_string(),
+            personality: "Helpful and cheerful".to_string(),
+            scenario: "Runs the local tavern".to_string(),
+            example_dialogue: "Welcome, traveler!".to_string(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![],
+    }]
+}
+
+/// Builds a `GameState` with selected NPCs in the starting area.
+pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
+    let _world = Arc::new(WorldCard {
+        key: "test".into(),
+        name: "Test World".into(),
+        description: "A test world".into(),
+        scenarios: vec![StartingScenario {
+            id: "default".into(),
+            name: "Default".into(),
+            description: "Test scenario".into(),
+            starting_room_id: "room1".into(),
+            text: String::new(),
+            npcs: vec![],
+        }],
+        default_scenario_id: Some("default".into()),
+        ..Default::default()
+    });
+
+    let room1 = Room {
+        id: "room1".into(),
+        name: "Test Tavern".into(),
+        description: "A cozy tavern with wooden beams and warm fire.".into(),
+        exits: HashMap::new(),
+        items: vec![],
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let region = Region {
+        id: "test_region".into(),
+        name: "Test Region".into(),
+        rooms: vec![room1],
+    };
+
+    let _map = Arc::new(MapDef {
+        overworld: Overworld {
+            id: "test_overworld".into(),
+            name: "Test World".into(),
+            regions: vec![region],
+        },
+    });
+
+    let _player = Arc::new(PersonaCard {
+        key: "test_player".to_string(),
+        sheet: CharacterSheet {
+            name: "Test Player".into(),
+            description: "A test player".into(),
+            personality: "Brave".into(),
+            scenario: "Test scenario".into(),
+            example_dialogue: "Hello!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+    });
+
+    let mut state = GameState::new("room1");
+    for npc in npcs.iter().filter(|n| room_npcs.contains(&n.id)) {
+        state.scene.npcs_in_area.push(npc.clone());
+    }
+    state
+}
+
+/// Builds a `GameState` seeded with the default test NPC.
+pub fn create_test_state() -> GameState {
+    create_test_state_with_npcs(vec!["test_npc".to_string()], create_test_npcs())
+}
+
+/// Builds a `WorldCard` with a default scenario for tests.
+pub fn create_test_world_with_scenario() -> WorldCard {
+    WorldCard {
+        key: "test".to_string(),
+        name: "Test Realm".to_string(),
+        description: "A small testing kingdom".to_string(),
+        scenarios: vec![StartingScenario {
+            id: "test_scenario".to_string(),
+            name: "Test Scenario".to_string(),
+            description: "A test".to_string(),
+            starting_room_id: "room1".to_string(),
+            text: "You wake up in a cozy room.".to_string(),
+            npcs: vec![],
+        }],
+        ..Default::default()
+    }
+}
+
+/// Builds the shopkeeper NPC used by mutation-order tests.
+pub fn shopkeeper_npc() -> NpcCard {
+    NpcCard {
+        id: "shopkeeper".into(),
+        sheet: CharacterSheet {
+            name: "Shopkeeper Sarah".into(),
+            description: "A shrewd shopkeeper".into(),
+            personality: "Business-minded".into(),
+            scenario: "Runs the shop".into(),
+            example_dialogue: "Welcome!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![Trigger {
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
+            narration: TriggerNarration {
+                name: "Greeting".into(),
+                narration_prompt: "The shopkeeper greets you.".into(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    }
+}
+
+/// Converts a vector of NPCs into an id-keyed map.
+pub fn npc_map(npcs: Vec<NpcCard>) -> HashMap<String, NpcCard> {
+    npcs.into_iter().map(|npc| (npc.id.clone(), npc)).collect()
 }
 
 pub fn seed_default_game_row(

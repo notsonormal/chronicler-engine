@@ -65,6 +65,7 @@ impl<'a> Visit<'a> for EnumVisitor<'a> {
     }
 }
 
+/// Requires every enum variant to have a `///` doc unless the enum is marked `/// [TRIVIAL_ENUM]`.
 pub fn check_enum_variant_docs(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let ast: File = match syn::parse_file(content) {

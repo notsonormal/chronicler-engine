@@ -85,4 +85,4 @@ A small set of guarantees follow from the shape above. Each is machine-checked o
 - [`../../reference/storage.md`](../../reference/storage.md) — SQLite schema and the eleven tables.
 - [`./two-state-channels.md`](./two-state-channels.md) — why the engine carries two complementary generation-state signals.
 - [`./rust_idioms.md`](./rust_idioms.md) — concrete services + `spawn_blocking` + settings-sharing shape that the hexagonal frame sits inside.
-- [`../reference/coding_standards/guardrails.md`](../reference/coding_standards/guardrails.md) §5 — formal enumeration of INV-001..007 with test references.
+- [`../reference/coding_standards/guardrails.md`](../reference/coding_standards/guardrails.md) — static guardrails (clippy, arch-lint, syn-based convention tests).

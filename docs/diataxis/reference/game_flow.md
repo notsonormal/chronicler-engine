@@ -97,7 +97,7 @@ Trigger evaluation runs after main narration and post-generation quantification,
 
 Trigger requirements observe the pre-increment value. A first-encounter equality check therefore sees `0`; after Trigger selection, encounter transitions advance the value to `1`. Less-than and greater-than-or-equal comparisons read that same pre-increment value.
 
-### INV-002 Mutation Order
+### Mutation Order
 
 State mutation preserves this order:
 
@@ -108,7 +108,7 @@ State mutation preserves this order:
 5. Trigger context is stored, continuation generation runs, and successful continuation commits event metadata.
 6. Post-event Character reconciliation applies after continuation commit.
 
-INV-002 depends on Trigger evaluation preceding encounter increments. Reversing those two operations suppresses first-encounter Triggers; moving continuation commit earlier deprives it of committed narration or resolved room context.
+This ordering depends on Trigger evaluation preceding encounter increments. Reversing those two operations suppresses first-encounter Triggers; moving continuation commit earlier deprives it of committed narration or resolved room context.
 
 ## Retry Flow
 

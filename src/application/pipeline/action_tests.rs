@@ -354,3 +354,114 @@ fn test_narration_saved_before_quantifying_phase() {
     release.wait();
     handle.join().expect("Action thread should complete");
 }
+
+#[tokio::test]
+async fn test_process_action_cancels_prior_generation_on_game_reset() {
+    use std::sync::atomic::Ordering;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use crate::application::errors::ProcessActionResult;
+
+    // Narration is delayed so the game-id can be flipped while gen A is mid-flight.
+    let mock_backend = Arc::new(
+        MockBackend::default()
+            .with_delay(300)
+            .with_narrations(vec!["GEN_A_OUTPUT".to_string(), "GEN_B_OUTPUT".to_string()]),
+    );
+    let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        AgentRegistry::default(),
+    );
+    let (app, _storage) = TestAppBuilder::default_test()
+        .pipeline(service)
+        .build_service_with_storage();
+
+    let game1 = app.game_catalogue.current_game_id();
+
+    let result_a = app
+        .pipeline
+        .process_action(&app.generation_gate, "look".to_string())
+        .expect("gen A claim should not error");
+    assert!(
+        matches!(result_a, ProcessActionResult::Started),
+        "gen A claim should return Started, got {result_a:?}"
+    );
+
+    let backend = Arc::clone(&mock_backend);
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(5) {
+        if backend.narration_started.load(Ordering::SeqCst) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        backend.narration_started.load(Ordering::SeqCst),
+        "gen A narration should start within timeout"
+    );
+
+    // Reset to a new game mid-flight: gen A's next phase-boundary check reads game2 and cancels.
+    let game2 = app
+        .game_catalogue
+        .create_game("test", "test_player")
+        .expect("create_game should succeed");
+    assert_ne!(game2, game1, "reset must produce a distinct game id");
+
+    let gate = &app.generation_gate;
+    let released = Instant::now();
+    while released.elapsed() < Duration::from_secs(5) {
+        if !gate.is_busy(game1) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        !gate.is_busy(game1),
+        "gen A slot must release after cancellation on game reset"
+    );
+
+    let state_after_a = app.message_service.load_or_fresh();
+    let a_leaked = state_after_a
+        .narrative
+        .history
+        .iter()
+        .any(|e| e.text().contains("GEN_A_OUTPUT"));
+    assert!(
+        !a_leaked,
+        "game 2 state must not contain cancelled gen A narration"
+    );
+
+    let result_b = app
+        .pipeline
+        .process_action(&app.generation_gate, "go north".to_string())
+        .expect("gen B claim should not error");
+    assert!(
+        matches!(result_b, ProcessActionResult::Started),
+        "gen B claim must succeed after gen A cancels and releases the slot, got {result_b:?}"
+    );
+
+    let completed = Instant::now();
+    while completed.elapsed() < Duration::from_secs(5) {
+        if !gate.is_busy(game2) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        !gate.is_busy(game2),
+        "gen B must complete and release its slot"
+    );
+
+    let state_after_b = app.message_service.load_or_fresh();
+    let b_present = state_after_b
+        .narrative
+        .history
+        .iter()
+        .any(|e| e.text().contains("GEN_B_OUTPUT"));
+    assert!(b_present, "game 2 state must contain gen B narration");
+
+    app.shutdown_token.cancel();
+}

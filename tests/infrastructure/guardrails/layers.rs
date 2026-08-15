@@ -9,6 +9,7 @@ use crate::Violation;
 const WIREDAPP_SCOPE_ALLOWLIST_PREFIXES: &[&str] =
     &["bootstrap/", "adapters/driving/http/", "test_support/"];
 
+/// Restricts `WiredApp` imports to composition-root, HTTP, test-support, and test scopes.
 pub fn check_wiredapp_scope(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -49,7 +50,7 @@ pub fn check_wiredapp_scope(file_path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
-// Guardrail: `messages.rs` must not reference the `message_swipes` table.
+/// Ensures `storage/messages.rs` never references the `message_swipes` table.
 pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -81,6 +82,7 @@ pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<V
     violations
 }
 
+/// Requires server handlers to return `Response<Body>` instead of `(StatusCode, String)`.
 pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -119,6 +121,7 @@ pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violatio
     violations
 }
 
+/// Prevents server-layer files from referencing `GameState` directly.
 pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -150,9 +153,7 @@ pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Viol
     violations
 }
 
-// Guardrail: HTTP layer files must not directly reference the driven `Storage` namespace.
-// This catches fully-qualified paths such as `crate::adapters::driven::storage::Storage`
-// that arch-lint's import-based deny cannot see.
+/// Prevents HTTP layer files from directly referencing the driven `Storage` namespace.
 pub fn check_http_storage_leak(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -186,6 +187,7 @@ pub fn check_http_storage_leak(file_path: &str, content: &str) -> Vec<Violation>
     violations
 }
 
+/// Prevents component tests from constructing or importing `GameState` directly.
 pub fn check_test_layer_boundaries(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 

@@ -6,7 +6,8 @@ use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnaps
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::db::DbPool;
 
-use crate::fixtures::{create_test_state, create_test_storage};
+use chronicler_engine::test_support::create_test_state;
+use crate::fixtures::create_test_storage;
 fn create_storage() -> Storage {
     create_test_storage(1)
 }

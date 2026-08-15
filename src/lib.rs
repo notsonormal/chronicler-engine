@@ -2,13 +2,21 @@
 // AI Guardrails: These lint attributes enforce the project's coding standards
 // at compile time. Any violation will fail the build.
 #![deny(
+    // Prevent panics in production; propagate errors with `?`.
     clippy::unwrap_used,
+    // No "should never happen" assumptions in production.
     clippy::expect_used,
+    // No debug prints in committed code.
     clippy::dbg_macro,
+    // No unfinished code in production.
     clippy::todo,
+    // No stubs in production.
     clippy::unimplemented,
+    // No `println!` in library code.
     clippy::print_stdout,
+    // No `eprintln!` in library code.
     clippy::print_stderr,
+    // No explicit panics in production.
     clippy::panic
 )]
 // Tests are allowed to panic on assertion failures — that's their purpose.

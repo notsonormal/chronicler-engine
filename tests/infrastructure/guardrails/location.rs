@@ -3,6 +3,7 @@
 use std::path::Path;
 use crate::Violation;
 
+/// Rejects unit-test files with the singular `_test.rs` suffix in favor of `_tests.rs`.
 pub fn check_test_file_naming(path: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -37,6 +38,7 @@ pub fn check_test_file_naming(path: &str) -> Vec<Violation> {
     violations
 }
 
+/// Requires every `_tests.rs` file in `src/` to have a matching source file or module directory.
 pub fn check_test_file_pairing(path: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -80,6 +82,7 @@ pub fn check_test_file_pairing(path: &str) -> Vec<Violation> {
     violations
 }
 
+/// Combines test-file naming and pairing checks for `src/` test files.
 pub fn check_test_file_location(path: &str, _content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 

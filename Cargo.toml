@@ -70,11 +70,6 @@ name = "guardrails"
 path = "tests/infrastructure/guardrails/mod.rs"
 required-features = ["testing"]
 
-[[test]]
-name = "invariant_contract"
-path = "tests/infrastructure/invariant_contract.rs"
-required-features = ["testing"]
-
 # Integration test harness - temporary home for HTTP-observable tests while ticket 02 moves them to `tests/http/`.
 # Once ticket 02/03 complete, this entry will be removed.
 [[test]]

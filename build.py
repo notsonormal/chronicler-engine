@@ -652,6 +652,12 @@ def main():
         )
 
         timed_step(
+            "Checking guardrails.md freshness...",
+            "python scripts/generate_guardrails_doc.py --check",
+            env=cargo_env,
+        )
+
+        timed_step(
             "Validating markdown docs...",
             "python scripts/validate_docs.py",
             env=cargo_env,

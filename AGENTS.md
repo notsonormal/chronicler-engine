@@ -163,6 +163,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
   - `generate_docs_index.py` — Generate an auto-updating index for docs/AGENTS.md.
+  - `generate_guardrails_doc.py` — Generate `docs/diataxis/reference/coding_standards/guardrails.md` from coding-standards sources.
   - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
   - `generate_tests_structure_index.py` — Generate tests/AGENTS.md structure index from module summaries.
   - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.

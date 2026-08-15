@@ -14,6 +14,9 @@ cd "$ENGINE_ROOT"
 # Regenerate docs index
 python "scripts/generate_docs_index.py"
 
+# Regenerate guardrails doc
+python "scripts/generate_guardrails_doc.py"
+
 # Regenerate structure index
 python "scripts/generate_structure_index.py"
 
@@ -37,6 +40,17 @@ if ! git diff --quiet -- "tests/AGENTS.md"; then
     echo "tests/AGENTS.md was updated by the tests structure index generator."
     echo "Please stage the changes and commit again:"
     echo "  git add tests/AGENTS.md"
+    echo "  git commit"
+    cd "$ORIG_DIR"
+    exit 1
+fi
+
+# Check if docs/diataxis/reference/coding_standards/guardrails.md was updated
+if ! git diff --quiet -- "docs/diataxis/reference/coding_standards/guardrails.md"; then
+    echo ""
+    echo "docs/diataxis/reference/coding_standards/guardrails.md was updated by the guardrails doc generator."
+    echo "Please stage the changes and commit again:"
+    echo "  git add docs/diataxis/reference/coding_standards/guardrails.md"
     echo "  git commit"
     cd "$ORIG_DIR"
     exit 1

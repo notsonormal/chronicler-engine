@@ -5,6 +5,7 @@ use syn::{ItemFn, Local};
 
 use crate::Violation;
 
+/// Enforces import ordering: std/core/alloc, then external crates, then crate/super/self.
 pub fn check_import_ordering(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let mut last_group = 0u8;
@@ -119,6 +120,7 @@ fn is_countable_comment(line: &str) -> bool {
     !after_slashes.trim().is_empty()
 }
 
+/// Warns when five or more countable comment lines appear consecutively.
 pub fn check_long_comment_runs(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let mut tracker = CfgTestTracker::new();
@@ -213,6 +215,7 @@ fn get_local_ident(local: &Local) -> Option<syn::Ident> {
     }
 }
 
+/// Warns on visual separator comments such as `// === ... ===`.
 pub fn check_separator_comments(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     for (line_num, line) in content.lines().enumerate() {
@@ -227,6 +230,7 @@ pub fn check_separator_comments(path: &str, content: &str) -> Vec<Violation> {
     }
     violations
 }
+/// Warns on single-letter variable names in functions with more than ten statements.
 pub fn check_single_letter_vars(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let ast = syn::parse_file(content).unwrap();

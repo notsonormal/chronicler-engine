@@ -25,7 +25,7 @@ Examples:
     - `mod.rs` — Browser test binary root (Playwright-driven): `behaviour` (client-side JS interaction, tagged against `docs/specs/browser.md`) + `invariants` (CSS/layout rendering invariants, named exemption — no spec, test code is the definition).
 - **helpers/**
     - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.
-    - `fixtures.rs` — Shared fixtures for integration tests: builds storage, world, character, and game-state instances with deterministic defaults so tests can focus on the behaviour under test.
+    - `fixtures.rs` — Shared fixtures for integration tests: builds storage instances with deterministic defaults so tests can focus on the behaviour under test.
     - `sqlite_test_app_builder.rs` — Integration-only SQLite-backed application builder for integration tests.
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
@@ -54,7 +54,6 @@ Examples:
       - `worlds_fragment_handlers.rs` — HTTP adapter tests for worlds_fragment handlers
 - **infrastructure/**
     - `architecture.rs` — Architecture guardrail tests using arch-lint — fail the build on any violation defined in `arch-lint.toml`; run with `cargo nextest run --test architecture`.
-    - `invariant_contract.rs` — Runtime invariant contract tests — fast regression guards.
     - **guardrails/**
       - `enums.rs` — Enum variant doc guardrail: every enum variant must carry `///` doc, OR the enum must be marked `/// [TRIVIAL_ENUM]` with all variants bare.
       - `free_fn.rs` — Free fn location guardrail: top-level free fns must live in a folder named `mappers`, `utils`, `builders`, `test_support`, `bootstrap`, or `handlers`.
