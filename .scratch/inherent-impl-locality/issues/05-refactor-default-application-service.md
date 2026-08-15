@@ -1,8 +1,14 @@
 # 05 — Refactor DefaultApplicationService to module-per-type
 
 Type: task
-Status: ready-for-agent
+Status: out-of-scope
 Blocked by: (none)
+
+> **Closed as out of scope.** The `DefaultApplicationService` type was deleted
+> in the facade-removal refactor series (commit `5fd2c54` "wire collaborators
+> into AppState, delete facade", continued by `3adc5e5` / `fbd7120`). The type
+> no longer exists in `src/`, so there is nothing to refactor. See
+> `## Answer`.
 
 ## Question
 
@@ -45,3 +51,15 @@ Acceptance:
 - Full `build.py` green.
 - No new `guardrails_*` failures.
 - `message_editing.rs` deleted if emptied.
+
+## Answer
+
+**Out of scope — type deleted.** `struct DefaultApplicationService` no longer
+exists anywhere in `src/` (`grep -rln "struct DefaultApplicationService" src/`
+returns nothing). The facade-removal series (`5fd2c54`, `3adc5e5`, `fbd7120`)
+replaced it with collaborators wired directly into `AppState`, so the
+three-folder impl split this ticket targeted no longer exists either.
+
+The violation evaporated when the type did — not by satisfying the rule — so
+this is a scope boundary, not a step on the route. Recorded in the map's
+**Out of scope** section, not **Decisions so far**.

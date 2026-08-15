@@ -6,19 +6,22 @@ use std::sync::RwLock;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
+use crate::adapters::driving::http::AppState;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::pipeline::ActionPipeline;
 use crate::application::message_service::MessageService;
+use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
-use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::settings::AppSettings;
 use crate::error::Result;
 use crate::test_support::TestData;
+use crate::test_support::{make_test_recorder, TestAppBuilder, TestDataBuilder};
 
 pub fn seed_default_preset(storage: &Storage) {
     storage
@@ -105,6 +108,34 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
         room_npcs: Vec::new(),
     };
     let _ = data.seed_into(storage);
+}
+
+pub fn make_test_pipeline_app() -> AppState {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    TestAppBuilder::with_data(data)
+        .pipeline(service)
+        .build_service()
+}
+
+pub fn make_test_pipeline_app_with_storage() -> (AppState, Arc<Storage>) {
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let agent_registry = AgentRegistry::default();
+    let service = make_test_pipeline_with_backends(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        agent_registry,
+    );
+    TestAppBuilder::with_data(data)
+        .pipeline(service)
+        .build_service_with_storage()
 }
 
 fn build_test_app(storage: Arc<Storage>) -> Result<WiredApp> {

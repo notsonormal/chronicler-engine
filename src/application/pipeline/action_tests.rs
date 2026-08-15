@@ -8,31 +8,23 @@ use crate::application::agents::registry::AgentRegistry;
 use crate::application::agents::Agent;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::llm::providers::MockBackend;
-use crate::test_support::make_test_recorder;
+use crate::adapters::driven::storage::Storage;
 use crate::test_support::{
-    make_test_pipeline_with_backends, make_test_pipeline_with_mock_quantifier, TestAppBuilder,
-    TestDataBuilder,
+    make_test_pipeline_app as make_test_app,
+    make_test_pipeline_app_with_storage as make_test_app_with_storage,
+    make_test_pipeline_with_backends, make_test_pipeline_with_mock_quantifier, make_test_recorder,
+    TestAppBuilder, TestDataBuilder,
 };
 
 #[test]
 fn test_execute_action_clears_last_trigger() {
     use crate::test_support::TestStoredTriggerContext;
 
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
+    let app = make_test_app();
 
     let mut state = app.message_service.load_or_fresh();
     state.narrative.last_trigger = Some(TestStoredTriggerContext::for_npc(
@@ -464,4 +456,50 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
     assert!(b_present, "game 2 state must contain gen B narration");
 
     app.shutdown_token.cancel();
+}
+
+#[test]
+fn test_process_action_heals_stale_status_before_validation_error() {
+    let (app, storage) = make_test_app_with_storage();
+
+    // Create a game whose persona_key does not resolve; this is the validation
+    // that will fail. The default world/persona are already seeded, but the new
+    // game points at a non-existent persona.
+    let bad_game_id = storage
+        .create_game(
+            "Test World",
+            "test",
+            "nonexistent",
+            "Nonexistent",
+            "Bad Game",
+        )
+        .expect("create_game should succeed");
+    storage.set_game_id(bad_game_id);
+
+    // Persist a stale Generating snapshot for the new game.
+    let mut state = app.message_service.load_or_fresh();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    storage
+        .save_snapshot(&GameStateSnapshot::from_game_state(&state))
+        .expect("save stale snapshot should succeed");
+
+    let result = app
+        .pipeline
+        .process_action(&app.generation_gate, "look".to_string());
+
+    assert!(
+        result.is_err(),
+        "process_action should fail when persona is missing, got {result:?}"
+    );
+
+    let (status, _) = app
+        .game_view_query
+        .get_generating_status()
+        .expect("get_generating_status should succeed");
+    assert_eq!(
+        status,
+        GenerationStatus::Idle,
+        "stale Generating status should be healed to Idle before validation error returns"
+    );
 }

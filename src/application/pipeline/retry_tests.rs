@@ -13,13 +13,13 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
 use crate::application::agents::registry::AgentRegistry;
+use crate::test_support::{
+    make_test_app_without_snapshot,
+    make_test_pipeline_app_with_storage as make_test_app_with_storage,
+    make_test_pipeline_with_backends, make_test_pipeline_with_mock_quantifier, make_test_recorder,
+    TestAppBuilder, TestDataBuilder,
+};
 use crate::test_support::fixtures::TestGameState;
-use crate::test_support::make_test_pipeline_with_backends;
-use crate::test_support::make_test_pipeline_with_mock_quantifier;
-use crate::test_support::make_test_recorder;
-use crate::test_support::TestAppBuilder;
-use crate::test_support::TestDataBuilder;
-use crate::test_support::make_test_app_without_snapshot;
 
 fn make_test_state() -> GameState {
     TestGameState::in_room("start")
@@ -227,7 +227,7 @@ async fn test_retry_load_messages_error() {
 
 #[tokio::test]
 async fn test_retry_no_input() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let sys = crate::domain::model::message::Message::new(
         None,
@@ -259,7 +259,7 @@ async fn test_retry_no_input() {
 
 #[tokio::test]
 async fn test_retry_event_with_no_pre_event_fallback_to_main() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let _input_id = add_input_and_save(&app, &storage, "test input");
 
@@ -282,7 +282,7 @@ async fn test_retry_event_with_no_pre_event_fallback_to_main() {
 
 #[tokio::test]
 async fn test_retry_event_with_no_pre_event_and_no_input() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
     state.add_message("Event only".to_string(), None, MessageType::Narration);
@@ -348,7 +348,7 @@ async fn test_retry_event_storage_error_on_pre_event() {
 
 #[tokio::test]
 async fn test_retry_event_missing_trigger_context() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     setup_event_flow_without_trigger(&app, &storage);
 
@@ -367,7 +367,7 @@ async fn test_retry_event_missing_trigger_context() {
 
 #[tokio::test]
 async fn test_retry_event_continuation_cancels_before_llm() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let _input_id = add_input_and_save(&app, &storage, "test input");
     let _pre_main_id = save_pre_main(&app, &storage);
@@ -485,7 +485,7 @@ async fn test_retry_event_empty_continuation_text() {
 
 #[tokio::test]
 async fn test_retry_main_no_pre_main_snapshot() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
     let player_name = "Player".to_string();
@@ -523,7 +523,7 @@ async fn test_retry_main_no_pre_main_snapshot() {
 
 #[tokio::test]
 async fn test_retry_event_continuation_happy_path() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let _input_id = add_input_and_save(&app, &storage, "test input");
     let _pre_main_id = save_pre_main(&app, &storage);
@@ -572,7 +572,7 @@ async fn test_retry_event_continuation_happy_path() {
 
 #[tokio::test]
 async fn test_retry_main_narration_happy_path() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let _input_id = add_input_and_save(&app, &storage, "test input");
     let _pre_main_id = save_pre_main(&app, &storage);
@@ -664,7 +664,7 @@ async fn test_retry_recovers_after_llm_failure() {
 
 #[tokio::test]
 async fn test_retry_room_not_found_sets_error() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
     state.add_message(
@@ -885,7 +885,7 @@ async fn test_retry_event_empty_continuation_triggers_error() {
 
 #[tokio::test]
 async fn test_retry_appends_swipe_to_same_message() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let _input_id = add_input_and_save(&app, &storage, "test input");
     let _pre_main_id = save_pre_main(&app, &storage);
@@ -1101,7 +1101,7 @@ async fn test_retry_last_response_cancelled_at_phase_boundary() {
 
 #[tokio::test]
 async fn test_retry_event_continuation_handles_state_without_input_message() {
-    let (app, _storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, _storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
@@ -1118,7 +1118,7 @@ async fn test_retry_event_continuation_handles_state_without_input_message() {
 async fn test_retry_records_missing_snapshot_id() {
     const MISSING_ID: u64 = 99_999;
 
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
     let player_name = "Player".to_string();
@@ -1149,7 +1149,7 @@ async fn test_retry_records_missing_snapshot_id() {
 async fn test_retry_returns_internal_error_when_anchor_has_no_snapshot_id() {
     // anchor message without snapshot_id is a data-integrity
     // violation → 500 from retry(), with the reason persisted on status.
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
     state.add_message(
@@ -1182,7 +1182,7 @@ async fn test_retry_returns_internal_error_when_anchor_has_no_snapshot_id() {
 #[tokio::test]
 async fn test_retry_returns_internal_error_when_snapshot_row_missing() {
     const MISSING_ID: u64 = 99_999;
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
     state.add_message(
@@ -1220,7 +1220,7 @@ async fn test_retry_returns_internal_error_when_snapshot_row_missing() {
 async fn test_retry_returns_concurrent_generation_when_gate_busy() {
     // retry() must reject concurrent generation the same way
     // `process_action` does — Ok(ConcurrentGeneration), no task spawned.
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
     let _input_id = add_input_and_save(&app, &storage, "test input");
 
     let game_id = storage.current_game_id();
@@ -1241,7 +1241,7 @@ async fn test_retry_returns_concurrent_generation_when_gate_busy() {
 
 #[tokio::test]
 async fn test_retry_returns_shutting_down_when_token_cancelled() {
-    let (app, _storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, _storage) = make_test_app_with_storage();
     app.shutdown_token.cancel();
 
     let result = app.pipeline.retry(&app.generation_gate);

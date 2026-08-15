@@ -2,7 +2,7 @@
 
 Type: prototype
 Status: ready-for-agent
-Blocked by: 03, 04, 05, 06, 07, 08
+Blocked by: 04, 06, 07
 
 > **Deferred per user direction (this session).** The rule was built, trial-run
 > (27 violations, captured by ticket 02's resolution), then **removed from the
@@ -11,12 +11,19 @@ Blocked by: 03, 04, 05, 06, 07, 08
 > guardrails_inherent_impl_locality` entry. `build.py` and
 > `cargo test --test guardrails` are clean on `main`.
 >
-> **Re-add as a later step**: blocked by 03–08. Once those refactor tickets
-> land (working against the 27-violation set + 3 discrepancies captured in
-> ticket 02's resolution), this ticket is re-worked (re-create the file,
-> re-register, re-run, confirm zero violations) immediately before ticket 09
-> promotes it to a gating step. The implementation blueprint and trial-run
-> findings are preserved below for that future pass.
+> **Re-add as a later step**: blocked by the remaining refactor tickets — **04,
+> 06, 07**. (03, 05, 08 are closed: 03 and 08 resolved by events, 05 out of
+> scope — type deleted.) Once 04/06/07 land, this ticket is re-worked
+> (re-create the file, re-register, re-run, confirm zero violations)
+> immediately before ticket 09 promotes it to a gating step. The implementation
+> blueprint below is preserved for that future pass.
+>
+> **The 27-violation trial-run set is STALE.** It was captured against the
+> pre-refactor tree (`backend/`, `action_pipeline/`, `narrative_prompt/`,
+> `fragments/renderers/`, `bootstrap/load.rs` `impl Storage`, the now-deleted
+> `DefaultApplicationService`). Do NOT diff a re-run against it. Re-scan `main`
+> from scratch and build the expected-zero set from the current tree. See
+> ticket 03's `## Answer` for the specific stale entries.
 
 ## Question
 

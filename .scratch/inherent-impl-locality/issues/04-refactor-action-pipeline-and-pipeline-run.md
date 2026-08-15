@@ -1,59 +1,64 @@
-# 04 — Refactor ActionPipeline and PipelineRun to module-per-type
+# 04 — Refactor ActionPipeline to module-per-type
 
 Type: task
 Status: ready-for-agent
 Blocked by: (none)
 
+> **Scope narrowed and re-pathed.** The `PipelineRun` half of this ticket is
+> done (resolved by commit `4c704bd`, see `## What changed since this ticket was
+> written`), and the folder-exemption question that used to shadow it is moot.
+> What remains is `ActionPipeline` only. Paths updated from `action_pipeline/`
+> to `pipeline/`.
+
 ## Question
 
-Refactor `ActionPipeline` and `PipelineRun` so their inherent impls satisfy `guardrails_inherent_impl_locality`.
+Refactor `ActionPipeline` so its inherent impls satisfy `guardrails_inherent_impl_locality`.
 
-Current state:
-- `ActionPipeline` defined in `application/action_pipeline/pipeline.rs`
-- `impl ActionPipeline` in `pipeline.rs` + `phases.rs` (4 methods in phases.rs: `phase_pre_main_snapshot`, `phase_trigger_continuation_with_cancel_handling`, `phase_finalize`, `handle_cancellation`)
-- `PipelineRun<'a>` defined in `application/action_pipeline/phases.rs`
-- `impl PipelineRun` spread across `phases.rs` + `pipeline.rs` (one method: `phase_engine_commit` in phases.rs is `impl ActionPipeline`)
+Current state on `main` (folder renamed `action_pipeline/` → `pipeline/` by commit `4c704bd`):
 
-Folder `action_pipeline/` matches `ActionPipeline`'s name, not `PipelineRun`'s.
+- `ActionPipeline` defined in `application/pipeline/core.rs`
+- `impl ActionPipeline` blocks spread across four files in `application/pipeline/`:
+  - `core.rs` (def + impls)
+  - `action.rs`
+  - `phases.rs`
+  - `retry.rs`
+  - `retrigger.rs`
 
-Target shape:
+Folder `pipeline/` does **not** match `snake(ActionPipeline) == "action_pipeline"`. The old folder-exemption edge case (folder named `action_pipeline/` matching the type) is gone — the rename made `ActionPipeline` an unambiguous violation. There is no longer a folder-exemption question to resolve; every off-`core.rs` `impl ActionPipeline` block is a plain violation.
+
+Target shape — single-file consolidation:
+
 ```text
-application/
+application/pipeline/
+  core.rs    # struct ActionPipeline + ALL impl ActionPipeline blocks
+  ...        # action.rs / phases.rs / retry.rs / retrigger.rs keep only
+             #   non-ActionPipeline code (entry-path fns, PipelineRun, etc.)
+```
+
+If `core.rs` would exceed 2000 lines (file_length guardrail) after consolidation, switch to a folder shape:
+
+```text
+application/pipeline/
   action_pipeline/
-    mod.rs                   # ActionPipeline definition + impl ActionPipeline (all methods here)
-    action_pipeline.rs → merge into mod.rs OR keep as single file?
-    pipeline_run/
-      mod.rs                 # struct PipelineRun<'a>
-      <phase methods>.rs     # split impl PipelineRun (allowed: folder named after type)
-  phase_error.rs             # pub enum PhaseError (stays where it is)
-  retry.rs                   # impl DefaultApplicationService — see ticket 05
-  retry_tests.rs             # #[cfg(test)] — unchanged location
-  pipeline_tests.rs          # #[cfg(test)] — unchanged location
+    mod.rs                # struct ActionPipeline
+    <method-group>.rs     # split impl ActionPipeline (allowed: folder = snake)
+  core.rs                 # re-export or empty
 ```
-
-OR simpler — single-file consolidation:
-```text
-application/action_pipeline/
-  pipeline.rs    # ActionPipeline only (def + all impls)
-  phases.rs      # PipelineRun only (def + all impls) — rename file to pipeline_run.rs for clarity?
-```
-
-The single-file version has `PipelineRun` def in `pipeline_run.rs` (or `phases.rs` renamed), with all impls in that one file. This is cleaner — no folder needed for a type that fits in one file.
-
-If `pipeline.rs` would exceed 2000 lines (file_length guardrail), switch to the folder shape.
 
 Constraints:
 - `build.py` green at every landed step.
-- Preserve all `pub`/`pub(crate)` visibility signatures exactly.
-- Preserve `PipelineInputs` (in `phases.rs`) — co-locate with `PipelineRun`.
-- Preserve `phase_error.rs` location (already a self-contained type).
-- The `ActionPipeline::phase_engine_commit` method currently in `phases.rs` — move to `pipeline.rs` (or wherever `ActionPipeline` lands).
-- The 4 `impl PipelineRun` methods currently in `pipeline.rs` — move to wherever `PipelineRun` lands.
+- Preserve all `pub`/`pub(crate)`/`pub(super)` visibility signatures exactly.
+- Do NOT touch `PipelineRun` — it is already clean (def + both `impl<'a> PipelineRun<'a>` blocks in `phases.rs`).
 - Do NOT touch trait impls.
-- Do NOT touch `DefaultApplicationService` impls (those are in `retry.rs` and `message_editing.rs` — ticket 05).
+- Do NOT touch `DefaultApplicationService` (deleted — see ticket 05, out of scope).
 
 Acceptance:
-- `cargo test --test guardrails guardrails_inherent_impl_locality` reports zero `ActionPipeline` and `PipelineRun` violations.
+- `cargo test --test guardrails guardrails_inherent_impl_locality` reports zero `ActionPipeline` violations.
 - Full `build.py` green.
 - No new `guardrails_*` failures.
-- File renaming is allowed (e.g. `phases.rs` → `pipeline_run.rs`) — update `mod.rs` declarations accordingly.
+
+## What changed since this ticket was written
+
+- **`PipelineRun` is clean.** Commit `4c704bd` split the monolithic `pipeline.rs` into `core.rs` plus entry modules (`action.rs`, `retrigger.rs`, `retry.rs`). `PipelineRun`'s def and both its `impl<'a> PipelineRun<'a>` blocks now all live in `phases.rs` (`impl_path == def_path`). The four `impl PipelineRun` methods that used to live in `pipeline.rs` were relocated. Nothing left to do for `PipelineRun`.
+- **Folder exemption question is moot.** The folder was renamed `action_pipeline/` → `pipeline/`, so `snake(ActionPipeline) == "action_pipeline"` no longer matches the parent dir. `ActionPipeline` is now flagged by the rule as specified, with no formula-tightening needed. The map's old "Not yet specified" fog item about rule-formula-vs-feature is cleared.
+- **`DefaultApplicationService` reference is stale.** The original ticket told the agent not to touch `DefaultApplicationService` impls in `retry.rs` / `message_editing.rs`. That type is deleted (ticket 05); those impl blocks no longer exist. `retry.rs` in `pipeline/` now holds `ActionPipeline` and/or `PipelineRun` code only.

@@ -11,14 +11,14 @@ use crate::application::pipeline::retry_tests::{
 };
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::test_support::make_test_pipeline_with_backends;
-use crate::test_support::make_test_recorder;
-use crate::test_support::TestAppBuilder;
-use crate::test_support::TestDataBuilder;
+use crate::test_support::{
+    make_test_pipeline_app_with_storage as make_test_app_with_storage,
+    make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder, TestDataBuilder,
+};
 
 #[tokio::test]
 async fn test_retrigger_event_cancels_cleanly() {
-    let (app, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let _input_id = add_input_and_save(&app, &storage, "test input");
     let _pre_main_id = save_pre_main(&app, &storage);
@@ -189,7 +189,7 @@ async fn test_retrigger_returns_concurrent_generation_when_gate_busy() {
 // The is_shutting_down() guard runs before any state load, so no seeding is needed.
 #[tokio::test]
 async fn test_retrigger_returns_shutting_down_when_token_cancelled() {
-    let (app, _storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let (app, _storage) = make_test_app_with_storage();
     app.shutdown_token.cancel();
 
     let result = app.pipeline.retrigger(&app.generation_gate);

@@ -15,9 +15,13 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
-use crate::test_support::make_test_recorder;
-use crate::test_support::{make_test_pipeline_with_backends, TestAppBuilder, TestDataBuilder};
 use crate::test_support::fixtures::{TestGameState, TestMap, TestNpc};
+use crate::test_support::make_test_recorder;
+use crate::test_support::{
+    make_test_pipeline_app as make_test_app,
+    make_test_pipeline_app_with_storage as make_test_app_with_storage,
+    make_test_pipeline_with_backends, TestAppBuilder, TestDataBuilder,
+};
 
 fn make_test_state() -> GameState {
     TestGameState::in_room("start")
@@ -25,17 +29,7 @@ fn make_test_state() -> GameState {
 
 #[test]
 fn test_pipeline_runs_to_completion() {
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
+    let app = make_test_app();
 
     let state = app.message_service.load_or_fresh();
     let outcome = app.pipeline.run_from_input(state, "look".to_string());
@@ -54,17 +48,7 @@ fn test_pipeline_runs_to_completion() {
 
 #[test]
 fn test_pipeline_saves_narration_to_history() {
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
+    let app = make_test_app();
 
     let state = app.message_service.load_or_fresh();
     let _outcome = app.pipeline.run_from_input(state, "look".to_string());
@@ -499,17 +483,7 @@ fn test_pipeline_trigger_complete_failure() {
 
 #[test]
 fn test_pipeline_saves_narration_before_quantifier() {
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
+    let app = make_test_app();
 
     let state = app.message_service.load_or_fresh();
     let _outcome = app.pipeline.run_from_input(state, "look".to_string());
@@ -574,17 +548,7 @@ fn test_pipeline_no_duplicate_narration() {
 
 #[test]
 fn test_pipeline_quantifier_runs_on_saved_state() {
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
+    let app = make_test_app();
 
     let state = app.message_service.load_or_fresh();
     let _outcome = app.pipeline.run_from_input(state, "look".to_string());
@@ -912,17 +876,7 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
 
 #[test]
 fn test_pipeline_empty_input_produces_continuation() {
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
+    let app = make_test_app();
 
     let state = app.message_service.load_or_fresh();
     let _outcome = app.pipeline.run_from_input(state, String::new());
@@ -952,17 +906,7 @@ fn test_pipeline_empty_input_produces_continuation() {
 
 #[test]
 fn test_pipeline_room_not_found_sets_error_status() {
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
+    let app = make_test_app();
 
     let mut state = app.message_service.load_or_fresh();
     state.movement.current_room_id = "non_existent_room".to_string();
@@ -1095,17 +1039,7 @@ fn test_pipeline_quantifier_detects_movement() {
 
 #[test]
 fn test_pipeline_cancels_when_token_already_cancelled() {
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let app = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service();
+    let app = make_test_app();
 
     app.shutdown_token.cancel();
     let state = app.message_service.load_or_fresh();
@@ -1121,17 +1055,7 @@ fn test_pipeline_cancels_when_token_already_cancelled() {
 
 #[test]
 fn test_pre_main_snapshot_saved_before_narration() {
-    let data = TestDataBuilder::default_test().build();
-    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let service = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        agent_registry,
-    );
-    let (app, storage) = TestAppBuilder::with_data(data)
-        .pipeline(service.clone())
-        .build_service_with_storage();
+    let (app, storage) = make_test_app_with_storage();
 
     let state = app.message_service.load_or_fresh();
     let _outcome = app

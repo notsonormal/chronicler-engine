@@ -8,13 +8,13 @@ Blocked by: (none)
 
 Refactor the `Db*` row-model types so their inherent impls satisfy `guardrails_inherent_impl_locality`.
 
-Current state (per scan):
-- `DbCharacter` defined in `adapters/driven/storage/models/character.rs`, impl split across `models/character.rs` + `backend/characters.rs`
-- `DbGame` — same shape (`models/game.rs` + `backend/games.rs`)
-- `DbPersona` — `models/persona.rs` + `backend/personas.rs`
-- `DbPromptPreset` — `models/prompt_preset.rs` + `backend/presets.rs`
-- `DbSettings` — `models/settings.rs` + `backend/settings.rs`
-- `DbWorld` — `models/world.rs` + `backend/worlds.rs`
+Current state (per scan, post-`backend/`-flatten commit `6cb2049`):
+- `DbCharacter` defined in `adapters/driven/storage/models/character.rs`, impl split across `models/character.rs` + `storage/characters.rs` (was `backend/characters.rs`)
+- `DbGame` — same shape (`models/game.rs` + `storage/games.rs`)
+- `DbPersona` — `models/persona.rs` + `storage/personas.rs`
+- `DbPromptPreset` — `models/prompt_preset.rs` + `storage/presets.rs`
+- `DbSettings` — `models/settings.rs` + `storage/settings.rs`
+- `DbWorld` — `models/world.rs` + `storage/worlds.rs`
 
 Each split is across two files, neither named after the type.
 
@@ -29,9 +29,9 @@ adapters/driven/storage/models/
   db_world.rs          # struct DbWorld + impl DbWorld
 ```
 
-The `backend/Xs.rs` impl blocks (character persistence behavior on `Storage` is NOT what's moving — that stays with `Storage` per ticket 03). What moves are the `impl DbX { from_row, into_domain, ... }` methods currently living in the `backend/` files.
+The `storage/Xs.rs` impl blocks (character persistence behavior on `Storage` is NOT what's moving — that stays with `Storage` per ticket 03, now resolved). What moves are the `impl DbX { from_row, into_domain, ... }` methods currently living in the `storage/` files.
 
-Wait — verify which impl blocks actually live in `backend/`. The scan showed `impl DbCharacter` in `backend/characters.rs` AND in `models/character.rs`. Before refactoring, the agent must `rg -n "^impl Db" src/adapters/driven/storage/` to enumerate the actual impl blocks and their locations, because the "backend/Xs.rs" files mostly contain `impl Storage` (not `impl DbX`) — the manual scan may have over-counted.
+Wait — verify which impl blocks actually live in `storage/`. The scan showed `impl DbCharacter` in `storage/characters.rs` AND in `models/character.rs`. Before refactoring, the agent must `rg -n "^impl Db" src/adapters/driven/storage/` to enumerate the actual impl blocks and their locations, because the `storage/Xs.rs` files mostly contain `impl Storage` (not `impl DbX`) — the manual scan may have over-counted.
 
 Constraints:
 - `build.py` green at every landed step.

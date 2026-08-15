@@ -170,12 +170,7 @@ impl ActionPipeline {
         let mut game_state = self.message_service.load_or_fresh();
         let game_id = self.storage.current_game_id();
 
-        // Validate before healing so a rejected entry (no input to retry, no
-        // trigger to retrigger) never touches persisted status — matches the
-        // pre-split ordering of retry/retrigger, which validated before heal_stale.
         before_claim(game_id, &mut game_state)?;
-
-        generation_gate.heal_stale(game_id, &mut game_state);
 
         let (started_game_id, started_generation_id, claim_result) =
             generation_gate.try_claim(game_id, &mut game_state, self.message_service.as_ref())?;
