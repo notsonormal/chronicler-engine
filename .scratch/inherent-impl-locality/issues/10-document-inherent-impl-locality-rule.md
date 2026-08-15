@@ -1,7 +1,8 @@
 # 10 — Document inherent impl locality rule
 
 Type: task
-Status: ready-for-agent
+Status: closed
+Resolution: resolved-by-events
 Blocked by: 09
 
 ## Question
@@ -41,3 +42,17 @@ Acceptance:
 - `inherent_impl.rs` has `[DOC: ...]` anchor pointing to the section.
 - `build.py` green (docs validation step, if present).
 - `chronicler-docs-hygiene` skill reports no violations introduced by this change.
+
+## Resolution
+
+Resolved by events — the auto-generation added in `scripts/generate_guardrails_doc.py` already documents the rule, and the ticket's specific instructions are stale on three points. No code or doc changes were made.
+
+- **The rule is already documented.** `generate_guardrails_doc.py` reads the `///` doc comment on `check_inherent_impl_locality` (`tests/infrastructure/guardrails/inherent_impl.rs:12-15`) and emits a row in the auto-managed syn table in `docs/diataxis/reference/coding_standards/guardrails.md` (`inherent impl locality` row, line 60). That row stays in sync with the source automatically; there is nothing manual to maintain. No other guardrail rule (free fn location, mod purity, file length, etc.) has a dedicated prose section either — the one-row table is the established pattern for every rule in this suite.
+
+- **The ticket's target path does not exist.** It names `docs/diataxi/reference/architecture_system.md`. The real folder is `docs/diataxis/` (with an "s"), and no `architecture_system.md` exists anywhere in `docs/`. The ticket's own constraint ("surface the discrepancy before creating the section; do not silently invent a new doc location") forbids inventing one.
+
+- **The mirror reference is stale.** The ticket says to mirror "the planned `## Free fn Doctrine` section from issue 11 in `.scratch/free-fn-scanner-rules/`." That scratch directory no longer exists, and no `Free fn Doctrine` section exists in any doc. The structural template it wanted to copy is gone.
+
+- **The `[DOC: ...]` anchor instruction would break a guardrail.** The ticket asks for a `[DOC: ...]` anchor on `inherent_impl.rs`, a test file. The `doc standards` guardrail (`tests/infrastructure/guardrails/structure.rs:69`) rejects DOC anchors in test files: "Test files must use a plain `//! <summary>` line only." `inherent_impl.rs` already has the correct plain `//!` summary on line 1; adding the anchor would fail `build.py`. No guardrail rule file carries a DOC anchor — consistent with that rule.
+
+If a richer prose treatment is later wanted, it would be a fresh doc decision (e.g. a new `docs/diataxis/reference/coding_standards/inherent_impl_locality.md`, or a section under `docs/diataxis/explanation/architecture.md#architectural-commitments`), not the ticket as written.

@@ -14,7 +14,6 @@ use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok, ok_refresh};
 use crate::application::errors::{ApplicationError, ProcessActionResult};
 use crate::domain::model::settings::TextCheckMode;
-use crate::error::EngineError;
 
 pub async fn index_handler() -> Html<String> {
     Html(include_str!("../../../../../../assets/index.html").to_string())
@@ -68,9 +67,7 @@ pub async fn switch_swipe_handler(
     state
         .message_service
         .switch_swipe(is_generating, message_id, swipe_index)?;
-    let html = state
-        .render_story_log()
-        .map_err(|e| EngineError::Render(format!("Failed to render story log: {e}")))?;
+    let html = state.render_story_log()?;
     Ok(ok(html))
 }
 

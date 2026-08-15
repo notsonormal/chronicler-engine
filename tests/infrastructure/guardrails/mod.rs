@@ -2,12 +2,14 @@
 
 pub mod enums;
 pub mod free_fn;
+pub mod inherent_impl;
 pub mod layers;
 pub mod location;
 pub mod nesting;
 pub mod structure;
 pub mod style;
 
+pub use inherent_impl::*;
 pub use enums::*;
 pub use free_fn::*;
 pub use layers::*;
@@ -15,6 +17,9 @@ pub use nesting::*;
 pub use structure::{check_no_legacy_test_context, *};
 pub use style::*;
 pub use location::*;
+
+#[cfg(test)]
+mod inherent_impl_tests;
 
 #[cfg(test)]
 mod free_fn_tests;
@@ -69,7 +74,7 @@ impl Violation {
     }
 }
 
-fn discover_rs_files(root: &str) -> Vec<String> {
+pub(crate) fn discover_rs_files(root: &str) -> Vec<String> {
     walkdir::WalkDir::new(root)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -79,11 +84,11 @@ fn discover_rs_files(root: &str) -> Vec<String> {
         .collect()
 }
 
-fn relative_path(full: &str) -> &str {
+pub(crate) fn relative_path(full: &str) -> &str {
     full.strip_prefix("src/").unwrap_or(full)
 }
 
-fn assert_violations(violations: &[Violation], rule_name: &str) {
+pub(crate) fn assert_violations(violations: &[Violation], rule_name: &str) {
     if !violations.is_empty() {
         for v in violations {
             eprintln!(
@@ -260,6 +265,25 @@ fn guardrails_enum_variant_docs_tests() {
 #[test]
 fn guardrails_nesting_depth_src() {
     check_src_files("nesting depth (src)", check_nesting_depth);
+}
+
+#[test]
+fn guardrails_inherent_impl_locality() {
+    let mut files: Vec<(String, String)> = Vec::new();
+    for file in discover_rs_files("src") {
+        if file.ends_with("_tests.rs") || file.ends_with("_test.rs") || file.ends_with("main.rs") {
+            continue;
+        }
+        let content = std::fs::read_to_string(&file).unwrap();
+        let rel = relative_path(&file).to_string();
+        files.push((rel, content));
+    }
+    let borrowed: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_str()))
+        .collect();
+    let errors = check_inherent_impl_locality(&borrowed);
+    assert_violations(&errors, "inherent impl locality");
 }
 
 #[test]

@@ -38,7 +38,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **driving/**
       - `mod.rs` — Driving adapters: HTTP and CLI interfaces
       - **http/**
-        - `app_state.rs` — Application state management
+        - `app_state.rs` — Application state and HTTP fragment rendering.
         - `error.rs` — HTTP driving adapter — maps application `ApplicationError` to axum `Response`.
         - `mod.rs` — HTTP server and API endpoints
         - `templates.rs` — Template rendering utilities

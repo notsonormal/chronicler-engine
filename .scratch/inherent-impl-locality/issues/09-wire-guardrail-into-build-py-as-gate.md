@@ -1,7 +1,7 @@
 # 09 — Wire guardrail into build.py as gate
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 ## Question
@@ -30,3 +30,13 @@ Acceptance:
 - `build.py` full run is green.
 - Rule module doc says "enforced" not "audit-only".
 - No `#[allow(...)]` on the rule function.
+
+## Answer
+
+- `build.py` already gates the guardrails suite. It runs `cargo nextest run --no-fail-fast`, which includes `tests/infrastructure/guardrails/`. No literal `cargo test --test guardrails` step is needed because nextest covers the same test binary.
+- The rule is wired into `tests/infrastructure/guardrails/mod.rs` as `guardrails_inherent_impl_locality` and calls `assert_violations`, so any violation panics the test — hard failure, no advisory path.
+- No `#[allow(...)]` attribute appears on `guardrails_inherent_impl_locality` or on `check_inherent_impl_locality`.
+- The module doc comment in `tests/infrastructure/guardrails/inherent_impl.rs` already uses enforced language (`"guardrail: every inherent impl must live in..."`). No "audit-only" wording is present, so no rewrite was required.
+- Verification:
+  - `cargo test --test guardrails guardrails_inherent_impl_locality` → 1 passed, 111 filtered out.
+  - `python build.py` → green, total 123.83 s, all 12 steps OK.

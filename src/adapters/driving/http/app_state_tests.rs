@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
 use crate::adapters::driven::storage::Storage;
@@ -9,8 +10,53 @@ use crate::adapters::driving::http::AppState;
 use crate::application::ports::text_checker::{CheckResult, TextChecker};
 use crate::application::text_check_service::TextCheckService;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::settings::{AppSettings, TextCheckMode};
 use crate::error::EngineError;
+use crate::test_support::TestAppBuilder;
+
+fn make_test_app_state(llm_storage: Option<Arc<Storage>>) -> AppState {
+    let mut builder = TestAppBuilder::default_test();
+    if let Some(storage) = llm_storage {
+        builder = builder.storage(storage);
+    }
+    builder.build_service()
+}
+
+#[test]
+fn test_render_llm_messages_empty() {
+    let app_state = make_test_app_state(None);
+    let html = app_state.render_llm_messages().unwrap();
+    assert!(html.contains("llm-message-list"));
+    assert!(html.contains("No LLM messages yet"));
+}
+
+#[test]
+fn test_render_llm_messages_with_data() {
+    let llm_storage = Arc::new(Storage::new_in_memory());
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: "narrator".to_string(),
+        backend_name: "OpenRouter".to_string(),
+        model_name: "gpt-4".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        raw_request_json: "req".to_string(),
+        raw_response_json: "res".to_string(),
+        parsed_response: "hello".to_string(),
+        error_message: None,
+        created_at: Utc::now(),
+    };
+    llm_storage.save_llm_message(&msg).unwrap();
+
+    let app_state = make_test_app_state(Some(llm_storage));
+    let html = app_state.render_llm_messages().unwrap();
+    assert!(html.contains("llm-message-list"));
+    assert!(html.contains("narrator"));
+    assert!(html.contains("OpenRouter"));
+    assert!(html.contains("gpt-4"));
+    assert!(html.contains("hello"));
+}
 
 struct NoopTextChecker;
 
