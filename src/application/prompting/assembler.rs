@@ -16,9 +16,9 @@ use crate::application::prompting::token_budget as budget;
 use crate::application::prompting::token_budget::truncate_to_budget;
 use crate::application::prompting::builders::sections::{
     build_post_history_prompt, build_system_prompt, render_known_npc_entry,
-    render_present_relationships, render_preset_xml_parts, sanitize_for_prompt,
+    render_present_relationships, sanitize_for_prompt,
 };
-use crate::application::prompting::types::{NpcContext, PromptContext};
+use crate::application::prompting::types::NpcContext;
 use crate::application::prompting::utils::context::fit_messages_to_context;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,6 +26,17 @@ pub struct AssembledPrompt {
     pub system_prompt: String,
     pub user_prompt: String,
     pub max_tokens: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct PromptContext<'a> {
+    pub world: &'a WorldCard,
+    pub room: &'a Room,
+    pub npcs: NpcContext<'a>,
+    pub persona: &'a PersonaCard,
+    pub user_message: &'a str,
+    pub history: &'a [MessageEntry],
+    pub template_vars: TemplateVars,
 }
 
 pub struct PromptAssembler {
@@ -324,20 +335,5 @@ impl<'a> LayerRenderer<'a> {
         output.push_str("\n</PlayerInput>\n");
 
         output
-    }
-}
-
-impl PromptPreset {
-    pub fn assemble_text(
-        &self,
-        global_rules: &[String],
-        response_length: Option<&str>,
-        template_vars: Option<&TemplateVars>,
-    ) -> String {
-        render_preset_xml_parts(self, global_rules, response_length, template_vars)
-            .into_iter()
-            .map(|(_, rendered)| rendered)
-            .collect::<Vec<_>>()
-            .join("\n\n")
     }
 }

@@ -1,7 +1,8 @@
+use crate::application::prompting::assembler::PromptContext;
 use crate::application::prompting::token_budget as budget;
 use crate::application::prompting::token_budget::estimate_tokens;
+use crate::application::prompting::types::NpcContext;
 use crate::application::prompting::utils::context::{fit_messages_to_context, trim_history_to_budget};
-use crate::application::prompting::types::{NpcContext, PromptContext};
 
 #[test]
 fn test_context_fitting_no_trim_needed() {

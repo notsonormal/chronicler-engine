@@ -6,9 +6,9 @@ use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::world::WorldCard;
-use crate::application::prompting::assembler::PromptAssembler;
+use crate::application::prompting::assembler::{PromptAssembler, PromptContext};
 use crate::application::prompting::token_budget as budget;
-use crate::application::prompting::types::{NpcContext, PromptContext};
+use crate::application::prompting::types::NpcContext;
 
 fn create_test_preset() -> PromptPreset {
     PromptPreset {

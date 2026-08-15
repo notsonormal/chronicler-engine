@@ -2,7 +2,7 @@
 
 Type: prototype
 Status: ready-for-agent
-Blocked by: 04, 06, 07
+Blocked by: 07
 
 > **Deferred per user direction (this session).** The rule was built, trial-run
 > (27 violations, captured by ticket 02's resolution), then **removed from the
@@ -11,12 +11,14 @@ Blocked by: 04, 06, 07
 > guardrails_inherent_impl_locality` entry. `build.py` and
 > `cargo test --test guardrails` are clean on `main`.
 >
-> **Re-add as a later step**: blocked by the remaining refactor tickets — **04,
-> 06, 07**. (03, 05, 08 are closed: 03 and 08 resolved by events, 05 out of
-> scope — type deleted.) Once 04/06/07 land, this ticket is re-worked
-> (re-create the file, re-register, re-run, confirm zero violations)
-> immediately before ticket 09 promotes it to a gating step. The implementation
-> blueprint below is preserved for that future pass.
+> **Re-add as a later step**: blocked by **07** (still open) and **11** (folder-
+> cohesion decision — 01's rule shape depends on it; block flipped from
+> `11 blocked by 01` because the decision must precede the build). 04 and 06
+> have landed (resolved by refactor); 03, 05, 08 are closed (03 and 08 resolved
+> by events, 05 out of scope — type deleted). Once 07 and 11 land, this ticket
+> is re-worked (re-create the file, re-register, re-run, confirm zero
+> violations) immediately before ticket 09 promotes it to a gating step. The
+> implementation blueprint below is preserved for that future pass.
 >
 > **The 27-violation trial-run set is STALE.** It was captured against the
 > pre-refactor tree (`backend/`, `action_pipeline/`, `narrative_prompt/`,

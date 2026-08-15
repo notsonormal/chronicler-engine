@@ -146,6 +146,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `settings_defaults.rs` — Serde default-fn-pointers for `AppSettings` fields. Cannot become methods — `#[serde(default = "...")]` requires a fn path.
         - `template.rs` — Template placeholder substitution for author-controlled text fields.
         - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.
+        - `xml.rs` — XML string formatting utilities.
   - **test_support/**
     - `context.rs` — Builds `WiredApp` instances for integration tests.
     - `fixtures.rs` — Test fixtures shared between unit and integration tests.

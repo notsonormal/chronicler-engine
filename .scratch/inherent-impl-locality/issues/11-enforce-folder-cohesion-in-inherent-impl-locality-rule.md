@@ -1,8 +1,9 @@
 # 11 — Enforce folder cohesion in the inherent-impl-locality rule
 
 Type: grilling
-Status: ready-for-agent
-Blocked by: 01
+Status: resolved
+Blocked by: (none)
+Assignee: agent
 
 ## Question
 
@@ -91,3 +92,68 @@ needs.
 - Related: `guardrails_mod_purity` already enforces that `mod.rs` holds
   declarations/re-exports only — a partial cohesion guard, but only for
   `mod.rs`, not folder contents.
+
+## Answer
+
+**Decision: leave cohesion as review policy. Do not tighten the rule.**
+
+`guardrails_inherent_impl_locality` stays **name-only**. Folder cohesion is
+review policy, not a mechanically enforced rule. The shape-D dodge (a
+folder named `snake(Foo)` that holds unrelated types) stays a human-judgment
+responsibility, caught at review — not encoded in the guardrail.
+
+### Why tightening was rejected
+
+A syntactic cohesion check cannot distinguish a genuine type-split folder
+from a subsystem folder that shares its name with a struct. That is the
+semantic judgment the map's standing constraint forbids at enforcement time.
+
+`src/adapters/driven/storage/` is the canonical collision: `storage/` is the
+subsystem, `Storage` (struct in `core.rs:16`) is one struct among many pub
+types defined in the folder root (`DbPool`, `InMemoryData`, `Backend`,
+`BackendKind`, etc.). `snake(Storage) == "storage"`, so the name-only rule
+classifies the folder as `Storage`'s type-split folder — but it isn't one. A
+cohesion rule would flag it indefinitely, forcing a consolidation or rename to
+satisfy a rule that misread the layout.
+
+This is not a one-off. The pattern is normal Rust: a subsystem folder
+(`storage/`, `rendering/`, `networking/`) sharing its name with a struct whose
+impls split across the subsystem. Tightening would false-positive on every
+future occurrence, not just `storage/` once.
+
+### Why the benefit doesn't justify the cost
+
+The benefit of tightening is mechanically blocking the shape-D dodge. That
+dodge has occurred once, during ticket 04's refactor, and was caught
+immediately by human review — review policy working as intended. The cost is
+perpetual false-positives on the legitimate subsystem-name-collision pattern,
+repeatedly, forever. The frequency and the review catch make the cost
+asymmetric.
+
+### `storage/` consequence
+
+None. Under name-only, `storage/` stays clean as-is. No consolidation, no
+rename, no re-split, no new task ticket.
+
+- Single-file consolidation of all 13 `impl Storage` blocks into `core.rs`
+  was weighed (combined ~1650 lines, under the 2000-line `file_length_src`
+  cap) and **rejected as undesirable** by the user — the split is intentional.
+- Renaming `Storage` → `StorageBackend` (to break the name collision) was
+  mooted and found to re-flag all 13 split impls (the folder `storage/` would
+  no longer match the exemption), so it only works paired with consolidation
+  or a genuine `storage_backend/` subfolder move — not a free fix.
+- Renaming a port to `database` had no target: there is no storage/database
+  port trait in `src/application/ports/` or the storage layer; `Storage` is a
+  concrete struct, not a trait.
+
+### Where the decision is recorded
+
+This resolution comment and the map's Decisions-so-far pointer only. Ticket
+10 (document the rule) is untouched — the cohesion boundary is not folded into
+its scope (Q2 → Option A). The map stays low-res.
+
+### Effect on the frontier
+
+- `11` removed from `01`'s and `07`'s `Blocked by` lists.
+- `01` now `Blocked by: 07` only.
+- `07` now `Blocked by: (none)` — it is the new frontier ticket.

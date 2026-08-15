@@ -1,7 +1,17 @@
 # 07 — Resolve PromptPreset and PromptContext placement
 
+## Answer
+
+**`PromptPreset` — option B (move the behavior down to domain).**
+`PromptPreset` is a persisted config data model used by all layers, so it belongs in `domain`. The misplaced `assemble_text` method was relocated to `domain/model/prompt_preset.rs`, co-located with the struct. The field→XML rendering core was shared by making it a `pub(crate)` method `PromptPreset::render_field_parts` that returns `Vec<(PresetField, String)>`. The application `render_preset_xml_parts` (in `application/prompting/builders/sections.rs`) is now a thin mapper that calls `render_field_parts` and tags each field with the application `Section` enum for positional filtering. This keeps the canonical render in domain while the application retains its system-prompt vs post-history-prompt split policy. `wrap_xml` moved to a new allowed `utils` folder (`domain/model/utils/xml.rs`) to satisfy `guardrails_free_fn_location`. `PromptPreset::preview_text` stayed in domain unchanged.
+
+**`PromptContext` — option (ii) (move the type definition into `assembler.rs`).**
+`PromptContext` is the assembler's front door: its `build_narration_prompt` method constructs `PromptAssembler` and drives `assemble`. The struct definition moved from `application/prompting/types.rs` to `application/prompting/assembler.rs`, co-located with its impl and with `PromptAssembler`. `application/prompting/mod.rs` re-exports `PromptContext` from `assembler` instead of `types`. `types.rs` keeps `PromptLayer` and `NpcContext`. Import paths were updated in test and caller modules; no public API behavior changed.
+
+Both changes satisfy `guardrails_inherent_impl_locality` structurally: `impl PromptPreset` lives only in `domain/model/prompt_preset.rs`, and `impl PromptContext` lives only in `application/prompting/assembler.rs` (where its definition now also lives). `python build.py` is green. No follow-up task ticket was needed.
+
 Type: grilling
-Status: ready-for-agent
+Status: resolved
 Blocked by: (none)
 
 > **Re-pathed and scope widened.** The `narrative_prompt/` module was renamed to

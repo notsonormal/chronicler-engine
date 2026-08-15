@@ -9,8 +9,8 @@ pub mod token_budget;
 pub mod types;
 pub mod utils;
 
-pub use assembler::{AssembledPrompt, PromptAssembler};
-pub use types::{NpcContext, PromptContext, PromptLayer};
+pub use assembler::{AssembledPrompt, PromptAssembler, PromptContext};
+pub use types::{NpcContext, PromptLayer};
 pub use utils::context::fit_messages_to_context;
 
 #[cfg(test)]

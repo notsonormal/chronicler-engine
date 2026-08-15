@@ -1,25 +1,12 @@
 //! Tests for `builders/sections.rs` prompt-section renderers.
 
 use crate::application::prompting::builders::sections::{
-    render_known_npc_entry, render_preset_xml_parts, render_present_relationships, wrap_xml,
-    Section,
+    render_known_npc_entry, render_preset_xml_parts, render_present_relationships, Section,
 };
 use crate::domain::model::character::{CharacterSheet, NpcCard, Relationship};
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::template::TemplateVars;
 use std::collections::HashSet;
-
-#[test]
-fn wrap_xml_indents_non_empty_lines_keeps_empty() {
-    let out = wrap_xml("line1\n\nline2", "tag");
-    assert_eq!(out, "<tag>\n    line1\n\n    line2\n</tag>");
-}
-
-#[test]
-fn wrap_xml_preserves_single_empty_content_line() {
-    let out = wrap_xml("", "t");
-    assert_eq!(out, "<t>\n\n</t>");
-}
 
 fn make_npc(
     id: &str,

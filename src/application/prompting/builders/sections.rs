@@ -2,24 +2,9 @@
 //! Multi-stage prompt builder.
 
 use crate::domain::model::character::{NpcCard, Relationship};
-use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::prompt_preset::{PresetField, PromptPreset};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::template::render_template;
-
-pub(crate) fn wrap_xml(content: &str, tag: &str) -> String {
-    let indented = content
-        .lines()
-        .map(|line| {
-            if line.is_empty() {
-                line.to_string()
-            } else {
-                format!("    {line}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("<{tag}>\n{indented}\n</{tag}>")
-}
 
 pub(crate) fn sanitize_for_prompt(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
@@ -71,48 +56,23 @@ pub(crate) fn render_preset_xml_parts(
     response_length: Option<&str>,
     template_vars: Option<&TemplateVars>,
 ) -> Vec<(Section, String)> {
-    let render_text = |source: &str| -> String {
-        match template_vars {
-            Some(template_vars) => render_template(source, template_vars),
-            None => source.to_string(),
+    preset
+        .render_field_parts(global_rules, response_length, template_vars)
+        .into_iter()
+        .map(|(field, rendered)| (field.into(), rendered))
+        .collect()
+}
+
+impl From<PresetField> for Section {
+    fn from(field: PresetField) -> Self {
+        match field {
+            PresetField::Role => Section::Role,
+            PresetField::Instructions => Section::Instructions,
+            PresetField::WritingStyle => Section::WritingStyle,
+            PresetField::GlobalRules => Section::GlobalRules,
+            PresetField::OutputFormat => Section::OutputFormat,
         }
-    };
-    let mut parts = Vec::new();
-    if let Some(role) = preset.role.as_deref() {
-        parts.push((Section::Role, wrap_xml(&render_text(role), "role")));
     }
-    if let Some(instructions) = preset.instructions.as_deref() {
-        parts.push((
-            Section::Instructions,
-            wrap_xml(&render_text(instructions), "instructions"),
-        ));
-    }
-    if let Some(writing_style) = preset.writing_style.as_deref() {
-        parts.push((
-            Section::WritingStyle,
-            wrap_xml(&render_text(writing_style), "writing_style"),
-        ));
-    }
-    if !global_rules.is_empty() {
-        let rules_text = global_rules
-            .iter()
-            .map(|global_rule| format!("- {}", render_text(global_rule)))
-            .collect::<Vec<_>>()
-            .join("\n");
-        parts.push((Section::GlobalRules, wrap_xml(&rules_text, "global_rules")));
-    }
-    if let Some(output_format) = &preset.output_format {
-        let mut output_text = render_text(output_format);
-        if let Some(response_length) = response_length {
-            output_text.push_str("\n\nResponse Length:\n");
-            output_text.push_str(response_length);
-        }
-        parts.push((
-            Section::OutputFormat,
-            wrap_xml(&output_text, "output_format"),
-        ));
-    }
-    parts
 }
 
 pub(crate) fn build_system_prompt(
