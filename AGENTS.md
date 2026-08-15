@@ -76,14 +76,16 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Generation gating and per-game slot orchestration.
       - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
     - **pipeline/**
-      - `action.rs` — Action entry path for the pipeline.
-      - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
       - `mod.rs` — Action pipeline for processing game actions
       - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
-      - `phases.rs` — Phase implementations for the action pipeline
-      - `retrigger.rs` — Retrigger entry path for the pipeline.
-      - `retry.rs` — Retry entry path for the pipeline.
+      - `pipeline_run.rs` — PipelineRun and its phase implementations for the action pipeline.
       - `spawn.rs` — Shared spawn helper for pipeline tasks
+      - **action_pipeline/**
+        - `action.rs` — Action entry path for the pipeline.
+        - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
+        - `mod.rs` — ActionPipeline type-split: the struct and all its inherent impls.
+        - `retrigger.rs` — Retrigger entry path for the pipeline.
+        - `retry.rs` — Retry entry path for the pipeline.
     - **ports/**
       - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)

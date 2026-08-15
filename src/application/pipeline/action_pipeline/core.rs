@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use crate::application::pipeline::phase_error::PhaseError;
-use crate::application::pipeline::phases::{PipelineInputs, PipelineRun};
+use crate::application::pipeline::pipeline_run::{PipelineInputs, PipelineRun};
 use crate::application::pipeline::spawn::spawn_pipeline_task;
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::adapters::driven::storage::Storage;
@@ -17,7 +17,7 @@ use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
-use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::game_state::{ActionResult, FreeActionContext, GameState};
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 
 use crate::application::errors::ProcessActionResult;
@@ -35,14 +35,14 @@ use crate::error::EngineError;
 
 #[derive(Clone)]
 pub struct ActionPipeline {
-    pub(super) prompt_assembler: Arc<PromptAssembler>,
-    pub(super) recorder: Arc<LlmCallRecorder>,
-    pub(super) agent_registry: Arc<AgentRegistry>,
-    pub(super) message_service: Arc<MessageService>,
-    pub(super) storage: Arc<Storage>,
+    pub(crate) prompt_assembler: Arc<PromptAssembler>,
+    pub(crate) recorder: Arc<LlmCallRecorder>,
+    pub(crate) agent_registry: Arc<AgentRegistry>,
+    pub(crate) message_service: Arc<MessageService>,
+    pub(crate) storage: Arc<Storage>,
 
-    pub(super) settings: Arc<RwLock<AppSettings>>,
-    pub(super) shutdown_token: CancellationToken,
+    pub(crate) settings: Arc<RwLock<AppSettings>>,
+    pub(crate) shutdown_token: CancellationToken,
 }
 
 impl ActionPipeline {
@@ -398,7 +398,7 @@ impl ActionPipeline {
         }
     }
 
-    pub(super) fn run_post_generation_agents(
+    pub(crate) fn run_post_generation_agents(
         &self,
         state: &GameState,
         player_input: &str,
@@ -540,5 +540,26 @@ impl ActionPipeline {
         input_text: String,
     ) -> Result<(), PhaseError> {
         self.run_from_input(state, input_text)
+    }
+}
+
+impl ActionPipeline {
+    pub(super) fn phase_engine_commit(
+        state: GameState,
+        narration_text: &str,
+        quantifier_result: &QuantifierResult,
+        map: &Arc<MapDef>,
+        persona: &Arc<PersonaCard>,
+        npcs: &HashMap<String, NpcCard>,
+    ) -> Result<ActionResult, EngineError> {
+        state.execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text,
+                quantifier_result,
+            },
+            map,
+            persona,
+            npcs,
+        )
     }
 }

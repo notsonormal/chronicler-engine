@@ -6,7 +6,7 @@ use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::errors::ProcessActionResult;
-use crate::application::pipeline::retry_tests::{
+use crate::application::pipeline::action_pipeline::retry_tests::{
     add_input_and_save, insert_message_with_swipe, save_pre_main, setup_event_flow,
 };
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};

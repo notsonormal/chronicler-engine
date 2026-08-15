@@ -5,7 +5,7 @@ use tracing::instrument;
 
 use crate::application::errors::ProcessActionResult;
 use crate::application::generation::gate::GenerationGate;
-use crate::application::pipeline::core::ActionPipeline;
+use super::core::ActionPipeline;
 use crate::application::pipeline::phase_error::PhaseError;
 use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;

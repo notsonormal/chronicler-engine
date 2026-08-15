@@ -124,7 +124,7 @@ fn extract_port_from_url(url: &str) -> Option<u16> {
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     let locator = page.locator("#status-display").await;
     let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(5);
+    let timeout = std::time::Duration::from_secs(12);
 
     while start.elapsed() < timeout {
         match locator.inner_text().await {
@@ -141,6 +141,39 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     }
     capture_failure_state(page, "wait_for_status_ready").await;
     panic!("Status did not become Ready");
+}
+
+/// Wait for `#status-display` to leave the "Ready" state — i.e. confirm the
+/// submitted action was acknowledged and generation has started.
+///
+/// `send_action` must call this before any `wait_for_status_ready` so the
+/// latter cannot return on the STALE pre-action "Ready" (a race where the
+/// `/action/check` "Thinking..." swap has not yet arrived). The 5s timeout
+/// comfortably covers the `/action/check` round-trip under parallel test load;
+/// the `/status/generating` poll that returns the generating/phase text fires
+/// within 5s of page load, so the status leaves "Ready" promptly once the
+/// action is acknowledged.
+pub async fn wait_for_status_generating(page: &playwright_rs::Page) {
+    let locator = page.locator("#status-display").await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+
+    while start.elapsed() < timeout {
+        match locator.inner_text().await {
+            Ok(text) if !text.contains("Ready") => return,
+            _ => sleep(Duration::from_millis(100)).await,
+        }
+    }
+    if let Ok(text) = locator.inner_text().await {
+        if !text.contains("Ready") {
+            return;
+        }
+        tracing::debug!("Final status-display='{text}'");
+    }
+    capture_failure_state(page, "wait_for_status_generating").await;
+    panic!(
+        "Status never left Ready after action — the /action/check acknowledgement did not arrive"
+    );
 }
 
 pub async fn wait_for_status_ready_or_error(page: &playwright_rs::Page) -> String {

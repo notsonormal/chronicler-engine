@@ -5,7 +5,7 @@ use tracing::instrument;
 
 use crate::application::errors::{ApplicationError, ProcessActionResult};
 use crate::application::generation::gate::GenerationGate;
-use crate::application::pipeline::core::ActionPipeline;
+use super::core::ActionPipeline;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;

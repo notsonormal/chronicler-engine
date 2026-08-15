@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::adapters::driving::http::AppState;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::pipeline::phase_error::PhaseError;
-use crate::application::pipeline::phases::PipelineRun;
+use crate::application::pipeline::pipeline_run::PipelineRun;
 use crate::domain::model::map::Room;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;

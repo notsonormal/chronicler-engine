@@ -1,15 +1,13 @@
 //! Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and DOM helpers (`wait_for_element_children`, `wait_for_status_ready`).
 
-use std::time::Duration;
-
 use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
-use playwright_rs::expect;
 
 use super::server::{TestServer, get_config_port, wait_for_server};
 pub use super::wait::wait_for_element_children;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
+use super::wait::wait_for_status_generating;
 
 pub async fn goto_with_connection_check(
     page: &playwright_rs::Page,
@@ -112,12 +110,12 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
         )
         .await;
 
-    let status_locator = page.locator("#status-display").await;
-    let _ = expect(status_locator)
-        .with_timeout(Duration::from_millis(500))
-        .not()
-        .to_contain_text("Ready")
-        .await;
+    // Confirm the action was acknowledged before returning: the
+    // `/action/check` response swaps "Thinking..." into #status-display. Without
+    // this wait, a subsequent `wait_for_status_ready` can return on the STALE
+    // pre-action "Ready" (before the swap arrives) and race the test — see
+    // `wait_for_status_generating`.
+    wait_for_status_generating(page).await;
 
     dismiss_text_check_if_present(page).await;
 }

@@ -1,13 +1,10 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Phase implementations for the action pipeline
+//! PipelineRun and its phase implementations for the action pipeline.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::model::state::game_state::{
-    ActionResult, FreeActionContext, GameState, TriggerMatch,
-};
-use crate::error::EngineError;
+use crate::domain::model::state::game_state::{GameState, TriggerMatch};
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
@@ -20,7 +17,7 @@ use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
 use super::phase_error::PhaseError;
-use super::core::ActionPipeline;
+use super::action_pipeline::core::ActionPipeline;
 
 pub struct PipelineInputs {
     pub input: String,
@@ -441,26 +438,5 @@ impl<'a> PipelineRun<'a> {
         state.narrative.input_buffer.phase = GenerationPhase::default();
         self.persist(&state);
         PhaseError::Cancelled
-    }
-}
-
-impl ActionPipeline {
-    pub(super) fn phase_engine_commit(
-        state: GameState,
-        narration_text: &str,
-        quantifier_result: &QuantifierResult,
-        map: &Arc<MapDef>,
-        persona: &Arc<PersonaCard>,
-        npcs: &HashMap<String, NpcCard>,
-    ) -> Result<ActionResult, EngineError> {
-        state.execute_freeaction_impl(
-            &FreeActionContext {
-                narration_text,
-                quantifier_result,
-            },
-            map,
-            persona,
-            npcs,
-        )
     }
 }
