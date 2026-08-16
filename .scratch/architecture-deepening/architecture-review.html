@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — Chronicler Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mod-box { border: 1px solid #94a3b8; }
+      .deep-box { border: 2px solid #0f172a; background:#1e293b; color:#e2e8f0; }
+      .badge-strong { background:#059669; }
+      .badge-explore { background:#d97706; }
+      .badge-spec { background:#64748b; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-3">
+        <h1 class="font-serif text-3xl">Architecture review — Chronicler Engine</h1>
+        <div class="flex flex-wrap gap-4 text-xs items-center text-slate-600">
+          <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 mod-box bg-white"></span> module</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 deep-box"></span> deep module</span>
+          <span class="flex items-center gap-1"><svg width="28" height="6"><line x1="0" y1="3" x2="28" y2="3" class="seam" stroke="#475569" stroke-width="2"/></svg> seam</span>
+          <span class="flex items-center gap-1"><svg width="28" height="6"><line x1="0" y1="3" x2="28" y2="3" class="leak" stroke-width="2"/></svg> leakage</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-12">
+
+        <!-- ============ CANDIDATE 1 ============ -->
+        <article class="space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">1. Storage dispatch is a wide inherent interface, not a trait</h2>
+            <div class="flex gap-2">
+              <span class="badge-strong text-white text-xs px-2 py-1 rounded">Strong</span>
+              <span class="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded">ports &amp; adapters</span>
+            </div>
+          </div>
+          <div class="font-mono text-sm text-slate-700 leading-relaxed">
+            src/adapters/driven/storage/core.rs · games.rs · worlds.rs · messages.rs · snapshots.rs · personas.rs · presets.rs · characters.rs
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- BEFORE -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — 1 wide struct, 2 match arms per method</div>
+              <pre class="mermaid">
+                flowchart TB
+                  S["Storage (struct)"]
+                  S --> BK["BackendKind enum"]
+                  BK --> D["Direct(Backend)"]
+                  BK --> T["Test{overrides}"]
+                  D --> SL["Backend::Sqlite{pool}"]
+                  D --> IM["Backend::InMemory(box)"]
+                  S -.~30 pub fn.-> Ops["list_games / load_snapshot / save_message ..."]
+                  Ops --> M["match backend { Sqlite=>.., InMemory=>.. }"]
+                  Ops --> M2["match backend { Sqlite=>.., InMemory=>.. }"]
+                  classDef wide stroke:#dc2626,stroke-width:2px;
+                  class S,Ops,M,M2 wide;
+              </pre>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one trait, two adapters</div>
+              <pre class="mermaid">
+                flowchart TB
+                  P["trait StorageBackend\n(list / load / save ...)"]
+                  P -.implemented by.-> SL["SqliteBackend"]
+                  P -.implemented by.-> IM["InMemoryBackend"]
+                  P -.implemented by.-> T["TestBackend { overrides }"]
+                  T -.replace-not-nest.-> SL
+                  classDef deep stroke:#0f172a,stroke-width:3px,fill:#1e293b,color:#e2e8f0;
+                  class P deep;
+              </pre>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem.</span> ~30 inherent <code>pub fn</code> methods each repeat the same <code>match backend { Sqlite=>.., InMemory=>.. }</code>. The seam is the <code>with_backend_mut</code> helper plus the <code>Backend</code> enum, not a trait — so every new operation adds two identical arms.</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Make <code>StorageBackend</code> a trait; <code>SqliteBackend</code> and <code>InMemoryBackend</code> become two real adapters. The test-override variant stays a third adapter wrapping the base.</p>
+          <ul class="text-sm list-disc list-inside space-y-1 text-slate-700">
+            <li>locality: dispatch logic lives once, not per-method</li>
+            <li>leverage: one interface, two real adapters + one test adapter</li>
+            <li>interface shrinks: callers see the trait, not the enum plumbing</li>
+            <li>two adapters justify the seam (the design-it-twice principle)</li>
+          </ul>
+          <p class="text-xs text-slate-500">Evidence: core.rs:117-141 <code>with_backend_mut</code>; core.rs:25-50 <code>Backend</code>/<code>BackendKind</code>; games.rs:10+, worlds.rs:18+, messages.rs:9+, snapshots.rs:9+. Deletion test: <em>partial</em> — the duality is real, the duplication is not.</p>
+        </article>
+
+        <!-- ============ CANDIDATE 2 ============ -->
+        <article class="space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">2. Layer rule forces a fleet of one-method CRUD services</h2>
+            <div class="flex gap-2">
+              <span class="badge-strong text-white text-xs px-2 py-1 rounded">Strong</span>
+              <span class="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded">in-process</span>
+            </div>
+          </div>
+          <div class="font-mono text-sm text-slate-700 leading-relaxed">
+            src/application/persona_catalogue.rs · settings_service.rs · prompt_preset_service.rs · world_catalogue.rs · arch-lint.toml:136-140
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- BEFORE: mass diagram -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — N shallow services, interface ≈ implementation</div>
+              <div class="space-y-2 text-xs font-mono">
+                <div class="border border-slate-300 rounded p-2"><div class="text-slate-500">PersonaCatalogue — iface</div>list_personas()<div class="text-slate-500 mt-1">— impl</div>self.storage.list_personas()</div>
+                <div class="border border-slate-300 rounded p-2"><div class="text-slate-500">SettingsService — iface</div>save_settings()<div class="text-slate-500 mt-1">— impl</div>self.storage.save_settings()</div>
+                <div class="border border-slate-300 rounded p-2"><div class="text-slate-500">PromptPresetService — iface</div>4 CRUD<div class="text-slate-500 mt-1">— impl</div>4 one-line delegates</div>
+                <div class="border border-slate-300 rounded p-2"><div class="text-slate-500">WorldCatalogue — iface</div>5 methods<div class="text-slate-500 mt-1">— impl</div>5 delegates</div>
+              </div>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one repository port, one deep adapter</div>
+              <div class="flex flex-col items-center justify-center h-full gap-3 py-4">
+                <div class="deep-box rounded p-3 text-center w-48">
+                  <div class="text-xs uppercase tracking-wider">trait Repository</div>
+                  <div class="text-xs mt-1 text-slate-300">worlds / personas / settings / presets</div>
+                </div>
+                <svg width="20" height="30"><line x1="10" y1="0" x2="10" y2="30" class="seam" stroke="#475569" stroke-width="2"/></svg>
+                <div class="mod-box rounded p-3 text-center w-48 bg-white">
+                  <div class="text-xs uppercase tracking-wider">Storage (adapter)</div>
+                  <div class="text-xs mt-1 text-slate-500">SQLite + InMemory impls</div>
+                </div>
+                <div class="text-xs text-slate-500">HTTP layer depends on the trait, not the struct</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem.</span> <code>arch-lint.toml</code> forbids the HTTP layer from importing storage, so the codebase grows one-method services that only forward to <code>Storage</code>. <code>PersonaCatalogue</code>'s own header admits it is "intentionally a one-method seam."</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Replace the parade of delegates with a single <code>Repository</code> port trait that <code>Storage</code> implements. The HTTP layer depends on the trait; the lint rule still holds.</p>
+          <ul class="text-sm list-disc list-inside space-y-1 text-slate-700">
+            <li>locality: storage access points stop multiplying</li>
+            <li>leverage: one port serves N HTTP handlers</li>
+            <li>delete 4 shallow wrapper modules</li>
+            <li>interface stays narrow per concern via sub-traits</li>
+          </ul>
+          <p class="text-xs text-slate-500">Evidence: persona_catalogue.rs:18-25 (one method), settings_service.rs:13-23 (one method), prompt_preset_service.rs:15-31 (four delegates), world_catalogue.rs:14-52 (five delegates), arch-lint.toml:136-140 ("Server layer must not depend on storage directly"). Deletion test: <em>partial</em> — delegates reappear in handlers <em>only because</em> of the lint rule; a port trait removes that reason.</p>
+        </article>
+
+        <!-- ============ CANDIDATE 3 ============ -->
+        <article class="space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">3. ActionPipeline sliced by entry path, not behaviour</h2>
+            <div class="flex gap-2">
+              <span class="badge-explore text-white text-xs px-2 py-1 rounded">Worth exploring</span>
+              <span class="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded">in-process</span>
+            </div>
+          </div>
+          <div class="font-mono text-sm text-slate-700 leading-relaxed">
+            src/application/pipeline/action_pipeline/{core,action,retrigger,retry}.rs · pipeline/pipeline_run.rs
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — four impl blocks, ordering in run_from_input</div>
+              <pre class="mermaid">
+                flowchart LR
+                  AP["impl ActionPipeline\n(core.rs)"]
+                  AP2["impl ActionPipeline\n(action.rs)"]
+                  AP3["impl ActionPipeline\n(retrigger.rs)"]
+                  AP4["impl ActionPipeline\n(retry.rs)"]
+                  PR["PipelineRun\nphase_* methods"]
+                  AP --> RFI["run_from_input\n~110 lines manual dispatch"]
+                  AP2 --> RFI
+                  AP3 --> RFI
+                  AP4 --> RFI
+                  RFI --> PR
+                  classDef wide stroke:#d97706,stroke-width:2px;
+                  class RFI,PR wide;
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one deep turn-life-cycle module</div>
+              <div class="flex flex-col items-center justify-center h-full gap-2 py-4">
+                <div class="deep-box rounded p-4 text-center w-56">
+                  <div class="text-xs uppercase tracking-wider">Turn lifecycle</div>
+                  <div class="text-xs mt-2 text-slate-300 leading-relaxed">claim → narrate → commit → trigger → reconcile → finalize</div>
+                  <div class="text-[10px] mt-2 text-slate-400">ordering invariant internal</div>
+                </div>
+                <div class="text-xs text-slate-500">entry variants (action/retrigger/retry) are constructors, not files</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem.</span> One orchestration concept is split across four files by entry path. <code>PipelineRun</code> exposes phase methods nearly as wide as the orchestration; the real ordering invariant lives in <code>run_from_input</code> (~110 lines of manual phase dispatch).</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Merge the four <code>impl</code> blocks into one turn-lifecycle module. Make phase ordering internal; expose entry variants as constructors, not separate files.</p>
+          <ul class="text-sm list-disc list-inside space-y-1 text-slate-700">
+            <li>locality: phase ordering concentrates in one module</li>
+            <li>interface shrinks: phase_* methods go private</li>
+            <li>tests hit the lifecycle, not its phases</li>
+          </ul>
+          <p class="text-xs text-slate-500">Evidence: core.rs:226-335 <code>run_from_input</code>; core.rs:152-209 <code>claim_and_spawn</code> (3 closures); pipeline_run.rs:41-55 duplicated <code>persist_snapshot_or_err</code>. Deletion test: file split <em>vanishes</em>; phase ordering <em>reappears</em> — belongs in one deep module.</p>
+        </article>
+
+        <!-- ============ CANDIDATE 4 ============ -->
+        <article class="space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">4. MessageService mixes four concerns behind one interface</h2>
+            <div class="flex gap-2">
+              <span class="badge-explore text-white text-xs px-2 py-1 rounded">Worth exploring</span>
+              <span class="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded">in-process</span>
+            </div>
+          </div>
+          <div class="font-mono text-sm text-slate-700 leading-relaxed">
+            src/application/message_service.rs · pipeline/pipeline_run.rs · action_pipeline/retry.rs
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — 13 methods, 4 concerns, callers use disjoint subsets</div>
+              <div class="space-y-2 text-xs">
+                <div class="border-l-4 border-rose-400 pl-2">snapshot: save_state, write_snapshot</div>
+                <div class="border-l-4 border-amber-400 pl-2">message: load_messages, save_message_and_snapshot, edit_history, delete_last</div>
+                <div class="border-l-4 border-emerald-400 pl-2">swipe: switch_swipe</div>
+                <div class="border-l-4 border-sky-400 pl-2">retry-anchor: find_retry_anchor, find_retry_anchor_msg</div>
+                <div class="border-l-4 border-slate-400 pl-2">fresh state: build_fresh_initial_state</div>
+              </div>
+              <div class="text-[11px] text-rose-600 mt-2">retry.rs:57-92 reaches past MessageService into storage.load_snapshot_by_id</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — deep snapshot-message module + focused siblings</div>
+              <div class="space-y-2 text-xs">
+                <div class="deep-box rounded p-2">SnapshotStore — atomic message+snapshot+swipe write</div>
+                <div class="mod-box bg-white rounded p-2">RetryAnchor — anchor lookup</div>
+                <div class="mod-box bg-white rounded p-2">SwipeSwitcher — switch + restore</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem.</span> 13 public methods span snapshot, message, swipe, retry-anchor, and fresh-state. <code>save_message_and_snapshot</code> bundles four persistence operations with domain ordering; <code>retry.rs</code> bypasses the service entirely to reach storage.</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Keep the atomic message+snapshot+swipe write as one deep module; lift retry-anchor and swipe switching into focused modules so callers stop using disjoint subsets of a 13-method interface.</p>
+          <ul class="text-sm list-disc list-inside space-y-1 text-slate-700">
+            <li>locality: snapshot ordering lives in one deep module</li>
+            <li>interface narrows per caller</li>
+            <li>retry.rs stops reaching across the seam</li>
+          </ul>
+          <p class="text-xs text-slate-500">Evidence: message_service.rs:24-205 (13 methods), :62-92 <code>save_message_and_snapshot</code> (4 ops); retry.rs:57-92 direct storage reach. Deletion test: <em>partial</em> — atomic write reappears; retry/swipe splits are largely independent.</p>
+        </article>
+
+        <!-- ============ CANDIDATE 5 ============ -->
+        <article class="space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">5. Prompting cluster: shallow helpers, ordering buried in assembler</h2>
+            <div class="flex gap-2">
+              <span class="badge-explore text-white text-xs px-2 py-1 rounded">Worth exploring</span>
+              <span class="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded">in-process</span>
+            </div>
+          </div>
+          <div class="font-mono text-sm text-slate-700 leading-relaxed">
+            src/application/prompting/{assembler.rs, prompt_merge.rs, token_budget.rs, utils/context.rs, builders/sections.rs}
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — depth in assembler, shallowness around it</div>
+              <pre class="mermaid">
+                flowchart TB
+                  PC["PromptContext::build_narration_prompt\n(thin wrapper)"]
+                  PA["PromptAssembler::assemble"]
+                  LR["LayerRenderer::render_and_fit\nHOLDS layer order + fit"]
+                  TB["token_budget.rs\n7 public constants"]
+                  PM["prompt_merge.rs\n1 format! call"]
+                  PC --> PA
+                  PA --> LR
+                  PA --> TB
+                  PA --> PM
+                  classDef shallow stroke:#d97706,stroke-width:2px,stroke-dasharray:4 4;
+                  class PC,PM,TB shallow;
+                  classDef deep stroke:#0f172a,stroke-width:3px,fill:#1e293b,color:#e2e8f0;
+                  class LR deep;
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — PromptAssembler absorbs the helpers</div>
+              <div class="flex flex-col items-center justify-center h-full py-4">
+                <div class="deep-box rounded p-4 text-center w-56">
+                  <div class="text-xs uppercase tracking-wider">PromptAssembler</div>
+                  <div class="text-xs mt-2 text-slate-300">layer order · budget · fit · merge</div>
+                  <div class="text-[10px] mt-2 text-slate-400">all internal</div>
+                </div>
+                <div class="text-xs text-slate-500 mt-2">PromptContext deleted; constants private</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem.</span> <code>prompt_merge.rs</code> is one <code>format!</code>. <code>token_budget.rs</code> exposes seven constants callers must know. <code>PromptContext::build_narration_prompt</code> duplicates the <code>assemble</code> call site. The genuine depth (<code>LayerRenderer::render_and_fit</code>) is already there — the module boundaries just don't reflect it.</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Make <code>PromptAssembler</code> the deep module: absorb the constants and merge helper as private internals; delete <code>PromptContext::build_narration_prompt</code>.</p>
+          <ul class="text-sm list-disc list-inside space-y-1 text-slate-700">
+            <li>locality: budget + ordering live together</li>
+            <li>leverage: one interface, callers stop importing constants</li>
+            <li>delete two shallow pass-throughs</li>
+          </ul>
+          <p class="text-xs text-slate-500">Evidence: prompt_merge.rs:11-13 (one format!), token_budget.rs:1-37 (7 constants), assembler.rs:91-109 (duplicate call site), assembler.rs:139-168 (<code>render_and_fit</code> holds the depth). Deletion test: helpers <em>vanish</em>; constants <em>reappear</em> — so absorb them.</p>
+        </article>
+
+        <!-- ============ CANDIDATE 6 ============ -->
+        <article class="space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">6. QuantifierAgent breaks its own seam to fetch a prompt preset</h2>
+            <div class="flex gap-2">
+              <span class="badge-explore text-white text-xs px-2 py-1 rounded">Worth exploring</span>
+              <span class="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded">ports &amp; adapters</span>
+            </div>
+          </div>
+          <div class="font-mono text-sm text-slate-700 leading-relaxed">
+            src/application/agents/quantifier/agent.rs · agents/trait_def.rs · agents/registry.rs
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — clean interface, leaky implementation</div>
+              <pre class="mermaid">
+                flowchart LR
+                  C["trait Agent\nexecute(&ctx)"]
+                  Q["QuantifierAgent::execute"]
+                  Q -.leak.-> ST["self.storage"]
+                  Q -.leak.-> SE["self.settings"]
+                  ST --> PR["get_preset(...)"]
+                  CTX["AgentContext\n(no preset field)"]
+                  Q --> CTX
+                  classDef leak stroke:#dc2626,stroke-width:2px;
+                  class Q,ST,SE leak;
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — preset resolved into AgentContext upstream</div>
+              <pre class="mermaid">
+                flowchart LR
+                  R["AgentRegistry\nbuilds ctx"]
+                  R --> CTX["AgentContext\n+ quantifier_prompt"]
+                  C["trait Agent\nexecute(&ctx)"]
+                  Q["QuantifierAgent::execute"]
+                  C -.implemented by.-> Q
+                  Q --> CTX
+                  classDef deep stroke:#0f172a,stroke-width:3px,fill:#1e293b,color:#e2e8f0;
+                  class C deep;
+              </pre>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem.</span> The <code>Agent</code> seam is narrow (<code>execute(&ctx)</code>), but <code>QuantifierAgent::execute</code> reaches into <code>self.storage</code> and <code>self.settings</code> to look up its prompt preset. The agent knows about persistence and global settings — concerns that belong upstream.</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Resolve the preset in <code>AgentRegistry</code> and put it on <code>AgentContext</code>. The agent then satisfies its own seam honestly.</p>
+          <ul class="text-sm list-disc list-inside space-y-1 text-slate-700">
+            <li>locality: preset resolution concentrates in the registry</li>
+            <li>interface honoured: agents stop crossing the seam</li>
+            <li>testability: agent tests need no storage mock</li>
+          </ul>
+          <p class="text-xs text-slate-500">Evidence: agent.rs:58-66 storage+settings reach; registry.rs:34-49 <code>from_config_with_storage</code>. Deletion test: <em>reappear</em> — the preset load moves to the registry, which is the correct home.</p>
+        </article>
+
+        <!-- ============ CANDIDATE 7 ============ -->
+        <article class="space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">7. Generation gate/slot/guard split finer than the behaviour</h2>
+            <div class="flex gap-2">
+              <span class="badge-spec text-white text-xs px-2 py-1 rounded">Speculative</span>
+              <span class="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded">in-process</span>
+            </div>
+          </div>
+          <div class="font-mono text-sm text-slate-700 leading-relaxed">
+            src/application/generation/{gate.rs, slot.rs, guard.rs}
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — three files sharing one registry</div>
+              <pre class="mermaid">
+                flowchart TB
+                  G["gate.rs\ntry_claim, heal_stale"]
+                  SL["slot.rs\nGenerationSlot enum + release_owned_slot"]
+                  GU["guard.rs\nRAII Drop → release_owned_slot"]
+                  REG["Arc RwLock HashMap"]
+                  G --> REG
+                  GU --> SL
+                  G --> SL
+                  classDef shallow stroke:#64748b,stroke-width:2px,stroke-dasharray:4 4;
+                  class SL,GU shallow;
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one deep GenerationGate module</div>
+              <div class="flex flex-col items-center justify-center h-full py-4">
+                <div class="deep-box rounded p-4 text-center w-56">
+                  <div class="text-xs uppercase tracking-wider">GenerationGate</div>
+                  <div class="text-xs mt-2 text-slate-300">registry · slot enum · RAII guard</div>
+                  <div class="text-[10px] mt-2 text-slate-400">all internal</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem.</span> One generation-lock concept is split into three tiny files. <code>GenerationSlot</code> is a two-variant enum; <code>GenerationGuard</code> is an RAII wrapper; <code>release_owned_slot</code> is a free function both files need. The registry is passed between files as if internal detail.</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Fold <code>slot.rs</code> and <code>guard.rs</code> into <code>gate.rs</code>. The registry and slot become internal to one deep module.</p>
+          <ul class="text-sm list-disc list-inside space-y-1 text-slate-700">
+            <li>locality: lock logic in one file</li>
+            <li>interface unchanged (new/heal_stale/try_claim)</li>
+            <li>delete two shallow files</li>
+          </ul>
+          <p class="text-xs text-slate-500">Evidence: slot.rs:11-49, guard.rs:10-38, gate.rs:29-40 + :95. Deletion test: <em>vanishes</em> — pure file split, no behaviour to reappear.</p>
+        </article>
+
+      </section>
+
+      <!-- ============ TOP RECOMMENDATION ============ -->
+      <section id="top-recommendation" class="space-y-3">
+        <h2 class="font-serif text-2xl">Top recommendation</h2>
+        <div class="rounded-lg border-2 border-emerald-600 bg-emerald-50 p-6 space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="badge-strong text-white text-xs px-2 py-1 rounded">Strong</span>
+            <a href="#" class="font-serif text-xl text-emerald-900">Start with candidate 1 — turn Storage into a StorageBackend trait.</a>
+          </div>
+          <p class="text-sm text-emerald-900">It is the root cause of candidate 2. The layer rule exists to keep HTTP off storage internals; a <code>Repository</code> port trait satisfies that rule directly and removes the fleet of one-method services. Two real adapters (SQLite, InMemory) plus a test adapter justify the seam. Fixing the storage seam first shrinks the interface callers see, concentrates dispatch logic in one place, and likely retires candidates 2, 6, and part of 4 in its wake.</p>
+          <p class="text-xs text-emerald-800">Sequence suggestion: 1 → 2 (largely automatic) → 6 → 4 → 3 → 5 → 7.</p>
+        </div>
+      </section>
+
+    </main>
+  </body>
+</html>
