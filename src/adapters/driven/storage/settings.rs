@@ -65,7 +65,6 @@ impl Storage {
     }
 
     pub fn seed_settings(&self, settings: &AppSettings) -> Result<(), EngineError> {
-        // For settings, seed is the same as save (singleton row)
         self.save_settings(settings)
     }
 }

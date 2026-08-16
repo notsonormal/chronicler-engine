@@ -76,13 +76,94 @@ fn test_generic_self_type_is_normalized() {
 
 #[test]
 fn test_cfg_test_block_is_skipped() {
-    let files = vec![(
-        "foo.rs",
-        "struct Foo;\n#[cfg(test)]\nmod tests {\n    impl Foo {}\n}\n",
-    )];
+    let files = vec![
+        ("bar.rs", "struct Foo;"),
+        ("foo.rs", "#[cfg(test)]\nmod tests {\n    impl Foo {}\n}\n"),
+    ];
     let violations = check_inherent_impl_locality(&files);
     assert!(
         violations.is_empty(),
-        "expected no violations, got {violations:?}"
+        "cfg(test) mod must be skipped, got {violations:?}"
     );
+}
+
+#[test]
+fn test_cfg_all_test_block_is_skipped() {
+    let files = vec![
+        ("bar.rs", "struct Foo;"),
+        (
+            "foo.rs",
+            "#[cfg(all(test, feature = \"x\"))]\nmod tests {\n    impl Foo {}\n}\n",
+        ),
+    ];
+    let violations = check_inherent_impl_locality(&files);
+    assert!(
+        violations.is_empty(),
+        "compound cfg(all(test, ...)) must be skipped, got {violations:?}"
+    );
+}
+
+#[test]
+fn test_cfg_any_test_block_is_skipped() {
+    let files = vec![
+        ("bar.rs", "struct Foo;"),
+        (
+            "foo.rs",
+            "#[cfg(any(test, feature = \"x\"))]\nmod tests {\n    impl Foo {}\n}\n",
+        ),
+    ];
+    let violations = check_inherent_impl_locality(&files);
+    assert!(
+        violations.is_empty(),
+        "compound cfg(any(test, ...)) must be skipped, got {violations:?}"
+    );
+}
+
+#[test]
+fn test_cfg_feature_test_is_not_skipped() {
+    let files = vec![
+        ("bar.rs", "struct Foo;"),
+        (
+            "foo.rs",
+            "#[cfg(feature = \"test\")]\nmod helper {\n    impl Foo {}\n}\n",
+        ),
+    ];
+    let violations = check_inherent_impl_locality(&files);
+    assert_eq!(
+        violations.len(),
+        1,
+        "cfg(feature = \"test\") must NOT be skipped, got {violations:?}"
+    );
+}
+
+#[test]
+fn test_to_snake_case_simple() {
+    assert_eq!(to_snake_case("Foo"), "foo");
+    assert_eq!(to_snake_case("ActionPipeline"), "action_pipeline");
+    assert_eq!(to_snake_case("DbPool"), "db_pool");
+}
+
+#[test]
+fn test_to_snake_case_acronym_run() {
+    // The `prev_upper && next_lower` rule inserts `_` only at the last
+    // uppercase of an acronym run, so the run stays together.
+    assert_eq!(to_snake_case("XMLHttpRequest"), "xml_http_request");
+    assert_eq!(to_snake_case("APIKey"), "api_key");
+    assert_eq!(to_snake_case("LLMMessage"), "llm_message");
+}
+
+#[test]
+fn test_to_snake_case_edge_shapes() {
+    assert_eq!(to_snake_case("A"), "a");
+    assert_eq!(to_snake_case("ABC"), "abc");
+}
+
+#[test]
+fn test_to_snake_case_digit_breaks_acronym_chain() {
+    // A digit is neither upper nor lower case, so it breaks the acronym
+    // detection: the uppercase after the digit gets no leading `_`.
+    // No digit-containing type names exist in `src/` today; this locks in
+    // current behaviour so a future addition surfaces the gap explicitly.
+    assert_eq!(to_snake_case("Foo2Bar"), "foo2bar");
+    assert_eq!(to_snake_case("OAuth2Token"), "o_auth2token");
 }

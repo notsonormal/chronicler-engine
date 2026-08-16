@@ -25,8 +25,7 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
-    // Timeout reached - try to reset the flag by posting to a reset endpoint
-    // This ensures is_generating doesn't get stuck
+    // Reset the generation flag after a timeout so a stuck flag does not hang the test.
     let _ = client
         .post(format!("http://127.0.0.1:{port}/status/reset-generating"))
         .send()

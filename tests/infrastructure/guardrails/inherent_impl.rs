@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 
-use quote::ToTokens;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{ItemEnum, ItemImpl, ItemStruct, ItemUnion, Type};
@@ -136,8 +135,38 @@ impl<'ast, 'a> Visit<'ast> for ImplCollector<'a> {
 
 fn is_cfg_test(attrs: &[syn::Attribute]) -> bool {
     attrs.iter().any(|attr| {
-        attr.path().is_ident("cfg") && attr.to_token_stream().to_string().contains("cfg(test)")
+        if !attr.path().is_ident("cfg") {
+            return false;
+        }
+        let mut is_test = false;
+        let _ = attr.parse_nested_meta(|meta| {
+            if cfg_predicate_includes_test(&meta) {
+                is_test = true;
+            }
+            Ok(())
+        });
+        is_test
     })
+}
+
+/// Whether a `cfg` predicate makes a module test-only: `test` directly, or any
+/// `all(...)`/`any(...)` conjunction containing `test`. `not(test)` and
+/// `feature = "test"` are correctly rejected — the module is not test-gated.
+fn cfg_predicate_includes_test(meta: &syn::meta::ParseNestedMeta) -> bool {
+    if meta.path.is_ident("test") {
+        return true;
+    }
+    if meta.path.is_ident("all") || meta.path.is_ident("any") {
+        let mut found = false;
+        let _ = meta.parse_nested_meta(|inner| {
+            if cfg_predicate_includes_test(&inner) {
+                found = true;
+            }
+            Ok(())
+        });
+        return found;
+    }
+    false
 }
 
 fn simple_type_name(ty: &Type) -> Option<String> {
@@ -157,7 +186,7 @@ fn simple_type_name(ty: &Type) -> Option<String> {
     }
 }
 
-fn to_snake_case(name: &str) -> String {
+pub(crate) fn to_snake_case(name: &str) -> String {
     let chars: Vec<char> = name.chars().collect();
     let mut result = String::with_capacity(name.len() + 4);
     for (i, c) in chars.iter().enumerate() {

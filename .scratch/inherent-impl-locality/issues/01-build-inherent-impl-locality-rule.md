@@ -89,7 +89,7 @@ Links:
 
 ### `ponytail:` shortcuts to re-apply
 
-- `is_cfg_test` uses substring match (`attr.to_token_stream().to_string().contains("test")`) on the `#[cfg(...)]` attribute — false-positive risk on `#[cfg(feature = "test")]`. Upgrade to ident-level scan if a real false positive surfaces.
+- ~~`is_cfg_test` uses substring match (`attr.to_token_stream().to_string().contains("test")`) on the `#[cfg(...)]` attribute — false-positive risk on `#[cfg(feature = "test")]`. Upgrade to ident-level scan if a real false positive surfaces.~~ **Resolved:** replaced with a `syn::meta::ParseNestedMeta` walk that recognises `test`, `all(test, ...)`, and `any(test, ...)` while correctly rejecting `cfg(feature = "test")` and `not(test)`. Covered by `test_cfg_all_test_block_is_skipped`, `test_cfg_any_test_block_is_skipped`, and `test_cfg_feature_test_is_not_skipped`.
 - Type-def index uses `or_insert_with` (first def wins) on type-name collisions. Same-name types in different modules are out of scope.
 
 ### Trial-run violation set (27 violations, no longer reproducible until re-created)

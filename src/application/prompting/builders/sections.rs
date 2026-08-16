@@ -40,39 +40,13 @@ fn scan_filtered_block(chars: &[char], start: usize) -> Option<usize> {
     None
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-/// [TRIVIAL_ENUM]
-pub(crate) enum Section {
-    Role,
-    Instructions,
-    WritingStyle,
-    GlobalRules,
-    OutputFormat,
-}
-
 pub(crate) fn render_preset_xml_parts(
     preset: &PromptPreset,
     global_rules: &[String],
     response_length: Option<&str>,
     template_vars: Option<&TemplateVars>,
-) -> Vec<(Section, String)> {
-    preset
-        .render_field_parts(global_rules, response_length, template_vars)
-        .into_iter()
-        .map(|(field, rendered)| (field.into(), rendered))
-        .collect()
-}
-
-impl From<PresetField> for Section {
-    fn from(field: PresetField) -> Self {
-        match field {
-            PresetField::Role => Section::Role,
-            PresetField::Instructions => Section::Instructions,
-            PresetField::WritingStyle => Section::WritingStyle,
-            PresetField::GlobalRules => Section::GlobalRules,
-            PresetField::OutputFormat => Section::OutputFormat,
-        }
-    }
+) -> Vec<(PresetField, String)> {
+    preset.render_field_parts(global_rules, response_length, template_vars)
 }
 
 pub(crate) fn build_system_prompt(
@@ -82,10 +56,10 @@ pub(crate) fn build_system_prompt(
 ) -> String {
     render_preset_xml_parts(preset, global_rules, None, Some(vars))
         .into_iter()
-        .filter(|(section, _)| {
+        .filter(|(field, _)| {
             matches!(
-                section,
-                Section::Role | Section::Instructions | Section::GlobalRules
+                field,
+                PresetField::Role | PresetField::Instructions | PresetField::GlobalRules
             )
         })
         .map(|(_, rendered)| rendered)
@@ -100,7 +74,7 @@ pub(crate) fn build_post_history_prompt(
 ) -> String {
     render_preset_xml_parts(preset, &[], response_length, Some(vars))
         .into_iter()
-        .filter(|(section, _)| matches!(section, Section::WritingStyle | Section::OutputFormat))
+        .filter(|(field, _)| matches!(field, PresetField::WritingStyle | PresetField::OutputFormat))
         .map(|(_, rendered)| rendered)
         .collect::<Vec<_>>()
         .join("\n\n")

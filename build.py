@@ -596,10 +596,10 @@ def main():
             both_print("=" * 60)
             llm_cmd = get_test_cmd(include_llm=True)
             if "nextest" in llm_cmd:
-                llm_cmd += " --test flow_llm_tests"
+                llm_cmd += " --test llm"
             else:
-                llm_cmd += " flow_llm_tests -- --ignored"
-            run(llm_cmd, check=False, env=cargo_env)
+                llm_cmd += " llm -- --ignored"
+            run(llm_cmd, check=True, env=cargo_env)
 
             steps.next("Done")
             both_print("=== Build Complete ===")

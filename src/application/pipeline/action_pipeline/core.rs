@@ -541,10 +541,8 @@ impl ActionPipeline {
     ) -> Result<(), PhaseError> {
         self.run_from_input(state, input_text)
     }
-}
 
-impl ActionPipeline {
-    pub(super) fn phase_engine_commit(
+    fn phase_engine_commit(
         state: GameState,
         narration_text: &str,
         quantifier_result: &QuantifierResult,

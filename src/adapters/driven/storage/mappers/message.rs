@@ -37,7 +37,6 @@ impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
             });
         }
 
-        // Use canonical validation method from Message
         if !message.swipes.is_empty() {
             let fallback_applied = message.ensure_valid_swipe_index();
             if fallback_applied {

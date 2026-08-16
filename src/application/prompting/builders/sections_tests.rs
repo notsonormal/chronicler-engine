@@ -1,10 +1,10 @@
 //! Tests for `builders/sections.rs` prompt-section renderers.
 
 use crate::application::prompting::builders::sections::{
-    render_known_npc_entry, render_preset_xml_parts, render_present_relationships, Section,
+    render_known_npc_entry, render_preset_xml_parts, render_present_relationships,
 };
 use crate::domain::model::character::{CharacterSheet, NpcCard, Relationship};
-use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::prompt_preset::{PresetField, PromptPreset};
 use crate::domain::model::template::TemplateVars;
 use std::collections::HashSet;
 
@@ -48,11 +48,11 @@ fn render_preset_xml_parts_emits_only_present_fields() {
     };
     let parts = render_preset_xml_parts(&preset, &["rule one".to_string()], None, None);
     let sections: Vec<_> = parts.iter().map(|(s, _)| *s).collect();
-    assert!(sections.contains(&Section::Role));
-    assert!(sections.contains(&Section::GlobalRules));
-    assert!(!sections.contains(&Section::Instructions));
-    assert!(!sections.contains(&Section::WritingStyle));
-    assert!(!sections.contains(&Section::OutputFormat));
+    assert!(sections.contains(&PresetField::Role));
+    assert!(sections.contains(&PresetField::GlobalRules));
+    assert!(!sections.contains(&PresetField::Instructions));
+    assert!(!sections.contains(&PresetField::WritingStyle));
+    assert!(!sections.contains(&PresetField::OutputFormat));
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn render_preset_xml_parts_appends_response_length_to_output_format() {
     let parts = render_preset_xml_parts(&preset, &[], Some("3 paragraphs"), None);
     let (_, text) = parts
         .iter()
-        .find(|(s, _)| *s == Section::OutputFormat)
+        .find(|(s, _)| *s == PresetField::OutputFormat)
         .expect("OutputFormat section should be present");
     assert!(text.contains("fmt"), "text: {text}");
     assert!(text.contains("Response Length:"), "text: {text}");

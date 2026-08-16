@@ -15,5 +15,3 @@ Per the design synthesis (`../research/04-design-synthesis.md`, Q4 + Q6):
 4. The blob lives on `Swipe`, NOT `GameStateSnapshot`. Verified: `Message.set_snapshot_id` delegates to `active_swipe_mut().snapshot_id` (`message.rs:108`) — the snapshot is associated with the swipe. `GameStateSnapshot` is a pure world-state freeze (`from_game_state`); steering is generation metadata, not world state.
 
 This is the shared mechanism — guide retry (ticket 07) and impersonate retry (ticket 09) both depend on it.
-
-Blocked by: 14 (specs/tests must be grilled and committed before implementation is considered done).
