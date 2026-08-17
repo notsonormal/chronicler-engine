@@ -16,4 +16,4 @@ Per the design synthesis (`../research/04-design-synthesis.md`, Q7 + Q7b + Q6 + 
 5. Output: generated text saved as a player-voiced `MessageEntry` (Q6=A). The replay blob (ticket 06) holds impersonate=true + direction + preset for retry.
 6. Mutual exclusivity with guide (Q8=A): impersonate and guide cannot fire on the same turn.
 
-Blocked by: 06 (replay blob), 07 (slash parser for `/impersonate` entry), 14 (specs/tests grilled and committed).
+Blocked by: 06 (replay blob), 07 (slash parser for `/impersonate` entry).

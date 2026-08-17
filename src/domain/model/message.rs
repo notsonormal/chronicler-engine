@@ -5,6 +5,14 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use crate::domain::model::state::message_types::MessageType;
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct GenerationReplay {
+    pub guide: Option<String>,
+    pub impersonate: bool,
+    pub impersonate_direction: Option<String>,
+    pub impersonate_preset_id: Option<String>,
+}
+
 /// Swipe variant of a [`Message`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Swipe {
@@ -12,6 +20,8 @@ pub struct Swipe {
     pub snapshot_id: Option<u64>,
     pub location_header: Option<String>,
     pub event_header: Option<String>,
+    #[serde(default)]
+    pub replay: Option<GenerationReplay>,
 }
 
 /// Message in the narrative history.
@@ -43,6 +53,7 @@ impl Message {
             snapshot_id: None,
             location_header,
             event_header,
+            replay: None,
         };
         Self {
             id: 0,
@@ -86,6 +97,10 @@ impl Message {
 
     pub fn snapshot_id(&self) -> Option<u64> {
         self.active_swipe().and_then(|s| s.snapshot_id)
+    }
+
+    pub fn replay(&self) -> Option<&GenerationReplay> {
+        self.active_swipe().and_then(|s| s.replay.as_ref())
     }
 
     /// Set active swipe index (content accessors use this).

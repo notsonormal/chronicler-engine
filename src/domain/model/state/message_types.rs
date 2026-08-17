@@ -11,6 +11,7 @@ pub enum MessageType {
     Dialogue,
     System,
     Input,
+    Narrator,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

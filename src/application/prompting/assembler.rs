@@ -8,7 +8,7 @@ use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::AppSettings;
-use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::template::render_template;
 use crate::domain::model::world::WorldCard;
@@ -317,8 +317,13 @@ impl<'a> LayerRenderer<'a> {
 
         let mut history_text = String::new();
         for entry in self.history {
-            let sender = entry.sender.as_deref().unwrap_or("Narrator");
-            history_text.push_str(&format!("{}: {}\n", sender, entry.text));
+            match entry.message_type {
+                MessageType::Narrator => history_text.push_str(&format!("{}\n", entry.text)),
+                _ => {
+                    let sender = entry.sender.as_deref().unwrap_or("Narrator");
+                    history_text.push_str(&format!("{}: {}\n", sender, entry.text));
+                }
+            }
         }
 
         let truncated = truncate_to_budget(&history_text, budget::MAX_HISTORY_TOKENS as usize);

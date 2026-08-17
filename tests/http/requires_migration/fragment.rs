@@ -750,6 +750,7 @@ async fn test_switch_swipe_handler_success() {
                 snapshot_id: Some(snap_id),
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             0,
         )
@@ -762,6 +763,7 @@ async fn test_switch_swipe_handler_success() {
                 snapshot_id: Some(snap_id),
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             1,
         )
@@ -889,6 +891,7 @@ async fn test_switch_swipe_handler_not_last() {
                 snapshot_id: Some(snap_id),
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             0,
         )
@@ -944,6 +947,7 @@ async fn test_switch_swipe_handler_concurrent() {
                 snapshot_id: Some(snap_id),
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             0,
         )

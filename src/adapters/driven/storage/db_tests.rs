@@ -137,6 +137,23 @@ fn test_db_message_swipes_table_exists() {
 }
 
 #[test]
+fn test_db_message_swipes_has_replay_column() {
+    let pool = DbPool::new(":memory:").unwrap();
+    let conn = pool.conn();
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name='replay'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        count, 1,
+        "message_swipes.replay column must exist after v15 migration"
+    );
+}
+
+#[test]
 fn test_db_cascade_delete_game() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();

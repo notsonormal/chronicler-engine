@@ -1,6 +1,6 @@
-use crate::domain::model::message::Message;
+use crate::domain::model::message::{GenerationReplay, Message};
 use crate::domain::model::state::message_types::MessageType;
-use crate::adapters::driven::storage::mappers::message::model_swipes_to_db;
+use crate::adapters::driven::storage::mappers::message::{model_swipes_to_db, parse_swipe_replay};
 use crate::adapters::driven::storage::models::message::DbMessage;
 
 #[test]
@@ -18,6 +18,7 @@ fn test_message_roundtrip() {
         snapshot_id: Some(3),
         location_header: Some("Room A".to_string()),
         event_header: None,
+        replay: None,
     }];
     let db = DbMessage::try_from((&original, 1)).unwrap();
     let swipes = model_swipes_to_db(&original);
@@ -48,6 +49,7 @@ fn test_message_unpersisted_roundtrip() {
         snapshot_id: None,
         location_header: None,
         event_header: Some("Event".to_string()),
+        replay: None,
     }];
     let db = DbMessage::try_from((&original, 2)).unwrap();
     let swipes = model_swipes_to_db(&original);
@@ -67,6 +69,7 @@ fn test_message_log_type_json_serialization() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     }];
     let db = DbMessage::try_from((&msg, 1)).unwrap();
     let _swipes = model_swipes_to_db(&msg);
@@ -90,12 +93,14 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
             snapshot_id: Some(1),
             location_header: Some("Room A".to_string()),
             event_header: None,
+            replay: None,
         },
         crate::domain::model::message::Swipe {
             text: "Second swipe".to_string(),
             snapshot_id: Some(2),
             location_header: Some("Room B".to_string()),
             event_header: Some("Event B".to_string()),
+            replay: None,
         },
     ];
     let db = DbMessage::try_from((&original, 1)).unwrap();
@@ -109,4 +114,32 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
     assert_eq!(back.text(), "First swipe");
     assert_eq!(back.location_header(), Some("Room A"));
     assert_eq!(back.snapshot_id(), Some(1));
+}
+
+fn sample_replay() -> GenerationReplay {
+    GenerationReplay {
+        guide: Some("steer toward the cellar".to_string()),
+        impersonate: true,
+        impersonate_direction: Some("as the player".to_string()),
+        impersonate_preset_id: Some("impersonate_default".to_string()),
+    }
+}
+
+#[test]
+fn parse_swipe_replay_returns_none_for_none_or_empty() {
+    assert!(parse_swipe_replay(None).is_none());
+    assert!(parse_swipe_replay(Some("")).is_none());
+}
+
+#[test]
+fn parse_swipe_replay_parses_valid_json() {
+    let expected = sample_replay();
+    let json = serde_json::to_string(&expected).unwrap();
+    assert_eq!(parse_swipe_replay(Some(&json)), Some(expected));
+}
+
+#[test]
+fn parse_swipe_replay_discards_corrupt_json() {
+    // Corrupt JSON must degrade to None (plain retry), not panic or propagate.
+    assert!(parse_swipe_replay(Some("{not json")).is_none());
 }

@@ -100,6 +100,7 @@ fn test_message_swipe_fields_roundtrip() {
         snapshot_id: None,
         location_header: Some("Room B".to_string()),
         event_header: Some("EventY".to_string()),
+        replay: None,
     });
 
     // Initially at index 0
@@ -143,6 +144,7 @@ fn test_message_set_snapshot_id_writes_active_swipe() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     });
     msg.set_active_swipe(1);
 

@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::error::EngineError;
-use crate::domain::model::message::{Message, Swipe};
+use crate::domain::model::message::{GenerationReplay, Message, Swipe};
 use crate::adapters::driven::storage::models::message::DbMessage;
 use crate::adapters::driven::storage::models::swipe::DbSwipe;
 
@@ -34,6 +34,7 @@ impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
                 snapshot_id: db_swipe.snapshot_id.map(|id| id as u64),
                 location_header: db_swipe.location_header.clone(),
                 event_header: db_swipe.event_header.clone(),
+                replay: parse_swipe_replay(db_swipe.replay.as_deref()),
             });
         }
 
@@ -83,6 +84,25 @@ pub fn model_swipes_to_db(msg: &Message) -> Vec<DbSwipe> {
             snapshot_id: swipe.snapshot_id.map(|id| id as i64),
             location_header: swipe.location_header.clone(),
             event_header: swipe.event_header.clone(),
+            replay: swipe
+                .replay
+                .as_ref()
+                .and_then(|r| serde_json::to_string(r).ok()),
         })
         .collect()
+}
+
+/// Parse a swipe's replay blob from its stored JSON column. Corrupt JSON is
+/// logged and discarded: replay is auxiliary steering metadata (a corrupt blob
+/// degrades the turn to a plain retry), unlike `message_type` which is
+/// structural and propagated as `EngineError::Config`.
+pub(crate) fn parse_swipe_replay(json: Option<&str>) -> Option<GenerationReplay> {
+    let s = json.filter(|s| !s.is_empty())?;
+    match serde_json::from_str(s) {
+        Ok(replay) => Some(replay),
+        Err(e) => {
+            tracing::warn!("Discarding corrupt swipe replay blob: {e}");
+            None
+        }
+    }
 }

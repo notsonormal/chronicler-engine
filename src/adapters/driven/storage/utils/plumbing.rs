@@ -269,5 +269,17 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 15 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if !column_exists(conn, "message_swipes", "replay") {
+            exec("ALTER TABLE message_swipes ADD COLUMN replay TEXT")?;
+        }
+        conn.pragma_update(None, "user_version", 15)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

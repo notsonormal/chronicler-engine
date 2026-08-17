@@ -90,6 +90,7 @@ fn test_insert_swipe_and_load() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     };
     storage.insert_swipe(id, &swipe, 0).unwrap();
 
@@ -118,6 +119,7 @@ fn test_update_swipe_text() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     };
     storage.insert_swipe(id, &swipe, 0).unwrap();
     storage.update_swipe_text(id, 0, "after").unwrap();
@@ -143,6 +145,7 @@ fn test_shift_swipe_indices() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     };
     storage.insert_swipe(id, &swipe, 0).unwrap();
     storage.shift_swipe_indices(id, 1).unwrap();
@@ -182,6 +185,7 @@ fn test_load_swipes_for_messages_multi() {
                 snapshot_id: None,
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             0,
         )
@@ -194,6 +198,7 @@ fn test_load_swipes_for_messages_multi() {
                 snapshot_id: None,
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             0,
         )

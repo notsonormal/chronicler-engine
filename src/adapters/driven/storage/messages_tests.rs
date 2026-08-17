@@ -37,6 +37,7 @@ fn test_insert_message_preserves_swipes() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     });
 
     let _id = storage.insert_message(&msg).unwrap();

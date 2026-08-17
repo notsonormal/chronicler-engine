@@ -619,6 +619,7 @@ pub fn dummy_swipe(text: &str) -> Swipe {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     }
 }
 

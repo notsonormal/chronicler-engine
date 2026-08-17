@@ -9,6 +9,7 @@ pub struct DbSwipe {
     pub snapshot_id: Option<i64>,
     pub location_header: Option<String>,
     pub event_header: Option<String>,
+    pub replay: Option<String>,
 }
 
 impl DbSwipe {
@@ -21,6 +22,7 @@ impl DbSwipe {
             snapshot_id: row.get(4)?,
             location_header: row.get(5)?,
             event_header: row.get(6)?,
+            replay: row.get(7)?,
         })
     }
 }

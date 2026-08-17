@@ -15,4 +15,4 @@ Per the design synthesis (`../research/04-design-synthesis.md`, Q11):
 
 Grounding: ST splits `/sys` (add-only) from `/sysgen` (generate-then-add); chronicler chose generate-then-add (Q11=B) on UX — a narrator direction that produces no response leaves the user wondering if it registered. Marinara has no manual narrator slash command (narrator rows are automated scene/game flows only), so it does not decide this.
 
-Blocked by: 05 (narrator type), 07 (slash parser), 14 (specs/tests grilled and committed).
+Blocked by: 05 (narrator type), 07 (slash parser).

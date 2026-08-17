@@ -902,6 +902,7 @@ async fn test_retry_appends_swipe_to_same_message() {
         snapshot_id: Some(_pre_main_id),
         location_header: None,
         event_header: None,
+        replay: None,
     };
     storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)

@@ -103,6 +103,35 @@ fn test_push_message_appends_swipe_on_retry_target() {
 }
 
 #[test]
+fn test_push_message_inherits_replay_on_retry_swipe() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let mut state = TestGameState::in_room("room1");
+
+    let mut target = crate::domain::model::message::Message::new(
+        None,
+        "Original narration",
+        MessageType::Narration,
+        None,
+        None,
+    );
+    let replay = GenerationReplay {
+        guide: Some("steer toward the cellar".to_string()),
+        impersonate: true,
+        impersonate_direction: Some("as the player".to_string()),
+        impersonate_preset_id: Some("impersonate_default".to_string()),
+    };
+    target.swipes[0].replay = Some(replay.clone());
+    state.narrative.retry_target = Some(target);
+
+    state.add_message("Retried narration".into(), None, MessageType::Narration);
+
+    let target = state.narrative.retry_target.unwrap();
+    assert_eq!(target.swipes.len(), 2);
+    assert_eq!(target.swipes[1].replay.as_ref(), Some(&replay));
+}
+
+#[test]
 fn test_push_message_creates_new_message_when_event_header_mismatches() {
     let mut state = TestGameState::in_room("room1");
 

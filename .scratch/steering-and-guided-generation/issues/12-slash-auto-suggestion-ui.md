@@ -2,6 +2,7 @@
 
 Type: task
 Status: pending
+Blocked by: 14
 
 ## Question
 
@@ -16,4 +17,4 @@ Per the design synthesis (`../research/04-design-synthesis.md`, Q14):
 
 This is frontend work in `assets/index.html` and any associated JS. Depends on the slash-command parser (ticket 07) existing so the suggested commands actually dispatch.
 
-Blocked by: 07 (slash parser), 14 (specs/tests grilled and committed).
+Blocked by: 07 (slash parser).

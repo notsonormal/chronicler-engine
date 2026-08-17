@@ -17,4 +17,4 @@ Per the design synthesis (`../research/04-design-synthesis.md`, Q2 + Q4 + Q9 + Q
 
 Grounding: Marinara pushes the guide after fully-assembled `finalMessages` (`generate.routes.ts:7140`); GG uses depth-0 (after last message). Chronicler's existing layer order already prioritizes recency (`<PlayerInput>` after output-format), so the guide-last placement is the consistent extension.
 
-Blocked by: 06 (replay blob for retry), 07 (slash parser for entry), 14 (specs/tests grilled and committed).
+Blocked by: 06 (replay blob for retry), 07 (slash parser for entry).
