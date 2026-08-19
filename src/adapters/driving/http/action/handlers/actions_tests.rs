@@ -104,6 +104,63 @@ async fn test_action_handler_started() {
 }
 
 #[tokio::test]
+async fn test_action_handler_guide_command_dispatches() {
+    let state = TestAppBuilder::default_test().build_service();
+    let form = ActionForm {
+        command: "/guide make it tense".to_string(),
+    };
+
+    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Thinking"),
+        "guide command should dispatch to the continue seam: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_action_handler_narrator_command_dispatches() {
+    let state = TestAppBuilder::default_test().build_service();
+    let form = ActionForm {
+        command: "/narrator The lights flicker".to_string(),
+    };
+
+    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Thinking"),
+        "narrator command should dispatch to the continue seam: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_action_handler_impersonate_command_dispatches() {
+    let state = TestAppBuilder::default_test().build_service();
+    let form = ActionForm {
+        command: "/impersonate act confident".to_string(),
+    };
+
+    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Thinking"),
+        "impersonate command should dispatch to the continue seam: {body_str}"
+    );
+}
+
+#[tokio::test]
 async fn test_action_confirm_handler_empty_command() {
     let state = TestAppBuilder::default_test().build_service();
     let form = ActionForm {

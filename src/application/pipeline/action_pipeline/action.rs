@@ -58,4 +58,31 @@ impl ActionPipeline {
     ) -> Result<ProcessActionResult, EngineError> {
         self.process_action(generation_gate, String::new())
     }
+
+    pub fn guide_narration(
+        &self,
+        generation_gate: &GenerationGate,
+        guide: String,
+    ) -> Result<ProcessActionResult, EngineError> {
+        drop(guide);
+        self.continue_narration(generation_gate)
+    }
+
+    pub fn narrator_action(
+        &self,
+        generation_gate: &GenerationGate,
+        text: String,
+    ) -> Result<ProcessActionResult, EngineError> {
+        drop(text);
+        self.continue_narration(generation_gate)
+    }
+
+    pub fn impersonate(
+        &self,
+        generation_gate: &GenerationGate,
+        direction: Option<String>,
+    ) -> Result<ProcessActionResult, EngineError> {
+        drop(direction);
+        self.continue_narration(generation_gate)
+    }
 }

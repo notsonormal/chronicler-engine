@@ -16,6 +16,7 @@ Review the research asset `research/11-specs-and-integration-tests.md` (audit fi
 4. **Mutual-exclusivity enforcement.** Should the parser reject a combined command, or is exclusivity only a per-turn replay-blob property?
 5. **Narrator message placement.** Is `/narrator` a permanent history note that can later be edited/deleted like other messages?
 6. **Impersonate output type.** ~~Should impersonate output be `MessageType::Input` (as proposed) or a distinct type such as `Dialogue`?~~ **Resolved ahead of grilling (2026-08-15): `MessageType::Input`.** Impersonate's purpose is to produce text that reads as player input — to pretend to be the player. Distinguishing it with a separate type or metadata would defeat that purpose; the output must be indistinguishable from a typed `Input` by everything downstream. The replay blob (ticket 06) still holds `impersonate=true` for retry mechanics, but that is not a visible type distinction.
+7. **Text check on recognized slash commands.** Surfaced by ticket 07: `action_check_handler` runs the player-input text check on the raw `command` string before dispatch, so a recognized command like `/guide make it tense` is checked as if it were player dialogue (slash prefix included). Should recognized slash commands bypass the text check, since steering text is not player dialogue? Or should the check run on the argument only?
 
 ## Answer
 
