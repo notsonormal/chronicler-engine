@@ -165,4 +165,11 @@ impl Message {
             swipe.event_header = header;
         }
     }
+
+    /// Set the `GenerationReplay` blob on the active swipe.
+    pub fn set_replay(&mut self, replay: Option<GenerationReplay>) {
+        if let Some(swipe) = self.active_swipe_mut() {
+            swipe.replay = replay;
+        }
+    }
 }

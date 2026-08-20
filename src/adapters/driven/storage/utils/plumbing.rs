@@ -281,5 +281,20 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 16 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if !column_exists(conn, "settings", "active_impersonate_prompt_preset_id") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN active_impersonate_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'impersonate_default'",
+            )?;
+        }
+        conn.pragma_update(None, "user_version", 16)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

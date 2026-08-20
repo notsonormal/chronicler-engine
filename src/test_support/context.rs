@@ -39,6 +39,22 @@ pub fn seed_default_preset(storage: &Storage) {
         .expect("test setup: save_preset must succeed for default preset");
 }
 
+pub fn seed_default_impersonate_preset(storage: &Storage) {
+    storage
+        .save_preset(&PromptPreset {
+            id: "impersonate_default".to_string(),
+            name: "Default Test Impersonate".to_string(),
+            role: Some("You are writing as {{user}}. {{persona_description}}".to_string()),
+            instructions: Some("Write only as {{user}}.".to_string()),
+            writing_style: Some("First person as {{user}}.".to_string()),
+            output_format: Some("Write {{user}}'s next message.".to_string()),
+            is_default: true,
+            preset_type: PresetType::Impersonate,
+        })
+        // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+        .expect("test setup: save_preset must succeed for default impersonate preset");
+}
+
 pub fn build_test_message_service(storage: Arc<Storage>) -> Arc<MessageService> {
     Arc::new(MessageService::new(storage))
 }

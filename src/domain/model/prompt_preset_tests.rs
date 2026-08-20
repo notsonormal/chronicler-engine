@@ -11,6 +11,11 @@ fn test_preset_type_quantifier_as_str() {
 }
 
 #[test]
+fn test_preset_type_impersonate_as_str() {
+    assert_eq!(PresetType::Impersonate.as_str(), "impersonate");
+}
+
+#[test]
 fn test_preset_type_try_from_quantifier() {
     assert_eq!(
         PresetType::try_from("quantifier").unwrap(),
@@ -21,6 +26,14 @@ fn test_preset_type_try_from_quantifier() {
 #[test]
 fn test_preset_type_try_from_system() {
     assert_eq!(PresetType::try_from("system").unwrap(), PresetType::System);
+}
+
+#[test]
+fn test_preset_type_try_from_impersonate() {
+    assert_eq!(
+        PresetType::try_from("impersonate").unwrap(),
+        PresetType::Impersonate
+    );
 }
 
 #[test]
@@ -45,6 +58,25 @@ fn test_prompt_preset_serialization_roundtrip() {
     let deserialized: PromptPreset = serde_json::from_str(&json).unwrap();
 
     assert_eq!(preset, deserialized);
+}
+
+#[test]
+fn test_prompt_preset_impersonate_serialization_roundtrip() {
+    let preset = PromptPreset {
+        id: "impersonate-id".into(),
+        name: "Impersonate".into(),
+        role: Some("Write as {{user}}.".into()),
+        instructions: Some("{{persona_description}}".into()),
+        is_default: true,
+        preset_type: PresetType::Impersonate,
+        ..Default::default()
+    };
+
+    let json = serde_json::to_string(&preset).unwrap();
+    let deserialized: PromptPreset = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(preset, deserialized);
+    assert_eq!(deserialized.preset_type, PresetType::Impersonate);
 }
 
 #[test]

@@ -13,6 +13,7 @@ pub enum PresetType {
     #[default]
     System,
     Quantifier,
+    Impersonate,
 }
 
 impl PresetType {
@@ -20,6 +21,7 @@ impl PresetType {
         match self {
             PresetType::System => "system",
             PresetType::Quantifier => "quantifier",
+            PresetType::Impersonate => "impersonate",
         }
     }
 }
@@ -31,6 +33,7 @@ impl TryFrom<&str> for PresetType {
         match s {
             "system" => Ok(PresetType::System),
             "quantifier" => Ok(PresetType::Quantifier),
+            "impersonate" => Ok(PresetType::Impersonate),
             other => Err(format!("unknown preset type: {other}")),
         }
     }

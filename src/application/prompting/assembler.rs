@@ -37,6 +37,14 @@ pub struct PromptContext<'a> {
     pub user_message: &'a str,
     pub history: &'a [MessageEntry],
     pub template_vars: TemplateVars,
+    /// Transient per-turn steering instruction (guided generation). Never persisted
+    /// to history; rendered as the final prompt layer. `None` for plain turns.
+    pub guide: Option<String>,
+    /// When true, the turn is impersonated: the player-character reference-card
+    /// layer is omitted and the impersonate preset (selected by the pipeline)
+    /// supplies the voice. Persona data reaches the prompt through the
+    /// `{{persona_*}}` macros in the preset text, not the dropped layer.
+    pub impersonate: bool,
 }
 
 pub struct PromptAssembler {
@@ -87,6 +95,8 @@ impl PromptAssembler {
             system_prompt,
             post_history_prompt,
             template_vars: &context.template_vars,
+            guide: context.guide.as_deref(),
+            impersonate: context.impersonate,
         };
 
         let (max_context_tokens, requested_max_tokens) = self.resolve_budget();
@@ -126,8 +136,29 @@ impl PromptContext<'_> {
             persona,
             user_message,
             history,
-            template_vars: TemplateVars::new(&persona.sheet.name),
+            template_vars: TemplateVars::from_persona(persona),
+            guide: None,
+            impersonate: false,
         }
+    }
+
+    /// Attach a transient guided-generation instruction. Rendered as the final
+    /// prompt layer; not persisted to history.
+    pub fn with_guide(mut self, guide: Option<String>) -> Self {
+        self.guide = guide;
+        self
+    }
+
+    /// Mark the turn as impersonated. Drops the player-character reference-card
+    /// layer; the pipeline must pass the impersonate preset so its voice replaces
+    /// the narrator voice. Mutually exclusive with `with_guide` (impersonate
+    /// suppresses the guide layer — see ticket 09).
+    pub fn with_impersonate(mut self, impersonate: bool) -> Self {
+        self.impersonate = impersonate;
+        if impersonate {
+            self.guide = None;
+        }
+        self
     }
 
     pub fn build_narration_prompt(
@@ -156,6 +187,8 @@ struct LayerRenderer<'a> {
     system_prompt: String,
     post_history_prompt: String,
     template_vars: &'a TemplateVars,
+    guide: Option<&'a str>,
+    impersonate: bool,
 }
 
 impl<'a> LayerRenderer<'a> {
@@ -174,6 +207,7 @@ impl<'a> LayerRenderer<'a> {
             self.render_history_layer(),
             self.post_history_prompt.clone(),
             self.render_user_layer(),
+            self.render_guide_layer(),
         ]
         .into_iter()
         .filter(|s| !s.is_empty())
@@ -264,6 +298,9 @@ impl<'a> LayerRenderer<'a> {
     }
 
     fn render_persona_layer(&self) -> String {
+        if self.impersonate {
+            return String::new();
+        }
         let mut output = String::from("<PlayerCharacter>\n");
         output.push_str("Name: ");
         output.push_str(&self.persona.sheet.name);
@@ -339,6 +376,21 @@ impl<'a> LayerRenderer<'a> {
         output.push_str(&sanitized);
         output.push_str("\n</PlayerInput>\n");
 
+        output
+    }
+
+    fn render_guide_layer(&self) -> String {
+        let Some(guide) = self.guide else {
+            return String::new();
+        };
+        let guide = guide.trim();
+        if guide.is_empty() {
+            return String::new();
+        }
+        let mut output = String::from("<Guide>\n");
+        output.push_str("Take the following into special consideration for your next message: ");
+        output.push_str(guide);
+        output.push_str("\n</Guide>\n");
         output
     }
 }

@@ -20,3 +20,7 @@ pub fn default_active_system_prompt_preset_id() -> String {
 pub fn default_active_quantifier_prompt_preset_id() -> String {
     "quantifier_default".to_string()
 }
+
+pub fn default_active_impersonate_prompt_preset_id() -> String {
+    "impersonate_default".to_string()
+}

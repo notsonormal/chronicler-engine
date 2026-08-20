@@ -538,3 +538,222 @@ fn test_budget_read_from_settings_per_call() {
         "small budget should be bounded by requested max_tokens=50: {small_budget}"
     );
 }
+
+#[test]
+fn test_assemble_guide_layer_renders_last_with_wrapper() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = create_test_preset();
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "I look around.",
+        &history,
+    )
+    .with_guide(Some("Add tension.".to_string()));
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        result.user_prompt.contains("<Guide>"),
+        "user should contain Guide layer when guide is set"
+    );
+    assert!(
+        result.user_prompt.contains(
+            "Take the following into special consideration for your next message: Add tension."
+        ),
+        "guide layer must use the verbatim Marinara wrapper around the guide text"
+    );
+
+    let player_pos = result
+        .user_prompt
+        .rfind("<PlayerInput>")
+        .expect("PlayerInput present");
+    let guide_pos = result.user_prompt.rfind("<Guide>").expect("Guide present");
+    assert!(
+        guide_pos > player_pos,
+        "Guide layer must render after PlayerInput (guide wins recency)"
+    );
+}
+
+#[test]
+fn test_assemble_no_guide_omits_guide_layer() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = create_test_preset();
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "I look around.",
+        &history,
+    );
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        !result.user_prompt.contains("<Guide>"),
+        "no Guide layer when guide is None"
+    );
+}
+
+#[test]
+fn test_assemble_blank_guide_omits_guide_layer() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = create_test_preset();
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "I look around.",
+        &history,
+    )
+    .with_guide(Some("   ".to_string()));
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        !result.user_prompt.contains("<Guide>"),
+        "whitespace-only guide must not render a Guide layer"
+    );
+}
+
+#[test]
+fn test_assemble_impersonate_drops_player_character_layer() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = PromptPreset {
+        id: "impersonate-test".to_string(),
+        name: "Impersonate".to_string(),
+        role: Some("Write as {{user}}. {{persona_description}}".to_string()),
+        instructions: Some("{{persona_personality}} / {{persona_background}}".to_string()),
+        writing_style: Some("First person.".to_string()),
+        output_format: Some("Write the next message.".to_string()),
+        is_default: true,
+        preset_type: crate::domain::model::prompt_preset::PresetType::Impersonate,
+    };
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "Ask about the artifact.",
+        &history,
+    )
+    .with_impersonate(true);
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        !result.user_prompt.contains("<PlayerCharacter>"),
+        "impersonate must drop the PlayerCharacter reference-card layer"
+    );
+    assert!(
+        !result.user_prompt.contains("<Guide>"),
+        "impersonate must not render a Guide layer (mutually exclusive)"
+    );
+    assert!(
+        result.user_prompt.contains("<GameState>"),
+        "impersonate keeps the GameState context layer"
+    );
+    assert!(
+        result.user_prompt.contains("<ConversationHistory>"),
+        "impersonate keeps the ConversationHistory context layer"
+    );
+}
+
+#[test]
+fn test_assemble_impersonate_injects_persona_macros_into_preset() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = PromptPreset {
+        id: "impersonate-test".to_string(),
+        name: "Impersonate".to_string(),
+        role: Some("Write as {{user}}. {{persona_description}}".to_string()),
+        instructions: Some("{{persona_personality}} / {{persona_background}}".to_string()),
+        writing_style: None,
+        output_format: None,
+        is_default: true,
+        preset_type: crate::domain::model::prompt_preset::PresetType::Impersonate,
+    };
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "",
+        &history,
+    )
+    .with_impersonate(true);
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    let player_name = create_test_player().sheet.name;
+    assert!(
+        result
+            .system_prompt
+            .contains(&format!("Write as {player_name}.")),
+        "{{user}} macro must substitute the player name in the impersonate role"
+    );
+    assert!(
+        result.system_prompt.contains(&player.sheet.description),
+        "{{persona_description}} macro must inject the persona description"
+    );
+    assert!(
+        result.system_prompt.contains(&format!(
+            "{} / {}",
+            player.sheet.personality, player.sheet.scenario
+        )),
+        "{{persona_personality}} and {{persona_background}} must inject into instructions"
+    );
+}

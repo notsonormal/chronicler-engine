@@ -25,6 +25,21 @@ pub struct PipelineInputs {
     pub map: Arc<MapDef>,
     pub persona: Arc<PersonaCard>,
     pub all_npcs: Vec<NpcCard>,
+    /// Transient guided-generation instruction for this turn (`None` on plain
+    /// turns; on retry, sourced from `retry_target.replay().guide` instead).
+    pub guide: Option<String>,
+    /// Impersonate steering for this turn. When true, the narration runs as the
+    /// player's persona: the impersonate preset replaces the system preset, the
+    /// player-character layer is dropped, and the output is a player-voiced
+    /// `Dialogue` message. Retry re-derives it from `retry_target.replay().impersonate`.
+    pub impersonate: bool,
+    /// Optional `/impersonate <direction>` text; fed to the prompt as the
+    /// instruction for the impersonated turn. `None` for plain `/impersonate`.
+    pub impersonate_direction: Option<String>,
+    /// Impersonate preset id to load (staged by the seam from settings, or read
+    /// from the retry-target replay blob). Falls back to
+    /// `active_impersonate_prompt_preset_id` when `None`.
+    pub impersonate_preset_id: Option<String>,
 }
 
 pub(super) struct PipelineRun<'a> {
@@ -103,9 +118,28 @@ impl<'a> PipelineRun<'a> {
         };
         let history = state.narrative.history();
 
-        let (preset, response_length) = match self.load_preset_and_response_length() {
-            Ok(p) => p,
-            Err(msg) => return Err(self.set_error(state, msg)),
+        let impersonate = self.resolve_impersonate(state, inputs);
+
+        let (preset, response_length) = if let Some((_direction, preset_id)) = &impersonate {
+            match self.load_impersonate_preset_and_response_length(preset_id.as_deref()) {
+                Ok(p) => p,
+                Err(msg) => return Err(self.set_error(state, msg)),
+            }
+        } else {
+            match self.load_preset_and_response_length() {
+                Ok(p) => p,
+                Err(msg) => return Err(self.set_error(state, msg)),
+            }
+        };
+
+        let impersonate_direction = impersonate
+            .as_ref()
+            .and_then(|(direction, _)| direction.clone())
+            .unwrap_or_default();
+        let user_message: &str = if impersonate.is_some() {
+            &impersonate_direction
+        } else {
+            &inputs.input
         };
 
         let context = PromptContext::new(
@@ -116,9 +150,14 @@ impl<'a> PipelineRun<'a> {
                 npcs_in_area: &state.scene.npcs_in_area,
             },
             &inputs.persona,
-            &inputs.input,
+            user_message,
             &history,
         );
+        let context = if impersonate.is_some() {
+            context.with_impersonate(true)
+        } else {
+            context.with_guide(self.resolve_guide(state, &inputs.guide))
+        };
 
         let assembled = match self.pipeline.prompt_assembler.assemble(
             &context,
@@ -149,7 +188,15 @@ impl<'a> PipelineRun<'a> {
             return Err(self.set_error(state, "LLM Error: empty response".to_string()));
         }
 
-        state.add_message(narration_text.clone(), None, MessageType::Narration);
+        let (sender, message_type) = if impersonate.is_some() {
+            (
+                Some(inputs.persona.sheet.name.clone()),
+                MessageType::Dialogue,
+            )
+        } else {
+            (None, MessageType::Narration)
+        };
+        state.add_message(narration_text.clone(), sender, message_type);
         self.persist_snapshot_or_err(state, "pre-quantifier narration")?;
 
         Ok((
@@ -379,6 +426,51 @@ impl<'a> PipelineRun<'a> {
         })
     }
 
+    /// Resolve the guided-generation instruction for the in-flight turn.
+    /// New guide generations carry it via `inputs.guide` (staged from the
+    /// `/guide` slash command); retry re-applies it from the replay blob on the
+    /// retry-target swipe.
+    fn resolve_guide(&self, state: &GameState, inputs_guide: &Option<String>) -> Option<String> {
+        if let Some(g) = inputs_guide {
+            return Some(g.clone());
+        }
+        state
+            .narrative
+            .retry_target
+            .as_ref()
+            .and_then(|m| m.replay())
+            .and_then(|r| r.guide.clone())
+    }
+
+    /// Resolve the impersonate steering for the in-flight turn, if any. New
+    /// impersonate generations carry direction/preset id via `inputs` (staged
+    /// from `/impersonate`); retry re-applies them from the retry-target replay
+    /// blob. Returns `(direction, preset_id)`.
+    fn resolve_impersonate(
+        &self,
+        state: &GameState,
+        inputs: &PipelineInputs,
+    ) -> Option<(Option<String>, Option<String>)> {
+        if inputs.impersonate {
+            return Some((
+                inputs.impersonate_direction.clone(),
+                inputs.impersonate_preset_id.clone(),
+            ));
+        }
+        state
+            .narrative
+            .retry_target
+            .as_ref()
+            .and_then(|m| m.replay())
+            .filter(|r| r.impersonate)
+            .map(|r| {
+                (
+                    r.impersonate_direction.clone(),
+                    r.impersonate_preset_id.clone(),
+                )
+            })
+    }
+
     pub(super) fn load_preset_and_response_length(&self) -> Result<(PromptPreset, String), String> {
         let settings = self
             .pipeline
@@ -394,6 +486,38 @@ impl<'a> PipelineRun<'a> {
                     "active system preset '{preset_id}' not found — defaults not seeded?"
                 );
                 Err("Active system preset not found".to_string())
+            }
+            Err(e) => {
+                tracing::error!("preset storage inaccessible: {e}");
+                Err("Preset storage inaccessible".to_string())
+            }
+        }
+    }
+
+    /// Load the impersonate preset for an impersonated turn. `preset_id` is the
+    /// blob's recorded id (staged from `active_impersonate_prompt_preset_id` by
+    /// the seam, or carried by the retry-target replay); when `None`/empty it
+    /// falls back to the current setting.
+    fn load_impersonate_preset_and_response_length(
+        &self,
+        preset_id: Option<&str>,
+    ) -> Result<(PromptPreset, String), String> {
+        let settings = self
+            .pipeline
+            .settings
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        let response_length = settings.response_length.clone();
+        let preset_id = preset_id
+            .filter(|id| !id.is_empty())
+            .unwrap_or(&settings.active_impersonate_prompt_preset_id);
+        match self.pipeline.storage.get_preset(preset_id) {
+            Ok(Some(p)) => Ok((p, response_length)),
+            Ok(None) => {
+                tracing::error!(
+                    "active impersonate preset '{preset_id}' not found — defaults not seeded?"
+                );
+                Err("Active impersonate preset not found".to_string())
             }
             Err(e) => {
                 tracing::error!("preset storage inaccessible: {e}");

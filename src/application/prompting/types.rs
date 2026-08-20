@@ -19,6 +19,9 @@ pub enum PromptLayer {
     History,
     /// Current player input turn.
     User,
+    /// Transient per-turn steering instruction (guided generation). Rendered last,
+    /// after `User`, so it wins recency over the player input and output format.
+    Guide,
 }
 
 #[derive(Debug, Clone, Copy)]

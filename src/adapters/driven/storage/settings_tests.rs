@@ -66,6 +66,7 @@ fn test_save_then_get_settings_roundtrip() {
         }],
         active_system_prompt_preset_id: "preset-sys".into(),
         active_quantifier_prompt_preset_id: "preset-quant".into(),
+        active_impersonate_prompt_preset_id: "preset-imp".into(),
     };
 
     storage.save_settings(&custom).expect("should save");
@@ -82,6 +83,7 @@ fn test_save_then_get_settings_roundtrip() {
     assert_eq!(loaded.agents[0].name, "TestAgent");
     assert_eq!(loaded.active_system_prompt_preset_id, "preset-sys");
     assert_eq!(loaded.active_quantifier_prompt_preset_id, "preset-quant");
+    assert_eq!(loaded.active_impersonate_prompt_preset_id, "preset-imp");
 }
 
 #[test]

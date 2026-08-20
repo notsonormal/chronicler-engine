@@ -118,6 +118,63 @@ use crate::domain::model::prompt_preset::PromptPreset;
             </div>
         </form>
     </div>
+
+    <div class="preset-section">
+        <h2>Impersonate Prompts</h2>
+        <p class="preset-section-desc">These prompts replace the narrator voice when the AI writes as the player's persona via /impersonate. Use the user and persona (persona_description, persona_personality, persona_background) macros to inject persona data.</p>
+        {% for preset in impersonate_presets %}
+        <div class="preset-card{% if preset.is_default %} default{% endif %}{% if preset.id == active_impersonate_id %} active{% endif %}">
+            <div class="card-header">
+                <span class="card-title">{{ preset.name }}</span>
+                <div class="card-badges">
+                    {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
+                    {% if preset.id == active_impersonate_id %}<span class="badge primary">Active</span>{% endif %}
+                </div>
+            </div>
+            <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
+            <div class="card-actions">
+                {% if preset.id != active_impersonate_id %}
+                <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active</button>
+                {% endif %}
+                {% if preset.is_default %}
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
+                {% else %}
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+                {% endif %}
+                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
+            </div>
+        </div>
+        {% endfor %}
+
+        <h3>Add Impersonate Prompt Preset</h3>
+        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <input type="hidden" name="preset_type" value="impersonate" />
+            <div class="form-group">
+                <label for="impersonate-preset-name">Name</label>
+                <input type="text" id="impersonate-preset-name" name="name" placeholder="My Custom Impersonate Prompt" required />
+            </div>
+            <div class="form-group">
+                <label for="impersonate-preset-role">Role</label>
+                <textarea id="impersonate-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="impersonate-preset-instructions">Instructions</label>
+                <textarea id="impersonate-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="impersonate-preset-style">Writing Style</label>
+                <textarea id="impersonate-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="impersonate-preset-output">Output Format</label>
+                <textarea id="impersonate-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Add Preset</button>
+            </div>
+        </form>
+    </div>
 </div>
 "#,
     ext = "html"
@@ -125,6 +182,8 @@ use crate::domain::model::prompt_preset::PromptPreset;
 pub struct PromptPresetsTemplate {
     pub system_presets: Vec<PromptPreset>,
     pub quantifier_presets: Vec<PromptPreset>,
+    pub impersonate_presets: Vec<PromptPreset>,
     pub active_system_id: String,
     pub active_quantifier_id: String,
+    pub active_impersonate_id: String,
 }

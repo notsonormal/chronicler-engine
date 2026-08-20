@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::message::Message;
+use crate::domain::model::message::{GenerationReplay, Message};
 use crate::domain::model::message_history::MessageHistory;
 use super::generation_status::InputBuffer;
 use super::message_types::MessageEntry;
@@ -25,6 +25,11 @@ pub struct NarrativeState {
     // Transient — not persisted (pipeline run only).
     #[serde(skip)]
     pub retry_target: Option<Message>,
+    // Transient — not persisted. Stages a GenerationReplay blob (guide, and
+    // later impersonate) for the next appended narration swipe, and supplies
+    // the guide text to the prompt assembler for the in-flight generation.
+    #[serde(skip)]
+    pub pending_replay: Option<GenerationReplay>,
 }
 
 impl NarrativeState {
@@ -44,6 +49,7 @@ impl NarrativeState {
             last_backend_name: snapshot.last_backend_name.clone(),
             last_model_name: snapshot.last_model_name.clone(),
             retry_target: None,
+            pending_replay: None,
         }
     }
 }

@@ -25,6 +25,8 @@ fn test_prompt_presets_template_renders_system_presets() {
         quantifier_presets: vec![],
         active_system_id: "custom-1".into(),
         active_quantifier_id: "default".into(),
+        impersonate_presets: vec![],
+        active_impersonate_id: "default".into(),
     };
 
     let html = template.render().unwrap();
@@ -46,6 +48,8 @@ fn test_prompt_presets_template_shows_active_badge() {
         quantifier_presets: vec![],
         active_system_id: "custom-1".into(),
         active_quantifier_id: "default".into(),
+        impersonate_presets: vec![],
+        active_impersonate_id: "default".into(),
     };
 
     let html = template.render().unwrap();
@@ -67,6 +71,8 @@ fn test_prompt_presets_template_shows_default_badge() {
         quantifier_presets: vec![],
         active_system_id: "other".into(),
         active_quantifier_id: "default".into(),
+        impersonate_presets: vec![],
+        active_impersonate_id: "default".into(),
     };
 
     let html = template.render().unwrap();
@@ -80,6 +86,8 @@ fn test_prompt_presets_template_has_add_forms() {
         quantifier_presets: vec![],
         active_system_id: "default".into(),
         active_quantifier_id: "default".into(),
+        impersonate_presets: vec![],
+        active_impersonate_id: "default".into(),
     };
 
     let html = template.render().unwrap();
@@ -102,6 +110,8 @@ fn test_prompt_presets_template_shows_full_preview() {
         quantifier_presets: vec![],
         active_system_id: "default".into(),
         active_quantifier_id: "default".into(),
+        impersonate_presets: vec![],
+        active_impersonate_id: "default".into(),
     };
 
     let html = template.render().unwrap();

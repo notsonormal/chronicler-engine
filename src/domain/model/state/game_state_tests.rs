@@ -176,6 +176,71 @@ fn test_push_message_creates_new_message_when_no_retry_target() {
     assert!(state.narrative.retry_target.is_none());
 }
 
+#[test]
+fn test_push_message_stages_pending_replay_on_new_narration_swipe() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let mut state = TestGameState::in_room("room1");
+    let replay = GenerationReplay {
+        guide: Some("steer toward the cellar".to_string()),
+        ..Default::default()
+    };
+    state.narrative.pending_replay = Some(replay.clone());
+
+    state.add_message("Guided narration".into(), None, MessageType::Narration);
+
+    let message = state.narrative.history.last().unwrap();
+    assert_eq!(message.text(), "Guided narration");
+    assert_eq!(message.replay().cloned(), Some(replay));
+    assert!(
+        state.narrative.pending_replay.is_none(),
+        "pending_replay must be consumed when the narration swipe is created"
+    );
+}
+
+#[test]
+fn test_push_message_no_pending_replay_leaves_swipe_replay_none() {
+    let mut state = TestGameState::in_room("room1");
+
+    state.add_message("Normal narration".into(), None, MessageType::Narration);
+
+    let message = state.narrative.history.last().unwrap();
+    assert!(
+        message.replay().is_none(),
+        "swipe replay stays None without pending_replay"
+    );
+}
+
+#[test]
+fn test_push_message_stages_impersonate_replay_on_player_voiced_dialogue() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let mut state = TestGameState::in_room("room1");
+    let replay = GenerationReplay {
+        impersonate: true,
+        impersonate_direction: Some("ask about the artifact".to_string()),
+        impersonate_preset_id: Some("impersonate_default".to_string()),
+        ..Default::default()
+    };
+    state.narrative.pending_replay = Some(replay.clone());
+
+    state.add_message(
+        "I ask about the artifact.".into(),
+        Some("Hero".to_string()),
+        MessageType::Dialogue,
+    );
+
+    let message = state.narrative.history.last().unwrap();
+    assert_eq!(message.text(), "I ask about the artifact.");
+    assert_eq!(message.sender.as_deref(), Some("Hero"));
+    assert_eq!(message.message_type, MessageType::Dialogue);
+    assert_eq!(message.replay().cloned(), Some(replay));
+    assert!(
+        state.narrative.pending_replay.is_none(),
+        "pending_replay must be consumed when the impersonate swipe is created"
+    );
+}
+
 fn log_text_strategy() -> impl Strategy<Value = String> {
     "[a-zA-Z0-9 ]{1,50}"
 }

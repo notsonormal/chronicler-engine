@@ -227,12 +227,29 @@ impl ActionPipeline {
             }
         };
         let all_npcs: Vec<NpcCard> = npcs.values().cloned().collect();
+        let replay = state.narrative.pending_replay.clone();
+        let impersonate = replay.as_ref().is_some_and(|r| r.impersonate);
+        let guide = if impersonate {
+            None
+        } else {
+            replay.as_ref().and_then(|r| r.guide.clone())
+        };
+        let impersonate_direction = replay
+            .as_ref()
+            .and_then(|r| r.impersonate_direction.clone());
+        let impersonate_preset_id = replay
+            .as_ref()
+            .and_then(|r| r.impersonate_preset_id.clone());
         let inputs = PipelineInputs {
             input: input.clone(),
             world: Arc::clone(&world),
             map: Arc::clone(&map),
             persona: Arc::clone(&persona),
             all_npcs,
+            guide,
+            impersonate,
+            impersonate_direction,
+            impersonate_preset_id,
         };
 
         if let Err(e) = run.phase_pre_main_snapshot(&mut state) {

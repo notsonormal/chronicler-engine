@@ -125,6 +125,8 @@ pub struct AppSettings {
     pub active_system_prompt_preset_id: String,
     #[serde(default = "settings_defaults::default_active_quantifier_prompt_preset_id")]
     pub active_quantifier_prompt_preset_id: String,
+    #[serde(default = "settings_defaults::default_active_impersonate_prompt_preset_id")]
+    pub active_impersonate_prompt_preset_id: String,
 }
 
 impl Default for AppSettings {
@@ -173,6 +175,8 @@ impl Default for AppSettings {
                 settings_defaults::default_active_system_prompt_preset_id(),
             active_quantifier_prompt_preset_id:
                 settings_defaults::default_active_quantifier_prompt_preset_id(),
+            active_impersonate_prompt_preset_id:
+                settings_defaults::default_active_impersonate_prompt_preset_id(),
         }
     }
 }

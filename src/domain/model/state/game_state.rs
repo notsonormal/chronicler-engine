@@ -138,7 +138,10 @@ impl GameState {
             }
         }
 
-        let message = Message::new(sender, text, message_type, location_header, event_header);
+        let mut message = Message::new(sender, text, message_type, location_header, event_header);
+        if let Some(replay) = self.narrative.pending_replay.take() {
+            message.set_replay(Some(replay));
+        }
         self.narrative.history.append(message);
     }
 

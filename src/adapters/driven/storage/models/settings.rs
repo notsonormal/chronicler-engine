@@ -16,6 +16,7 @@ pub struct DbSettings {
     pub agents: String,     // JSON: Vec<AgentConfig>
     pub active_system_prompt_preset_id: String,
     pub active_quantifier_prompt_preset_id: String,
+    pub active_impersonate_prompt_preset_id: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -32,6 +33,7 @@ impl DbSettings {
             agents: row.get(6)?,
             active_system_prompt_preset_id: row.get(7)?,
             active_quantifier_prompt_preset_id: row.get(8)?,
+            active_impersonate_prompt_preset_id: row.get(11)?,
             created_at: row.get(9)?,
             updated_at: row.get(10)?,
         })
@@ -54,6 +56,7 @@ impl DbSettings {
             agents,
             active_system_prompt_preset_id: self.active_system_prompt_preset_id.clone(),
             active_quantifier_prompt_preset_id: self.active_quantifier_prompt_preset_id.clone(),
+            active_impersonate_prompt_preset_id: self.active_impersonate_prompt_preset_id.clone(),
         })
     }
 }

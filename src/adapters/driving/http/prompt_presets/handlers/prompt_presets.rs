@@ -43,6 +43,7 @@ pub async fn preset_card_handler(
     let is_active = match preset.preset_type {
         PresetType::System => settings.active_system_prompt_preset_id == id,
         PresetType::Quantifier => settings.active_quantifier_prompt_preset_id == id,
+        PresetType::Impersonate => settings.active_impersonate_prompt_preset_id == id,
     };
 
     Html(preset_card_html(&preset, is_active))
@@ -66,14 +67,20 @@ pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
         .prompt_preset_service
         .list_presets(PresetType::Quantifier)
         .unwrap_or_default();
+    let impersonate_presets = app_state
+        .prompt_preset_service
+        .list_presets(PresetType::Impersonate)
+        .unwrap_or_default();
 
     let settings = try_lock!(app_state.settings.read());
 
     render_template(PromptPresetsTemplate {
         system_presets,
         quantifier_presets,
+        impersonate_presets,
         active_system_id: settings.active_system_prompt_preset_id.clone(),
         active_quantifier_id: settings.active_quantifier_prompt_preset_id.clone(),
+        active_impersonate_id: settings.active_impersonate_prompt_preset_id.clone(),
     })
 }
 
@@ -136,6 +143,7 @@ pub async fn edit_preset_form_handler(
     let is_active = match preset.preset_type {
         PresetType::System => settings.active_system_prompt_preset_id == id,
         PresetType::Quantifier => settings.active_quantifier_prompt_preset_id == id,
+        PresetType::Impersonate => settings.active_impersonate_prompt_preset_id == id,
     };
 
     Html(preset_edit_form_html(
@@ -173,6 +181,7 @@ pub async fn update_preset_handler(
     let is_active = match preset_type {
         PresetType::System => settings.active_system_prompt_preset_id == updated.id,
         PresetType::Quantifier => settings.active_quantifier_prompt_preset_id == updated.id,
+        PresetType::Impersonate => settings.active_impersonate_prompt_preset_id == updated.id,
     };
     Html(preset_card_html(&updated, is_active))
 }
@@ -227,6 +236,9 @@ pub async fn activate_preset_handler(
         PresetType::Quantifier => {
             settings.active_quantifier_prompt_preset_id = id.clone();
         }
+        PresetType::Impersonate => {
+            settings.active_impersonate_prompt_preset_id = id.clone();
+        }
     }
     if let Err(e) = app_state.settings_service.save_settings(&settings) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
@@ -240,11 +252,17 @@ pub async fn activate_preset_handler(
         .prompt_preset_service
         .list_presets(PresetType::Quantifier)
         .unwrap_or_default();
+    let impersonate_presets = app_state
+        .prompt_preset_service
+        .list_presets(PresetType::Impersonate)
+        .unwrap_or_default();
 
     render_template(PromptPresetsTemplate {
         system_presets,
         quantifier_presets,
+        impersonate_presets,
         active_system_id: settings.active_system_prompt_preset_id.clone(),
         active_quantifier_id: settings.active_quantifier_prompt_preset_id.clone(),
+        active_impersonate_id: settings.active_impersonate_prompt_preset_id.clone(),
     })
 }

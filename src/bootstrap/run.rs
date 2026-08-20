@@ -230,7 +230,11 @@ pub(crate) fn ensure_presets(
 ) -> crate::error::Result<()> {
     use crate::domain::model::prompt_preset::PresetType;
 
-    for preset_type in [PresetType::System, PresetType::Quantifier] {
+    for preset_type in [
+        PresetType::System,
+        PresetType::Quantifier,
+        PresetType::Impersonate,
+    ] {
         let dir = data_dir.join("prompt_presets").join(preset_type.as_str());
         if !dir.exists() {
             tracing::info!("Prompt preset seed directory not found: {}", dir.display());
