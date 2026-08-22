@@ -503,3 +503,201 @@ fn test_process_action_heals_stale_status_before_validation_error() {
         "stale Generating status should be healed to Idle before validation error returns"
     );
 }
+
+#[tokio::test]
+async fn test_narrator_action_persists_narrator_entry_then_generates() {
+    use crate::application::errors::ProcessActionResult;
+
+    let data = TestDataBuilder::default_test().build();
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let quantifier_provider = Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>;
+    let service = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        quantifier_provider,
+    );
+    let app = TestAppBuilder::with_data(data)
+        .pipeline(service)
+        .build_service();
+    let game_id = app.game_catalogue.current_game_id();
+
+    let result = app
+        .pipeline
+        .narrator_action(&app.generation_gate, "Make the scene tense".to_string())
+        .expect("narrator_action claim should not error");
+    assert!(
+        matches!(result, ProcessActionResult::Started),
+        "narrator_action should return Started, got {result:?}"
+    );
+
+    wait_for_generation_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
+
+    let narrator = entries
+        .iter()
+        .find(|e| e.message_type == MessageType::Narrator)
+        .expect("narrator_action should persist a Narrator entry");
+    assert_eq!(narrator.text, "Make the scene tense");
+    assert!(
+        narrator.sender.is_none(),
+        "Narrator entries have no sender (rendered bare)"
+    );
+
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.message_type == MessageType::Narration),
+        "narrator_action should trigger a narration generation"
+    );
+    assert_eq!(
+        final_state.narrative.input_buffer.status,
+        GenerationStatus::Idle,
+        "Generation should complete and return to Idle"
+    );
+}
+
+#[tokio::test]
+async fn test_narrator_action_preserves_prior_history() {
+    let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
+    let quantifier_provider = Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>;
+    let service = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        quantifier_provider,
+    );
+    let app = TestAppBuilder::default_test()
+        .log("examine room", Some("Player"), MessageType::Input)
+        .pipeline(service)
+        .build_service();
+    let game_id = app.game_catalogue.current_game_id();
+
+    app.pipeline
+        .narrator_action(&app.generation_gate, "Shift to dusk".to_string())
+        .expect("narrator_action should not error");
+
+    wait_for_generation_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
+    let input_idx = entries
+        .iter()
+        .position(|e| e.message_type == MessageType::Input);
+    let narrator_idx = entries
+        .iter()
+        .position(|e| e.message_type == MessageType::Narrator);
+    let narration_idx = entries
+        .iter()
+        .position(|e| e.message_type == MessageType::Narration);
+    assert!(input_idx.is_some(), "prior Input should be preserved");
+    assert!(narrator_idx.is_some(), "Narrator entry should be added");
+    assert!(narration_idx.is_some(), "Narration should be generated");
+    assert_eq!(
+        narrator_idx.unwrap(),
+        entries
+            .iter()
+            .rposition(|e| e.message_type == MessageType::Narrator)
+            .unwrap(),
+        "only one Narrator entry expected"
+    );
+    assert!(
+        narrator_idx.unwrap() > input_idx.unwrap(),
+        "Narrator entry should appear after prior Input"
+    );
+    assert!(
+        narration_idx.unwrap() > narrator_idx.unwrap(),
+        "Narration should appear after the Narrator entry"
+    );
+}
+
+#[tokio::test]
+async fn test_narrator_action_rejects_concurrent_generation() {
+    use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
+
+    use crate::application::errors::ProcessActionResult;
+
+    let mock_backend = Arc::new(
+        MockBackend::default()
+            .with_delay(300)
+            .with_narrations(vec!["GEN_OUTPUT".to_string(), "GEN_OUTPUT_B".to_string()]),
+    );
+    let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
+    let quantifier_provider = Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>;
+    let service = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        narrator_recorder,
+        quantifier_provider,
+    );
+    let app = TestAppBuilder::default_test()
+        .pipeline(service)
+        .build_service();
+    let game_id = app.game_catalogue.current_game_id();
+
+    let result_gen = app
+        .pipeline
+        .process_action(&app.generation_gate, "look".to_string())
+        .expect("first generation should claim");
+    assert!(matches!(result_gen, ProcessActionResult::Started));
+
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(5) {
+        if mock_backend.narration_started.load(Ordering::SeqCst) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(
+        mock_backend.narration_started.load(Ordering::SeqCst),
+        "first generation should start"
+    );
+
+    let before = app.message_service.load_or_fresh();
+    let narrator_count_before = before
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.message_type == MessageType::Narrator)
+        .count();
+
+    let result_narrator = app
+        .pipeline
+        .narrator_action(&app.generation_gate, "ignored".to_string())
+        .expect("narrator_action should not error during concurrent gen");
+    assert!(
+        matches!(result_narrator, ProcessActionResult::ConcurrentGeneration),
+        "narrator_action should be rejected while a generation is in flight, got {result_narrator:?}"
+    );
+
+    let after = app.message_service.load_or_fresh();
+    let narrator_count_after = after
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.message_type == MessageType::Narrator)
+        .count();
+    assert_eq!(
+        narrator_count_before, narrator_count_after,
+        "rejected narrator_action must not persist a Narrator entry"
+    );
+
+    app.shutdown_token.cancel();
+    wait_for_generation_idle(&app.generation_gate, game_id).await;
+}
+
+async fn wait_for_generation_idle(
+    gate: &crate::application::generation::gate::GenerationGate,
+    game_id: u64,
+) {
+    use std::time::{Duration, Instant};
+
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(5) {
+        if !gate.is_busy(game_id) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("generation for game {game_id} did not become idle within 5s");
+}

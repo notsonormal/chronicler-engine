@@ -249,3 +249,4 @@ vectors.db
 # Project-level plan-mode defaults (extension is generic; values live per-project).
 !.pi/plan-mode.json
 context.md
+mutants.out/*

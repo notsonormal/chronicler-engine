@@ -115,13 +115,37 @@ impl ActionPipeline {
         self.process_action_with_guide(generation_gate, String::new(), Some(guide))
     }
 
+    /// Narrator action: persist a permanent narrator directive in history,
+    /// then trigger a continue narration so the next response is shaped by it.
     pub fn narrator_action(
         &self,
         generation_gate: &GenerationGate,
         text: String,
     ) -> Result<ProcessActionResult, EngineError> {
-        drop(text);
-        self.continue_narration(generation_gate)
+        self.process_action_with_narrator(generation_gate, text)
+    }
+
+    /// No replay blob is needed: the narrator message is persisted in history, so
+    /// retry naturally re-reads it (unlike guide/impersonate, whose steering is
+    /// transient and must ride on the swipe's replay blob).
+    fn process_action_with_narrator(
+        &self,
+        generation_gate: &GenerationGate,
+        text: String,
+    ) -> Result<ProcessActionResult, EngineError> {
+        self.claim_and_spawn(
+            generation_gate,
+            move |game_id, game_state| {
+                generation_gate.heal_stale(game_id, game_state);
+                self.message_service.save_state(game_state)?;
+                game_state.add_message(text.clone(), None, MessageType::Narrator);
+                Ok(())
+            },
+            || Ok(()),
+            move |pipeline| {
+                pipeline.execute_action_with_replay(String::new(), None);
+            },
+        )
     }
 
     /// Impersonate: force the next narration to be written as the player's
