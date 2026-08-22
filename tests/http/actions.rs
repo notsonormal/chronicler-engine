@@ -673,3 +673,113 @@ async fn test_async_action_sequence_then_retry_http() {
         .collect();
     assert_eq!(inputs.len(), 2, "should have 2 Input entries");
 }
+
+// [docs/specs/actions.md] SCENARIO: 1.9
+#[tokio::test]
+async fn test_slash_impersonate_produces_dialogue_http() {
+    let narrator = Arc::new(MockBackend::default());
+    let (app, state) = app_with_narrator(narrator);
+
+    let resp = post_action(&app, "/impersonate hello").await;
+    assert!(resp.status().is_success(), "/impersonate should accept");
+    assert!(
+        wait_idle(&state, 1000).await,
+        "impersonate action should complete"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let dialogues: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Dialogue)
+        .collect();
+    assert_eq!(
+        dialogues.len(),
+        1,
+        "impersonate should produce exactly one Dialogue entry"
+    );
+
+    let inputs: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .collect();
+    assert_eq!(
+        inputs.len(),
+        0,
+        "impersonate should not persist an Input entry"
+    );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.10
+#[tokio::test]
+async fn test_slash_guide_does_not_persist_input_http() {
+    let narrator = Arc::new(MockBackend::default());
+    let (app, state) = app_with_narrator(narrator);
+
+    let resp = post_action(&app, "/guide look around").await;
+    assert!(resp.status().is_success(), "/guide should accept");
+    assert!(
+        wait_idle(&state, 1000).await,
+        "guide action should complete"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let narrations: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .collect();
+    assert!(
+        !narrations.is_empty(),
+        "guide should produce at least one Narration entry"
+    );
+
+    let inputs: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .collect();
+    assert_eq!(inputs.len(), 0, "guide should not persist an Input entry");
+
+    let narrators: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narrator)
+        .collect();
+    assert_eq!(
+        narrators.len(),
+        0,
+        "guide should not persist a Narrator entry"
+    );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.11
+#[tokio::test]
+async fn test_slash_narrator_persists_narrator_message_http() {
+    let narrator = Arc::new(MockBackend::default());
+    let (app, state) = app_with_narrator(narrator);
+
+    let resp = post_action(&app, "/narrator the room is dark").await;
+    assert!(resp.status().is_success(), "/narrator should accept");
+    assert!(
+        wait_idle(&state, 1000).await,
+        "narrator action should complete"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let narrators: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narrator)
+        .collect();
+    assert_eq!(
+        narrators.len(),
+        1,
+        "narrator should persist exactly one Narrator entry"
+    );
+    assert_eq!(narrators[0].text(), "the room is dark");
+
+    let narrations: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .collect();
+    assert!(
+        !narrations.is_empty(),
+        "narrator should produce at least one Narration entry"
+    );
+}

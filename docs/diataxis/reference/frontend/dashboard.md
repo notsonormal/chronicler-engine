@@ -79,13 +79,15 @@ State transitions happen on three events: form submission (immediately sets Thin
 
 **Text-check preflight.** Before the action reaches its endpoint, the form posts to the action-check endpoint, which invokes the configured text checker. If issues are found, the action area is replaced with a preview showing the original text, an editable corrected text textarea, and issue tags (orange = spell, pink = grammar). Three buttons: Send (submit corrected), Send Original (submit original), Cancel (restore action area from `data-original-html`). The submit paths converge on the action-confirm endpoint; the corrected-vs-original distinction is carried by the form payload.
 
+**Slash-command palette.** Typing `/` in the command input opens a fixed-position palette above the input listing the three steering commands (`/narrator`, `/impersonate`, `/guide`); further typing filters the list, arrow keys move the highlight (wrapping at the ends), Enter or a click populates the input with the highlighted command plus a trailing space without submitting, and Escape, focus loss, scroll, or submit closes it. The palette element is a `<body>` child whose listeners are delegated to `document`, so it survives the action-area innerHTML swap that action submission performs — the input is recreated and the wiring re-binds to it. The interaction contract is enforced by [`../../../specs/browser.md`](../../../specs/browser.md) (scenarios 17.1–17.10).
+
 ## Polling Cadences
 
 Four endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: story log 2s, visual sidebar 5s, status display 5s, LLM messages 4s; the header fetches once on load. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive.
 
 ## Edit, Delete, Swipe, Retrigger Flows
 
-All four flows operate on the **last entry** in the story log. Conditional visibility is computed in `NarrativeLogTemplate::new` (templates.rs) — `show_retrigger` is set when the last entry is narration/dialogue, has no event continuation, and the previous turn had a trigger; swipe controls appear only when `swipe_count > 1` on the last entry; the delete button appears only when the last entry is not the only entry. The description below focuses on what each flow does.
+All four flows operate on the **last entry** in the story log. Conditional visibility is computed in `NarrativeLogTemplate::new` (templates.rs); the per-button and swipe-control visibility rules are specified in the UI design doc (see Document References). The description below focuses on what each flow does.
 
 ### Edit Flow
 
@@ -106,11 +108,11 @@ The textarea height is auto-resized on input. The save/cancel buttons replace th
 
 ### Swipe Flow
 
-Swipes exist on the **last entry only** and only when `swipe_count > 1`. The control row holds: a left arrow (◀, disabled on the first swipe), a counter (`active_swipe_index + 1 / swipe_count`), and a right arrow (▶). Clicking ◀ or ▶ submits to the swipe-switch endpoint with the target swipe index. On success, JavaScript replaces `#story-log` innerHTML with the response and refreshes the visual sidebar and header — the sidebar and header reflect game state, and switching swipes restores the `snapshot_id` of the target swipe, so both must re-render to match. Clicking ▶ when on the latest swipe submits to the new-swipe endpoint; JavaScript transitions the submit button to "Stop" / status to "Thinking..." immediately, then refreshes `#story-log` on response.
+Swipes exist on the **last entry only**. The control row holds: a left arrow (◀, disabled on the first swipe), a counter (`active_swipe_index + 1 / swipe_count`), and a right arrow (▶). Clicking ◀ or ▶ submits to the swipe-switch endpoint with the target swipe index. On success, JavaScript replaces `#story-log` innerHTML with the response and refreshes the visual sidebar and header — the sidebar and header reflect game state, and switching swipes restores the `snapshot_id` of the target swipe, so both must re-render to match. Clicking ▶ when on the latest swipe submits to the new-swipe endpoint; JavaScript transitions the submit button to "Stop" / status to "Thinking..." immediately, then refreshes `#story-log` on response.
 
 ### Retrigger Flow
 
-The retrigger (♻) button appears on the last entry only when `show_retrigger` is true: the last entry is narration or dialogue, has no event continuation, and the previous turn had a trigger.
+The retrigger (♻) button appears on the last entry only when `show_retrigger` is true.
 
 1. The user clicks the retrigger button. JavaScript submits to the retrigger endpoint and immediately transitions the button to "Stop" / status to "Thinking...".
 2. On response, JavaScript triggers `htmx:refresh` on `#story-log`.
@@ -140,7 +142,7 @@ New-game names are auto-generated as `{WorldName}_{YYYY-MM-DD}_{N}` (underscores
 ## Document References
 
 - [`./http_routes.md`](./http_routes.md) — full HTTP route topology (52 routes; machine-generated).
-- [`./ui_design.md`](./ui_design.md) — design tokens (colors, typography, spacing) + component specs.
+- [`./ui_design.md`](./ui_design.md) — design tokens (colors, typography, spacing), component specs, and the per-button/swipe-control visibility rules.
 - [`../narrative/narration_system.md#llm-call-logging--forensics`](../narrative/narration_system.md#llm-call-logging--forensics) — LLM Messages tab forensics + the 50-row `llm_messages` cap.
 - [`../game_flow.md#text-check-branch`](../game_flow.md#text-check-branch) — text-check preflight, settings, and preview UI.
 - [`../narrative/prompt_system.md`](../narrative/prompt_system.md) — Prompt Presets tab content.

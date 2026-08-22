@@ -37,6 +37,8 @@ pub fn seed_default_preset(storage: &Storage) {
         })
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
         .expect("test setup: save_preset must succeed for default preset");
+
+    seed_default_impersonate_preset(storage);
 }
 
 pub fn seed_default_impersonate_preset(storage: &Storage) {
