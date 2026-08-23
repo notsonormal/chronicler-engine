@@ -145,6 +145,32 @@ pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
         .len()
 }
 
+/// Poll until the number of `#story-log .log-entry` elements drops below `max_count`.
+/// Returns the final count. Panics on timeout.
+pub async fn wait_for_log_entries_below(page: &playwright_rs::Page, max_count: usize) -> usize {
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(10);
+    let mut last_count = max_count;
+
+    while start.elapsed() < timeout {
+        let count = count_log_entries(page).await;
+        last_count = count;
+        if count < max_count {
+            return count;
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+
+    eprintln!(
+        "⏱️  wait_for_log_entries_below({max_count}) TIMED OUT after 10s (last: {last_count})"
+    );
+    capture_failure_state(page, "wait_for_log_entries_below").await;
+    panic!("Log entry count did not drop below {max_count} within 10s (last: {last_count})");
+}
+
 /// Capture screenshot and DOM dump when a test fails for debugging.
 /// Saves to `tmp/screenshots/` and `tmp/test_diagnostics/`.
 pub async fn capture_failure_state(page: &playwright_rs::Page, test_name: &str) {

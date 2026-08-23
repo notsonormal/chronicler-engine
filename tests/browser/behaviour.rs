@@ -140,18 +140,11 @@ async fn test_delete_removes_message() {
 
         page.locator(".delete-btn").await.click(None).await.unwrap();
 
-        let mut attempts = 0;
-        let max_attempts = 40; // 4 seconds at 100ms intervals
-        let mut current_count = count_log_entries(&page).await;
-        while current_count >= count_before_delete && attempts < max_attempts {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            current_count = count_log_entries(&page).await;
-            attempts += 1;
-        }
+        let current_count = wait_for_log_entries_below(&page, count_before_delete).await;
 
         assert!(
             current_count < count_before_delete,
-            "Delete should remove the message (expected < {count_before_delete}, got {current_count} after {attempts} attempts)"
+            "Delete should remove the message (expected < {count_before_delete}, got {current_count})"
         );
     })
     .await;
