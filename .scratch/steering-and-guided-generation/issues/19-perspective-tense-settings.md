@@ -1,12 +1,38 @@
 # Implement: narrative perspective and tense settings
 
 Type: task
-Status: pending
+Status: closed
 Blocked by: (none)
+Assignee: pi (wayfinder session 2026-08-23)
 
 ## Question
 
 Implement the `NarrativePerspective` and `NarrativeTense` settings decided in ticket 16, plus the macro plumbing and three-preset rewrite. Fully specified by ticket 16's answer.
+
+## Resolution
+
+Implemented and build-green (`python build.py` and `python build.py --llm-only` both pass).
+
+### What changed
+
+- Added `NarrativePerspective { Second, Third }` and `NarrativeTense { Past, Present }` enums in `src/domain/model/settings.rs` with `as_str()` and `FromStr` conversions.
+- Added `narrative_perspective`/`narrative_tense` fields to `AppSettings` (default `Third`/`Past`) via `settings_defaults` serde default fns.
+- Extended `TemplateVars` with `narrative_perspective`/`narrative_tense` macro strings and updated `render_template` to substitute `{{narrative_perspective}}` / `{{narrative_tense}}`.
+- Centralized prompt injection in `PromptAssembler::assemble`: it clones `context.template_vars` and overwrites the two voice fields from `self.settings`. This covers all four pipeline/retry sites without touching `pipeline_run.rs` or `retry.rs`.
+- Updated `arrival_service.rs` to read `Storage::get_settings()` once and set the two voice fields on the context before `build_narration_prompt` (arrival's local assembler is settings-less).
+- Added storage migration v18 (`settings.narrative_perspective`, `settings.narrative_tense` TEXT columns) and wired `DbSettings`/`settings.rs` round-trip.
+- Rewrote `data/prompt_presets/system/default.json` and `data/prompt_presets/impersonate/default.json` to use the macros.
+- Rewrote `data/prompt_presets/quantifier/default.json` examples to third-person past, **without macros** — macro-driving the teaching examples would produce ungrammatical `"third walks..."`. This is the deliberate deviation from ticket 16's blanket "all three presets"; the quantifier keys off location, not pronoun, so the examples match the default narrator voice by hardcoding.
+- Added a dedicated `/settings/narrative-voice` form with two dropdowns (Perspective, Tense), mirroring the text-check pattern.
+- Added unit tests (`settings_tests.rs`, extended `template_tests.rs`, central-injection tests in `assembler_tests.rs`) and HTTP E2E tests (`tests/http/settings.rs`). Updated `docs/specs/settings.md` with scenarios 20.8–20.10 and regenerated `docs/diataxis/reference/frontend/http_routes.md` (now 53 routes).
+
+### Key design call
+
+Voice injection is centralized in `PromptAssembler::assemble` rather than threaded through each `PromptContext::new` call site. The assembler already owns `settings` and reads it for budget resolution; extending it to patch `template_vars` keeps the injection in one place and avoids edits to `pipeline_run.rs`/`retry.rs`.
+
+### Deferred
+
+Diátaxis reference doc updates (`prompt_system.md` macro list, `storage.md` migration v18) were deferred to the `chronicler-after-plan-workflow` skill per the plan.
 
 ## Specification (from ticket 16)
 
@@ -96,3 +122,34 @@ New storage migration (increment the version — check the current version, tick
 - Re-verify every file path against the current tree before editing (map standing preference; the old plan's paths are stale).
 - The quantifier-preset macro decision (hardcode third, don't macro-drive) is a deviation from ticket 16's blanket "all three presets" — flag it in the resolution, do not silently diverge.
 - Read `src/adapters/driven/storage/settings.rs` and the settings storage tests before deciding whether a schema migration is needed.
+
+## Resolution
+
+Implemented and build-green.
+
+Validation results:
+- `python build.py` green (all 12 steps passed; 1444 tests passed, 2 LLM tests skipped).
+- `python build.py --llm-only` green (2/2 LLM tests passed).
+
+## What changed
+
+- `src/domain/model/settings.rs` — added `NarrativePerspective` (Second/Third) and `NarrativeTense` (Past/Present) enums with `as_str()`/`FromStr`; added the two fields to `AppSettings` with serde defaults; updated `AppSettings::default()`.
+- `src/domain/model/utils/settings_defaults.rs` — added default-fn pointers returning Third/Past.
+- `src/domain/model/template.rs` + `src/domain/model/utils/template.rs` — `TemplateVars` gained `narrative_perspective`/`narrative_tense` (default `"third"`/`"past"`); `render_template` substitutes the two macros.
+- `src/application/prompting/assembler.rs` — `PromptAssembler::assemble` now injects the voice centrally from `self.settings`, covering all four pipeline/retry sites with one change.
+- `src/application/arrival_service.rs` — arrival reads `Storage::get_settings()` once and sets the two voice fields on the context (arrival's local assembler has no settings handle).
+- `src/adapters/driven/storage/utils/plumbing.rs` — migration v18 adds the two settings columns.
+- `src/adapters/driven/storage/models/settings.rs` + `src/adapters/driven/storage/settings.rs` — `DbSettings` maps the two columns; load parses via `FromStr` with a fallback + warning on unknown values.
+- `data/prompt_presets/system/default.json` — `writing_style` uses `{{narrative_perspective}}`/`{{narrative_tense}}`.
+- `data/prompt_presets/impersonate/default.json` — `writing_style` and `instructions` use the macros; impersonate now follows the narrator's configured voice instead of hardcoding first person.
+- `data/prompt_presets/quantifier/default.json` — examples rewritten to third-person past, NO macros (macro-driving would produce ungrammatical `"third walks..."` teaching text).
+- `src/adapters/driving/http/settings/templates/settings.rs` + `handlers/settings.rs` + `builders/router.rs` — added a dedicated `/settings/narrative-voice` form with Perspective and Tense dropdowns.
+- Tests added/extended: `src/domain/model/settings_tests.rs`; `src/domain/model/template_tests.rs` (macro + real-preset-coherence tests); `src/application/prompting/assembler_tests.rs` (central-injection + settings-less default); `tests/http/settings.rs` (panel + POST + fallback + failure); `src/adapters/driven/storage/settings_tests.rs` (round-trip).
+- `docs/specs/settings.md` — added scenarios 20.8–20.10 for the new endpoint.
+- `docs/diataxis/reference/frontend/http_routes.md` + `scripts/tests/test_extract_http_routes.py` — regenerated/updated for the new route (53 routes).
+
+## Design deviations from the original ticket
+
+- **Voice injection point:** Centralized in `PromptAssembler::assemble` rather than threading a builder through every `PromptContext::new` call site. Decision made during plan review; avoids duplicated settings reads and keeps the change localized.
+- **Storage:** Verified column-based settings storage, so v18 migration was required.
+- **Existing DBs:** Preset JSON rewrites only affect fresh DBs; existing DBs keep old preset text until the user edits/re-seeds (user-confirmed "seed files only" option).

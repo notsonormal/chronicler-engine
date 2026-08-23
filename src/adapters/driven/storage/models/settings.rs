@@ -3,7 +3,9 @@
 
 use crate::error::EngineError;
 use crate::domain::model::agent::AgentConfig;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckSettings};
+use crate::domain::model::settings::{
+    AppSettings, LlmProviderConfig, NarrativePerspective, NarrativeTense, TextCheckSettings,
+};
 
 /// Database row for `settings` table (singleton, id=1).
 pub struct DbSettings {
@@ -17,6 +19,8 @@ pub struct DbSettings {
     pub active_system_prompt_preset_id: String,
     pub active_quantifier_prompt_preset_id: String,
     pub active_impersonate_prompt_preset_id: String,
+    pub narrative_perspective: String,
+    pub narrative_tense: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -34,6 +38,8 @@ impl DbSettings {
             active_system_prompt_preset_id: row.get(7)?,
             active_quantifier_prompt_preset_id: row.get(8)?,
             active_impersonate_prompt_preset_id: row.get(11)?,
+            narrative_perspective: row.get(12)?,
+            narrative_tense: row.get(13)?,
             created_at: row.get(9)?,
             updated_at: row.get(10)?,
         })
@@ -47,6 +53,10 @@ impl DbSettings {
         let agents: Vec<AgentConfig> = serde_json::from_str(&self.agents)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize agents: {e}")))?;
 
+        let narrative_perspective =
+            NarrativePerspective::parse_or_default(&self.narrative_perspective);
+        let narrative_tense = NarrativeTense::parse_or_default(&self.narrative_tense);
+
         Ok(AppSettings {
             connections,
             narration_connection_id: self.narration_connection_id.clone(),
@@ -57,6 +67,8 @@ impl DbSettings {
             active_system_prompt_preset_id: self.active_system_prompt_preset_id.clone(),
             active_quantifier_prompt_preset_id: self.active_quantifier_prompt_preset_id.clone(),
             active_impersonate_prompt_preset_id: self.active_impersonate_prompt_preset_id.clone(),
+            narrative_perspective,
+            narrative_tense,
         })
     }
 }

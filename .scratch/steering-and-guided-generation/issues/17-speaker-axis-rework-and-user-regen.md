@@ -1,7 +1,7 @@
 # Implementation: speaker-axis type rework + user-regen
 
 Type: task
-Status: pending
+Status: resolved
 Blocked by: 15
 
 ## Question
@@ -81,3 +81,19 @@ User-regen is retry-only. No `Action` variant, no parser entry, no auto-suggesti
 - `cargo nextest run --tests` — integration tests; the impersonate integration tests (ticket 09/10) must update to expect `Input` not `Dialogue` and no `sender`.
 - `python build.py` green.
 - UI: verify swipe controls appear on a retried Input; verify no sender prefix renders on any message; verify impersonate output renders as an Input-styled line.
+
+## Resolution
+
+Implemented in commit `b7aee81` (feat(speaker-axis): Implement ticket 17 speaker/role type rework + user-regen). All seven scope items verified against the code:
+
+1. **Impersonate → `Input`** — `pipeline_run.rs:178` sets `MessageType::Input` for the impersonate branch (was `Dialogue`).
+2. **`sender` deleted + migration** — removed from `Message`, `MessageEntry`, `DbMessage`, `MessageEntryView`; storage migration v17 (`ALTER TABLE messages DROP COLUMN sender`, guarded by `column_exists`). The `{{ sender }}:` template prefix and `.sender` CSS rule removed.
+3. **`Dialogue` variant removed** — `MessageType` is now `Narration | System | Input | Narrator`; view-model match and `last_ai_response_index`/`resolve_retry_target` filter arms cleaned.
+4. **`Input` swipe support + 3-way retry** — `RetryMode { ReNarrate, ReImpersonate, UserRegen }` in `retry.rs`; `resolve_retry_target` branches on last message type + steering record (`replay.impersonate`); template swipe-controls now gate on `log_type == "narration" || "input"`.
+5. **Stop-after-swipe** — `retry_user_regen` adds the swipe and finalizes without chaining `phase_narrate`; `retry_reimpersonate` likewise.
+6. **Hardcoded user-regen instruction** — `build_user_regen_instruction` matches ticket 17 decision 6 verbatim; no `PresetType`.
+7. **No slash command** — `Action` enum unchanged; user-regen routed internally from last-message + record.
+
+Specs updated: `docs/specs/actions.md`, `browser.md`, `retrigger.md`, `swipe_new.md`.
+
+`python build.py` green: 1446 tests passed, 2 LLM tests skipped (expected per LLM policy). Recorded by a later session that found the code landed but the wayfinder bookkeeping had not been updated.

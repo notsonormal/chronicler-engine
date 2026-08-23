@@ -41,6 +41,8 @@ mod prompt_preset_tests;
 #[cfg(test)]
 mod scenario_tests;
 #[cfg(test)]
+mod settings_tests;
+#[cfg(test)]
 mod template_tests;
 #[cfg(test)]
 mod trigger_tests;

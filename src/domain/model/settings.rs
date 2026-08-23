@@ -1,6 +1,8 @@
 //! [DOC: docs/diataxis/reference/architecture_system.md]
 //! Settings and configuration types
 
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::agent::AgentConfig;
@@ -18,6 +20,90 @@ pub enum TextCheckMode {
     Grammar,
     /// Spell and grammar checks both applied.
     SpellGrammar,
+}
+
+/// Narrative point of view used by the narrator and impersonate preset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NarrativePerspective {
+    /// Second person ("you walked") — classic interactive-fiction/CYOA voice.
+    Second,
+    /// Third person ("she walked") — default novel/RP voice.
+    Third,
+}
+
+impl NarrativePerspective {
+    /// Returns the lowercase wire/storage value (`"second"` / `"third"`).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Second => "second",
+            Self::Third => "third",
+        }
+    }
+
+    /// Parse from the wire/storage string, falling back to the default variant
+    /// (`Third`) with a warning on unknown values so corrupt or stale rows stay
+    /// loadable. Mirrors `LlmBackendType::from_str`'s graceful-degradation pattern.
+    pub fn parse_or_default(s: &str) -> Self {
+        Self::from_str(s).unwrap_or_else(|e| {
+            tracing::warn!("Invalid narrative perspective '{s}', falling back to Third: {e}");
+            Self::Third
+        })
+    }
+}
+
+impl FromStr for NarrativePerspective {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "second" => Ok(Self::Second),
+            "third" => Ok(Self::Third),
+            _ => Err(format!("Unknown narrative perspective: {s}")),
+        }
+    }
+}
+
+/// Narrative tense used by the narrator and impersonate preset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NarrativeTense {
+    /// Present tense ("she walks").
+    Present,
+    /// Past tense ("she walked") — default.
+    Past,
+}
+
+impl NarrativeTense {
+    /// Returns the lowercase wire/storage value (`"past"` / `"present"`).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Present => "present",
+            Self::Past => "past",
+        }
+    }
+
+    /// Parse from the wire/storage string, falling back to the default variant
+    /// (`Past`) with a warning on unknown values so corrupt or stale rows stay
+    /// loadable. Mirrors `LlmBackendType::from_str`'s graceful-degradation pattern.
+    pub fn parse_or_default(s: &str) -> Self {
+        Self::from_str(s).unwrap_or_else(|e| {
+            tracing::warn!("Invalid narrative tense '{s}', falling back to Past: {e}");
+            Self::Past
+        })
+    }
+}
+
+impl FromStr for NarrativeTense {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "present" => Ok(Self::Present),
+            "past" => Ok(Self::Past),
+            _ => Err(format!("Unknown narrative tense: {s}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -127,6 +213,10 @@ pub struct AppSettings {
     pub active_quantifier_prompt_preset_id: String,
     #[serde(default = "settings_defaults::default_active_impersonate_prompt_preset_id")]
     pub active_impersonate_prompt_preset_id: String,
+    #[serde(default = "settings_defaults::default_narrative_perspective")]
+    pub narrative_perspective: NarrativePerspective,
+    #[serde(default = "settings_defaults::default_narrative_tense")]
+    pub narrative_tense: NarrativeTense,
 }
 
 impl Default for AppSettings {
@@ -177,6 +267,8 @@ impl Default for AppSettings {
                 settings_defaults::default_active_quantifier_prompt_preset_id(),
             active_impersonate_prompt_preset_id:
                 settings_defaults::default_active_impersonate_prompt_preset_id(),
+            narrative_perspective: settings_defaults::default_narrative_perspective(),
+            narrative_tense: settings_defaults::default_narrative_tense(),
         }
     }
 }

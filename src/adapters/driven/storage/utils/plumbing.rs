@@ -308,5 +308,26 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 18 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if !column_exists(conn, "settings", "narrative_perspective") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN narrative_perspective \
+                 TEXT NOT NULL DEFAULT 'third'",
+            )?;
+        }
+        if !column_exists(conn, "settings", "narrative_tense") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN narrative_tense \
+                 TEXT NOT NULL DEFAULT 'past'",
+            )?;
+        }
+        conn.pragma_update(None, "user_version", 18)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

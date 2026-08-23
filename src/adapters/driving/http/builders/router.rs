@@ -154,6 +154,10 @@ pub fn build_router(app_state: AppState) -> Router {
             post(settings::handlers::save_text_check_handler),
         )
         .route(
+            "/settings/narrative-voice",
+            post(settings::handlers::save_narrative_voice_handler),
+        )
+        .route(
             "/fragment/prompt-presets",
             get(prompt_presets::handlers::panel_handler),
         )

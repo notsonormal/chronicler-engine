@@ -99,6 +99,34 @@ use crate::adapters::driving::http::utils::template_helpers::provider_options_ht
             </div>
         </form>
     </div>
+    <h2>Narrative Voice</h2>
+    <div class="connection-card">
+        <div class="card-header">
+            <span class="card-title">Perspective &amp; Tense</span>
+        </div>
+        <div class="card-details">
+            Controls the narrator's point of view and tense, and the impersonate preset follows the same voice.
+        </div>
+        <form hx-post="/settings/narrative-voice" hx-target="#settings-status" hx-swap="innerHTML">
+            <div class="form-group">
+                <label for="narrative_perspective">Perspective</label>
+                <select name="narrative_perspective" id="narrative_perspective">
+                    <option value="second" {% if narrative_perspective == "second" %}selected{% endif %}>Second person</option>
+                    <option value="third" {% if narrative_perspective == "third" %}selected{% endif %}>Third person</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="narrative_tense">Tense</label>
+                <select name="narrative_tense" id="narrative_tense">
+                    <option value="past" {% if narrative_tense == "past" %}selected{% endif %}>Past</option>
+                    <option value="present" {% if narrative_tense == "present" %}selected{% endif %}>Present</option>
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
 </div>
 "##,
     ext = "html"
@@ -110,6 +138,8 @@ pub struct SettingsTemplate {
     pub provider_options: String,
     pub text_check_mode: String,
     pub enable_auto_check: bool,
+    pub narrative_perspective: String,
+    pub narrative_tense: String,
 }
 
 impl SettingsTemplate {
@@ -127,6 +157,8 @@ impl SettingsTemplate {
             }
             .to_string(),
             enable_auto_check: settings.text_check.enable_auto_check,
+            narrative_perspective: settings.narrative_perspective.as_str().to_string(),
+            narrative_tense: settings.narrative_tense.as_str().to_string(),
         }
     }
 }

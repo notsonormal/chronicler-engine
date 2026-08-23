@@ -1,7 +1,7 @@
 # Grill: two narrator modes (novel/RP vs. IF/CYOA)
 
 Type: grilling
-Status: pending
+Status: resolved
 Blocked by: (none)
 
 ## Question
@@ -52,3 +52,27 @@ The observation opened during ticket 16: the user noted "a novel style where the
 - Related tickets: 16 (perspective — orthogonal axis, nearly decided: Second/Third, default Third, macro across presets), 04 (feature synthesis), 09 (impersonate preset), 15 (Dialogue-vs-Input — the type axis, also orthogonal to mode).
 - Skills: `/grilling`, `/domain-modeling`.
 - This is a narrator-design decision, larger in scope than ticket 16. Do not implement until the grilling resolves mode shape (Q2), the perspective interaction (Q3), and whether this stays on the map or becomes its own effort (Q5/Q6).
+
+## Resolution
+
+Grilled across one round (Q1, Q2). The frontier collapsed after both answers.
+
+### Decisions
+
+1. **A genuine second narrator posture is wanted (Q1=A).** IF/CYOA mode — where the player writes terse commands and the narrator *elaborates* them ("take vase" → "You take the ancient vase") — is a real, missing posture, not a perspective tweak. The current system preset's Agency Rule materially blocks it (Fact 1: *"Never write, assume, or infer the player's actions, thoughts, or feelings… The player's speech lines must be in indirect speech."*). Forcing an IF player to write prose defeats the genre, so the existing preset cannot serve both postures by input style alone. Reinforcing signal from the user: a future auto-generation of pickable options for the player would suit the new mode — a classic IF/CYOA affordance with no home in novel mode.
+
+2. **Out of scope for this map; spins off as a fresh wayfinder effort (Q2=A).** Two-narrator-modes is not named in this map's Destination (guide / narrator action / impersonate — all three now implemented and build-green). It reshapes the narrator role itself — bigger and architecturally different from a steering feature (new mode setting, preset bundles, Agency Rule surgery, perspective-interaction, impersonate-in-IF redesign). Loading it onto an effort at its finish line risks scope creep and blurs the "done" line. It deserves its own chart-the-map treatment, which forces the mode question through its own breadth-first grilling.
+
+### What this ticket does NOT decide (graduated to the new map)
+
+The mode-shape questions are the new map's to grill, not this ticket's:
+- **Mode shape** (ticket 18 Q2): new `AppSettings` `NarratorMode` field + preset bundle vs. preset-edit-only vs. both.
+- **Perspective interaction** (ticket 18 Q3): does mode set/lock the default perspective, or stay independent? Mode and perspective are orthogonal (ticket 16); their defaults correlate (novel→third, IF→second) but are independent knobs.
+- **Impersonate in IF mode** (ticket 18 Q4): disable, repurpose to draft a terse command, or keep?
+- **Options-autogeneration** (user-surfaced this session): an auto-generated pickable-options feature that would suit IF mode. Candidate fog toward the new map's destination — not yet sharp enough to ticket; the new map's charting decides whether it is in the destination or fog.
+
+### Seed facts for the new map's first session
+
+- **Current engine state:** novel-only. Agency Rule in `data/prompt_presets/system/default.json` (the novel posture). `AppSettings` (`src/domain/model/settings.rs`) has `active_system_prompt_preset_id` but no mode field. Perspective/tense settings landed (ticket 19: `NarrativePerspective` Second/Third default Third, `NarrativeTense` Past/Present default Past, via `{{narrative_perspective}}`/`{{narrative_tense}}` macros). Impersonate works in novel mode (tickets 09/17; output is `MessageType::Input`, no `sender`).
+- **Orthogonality:** mode is orthogonal to perspective (ticket 16) and to the speaker axis (ticket 15). The new map should respect both — neither axis is re-litigated.
+- **The new map's chart-the-map step 1 (name the destination) is a grilling, not a ticket.** It runs before the new map exists. Tickets are created in step 4, after the destination and frontier are settled.

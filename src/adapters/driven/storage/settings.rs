@@ -14,7 +14,7 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                    "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, created_at, updated_at, active_impersonate_prompt_preset_id FROM settings WHERE id = 1",
+                    "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, created_at, updated_at, active_impersonate_prompt_preset_id, narrative_perspective, narrative_tense FROM settings WHERE id = 1",
                 )?;
                 let result = stmt.query_row([], DbSettings::from_row);
                 match result {
@@ -40,8 +40,8 @@ impl Storage {
                     .map_err(|e| EngineError::Parse(format!("Failed to serialize agents: {e}")))?;
 
                 conn.execute(
-                    "INSERT OR REPLACE INTO settings (id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, created_at, updated_at, active_impersonate_prompt_preset_id)
-                     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO settings (id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, created_at, updated_at, active_impersonate_prompt_preset_id, narrative_perspective, narrative_tense)
+                     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     rusqlite::params![
                         &connections_json,
                         &settings.narration_connection_id,
@@ -54,6 +54,8 @@ impl Storage {
                         &now,
                         &now,
                         &settings.active_impersonate_prompt_preset_id,
+                        &settings.narrative_perspective.as_str(),
+                        &settings.narrative_tense.as_str(),
                     ],
                 )?;
                 Ok(())

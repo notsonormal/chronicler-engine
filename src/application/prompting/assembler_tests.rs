@@ -750,3 +750,114 @@ fn test_assemble_impersonate_injects_persona_macros_into_preset() {
         "{{persona_personality}} and {{persona_background}} must inject into instructions"
     );
 }
+
+#[test]
+fn test_assemble_injects_narrative_voice_from_settings() {
+    use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
+
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = PromptPreset {
+        id: "voice-test".to_string(),
+        name: "Voice Test".to_string(),
+        role: None,
+        instructions: None,
+        writing_style: Some(
+            "{{narrative_perspective}}-person limited perspective. {{narrative_tense}} tense."
+                .to_string(),
+        ),
+        output_format: None,
+        is_default: true,
+        preset_type: crate::domain::model::prompt_preset::PresetType::System,
+    };
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "go north",
+        &history,
+    );
+
+    let settings = AppSettings {
+        narrative_perspective: NarrativePerspective::Second,
+        narrative_tense: NarrativeTense::Present,
+        ..Default::default()
+    };
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS)
+        .with_settings(Arc::new(RwLock::new(settings)));
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        result
+            .user_prompt
+            .contains("second-person limited perspective"),
+        "settings narrative_perspective must be injected into user prompt: {:#?}",
+        result.user_prompt
+    );
+    assert!(
+        result.user_prompt.contains("present tense"),
+        "settings narrative_tense must be injected into user prompt: {:#?}",
+        result.user_prompt
+    );
+}
+
+#[test]
+fn test_assemble_without_settings_uses_default_voice() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = PromptPreset {
+        id: "voice-test".to_string(),
+        name: "Voice Test".to_string(),
+        role: None,
+        instructions: None,
+        writing_style: Some(
+            "{{narrative_perspective}}-person limited perspective. {{narrative_tense}} tense."
+                .to_string(),
+        ),
+        output_format: None,
+        is_default: true,
+        preset_type: crate::domain::model::prompt_preset::PresetType::System,
+    };
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "go north",
+        &history,
+    );
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        result
+            .user_prompt
+            .contains("third-person limited perspective"),
+        "default narrative_perspective must render when assembler has no settings: {:#?}",
+        result.user_prompt
+    );
+    assert!(
+        result.user_prompt.contains("past tense"),
+        "default narrative_tense must render when assembler has no settings: {:#?}",
+        result.user_prompt
+    );
+}

@@ -3,15 +3,16 @@
 
 use axum::{Form, extract::State, response::Html};
 
-use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{LlmProviderConfig, TextCheckMode};
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::connections::{
     connection_card_html, connection_edit_form_html,
 };
-use crate::adapters::driving::http::utils::handler_helpers::{opt_string, render_template};
-
 use crate::adapters::driving::http::settings::templates::settings::SettingsTemplate;
+use crate::adapters::driving::http::utils::handler_helpers::{opt_string, render_template};
+use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::settings::{
+    LlmProviderConfig, NarrativePerspective, NarrativeTense, TextCheckMode,
+};
 
 macro_rules! try_lock {
     ($lock:expr) => {
@@ -51,6 +52,12 @@ pub struct TextCheckForm {
     pub enable_auto_check: bool,
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct NarrativeVoiceForm {
+    pub narrative_perspective: String,
+    pub narrative_tense: String,
+}
+
 pub async fn save_settings_handler(
     State(app_state): State<AppState>,
     Form(form): Form<SettingsForm>,
@@ -86,6 +93,23 @@ pub async fn save_text_check_handler(
     }
 
     Html("Text check settings saved!".to_string())
+}
+
+pub async fn save_narrative_voice_handler(
+    State(app_state): State<AppState>,
+    Form(form): Form<NarrativeVoiceForm>,
+) -> Html<String> {
+    let mut settings = try_lock!(app_state.settings.write());
+
+    settings.narrative_perspective =
+        NarrativePerspective::parse_or_default(&form.narrative_perspective);
+    settings.narrative_tense = NarrativeTense::parse_or_default(&form.narrative_tense);
+
+    if let Err(e) = app_state.settings_service.save_settings(&settings) {
+        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+    }
+
+    Html("Narrative voice saved!".to_string())
 }
 
 pub async fn add_connection_handler(

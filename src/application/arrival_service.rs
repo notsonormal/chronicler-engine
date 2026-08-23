@@ -131,7 +131,9 @@ impl ArrivalTaskContext {
             return Ok(());
         };
 
-        let prompt_context = PromptContext::new(
+        let settings = storage.get_settings()?;
+
+        let mut prompt_context = PromptContext::new(
             &world,
             room,
             NpcContext {
@@ -142,6 +144,9 @@ impl ArrivalTaskContext {
             "",
             &[],
         );
+        prompt_context
+            .template_vars
+            .set_narrative_voice(settings.narrative_perspective, settings.narrative_tense);
 
         let global_rules = &world.global_rules;
         let narration = match self.arrival_preset.as_ref() {

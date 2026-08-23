@@ -81,9 +81,15 @@ impl PromptAssembler {
         global_rules: &[String],
         response_length: Option<&str>,
     ) -> Result<AssembledPrompt, EngineError> {
-        let system_prompt = build_system_prompt(preset, global_rules, &context.template_vars);
+        let mut template_vars = context.template_vars.clone();
+        if let Some(settings) = &self.settings {
+            let guard = settings.read().unwrap_or_else(|e| e.into_inner());
+            template_vars.set_narrative_voice(guard.narrative_perspective, guard.narrative_tense);
+        }
+
+        let system_prompt = build_system_prompt(preset, global_rules, &template_vars);
         let post_history_prompt =
-            build_post_history_prompt(preset, response_length, &context.template_vars);
+            build_post_history_prompt(preset, response_length, &template_vars);
 
         let renderer = LayerRenderer {
             world: context.world,
@@ -94,7 +100,7 @@ impl PromptAssembler {
             history: context.history,
             system_prompt,
             post_history_prompt,
-            template_vars: &context.template_vars,
+            template_vars: &template_vars,
             guide: context.guide.as_deref(),
             impersonate: context.impersonate,
         };

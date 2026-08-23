@@ -24,3 +24,11 @@ pub fn default_active_quantifier_prompt_preset_id() -> String {
 pub fn default_active_impersonate_prompt_preset_id() -> String {
     "impersonate_default".to_string()
 }
+
+pub fn default_narrative_perspective() -> crate::domain::model::settings::NarrativePerspective {
+    crate::domain::model::settings::NarrativePerspective::Third
+}
+
+pub fn default_narrative_tense() -> crate::domain::model::settings::NarrativeTense {
+    crate::domain::model::settings::NarrativeTense::Past
+}
