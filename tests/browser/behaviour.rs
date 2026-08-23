@@ -487,8 +487,8 @@ async fn test_slash_menu_click_populates_input() {
             type_into_command(&page, "/").await;
             wait_for_element_exists(&page, "#slash-menu", 20).await;
 
-            // Click the /guide suggestion (third item).
-            page.locator("#slash-menu .slash-suggestion:last-child")
+            // Click the /guide suggestion by its command text, independent of menu order.
+            page.locator("#slash-menu .slash-suggestion:has(.slash-cmd:text-is('/guide'))")
                 .await
                 .click(None)
                 .await
@@ -514,33 +514,42 @@ async fn test_slash_menu_click_populates_input() {
 // [docs/specs/browser.md] SCENARIO: 17.7
 #[tokio::test]
 async fn test_slash_menu_reopens_after_action_area_rerender() {
-    with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
-        type_into_command(&page, "/").await;
-        wait_for_element_exists(&page, "#slash-menu", 20).await;
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            type_into_command(&page, "/").await;
+            wait_for_element_exists(&page, "#slash-menu", 20).await;
 
-        page.evaluate::<(), ()>(
-            r##"(() => {
+            page.evaluate::<(), ()>(
+                r##"(() => {
                 const area = document.getElementById('action-area');
-                area.innerHTML = '<form id="command-form" hx-post="/action/check" hx-target="#action-area" hx-swap="innerHTML"><input type="text" name="command" placeholder="Enter command..." autocomplete="off" /><button type="submit" id="submit-btn">Send</button></form>';
+                const productionMarkup = area.innerHTML;
+                area.innerHTML = productionMarkup;
             })()"##,
-            None,
-        )
-        .await
-        .unwrap();
-
-        wait_for_element_not_exists(&page, "#slash-menu", 20).await;
-
-        type_into_command(&page, "/").await;
-        wait_for_element_exists(&page, "#slash-menu", 20).await;
-
-        let count: u32 = page
-            .locator("#slash-menu .slash-suggestion")
+                None,
+            )
             .await
-            .count()
-            .await
-            .unwrap_or(0) as u32;
-        assert_eq!(count, 3, "Menu should reopen with all three commands after re-render");
-    })
+            .unwrap();
+
+            wait_for_element_not_exists(&page, "#slash-menu", 20).await;
+
+            type_into_command(&page, "/").await;
+            wait_for_element_exists(&page, "#slash-menu", 20).await;
+
+            let count: u32 = page
+                .locator("#slash-menu .slash-suggestion")
+                .await
+                .count()
+                .await
+                .unwrap_or(0) as u32;
+            assert_eq!(
+                count, 3,
+                "Menu should reopen with all three commands after re-render"
+            );
+        },
+    )
     .await;
 }
 

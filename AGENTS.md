@@ -112,14 +112,14 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `wiring.rs` — Composition root for application orchestrators
   - **domain/**
     - **model/**
-      - `action.rs` — Action enum and semantic command types
+      - `action.rs` — Action enum and semantic command types (slash-command steering entry)
       - `agent.rs` — Agent definitions and behavior types
       - `character.rs` — Character sheet data and NPC card definitions
       - `game.rs` — Game state and session management
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
-      - `message.rs` — Message types and conversation history
+      - `message.rs` — Message types and conversation history (Message, Swipe, replay blob)
       - `message_history.rs` — Message history tracking
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
@@ -181,7 +181,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 
 ## Your Responsibility
 
-You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task.
+You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task, as this could interfere with other work going on in the repository at the same time.
 
 ## Communication
 

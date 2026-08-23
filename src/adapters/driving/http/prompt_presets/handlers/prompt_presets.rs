@@ -228,21 +228,24 @@ pub async fn activate_preset_handler(
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     let mut settings = try_lock!(app_state.settings.write());
+    let mut candidate = settings.clone();
 
     match preset.preset_type {
         PresetType::System => {
-            settings.active_system_prompt_preset_id = id.clone();
+            candidate.active_system_prompt_preset_id = id.clone();
         }
         PresetType::Quantifier => {
-            settings.active_quantifier_prompt_preset_id = id.clone();
+            candidate.active_quantifier_prompt_preset_id = id.clone();
         }
         PresetType::Impersonate => {
-            settings.active_impersonate_prompt_preset_id = id.clone();
+            candidate.active_impersonate_prompt_preset_id = id.clone();
         }
     }
-    if let Err(e) = app_state.settings_service.save_settings(&settings) {
+    if let Err(e) = app_state.settings_service.save_settings(&candidate) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
+
+    *settings = candidate;
 
     let system_presets = app_state
         .prompt_preset_service

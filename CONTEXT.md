@@ -60,6 +60,26 @@ _Avoid_: Variant, version, alternate
 A serialized mutable game sub-state, message-aligned and persisted immediately with its corresponding Message. Every snapshot is immediately valid for restore. Immutable world data lives in Storage only; the orchestrator fetches each field it needs and passes it to the engine function.
 _Avoid_: Save, checkpoint, dump
 
+**Steering**:
+Player influence over a single narration, distinct from a free action. Three surfaces: Guided Generation, Narrator Action, Impersonate. All three enter through slash commands in the command input.
+_Avoid_: direction, control, prompt (use Steering for the surface; Action for the pipeline input)
+
+**Guided Generation**:
+A transient per-turn instruction that steers what the narrator says. Rendered as the final prompt layer (`<Guide>`) and recorded on the swipe's replay blob for retry. Lives on the replay blob only, not in history.
+_Avoid_: hint, nudge, instruction (use Guided Generation for the feature)
+
+**Narrator Action**:
+A permanent author directive from the omniscient voice, persisted as a Narrator message in history and rendered without a sender prefix. Distinct from a System message, which is an engine notice.
+_Avoid_: system message, note, author's note (Narrator Action is the player-authored directive; System is an engine notice)
+
+**Impersonate**:
+Forcing the next narration to be written as the player's persona. Uses the impersonate preset (replacing the system preset), drops the `<PlayerCharacter>` layer, and saves the output as a `Dialogue` message.
+_Avoid_: roleplay as, pose as, pretend (use Impersonate)
+
+**Replay Blob**:
+The steering conditions stored on a Swipe — a guide, or an impersonation with its direction and preset id — so a retry of that swipe re-applies the same steering. The steering half of "reproduce this generation"; the snapshot is the state half.
+_Avoid_: replay data, steering cache (use Replay Blob)
+
 ## Deprecated Terms
 
 **Turn**:

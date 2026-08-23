@@ -224,6 +224,43 @@ async fn test_update_preset_invalid_type_returns_error() {
 }
 
 #[tokio::test]
+async fn test_activate_preset_does_not_update_memory_when_save_fails() {
+    let app_state = make_test_app_state_with_failing_storage(
+        PromptPreset {
+            id: "custom-system".into(),
+            name: "Custom System".into(),
+            instructions: Some("Custom.".into()),
+            preset_type: PresetType::System,
+            ..Default::default()
+        },
+        |h| {
+            h.set(
+                "save_settings",
+                TestOverride::config("injected save failure"),
+            )
+        },
+    );
+
+    let response = activate_preset_handler(
+        axum::extract::State(app_state.clone()),
+        axum::extract::Path("custom-system".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("Save failed"));
+
+    let active_id = app_state
+        .settings
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .active_system_prompt_preset_id
+        .clone();
+    assert_eq!(
+        active_id, "system_default",
+        "in-memory active preset id must not change when persistence fails"
+    );
+}
+
+#[tokio::test]
 async fn test_activate_nonexistent_preset_returns_error() {
     let app_state =
         make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));

@@ -42,6 +42,13 @@ pub struct PipelineInputs {
     pub impersonate_preset_id: Option<String>,
 }
 
+/// Steering resolved for an impersonated turn. `direction` is the optional
+/// player-facing instruction; `preset_id` selects the impersonate preset.
+pub(super) struct ImpersonateSteering {
+    pub direction: Option<String>,
+    pub preset_id: Option<String>,
+}
+
 pub(super) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
     pub(super) started_for: u64,
@@ -120,8 +127,8 @@ impl<'a> PipelineRun<'a> {
 
         let impersonate = self.resolve_impersonate(state, inputs);
 
-        let (preset, response_length) = if let Some((_direction, preset_id)) = &impersonate {
-            match self.load_impersonate_preset_and_response_length(preset_id.as_deref()) {
+        let (preset, response_length) = if let Some(steering) = &impersonate {
+            match self.load_impersonate_preset_and_response_length(steering.preset_id.as_deref()) {
                 Ok(p) => p,
                 Err(msg) => return Err(self.set_error(state, msg)),
             }
@@ -134,7 +141,7 @@ impl<'a> PipelineRun<'a> {
 
         let impersonate_direction = impersonate
             .as_ref()
-            .and_then(|(direction, _)| direction.clone())
+            .and_then(|steering| steering.direction.clone())
             .unwrap_or_default();
         let user_message: &str = if impersonate.is_some() {
             &impersonate_direction
@@ -450,12 +457,12 @@ impl<'a> PipelineRun<'a> {
         &self,
         state: &GameState,
         inputs: &PipelineInputs,
-    ) -> Option<(Option<String>, Option<String>)> {
+    ) -> Option<ImpersonateSteering> {
         if inputs.impersonate {
-            return Some((
-                inputs.impersonate_direction.clone(),
-                inputs.impersonate_preset_id.clone(),
-            ));
+            return Some(ImpersonateSteering {
+                direction: inputs.impersonate_direction.clone(),
+                preset_id: inputs.impersonate_preset_id.clone(),
+            });
         }
         state
             .narrative
@@ -463,11 +470,9 @@ impl<'a> PipelineRun<'a> {
             .as_ref()
             .and_then(|m| m.replay())
             .filter(|r| r.impersonate)
-            .map(|r| {
-                (
-                    r.impersonate_direction.clone(),
-                    r.impersonate_preset_id.clone(),
-                )
+            .map(|r| ImpersonateSteering {
+                direction: r.impersonate_direction.clone(),
+                preset_id: r.impersonate_preset_id.clone(),
             })
     }
 

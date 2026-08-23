@@ -1,5 +1,5 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
-//! Message types and conversation history
+//! [DOC: docs/diataxis/reference/storage.md]
+//! Message types and conversation history (Message, Swipe, replay blob)
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

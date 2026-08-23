@@ -1,7 +1,7 @@
 # Grill: the Dialogue-vs-Input message-type distinction
 
 Type: grilling
-Status: pending
+Status: claimed
 Blocked by: (none)
 
 ## Question

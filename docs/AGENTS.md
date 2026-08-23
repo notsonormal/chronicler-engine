@@ -35,7 +35,7 @@ Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-d
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-19 19:52 UTC*
+*Index last generated: 2026-08-23 11:32 UTC*
 
 ### `docs/diataxis/explanation/`
 
@@ -75,6 +75,7 @@ Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-d
 ### `docs/diataxis/reference/narrative/`
 
 - [Agent System](./diataxis/reference/narrative/agent_system.md)
+- [AI Steering](./diataxis/reference/narrative/ai_steering.md)
 - [Narration System](./diataxis/reference/narrative/narration_system.md)
 - [Prompt System](./diataxis/reference/narrative/prompt_system.md)
 

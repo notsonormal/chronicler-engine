@@ -118,7 +118,10 @@ impl GameState {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
 
-        if message_type == MessageType::Narration || message_type == MessageType::Dialogue {
+        if message_type == MessageType::Narration
+            || message_type == MessageType::Dialogue
+            || message_type == MessageType::Narrator
+        {
             if let Some(ref mut target) = self.narrative.retry_target {
                 let target_is_event = target.event_header().is_some();
                 let new_is_event = event_header.is_some();

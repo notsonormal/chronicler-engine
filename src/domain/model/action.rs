@@ -1,5 +1,5 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
-//! Action enum and semantic command types
+//! [DOC: docs/diataxis/reference/narrative/ai_steering.md]
+//! Action enum and semantic command types (slash-command steering entry)
 
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, PartialEq)]
