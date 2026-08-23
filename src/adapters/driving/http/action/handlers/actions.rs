@@ -88,19 +88,27 @@ pub async fn action_confirm_handler(
         .expect("static response body is valid")
 }
 
+async fn dispatch_with_status_headers(state: &AppState, command: String) -> Response<Body> {
+    let mut response = dispatch_action(state, command).await;
+    add_status_swap_headers(&mut response);
+    response
+}
+
 pub async fn action_check_handler(
     State(state): State<AppState>,
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
 
+    if Action::parse(&command).is_steering() {
+        return dispatch_with_status_headers(&state, command).await;
+    }
+
     let settings = state.settings();
 
     if settings.text_check.mode == TextCheckMode::Disabled || !settings.text_check.enable_auto_check
     {
-        let mut response = dispatch_action(&state, command).await;
-        add_status_swap_headers(&mut response);
-        return response;
+        return dispatch_with_status_headers(&state, command).await;
     }
 
     let result = match state.text_check_service().check_player_input(
@@ -111,9 +119,7 @@ pub async fn action_check_handler(
         Ok(result) => result,
         Err(e) => {
             tracing::error!("Text check failed: {e}");
-            let mut response = dispatch_action(&state, command).await;
-            add_status_swap_headers(&mut response);
-            return response;
+            return dispatch_with_status_headers(&state, command).await;
         }
     };
 
@@ -125,10 +131,6 @@ pub async fn action_check_handler(
                 Err(e) => internal_error(render_error(&format!("Template error: {e}"))),
             }
         }
-        None => {
-            let mut response = dispatch_action(&state, command).await;
-            add_status_swap_headers(&mut response);
-            response
-        }
+        None => dispatch_with_status_headers(&state, command).await,
     }
 }

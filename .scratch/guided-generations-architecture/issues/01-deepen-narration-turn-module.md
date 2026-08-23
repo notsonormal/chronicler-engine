@@ -1,8 +1,8 @@
 # 01 — Deepen a NarrationTurn module (architecture candidate 2)
 
 Type: grilling
-Status: claimed
-Blocked by: (none)
+Status: open
+Blocked by: 06
 
 ## Question
 
@@ -49,3 +49,29 @@ stable narration-turn seam informs the grillings of tickets 02 (ReplaySteering
   or stays split.
 - Whether `phase_narrate`'s steering branches (guide / impersonate) stay in
   the phase or move behind NarrationTurn.
+
+## Grilling notes (paused — blocked by 06)
+
+Grilling began, then surfaced a conceptual-model question that sits before
+this ticket's structural decision. Ticket 06 now blocks this one. Findings
+to carry into the resumed session:
+
+- **Scope (recommendation, not yet confirmed).** The deepened core should
+  own the narrate-and-persist prefix only (load world bundle → resolve room
+  → select preset → build `PromptContext` → call narrator →
+  `check_game_unchanged` → add Message → save Message + Snapshot). The
+  post-narration tail diverges by path: `run_from_input` runs quantifier →
+  engine commit → trigger; impersonate and user-regen retry stop after save
+  and append the retry target; `retry_event_continuation` runs trigger
+  continuation and never uses the narrate prompt path. A single "run the
+  whole turn" interface cannot cover all paths without widening.
+- **Naming.** `CONTEXT.md` retires "Turn." "Generation" aligns with the
+  existing `generation/` namespace (`GenerationGate`, `GenerationSlot`,
+  `GenerationStatus`). Deferred — depends on 06, which decides whether the
+  "steering" and "retry" framing survives.
+- **Structural finding (user-confirmed).** Impersonate retry is closer to
+  the impersonate generation flow than to the narration retry flow. If 06
+  confirms this, `retry_reimpersonate` merges with the impersonate
+  generation path, not with the narrate core — and this ticket's scope
+  shrinks to the narration core only (ReNarrate + the narrate step of
+  `run_from_input`), excluding impersonate.

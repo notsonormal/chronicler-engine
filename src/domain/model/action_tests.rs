@@ -143,3 +143,18 @@ fn test_parse_slash_after_leading_whitespace_is_recognized() {
         Action::Guide("hurry".to_string())
     );
 }
+
+#[test]
+fn test_is_steering_true_for_guide_narrator_impersonate() {
+    assert!(Action::Guide(String::new()).is_steering());
+    assert!(Action::Narrator("the door creaks".to_string()).is_steering());
+    assert!(Action::Impersonate(None).is_steering());
+    assert!(Action::Impersonate(Some("be brave".to_string())).is_steering());
+}
+
+#[test]
+fn test_is_steering_false_for_free_action() {
+    assert!(!Action::FreeAction(String::new()).is_steering());
+    assert!(!Action::FreeAction("/shrug".to_string()).is_steering());
+    assert!(!Action::FreeAction("look around".to_string()).is_steering());
+}

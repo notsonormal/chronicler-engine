@@ -30,4 +30,11 @@ impl Action {
             _ => Self::FreeAction(input.to_string()),
         }
     }
+
+    pub fn is_steering(&self) -> bool {
+        matches!(
+            self,
+            Self::Guide(_) | Self::Narrator(_) | Self::Impersonate(_)
+        )
+    }
 }

@@ -11,6 +11,7 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::application::agents::registry::AgentRegistry;
+use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::test_support::{
     make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder, TestMap, TestPersona,
     TestWorld,
@@ -77,6 +78,24 @@ pub async fn post_action(app: &axum::Router, command: &str) -> axum::response::R
     app.clone().oneshot(req).await.unwrap()
 }
 
+/// POST a url-encoded `command=...` body to `/action/check`.
+pub async fn post_action_check(
+    app: &axum::Router,
+    command: &str,
+) -> axum::response::Response<Body> {
+    let body = format!("command={}", command.replace(' ', "+"));
+    let req = Request::builder()
+        .uri("/action/check")
+        .method(Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from(body))
+        .unwrap();
+    app.clone().oneshot(req).await.unwrap()
+}
+
 /// POST to a no-body endpoint (`/swipe/new`, `/history/delete`, `/reset`).
 pub async fn post_empty(app: &axum::Router, uri: &str) -> axum::response::Response<Body> {
     let req = Request::builder()
@@ -107,6 +126,14 @@ pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
 
 /// Build an app with a custom narrator backend (default quantifier).
 pub fn app_with_narrator(narrator: Arc<MockBackend>) -> (axum::Router, AppState) {
+    app_with_narrator_and_settings(narrator, AppSettings::default())
+}
+
+/// Build an app with a custom narrator backend and explicit settings (default quantifier).
+pub fn app_with_narrator_and_settings(
+    narrator: Arc<MockBackend>,
+    settings: AppSettings,
+) -> (axum::Router, AppState) {
     let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
     let pipeline = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
@@ -115,5 +142,6 @@ pub fn app_with_narrator(narrator: Arc<MockBackend>) -> (axum::Router, AppState)
     );
     TestAppBuilder::default_test()
         .pipeline(pipeline)
+        .settings(settings)
         .build_with_state()
 }

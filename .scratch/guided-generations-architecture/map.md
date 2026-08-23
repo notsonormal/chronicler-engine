@@ -40,12 +40,12 @@ shapes, not code. Writing the accepted refactors is the next effort
   helper absorption, not the branch-introduced steering shallows. A decision
   here may sharpen those; it does not resolve them.
 - **Ticket ordering.** Tickets are numbered in recommended resolution order,
-  not candidate order. Ticket 01 (NarrationTurn, architecture candidate 2) is
-  the recommended starting point: the report's top recommendation, because a
-  stable narration-turn seam informs the grillings of 02, 03, and 04. All
-  tickets are unblocked frontier — each can be grilled independently — but
-  where a ticket's decision relates to another's, the Background names the
-  sibling.
+  not candidate order. Ticket 06 (revise the branch's conceptual model) is
+  now the recommended starting point: it blocks 01, 02, and 04, which all
+  assume the branch-introduced Steering / replay-blob / retry framing. Once
+  06 resolves, 01 (narration core), 02 (replay carrier), and 04 (steering
+  prompt policy) resume; 03 (steering entry dispatcher) and 05 (narrative
+  voice) may also relate and are clarified by 06's grilling.
 - No ADRs exist in `docs/adr/`. If a candidate is rejected with a
   load-bearing reason that future reviews should not re-suggest, offer an ADR
   during that ticket's grilling.

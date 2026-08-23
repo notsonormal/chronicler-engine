@@ -6,6 +6,7 @@ use axum::http::StatusCode;
 
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
@@ -13,7 +14,10 @@ use chronicler_engine::test_support::{
     make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder, TestDataBuilder,
 };
 
-use crate::test_helpers::{app_with_narrator, post_action, post_empty, wait_idle};
+use crate::test_helpers::{
+    app_with_narrator, app_with_narrator_and_settings, post_action, post_action_check, post_empty,
+    wait_idle,
+};
 
 // [docs/specs/actions.md] SCENARIO: 1.1
 #[tokio::test]
@@ -782,5 +786,52 @@ async fn test_slash_narrator_persists_narrator_message_http() {
     assert!(
         !narrations.is_empty(),
         "narrator should produce at least one Narration entry"
+    );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.12
+#[tokio::test]
+async fn test_slash_command_bypasses_text_check_http() {
+    let narrator = Arc::new(MockBackend::default());
+    let settings = AppSettings {
+        text_check: TextCheckSettings {
+            mode: TextCheckMode::Spell,
+            enable_auto_check: true,
+            ignored_words: vec![],
+        },
+        ..Default::default()
+    };
+    let (app, state) = app_with_narrator_and_settings(narrator, settings);
+
+    // Recognized steering command: the misspelling must not surface a preview.
+    let resp = post_action_check(&app, "/guide look at the casle").await;
+    assert!(resp.status().is_success());
+    assert!(
+        resp.headers().get("HX-Retarget").is_some(),
+        "steering command should dispatch directly (HX-Retarget set)"
+    );
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        !body_str.contains("text-check-preview"),
+        "steering command must bypass the text check: {body_str}"
+    );
+    assert!(
+        wait_idle(&state, 1000).await,
+        "guide action should complete"
+    );
+
+    // Same words as plain input: the spell check must surface a preview.
+    let resp = post_action_check(&app, "look at the casle").await;
+    assert!(resp.status().is_success());
+    assert!(
+        resp.headers().get("HX-Retarget").is_none(),
+        "plain input should show a preview, not dispatch (no HX-Retarget)"
+    );
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("text-check-preview"),
+        "plain input should surface the text-check preview: {body_str}"
     );
 }
