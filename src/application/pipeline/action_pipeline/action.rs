@@ -56,14 +56,9 @@ impl ActionPipeline {
                 self.message_service.save_state(game_state)?;
 
                 let game = self.storage.require_game(game_id)?;
-                let persona = self.storage.require_persona(&game.persona_key)?;
-                let player_name = persona.sheet.name.clone();
+                let _persona = self.storage.require_persona(&game.persona_key)?;
                 if !input.is_empty() {
-                    game_state.add_message(
-                        input.clone(),
-                        Some(player_name.clone()),
-                        MessageType::Input,
-                    );
+                    game_state.add_message(input.clone(), MessageType::Input);
                 }
                 Ok(())
             },
@@ -138,7 +133,7 @@ impl ActionPipeline {
             move |game_id, game_state| {
                 generation_gate.heal_stale(game_id, game_state);
                 self.message_service.save_state(game_state)?;
-                game_state.add_message(text.clone(), None, MessageType::Narrator);
+                game_state.add_message(text.clone(), MessageType::Narrator);
                 Ok(())
             },
             || Ok(()),
@@ -151,7 +146,7 @@ impl ActionPipeline {
     /// Impersonate: force the next narration to be written as the player's
     /// persona. Runs the continue path (no player input); the impersonate
     /// preset replaces the system preset, the player-character layer is dropped,
-    /// and the output is a player-voiced `Dialogue` message. Retry re-applies it.
+    /// and the output is a player-voiced `Input` message. Retry re-applies it.
     pub fn impersonate(
         &self,
         generation_gate: &GenerationGate,

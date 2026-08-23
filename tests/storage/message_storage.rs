@@ -13,13 +13,7 @@ fn create_storage() -> Storage {
 #[test]
 fn test_soft_delete_message() {
     let storage = create_storage();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "to soft delete",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("to soft delete", MessageType::Input, None, None);
     let id = storage.insert_message(&msg).unwrap();
 
     let before = storage.load_message_rows().unwrap();
@@ -34,13 +28,7 @@ fn test_soft_delete_message() {
 #[test]
 fn test_restore_soft_deleted() {
     let storage = create_storage();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "to restore",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("to restore", MessageType::Input, None, None);
     let id = storage.insert_message(&msg).unwrap();
     storage.soft_delete_message(id).unwrap();
 
@@ -57,13 +45,7 @@ fn test_restore_soft_deleted() {
 #[test]
 fn test_purge_soft_deleted() {
     let storage = create_storage();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "to purge",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("to purge", MessageType::Input, None, None);
     let id = storage.insert_message(&msg).unwrap();
     storage.soft_delete_message(id).unwrap();
 
@@ -76,13 +58,7 @@ fn test_purge_soft_deleted() {
 #[test]
 fn test_insert_swipe_and_load() {
     let storage = create_storage();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "original",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg = Message::new("original", MessageType::Narration, None, None);
     let id = storage.insert_message(&msg).unwrap();
 
     let swipe = Swipe {
@@ -105,13 +81,7 @@ fn test_insert_swipe_and_load() {
 #[test]
 fn test_update_swipe_text() {
     let storage = create_storage();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "original",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg = Message::new("original", MessageType::Narration, None, None);
     let id = storage.insert_message(&msg).unwrap();
 
     let swipe = Swipe {
@@ -131,13 +101,7 @@ fn test_update_swipe_text() {
 #[test]
 fn test_shift_swipe_indices() {
     let storage = create_storage();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "original",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg = Message::new("original", MessageType::Narration, None, None);
     let id = storage.insert_message(&msg).unwrap();
 
     let swipe = Swipe {
@@ -159,22 +123,10 @@ fn test_shift_swipe_indices() {
 fn test_load_swipes_for_messages_multi() {
     let storage = create_storage();
 
-    let msg_a = Message::new(
-        Some("Player".to_string()),
-        "msg a",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg_a = Message::new("msg a", MessageType::Input, None, None);
     let id_a = storage.insert_message(&msg_a).unwrap();
 
-    let msg_b = Message::new(
-        Some("NPC".to_string()),
-        "msg b",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg_b = Message::new("msg b", MessageType::Narration, None, None);
     let id_b = storage.insert_message(&msg_b).unwrap();
 
     storage
@@ -220,13 +172,7 @@ fn test_load_swipes_for_messages_empty() {
 #[test]
 fn test_count_swipes_for_message_none() {
     let storage = create_storage();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "no swipes",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("no swipes", MessageType::Input, None, None);
     let id = storage.insert_message(&msg).unwrap();
 
     let count = storage.count_swipes_for_message(id).unwrap();
@@ -238,13 +184,7 @@ fn test_inmemory_insert_and_load() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "inmem test",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("inmem test", MessageType::Input, None, None);
     let id = storage.insert_message(&msg).unwrap();
     let loaded = storage.load_message_rows().unwrap();
     assert_eq!(loaded.len(), 1);
@@ -256,13 +196,7 @@ fn test_inmemory_delete_message() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "to delete",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("to delete", MessageType::Input, None, None);
     let id = storage.insert_message(&msg).unwrap();
     storage.delete_message(id).unwrap();
     assert!(storage.load_message_rows().unwrap().is_empty());
@@ -282,13 +216,7 @@ fn test_inmemory_soft_delete_and_restore() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "soft",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("soft", MessageType::Input, None, None);
     let id = storage.insert_message(&msg).unwrap();
     storage.soft_delete_message(id).unwrap();
     assert!(storage.load_message_rows().unwrap().is_empty());
@@ -302,13 +230,7 @@ fn test_inmemory_purge_deleted() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "purge",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("purge", MessageType::Input, None, None);
     let id = storage.insert_message(&msg).unwrap();
     storage.soft_delete_message(id).unwrap();
     storage.purge_soft_deleted(&[id]).unwrap();

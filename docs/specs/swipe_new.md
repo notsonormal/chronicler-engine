@@ -197,6 +197,49 @@ Then the response is 200 with a "Still thinking..." status string
 And no retry is started (the gate is not claimed)
 ```
 
+### Three-way retry
+
+#### Scenario 22.1: Re-impersonate retry generates a new Input swipe
+
+```gherkin
+Given a game state whose last message is an Input with replay.impersonate == true
+And a narrator backend that returns "I look around cautiously." for the impersonation prompt
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then message_service.load_messages() contains exactly one Input entry (the original message ID unchanged)
+And that Input entry has 2 swipes (one appended by retry)
+And the active swipe's text is "I look around cautiously."
+And message_service.load_or_fresh().narrative.input_buffer.status is Idle
+And the player has not moved (the quantifier did not re-run)
+```
+
+#### Scenario 22.2: User-regen retry generates a new Input swipe
+
+```gherkin
+Given a game state whose last message is an Input with no replay record
+And a narrator backend that returns "I sprint forward." for the user-regen prompt
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then message_service.load_messages() contains exactly one Input entry (the original message ID unchanged)
+And that Input entry has 2 swipes (one appended by retry)
+And the active swipe's text is "I sprint forward."
+And message_service.load_or_fresh().narrative.input_buffer.status is Idle
+And the player has not moved (the quantifier did not re-run)
+```
+
+#### Scenario 22.3: Re-impersonate retry preserves the steering record
+
+```gherkin
+Given a game state whose last message is an Input with replay.impersonate == true
+And replay.impersonate_direction == "Sneak past the guard."
+And replay.impersonate_preset_id == "impersonate_default"
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then message_service.load_messages() contains an Input entry whose active swipe has replay.impersonate == true
+And replay.impersonate_direction == "Sneak past the guard."
+And replay.impersonate_preset_id == "impersonate_default"
+```
+
 ---
 
 ## Invariants
@@ -207,14 +250,18 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
 - **I.1** After the pipeline returns to idle, `input_buffer.status` is
   `Idle` or `Error(msg)` — never stuck `Generating`.
 - **I.2** Retry (`POST /swipe/new`) never adds a new message to
-  `narrative.history`. It appends a swipe to an existing message.
-- **I.4** Retry never modifies an existing Input message's text. (Main
+  `narrative.history`. It appends a swipe to an existing message. Re-impersonate
+  and user-regen retries append the new swipe to the existing Input message.
+- **I.4** Retry never modifies an existing Input message's text. Main
   retry uses the input's current active swipe text, which the user may
   have edited before clicking retry, but the retry itself does not
-  change it.)
+  change it. Re-impersonate and user-regen retries generate a new
+  swipe without altering prior swipes.
 - **I.5** Each retry appends exactly one swipe. Repeated retries on the
   same message increment the swipe count by one each time.
 - **I.6** Main retry re-runs the quantifier; event retry does not.
+  Re-impersonate and user-regen retries do not re-run the quantifier.
+  They generate one swipe and stop.
 - **I.7** If a message exists in history, it must have a `snapshot_id`
   pointing to a restorable snapshot. A message without a snapshot (or with
   a dangling snapshot id) is a data-integrity violation (500), not a user

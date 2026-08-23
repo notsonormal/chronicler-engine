@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use super::retry::{RetryMode, RetryTarget};
+
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driving::http::AppState;
@@ -57,8 +59,8 @@ pub(super) fn add_input_and_save(
     text: &str,
 ) -> u64 {
     let mut state = app.message_service.load_or_fresh();
-    let player_name = "Player".to_string();
-    state.add_message(text.to_string(), Some(player_name), MessageType::Input);
+    let _player_name = "Player".to_string();
+    state.add_message(text.to_string(), MessageType::Input);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -77,7 +79,7 @@ pub(super) fn add_narration_and_save(
     text: &str,
 ) -> u64 {
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(text.to_string(), None, MessageType::Narration);
+    state.add_message(text.to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -124,7 +126,7 @@ pub(super) fn setup_event_flow(
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -136,7 +138,7 @@ pub(super) fn setup_event_flow(
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -162,7 +164,7 @@ pub(super) fn setup_event_flow_without_trigger(
     let _ = save_pre_main(app, storage);
 
     let mut pre_event_state = app.message_service.load_or_fresh();
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -174,7 +176,7 @@ pub(super) fn setup_event_flow_without_trigger(
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -229,15 +231,9 @@ async fn test_retry_load_messages_error() {
 async fn test_retry_no_input() {
     let (app, storage) = make_test_app_with_storage();
 
-    let sys = crate::domain::model::message::Message::new(
-        None,
-        "System boot",
-        MessageType::System,
-        None,
-        None,
-    );
+    let sys =
+        crate::domain::model::message::Message::new("System boot", MessageType::System, None, None);
     let nar = crate::domain::model::message::Message::new(
-        None,
         "You see a room.",
         MessageType::Narration,
         None,
@@ -264,7 +260,7 @@ async fn test_retry_event_with_no_pre_event_fallback_to_main() {
     let _input_id = add_input_and_save(&app, &storage, "test input");
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    state.add_message("Event narration".to_string(), MessageType::Narration);
     state
         .narrative
         .history
@@ -285,7 +281,7 @@ async fn test_retry_event_with_no_pre_event_and_no_input() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message("Event only".to_string(), None, MessageType::Narration);
+    state.add_message("Event only".to_string(), MessageType::Narration);
     state
         .narrative
         .history
@@ -375,7 +371,7 @@ async fn test_retry_event_continuation_cancels_before_llm() {
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -467,7 +463,7 @@ async fn test_retry_event_empty_continuation_text() {
     let _pre_event_with_trigger_id = storage.save_snapshot(&snapshot).unwrap();
 
     let mut final_state = state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -488,18 +484,14 @@ async fn test_retry_main_no_pre_main_snapshot() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    let player_name = "Player".to_string();
-    state.add_message(
-        "test input".to_string(),
-        Some(player_name),
-        MessageType::Input,
-    );
+    let _player_name = "Player".to_string();
+    state.add_message("test input".to_string(), MessageType::Input);
     if let Some(last) = state.narrative.history.last_mut() {
         insert_message_with_swipe(&app, &storage, last);
     }
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message("Narration text".to_string(), None, MessageType::Narration);
+    state.add_message("Narration text".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -531,7 +523,7 @@ async fn test_retry_event_continuation_happy_path() {
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -543,7 +535,7 @@ async fn test_retry_event_continuation_happy_path() {
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -641,6 +633,10 @@ async fn test_retry_recovers_after_llm_failure() {
         after_fail.narrative.input_buffer.status
     );
 
+    // Retry operates on the last message; seed a Narration so the test exercises
+    // re-narrate recovery rather than user-regen.
+    add_narration_and_save(&app, &storage, "You look around.");
+
     app.pipeline.retry_last_response();
 
     let after_retry = app.message_service.load_or_fresh();
@@ -667,12 +663,19 @@ async fn test_retry_room_not_found_sets_error() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(
-        "look".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
     state.movement.current_room_id = "non_existent_room".to_string();
+    state.add_message("look".to_string(), MessageType::Input);
+    let input_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
+    let input_id = storage.save_snapshot(&input_snapshot).unwrap();
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(input_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    state.add_message("You look around.".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -846,7 +849,7 @@ async fn test_retry_event_empty_continuation_triggers_error() {
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -858,7 +861,7 @@ async fn test_retry_event_empty_continuation_triggers_error() {
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -1108,7 +1111,6 @@ async fn test_retry_event_continuation_handles_state_without_input_message() {
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     state.add_message(
         "Narration without prior input".to_string(),
-        None,
         MessageType::Narration,
     );
 
@@ -1122,12 +1124,8 @@ async fn test_retry_records_missing_snapshot_id() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    let player_name = "Player".to_string();
-    state.add_message(
-        "test input".to_string(),
-        Some(player_name),
-        MessageType::Input,
-    );
+    let _player_name = "Player".to_string();
+    state.add_message("test input".to_string(), MessageType::Input);
     if let Some(last) = state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(MISSING_ID));
         insert_message_with_swipe(&app, &storage, last);
@@ -1153,11 +1151,7 @@ async fn test_retry_returns_internal_error_when_anchor_has_no_snapshot_id() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(
-        "test input".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
+    state.add_message("test input".to_string(), MessageType::Input);
     let last = state.narrative.history.last().unwrap();
     insert_message_with_swipe(&app, &storage, last);
 
@@ -1186,11 +1180,7 @@ async fn test_retry_returns_internal_error_when_snapshot_row_missing() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(
-        "test input".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
+    state.add_message("test input".to_string(), MessageType::Input);
     if let Some(last) = state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(MISSING_ID));
         insert_message_with_swipe(&app, &storage, last);
@@ -1249,5 +1239,173 @@ async fn test_retry_returns_shutting_down_when_token_cancelled() {
     assert!(
         matches!(result, Ok(ProcessActionResult::ShuttingDown)),
         "retry() should return Ok(ShuttingDown) when token is cancelled, got {result:?}"
+    );
+}
+
+fn make_input_with_replay(text: &str, impersonate: bool) -> crate::domain::model::message::Message {
+    use crate::domain::model::message::GenerationReplay;
+    let mut msg = crate::domain::model::message::Message::new(
+        text.to_string(),
+        MessageType::Input,
+        None,
+        None,
+    );
+    msg.set_snapshot_id(Some(1));
+    msg.swipes[0].replay = Some(GenerationReplay {
+        impersonate,
+        impersonate_direction: None,
+        impersonate_preset_id: None,
+        guide: None,
+    });
+    msg
+}
+
+#[tokio::test]
+async fn test_resolve_retry_target_re_narrate_skips_trailing_system() {
+    let pipeline = make_service();
+    let mut input = crate::domain::model::message::Message::new(
+        "look".to_string(),
+        MessageType::Input,
+        None,
+        None,
+    );
+    input.set_snapshot_id(Some(1));
+    let narration = crate::domain::model::message::Message::new(
+        "You look.".to_string(),
+        MessageType::Narration,
+        None,
+        None,
+    );
+    let system = crate::domain::model::message::Message::new(
+        "[System]".to_string(),
+        MessageType::System,
+        None,
+        None,
+    );
+    let messages = vec![input, narration, system];
+
+    let target = pipeline.resolve_retry_target(&messages).unwrap();
+    assert_eq!(target.mode, RetryMode::ReNarrate);
+    assert_eq!(
+        target.old_target.as_ref().unwrap().message_type,
+        MessageType::Narration
+    );
+    assert!(!target.is_event);
+}
+
+#[tokio::test]
+async fn test_resolve_retry_target_re_narrate_event() {
+    let pipeline = make_service();
+    let mut input = crate::domain::model::message::Message::new(
+        "look".to_string(),
+        MessageType::Input,
+        None,
+        None,
+    );
+    input.set_snapshot_id(Some(1));
+    let mut narration = crate::domain::model::message::Message::new(
+        "Event.".to_string(),
+        MessageType::Narration,
+        None,
+        None,
+    );
+    narration.set_event_header(Some("battle".to_string()));
+    let messages = vec![input, narration];
+
+    let target = pipeline.resolve_retry_target(&messages).unwrap();
+    assert_eq!(target.mode, RetryMode::ReNarrate);
+    assert!(target.is_event);
+}
+
+#[tokio::test]
+async fn test_resolve_retry_target_re_impersonate() {
+    let pipeline = make_service();
+    let input = make_input_with_replay("I look.", true);
+    let messages = vec![input];
+
+    let target = pipeline.resolve_retry_target(&messages).unwrap();
+    assert_eq!(target.mode, RetryMode::ReImpersonate);
+    assert_eq!(
+        target.old_target.as_ref().unwrap().message_type,
+        MessageType::Input
+    );
+}
+
+#[tokio::test]
+async fn test_resolve_retry_target_user_regen() {
+    let pipeline = make_service();
+    let input = make_input_with_replay("I look.", false);
+    let messages = vec![input];
+
+    let target = pipeline.resolve_retry_target(&messages).unwrap();
+    assert_eq!(target.mode, RetryMode::UserRegen);
+    assert_eq!(
+        target.old_target.as_ref().unwrap().message_type,
+        MessageType::Input
+    );
+}
+
+#[tokio::test]
+async fn test_reconstruct_retry_state_re_narrate_keeps_input() {
+    let input = crate::domain::model::message::Message::new(
+        "look".to_string(),
+        MessageType::Input,
+        None,
+        None,
+    );
+    let narration = crate::domain::model::message::Message::new(
+        "You look.".to_string(),
+        MessageType::Narration,
+        None,
+        None,
+    );
+    let messages = vec![input, narration.clone()];
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &crate::test_support::fixtures::TestGameState::in_room("room1"),
+        );
+    let target = RetryTarget {
+        anchor_idx: 0,
+        snapshot_id: 1,
+        is_event: false,
+        mode: RetryMode::ReNarrate,
+        old_target: Some(narration),
+    };
+
+    let state = crate::application::pipeline::action_pipeline::core::ActionPipeline::reconstruct_retry_state(snapshot, messages, &target);
+    assert_eq!(state.narrative.history.len(), 1);
+    assert_eq!(
+        state.narrative.history.as_slice()[0].message_type,
+        MessageType::Input
+    );
+    assert!(state.narrative.retry_target.is_some());
+    assert_eq!(
+        state.narrative.retry_target.as_ref().unwrap().message_type,
+        MessageType::Narration
+    );
+}
+
+#[tokio::test]
+async fn test_reconstruct_retry_state_user_regen_removes_input() {
+    let input = make_input_with_replay("I look.", false);
+    let messages = vec![input.clone()];
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &crate::test_support::fixtures::TestGameState::in_room("room1"),
+        );
+    let target = RetryTarget {
+        anchor_idx: 0,
+        snapshot_id: 1,
+        is_event: false,
+        mode: RetryMode::UserRegen,
+        old_target: Some(input),
+    };
+
+    let state = crate::application::pipeline::action_pipeline::core::ActionPipeline::reconstruct_retry_state(snapshot, messages, &target);
+    assert_eq!(state.narrative.history.len(), 0);
+    assert!(state.narrative.retry_target.is_some());
+    assert_eq!(
+        state.narrative.retry_target.as_ref().unwrap().message_type,
+        MessageType::Input
     );
 }

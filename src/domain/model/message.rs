@@ -30,7 +30,6 @@ pub struct Swipe {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub id: u64,
-    pub sender: Option<String>,
     pub message_type: MessageType,
     pub timestamp: DateTime<Utc>,
     pub active_swipe_index: usize,
@@ -41,7 +40,6 @@ pub struct Message {
 impl Message {
     /// Create new message with a single initial swipe.
     pub fn new(
-        sender: Option<String>,
         text: impl Into<String>,
         message_type: MessageType,
         location_header: Option<String>,
@@ -57,7 +55,6 @@ impl Message {
         };
         Self {
             id: 0,
-            sender,
             message_type,
             timestamp: Utc::now(),
             active_swipe_index: 0,
@@ -129,7 +126,6 @@ impl Message {
     /// Construct message from database values.
     pub(crate) fn from_db(
         id: u64,
-        sender: Option<String>,
         message_type: MessageType,
         timestamp: DateTime<Utc>,
         active_swipe_index: usize,
@@ -137,7 +133,6 @@ impl Message {
     ) -> Self {
         Self {
             id,
-            sender,
             message_type,
             timestamp,
             active_swipe_index,

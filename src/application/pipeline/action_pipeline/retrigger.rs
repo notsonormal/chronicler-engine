@@ -24,8 +24,7 @@ impl ActionPipeline {
                     return Err(ApplicationError::validation("No messages to retrigger"));
                 };
 
-                let is_narration = last_msg.message_type == MessageType::Narration
-                    || last_msg.message_type == MessageType::Dialogue;
+                let is_narration = last_msg.message_type == MessageType::Narration;
 
                 if !is_narration || last_msg.event_header().is_some() {
                     return Err(ApplicationError::validation(

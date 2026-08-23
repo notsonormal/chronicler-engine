@@ -26,7 +26,7 @@ async fn test_retrigger_event_cancels_cleanly() {
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -38,7 +38,7 @@ async fn test_retrigger_event_cancels_cleanly() {
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -167,7 +167,7 @@ async fn test_retrigger_returns_concurrent_generation_when_gate_busy() {
     // `process_action` does — Ok(ConcurrentGeneration), no task spawned.
     let (app, storage) = TestAppBuilder::default_test()
         .last_trigger(crate::test_support::TestStoredTriggerContext::standard())
-        .log("Main narration", None, MessageType::Narration)
+        .log("Main narration", MessageType::Narration)
         .build_service_with_storage();
 
     let game_id = storage.current_game_id();

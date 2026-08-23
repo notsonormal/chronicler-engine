@@ -152,7 +152,7 @@ impl PromptContext<'_> {
     /// Mark the turn as impersonated. Drops the player-character reference-card
     /// layer; the pipeline must pass the impersonate preset so its voice replaces
     /// the narrator voice. Mutually exclusive with `with_guide` (impersonate
-    /// suppresses the guide layer — see ticket 09).
+    /// suppresses the guide layer).
     pub fn with_impersonate(mut self, impersonate: bool) -> Self {
         self.impersonate = impersonate;
         if impersonate {
@@ -356,9 +356,15 @@ impl<'a> LayerRenderer<'a> {
         for entry in self.history {
             match entry.message_type {
                 MessageType::Narrator => history_text.push_str(&format!("{}\n", entry.text)),
-                _ => {
-                    let sender = entry.sender.as_deref().unwrap_or("Narrator");
-                    history_text.push_str(&format!("{}: {}\n", sender, entry.text));
+                MessageType::Narration => {
+                    history_text.push_str(&format!("Narrator: {}\n", entry.text));
+                }
+                MessageType::Input => {
+                    history_text
+                        .push_str(&format!("{}: {}\n", self.persona.sheet.name, entry.text));
+                }
+                MessageType::System => {
+                    history_text.push_str(&format!("System: {}\n", entry.text));
                 }
             }
         }

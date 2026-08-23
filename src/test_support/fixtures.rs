@@ -604,13 +604,7 @@ pub fn sqlite_storage() -> Result<Storage, crate::error::EngineError> {
 }
 
 pub fn dummy_message(text: &str) -> Message {
-    Message::new(
-        Some("Player".to_string()),
-        text,
-        MessageType::Input,
-        None,
-        None,
-    )
+    Message::new(text, MessageType::Input, None, None)
 }
 
 pub fn dummy_swipe(text: &str) -> Swipe {
@@ -668,11 +662,7 @@ pub fn seed_event_flow(
 
     let input_snap_id = {
         let mut gs = state.message_service.load_or_fresh();
-        gs.add_message(
-            "look".to_string(),
-            Some("Player".to_string()),
-            MessageType::Input,
-        );
+        gs.add_message("look".to_string(), MessageType::Input);
         let snap = GameStateSnapshot::from_game_state(&gs);
         let id = storage.save_snapshot(&snap)?;
         if let Some(last) = gs.narrative.history.last_mut() {
@@ -686,7 +676,7 @@ pub fn seed_event_flow(
     let _pre_event_id = {
         let mut gs = state.message_service.load_or_fresh();
         gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
-        gs.add_message("Main narration".to_string(), None, MessageType::Narration);
+        gs.add_message("Main narration".to_string(), MessageType::Narration);
         let snap = GameStateSnapshot::from_game_state(&gs);
         let id = storage.save_snapshot(&snap)?;
         if let Some(last) = gs.narrative.history.last_mut() {
@@ -699,7 +689,7 @@ pub fn seed_event_flow(
     let _final_id = {
         let mut gs = state.message_service.load_or_fresh();
         gs.narrative.pending_event = Some("Event".to_string());
-        gs.add_message("Event narration".to_string(), None, MessageType::Narration);
+        gs.add_message("Event narration".to_string(), MessageType::Narration);
         if let Some(last) = gs.narrative.history.last_mut() {
             last.set_event_header(Some("Event".to_string()));
         }

@@ -216,13 +216,7 @@ fn test_delete_game_cascades() {
     msg_storage.set_game_id(game_id);
 
     storage.save_snapshot(&create_snapshot()).unwrap();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "hello",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("hello", MessageType::Input, None, None);
     msg_storage.insert_message(&msg).unwrap();
 
     storage.delete_game(game_id).expect("delete should succeed");
@@ -289,13 +283,7 @@ fn test_insert_and_load_messages() {
     chronicler_engine::test_support::seed_default_game_row(&pool, 1).unwrap();
     let msg_repo = Storage::new_sqlite(pool, 1);
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "look around",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("look around", MessageType::Input, None, None);
 
     let id = msg_repo.insert_message(&msg).unwrap();
     assert!(id > 0, "insert_message should return a message id");
@@ -310,13 +298,7 @@ fn test_get_and_update_active_swipe_index() {
     chronicler_engine::test_support::seed_default_game_row(&pool, 1).unwrap();
     let msg_repo = Storage::new_sqlite(pool, 1);
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "original",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("original", MessageType::Input, None, None);
     let id = msg_repo.insert_message(&msg).unwrap();
 
     assert_eq!(msg_repo.get_active_swipe_index(id).unwrap(), Some(0));
@@ -330,13 +312,7 @@ fn test_delete_message() {
     chronicler_engine::test_support::seed_default_game_row(&pool, 1).unwrap();
     let msg_repo = Storage::new_sqlite(pool, 1);
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "to delete",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("to delete", MessageType::Input, None, None);
     let id = msg_repo.insert_message(&msg).unwrap();
     msg_repo.delete_message(id).unwrap();
 

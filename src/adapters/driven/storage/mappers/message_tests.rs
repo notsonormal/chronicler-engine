@@ -6,7 +6,6 @@ use crate::adapters::driven::storage::models::message::DbMessage;
 #[test]
 fn test_message_roundtrip() {
     let mut original = Message::new(
-        Some("System".to_string()),
         "Hello world",
         MessageType::System,
         Some("Room A".to_string()),
@@ -25,7 +24,6 @@ fn test_message_roundtrip() {
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert_eq!(original.id, back.id);
-    assert_eq!(original.sender, back.sender);
     assert_eq!(original.text(), back.text());
     assert_eq!(original.message_type, back.message_type);
     assert_eq!(original.timestamp, back.timestamp);
@@ -38,7 +36,6 @@ fn test_message_roundtrip() {
 #[test]
 fn test_message_unpersisted_roundtrip() {
     let mut original = Message::new(
-        None,
         "Input text",
         MessageType::Input,
         None,
@@ -56,14 +53,13 @@ fn test_message_unpersisted_roundtrip() {
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert_eq!(back.id, 0);
-    assert!(back.sender.is_none());
     assert_eq!(back.message_type, MessageType::Input);
     assert_eq!(db.game_id, 2);
 }
 
 #[test]
 fn test_message_log_type_json_serialization() {
-    let mut msg = Message::new(None, "test", MessageType::Dialogue, None, None);
+    let mut msg = Message::new("test", MessageType::Input, None, None);
     msg.swipes = vec![crate::domain::model::message::Swipe {
         text: "test".to_string(),
         snapshot_id: None,
@@ -74,13 +70,12 @@ fn test_message_log_type_json_serialization() {
     let db = DbMessage::try_from((&msg, 1)).unwrap();
     let _swipes = model_swipes_to_db(&msg);
 
-    assert_eq!(db.message_type_json, "\"Dialogue\"");
+    assert_eq!(db.message_type_json, "\"Input\"");
 }
 
 #[test]
 fn test_active_swipe_index_out_of_bounds_fallback() {
     let mut original = Message::new(
-        Some("Narrator".to_string()),
         "First swipe",
         MessageType::Narration,
         Some("Room A".to_string()),

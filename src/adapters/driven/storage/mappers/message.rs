@@ -21,7 +21,6 @@ impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
 
         let mut message = Message::from_db(
             db.id as u64,
-            db.sender.clone(),
             message_type,
             timestamp,
             db.active_swipe_index as usize,
@@ -62,7 +61,6 @@ impl TryFrom<(&Message, i64)> for DbMessage {
         Ok(DbMessage {
             id: msg.id as i64,
             game_id,
-            sender: msg.sender.clone(),
             message_type_json,
             timestamp: msg.timestamp.to_rfc3339(),
             active_swipe_index: msg.active_swipe_index as i64,

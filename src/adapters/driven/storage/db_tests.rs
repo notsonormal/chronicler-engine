@@ -173,8 +173,8 @@ fn test_db_cascade_delete_game() {
     .unwrap();
 
     conn.execute(
-        "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted)
-         VALUES (?1, NULL, 'Narration', '1', 0, 0)",
+        "INSERT INTO messages (game_id, message_type, timestamp, active_swipe_index, is_deleted)
+         VALUES (?1, 'Narration', '1', 0, 0)",
         rusqlite::params![game_id],
     )
     .unwrap();

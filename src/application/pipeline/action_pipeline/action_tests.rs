@@ -200,7 +200,7 @@ fn test_execute_action_preserves_existing_input_log() {
         quantifier_provider,
     );
     let app = TestAppBuilder::default_test()
-        .log("examine room", Some("Player"), MessageType::Input)
+        .log("examine room", MessageType::Input)
         .pipeline(service)
         .build_service();
     app.pipeline.execute_action("examine room".to_string());
@@ -541,8 +541,8 @@ async fn test_narrator_action_persists_narrator_entry_then_generates() {
         .expect("narrator_action should persist a Narrator entry");
     assert_eq!(narrator.text, "Make the scene tense");
     assert!(
-        narrator.sender.is_none(),
-        "Narrator entries have no sender (rendered bare)"
+        !narrator.text.is_empty(),
+        "Narrator entries have text (rendered bare)"
     );
 
     assert!(
@@ -568,7 +568,7 @@ async fn test_narrator_action_preserves_prior_history() {
         quantifier_provider,
     );
     let app = TestAppBuilder::default_test()
-        .log("examine room", Some("Player"), MessageType::Input)
+        .log("examine room", MessageType::Input)
         .pipeline(service)
         .build_service();
     let game_id = app.game_catalogue.current_game_id();

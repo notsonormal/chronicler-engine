@@ -31,7 +31,7 @@ pub struct PipelineInputs {
     /// Impersonate steering for this turn. When true, the narration runs as the
     /// player's persona: the impersonate preset replaces the system preset, the
     /// player-character layer is dropped, and the output is a player-voiced
-    /// `Dialogue` message. Retry re-derives it from `retry_target.replay().impersonate`.
+    /// `Input` message. Retry re-derives it from `retry_target.replay().impersonate`.
     pub impersonate: bool,
     /// Optional `/impersonate <direction>` text; fed to the prompt as the
     /// instruction for the impersonated turn. `None` for plain `/impersonate`.
@@ -62,7 +62,7 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    fn check_game_unchanged(&self, started_for: u64) -> Result<(), PhaseError> {
+    pub(super) fn check_game_unchanged(&self, started_for: u64) -> Result<(), PhaseError> {
         let current = self.pipeline.storage.current_game_id();
         if current != started_for {
             tracing::info!(
@@ -166,14 +166,39 @@ impl<'a> PipelineRun<'a> {
             context.with_guide(self.resolve_guide(state, &inputs.guide))
         };
 
+        let (narration_text, backend_name, model_name) =
+            match self.call_narrator(&context, &preset, &response_length) {
+                Ok(triple) => triple,
+                Err(msg) => return Err(self.set_error(state, msg)),
+            };
+
+        self.check_game_unchanged(self.started_for)?;
+
+        let message_type = if impersonate.is_some() {
+            MessageType::Input
+        } else {
+            MessageType::Narration
+        };
+        state.add_message(narration_text.clone(), message_type);
+        self.persist_snapshot_or_err(state, "pre-quantifier narration")?;
+
+        Ok((narration_text, backend_name, model_name))
+    }
+
+    pub(super) fn call_narrator(
+        &self,
+        context: &PromptContext,
+        preset: &PromptPreset,
+        response_length: &str,
+    ) -> Result<(String, String, String), String> {
         let assembled = match self.pipeline.prompt_assembler.assemble(
-            &context,
-            &preset,
-            &inputs.world.global_rules,
-            Some(&response_length),
+            context,
+            preset,
+            &context.world.global_rules,
+            Some(response_length),
         ) {
             Ok(a) => a,
-            Err(e) => return Err(self.set_error(state, e.llm_error_string())),
+            Err(e) => return Err(e.llm_error_string()),
         };
 
         tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
@@ -184,27 +209,14 @@ impl<'a> PipelineRun<'a> {
             Some(assembled.max_tokens),
         ) {
             Ok(result) => result,
-            Err(e) => return Err(self.set_error(state, e.llm_error_string())),
+            Err(e) => return Err(e.llm_error_string()),
         };
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;
 
-        self.check_game_unchanged(self.started_for)?;
-
         if narration_text.trim().is_empty() {
-            return Err(self.set_error(state, "LLM Error: empty response".to_string()));
+            return Err("LLM Error: empty response".to_string());
         }
-
-        let (sender, message_type) = if impersonate.is_some() {
-            (
-                Some(inputs.persona.sheet.name.clone()),
-                MessageType::Dialogue,
-            )
-        } else {
-            (None, MessageType::Narration)
-        };
-        state.add_message(narration_text.clone(), sender, message_type);
-        self.persist_snapshot_or_err(state, "pre-quantifier narration")?;
 
         Ok((
             narration_text,
@@ -250,7 +262,6 @@ impl<'a> PipelineRun<'a> {
             quantifier_result.npcs.confidence = QuantifierConfidence::Low;
             state.add_message(
                 "[System] NPC detection uncertain — using room defaults".to_string(),
-                None,
                 MessageType::System,
             );
         }
@@ -298,7 +309,6 @@ impl<'a> PipelineRun<'a> {
                 tracing::error!("Trigger narration failed: {e}");
                 state.add_message(
                     format!("[Trigger narration failed: {e}]"),
-                    None,
                     MessageType::System,
                 );
                 return Err(self.set_error(state, format!("Trigger narration failed: {e}")));
@@ -503,7 +513,7 @@ impl<'a> PipelineRun<'a> {
     /// blob's recorded id (staged from `active_impersonate_prompt_preset_id` by
     /// the seam, or carried by the retry-target replay); when `None`/empty it
     /// falls back to the current setting.
-    fn load_impersonate_preset_and_response_length(
+    pub(super) fn load_impersonate_preset_and_response_length(
         &self,
         preset_id: Option<&str>,
     ) -> Result<(PromptPreset, String), String> {

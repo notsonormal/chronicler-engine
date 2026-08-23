@@ -55,7 +55,7 @@ type StateMut = Box<dyn FnOnce(&mut GameState)>;
 /// directly (no HTTP router), backed by in-memory SQLite with full snapshot + message persistence.
 pub struct SqliteTestAppBuilder {
     test_data: TestData,
-    logs: Vec<(String, Option<String>, MessageType)>,
+    logs: Vec<(String, MessageType)>,
     messages: Vec<Message>,
     last_trigger: Option<StoredTriggerContext>,
     generation: Option<(GenerationStatus, GenerationPhase)>,
@@ -95,9 +95,8 @@ impl SqliteTestAppBuilder {
         self
     }
 
-    pub fn log(mut self, text: &str, speaker: Option<&str>, log_type: MessageType) -> Self {
-        self.logs
-            .push((text.to_string(), speaker.map(|s| s.to_string()), log_type));
+    pub fn log(mut self, text: &str, log_type: MessageType) -> Self {
+        self.logs.push((text.to_string(), log_type));
         self
     }
 
@@ -255,8 +254,8 @@ impl SqliteTestAppBuilder {
             state.narrative.input_buffer.phase = phase;
         }
 
-        for (text, sender, log_type) in self.logs.clone() {
-            state.add_message(text, sender, log_type);
+        for (text, log_type) in self.logs.clone() {
+            state.add_message(text, log_type);
         }
 
         for msg in self.messages.clone() {

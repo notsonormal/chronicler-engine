@@ -114,12 +114,12 @@ impl GameState {
         }
     }
 
-    fn push_message(&mut self, text: String, sender: Option<String>, message_type: MessageType) {
+    fn push_message(&mut self, text: String, message_type: MessageType) {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
 
         if message_type == MessageType::Narration
-            || message_type == MessageType::Dialogue
+            || message_type == MessageType::Input
             || message_type == MessageType::Narrator
         {
             if let Some(ref mut target) = self.narrative.retry_target {
@@ -141,15 +141,15 @@ impl GameState {
             }
         }
 
-        let mut message = Message::new(sender, text, message_type, location_header, event_header);
+        let mut message = Message::new(text, message_type, location_header, event_header);
         if let Some(replay) = self.narrative.pending_replay.take() {
             message.set_replay(Some(replay));
         }
         self.narrative.history.append(message);
     }
 
-    pub fn add_message(&mut self, text: String, sender: Option<String>, message_type: MessageType) {
-        self.push_message(text, sender, message_type);
+    pub fn add_message(&mut self, text: String, message_type: MessageType) {
+        self.push_message(text, message_type);
     }
 
     pub fn inject_scenario_logs(
@@ -172,7 +172,7 @@ impl GameState {
 
         self.narrative.pending_location = Some(room_name);
         let text = render_template(&scenario.text, &TemplateVars::new(&player.sheet.name));
-        self.add_message(text, None, MessageType::Narration);
+        self.add_message(text, MessageType::Narration);
     }
 }
 
@@ -205,7 +205,6 @@ impl GameState {
                     Room::new_dynamic(destination, "A place you have never seen before.");
                 self.add_message(
                     format!("[System] Entered unknown location: {}", dynamic_room.id),
-                    None,
                     MessageType::System,
                 );
                 self.movement
@@ -298,7 +297,7 @@ impl GameState {
         }
         self.narrative.last_trigger = Some(trigger.clone());
         self.narrative.pending_event = Some(trigger.trigger_name.clone());
-        self.add_message(continuation_text.to_string(), None, MessageType::Narration);
+        self.add_message(continuation_text.to_string(), MessageType::Narration);
         if !trigger.trigger_repeat {
             self.npc_encounter_log
                 .mark_trigger_fired(&trigger.npc_id, trigger.trigger_idx);

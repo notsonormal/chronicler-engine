@@ -30,7 +30,7 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
     );
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
-        .log("Main narration", None, MessageType::Narration)
+        .log("Main narration", MessageType::Narration)
         .pipeline(pipeline)
         .build_with_state();
 
@@ -81,7 +81,7 @@ async fn test_retrigger_does_not_rerun_quantifier_http() {
     );
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
-        .log("Main narration", None, MessageType::Narration)
+        .log("Main narration", MessageType::Narration)
         .pipeline(pipeline)
         .build_with_state();
 
@@ -152,7 +152,7 @@ async fn test_retrigger_no_messages_returns_400_http() {
 async fn test_retrigger_last_message_not_narration_returns_400_http() {
     let app = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
-        .log("test input", Some("Player"), MessageType::Input)
+        .log("test input", MessageType::Input)
         .build();
 
     let req = axum::http::Request::builder()
@@ -175,12 +175,11 @@ async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
     let storage = Arc::new(Storage::new_in_memory());
     let app = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
-        .log("Main narration", None, MessageType::Narration)
+        .log("Main narration", MessageType::Narration)
         .storage(Arc::clone(&storage))
         .build();
 
     let event_msg = Message::new(
-        None,
         "Event narration",
         MessageType::Narration,
         None,
@@ -217,7 +216,7 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
     );
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
-        .log("Main narration", None, MessageType::Narration)
+        .log("Main narration", MessageType::Narration)
         .pipeline(pipeline)
         .build_with_state();
 
@@ -289,7 +288,7 @@ async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
 
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
-        .log("Main narration", None, MessageType::Narration)
+        .log("Main narration", MessageType::Narration)
         .build_with_state();
 
     let game_id = state.game_catalogue.current_game_id();

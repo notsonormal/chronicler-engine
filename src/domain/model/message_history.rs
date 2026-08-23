@@ -103,9 +103,9 @@ impl MessageHistory {
     }
 
     pub fn last_ai_response_index(&self) -> Option<usize> {
-        self.messages.iter().rposition(|m| {
-            m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue
-        })
+        self.messages
+            .iter()
+            .rposition(|m| m.message_type == MessageType::Narration)
     }
 
     pub fn last_input_index(&self) -> Option<usize> {
@@ -114,23 +114,20 @@ impl MessageHistory {
             .rposition(|m| m.message_type == MessageType::Input)
     }
 
-    pub fn last_input_text(&self) -> Option<(String, String)> {
+    pub fn last_input_text(&self) -> Option<String> {
         let input = self
             .messages
             .iter()
             .rev()
             .find(|m| m.message_type == MessageType::Input)?;
-        let sender = input.sender.clone().unwrap_or_default();
-        Some((sender, input.text().to_string()))
+        Some(input.text().to_string())
     }
 
     pub fn is_last_ai_response_event_continuation(&self) -> bool {
         self.messages
             .iter()
             .rev()
-            .find(|m| {
-                m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue
-            })
+            .find(|m| m.message_type == MessageType::Narration)
             .is_some_and(|m| m.event_header().is_some())
     }
 

@@ -20,7 +20,7 @@ use crate::test_support::test_data_builder::TestData;
 
 pub struct TestAppBuilder {
     test_data: Option<TestData>,
-    logs: Vec<(String, Option<String>, MessageType)>,
+    logs: Vec<(String, MessageType)>,
     last_trigger: Option<StoredTriggerContext>,
     generation: Option<(GenerationStatus, GenerationPhase)>,
     settings: AppSettings,
@@ -68,9 +68,8 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn log(mut self, text: &str, speaker: Option<&str>, log_type: MessageType) -> Self {
-        self.logs
-            .push((text.to_string(), speaker.map(|s| s.to_string()), log_type));
+    pub fn log(mut self, text: &str, log_type: MessageType) -> Self {
+        self.logs.push((text.to_string(), log_type));
         self
     }
 
@@ -166,8 +165,8 @@ impl TestAppBuilder {
             state.narrative.input_buffer.phase = phase;
         }
 
-        for (text, sender, log_type) in self.logs {
-            state.add_message(text, sender, log_type);
+        for (text, log_type) in self.logs {
+            state.add_message(text, log_type);
         }
 
         if self.is_generating {

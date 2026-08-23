@@ -725,11 +725,7 @@ fn test_pipeline_persists_input_before_narration() {
         .build_service();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(
-        "look".to_string(),
-        Some("Test Player".to_string()),
-        MessageType::Input,
-    );
+    state.add_message("look".to_string(), MessageType::Input);
     let _outcome = app.pipeline.run_from_input(state, "look".to_string());
 
     let messages = app.message_service.load_messages().unwrap();

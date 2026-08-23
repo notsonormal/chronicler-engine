@@ -296,5 +296,17 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 17 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if column_exists(conn, "messages", "sender") {
+            exec("ALTER TABLE messages DROP COLUMN sender")?;
+        }
+        conn.pragma_update(None, "user_version", 17)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

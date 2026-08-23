@@ -142,13 +142,13 @@ And a new #command-form input[name="command"] is rendered
 And typing "/" into the new input opens #slash-menu again
 ```
 
-#### Scenario 17.8: Submitting `/impersonate` produces a Dialogue log entry
+#### Scenario 17.8: Submitting `/impersonate` produces an Input log entry
 
 ```gherkin
 Given the dashboard is loaded and the command input is rendered
 When the client submits "/impersonate hello"
 And the generation completes
-Then a new .log-entry.dialogue appears in #story-log
+Then a new .log-entry.input appears in #story-log
 And no .log-entry.input whose text is "/impersonate hello" appears
 ```
 

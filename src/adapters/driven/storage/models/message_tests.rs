@@ -7,15 +7,15 @@ use super::swipe::DbSwipe;
 fn test_db_message_from_row_maps_columns() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(
-        "CREATE TABLE m (id INTEGER, game_id INTEGER, sender TEXT, \
-         message_type_json TEXT, timestamp TEXT, active_swipe_index INTEGER);\
-         INSERT INTO m VALUES (7, 3, 'npc', '\"Narration\"', '2026-01-01', 2);",
+        "CREATE TABLE m (id INTEGER, game_id INTEGER, \
+         message_type_json TEXT, timestamp TEXT, active_swipe_index INTEGER);\n\
+         INSERT INTO m VALUES (7, 3, '\"Narration\"', '2026-01-01', 2);",
     )
     .unwrap();
 
     let msg = conn
         .query_row(
-            "SELECT id, game_id, sender, message_type_json, timestamp, active_swipe_index FROM m",
+            "SELECT id, game_id, message_type_json, timestamp, active_swipe_index FROM m",
             [],
             DbMessage::from_row,
         )
@@ -23,7 +23,6 @@ fn test_db_message_from_row_maps_columns() {
 
     assert_eq!(msg.id, 7);
     assert_eq!(msg.game_id, 3);
-    assert_eq!(msg.sender.as_deref(), Some("npc"));
     assert_eq!(msg.message_type_json, "\"Narration\"");
     assert_eq!(msg.timestamp, "2026-01-01");
     assert_eq!(msg.active_swipe_index, 2);
@@ -35,21 +34,19 @@ fn test_db_message_from_row_maps_columns() {
 fn test_db_message_from_row_null_sender() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(
-        "CREATE TABLE m (id INTEGER, game_id INTEGER, sender TEXT, \
-         message_type_json TEXT, timestamp TEXT, active_swipe_index INTEGER);\
-         INSERT INTO m VALUES (1, 1, NULL, '\"Input\"', 't', 0);",
+        "CREATE TABLE m (id INTEGER, game_id INTEGER, \
+         message_type_json TEXT, timestamp TEXT, active_swipe_index INTEGER);\n\
+         INSERT INTO m VALUES (1, 1, '\"Input\"', 't', 0);",
     )
     .unwrap();
 
-    let msg = conn
+    let _msg = conn
         .query_row(
-            "SELECT id, game_id, sender, message_type_json, timestamp, active_swipe_index FROM m",
+            "SELECT id, game_id, message_type_json, timestamp, active_swipe_index FROM m",
             [],
             DbMessage::from_row,
         )
         .unwrap();
-
-    assert_eq!(msg.sender, None);
 }
 
 #[test]

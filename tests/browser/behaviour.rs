@@ -555,22 +555,22 @@ async fn test_slash_menu_reopens_after_action_area_rerender() {
 
 // [docs/specs/browser.md] SCENARIO: 17.8
 #[tokio::test]
-async fn test_slash_impersonate_produces_dialogue_entry() {
+async fn test_slash_impersonate_produces_input_entry() {
     with_test_page(
         CONFIG_PATH,
         TEST_WORLD,
         TEST_PERSONA,
         |page, _port| async move {
-            let before = page.locator("#story-log .log-entry.dialogue").await.count().await.unwrap_or(0);
+            let before = page.locator("#story-log .log-entry.input").await.count().await.unwrap_or(0);
 
             send_action(&page, "/impersonate hello").await;
             wait_for_status_ready(&page).await;
 
-            let after = page.locator("#story-log .log-entry.dialogue").await.count().await.unwrap_or(0);
+            let after = page.locator("#story-log .log-entry.input").await.count().await.unwrap_or(0);
             assert_eq!(
                 after,
                 before + 1,
-                "Submitting /impersonate should add one Dialogue entry"
+                "Submitting /impersonate should add one Input entry"
             );
 
             let input_text: String = page

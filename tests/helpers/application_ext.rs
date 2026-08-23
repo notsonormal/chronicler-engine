@@ -68,7 +68,7 @@ impl PipelineHelpers for AppState {
             .and_then(|game| storage.get_persona(&game.persona_key).ok().flatten())
             .map(|persona| persona.sheet.name)
             .unwrap_or_else(|| "Player".to_string());
-        state.add_message(text.to_string(), Some(player_name), MessageType::Input);
+        state.add_message(text.to_string(), MessageType::Input);
         self.save_test_state(storage, &state);
     }
 

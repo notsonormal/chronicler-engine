@@ -87,7 +87,6 @@ fn create_test_history() -> Vec<MessageEntry> {
     vec![
         MessageEntry {
             id: 1,
-            sender: Some("Narrator".to_string()),
             text: "Welcome to the game!".to_string(),
             message_type: MessageType::Narration,
             timestamp: chrono::Utc::now(),
@@ -95,7 +94,6 @@ fn create_test_history() -> Vec<MessageEntry> {
         },
         MessageEntry {
             id: 2,
-            sender: Some("Player".to_string()),
             text: "I look around.".to_string(),
             message_type: MessageType::Input,
             timestamp: chrono::Utc::now(),
@@ -114,7 +112,6 @@ fn test_narrator_message_renders_without_sender_prefix() {
     let history = vec![
         MessageEntry {
             id: 1,
-            sender: Some("Narrator".to_string()),
             text: "Welcome to the game!".to_string(),
             message_type: MessageType::Narration,
             timestamp: chrono::Utc::now(),
@@ -122,7 +119,6 @@ fn test_narrator_message_renders_without_sender_prefix() {
         },
         MessageEntry {
             id: 2,
-            sender: None,
             text: "The ceiling collapses.".to_string(),
             message_type: MessageType::Narrator,
             timestamp: chrono::Utc::now(),
@@ -130,7 +126,6 @@ fn test_narrator_message_renders_without_sender_prefix() {
         },
         MessageEntry {
             id: 3,
-            sender: Some("Player".to_string()),
             text: "I look around.".to_string(),
             message_type: MessageType::Input,
             timestamp: chrono::Utc::now(),
@@ -182,7 +177,7 @@ fn test_narrator_message_renders_without_sender_prefix() {
         "narration entry should keep its sender prefix"
     );
     assert!(
-        history_block.contains("Player: I look around."),
+        history_block.contains("Test Player: I look around."),
         "input entry should keep its sender prefix"
     );
 }
@@ -357,7 +352,6 @@ fn test_assemble_budget_trimming() {
     let long_history: Vec<MessageEntry> = (0..100)
         .map(|i| MessageEntry {
             id: i,
-            sender: Some(format!("Speaker {i}")),
             text: format!(
                 "This is a very long message number {i} with lots of text to consume tokens."
             ),
@@ -463,7 +457,6 @@ fn test_budget_read_from_settings_per_call() {
     let long_history: Vec<MessageEntry> = (0..100)
         .map(|i| MessageEntry {
             id: i,
-            sender: Some(format!("Speaker {i}")),
             text: "a".repeat(80),
             message_type: MessageType::Narration,
             timestamp: chrono::Utc::now(),
@@ -486,7 +479,7 @@ fn test_budget_read_from_settings_per_call() {
     let small = assembler
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
         .expect("small budget assemble should succeed");
-    let small_count = small.user_prompt.matches("Speaker ").count();
+    let small_count = small.user_prompt.matches("Narrator:").count();
 
     {
         let mut guard = settings.write().unwrap();
@@ -496,7 +489,7 @@ fn test_budget_read_from_settings_per_call() {
     let large = assembler
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
         .expect("large budget assemble should succeed");
-    let large_count = large.user_prompt.matches("Speaker ").count();
+    let large_count = large.user_prompt.matches("Narrator:").count();
 
     assert!(
         large_count > small_count,

@@ -69,7 +69,7 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
     {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted) VALUES (?1, 'Player', 'Input', ?2, 0, 0)",
+            "INSERT INTO messages (game_id, message_type, timestamp, active_swipe_index, is_deleted) VALUES (?1, 'Input', ?2, 0, 0)",
             rusqlite::params![game_a_id as i64, &newer],
         )
         .unwrap();

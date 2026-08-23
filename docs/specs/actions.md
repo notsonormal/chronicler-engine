@@ -211,14 +211,15 @@ Then message_service.load_messages() contains exactly 2 Input entries
 
 ### Slash commands
 
-#### Scenario 1.9: `/impersonate` dispatches as impersonate and produces a Dialogue message
+#### Scenario 1.9: `/impersonate` dispatches as impersonate and produces an Input message
 
 ```gherkin
 Given a fresh game state with narrative.history empty
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="/impersonate hello"
 And the pipeline returns to idle
-Then message_service.load_messages() contains exactly one Dialogue entry
+Then message_service.load_messages() contains exactly one Input entry
+And message_service.load_messages() contains zero Dialogue entries
 And message_service.load_messages() contains zero Input entries whose text is "/impersonate hello"
 And message_service.load_or_fresh().narrative.input_buffer.status is Idle
 ```

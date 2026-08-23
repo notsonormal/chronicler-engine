@@ -498,10 +498,11 @@ impl ActionPipeline {
             Self::finalize_phase_error(&run, Some(state), PhaseError::TriggerMissing);
             return Ok(());
         };
-        let input_text = match state.narrative.history.last_input_text() {
-            Some((_, text)) => text,
-            None => String::new(),
-        };
+        let input_text = state
+            .narrative
+            .history
+            .last_input_text()
+            .unwrap_or_default();
         let WorldBundle {
             map,
             persona,

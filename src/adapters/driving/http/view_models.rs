@@ -25,7 +25,6 @@ impl fmt::Display for SafeHtml {
 pub struct MessageEntryView {
     pub id: u64,
     pub timestamp: String,
-    pub sender: String,
     pub text: SafeHtml,
     pub raw_text: String,
     pub log_type: String,
@@ -46,12 +45,10 @@ impl From<&MessageEntry> for MessageEntryView {
         Self {
             id: entry.id,
             timestamp: entry.timestamp.format("%H:%M").to_string(),
-            sender: entry.sender.clone().unwrap_or_default(),
             text: SafeHtml(parsed_text),
             raw_text: entry.text.clone(),
             log_type: match entry.message_type {
                 MessageType::Narration => "narration".to_string(),
-                MessageType::Dialogue => "dialogue".to_string(),
                 MessageType::System => "system".to_string(),
                 MessageType::Input => "input".to_string(),
                 MessageType::Narrator => "narrator".to_string(),

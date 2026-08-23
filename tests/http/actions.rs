@@ -676,7 +676,7 @@ async fn test_async_action_sequence_then_retry_http() {
 
 // [docs/specs/actions.md] SCENARIO: 1.9
 #[tokio::test]
-async fn test_slash_impersonate_produces_dialogue_http() {
+async fn test_slash_impersonate_produces_input_http() {
     let narrator = Arc::new(MockBackend::default());
     let (app, state) = app_with_narrator(narrator);
 
@@ -688,24 +688,25 @@ async fn test_slash_impersonate_produces_dialogue_http() {
     );
 
     let messages = state.message_service.load_messages().unwrap();
-    let dialogues: Vec<_> = messages
-        .iter()
-        .filter(|m| m.message_type == MessageType::Dialogue)
-        .collect();
-    assert_eq!(
-        dialogues.len(),
-        1,
-        "impersonate should produce exactly one Dialogue entry"
-    );
-
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
         .collect();
     assert_eq!(
         inputs.len(),
+        1,
+        "impersonate should produce exactly one Input entry"
+    );
+
+    // The slash command itself is not persisted as a plain Input entry.
+    let raw_command: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Input && m.text().contains("/impersonate hello"))
+        .collect();
+    assert_eq!(
+        raw_command.len(),
         0,
-        "impersonate should not persist an Input entry"
+        "impersonate should not persist the raw command as an Input entry"
     );
 }
 

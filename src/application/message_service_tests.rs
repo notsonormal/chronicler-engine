@@ -85,7 +85,7 @@ fn test_delete_last_removes_message_and_snapshot() {
     let (service, _storage, _game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
-    state.add_message("hello".to_string(), None, MessageType::Narration);
+    state.add_message("hello".to_string(), MessageType::Narration);
     service.save_message_and_snapshot(&mut state).unwrap();
 
     let before = service.load_messages().unwrap();
@@ -102,7 +102,7 @@ fn test_edit_history_updates_text_and_snapshot() {
     let (service, _storage, _game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
-    state.add_message("old".to_string(), None, MessageType::Narration);
+    state.add_message("old".to_string(), MessageType::Narration);
     service.save_message_and_snapshot(&mut state).unwrap();
 
     let messages = service.load_messages().unwrap();
@@ -119,7 +119,7 @@ fn test_save_message_and_snapshot_assigns_snapshot_id_to_message() {
     let (service, _storage, _game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
-    state.add_message("hello".to_string(), None, MessageType::Narration);
+    state.add_message("hello".to_string(), MessageType::Narration);
     assert!(
         state
             .narrative

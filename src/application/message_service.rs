@@ -126,7 +126,7 @@ impl MessageService {
 
             let text = render_template(&scenario.text, &TemplateVars::new(&persona.sheet.name));
             if !text.is_empty() {
-                initial_state.add_message(text, None, MessageType::Narration);
+                initial_state.add_message(text, MessageType::Narration);
             }
 
             initial_state.init_scenario_npcs(scenario, &npcs_map);
