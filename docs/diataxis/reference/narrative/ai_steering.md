@@ -49,7 +49,7 @@ A narrator action is a permanent author directive from the omniscient voice, per
 
 The `/narrator <text>` command does two things in one turn: it appends a narrator entry to history with no sender and the directive text, then it runs a continue narration so the next response is shaped by the directive already in the history.
 
-In `<ConversationHistory>`, a `Narrator` row renders as bare text — no `{sender}: ` prefix. Every other message type renders with a sender prefix (defaulting to `Narrator` when the sender is absent). The absent prefix is itself the narrator signal. `Narrator` is distinct from `System`, which carries engine notices such as the NPC-detection-uncertain message.
+In `<ConversationHistory>`, a `Narrator` row renders as bare text with no sender label or colon prefix. Every other message type renders with a sender prefix. The absent prefix is itself the narrator signal. `Narrator` is distinct from `System`, which carries engine notices such as the NPC-detection-uncertain message.
 
 A retry re-reads the narrator row from history, the same way it re-reads any other history row.
 
@@ -57,17 +57,17 @@ A retry re-reads the narrator row from history, the same way it re-reads any oth
 
 Impersonate forces the next narration to be written as the player's persona. It substitutes the *speaker*, not the content — a distinct axis from guided generation.
 
-For an impersonated turn, the impersonate preset replaces the system preset. The active impersonate preset is selected by the `active_impersonate_prompt_preset_id` setting. The impersonate preset is a voice apparatus that injects the persona through `{{user}}` and the `{{persona_description}}`, `{{persona_personality}}`, and `{{persona_background}}` macros, writing in first person as the player character. The default impersonate preset ships at `data/prompt_presets/impersonate/default.json`.
+For an impersonated turn, the impersonate preset replaces the system preset. The active impersonate preset is selected through settings. The impersonate preset acts as a voice apparatus: it writes in first person as the player character and receives the persona sheet through template variables.
 
-The `<PlayerCharacter>` layer is dropped for an impersonated turn. The context layers stay: `<GameState>`, `<KnownNpcs>` / `<NpcsInRoom>`, `<WorldLore>`, and `<ConversationHistory>` remain. Persona data reaches the prompt through the impersonate preset's macros, not through the dropped layer.
+The `<PlayerCharacter>` layer is dropped for an impersonated turn. The context layers stay: `<GameState>`, `<KnownNpcs>` / `<NpcsInRoom>`, `<WorldLore>`, and `<ConversationHistory>` remain. Persona data reaches the prompt through the impersonate preset, not through the dropped layer.
 
-The impersonate output is saved as a player-voiced `Dialogue` entry — the sender is the persona name. An optional `/impersonate <direction>` text steers the impersonated action without forcing an implausible leap; with no direction, the persona acts in character.
+The impersonate output is saved as a player-voiced dialogue entry — the sender is the persona name. An optional `/impersonate <direction>` text steers the impersonated action without forcing an implausible leap; with no direction, the persona acts in character.
 
-The replay blob on the swipe (the impersonate flag, the direction, and the preset id) makes a retry re-impersonate using the same preset.
+The replay blob on the swipe makes a retry re-impersonate using the same preset.
 
 ## Replay Blob
 
-The replay blob is the shared mechanism for transient steering — guided generation and impersonate. A `GenerationReplay` record on `Swipe` carries the turn's steering conditions: the guide text, or the impersonate flag with its direction and preset id.
+The replay blob is the shared mechanism for transient steering — guided generation and impersonate. It lives on the swipe and carries the conditions needed to reproduce the steering: the guide text, or the impersonate direction and selected preset.
 
 On a fresh guided or impersonated turn, the blob is staged on the in-flight narrative state and consumed onto the new swipe when the narration is appended. On a retry, the blob is inherited from the retry-target swipe onto the new swipe, so the alternative generation re-applies the same steering.
 
@@ -85,7 +85,7 @@ On retry, the engine reads the steering from the retry-target swipe's replay blo
 
 ## Document References
 
-- [`./prompt_system.md`](./prompt_system.md) — the layered prompt architecture: `<PlayerInput>`, `<PlayerCharacter>`, the post-history splice, and the `{{user}}` / `{{persona_*}}` template macros.
+- [`./prompt_system.md`](./prompt_system.md) — the layered prompt architecture: `<PlayerInput>`, `<PlayerCharacter>`, the post-history splice, and template macros.
 - [`./narration_system.md`](./narration_system.md) — the Game Master role, the `FreeAction` default, and the continue path.
 - [`../game_flow.md`](../game_flow.md) — the action-pipeline phases, the retry flow, and the re-trigger path.
 - [`../storage.md`](../storage.md) — the `messages` and `message_swipes` tables, the `Swipe` record, and the replay column.

@@ -1,7 +1,7 @@
 # Grill: the Dialogue-vs-Input message-type distinction
 
 Type: grilling
-Status: claimed
+Status: resolved
 Blocked by: (none)
 
 ## Question
@@ -46,3 +46,50 @@ Impersonate (ticket 09) currently saves output as `MessageType::Dialogue` with `
 - Supersedes ticket 14 Q6. If this ticket decides `Dialogue`, update ticket 14's Q6 answer to match. If `Input` (or `Input` + new retry mode), ticket 09's implementation must change and the retry filter needs rework.
 - Out of scope: the no-immediate-narrator-follow-up after impersonate (separate observation from the same session — that is Marinara's model, logged for a future ticket if the user wants narrator auto-follow).
 - Skills: `/grilling`, `/domain-modeling`.
+
+## Answer
+
+Grilled across six rounds. The type axis is **speaker/role**, not function. Impersonate output is `MessageType::Input` — the same type as a typed player line, because impersonate *is* the player speaking. This overturns ticket 09's implementation (which saved impersonate as `Dialogue` with a `sender`) and relocates ticket 14 Q6's `Input` decision from the function axis to the speaker axis. An implementation ticket carries the code change.
+
+### Decisions
+
+1. **Type axis = speaker/role (overturns the grilling's working hypothesis).** `MessageType` encodes *who is speaking* — narrator, player, system — not *what the message is for* (prompt vs output). The retry machinery keys on the type today, but the decisions below reshape that machinery so the type carries role cleanly. Impersonate and typed input are the same type because both are the player speaking.
+
+2. **Delete `sender` entirely (full removal).** The `sender` field on `MessageEntry`, the `{{ sender }}:` template prefix, the view-model field, and the storage column all go. Voices are distinguished by `MessageType` styling alone (input vs narration vs narrator vs system). A sender/name field is not needed because the engine always has a narrator as the opposing side; a name on player lines is a leftover from a design the engine does not use. A future NPC-speech feature re-adds a name field with its own design if it arrives. Storage migration drops the column.
+
+3. **Remove the `Dialogue` variant.** With impersonate moved to `Input`, `Dialogue` has no emitter (verified across every `add_message` call site — only the impersonate branch emitted it). A variant with no emitter leaves dead retry/swipe filter arms that mislead the next reader. If NPC-as-separate-message arrives, it is a fresh design that picks its own type; inheriting a reserved variant pre-decides that design. Remove the variant, its view-model branch, its template styling, and its `last_ai_response_index`/`resolve_retry_target` filter arms.
+
+4. **Retry model = three-way, last-message + steering-record disambiguated.** Retry targets the last message only (already enforced by `switch_swipe` rejecting non-last messages). The steering record (the `GenerationReplay` struct on `Swipe.replay` — rename to `SteeringRecord`/`Swipe.steering` deferred to a later ticket; called "steering record" here) disambiguates the Input case:
+
+   | Last message | Steering record | Retry mode |
+   |---|---|---|
+   | `Narration` | (n/a) | Re-narrate — anchor on last `Input`, truncate, re-roll narration (existing path) |
+   | `Input` | present, `impersonate: true` | Re-impersonate — append swipe to the Input, replay the record's steering |
+   | `Input` | absent | User-regen — append swipe to the Input, dedicated hardcoded rewrite instruction, original text fed back in tags |
+
+   Consequences: plain Inputs store *no* steering record (absence is the user-regen signal); `Input` gains swipe support, because both re-impersonate and user-regen append swipes to the Input itself. `last_ai_response_index` and `resolve_retry_target` must treat an Input carrying a steering record (or any Input that is the last message) as a swipe target. The `Dialogue` filter arm is removed (decision 3).
+
+5. **Retry any Input = offer an alternative player line (overturns the grilling's Q3).** Retrying a plain Input is not a re-roll of the AI's response to it; it re-authors the Input itself, offering an alternative way the player might have expressed the same intent. This re-rolls the last thing that was *generated* — for an impersonate-originated Input that was AI-generated, and for a typed Input it asks the AI for an alternative deliberately. The Q3 "retry does not re-author player input" position is overturned.
+
+6. **Dedicated user-regen path (not the impersonate path).** A third generation mode, mirroring Marinara's `buildUserMessageRegenerationInstruction`: the prompt says "rewrite this as an alternate swipe" and includes the original Input text in tags as a rewrite target. This is distinct from impersonate, which writes a player line from scratch (persona + context, no original). The two intents differ — rewrite vs author — and a shared path would conflate two presets' worth of tuning. User-regen is **hardcoded** (a Rust instruction builder, not a `PresetType`): the rewrite contract is fixed and should not change, so it earns none of the preset/setting/panel apparatus ticket 09 built for impersonate.
+
+7. **User-regen is retry-only; no slash command.** Reached only via the swipe/retry UI on a plain Input. No parser entry, no auto-suggestion entry. The existing retry handler branches on last-message type + record to route to the three modes; user-regen is the Input-without-record branch.
+
+8. **Stop after the alternate swipe; no auto-narration.** Both re-impersonate and user-regen produce the new swipe and stop. The player reviews alternates, picks one (or edits), then submits to trigger narration. This matches the no-auto-narrate principle already endorsed for impersonate ("Marinara's model: it needs to allow the impersonate to be re-tried rather than assuming it will be correct the first time"). Auto-narrating would let narration lock in an Input the player has not approved.
+
+9. **No "old narration" problem (dissolved).** Retry is last-message-only, so when an Input is the retry target there is by definition no narration after it. The truncation in the existing re-narrate path removes the Narration that is the retry target (the last message), not a later message. The three-way table (decision 4) and stop-after-swipe (decision 8) are the complete model.
+
+10. **"Guided Generation" kept; `GenerationReplay` rename deferred.** The feature name stays (established in CONTEXT.md and docs, matches Marinara and the GG extension; "Steering" is the umbrella term and promoting it to a member name would blur the family/member distinction). The `GenerationReplay` struct / `Swipe.replay` field / `pending_replay` rename to `SteeringRecord` / `Swipe.steering` / `pending_steering` is deferred to a later ticket — the term "steering record" is used in this resolution, the rename is mechanical (no behavior change, no migration), and it does not gate the implementation ticket. CONTEXT.md's "Replay Blob" entry is left untouched pending the rename.
+
+### What this overturns
+
+- **Ticket 09** (impersonate saved as `Dialogue` with `sender = persona.sheet.name`): the impersonate branch of `phase_narrate` (`pipeline_run.rs:198-205`) must write `MessageType::Input` with no `sender`. The `Dialogue` variant is removed. The `sender` argument goes away across all call sites. An implementation ticket carries this.
+- **Ticket 14 Q6** (decided `Input` on the function axis): the type result stands (`Input`), but the rationale moves to the speaker axis. The retry consequence Q6 recorded (Input as anchor, not swipe target) is overturned — an impersonate Input *is* a swipe target under the three-way model.
+
+### CONTEXT.md
+
+The "Impersonate" entry was updated during the session to reflect the `Input` output type and the no-auto-narrate, retryable properties.
+
+### Implementation ticket to graduate
+
+One implementation ticket carries the code changes: `MessageType::Input` for impersonate (overturning ticket 09), `sender` deletion (full removal + storage migration), `Dialogue` variant removal, `Input` swipe support, three-way retry disambiguation in `resolve_retry_target`/`last_ai_response_index`, the hardcoded user-regen instruction, and the retry-handler branching. The `GenerationReplay` → `SteeringRecord` rename is a separate later ticket (deferred per decision 10).

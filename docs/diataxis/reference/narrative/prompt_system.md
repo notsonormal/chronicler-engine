@@ -141,30 +141,11 @@ The user's selected response length (from `AppSettings.response_length`, persist
 
 ## Context Templates
 
-The template engine substitutes these variables in author-controlled preset fields at render time:
-
-- **`{{user}}`** — the player persona's name.
-- **`{{persona_description}}`** — the player persona's description.
-- **`{{persona_personality}}`** — the player persona's personality.
-- **`{{persona_background}}`** — the player persona's background / scenario.
-
-`{{user}}` is available to every preset. The `{{persona_*}}` macros carry the persona sheet into presets that need it, such as the impersonate preset's voice apparatus. Unknown placeholders are left in place. Substitution in author-controlled preset fields happens before user input reaches the assembler; the `{{variable}}` pattern in user input is stripped during prompt sanitization (see "Prompt Injection Sanitization" above).
+The template engine substitutes player-persona fields into author-controlled preset fields at render time. Every preset can reach the player name. Presets that write as the persona can also reach the persona description, personality, and background. Unknown placeholders are left in place. Substitution in author-controlled preset fields happens before user input reaches the assembler; placeholder patterns in user input are stripped during prompt sanitization (see "Prompt Injection Sanitization" above).
 
 ## Character Card Format
 
-World-author data uses the SillyTavern character-card shape:
-
-```json
-{
-  "name": "Character Name",
-  "description": "Physical appearance, personality",
-  "personality": "Behavior traits",
-  "scenario": "Setting context",
-  "example_dialogue": "Sample conversations"
-}
-```
-
-`NpcCard` extends this with `id`, `summary` (3-line condensed form), and `relationships` (per-partner dynamic/static text). `PersonaCard` mirrors the same shape on the player side. Cards are stored as JSON files under `data/characters/<world>/` and hydrated at load time.
+World-author data uses the SillyTavern character-card shape, which carries name, description, personality, scenario, and example dialogue fields. The engine extends that shape for non-player characters with an identifier, a short summary, and relationship text per partner. The player persona mirrors the same shape. Cards live as JSON files under the world's character directory and are hydrated at load time.
 
 ## Quantifier Prompt (Separate)
 
@@ -172,9 +153,9 @@ The engine also uses a quantifier prompt — a separate secondary LLM call that 
 
 ## Prompt Presets
 
-The four editable sections are stored on `PromptPreset` records. A preset has a `PresetType` — `System` (the narrator voice), `Quantifier` (the post-generation scene analysis), or `Impersonate` (the player-persona voice). The active preset id of each type is held on `AppSettings` (`active_system_prompt_preset_id` for the narrator, `active_impersonate_prompt_preset_id` for impersonation). At assembly time, the assembler reads the selected preset fresh from storage; `AppSettings` holds only the active-id references.
+The prompt system stores editable presets by role. The narrator preset controls the narrator voice. The quantifier preset drives the post-generation scene analysis, which runs as a separate secondary call. The impersonate preset controls the player-persona voice. Each role has its own active preset, selected through settings. At assembly time, the assembler reads the selected preset fresh from storage; settings hold only the active-preset references.
 
-An impersonated turn selects the impersonate preset in place of the system preset; the quantifier preset runs a separate secondary call and is selected independently. Default presets ship under `data/prompt_presets/<type>/default.json` and are protected from edit or delete. The dashboard's Prompt Presets tab provides the create/copy/set-active surface for each type.
+An impersonated turn selects the impersonate preset in place of the narrator preset; the quantifier preset runs independently. Default presets ship with the engine and are protected from edit or delete. The dashboard's Prompt Presets tab provides the create, copy, and set-active surface for each role.
 
 ## Document References
 

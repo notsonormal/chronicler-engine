@@ -1,7 +1,7 @@
 # Grill: narrative perspective (first/second/third person) and impersonate
 
 Type: grilling
-Status: pending
+Status: resolved
 Blocked by: (none)
 
 ## Question
@@ -53,3 +53,34 @@ The user ran `/impersonate`, saw first-person output, and found it strange again
 - Related tickets: 09 (impersonate preset, first-person choice), 14 Q6 (superseded by 15), 15 (Dialogue-vs-Input — the message-type side of "impersonate reads as a player line"). This ticket is the *perspective* side of the same observation; 15 is the *type* side.
 - Skills: `/grilling`, `/domain-modeling`.
 - This is a settings/UX design decision, not a bug fix. Do not implement until the grilling resolves where the setting lives (Q4) and whether impersonate is locked (Q2).
+
+## Answer
+
+Grilling resolved over three rounds. Eight decisions:
+
+1. **Impersonate is NOT locked to first person** — it follows the configured perspective. The user's framing overturned the initial Q1 read: the complaint was that the player is *forced* to "I", not that impersonate is intrinsically first. Impersonate's perspective is a free axis, driven by the same setting as the narrator.
+
+2. **Narrator third-person is the correct default, not a defect.** The narrator/impersonate perspective split is expected (two distinct voices). The user's "strangeness" was (a) the impersonate-first hardcode and (b) ticket 15's type axis (the line reads as a player input in the narration flow), not a perspective problem. No setting is added to "fix" the split — it is correct behavior.
+
+3. **Quantifier examples fixed to third person (Q3).** Verified the quantifier's movement logic is a location comparison against `<CurrentRoom>`, not a pronoun check (`src/application/agents/quantifier/prompt.rs`), so the second-person examples ("You walk through the door...") are a teaching inconsistency, not a parsing bug — but misleading and free to fix. Folded into the macro work (decision 6): the examples become macro-driven so they follow the setting.
+
+4. **One `NarrativePerspective` setting: Second/Third, default Third**, driving both narrator and impersonate. First-person is excluded: unavailable to the narrator (the system preset defines the narrator as external to the PC — "every character within it except the protagonist" — so a first-person narrator would collapse the narrator/PC split), and unwanted by the user for impersonate (the complaint). First-person remains only a player-input typing choice, not engine state. The user's "novel has first/third, game has second/third" premise was corrected: other characters are always "he/she" by grammar in every perspective — perspective is the pronoun of who is *looking*, not who is being talked about.
+
+5. **One `NarrativeTense` setting: Past/Present, default Past**, via the same macro mechanism. The impersonate preset's vague "Match the tense already in use" instruction is **deleted** — replaced by explicit `{{narrative_tense}}` injection. The user flagged the "match" instruction as vague and untrustworthy; explicit injection fixes it directly. No Auto value on either axis (Auto would reintroduce the vague "match" instruction it claims to fix; engine-side detection was considered but is premature scope).
+
+6. **Both macros injected into all three presets** (system, impersonate, quantifier) for coherence. This is the whole point of the macro approach: the setting *enforces* agreement across presets, fixing the original defect (three presets drifting to three perspectives with nothing checking agreement). If a macro only went into one preset, the drift defect would recur.
+
+7. **Mechanism (Q6 = a): new `AppSettings` fields + macro plumbing + storage migration + settings-panel dropdown.** Two new enum fields on `AppSettings` (`NarrativePerspective`, `NarrativeTense`); two new macros (`{{narrative_perspective}}`, `{{narrative_tense}}`) on `TemplateVars` (`src/domain/model/template.rs`) consumed by `render_template`; three preset JSONs rewritten to use the macros; a settings-panel dropdown for each; storage migration for the two new fields. Option (c) (macro + preset-edit escape hatch) deferred as premature.
+
+8. **Two-narrator-modes question → ticket 18** (`issues/18-grill-two-narrator-modes.md`). The user surfaced a second, orthogonal axis: novel/RP mode (Agency Rule on, narrator never writes the PC) vs. IF/CYOA mode (narrator elaborates the player's terse input). This is a narrator-posture axis, distinct from the perspective (pronoun) axis; their defaults correlate (novel→third, IF→second) but they are independent knobs. It is larger in scope than this ticket (reshapes the narrator role, not just a setting) and was scoped out of this grilling to avoid ballooning the session. Ticket 18 grills whether two modes should exist, their shape, the perspective interaction, impersonate-in-IF-mode, and whether it stays on this map or becomes its own effort.
+
+### Graduates
+
+- **One implementation ticket** (`issues/19-perspective-tense-settings.md`): add `NarrativePerspective` (Second/Third, default Third) and `NarrativeTense` (Past/Present, default Past) to `AppSettings`; add `{{narrative_perspective}}`/`{{narrative_tense}}` macros to `TemplateVars`/`render_template`; rewrite the three preset JSONs (system, impersonate, quantifier) to use the macros, including rewriting the quantifier examples from second-person to macro-driven; settings-panel dropdowns; storage migration; unit tests. Fully specified — macro names and preset edits decided here.
+- **One grilling ticket** (18, already created): two-narrator-modes, orthogonal to this ticket.
+
+### Confirmed facts (not decisions)
+
+- `src/application/agents/quantifier/prompt.rs`: movement detection is a location comparison ("does the narration describe the player being in a different place than `<CurrentRoom>`?"), not a pronoun check. The second-person examples are teaching-only, not a parsing dependency.
+- `src/domain/model/template.rs`: `TemplateVars` already carries `{{user}}`/`{{persona_*}}` macros via `render_template`; a `{{narrative_perspective}}`/`{{narrative_tense}}` extension is the same mechanism.
+- `src/domain/model/settings.rs:120-130`: `AppSettings` has the three `active_*_prompt_preset_id` fields (which preset) but no perspective/tense field — confirms no existing setting.
