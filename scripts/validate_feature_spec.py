@@ -3,12 +3,13 @@
 Discovers specs in `docs/specs/*.md` and walks the
 HTTP-tier (`tests/http/`) and browser-tier
 (`tests/browser/`) test directories for
-`// SCENARIO: X.Y` comments that appear immediately before a `#[test]`
+`// [spec] SCENARIO: X.Y` comments that appear immediately before a `#[test]`
 (or `#[tokio::test]`) attribute. Per `tests/STRATEGY.md`, SCENARIO tags
 live in `tests/http/` and `tests/browser/behaviour.rs` — not in `src/`
 (unit tier) or `tests/integration/` (the dissolved component tier).
-Also fails on duplicate scenario IDs across specs, since the set-based
-coverage check would otherwise hide collisions.
+Coverage is keyed by the (spec path, scenario ID) pair, so the same ID
+declared in two specs (e.g. 17.1 in games.md and browser.md) is tracked
+as two distinct scenarios that must each be covered.
 
 Exit codes:
     0  all declared scenarios have at least one covering test and no orphans
@@ -42,10 +43,9 @@ TEST_DIRS = [
 # Captures the scenario ID (digits.digits).
 SCENARIO_RE = re.compile(r"^#{1,6}\s+Scenario\s+(\d+\.\d+)\b")
 
-# Comment annotations: `// [path/to/spec.md] SCENARIO: 1.1`.
-# The bracketed spec path is mandatory — every annotation must link back
-# to the spec it covers. Captures the scenario ID (digits.digits).
-SCENARIO_COMMENT_RE = re.compile(r"^\s*//\s*\[[^\]]+\]\s*SCENARIO:\s*(\d+\.\d+)\s*$")
+SCENARIO_COMMENT_RE = re.compile(
+    r"^\s*//\s*\[([^\]]+)\]\s*SCENARIO:\s*(\d+\.\d+)\s*$"
+)
 
 # `#[test]` or `#[tokio::test]` (any attr starting with `#[test`).
 TEST_ATTR_RE = re.compile(r"^\s*#\[(tokio::)?test\b")
@@ -73,11 +73,11 @@ def parse_spec_scenarios(spec_path: Path) -> set[str]:
 
 def parse_test_annotations(
     test_path: Path,
-) -> list[tuple[int, str]]:
-    """Find `// SCENARIO: X.Y` comments paired with a following `#[test]`
-    attribute. Returns list of (comment_line_number, scenario_id) for every
-    comment that is followed (within COMMENT_LOOKAHEAD lines) by a
-    `#[test]` attribute."""
+) -> list[tuple[int, str, str]]:
+    """Find `// [spec] SCENARIO: X.Y` comments paired with a following
+    `#[test]` attribute. Returns list of (comment_line_number, spec_path,
+    scenario_id) for every comment that is followed (within
+    COMMENT_LOOKAHEAD lines) by a `#[test]` attribute."""
     try:
         text = test_path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -85,16 +85,16 @@ def parse_test_annotations(
         sys.exit(2)
 
     lines = text.splitlines()
-    annotations: list[tuple[int, str]] = []
+    annotations: list[tuple[int, str, str]] = []
 
     for i, line in enumerate(lines):
         m = SCENARIO_COMMENT_RE.match(line)
         if not m:
             continue
-        scenario_id = m.group(1)
+        spec_path, scenario_id = m.group(1), m.group(2)
         for j in range(i + 1, min(i + 1 + COMMENT_LOOKAHEAD, len(lines))):
             if TEST_ATTR_RE.match(lines[j]):
-                annotations.append((i + 1, scenario_id))  # 1-based
+                annotations.append((i + 1, spec_path, scenario_id))  # 1-based
                 break
 
     return annotations
@@ -115,29 +115,29 @@ def main() -> int:
         print(f"No spec files found in {SPECS_DIR}", file=sys.stderr)
         return 2
 
-    declared: set[str] = set()
-    seen: dict[str, Path] = {}
-    duplicates: list[tuple[str, Path, Path]] = []
+    # Coverage is keyed by (spec_path, scenario_id) so the same ID declared
+    # in two specs is tracked as two distinct scenarios. The duplicate-ID
+    # check is no longer needed: colliding IDs in different specs are simply
+    # two keys that must each be covered.
+    declared: set[tuple[str, str]] = set()
     for spec in spec_files:
+        spec_rel = str(spec.relative_to(ENGINE_ROOT))
         for sid in parse_spec_scenarios(spec):
-            if sid in declared:
-                duplicates.append((sid, seen[sid], spec))
-            else:
-                declared.add(sid)
-                seen[sid] = spec
+            declared.add((spec_rel, sid))
 
-    covered: dict[str, list[tuple[Path, int]]] = {}
-    orphans: list[tuple[Path, int, str]] = []
+    covered: dict[tuple[str, str], list[tuple[Path, int]]] = {}
+    orphans: list[tuple[Path, int, str, str]] = []
 
     test_files = sorted(
         f for test_dir in TEST_DIRS for f in test_dir.rglob("*.rs")
     )
     for test in test_files:
-        for lineno, scenario_id in parse_test_annotations(test):
-            if scenario_id in declared:
-                covered.setdefault(scenario_id, []).append((test, lineno))
+        for lineno, spec_path, scenario_id in parse_test_annotations(test):
+            pair = (spec_path, scenario_id)
+            if pair in declared:
+                covered.setdefault(pair, []).append((test, lineno))
             else:
-                orphans.append((test, lineno, scenario_id))
+                orphans.append((test, lineno, spec_path, scenario_id))
 
     gaps = sorted(declared - set(covered.keys()))
     declared_count = len(declared)
@@ -152,24 +152,16 @@ def main() -> int:
 
     if gaps:
         print("\nGaps (declared scenario has no covering test):")
-        for sid in gaps:
-            print(f"  {sid}")
+        for spec_rel, sid in gaps:
+            print(f"  {spec_rel}  {sid}")
 
     if orphans:
         print("\nOrphans (test annotation references undeclared scenario):")
-        for path, lineno, sid in orphans:
+        for path, lineno, spec_path, sid in orphans:
             rel = path.relative_to(ENGINE_ROOT)
-            print(f"  {rel}:{lineno}  {sid}")
+            print(f"  {rel}:{lineno}  [{spec_path}] {sid}")
 
-    if duplicates:
-        print("\nDuplicate scenario IDs across specs:")
-        for sid, first, second in duplicates:
-            print(
-                f"  {sid} in {first.relative_to(ENGINE_ROOT)} "
-                f"and {second.relative_to(ENGINE_ROOT)}"
-            )
-
-    if gap_count > 0 or orphan_count > 0 or duplicates:
+    if gap_count > 0 or orphan_count > 0:
         return 1
     return 0
 

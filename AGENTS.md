@@ -156,8 +156,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - **utils/**
     - `cli.rs` — Command-line interface definitions
     - `settings.rs` — Application settings and configuration
+- `build.py` — Full build, validate, and test for Chronicler Engine.
 - **scripts/**
-  - `build.py` — Full build, validate, and test for Chronicler Engine.
   - `check_python_docstrings.py` — Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings.
   - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.
   - `coverage_summary.py` — Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON.

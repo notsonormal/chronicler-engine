@@ -119,9 +119,23 @@ def build_bullet_structure(src_dir: Path) -> str:
     return "\n".join(lines)
 
 
+def _extract_docstring_summary(path: Path) -> str:
+    """Read the first line of a Python file's module docstring."""
+    try:
+        content = path.read_text(encoding="utf-8")
+        match = re.search(r'"""(.+?)"""', content, re.DOTALL)
+        return match.group(1).split("\n")[0].strip() if match else "No summary"
+    except Exception:
+        return "No summary"
+
+
 def build_python_bullets(scripts_dir: Path, engine_dir: Path) -> str:
-    """Build a bullet-point representation of Python scripts."""
+    """Build bullets for repo-root .py files plus the scripts/ directory."""
     lines: list[str] = []
+
+    for py_file in sorted(engine_dir.glob("*.py")):
+        lines.append(f"- `{py_file.name}` — {_extract_docstring_summary(py_file)}")
+
     lines.append("- **scripts/**")
 
     if not scripts_dir.exists():
@@ -129,25 +143,8 @@ def build_python_bullets(scripts_dir: Path, engine_dir: Path) -> str:
         return "\n".join(lines)
 
     scripts: list[tuple[str, str]] = []
-
-    build_py = engine_dir / "build.py"
-    if build_py.exists():
-        try:
-            content = build_py.read_text(encoding="utf-8")
-            match = re.search(r'"""(.+?)"""', content, re.DOTALL)
-            summary = match.group(1).split("\n")[0].strip() if match else "No summary"
-            scripts.append(("build.py", summary))
-        except Exception:
-            scripts.append(("build.py", "No summary"))
-
     for py_file in sorted(scripts_dir.glob("*.py")):
-        try:
-            content = py_file.read_text(encoding="utf-8")
-            match = re.search(r'"""(.+?)"""', content, re.DOTALL)
-            summary = match.group(1).split("\n")[0].strip() if match else "No summary"
-            scripts.append((py_file.name, summary))
-        except Exception:
-            scripts.append((py_file.name, "No summary"))
+        scripts.append((py_file.name, _extract_docstring_summary(py_file)))
 
     for filename, summary in scripts:
         lines.append(f"  - `{filename}` — {summary}")
