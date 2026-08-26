@@ -32,7 +32,9 @@ This map carries implementation into itself (Notes override): decide, then imple
 
 ## Decisions so far
 
-<!-- empty — map charted 2026-08-23 -->
+<!-- the index — one line per closed ticket: enough to judge relevance, then zoom the link for the detail the ticket holds -->
+
+- [03 Research: option/choice-generation prior art](issues/03-research-option-generation-prior-art.md) — three systems generate pickable choices: ST-CYOA & ST-Roadway (separate LLM call, selection-as-input via impersonate; CYOA=on-demand, Roadway=on-demand+auto-on-message with a cheap-profile two-model pattern and domain-diversity prompt) and AI Dungeon Classic (same-call, later dropped); ChoiceScript/Twine authored; swipes are retry; open gaps: option-set retry (swipe-style), cross-session persistence, options×steering.
 
 ## Not yet specified
 
