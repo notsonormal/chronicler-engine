@@ -79,14 +79,13 @@ impl Agent for QuantifierAgent {
 
         let quantifier_prompt_override = {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
-            self.storage
-                .as_ref()
-                .and_then(|s| {
-                    s.get_preset(&settings.active_quantifier_prompt_preset_id)
-                        .ok()
-                        .flatten()
-                })
-                .map(|preset| preset.assemble_text(&[], None, None))
+            self.storage.as_ref().and_then(|s| {
+                let preset_id = s.active_quantifier_preset_id(&settings);
+                s.get_preset(&preset_id)
+                    .ok()
+                    .flatten()
+                    .map(|preset| preset.assemble_text(&[], None, None))
+            })
         };
 
         let result = determine_npcs_in_room(

@@ -10,6 +10,7 @@ fn dummy_preset(id: &str, preset_type: PresetType) -> PromptPreset {
         instructions: Some("instructions".to_string()),
         writing_style: None,
         output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
     }
 }
@@ -86,4 +87,42 @@ fn test_delete_preset_failure() {
 
     let result = storage.delete_preset("any");
     assert!(result.is_err());
+}
+
+#[test]
+fn test_allowed_modes_round_trip_sqlite() {
+    use crate::adapters::driven::storage::db::DbPool;
+    use crate::domain::model::settings::NarratorMode;
+
+    let pool = DbPool::new(":memory:").unwrap();
+    let storage = Storage::new_sqlite(pool, 1);
+    let mut preset = dummy_preset("m1", PresetType::System);
+    preset.allowed_modes = vec![NarratorMode::Novel];
+    storage.save_preset(&preset).unwrap();
+
+    let loaded = storage.get_preset("m1").unwrap().unwrap();
+    assert_eq!(loaded.allowed_modes, vec![NarratorMode::Novel]);
+}
+
+#[test]
+fn test_corrupt_allowed_modes_in_db_errors_as_parse() {
+    use crate::adapters::driven::storage::db::DbPool;
+    use crate::error::EngineError;
+
+    let pool = DbPool::new(":memory:").unwrap();
+    let storage = Storage::new_sqlite(pool.clone(), 1);
+    storage
+        .save_preset(&dummy_preset("m2", PresetType::System))
+        .unwrap();
+    pool.conn()
+        .execute(
+            "UPDATE prompt_presets SET allowed_modes = 'not-json' WHERE id = 'm2'",
+            [],
+        )
+        .unwrap();
+
+    match storage.get_preset("m2") {
+        Err(EngineError::Parse(_)) => {}
+        other => panic!("expected EngineError::Parse, got {other:?}"),
+    }
 }

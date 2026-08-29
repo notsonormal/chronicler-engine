@@ -15,7 +15,14 @@ fn resolve_game_id_auto_creates_with_persona() {
         ..Default::default()
     };
 
-    let game_id = resolve_game_id(&db_pool, &world, "julian", "Julian").unwrap();
+    let game_id = resolve_game_id(
+        &db_pool,
+        &world,
+        "julian",
+        "Julian",
+        &crate::domain::model::settings::AppSettings::default().mode_preset_registry,
+    )
+    .unwrap();
     assert!(game_id > 0);
 
     let (world_key, persona_key, persona_name): (String, String, String) = db_pool
@@ -30,7 +37,14 @@ fn resolve_game_id_auto_creates_with_persona() {
     assert_eq!(persona_key, "julian");
     assert_eq!(persona_name, "Julian");
 
-    let again = resolve_game_id(&db_pool, &world, "julian", "Julian").unwrap();
+    let again = resolve_game_id(
+        &db_pool,
+        &world,
+        "julian",
+        "Julian",
+        &crate::domain::model::settings::AppSettings::default().mode_preset_registry,
+    )
+    .unwrap();
     assert_eq!(again, game_id);
 
     let count: i64 = db_pool
@@ -38,6 +52,67 @@ fn resolve_game_id_auto_creates_with_persona() {
         .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
         .unwrap();
     assert_eq!(count, 1, "Second call should not create a duplicate game");
+}
+
+#[test]
+fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
+    use crate::domain::model::settings::{NarratorMode, NarrativePerspective, NarrativeTense};
+
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
+
+    let world = crate::domain::model::world::WorldCard {
+        key: "redmist_if".to_string(),
+        name: "Redmist IF".to_string(),
+        description: String::new(),
+        scenarios: vec![],
+        narrator_mode: NarratorMode::InteractiveFiction,
+        narrative_perspective: NarrativePerspective::Second,
+        narrative_tense: NarrativeTense::Present,
+        ..Default::default()
+    };
+
+    let game_id = resolve_game_id(
+        &db_pool,
+        &world,
+        "julian",
+        "Julian",
+        &crate::domain::model::settings::AppSettings::default().mode_preset_registry,
+    )
+    .unwrap();
+    assert!(game_id > 0);
+
+    let (
+        narrator_mode,
+        narrative_perspective,
+        narrative_tense,
+        system_preset_id,
+        quantifier_preset_id,
+        impersonate_preset_id,
+    ): (String, String, String, String, String, String) = db_pool
+        .conn()
+        .query_row(
+            "SELECT narrator_mode, narrative_perspective, narrative_tense, \
+             active_system_prompt_preset_id, active_quantifier_prompt_preset_id, \
+             active_impersonate_prompt_preset_id FROM games WHERE id = ?1",
+            rusqlite::params![game_id as i64],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .unwrap();
+    assert_eq!(narrator_mode, "interactive_fiction");
+    assert_eq!(narrative_perspective, "second");
+    assert_eq!(narrative_tense, "present");
+    assert_eq!(system_preset_id, "system_if_default");
+    assert_eq!(quantifier_preset_id, "quantifier_default");
+    assert_eq!(impersonate_preset_id, "impersonate_default");
 }
 #[test]
 fn test_find_latest_game_for_world_uses_message_timestamp() {
@@ -384,6 +459,7 @@ fn test_ensure_presets_skips_existing_preset_with_content() {
         instructions: None,
         writing_style: None,
         output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
     };
@@ -418,6 +494,7 @@ fn test_ensure_presets_updates_empty_preset() {
         instructions: None,
         writing_style: None,
         output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
     };
@@ -572,4 +649,133 @@ fn test_ensure_presets_idempotent() {
     let presets = storage.list_presets(PresetType::System).unwrap();
     assert_eq!(presets.len(), 1);
     assert_eq!(presets[0].id, "idempotent_test");
+}
+
+#[test]
+fn test_ensure_presets_applies_allowed_modes_at_insert() {
+    use crate::domain::model::settings::NarratorMode;
+
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+
+    let flagged = serde_json::json!({
+        "id": "if_seed",
+        "name": "IF",
+        "role": "R",
+        "is_default": true,
+        "allowed_modes": ["interactive_fiction"]
+    });
+    std::fs::write(
+        system_dir.join("if_seed.json"),
+        serde_json::to_string_pretty(&flagged).unwrap(),
+    )
+    .unwrap();
+    let plain = serde_json::json!({
+        "id": "plain_seed",
+        "name": "Plain",
+        "role": "R",
+        "is_default": true
+    });
+    std::fs::write(
+        system_dir.join("plain_seed.json"),
+        serde_json::to_string_pretty(&plain).unwrap(),
+    )
+    .unwrap();
+
+    ensure_presets(&storage, temp_data.path()).unwrap();
+
+    let if_seed = storage.get_preset("if_seed").unwrap().unwrap();
+    assert_eq!(
+        if_seed.allowed_modes,
+        vec![NarratorMode::InteractiveFiction]
+    );
+    let plain_seed = storage.get_preset("plain_seed").unwrap().unwrap();
+    assert_eq!(
+        plain_seed.allowed_modes,
+        vec![NarratorMode::Novel, NarratorMode::InteractiveFiction]
+    );
+}
+
+#[test]
+fn test_ensure_presets_invalid_allowed_modes_falls_back_to_all() {
+    use crate::domain::model::settings::NarratorMode;
+
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+
+    let bogus = serde_json::json!({
+        "id": "bogus_seed",
+        "name": "Bogus",
+        "role": "R",
+        "is_default": true,
+        "allowed_modes": "novel"
+    });
+    std::fs::write(
+        system_dir.join("bogus_seed.json"),
+        serde_json::to_string_pretty(&bogus).unwrap(),
+    )
+    .unwrap();
+
+    ensure_presets(&storage, temp_data.path()).unwrap();
+
+    let seeded = storage.get_preset("bogus_seed").unwrap().unwrap();
+    assert_eq!(
+        seeded.allowed_modes,
+        vec![NarratorMode::Novel, NarratorMode::InteractiveFiction]
+    );
+}
+
+#[test]
+fn test_ensure_presets_refresh_preserves_existing_flags() {
+    use crate::domain::model::prompt_preset::PromptPreset;
+    use crate::domain::model::settings::NarratorMode;
+
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+
+    let seed = serde_json::json!({
+        "id": "flagged_preset",
+        "name": "Updated Name",
+        "role": "New role from file",
+        "is_default": true,
+        "allowed_modes": ["interactive_fiction"]
+    });
+    std::fs::write(
+        system_dir.join("flagged_preset.json"),
+        serde_json::to_string_pretty(&seed).unwrap(),
+    )
+    .unwrap();
+
+    // Existing content-free row with user-owned novel-only flags.
+    let existing = PromptPreset {
+        id: "flagged_preset".to_string(),
+        name: "Empty".to_string(),
+        role: None,
+        instructions: None,
+        writing_style: None,
+        output_format: None,
+        allowed_modes: vec![NarratorMode::Novel],
+        is_default: true,
+        preset_type: PresetType::System,
+    };
+    storage.save_preset(&existing).unwrap();
+
+    ensure_presets(&storage, temp_data.path()).unwrap();
+
+    let found = storage.get_preset("flagged_preset").unwrap().unwrap();
+    assert_eq!(found.role, Some("New role from file".to_string()));
+    assert_eq!(
+        found.allowed_modes,
+        vec![NarratorMode::Novel],
+        "refresh must keep user-owned flags"
+    );
 }

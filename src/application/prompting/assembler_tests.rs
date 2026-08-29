@@ -18,6 +18,7 @@ fn create_test_preset() -> PromptPreset {
         instructions: Some("Be descriptive.".to_string()),
         writing_style: Some("Write in second person.".to_string()),
         output_format: Some("Format as prose.".to_string()),
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: crate::domain::model::prompt_preset::PresetType::System,
     }
@@ -288,6 +289,7 @@ fn test_assemble_empty_preset_sections() {
         instructions: None,
         writing_style: None,
         output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: crate::domain::model::prompt_preset::PresetType::System,
     };
@@ -656,6 +658,7 @@ fn test_assemble_impersonate_drops_player_character_layer() {
         instructions: Some("{{persona_personality}} / {{persona_background}}".to_string()),
         writing_style: Some("First person.".to_string()),
         output_format: Some("Write the next message.".to_string()),
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: crate::domain::model::prompt_preset::PresetType::Impersonate,
     };
@@ -709,6 +712,7 @@ fn test_assemble_impersonate_injects_persona_macros_into_preset() {
         instructions: Some("{{persona_personality}} / {{persona_background}}".to_string()),
         writing_style: None,
         output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: crate::domain::model::prompt_preset::PresetType::Impersonate,
     };
@@ -752,10 +756,12 @@ fn test_assemble_impersonate_injects_persona_macros_into_preset() {
 }
 
 #[test]
-fn test_assemble_injects_narrative_voice_from_settings() {
+fn test_assemble_injects_narrative_voice_from_world_posture() {
     use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 
-    let world = create_test_world();
+    let mut world = create_test_world();
+    world.narrative_perspective = NarrativePerspective::Second;
+    world.narrative_tense = NarrativeTense::Present;
     let room = create_test_room();
     let player = create_test_player();
     let history = create_test_history();
@@ -769,6 +775,7 @@ fn test_assemble_injects_narrative_voice_from_settings() {
                 .to_string(),
         ),
         output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: crate::domain::model::prompt_preset::PresetType::System,
     };
@@ -785,14 +792,8 @@ fn test_assemble_injects_narrative_voice_from_settings() {
         &history,
     );
 
-    let settings = AppSettings {
-        narrative_perspective: NarrativePerspective::Second,
-        narrative_tense: NarrativeTense::Present,
-        ..Default::default()
-    };
-
     let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS)
-        .with_settings(Arc::new(RwLock::new(settings)));
+        .with_settings(Arc::new(RwLock::new(AppSettings::default())));
     let result = assembler
         .assemble(&context, &preset, &world.global_rules, None)
         .expect("assemble should succeed");
@@ -801,12 +802,12 @@ fn test_assemble_injects_narrative_voice_from_settings() {
         result
             .user_prompt
             .contains("second-person limited perspective"),
-        "settings narrative_perspective must be injected into user prompt: {:#?}",
+        "world narrative_perspective must be injected into user prompt: {:#?}",
         result.user_prompt
     );
     assert!(
         result.user_prompt.contains("present tense"),
-        "settings narrative_tense must be injected into user prompt: {:#?}",
+        "world narrative_tense must be injected into user prompt: {:#?}",
         result.user_prompt
     );
 }
@@ -827,6 +828,7 @@ fn test_assemble_without_settings_uses_default_voice() {
                 .to_string(),
         ),
         output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: crate::domain::model::prompt_preset::PresetType::System,
     };

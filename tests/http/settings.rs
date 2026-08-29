@@ -61,15 +61,6 @@ async fn test_settings_panel_renders_full_surface() {
     assert!(body.contains("<h2>Text Check</h2>"));
     assert!(body.contains(r#"id="check_mode""#));
     assert!(body.contains(r#"name="enable_auto_check""#));
-    assert!(body.contains("<h2>Narrative Voice</h2>"));
-    assert!(body.contains(r#"id="narrative_perspective""#));
-    assert!(body.contains(r#"name="narrative_perspective""#));
-    assert!(body.contains("Second person"));
-    assert!(body.contains("Third person"));
-    assert!(body.contains(r#"id="narrative_tense""#));
-    assert!(body.contains(r#"name="narrative_tense""#));
-    assert!(body.contains("Past"));
-    assert!(body.contains("Present"));
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.2
@@ -165,61 +156,6 @@ async fn test_post_settings_reports_save_failure() {
     let req = post_form_request(
         "/settings",
         "narration_connection_id=openrouter-euryale&quantifier_connection_id=openrouter-gpt-4o-mini",
-    );
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert!(body.contains(r#"<span class='error'>Save failed:"#));
-}
-
-// [docs/specs/settings.md] SCENARIO: 20.8
-#[tokio::test]
-async fn test_post_narrative_voice_sets_perspective_and_tense() {
-    let _guard = SettingsTestGuard::new();
-    let app = TestAppBuilder::default_app();
-
-    let req = post_form_request(
-        "/settings/narrative-voice",
-        "narrative_perspective=second&narrative_tense=present",
-    );
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "Narrative voice saved!");
-}
-
-// [docs/specs/settings.md] SCENARIO: 20.9
-#[tokio::test]
-async fn test_post_narrative_voice_falls_back_on_unknown_values() {
-    let _guard = SettingsTestGuard::new();
-    let app = TestAppBuilder::default_app();
-
-    let req = post_form_request(
-        "/settings/narrative-voice",
-        "narrative_perspective=first&narrative_tense=future",
-    );
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "Narrative voice saved!");
-}
-
-// [docs/specs/settings.md] SCENARIO: 20.10
-#[tokio::test]
-async fn test_post_narrative_voice_reports_save_failure() {
-    let _guard = SettingsTestGuard::new();
-    let storage = Arc::new(Storage::new_in_memory().with_failure(
-        "save_settings",
-        TestOverride::internal("settings save failure"),
-    ));
-    let app = TestAppBuilder::default_test().storage(storage).build();
-
-    let req = post_form_request(
-        "/settings/narrative-voice",
-        "narrative_perspective=second&narrative_tense=present",
     );
     let response = app.oneshot(req).await.unwrap();
 

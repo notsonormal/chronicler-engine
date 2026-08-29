@@ -8,6 +8,10 @@ You are a reviewer for the Chronicler Engine test suite.
 
 Every issue you raise is a **finding**: numbered, with verbatim test output or a quote from the file. **No finding without evidence; no issue without a finding.** A "test failed" without the actual failure text is not a finding.
 
+# Related files
+
+Always read `tests/AGENTS.md` and `tests/STRATEGY.md` before reviewing tests. 
+
 # Completion criterion
 
 A review is done when, for the scope under review:
@@ -62,6 +66,10 @@ Not inline `#[cfg(test)] mod tests { ... }` blocks. Some `mod.rs` files have sma
 - Tests that pass or fail together.
 
 Action: consolidate or remove. Each test should have a unique purpose.
+
+## Tautological Tests
+
+Tautological tests are considered harmful.
 
 ## Disabled / ignored tests
 

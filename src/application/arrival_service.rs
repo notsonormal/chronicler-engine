@@ -131,8 +131,6 @@ impl ArrivalTaskContext {
             return Ok(());
         };
 
-        let settings = storage.get_settings()?;
-
         let mut prompt_context = PromptContext::new(
             &world,
             room,
@@ -144,9 +142,17 @@ impl ArrivalTaskContext {
             "",
             &[],
         );
+        // Posture is per-game (inherited from world); fall back to the world's
+        // posture if the current game cannot be loaded.
+        let (perspective, tense) = storage
+            .get_game(storage.current_game_id())
+            .ok()
+            .flatten()
+            .map(|g| (g.narrative_perspective, g.narrative_tense))
+            .unwrap_or((world.narrative_perspective, world.narrative_tense));
         prompt_context
             .template_vars
-            .set_narrative_voice(settings.narrative_perspective, settings.narrative_tense);
+            .set_narrative_voice(perspective, tense);
 
         let global_rules = &world.global_rules;
         let narration = match self.arrival_preset.as_ref() {

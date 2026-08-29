@@ -16,9 +16,10 @@ use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::AppSettings;
+use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+use crate::domain::model::utils::settings_defaults;
 use crate::error::Result;
 use crate::test_support::TestData;
 use crate::test_support::{make_test_recorder, TestAppBuilder, TestDataBuilder};
@@ -32,6 +33,7 @@ pub fn seed_default_preset(storage: &Storage) {
             instructions: None,
             writing_style: None,
             output_format: None,
+            allowed_modes: vec![NarratorMode::Novel],
             is_default: true,
             preset_type: PresetType::System,
         })
@@ -50,6 +52,7 @@ pub fn seed_default_impersonate_preset(storage: &Storage) {
             instructions: Some("Write only as {{user}}.".to_string()),
             writing_style: Some("First person as {{user}}.".to_string()),
             output_format: Some("Write {{user}}'s next message.".to_string()),
+            allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: true,
             preset_type: PresetType::Impersonate,
         })

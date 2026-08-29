@@ -13,7 +13,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at
+                        "SELECT id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at, allowed_modes
                          FROM prompt_presets
                          WHERE preset_type = ?1
                          ORDER BY updated_at DESC",
@@ -48,7 +48,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at
+                        "SELECT id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at, allowed_modes
                          FROM prompt_presets
                          WHERE id = ?1",
                     )
@@ -81,8 +81,8 @@ impl Storage {
                 let is_default = if preset.is_default { 1 } else { 0 };
 
                 conn.execute(
-                    "INSERT INTO prompt_presets (id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                    "INSERT INTO prompt_presets (id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at, allowed_modes)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                      ON CONFLICT(id) DO UPDATE SET
                          name = excluded.name,
                          preset_type = excluded.preset_type,
@@ -91,7 +91,8 @@ impl Storage {
                          writing_style = excluded.writing_style,
                          output_format = excluded.output_format,
                          is_default = excluded.is_default,
-                         updated_at = excluded.updated_at",
+                         updated_at = excluded.updated_at,
+                         allowed_modes = excluded.allowed_modes",
                     rusqlite::params![
                         preset.id,
                         preset.name,
@@ -103,6 +104,10 @@ impl Storage {
                         is_default,
                         now,
                         now,
+                        serde_json::to_string(&preset.allowed_modes)
+                            .map_err(|e| EngineError::Parse(format!(
+                                "Failed to serialize allowed_modes: {e}"
+                            )))?,
                     ],
                 )
                 .map_err(|e| EngineError::Config(format!("Failed to save preset: {e}")))?;

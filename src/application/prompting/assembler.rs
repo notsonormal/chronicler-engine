@@ -37,13 +37,9 @@ pub struct PromptContext<'a> {
     pub user_message: &'a str,
     pub history: &'a [MessageEntry],
     pub template_vars: TemplateVars,
-    /// Transient per-turn steering instruction (guided generation). Never persisted
-    /// to history; rendered as the final prompt layer. `None` for plain turns.
+    /// Transient: never persisted; rendered as the final prompt layer.
     pub guide: Option<String>,
-    /// When true, the turn is impersonated: the player-character reference-card
-    /// layer is omitted and the impersonate preset (selected by the pipeline)
-    /// supplies the voice. Persona data reaches the prompt through the
-    /// `{{persona_*}}` macros in the preset text, not the dropped layer.
+    /// Drops the player-character layer; the impersonate preset supplies the voice.
     pub impersonate: bool,
 }
 
@@ -82,10 +78,10 @@ impl PromptAssembler {
         response_length: Option<&str>,
     ) -> Result<AssembledPrompt, EngineError> {
         let mut template_vars = context.template_vars.clone();
-        if let Some(settings) = &self.settings {
-            let guard = settings.read().unwrap_or_else(|e| e.into_inner());
-            template_vars.set_narrative_voice(guard.narrative_perspective, guard.narrative_tense);
-        }
+        template_vars.set_narrative_voice(
+            context.world.narrative_perspective,
+            context.world.narrative_tense,
+        );
 
         let system_prompt = build_system_prompt(preset, global_rules, &template_vars);
         let post_history_prompt =
@@ -148,17 +144,11 @@ impl PromptContext<'_> {
         }
     }
 
-    /// Attach a transient guided-generation instruction. Rendered as the final
-    /// prompt layer; not persisted to history.
     pub fn with_guide(mut self, guide: Option<String>) -> Self {
         self.guide = guide;
         self
     }
 
-    /// Mark the turn as impersonated. Drops the player-character reference-card
-    /// layer; the pipeline must pass the impersonate preset so its voice replaces
-    /// the narrator voice. Mutually exclusive with `with_guide` (impersonate
-    /// suppresses the guide layer).
     pub fn with_impersonate(mut self, impersonate: bool) -> Self {
         self.impersonate = impersonate;
         if impersonate {

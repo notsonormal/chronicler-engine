@@ -32,7 +32,7 @@ Review the file `chronicler_engine\AGENTS.md` to understand the coding standards
 
 # Detection Targets
 
-### AI Slop Patterns (Rust)
+## AI Slop Patterns (Rust)
 | Pattern | Example | Action |
 |---------|---------|--------|
 | Verbose module docs (3+ `//!`) | `//! This module handles...` | DELETE |
@@ -44,7 +44,7 @@ Review the file `chronicler_engine\AGENTS.md` to understand the coding standards
 | Separator comments | `// === Section ===` | DELETE |
 | Enum variant narration prose | `/// This variant represents...` | DELETE (rephrase as semantic, see below) |
 
-# Enum Variant Docs
+## Enum Variant Docs
 
 Enum variant `///` comments are **allowed and required** for non-trivial enums. The
 `check_enum_variant_docs` guardrail enforces this. The opt-out marker
@@ -60,7 +60,7 @@ emitted* — not "What" narration.
 | `/// This variant represents the cancelled state.` ("This variant...") | DELETE — slop |
 | `/// Red hue.` on `Color::Red` | DELETE — trivial, use `[TRIVIAL_ENUM]` |
 
-### Python AI Slop
+## Python AI Slop
 
 | Pattern | Action |
 |---------|--------|
@@ -68,7 +68,14 @@ emitted* — not "What" narration.
 | Placeholder TODOs without owner | DELETE |
 | AI slop phrases: "leverages", "utilizes", "robust", "seamless" | DELETE |
 
-# File/Module Comments
+## Comment Density
+
+Check the comment density of the new code against the comment density of the old code. 
+
+If the new comment density is much higher then you most certainly should be cutting them
+more aggressively.
+
+## File/Module Comments
 
 The first two lines of most production files will be a DOC module and a module comment e.g.
 

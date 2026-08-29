@@ -4,7 +4,6 @@ Endpoints:
  - `GET /fragment/settings`
  - `POST /settings`
  - `POST /settings/text-check`
- - `POST /settings/narrative-voice`
 
 ## Scenarios
 
@@ -29,9 +28,6 @@ And the body contains a single_user_message checkbox labelled "Single User Messa
 And the body contains a "Text Check" heading
 And the body contains a check_mode select
 And the body contains an enable_auto_check checkbox
-And the body contains a "Perspective & Tense" heading
-And the body contains a narrative_perspective select (Second person, Third person)
-And the body contains a narrative_tense select (Past, Present)
 ```
 
 ### POST /settings — success paths
@@ -92,39 +88,6 @@ Then the response is 422 Unprocessable Entity (axum Form rejection)
 ```gherkin
 Given an app state whose settings storage fails on save
 When the client POST /settings with valid narration_connection_id and quantifier_connection_id fields
-Then the response is 200
-And the response body contains "<span class='error'>Save failed:" (the error is surfaced in the fragment, not as a HTTP error status)
-```
-
-### POST /settings/narrative-voice — success paths
-
-#### Scenario 20.8: POST /settings/narrative-voice sets narrative perspective and tense
-
-```gherkin
-Given a fresh app state with default narrative voice (Third person, Past)
-When the client POST /settings/narrative-voice with narrative_perspective=second and narrative_tense=present
-Then the response is 200
-And the response body is "Narrative voice saved!"
-And subsequent settings loads return Second person and Present tense
-```
-
-#### Scenario 20.9: POST /settings/narrative-voice falls back on unknown values
-
-```gherkin
-Given a fresh app state
-When the client POST /settings/narrative-voice with narrative_perspective=first and narrative_tense=future
-Then the response is 200
-And the response body is "Narrative voice saved!"
-And the stored values fall back to the defaults (Third person, Past tense)
-```
-
-### POST /settings/narrative-voice — error paths
-
-#### Scenario 20.10: POST /settings/narrative-voice reports a save failure in the response body
-
-```gherkin
-Given an app state whose settings storage fails on save
-When the client POST /settings/narrative-voice with narrative_perspective=second and narrative_tense=present
 Then the response is 200
 And the response body contains "<span class='error'>Save failed:" (the error is surfaced in the fragment, not as a HTTP error status)
 ```

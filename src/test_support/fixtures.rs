@@ -9,6 +9,8 @@ use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
@@ -287,6 +289,7 @@ impl TestPromptPreset {
             instructions: Some(format!("{name}.")),
             writing_style: None,
             output_format: None,
+            allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type: PresetType::System,
         }
@@ -300,6 +303,7 @@ impl TestPromptPreset {
             instructions: Some(format!("{name}.")),
             writing_style: None,
             output_format: None,
+            allowed_modes: vec![NarratorMode::Novel],
             is_default: true,
             preset_type: PresetType::System,
         }
@@ -330,6 +334,9 @@ impl TestWorldManifest {
             scenarios: vec![],
             default_scenario_id: None,
             default_room_image: None,
+            narrator_mode: crate::domain::model::settings::NarratorMode::Novel,
+            narrative_perspective: crate::domain::model::settings::NarrativePerspective::Third,
+            narrative_tense: crate::domain::model::settings::NarrativeTense::Past,
         }
     }
 }

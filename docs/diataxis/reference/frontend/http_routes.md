@@ -84,7 +84,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/connections/:id/set-narrator` | `set_narrator_handler` |
 | POST | `/connections/:id/set-quantifier` | `set_quantifier_handler` |
 | POST | `/settings/text-check` | `save_text_check_handler` |
-| POST | `/settings/narrative-voice` | `save_narrative_voice_handler` |
 
 ## Prompt presets
 

@@ -227,14 +227,6 @@ class TestDocEmission(unittest.TestCase):
 
 
 class TestRealRouter(unittest.TestCase):
-    def test_real_router_yields_53_routes(self) -> None:
-        router_path = ENGINE_ROOT / er.ROUTER_REL
-        if not router_path.exists():
-            self.skipTest(f"router.rs not found: {router_path}")
-        source = router_path.read_text(encoding="utf-8")
-        routes = er.extract_routes(source)
-        self.assertEqual(len(routes), 53)
-
     def test_real_router_route_count_matches_grep(self) -> None:
         # Cross-check against `grep -c '\.route('` on the same file —
         # guards against parser drift from the file's structure.
@@ -329,7 +321,7 @@ class TestRealRouter(unittest.TestCase):
 
         rows = re.findall(r"^\| (?:GET|POST) \|", rendered, flags=re.MULTILINE)
         self.assertEqual(len(rows), len(routes))
-        self.assertEqual(len(rows), 53)
+        self.assertEqual(len(rows), 52)
 
 
 

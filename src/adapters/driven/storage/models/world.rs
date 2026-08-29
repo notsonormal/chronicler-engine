@@ -13,6 +13,9 @@ pub struct DbWorld {
     pub scenarios: String,    // JSON: Vec<StartingScenario>
     pub default_scenario_id: Option<String>,
     pub default_room_image: Option<String>,
+    pub narrator_mode: String,
+    pub narrative_perspective: String,
+    pub narrative_tense: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -28,8 +31,11 @@ impl DbWorld {
             scenarios: row.get(5)?,
             default_scenario_id: row.get(6)?,
             default_room_image: row.get(7)?,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
+            narrator_mode: row.get(8)?,
+            narrative_perspective: row.get(9)?,
+            narrative_tense: row.get(10)?,
+            created_at: row.get(11)?,
+            updated_at: row.get(12)?,
         })
     }
 
@@ -45,6 +51,16 @@ impl DbWorld {
                 .map_err(|e| EngineError::Parse(format!("Failed to deserialize scenarios: {e}")))?,
             default_scenario_id: self.default_scenario_id.clone().filter(|s| !s.is_empty()),
             default_room_image: self.default_room_image.clone().filter(|s| !s.is_empty()),
+            narrator_mode: crate::domain::model::settings::NarratorMode::parse_or_default(
+                &self.narrator_mode,
+            ),
+            narrative_perspective:
+                crate::domain::model::settings::NarrativePerspective::parse_or_default(
+                    &self.narrative_perspective,
+                ),
+            narrative_tense: crate::domain::model::settings::NarrativeTense::parse_or_default(
+                &self.narrative_tense,
+            ),
         })
     }
 }

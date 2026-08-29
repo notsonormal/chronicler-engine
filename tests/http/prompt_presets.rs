@@ -602,3 +602,38 @@ async fn test_activate_missing_preset_returns_error() {
     let body = body_string(response).await;
     assert_eq!(body, "<span class='error'>Preset not found</span>");
 }
+
+#[tokio::test]
+async fn test_activate_refuses_preset_not_allowed_for_mode() {
+    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+    use chronicler_engine::domain::model::settings::NarratorMode;
+
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let preset = PromptPreset {
+        id: "if-only".to_string(),
+        name: "IF Only".to_string(),
+        instructions: Some("IF.".to_string()),
+        allowed_modes: vec![NarratorMode::InteractiveFiction],
+        is_default: false,
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    storage.save_preset(&preset).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    // No mode param resolves to Novel, which the preset does not allow.
+    let response = app
+        .oneshot(empty_post_request("/prompt-presets/if-only/activate"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+    assert_eq!(
+        body,
+        "<span class='error'>Preset not allowed for novel mode</span>"
+    );
+}

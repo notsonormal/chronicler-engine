@@ -3,10 +3,11 @@
 use std::sync::{Arc, RwLock};
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::settings::NarratorMode;
 use crate::adapters::driving::http::prompt_presets::handlers::{
-    PresetForm, activate_preset_handler, delete_preset_handler, duplicate_preset_handler,
-    edit_preset_form_handler, panel_handler, preset_card_handler, save_preset_handler,
-    update_preset_handler, view_preset_form_handler,
+    ActivateQuery, PresetForm, activate_preset_handler, delete_preset_handler,
+    duplicate_preset_handler, edit_preset_form_handler, panel_handler, preset_card_handler,
+    save_preset_handler, update_preset_handler, view_preset_form_handler,
 };
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::TestPromptPreset;
@@ -244,6 +245,7 @@ async fn test_activate_preset_does_not_update_memory_when_save_fails() {
     let response = activate_preset_handler(
         axum::extract::State(app_state.clone()),
         axum::extract::Path("custom-system".to_string()),
+        axum::extract::Query(ActivateQuery::default()),
     )
     .await;
     assert!(response.0.contains("Save failed"));
@@ -252,7 +254,9 @@ async fn test_activate_preset_does_not_update_memory_when_save_fails() {
         .settings
         .read()
         .unwrap_or_else(|e| e.into_inner())
-        .active_system_prompt_preset_id
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel)
+        .system_prompt_preset_id
         .clone();
     assert_eq!(
         active_id, "system_default",
@@ -267,6 +271,7 @@ async fn test_activate_nonexistent_preset_returns_error() {
     let response = activate_preset_handler(
         axum::extract::State(app_state),
         axum::extract::Path("missing".to_string()),
+        axum::extract::Query(ActivateQuery::default()),
     )
     .await;
     assert!(response.0.contains("Preset not found"));
@@ -415,4 +420,140 @@ async fn test_delete_preset_delete_storage_error_returns_error() {
     )
     .await;
     assert!(response.0.contains("Delete failed"));
+}
+
+fn preset_with_modes(id: &str, modes: Vec<NarratorMode>) -> PromptPreset {
+    let mut preset = crate::test_support::TestPromptPreset::system(id, id);
+    preset.allowed_modes = modes;
+    preset
+}
+
+#[tokio::test]
+async fn test_activate_writes_novel_slot_for_allowed_preset() {
+    let preset = preset_with_modes("custom-novel", vec![NarratorMode::Novel]);
+    let app_state = make_test_app_state_with_preset(preset);
+
+    let response = activate_preset_handler(
+        axum::extract::State(app_state.clone()),
+        axum::extract::Path("custom-novel".to_string()),
+        axum::extract::Query(ActivateQuery::default()),
+    )
+    .await;
+    assert!(
+        !response.0.contains("error"),
+        "activation should succeed: {}",
+        response.0
+    );
+
+    let settings = app_state.settings.read().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        settings
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .system_prompt_preset_id,
+        "custom-novel"
+    );
+    assert_eq!(
+        settings
+            .mode_preset_registry
+            .bundle_for(NarratorMode::InteractiveFiction)
+            .system_prompt_preset_id,
+        "system_if_default",
+        "IF bundle must stay untouched"
+    );
+}
+
+#[tokio::test]
+async fn test_activate_refuses_preset_not_allowed_for_mode() {
+    let preset = preset_with_modes("if-only", vec![NarratorMode::InteractiveFiction]);
+    let app_state = make_test_app_state_with_preset(preset);
+
+    // No mode param resolves to Novel, which the preset does not allow.
+    let response = activate_preset_handler(
+        axum::extract::State(app_state.clone()),
+        axum::extract::Path("if-only".to_string()),
+        axum::extract::Query(ActivateQuery::default()),
+    )
+    .await;
+    assert!(response.0.contains("not allowed"));
+
+    let settings = app_state.settings.read().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        settings
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .system_prompt_preset_id,
+        "system_default",
+        "refused activation must leave settings untouched"
+    );
+}
+
+#[tokio::test]
+async fn test_activate_with_mode_param_writes_that_modes_slot() {
+    let app_state =
+        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("both", "B"));
+
+    let response = activate_preset_handler(
+        axum::extract::State(app_state.clone()),
+        axum::extract::Path("both".to_string()),
+        axum::extract::Query(ActivateQuery {
+            mode: Some("interactive_fiction".to_string()),
+        }),
+    )
+    .await;
+    assert!(
+        !response.0.contains("error"),
+        "activation should succeed: {}",
+        response.0
+    );
+
+    let settings = app_state.settings.read().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        settings
+            .mode_preset_registry
+            .bundle_for(NarratorMode::InteractiveFiction)
+            .system_prompt_preset_id,
+        "both"
+    );
+    assert_eq!(
+        settings
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .system_prompt_preset_id,
+        "system_default",
+        "novel slot must stay untouched"
+    );
+}
+
+#[tokio::test]
+async fn test_delete_refuses_preset_referenced_as_any_mode_default() {
+    let app_state = make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system(
+        "custom-ref",
+        "Custom Ref",
+    ));
+
+    // Reference the custom preset as the IF bundle's system default.
+    {
+        let mut settings = app_state.settings.write().unwrap();
+        let mut bundle = settings
+            .mode_preset_registry
+            .bundle_for(NarratorMode::InteractiveFiction);
+        bundle.system_prompt_preset_id = "custom-ref".to_string();
+        settings.mode_preset_registry.set_bundle(bundle);
+    }
+
+    let response = delete_preset_handler(
+        axum::extract::State(app_state.clone()),
+        axum::extract::Path("custom-ref".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("mode default"));
+    assert!(
+        app_state
+            .prompt_preset_service
+            .get_preset("custom-ref")
+            .unwrap()
+            .is_some(),
+        "referenced preset must not be deleted"
+    );
 }

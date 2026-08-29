@@ -22,6 +22,17 @@ shapes, not code. Writing the accepted refactors is the next effort
   `/improve-codebase-architecture` report with the 5 candidates, before/after
   diagrams, and evidence. Open it first every session.
 - Branch under review: `guided-generations` (at `1898a53`).
+- **Stale snapshot (2026-08-29).** The review artifact was produced at
+  `1898a53`, before the narrator-modes-and-options work landed on this branch
+  (tickets 05, 13, 14: posture relocation to World/Game, prompt-preset
+  mode-allow flags, registry list reshape, `system_if_default` seed). Before
+  grilling, re-verify each candidate's evidence against the current tree.
+  Known affected: candidate 5 (narrative-voice injection) — the global
+  narrative-voice setting was removed and injection centralized in
+  `PromptAssembler::assemble`; candidate 1 (NarrationTurn) and candidate 4
+  (SteeringPromptPolicy) touch `assembler.rs`/`pipeline_run.rs`, which the
+  remaining narrator-modes tickets would modify further — resolve the
+  architecture decisions before that implementation continues.
 - Skills every session should consult: `/grilling`, `/domain-modeling`,
   `/codebase-design` (for the deep-module vocabulary: module, interface,
   implementation, depth, seam, adapter, leverage, locality — use these terms

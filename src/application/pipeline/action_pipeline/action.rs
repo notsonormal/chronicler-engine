@@ -20,9 +20,6 @@ impl ActionPipeline {
         self.process_action_with_replay(generation_gate, input, None)
     }
 
-    /// `process_action` carrying a guided-generation instruction. The guide is
-    /// staged as a `pending_replay` blob by [`execute_action_with_replay`] and
-    /// never enters history; a guided turn runs the continue path with empty input.
     pub(crate) fn process_action_with_guide(
         &self,
         generation_gate: &GenerationGate,
@@ -36,10 +33,6 @@ impl ActionPipeline {
         self.process_action_with_replay(generation_gate, input, replay)
     }
 
-    /// `process_action` carrying a turn-conditions replay blob (guided
-    /// generation or impersonate). The blob is staged as `pending_replay` by
-    /// [`execute_action_with_replay`] and never enters history itself; it is
-    /// recorded on the generated swipe so retry re-applies the steering.
     pub(crate) fn process_action_with_replay(
         &self,
         generation_gate: &GenerationGate,
@@ -73,9 +66,6 @@ impl ActionPipeline {
         self.execute_action_with_replay(input, None)
     }
 
-    /// `execute_action` carrying an optional turn-conditions replay blob. Stages
-    /// it as `pending_replay` so the assembler renders the steering layer and
-    /// the generated swipe records it for retry.
     #[instrument(skip(self, replay), fields(input_length))]
     pub(crate) fn execute_action_with_replay(
         &self,
@@ -99,9 +89,7 @@ impl ActionPipeline {
         self.process_action(generation_gate, String::new())
     }
 
-    /// Guided generation: a transient steering instruction on the next narration.
-    /// Runs the continue path (no player input); the guide is the final prompt
-    /// layer and is recorded on the swipe replay blob so retry re-applies it.
+    /// Transient steering: the guide is the final prompt layer and rides on the swipe replay blob (not history) so retry re-applies it.
     pub fn guide_narration(
         &self,
         generation_gate: &GenerationGate,
@@ -110,8 +98,7 @@ impl ActionPipeline {
         self.process_action_with_guide(generation_gate, String::new(), Some(guide))
     }
 
-    /// Narrator action: persist a permanent narrator directive in history,
-    /// then trigger a continue narration so the next response is shaped by it.
+    /// Persists a permanent narrator directive in history; retry re-reads it naturally (no replay blob).
     pub fn narrator_action(
         &self,
         generation_gate: &GenerationGate,
@@ -120,9 +107,6 @@ impl ActionPipeline {
         self.process_action_with_narrator(generation_gate, text)
     }
 
-    /// No replay blob is needed: the narrator message is persisted in history, so
-    /// retry naturally re-reads it (unlike guide/impersonate, whose steering is
-    /// transient and must ride on the swipe's replay blob).
     fn process_action_with_narrator(
         &self,
         generation_gate: &GenerationGate,
@@ -143,21 +127,16 @@ impl ActionPipeline {
         )
     }
 
-    /// Impersonate: force the next narration to be written as the player's
-    /// persona. Runs the continue path (no player input); the impersonate
-    /// preset replaces the system preset, the player-character layer is dropped,
-    /// and the output is a player-voiced `Input` message. Retry re-applies it.
+    /// Transient steering: impersonate rides on the swipe replay blob (not history) so retry re-applies it.
     pub fn impersonate(
         &self,
         generation_gate: &GenerationGate,
         direction: Option<String>,
     ) -> Result<ProcessActionResult, EngineError> {
-        let preset_id = self
-            .settings
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .active_impersonate_prompt_preset_id
-            .clone();
+        let preset_id = {
+            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            self.storage.active_impersonate_preset_id(&settings)
+        };
         let replay = GenerationReplay {
             impersonate: true,
             impersonate_direction: direction,

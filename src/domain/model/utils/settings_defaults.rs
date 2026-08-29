@@ -25,6 +25,37 @@ pub fn default_active_impersonate_prompt_preset_id() -> String {
     "impersonate_default".to_string()
 }
 
+pub fn default_if_system_prompt_preset_id() -> String {
+    "system_if_default".to_string()
+}
+
+pub fn default_allowed_modes() -> Vec<crate::domain::model::settings::NarratorMode> {
+    use crate::domain::model::settings::NarratorMode;
+    vec![NarratorMode::Novel, NarratorMode::InteractiveFiction]
+}
+
+pub fn default_narrator_mode() -> crate::domain::model::settings::NarratorMode {
+    crate::domain::model::settings::NarratorMode::Novel
+}
+
+pub fn default_bundle_for_mode(
+    mode: crate::domain::model::settings::NarratorMode,
+) -> crate::domain::model::settings::ModePresetBundle {
+    use crate::domain::model::settings::{ModePresetBundle, NarratorMode};
+    // IF mode reuses the novel quantifier/impersonate defaults;
+    // only the system preset diverges (system_if_default).
+    let system_prompt_preset_id = match mode {
+        NarratorMode::Novel => default_active_system_prompt_preset_id(),
+        NarratorMode::InteractiveFiction => default_if_system_prompt_preset_id(),
+    };
+    ModePresetBundle {
+        mode,
+        system_prompt_preset_id,
+        quantifier_prompt_preset_id: default_active_quantifier_prompt_preset_id(),
+        impersonate_prompt_preset_id: default_active_impersonate_prompt_preset_id(),
+    }
+}
+
 pub fn default_narrative_perspective() -> crate::domain::model::settings::NarrativePerspective {
     crate::domain::model::settings::NarrativePerspective::Third
 }

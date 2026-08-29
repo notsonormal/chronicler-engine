@@ -25,25 +25,15 @@ pub struct PipelineInputs {
     pub map: Arc<MapDef>,
     pub persona: Arc<PersonaCard>,
     pub all_npcs: Vec<NpcCard>,
-    /// Transient guided-generation instruction for this turn (`None` on plain
-    /// turns; on retry, sourced from `retry_target.replay().guide` instead).
+    /// Transient: never persisted; on retry, sourced from `retry_target.replay().guide`.
     pub guide: Option<String>,
-    /// Impersonate steering for this turn. When true, the narration runs as the
-    /// player's persona: the impersonate preset replaces the system preset, the
-    /// player-character layer is dropped, and the output is a player-voiced
-    /// `Input` message. Retry re-derives it from `retry_target.replay().impersonate`.
+    /// Transient: on retry, re-derived from `retry_target.replay().impersonate`.
     pub impersonate: bool,
-    /// Optional `/impersonate <direction>` text; fed to the prompt as the
-    /// instruction for the impersonated turn. `None` for plain `/impersonate`.
     pub impersonate_direction: Option<String>,
-    /// Impersonate preset id to load (staged by the seam from settings, or read
-    /// from the retry-target replay blob). Falls back to
-    /// `active_impersonate_prompt_preset_id` when `None`.
+    /// Falls back to `active_impersonate_prompt_preset_id` when `None`.
     pub impersonate_preset_id: Option<String>,
 }
 
-/// Steering resolved for an impersonated turn. `direction` is the optional
-/// player-facing instruction; `preset_id` selects the impersonate preset.
 pub(super) struct ImpersonateSteering {
     pub direction: Option<String>,
     pub preset_id: Option<String>,
@@ -443,10 +433,6 @@ impl<'a> PipelineRun<'a> {
         })
     }
 
-    /// Resolve the guided-generation instruction for the in-flight turn.
-    /// New guide generations carry it via `inputs.guide` (staged from the
-    /// `/guide` slash command); retry re-applies it from the replay blob on the
-    /// retry-target swipe.
     fn resolve_guide(&self, state: &GameState, inputs_guide: &Option<String>) -> Option<String> {
         if let Some(g) = inputs_guide {
             return Some(g.clone());
@@ -459,10 +445,6 @@ impl<'a> PipelineRun<'a> {
             .and_then(|r| r.guide.clone())
     }
 
-    /// Resolve the impersonate steering for the in-flight turn, if any. New
-    /// impersonate generations carry direction/preset id via `inputs` (staged
-    /// from `/impersonate`); retry re-applies them from the retry-target replay
-    /// blob. Returns `(direction, preset_id)`.
     fn resolve_impersonate(
         &self,
         state: &GameState,
@@ -492,8 +474,8 @@ impl<'a> PipelineRun<'a> {
             .settings
             .read()
             .unwrap_or_else(|e| e.into_inner());
-        let preset_id = settings.active_system_prompt_preset_id.clone();
         let response_length = settings.response_length.clone();
+        let preset_id = self.pipeline.storage.active_system_preset_id(&settings);
         match self.pipeline.storage.get_preset(&preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
@@ -509,10 +491,6 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    /// Load the impersonate preset for an impersonated turn. `preset_id` is the
-    /// blob's recorded id (staged from `active_impersonate_prompt_preset_id` by
-    /// the seam, or carried by the retry-target replay); when `None`/empty it
-    /// falls back to the current setting.
     pub(super) fn load_impersonate_preset_and_response_length(
         &self,
         preset_id: Option<&str>,
@@ -525,8 +503,13 @@ impl<'a> PipelineRun<'a> {
         let response_length = settings.response_length.clone();
         let preset_id = preset_id
             .filter(|id| !id.is_empty())
-            .unwrap_or(&settings.active_impersonate_prompt_preset_id);
-        match self.pipeline.storage.get_preset(preset_id) {
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                self.pipeline
+                    .storage
+                    .active_impersonate_preset_id(&settings)
+            });
+        match self.pipeline.storage.get_preset(&preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
                 tracing::error!(

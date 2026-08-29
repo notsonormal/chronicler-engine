@@ -51,6 +51,7 @@ impl WorldForm {
             scenarios,
             default_scenario_id: None,
             default_room_image: self.default_room_image.filter(|s| !s.is_empty()),
+            ..Default::default()
         };
 
         Ok((world_card, map))

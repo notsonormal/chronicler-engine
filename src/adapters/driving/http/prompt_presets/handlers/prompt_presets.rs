@@ -4,6 +4,8 @@
 use axum::{Form, extract::State, response::Html};
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::utils::settings_defaults;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{
     preset_card_html, preset_edit_form_html, preset_view_form_html,
@@ -40,11 +42,10 @@ pub async fn preset_card_handler(
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     let settings = try_lock!(app_state.settings.read());
-    let is_active = match preset.preset_type {
-        PresetType::System => settings.active_system_prompt_preset_id == id,
-        PresetType::Quantifier => settings.active_quantifier_prompt_preset_id == id,
-        PresetType::Impersonate => settings.active_impersonate_prompt_preset_id == id,
-    };
+    let novel_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel);
+    let is_active = preset.preset_type.bundle_slot(&novel_bundle) == id;
 
     Html(preset_card_html(&preset, is_active))
 }
@@ -73,14 +74,17 @@ pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
         .unwrap_or_default();
 
     let settings = try_lock!(app_state.settings.read());
+    let novel_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel);
 
     render_template(PromptPresetsTemplate {
         system_presets,
         quantifier_presets,
         impersonate_presets,
-        active_system_id: settings.active_system_prompt_preset_id.clone(),
-        active_quantifier_id: settings.active_quantifier_prompt_preset_id.clone(),
-        active_impersonate_id: settings.active_impersonate_prompt_preset_id.clone(),
+        active_system_id: novel_bundle.system_prompt_preset_id.clone(),
+        active_quantifier_id: novel_bundle.quantifier_prompt_preset_id.clone(),
+        active_impersonate_id: novel_bundle.impersonate_prompt_preset_id.clone(),
     })
 }
 
@@ -103,6 +107,8 @@ impl PresetForm {
             instructions: self.instructions,
             writing_style: self.writing_style,
             output_format: self.output_format,
+            // Panel-created presets are selectable for every mode.
+            allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type,
         }
@@ -140,11 +146,10 @@ pub async fn edit_preset_form_handler(
     }
 
     let settings = try_lock!(app_state.settings.read());
-    let is_active = match preset.preset_type {
-        PresetType::System => settings.active_system_prompt_preset_id == id,
-        PresetType::Quantifier => settings.active_quantifier_prompt_preset_id == id,
-        PresetType::Impersonate => settings.active_impersonate_prompt_preset_id == id,
-    };
+    let novel_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel);
+    let is_active = preset.preset_type.bundle_slot(&novel_bundle) == id;
 
     Html(preset_edit_form_html(
         &preset,
@@ -172,17 +177,19 @@ pub async fn update_preset_handler(
     };
 
     let updated = form.into_preset(id, preset_type);
+    // The form carries no mode-flag field; keep the user-owned flags.
+    let mut updated = updated;
+    updated.allowed_modes = existing.allowed_modes;
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&updated) {
         return Html(format!("<span class='error'>Update failed: {e}</span>"));
     }
 
     let settings = try_lock!(app_state.settings.write());
-    let is_active = match preset_type {
-        PresetType::System => settings.active_system_prompt_preset_id == updated.id,
-        PresetType::Quantifier => settings.active_quantifier_prompt_preset_id == updated.id,
-        PresetType::Impersonate => settings.active_impersonate_prompt_preset_id == updated.id,
-    };
+    let novel_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel);
+    let is_active = preset_type.bundle_slot(&novel_bundle) == updated.id;
     Html(preset_card_html(&updated, is_active))
 }
 
@@ -194,6 +201,18 @@ pub async fn delete_preset_handler(
 
     if preset.is_default {
         return Html("<span class='error'>Cannot delete default presets</span>".to_string());
+    }
+
+    // Refuse presets referenced as any mode's default — deleting one would
+    // leave that mode's bundle pointing at a missing preset.
+    {
+        let settings = try_lock!(app_state.settings.read());
+        if settings.mode_preset_registry.references(&id) {
+            return Html(
+                "<span class='error'>Preset is a mode default; change the default before deleting</span>"
+                    .to_string(),
+            );
+        }
     }
 
     if let Err(e) = app_state.prompt_preset_service.delete_preset(&id) {
@@ -221,26 +240,40 @@ pub async fn duplicate_preset_handler(
     panel_handler(State(app_state)).await
 }
 
+/// Query for the activate endpoint. The panel's single activate button sends
+/// no mode; the handler falls back to Novel.
+#[derive(Debug, Default, serde::Deserialize)]
+pub struct ActivateQuery {
+    pub mode: Option<String>,
+}
+
 pub async fn activate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
+    axum::extract::Query(query): axum::extract::Query<ActivateQuery>,
 ) -> Html<String> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
-    let mut settings = try_lock!(app_state.settings.write());
-    let mut candidate = settings.clone();
+    // Absent or invalid mode falls back to Novel (the single panel button);
+    // the flags check still refuses a disallowed preset into the Novel slot.
+    let mode = NarratorMode::parse_or_default(query.mode.as_deref().unwrap_or("novel"));
 
-    match preset.preset_type {
-        PresetType::System => {
-            candidate.active_system_prompt_preset_id = id.clone();
-        }
-        PresetType::Quantifier => {
-            candidate.active_quantifier_prompt_preset_id = id.clone();
-        }
-        PresetType::Impersonate => {
-            candidate.active_impersonate_prompt_preset_id = id.clone();
-        }
+    let mut settings = try_lock!(app_state.settings.write());
+
+    // Refuse before any save or in-memory commit so a rejected activation
+    // leaves settings untouched.
+    if !preset.allows(mode) {
+        return Html(format!(
+            "<span class='error'>Preset not allowed for {} mode</span>",
+            mode.as_str()
+        ));
     }
+
+    let mut candidate = settings.clone();
+    let mut bundle = candidate.mode_preset_registry.bundle_for(mode);
+    preset.preset_type.set_bundle_slot(&mut bundle, id);
+    candidate.mode_preset_registry.set_bundle(bundle);
+
     if let Err(e) = app_state.settings_service.save_settings(&candidate) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
@@ -260,12 +293,15 @@ pub async fn activate_preset_handler(
         .list_presets(PresetType::Impersonate)
         .unwrap_or_default();
 
+    let novel_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel);
     render_template(PromptPresetsTemplate {
         system_presets,
         quantifier_presets,
         impersonate_presets,
-        active_system_id: settings.active_system_prompt_preset_id.clone(),
-        active_quantifier_id: settings.active_quantifier_prompt_preset_id.clone(),
-        active_impersonate_id: settings.active_impersonate_prompt_preset_id.clone(),
+        active_system_id: novel_bundle.system_prompt_preset_id.clone(),
+        active_quantifier_id: novel_bundle.quantifier_prompt_preset_id.clone(),
+        active_impersonate_id: novel_bundle.impersonate_prompt_preset_id.clone(),
     })
 }
