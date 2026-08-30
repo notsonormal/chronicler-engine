@@ -12,34 +12,15 @@ use crate::domain::model::quantifier::{NpcEventList, QuantifierConfidence, Quant
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::world::WorldCard;
 use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
+
+use crate::adapters::driven::storage::worlds::WorldBundle;
 
 use super::phase_error::PhaseError;
 use super::action_pipeline::core::ActionPipeline;
 
-pub struct PipelineInputs {
-    pub input: String,
-    pub world: Arc<WorldCard>,
-    pub map: Arc<MapDef>,
-    pub persona: Arc<PersonaCard>,
-    pub all_npcs: Vec<NpcCard>,
-    /// Transient: never persisted; on retry, sourced from `retry_target.replay().guide`.
-    pub guide: Option<String>,
-    /// Transient: on retry, re-derived from `retry_target.replay().impersonate`.
-    pub impersonate: bool,
-    pub impersonate_direction: Option<String>,
-    /// Falls back to `active_impersonate_prompt_preset_id` when `None`.
-    pub impersonate_preset_id: Option<String>,
-}
-
-pub(super) struct ImpersonateSteering {
-    pub direction: Option<String>,
-    pub preset_id: Option<String>,
-}
-
-pub(super) struct PipelineRun<'a> {
+pub(crate) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
     pub(super) started_for: u64,
 }
@@ -91,88 +72,9 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    fn set_error(&self, state: &mut GameState, msg: String) -> PhaseError {
+    pub(super) fn set_error(&self, state: &mut GameState, msg: String) -> PhaseError {
         state.narrative.input_buffer.status = GenerationStatus::Error(msg.clone());
         PhaseError::NarratorFailed(msg)
-    }
-
-    pub(super) fn phase_narrate(
-        &self,
-        state: &mut GameState,
-        inputs: &PipelineInputs,
-    ) -> Result<(String, String, String), PhaseError> {
-        let Some(room) = inputs
-            .map
-            .get_room_by_id(&state.movement.current_room_id)
-            .or_else(|| {
-                state
-                    .movement
-                    .dynamic_rooms
-                    .get(&state.movement.current_room_id)
-            })
-        else {
-            return Err(self.set_error(state, "Room not found".to_string()));
-        };
-        let history = state.narrative.history();
-
-        let impersonate = self.resolve_impersonate(state, inputs);
-
-        let (preset, response_length) = if let Some(steering) = &impersonate {
-            match self.load_impersonate_preset_and_response_length(steering.preset_id.as_deref()) {
-                Ok(p) => p,
-                Err(msg) => return Err(self.set_error(state, msg)),
-            }
-        } else {
-            match self.load_preset_and_response_length() {
-                Ok(p) => p,
-                Err(msg) => return Err(self.set_error(state, msg)),
-            }
-        };
-
-        let impersonate_direction = impersonate
-            .as_ref()
-            .and_then(|steering| steering.direction.clone())
-            .unwrap_or_default();
-        let user_message: &str = if impersonate.is_some() {
-            &impersonate_direction
-        } else {
-            &inputs.input
-        };
-
-        let context = PromptContext::new(
-            &inputs.world,
-            room,
-            NpcContext {
-                all_npcs: &inputs.all_npcs,
-                npcs_in_area: &state.scene.npcs_in_area,
-            },
-            &inputs.persona,
-            user_message,
-            &history,
-        );
-        let context = if impersonate.is_some() {
-            context.with_impersonate(true)
-        } else {
-            context.with_guide(self.resolve_guide(state, &inputs.guide))
-        };
-
-        let (narration_text, backend_name, model_name) =
-            match self.call_narrator(&context, &preset, &response_length) {
-                Ok(triple) => triple,
-                Err(msg) => return Err(self.set_error(state, msg)),
-            };
-
-        self.check_game_unchanged(self.started_for)?;
-
-        let message_type = if impersonate.is_some() {
-            MessageType::Input
-        } else {
-            MessageType::Narration
-        };
-        state.add_message(narration_text.clone(), message_type);
-        self.persist_snapshot_or_err(state, "pre-quantifier narration")?;
-
-        Ok((narration_text, backend_name, model_name))
     }
 
     pub(super) fn call_narrator(
@@ -375,7 +277,7 @@ impl<'a> PipelineRun<'a> {
         &self,
         state: &GameState,
         narration_text: &str,
-        inputs: &PipelineInputs,
+        bundle: &WorldBundle,
         trigger_match: &TriggerMatch,
     ) -> Option<StoredTriggerContext> {
         let continuation_user_msg = format!(
@@ -385,7 +287,7 @@ impl<'a> PipelineRun<'a> {
             narration_text, trigger_match.trigger_narration_prompt
         );
 
-        let room_data = inputs
+        let room_data = bundle
             .map
             .get_room_by_id(&state.movement.current_room_id)
             .or_else(|| {
@@ -396,16 +298,27 @@ impl<'a> PipelineRun<'a> {
             })?;
         let history = state.narrative.history();
 
-        let (preset, response_length) = self.load_preset_and_response_length().ok()?;
+        let preset_id = {
+            let settings = self
+                .pipeline
+                .settings
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            self.pipeline.storage.active_system_preset_id(&settings)
+        };
+        let (preset, response_length) = self
+            .load_preset_and_response_length(&preset_id, PresetKind::System)
+            .ok()?;
 
+        let all_npcs: Vec<NpcCard> = bundle.npcs.values().cloned().collect();
         let trigger_ctx = PromptContext::new(
-            &inputs.world,
+            &bundle.world,
             room_data,
             NpcContext {
-                all_npcs: &inputs.all_npcs,
+                all_npcs: &all_npcs,
                 npcs_in_area: &state.scene.npcs_in_area,
             },
-            &inputs.persona,
+            &bundle.persona,
             &continuation_user_msg,
             &history,
         );
@@ -416,7 +329,7 @@ impl<'a> PipelineRun<'a> {
             .assemble(
                 &trigger_ctx,
                 &preset,
-                &inputs.world.global_rules,
+                &bundle.world.global_rules,
                 Some(&response_length),
             )
             .ok()?;
@@ -433,67 +346,10 @@ impl<'a> PipelineRun<'a> {
         })
     }
 
-    fn resolve_guide(&self, state: &GameState, inputs_guide: &Option<String>) -> Option<String> {
-        if let Some(g) = inputs_guide {
-            return Some(g.clone());
-        }
-        state
-            .narrative
-            .retry_target
-            .as_ref()
-            .and_then(|m| m.replay())
-            .and_then(|r| r.guide.clone())
-    }
-
-    fn resolve_impersonate(
+    pub(super) fn load_preset_and_response_length(
         &self,
-        state: &GameState,
-        inputs: &PipelineInputs,
-    ) -> Option<ImpersonateSteering> {
-        if inputs.impersonate {
-            return Some(ImpersonateSteering {
-                direction: inputs.impersonate_direction.clone(),
-                preset_id: inputs.impersonate_preset_id.clone(),
-            });
-        }
-        state
-            .narrative
-            .retry_target
-            .as_ref()
-            .and_then(|m| m.replay())
-            .filter(|r| r.impersonate)
-            .map(|r| ImpersonateSteering {
-                direction: r.impersonate_direction.clone(),
-                preset_id: r.impersonate_preset_id.clone(),
-            })
-    }
-
-    pub(super) fn load_preset_and_response_length(&self) -> Result<(PromptPreset, String), String> {
-        let settings = self
-            .pipeline
-            .settings
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
-        let response_length = settings.response_length.clone();
-        let preset_id = self.pipeline.storage.active_system_preset_id(&settings);
-        match self.pipeline.storage.get_preset(&preset_id) {
-            Ok(Some(p)) => Ok((p, response_length)),
-            Ok(None) => {
-                tracing::error!(
-                    "active system preset '{preset_id}' not found — defaults not seeded?"
-                );
-                Err("Active system preset not found".to_string())
-            }
-            Err(e) => {
-                tracing::error!("preset storage inaccessible: {e}");
-                Err("Preset storage inaccessible".to_string())
-            }
-        }
-    }
-
-    pub(super) fn load_impersonate_preset_and_response_length(
-        &self,
-        preset_id: Option<&str>,
+        preset_id: &str,
+        kind: PresetKind,
     ) -> Result<(PromptPreset, String), String> {
         let settings = self
             .pipeline
@@ -501,26 +357,37 @@ impl<'a> PipelineRun<'a> {
             .read()
             .unwrap_or_else(|e| e.into_inner());
         let response_length = settings.response_length.clone();
-        let preset_id = preset_id
-            .filter(|id| !id.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| {
-                self.pipeline
-                    .storage
-                    .active_impersonate_preset_id(&settings)
-            });
-        match self.pipeline.storage.get_preset(&preset_id) {
+        match self.pipeline.storage.get_preset(preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
                 tracing::error!(
-                    "active impersonate preset '{preset_id}' not found — defaults not seeded?"
+                    "active {} preset '{preset_id}' not found — defaults not seeded?",
+                    kind.label()
                 );
-                Err("Active impersonate preset not found".to_string())
+                Err(format!("Active {} preset not found", kind.label()))
             }
             Err(e) => {
                 tracing::error!("preset storage inaccessible: {e}");
                 Err("Preset storage inaccessible".to_string())
             }
+        }
+    }
+}
+
+/// Which preset branch a load serves — names the not-found error.
+#[derive(Clone, Copy)]
+pub(crate) enum PresetKind {
+    /// The active system preset (narration and trigger generations).
+    System,
+    /// The active impersonate preset (impersonate generations).
+    Impersonate,
+}
+
+impl PresetKind {
+    fn label(self) -> &'static str {
+        match self {
+            PresetKind::System => "system",
+            PresetKind::Impersonate => "impersonate",
         }
     }
 }

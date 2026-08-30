@@ -47,13 +47,11 @@ pub(crate) fn resolve_game_id(
                 persona_name: persona_name.to_string(),
                 name: name.clone(),
                 narrator_mode: world.narrator_mode,
-                narrative_perspective: world.narrative_perspective,
-                narrative_tense: world.narrative_tense,
                 system_prompt_preset_id: bundle.system_prompt_preset_id.clone(),
                 quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id.clone(),
                 impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id.clone(),
             };
-            let id = db_pool.insert_game_with_posture(&request)?;
+            let id = db_pool.insert_game_from_request(&request)?;
             tracing::info!("Created new game '{name}' (id={id}) with persona '{persona_key}'");
             Ok(id)
         }

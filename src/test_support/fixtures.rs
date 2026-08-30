@@ -659,6 +659,33 @@ pub fn insert_message_with_swipe(
     Ok(())
 }
 
+/// Build a game state whose last message has a Swipe with stored generation
+/// inputs (`replay`) — the redo-entry fixture for retry flow tests.
+pub fn seed_swipe_with_stored_inputs(
+    storage: &Storage,
+    room_id: &str,
+    text: &str,
+    message_type: MessageType,
+    replay: Option<crate::domain::model::message::GenerationReplay>,
+) -> Result<u64, crate::error::EngineError> {
+    use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+
+    let mut state = TestGameState::in_room(room_id);
+    state.add_message(text.to_string(), message_type);
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let snapshot_id = storage.save_snapshot(&snapshot)?;
+    let mut message = state
+        .narrative
+        .history
+        .last()
+        .ok_or_else(|| crate::error::EngineError::Config("seed: no message appended".into()))?
+        .clone();
+    message.swipes[0].replay = replay;
+    message.set_snapshot_id(Some(snapshot_id));
+    insert_message_with_swipe(storage, &message)?;
+    Ok(snapshot_id)
+}
+
 /// Event retry flow: Input → Main narration (with `last_trigger`) →
 /// Event narration (with `event_header`). Each message gets its own snapshot.
 pub fn seed_event_flow(

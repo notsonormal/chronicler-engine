@@ -59,14 +59,12 @@ impl GameCatalogue {
             persona_name: player.sheet.name.clone(),
             name: name.clone(),
             narrator_mode: world_card.narrator_mode,
-            narrative_perspective: world_card.narrative_perspective,
-            narrative_tense: world_card.narrative_tense,
             system_prompt_preset_id: bundle.system_prompt_preset_id,
             quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id,
             impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id,
         };
 
-        let new_id = storage.create_game_with_posture(&request)?;
+        let new_id = storage.create_game_from_request(&request)?;
         let old_id = storage.current_game_id();
         self.storage.set_game_id(new_id);
 
@@ -149,13 +147,11 @@ impl GameCatalogue {
             persona_name: player.sheet.name.clone(),
             name: new_name.clone(),
             narrator_mode: world_card.narrator_mode,
-            narrative_perspective: world_card.narrative_perspective,
-            narrative_tense: world_card.narrative_tense,
             system_prompt_preset_id: bundle.system_prompt_preset_id,
             quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id,
             impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id,
         };
-        let new_id = storage.create_game_with_posture(&request)?;
+        let new_id = storage.create_game_from_request(&request)?;
         self.storage.set_game_id(new_id);
 
         let _ = self.persist_initial_state_with_swipes();

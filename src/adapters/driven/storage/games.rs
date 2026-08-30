@@ -3,9 +3,7 @@
 
 use crate::error::EngineError;
 use crate::domain::model::game::{Game, NewGame};
-use crate::domain::model::settings::{
-    AppSettings, ModePresetBundle, NarrativePerspective, NarrativeTense, NarratorMode,
-};
+use crate::domain::model::settings::{AppSettings, ModePresetBundle, NarratorMode};
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
 
@@ -16,7 +14,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
                          FROM games
                          ORDER BY updated_at DESC",
                     )
@@ -66,8 +64,6 @@ impl Storage {
                     created_at: now,
                     updated_at: now,
                     narrator_mode: NarratorMode::Novel,
-                    narrative_perspective: NarrativePerspective::Third,
-                    narrative_tense: NarrativeTense::Past,
                     active_system_prompt_preset_id: "system_default".to_string(),
                     active_quantifier_prompt_preset_id: "quantifier_default".to_string(),
                     active_impersonate_prompt_preset_id: "impersonate_default".to_string(),
@@ -77,9 +73,9 @@ impl Storage {
         })
     }
 
-    pub fn create_game_with_posture(&self, request: &NewGame) -> Result<u64, EngineError> {
+    pub fn create_game_from_request(&self, request: &NewGame) -> Result<u64, EngineError> {
         self.with_backend_mut("create_game", |backend| match backend {
-            Backend::Sqlite { pool } => pool.insert_game_with_posture(request),
+            Backend::Sqlite { pool } => pool.insert_game_from_request(request),
             Backend::InMemory(data) => {
                 let id = data.next_game_id;
                 data.next_game_id += 1;
@@ -94,8 +90,6 @@ impl Storage {
                     created_at: now,
                     updated_at: now,
                     narrator_mode: request.narrator_mode,
-                    narrative_perspective: request.narrative_perspective,
-                    narrative_tense: request.narrative_tense,
                     active_system_prompt_preset_id: request.system_prompt_preset_id.clone(),
                     active_quantifier_prompt_preset_id: request.quantifier_prompt_preset_id.clone(),
                     active_impersonate_prompt_preset_id: request
@@ -131,7 +125,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
                          FROM games
                          WHERE id = ?1
                          LIMIT 1",

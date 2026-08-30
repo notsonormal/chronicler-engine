@@ -84,7 +84,6 @@ impl<'a> QuantifierPromptBuilder<'a> {
             prompt.push_str("<RecentHistory>\n");
             for entry in self.context.recent_history {
                 let sender_label = match entry.message_type {
-                    MessageType::Narrator => "",
                     MessageType::Narration => "Narrator",
                     MessageType::Input => self.context.player_name,
                     MessageType::System => "System",

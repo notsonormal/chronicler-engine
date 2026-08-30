@@ -2,7 +2,6 @@
 //! Template placeholder substitution for author-controlled text fields.
 
 use crate::domain::model::character::PersonaCard;
-use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 
 /// Known template variables available for substitution.
 #[derive(Debug, Clone)]
@@ -42,17 +41,5 @@ impl TemplateVars {
             narrative_perspective: "third".to_string(),
             narrative_tense: "past".to_string(),
         }
-    }
-
-    /// Overwrite the narrative voice fields from the configured enums. Used at
-    /// the prompt-injection points (assembler + arrival) where `AppSettings`
-    /// is the source of truth for perspective/tense.
-    pub fn set_narrative_voice(
-        &mut self,
-        perspective: NarrativePerspective,
-        tense: NarrativeTense,
-    ) {
-        self.narrative_perspective = perspective.as_str().to_string();
-        self.narrative_tense = tense.as_str().to_string();
     }
 }

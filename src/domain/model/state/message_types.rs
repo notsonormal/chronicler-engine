@@ -10,7 +10,6 @@ pub enum MessageType {
     Narration,
     System,
     Input,
-    Narrator,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

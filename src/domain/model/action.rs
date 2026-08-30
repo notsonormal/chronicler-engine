@@ -6,7 +6,6 @@
 pub enum Action {
     FreeAction(String),
     Guide(String),
-    Narrator(String),
     Impersonate(Option<String>),
 }
 
@@ -21,7 +20,6 @@ impl Action {
         };
         match command.to_ascii_lowercase().as_str() {
             "guide" => Self::Guide(argument.to_string()),
-            "narrator" => Self::Narrator(argument.to_string()),
             "impersonate" => Self::Impersonate(if argument.is_empty() {
                 None
             } else {
@@ -32,9 +30,6 @@ impl Action {
     }
 
     pub fn is_steering(&self) -> bool {
-        matches!(
-            self,
-            Self::Guide(_) | Self::Narrator(_) | Self::Impersonate(_)
-        )
+        matches!(self, Self::Guide(_) | Self::Impersonate(_))
     }
 }

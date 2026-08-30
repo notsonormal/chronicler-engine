@@ -7,7 +7,7 @@ use crate::error::EngineError;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::AppSettings;
+use crate::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::template::render_template;
@@ -78,7 +78,8 @@ impl PromptAssembler {
         response_length: Option<&str>,
     ) -> Result<AssembledPrompt, EngineError> {
         let mut template_vars = context.template_vars.clone();
-        template_vars.set_narrative_voice(
+        Self::apply_posture(
+            &mut template_vars,
             context.world.narrative_perspective,
             context.world.narrative_tense,
         );
@@ -119,6 +120,16 @@ impl PromptAssembler {
         let guard = settings.read().unwrap_or_else(|e| e.into_inner());
         let conn = guard.narration_connection();
         (conn.resolve_max_context_tokens(), conn.max_tokens)
+    }
+
+    /// Sole owner of narrative-voice application. Callers never stamp.
+    fn apply_posture(
+        template_vars: &mut TemplateVars,
+        perspective: NarrativePerspective,
+        tense: NarrativeTense,
+    ) {
+        template_vars.narrative_perspective = perspective.as_str().to_string();
+        template_vars.narrative_tense = tense.as_str().to_string();
     }
 }
 
@@ -351,7 +362,6 @@ impl<'a> LayerRenderer<'a> {
         let mut history_text = String::new();
         for entry in self.history {
             match entry.message_type {
-                MessageType::Narrator => history_text.push_str(&format!("{}\n", entry.text)),
                 MessageType::Narration => {
                     history_text.push_str(&format!("Narrator: {}\n", entry.text));
                 }

@@ -481,5 +481,24 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 21 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Per-game posture is dead data: the prompt assembler stamps world
+        // posture as the sole owner, and no code reads the per-game copies.
+        if column_exists(conn, "games", "narrative_perspective") {
+            exec("ALTER TABLE games DROP COLUMN narrative_perspective")?;
+        }
+        if column_exists(conn, "games", "narrative_tense") {
+            exec("ALTER TABLE games DROP COLUMN narrative_tense")?;
+        }
+
+        conn.pragma_update(None, "user_version", 21)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

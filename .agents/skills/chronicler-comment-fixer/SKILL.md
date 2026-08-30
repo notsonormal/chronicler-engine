@@ -70,10 +70,16 @@ emitted* — not "What" narration.
 
 ## Comment Density
 
-Check the comment density of the new code against the comment density of the old code. 
+Check the comment density of the new code against the comment density of the old code. For example, 
+if a 500 line file has 20 comments, then it would be strange for it to suddenly jump to 100 comments despite
+the size of the file only increasing by 300 lines. 
 
 If the new comment density is much higher then you most certainly should be cutting them
 more aggressively.
+
+## No negative explaining
+
+Don't describe a thing by what it isn't, and don't editorialize about absences in body prose. 
 
 ## File/Module Comments
 

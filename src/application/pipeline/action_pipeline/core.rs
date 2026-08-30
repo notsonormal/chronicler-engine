@@ -8,12 +8,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use crate::application::pipeline::phase_error::PhaseError;
-use crate::application::pipeline::pipeline_run::{PipelineInputs, PipelineRun};
+use crate::application::pipeline::narration_generation;
+use crate::application::pipeline::pipeline_run::PipelineRun;
 use crate::application::pipeline::spawn::spawn_pipeline_task;
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::adapters::driven::storage::Storage;
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
@@ -207,49 +209,41 @@ impl ActionPipeline {
         Ok(ProcessActionResult::Started)
     }
 
-    #[instrument(skip(self), fields(input_length))]
-    pub fn run_from_input(&self, mut state: GameState, input: String) -> Result<(), PhaseError> {
+    #[instrument(skip(self, fresh_replay), fields(input_length))]
+    pub fn run_from_input(
+        &self,
+        mut state: GameState,
+        input: String,
+        fresh_replay: Option<GenerationReplay>,
+    ) -> Result<(), PhaseError> {
         tracing::debug!("run_from_input: called");
         let started_for = self.storage.current_game_id();
         let run = PipelineRun::new(self, started_for);
 
-        let WorldBundle {
-            world,
-            map,
-            persona,
-            npcs,
-        } = match self.load_world_bundle(started_for) {
-            Ok(bundle) => bundle,
-            Err(e) => {
-                tracing::error!("run_from_input: {e}");
-                self.persist_generation_error(e.to_string());
-                return Ok(());
-            }
-        };
-        let all_npcs: Vec<NpcCard> = npcs.values().cloned().collect();
-        let replay = state.narrative.pending_replay.clone();
+        // Guide and impersonate are mutually exclusive — impersonate wins.
+        let replay = fresh_replay.or_else(|| {
+            state
+                .narrative
+                .retry_target
+                .as_ref()
+                .and_then(|t| t.replay().cloned())
+        });
         let impersonate = replay.as_ref().is_some_and(|r| r.impersonate);
-        let guide = if impersonate {
-            None
-        } else {
-            replay.as_ref().and_then(|r| r.guide.clone())
-        };
-        let impersonate_direction = replay
-            .as_ref()
-            .and_then(|r| r.impersonate_direction.clone());
-        let impersonate_preset_id = replay
-            .as_ref()
-            .and_then(|r| r.impersonate_preset_id.clone());
-        let inputs = PipelineInputs {
+        let generation_inputs = narration_generation::GenerationInputs {
             input: input.clone(),
-            world: Arc::clone(&world),
-            map: Arc::clone(&map),
-            persona: Arc::clone(&persona),
-            all_npcs,
-            guide,
-            impersonate,
-            impersonate_direction,
-            impersonate_preset_id,
+            guide: if impersonate {
+                None
+            } else {
+                replay.as_ref().and_then(|r| r.guide.clone())
+            },
+            impersonate: impersonate.then(|| narration_generation::ImpersonateInputs {
+                direction: replay
+                    .as_ref()
+                    .and_then(|r| r.impersonate_direction.clone()),
+                preset_id: replay
+                    .as_ref()
+                    .and_then(|r| r.impersonate_preset_id.clone()),
+            }),
         };
 
         if let Err(e) = run.phase_pre_main_snapshot(&mut state) {
@@ -257,17 +251,27 @@ impl ActionPipeline {
             return Ok(());
         }
 
-        let (narration_text, backend_name, model_name) =
-            match run.phase_narrate(&mut state, &inputs) {
-                Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
-                Err(e) => {
-                    Self::finalize_phase_error(&run, Some(&mut state), e);
-                    return Ok(());
-                }
-                Ok(t) => t,
-            };
-        state.narrative.last_backend_name = Some(backend_name);
-        state.narrative.last_model_name = Some(model_name);
+        let outcome = match narration_generation::NarrationGeneration::new(&run, generation_inputs)
+            .run(&mut state)
+        {
+            Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
+            Err(e) => {
+                Self::finalize_phase_error(&run, Some(&mut state), e);
+                return Ok(());
+            }
+            Ok(outcome) => outcome,
+        };
+        let narration_text = outcome.narration_text;
+        state.narrative.last_backend_name = Some(outcome.backend_name);
+        state.narrative.last_model_name = Some(outcome.model_name);
+        let (map, persona, npcs) = {
+            let bundle = &outcome.bundle;
+            (
+                Arc::clone(&bundle.map),
+                Arc::clone(&bundle.persona),
+                bundle.npcs.clone(),
+            )
+        };
 
         let quantifier_result = match run.phase_post_generation(
             &mut state,
@@ -314,7 +318,7 @@ impl ActionPipeline {
                 run.build_trigger_request(
                     &post_commit_state,
                     &narration_text,
-                    &inputs,
+                    &outcome.bundle,
                     trigger_match,
                 )
             });
@@ -361,7 +365,7 @@ impl ActionPipeline {
         Ok(())
     }
 
-    pub(super) fn load_world_bundle(&self, started_for: u64) -> Result<WorldBundle, EngineError> {
+    pub(crate) fn load_world_bundle(&self, started_for: u64) -> Result<WorldBundle, EngineError> {
         self.storage.world_bundle_for(started_for)
     }
 
@@ -557,7 +561,7 @@ impl ActionPipeline {
         state: GameState,
         input_text: String,
     ) -> Result<(), PhaseError> {
-        self.run_from_input(state, input_text)
+        self.run_from_input(state, input_text, None)
     }
 
     fn phase_engine_commit(

@@ -25,22 +25,9 @@ pub struct ActionForm {
 }
 
 async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
-    let action_result = match Action::parse(&command) {
-        Action::FreeAction(input) => {
-            if input.is_empty() {
-                state.pipeline.continue_narration(&state.generation_gate)
-            } else {
-                state.pipeline.process_action(&state.generation_gate, input)
-            }
-        }
-        Action::Guide(guide) => state
-            .pipeline
-            .guide_narration(&state.generation_gate, guide),
-        Action::Narrator(text) => state.pipeline.narrator_action(&state.generation_gate, text),
-        Action::Impersonate(direction) => state
-            .pipeline
-            .impersonate(&state.generation_gate, direction),
-    };
+    let action_result = state
+        .pipeline
+        .process_action(&state.generation_gate, Action::parse(&command));
 
     match action_result {
         Ok(ProcessActionResult::Started) => {

@@ -55,11 +55,3 @@ pub fn default_bundle_for_mode(
         impersonate_prompt_preset_id: default_active_impersonate_prompt_preset_id(),
     }
 }
-
-pub fn default_narrative_perspective() -> crate::domain::model::settings::NarrativePerspective {
-    crate::domain::model::settings::NarrativePerspective::Third
-}
-
-pub fn default_narrative_tense() -> crate::domain::model::settings::NarrativeTense {
-    crate::domain::model::settings::NarrativeTense::Past
-}

@@ -329,12 +329,8 @@ async fn test_slash_menu_opens_on_slash() {
                 .unwrap_or_default();
             assert_eq!(
                 cmds,
-                vec![
-                    "/narrator".to_string(),
-                    "/impersonate".to_string(),
-                    "/guide".to_string()
-                ],
-                "Menu should list the three steering commands in canonical order"
+                vec!["/impersonate".to_string(), "/guide".to_string()],
+                "Menu should list the steering commands in canonical order"
             );
         },
     )
@@ -431,14 +427,14 @@ async fn test_slash_menu_enter_populates_input() {
             wait_for_element_exists(&page, "#slash-menu", 20).await;
 
             let input = page.locator(COMMAND_INPUT_SELECTOR).await;
-            // First suggestion (/narrator) is active by default.
+            // First suggestion (/impersonate) is active by default.
             input.press("Enter", None).await.unwrap();
 
             wait_for_element_not_exists(&page, "#slash-menu", 20).await;
 
             let value: String = input.input_value(None).await.unwrap_or_default();
             assert_eq!(
-                value, "/narrator ",
+                value, "/impersonate ",
                 "Enter should populate the input with the highlighted command + trailing space"
             );
         },
@@ -538,8 +534,8 @@ async fn test_slash_menu_reopens_after_action_area_rerender() {
                 .await
                 .unwrap_or(0) as u32;
             assert_eq!(
-                count, 3,
-                "Menu should reopen with all three commands after re-render"
+                count, 2,
+                "Menu should reopen with both commands after re-render"
             );
         },
     )
@@ -630,68 +626,6 @@ async fn test_slash_guide_does_not_persist_input_entry() {
             assert!(
                 narrations_after > narrations_before,
                 "/guide should produce at least one Narration entry"
-            );
-        },
-    )
-    .await;
-}
-
-// [docs/specs/browser.md] SCENARIO: 17.10
-#[tokio::test]
-async fn test_slash_narrator_persists_narrator_entry() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            let before = page
-                .locator("#story-log .log-entry.narrator")
-                .await
-                .count()
-                .await
-                .unwrap_or(0);
-            let narrations_before = page
-                .locator("#story-log .log-entry.narration")
-                .await
-                .count()
-                .await
-                .unwrap_or(0);
-
-            send_action(&page, "/narrator the room is dark").await;
-            wait_for_status_ready(&page).await;
-
-            let after = page
-                .locator("#story-log .log-entry.narrator")
-                .await
-                .count()
-                .await
-                .unwrap_or(0);
-            let narrations_after = page
-                .locator("#story-log .log-entry.narration")
-                .await
-                .count()
-                .await
-                .unwrap_or(0);
-
-            assert_eq!(
-                after,
-                before + 1,
-                "Submitting /narrator should add one Narrator entry"
-            );
-            assert!(
-                narrations_after > narrations_before,
-                "/narrator should produce at least one Narration entry"
-            );
-
-            let narrator_text: String = page
-                .locator("#story-log .log-entry.narrator .text")
-                .await
-                .inner_text()
-                .await
-                .unwrap_or_default();
-            assert_eq!(
-                narrator_text, "the room is dark",
-                "Narrator entry should preserve the submitted directive"
             );
         },
     )

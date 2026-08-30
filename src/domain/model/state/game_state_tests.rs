@@ -174,7 +174,7 @@ fn test_push_message_creates_new_message_when_no_retry_target() {
 }
 
 #[test]
-fn test_push_message_stages_pending_replay_on_new_narration_swipe() {
+fn test_push_message_writes_stored_inputs_on_new_narration_message() {
     use crate::domain::model::message::GenerationReplay;
 
     let mut state = TestGameState::in_room("room1");
@@ -182,21 +182,20 @@ fn test_push_message_stages_pending_replay_on_new_narration_swipe() {
         guide: Some("steer toward the cellar".to_string()),
         ..Default::default()
     };
-    state.narrative.pending_replay = Some(replay.clone());
 
-    state.add_message("Guided narration".into(), MessageType::Narration);
+    state.add_message_with_inputs(
+        "Guided narration".into(),
+        MessageType::Narration,
+        Some(replay.clone()),
+    );
 
     let message = state.narrative.history.last().unwrap();
     assert_eq!(message.text(), "Guided narration");
     assert_eq!(message.replay().cloned(), Some(replay));
-    assert!(
-        state.narrative.pending_replay.is_none(),
-        "pending_replay must be consumed when the narration swipe is created"
-    );
 }
 
 #[test]
-fn test_push_message_no_pending_replay_leaves_swipe_replay_none() {
+fn test_push_message_no_stored_inputs_leaves_swipe_replay_none() {
     let mut state = TestGameState::in_room("room1");
 
     state.add_message("Normal narration".into(), MessageType::Narration);
@@ -204,12 +203,12 @@ fn test_push_message_no_pending_replay_leaves_swipe_replay_none() {
     let message = state.narrative.history.last().unwrap();
     assert!(
         message.replay().is_none(),
-        "swipe replay stays None without pending_replay"
+        "swipe replay stays None without stored inputs"
     );
 }
 
 #[test]
-fn test_push_message_stages_impersonate_replay_on_player_voiced_input() {
+fn test_push_message_writes_impersonate_inputs_on_player_voiced_input() {
     use crate::domain::model::message::GenerationReplay;
 
     let mut state = TestGameState::in_room("room1");
@@ -219,18 +218,17 @@ fn test_push_message_stages_impersonate_replay_on_player_voiced_input() {
         impersonate_preset_id: Some("impersonate_default".to_string()),
         ..Default::default()
     };
-    state.narrative.pending_replay = Some(replay.clone());
 
-    state.add_message("I ask about the artifact.".into(), MessageType::Input);
+    state.add_message_with_inputs(
+        "I ask about the artifact.".into(),
+        MessageType::Input,
+        Some(replay.clone()),
+    );
 
     let message = state.narrative.history.last().unwrap();
     assert_eq!(message.text(), "I ask about the artifact.");
     assert_eq!(message.message_type, MessageType::Input);
     assert_eq!(message.replay().cloned(), Some(replay));
-    assert!(
-        state.narrative.pending_replay.is_none(),
-        "pending_replay must be consumed when the impersonate swipe is created"
-    );
 }
 
 fn log_text_strategy() -> impl Strategy<Value = String> {
@@ -242,7 +240,6 @@ fn log_type_strategy() -> impl Strategy<Value = MessageType> {
         Just(MessageType::Narration),
         Just(MessageType::System),
         Just(MessageType::Input),
-        Just(MessageType::Narrator),
     ]
 }
 

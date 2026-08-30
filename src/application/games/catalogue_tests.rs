@@ -6,7 +6,7 @@ use crate::application::errors::ApplicationError;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::message_service::MessageService;
 use crate::adapters::driven::storage::{Storage, TestOverride};
-use crate::domain::model::settings::{AppSettings, NarratorMode, NarrativePerspective, NarrativeTense};
+use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::TestDataBuilder;
 
@@ -58,8 +58,6 @@ fn test_create_game_inherits_world_posture_and_mode_matched_bundle() {
             .clone();
         world.key = "test_if".to_string();
         world.narrator_mode = NarratorMode::InteractiveFiction;
-        world.narrative_perspective = NarrativePerspective::Second;
-        world.narrative_tense = NarrativeTense::Present;
         world
     };
     let data = TestDataBuilder::default_test()
@@ -82,8 +80,6 @@ fn test_create_game_inherits_world_posture_and_mode_matched_bundle() {
         .expect("game should be persisted");
 
     assert_eq!(game.narrator_mode, NarratorMode::InteractiveFiction);
-    assert_eq!(game.narrative_perspective, NarrativePerspective::Second);
-    assert_eq!(game.narrative_tense, NarrativeTense::Present);
     assert_eq!(game.active_system_prompt_preset_id, "system_if_default");
     assert_eq!(
         game.active_quantifier_prompt_preset_id,

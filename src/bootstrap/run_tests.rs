@@ -81,35 +81,22 @@ fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
     .unwrap();
     assert!(game_id > 0);
 
-    let (
-        narrator_mode,
-        narrative_perspective,
-        narrative_tense,
-        system_preset_id,
-        quantifier_preset_id,
-        impersonate_preset_id,
-    ): (String, String, String, String, String, String) = db_pool
+    let (narrator_mode, system_preset_id, quantifier_preset_id, impersonate_preset_id): (
+        String,
+        String,
+        String,
+        String,
+    ) = db_pool
         .conn()
         .query_row(
-            "SELECT narrator_mode, narrative_perspective, narrative_tense, \
+            "SELECT narrator_mode, \
              active_system_prompt_preset_id, active_quantifier_prompt_preset_id, \
              active_impersonate_prompt_preset_id FROM games WHERE id = ?1",
             rusqlite::params![game_id as i64],
-            |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                    row.get(5)?,
-                ))
-            },
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .unwrap();
     assert_eq!(narrator_mode, "interactive_fiction");
-    assert_eq!(narrative_perspective, "second");
-    assert_eq!(narrative_tense, "present");
     assert_eq!(system_preset_id, "system_if_default");
     assert_eq!(quantifier_preset_id, "quantifier_default");
     assert_eq!(impersonate_preset_id, "impersonate_default");

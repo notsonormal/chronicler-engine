@@ -56,7 +56,7 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | Rule | Description | Source |
 |------|-------------|--------|
 | enum variant docs | Requires every enum variant to have a `///` doc unless the enum is marked `/// [TRIVIAL_ENUM]`. | `tests/infrastructure/guardrails/enums.rs:69` |
-| free fn location | Restricts top-level free functions to allowlisted category folders or exempt paths. | `tests/infrastructure/guardrails/free_fn.rs:34` |
+| free fn location | Restricts top-level free functions to allowlisted category folders or exempt paths. | `tests/infrastructure/guardrails/free_fn.rs:31` |
 | inherent impl locality | Checks all files in `src/` for inherent impls that violate the module-per-type rule. | `tests/infrastructure/guardrails/inherent_impl.rs:15` |
 | wiredapp scope | Restricts `WiredApp` imports to composition-root, HTTP, test-support, and test scopes. | `tests/infrastructure/guardrails/layers.rs:13` |
 | messages swipes separation | Ensures `storage/messages.rs` never references the `message_swipes` table. | `tests/infrastructure/guardrails/layers.rs:54` |

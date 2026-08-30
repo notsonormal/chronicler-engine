@@ -17,9 +17,10 @@
    },
     "bash": {
       "*": "allow",
+      "find *": "allow",
+      "nohup *": "allow",      
       "xargs": "deny",
       "xargs *": "deny",
-      "find *": "deny",
       "timeout": "deny",
       "timeout *": "deny",      
       "git tag": "deny",

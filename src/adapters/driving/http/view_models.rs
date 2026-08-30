@@ -51,7 +51,6 @@ impl From<&MessageEntry> for MessageEntryView {
                 MessageType::Narration => "narration".to_string(),
                 MessageType::System => "system".to_string(),
                 MessageType::Input => "input".to_string(),
-                MessageType::Narrator => "narrator".to_string(),
             },
             location_header: entry.location_header.clone(),
             event_header: entry.event_header.clone(),

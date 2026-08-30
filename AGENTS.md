@@ -77,6 +77,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
     - **pipeline/**
       - `mod.rs` — Action pipeline for processing game actions
+      - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.
       - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
       - `pipeline_run.rs` — PipelineRun and its phase implementations for the action pipeline.
       - `spawn.rs` — Shared spawn helper for pipeline tasks
@@ -248,7 +249,9 @@ python scripts/install_git_hooks.py
 
 Temporary files should be written into tmp folders e.g. `tmp`.
 
-`build.py` writes logs to both standard output and to the `logs` folder. The standard build should take about 1 minute normally. If it times out or fails, check the build logs for failures. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
+Pi wraps commands with rtk and condenses git/diff output; redirect command output to a file before filtering.
+
+`build.py` writes logs to both standard output and to the `logs` folder. The standard build should take about 2-3 minute normally. If it times out or fails, check the build logs for failures. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
 
 ### Commands
 

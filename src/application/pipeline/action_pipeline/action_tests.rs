@@ -1,13 +1,29 @@
-//! Unit tests for the action entry path (process_action / execute_action).
+//! Unit tests for the action entry path (process_action dispatcher).
 
 use std::sync::Arc;
 use std::sync::Barrier;
+
+/// Poll until the generation gate releases the game's slot (5s budget).
+pub(super) async fn wait_for_gate_idle(
+    gate: &crate::application::generation::gate::GenerationGate,
+    game_id: u64,
+) {
+    use std::time::{Duration, Instant};
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(5) {
+        if !gate.is_busy(game_id) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
 
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::agents::Agent;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
+use crate::domain::model::action::Action;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
@@ -36,7 +52,8 @@ fn test_execute_action_clears_last_trigger() {
         .save_state(&state)
         .expect("save_state should succeed");
 
-    app.pipeline.execute_action("look".to_string());
+    app.pipeline
+        .execute_action_with_replay("look".to_string(), None);
 
     let final_state = app.message_service.load_or_fresh();
     assert!(
@@ -69,7 +86,9 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     let app_clone = app.clone();
     let message_service = Arc::clone(&app.message_service);
     let handle = thread::spawn(move || {
-        app_clone.pipeline.execute_action("look around".to_string());
+        app_clone
+            .pipeline
+            .execute_action_with_replay("look around".to_string(), None);
     });
 
     let start = std::time::Instant::now();
@@ -125,7 +144,8 @@ fn test_execute_action_completes_and_persists_state() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    app.pipeline.execute_action("look".to_string());
+    app.pipeline
+        .execute_action_with_replay("look".to_string(), None);
     let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -156,7 +176,8 @@ fn test_execute_action_handles_narration_error() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    app.pipeline.execute_action("look".to_string());
+    app.pipeline
+        .execute_action_with_replay("look".to_string(), None);
     let final_state = app.message_service.load_or_fresh();
     assert!(
         matches!(
@@ -181,7 +202,8 @@ fn test_execute_action_handles_cancellation() {
         .pipeline(service)
         .build_service();
     app.shutdown_token.cancel();
-    app.pipeline.execute_action("look".to_string());
+    app.pipeline
+        .execute_action_with_replay("look".to_string(), None);
     let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -203,7 +225,8 @@ fn test_execute_action_preserves_existing_input_log() {
         .log("examine room", MessageType::Input)
         .pipeline(service)
         .build_service();
-    app.pipeline.execute_action("examine room".to_string());
+    app.pipeline
+        .execute_action_with_replay("examine room".to_string(), None);
     let final_state = app.message_service.load_or_fresh();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
@@ -276,7 +299,9 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     let app_for_thread = app.clone();
 
     let handle = thread::spawn(move || {
-        app_for_thread.pipeline.execute_action("look".to_string());
+        app_for_thread
+            .pipeline
+            .execute_action_with_replay("look".to_string(), None);
     });
 
     entered.wait();
@@ -323,7 +348,9 @@ fn test_narration_saved_before_quantifying_phase() {
     let app_for_thread = app.clone();
 
     let handle = thread::spawn(move || {
-        app_for_thread.pipeline.execute_action("test".to_string());
+        app_for_thread
+            .pipeline
+            .execute_action_with_replay("test".to_string(), None);
     });
 
     entered.wait();
@@ -375,7 +402,7 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
 
     let result_a = app
         .pipeline
-        .process_action(&app.generation_gate, "look".to_string())
+        .process_action(&app.generation_gate, Action::FreeAction("look".to_string()))
         .expect("gen A claim should not error");
     assert!(
         matches!(result_a, ProcessActionResult::Started),
@@ -428,7 +455,10 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
 
     let result_b = app
         .pipeline
-        .process_action(&app.generation_gate, "go north".to_string())
+        .process_action(
+            &app.generation_gate,
+            Action::FreeAction("go north".to_string()),
+        )
         .expect("gen B claim should not error");
     assert!(
         matches!(result_b, ProcessActionResult::Started),
@@ -486,7 +516,7 @@ fn test_process_action_heals_stale_status_before_validation_error() {
 
     let result = app
         .pipeline
-        .process_action(&app.generation_gate, "look".to_string());
+        .process_action(&app.generation_gate, Action::FreeAction("look".to_string()));
 
     assert!(
         result.is_err(),
@@ -505,7 +535,7 @@ fn test_process_action_heals_stale_status_before_validation_error() {
 }
 
 #[tokio::test]
-async fn test_narrator_action_persists_narrator_entry_then_generates() {
+async fn test_dispatcher_guide_stores_guide_on_swipe_replay() {
     use crate::application::errors::ProcessActionResult;
 
     let data = TestDataBuilder::default_test().build();
@@ -523,43 +553,50 @@ async fn test_narrator_action_persists_narrator_entry_then_generates() {
 
     let result = app
         .pipeline
-        .narrator_action(&app.generation_gate, "Make the scene tense".to_string())
-        .expect("narrator_action claim should not error");
+        .process_action(
+            &app.generation_gate,
+            Action::Guide("make it ominous".to_string()),
+        )
+        .expect("guide claim should not error");
     assert!(
         matches!(result, ProcessActionResult::Started),
-        "narrator_action should return Started, got {result:?}"
+        "guide should claim the slot, got {result:?}"
     );
 
-    wait_for_generation_idle(&app.generation_gate, game_id).await;
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+    assert!(
+        !app.generation_gate.is_busy(game_id),
+        "guide generation should complete"
+    );
 
-    let final_state = app.message_service.load_or_fresh();
-    let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
-
-    let narrator = entries
+    let state = app.message_service.load_or_fresh();
+    let narration = state
+        .narrative
+        .history
         .iter()
-        .find(|e| e.message_type == MessageType::Narrator)
-        .expect("narrator_action should persist a Narrator entry");
-    assert_eq!(narrator.text, "Make the scene tense");
+        .find(|e| e.message_type == MessageType::Narration)
+        .expect("guide should produce a Narration message");
+    let replay = narration
+        .replay()
+        .expect("narration swipe should carry the stored inputs");
+    assert_eq!(
+        replay.guide.as_deref(),
+        Some("make it ominous"),
+        "the guide must be stored on the swipe"
+    );
     assert!(
-        !narrator.text.is_empty(),
-        "Narrator entries have text (rendered bare)"
+        !replay.impersonate,
+        "guide inputs must not set the impersonate flag"
     );
 
-    assert!(
-        entries
-            .iter()
-            .any(|e| e.message_type == MessageType::Narration),
-        "narrator_action should trigger a narration generation"
-    );
-    assert_eq!(
-        final_state.narrative.input_buffer.status,
-        GenerationStatus::Idle,
-        "Generation should complete and return to Idle"
-    );
+    app.shutdown_token.cancel();
 }
 
 #[tokio::test]
-async fn test_narrator_action_preserves_prior_history() {
+async fn test_dispatcher_impersonate_pins_preset_and_stores_direction() {
+    use crate::application::errors::ProcessActionResult;
+
+    let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier_provider = Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>;
     let service = make_test_pipeline_with_mock_quantifier(
@@ -567,137 +604,66 @@ async fn test_narrator_action_preserves_prior_history() {
         narrator_recorder,
         quantifier_provider,
     );
-    let app = TestAppBuilder::default_test()
-        .log("examine room", MessageType::Input)
+    let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
     let game_id = app.game_catalogue.current_game_id();
 
-    app.pipeline
-        .narrator_action(&app.generation_gate, "Shift to dusk".to_string())
-        .expect("narrator_action should not error");
+    let expected_preset_id = {
+        let settings = app
+            .pipeline
+            .settings
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        app.pipeline.storage.active_impersonate_preset_id(&settings)
+    };
 
-    wait_for_generation_idle(&app.generation_gate, game_id).await;
-
-    let final_state = app.message_service.load_or_fresh();
-    let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
-    let input_idx = entries
-        .iter()
-        .position(|e| e.message_type == MessageType::Input);
-    let narrator_idx = entries
-        .iter()
-        .position(|e| e.message_type == MessageType::Narrator);
-    let narration_idx = entries
-        .iter()
-        .position(|e| e.message_type == MessageType::Narration);
-    assert!(input_idx.is_some(), "prior Input should be preserved");
-    assert!(narrator_idx.is_some(), "Narrator entry should be added");
-    assert!(narration_idx.is_some(), "Narration should be generated");
-    assert_eq!(
-        narrator_idx.unwrap(),
-        entries
-            .iter()
-            .rposition(|e| e.message_type == MessageType::Narrator)
-            .unwrap(),
-        "only one Narrator entry expected"
-    );
-    assert!(
-        narrator_idx.unwrap() > input_idx.unwrap(),
-        "Narrator entry should appear after prior Input"
-    );
-    assert!(
-        narration_idx.unwrap() > narrator_idx.unwrap(),
-        "Narration should appear after the Narrator entry"
-    );
-}
-
-#[tokio::test]
-async fn test_narrator_action_rejects_concurrent_generation() {
-    use std::sync::atomic::Ordering;
-    use std::time::{Duration, Instant};
-
-    use crate::application::errors::ProcessActionResult;
-
-    let mock_backend = Arc::new(
-        MockBackend::default()
-            .with_delay(300)
-            .with_narrations(vec!["GEN_OUTPUT".to_string(), "GEN_OUTPUT_B".to_string()]),
-    );
-    let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
-    let quantifier_provider = Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>;
-    let service = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        narrator_recorder,
-        quantifier_provider,
-    );
-    let app = TestAppBuilder::default_test()
-        .pipeline(service)
-        .build_service();
-    let game_id = app.game_catalogue.current_game_id();
-
-    let result_gen = app
+    let result = app
         .pipeline
-        .process_action(&app.generation_gate, "look".to_string())
-        .expect("first generation should claim");
-    assert!(matches!(result_gen, ProcessActionResult::Started));
-
-    let started = Instant::now();
-    while started.elapsed() < Duration::from_secs(5) {
-        if mock_backend.narration_started.load(Ordering::SeqCst) {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+        .process_action(
+            &app.generation_gate,
+            Action::Impersonate(Some("act wary".to_string())),
+        )
+        .expect("impersonate claim should not error");
     assert!(
-        mock_backend.narration_started.load(Ordering::SeqCst),
-        "first generation should start"
+        matches!(result, ProcessActionResult::Started),
+        "impersonate should claim the slot, got {result:?}"
     );
 
-    let before = app.message_service.load_or_fresh();
-    let narrator_count_before = before
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+    assert!(
+        !app.generation_gate.is_busy(game_id),
+        "impersonate generation should complete"
+    );
+
+    let state = app.message_service.load_or_fresh();
+    let input_entry = state
         .narrative
         .history
         .iter()
-        .filter(|e| e.message_type == MessageType::Narrator)
-        .count();
-
-    let result_narrator = app
-        .pipeline
-        .narrator_action(&app.generation_gate, "ignored".to_string())
-        .expect("narrator_action should not error during concurrent gen");
+        .find(|e| e.message_type == MessageType::Input)
+        .expect("impersonate should produce an Input message");
+    let replay = input_entry
+        .replay()
+        .expect("impersonate swipe should carry the stored inputs");
     assert!(
-        matches!(result_narrator, ProcessActionResult::ConcurrentGeneration),
-        "narrator_action should be rejected while a generation is in flight, got {result_narrator:?}"
+        replay.impersonate,
+        "the impersonate flag must be stored on the swipe"
     );
-
-    let after = app.message_service.load_or_fresh();
-    let narrator_count_after = after
-        .narrative
-        .history
-        .iter()
-        .filter(|e| e.message_type == MessageType::Narrator)
-        .count();
     assert_eq!(
-        narrator_count_before, narrator_count_after,
-        "rejected narrator_action must not persist a Narrator entry"
+        replay.impersonate_direction.as_deref(),
+        Some("act wary"),
+        "the direction must be stored on the swipe"
+    );
+    assert_eq!(
+        replay.impersonate_preset_id.as_deref(),
+        Some(expected_preset_id.as_str()),
+        "the active impersonate preset id must be pinned at entry time"
+    );
+    assert!(
+        replay.guide.is_none(),
+        "impersonate inputs must not carry a guide"
     );
 
     app.shutdown_token.cancel();
-    wait_for_generation_idle(&app.generation_gate, game_id).await;
-}
-
-async fn wait_for_generation_idle(
-    gate: &crate::application::generation::gate::GenerationGate,
-    game_id: u64,
-) {
-    use std::time::{Duration, Instant};
-
-    let started = Instant::now();
-    while started.elapsed() < Duration::from_secs(5) {
-        if !gate.is_busy(game_id) {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-    panic!("generation for game {game_id} did not become idle within 5s");
 }

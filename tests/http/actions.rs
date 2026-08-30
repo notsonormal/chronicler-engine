@@ -712,6 +712,24 @@ async fn test_slash_impersonate_produces_input_http() {
         0,
         "impersonate should not persist the raw command as an Input entry"
     );
+
+    let input_entry = inputs.first().expect("exactly one Input entry");
+    let replay = input_entry
+        .replay()
+        .expect("impersonate swipe should carry the stored inputs");
+    assert!(
+        replay.impersonate,
+        "the impersonate flag must be stored on the swipe"
+    );
+    assert_eq!(
+        replay.impersonate_direction.as_deref(),
+        Some("hello"),
+        "the direction must be stored on the swipe"
+    );
+    assert!(
+        replay.impersonate_preset_id.is_some(),
+        "the active impersonate preset id must be pinned at entry time"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.10
@@ -743,49 +761,18 @@ async fn test_slash_guide_does_not_persist_input_http() {
         .collect();
     assert_eq!(inputs.len(), 0, "guide should not persist an Input entry");
 
-    let narrators: Vec<_> = messages
-        .iter()
-        .filter(|m| m.message_type == MessageType::Narrator)
-        .collect();
+    let narration = narrations.first().expect("at least one Narration entry");
+    let replay = narration
+        .replay()
+        .expect("guide swipe should carry the stored inputs");
     assert_eq!(
-        narrators.len(),
-        0,
-        "guide should not persist a Narrator entry"
+        replay.guide.as_deref(),
+        Some("look around"),
+        "the guide must be stored on the swipe"
     );
-}
-
-// [docs/specs/actions.md] SCENARIO: 1.11
-#[tokio::test]
-async fn test_slash_narrator_persists_narrator_message_http() {
-    let narrator = Arc::new(MockBackend::default());
-    let (app, state) = app_with_narrator(narrator);
-
-    let resp = post_action(&app, "/narrator the room is dark").await;
-    assert!(resp.status().is_success(), "/narrator should accept");
     assert!(
-        wait_idle(&state, 1000).await,
-        "narrator action should complete"
-    );
-
-    let messages = state.message_service.load_messages().unwrap();
-    let narrators: Vec<_> = messages
-        .iter()
-        .filter(|m| m.message_type == MessageType::Narrator)
-        .collect();
-    assert_eq!(
-        narrators.len(),
-        1,
-        "narrator should persist exactly one Narrator entry"
-    );
-    assert_eq!(narrators[0].text(), "the room is dark");
-
-    let narrations: Vec<_> = messages
-        .iter()
-        .filter(|m| m.message_type == MessageType::Narration)
-        .collect();
-    assert!(
-        !narrations.is_empty(),
-        "narrator should produce at least one Narration entry"
+        !replay.impersonate,
+        "guide inputs must not set the impersonate flag"
     );
 }
 

@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use super::retry::{RetryMode, RetryTarget};
-
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driving::http::AppState;
@@ -20,6 +18,8 @@ use crate::test_support::{
     TestAppBuilder, TestDataBuilder,
 };
 use crate::test_support::fixtures::TestGameState;
+
+use super::action_tests::wait_for_gate_idle;
 
 fn make_test_state() -> GameState {
     TestGameState::in_room("start")
@@ -619,7 +619,8 @@ async fn test_retry_recovers_after_llm_failure() {
 
     let _input_id = add_input_and_save(&app, &storage, "look");
 
-    app.pipeline.execute_action("look".to_string());
+    app.pipeline
+        .execute_action_with_replay("look".to_string(), None);
     let after_fail = app.message_service.load_or_fresh();
     assert!(
         after_fail
@@ -1241,197 +1242,248 @@ async fn test_retry_returns_shutting_down_when_token_cancelled() {
     );
 }
 
-fn make_input_with_replay(text: &str, impersonate: bool) -> crate::domain::model::message::Message {
-    use crate::domain::model::message::GenerationReplay;
-    let mut msg = crate::domain::model::message::Message::new(
-        text.to_string(),
-        MessageType::Input,
-        None,
-        None,
-    );
-    msg.set_snapshot_id(Some(1));
-    msg.swipes[0].replay = Some(GenerationReplay {
-        impersonate,
-        impersonate_direction: None,
-        impersonate_preset_id: None,
-        guide: None,
-    });
-    msg
-}
+// Redo-mode coverage through the public retry() entry: one test per mode.
 
 #[tokio::test]
-async fn test_resolve_retry_target_re_narrate_skips_trailing_system() {
-    let pipeline = make_service();
-    let mut input = crate::domain::model::message::Message::new(
-        "look".to_string(),
-        MessageType::Input,
-        None,
-        None,
+async fn test_retry_flow_narration_mode_makes_new_swipe() {
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["Regenerated narration.".to_string()]),
     );
-    input.set_snapshot_id(Some(1));
-    let narration = crate::domain::model::message::Message::new(
-        "You look.".to_string(),
-        MessageType::Narration,
-        None,
-        None,
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     );
-    let system = crate::domain::model::message::Message::new(
-        "[System]".to_string(),
-        MessageType::System,
-        None,
-        None,
-    );
-    let messages = vec![input, narration, system];
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
 
-    let target = pipeline.resolve_retry_target(&messages).unwrap();
-    assert_eq!(target.mode, RetryMode::ReNarrate);
-    assert_eq!(
-        target.old_target.as_ref().unwrap().message_type,
-        MessageType::Narration
+    let _ = add_input_and_save(&app, &storage, "test input");
+    let _ = save_pre_main(&app, &storage);
+    let _ = add_narration_and_save(&app, &storage, "Narration text");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(
+        matches!(result, ProcessActionResult::Started),
+        "retry should claim the slot, got {result:?}"
     );
-    assert!(!target.is_event);
-}
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
 
-#[tokio::test]
-async fn test_resolve_retry_target_re_narrate_event() {
-    let pipeline = make_service();
-    let mut input = crate::domain::model::message::Message::new(
-        "look".to_string(),
-        MessageType::Input,
-        None,
-        None,
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
     );
-    input.set_snapshot_id(Some(1));
-    let mut narration = crate::domain::model::message::Message::new(
-        "Event.".to_string(),
-        MessageType::Narration,
-        None,
-        None,
-    );
-    narration.set_event_header(Some("battle".to_string()));
-    let messages = vec![input, narration];
-
-    let target = pipeline.resolve_retry_target(&messages).unwrap();
-    assert_eq!(target.mode, RetryMode::ReNarrate);
-    assert!(target.is_event);
-}
-
-#[tokio::test]
-async fn test_resolve_retry_target_re_impersonate() {
-    let pipeline = make_service();
-    let input = make_input_with_replay("I look.", true);
-    let messages = vec![input];
-
-    let target = pipeline.resolve_retry_target(&messages).unwrap();
-    assert_eq!(target.mode, RetryMode::ReImpersonate);
-    assert_eq!(
-        target.old_target.as_ref().unwrap().message_type,
-        MessageType::Input
-    );
-}
-
-#[tokio::test]
-async fn test_resolve_retry_target_user_regen() {
-    let pipeline = make_service();
-    let input = make_input_with_replay("I look.", false);
-    let messages = vec![input];
-
-    let target = pipeline.resolve_retry_target(&messages).unwrap();
-    assert_eq!(target.mode, RetryMode::UserRegen);
-    assert_eq!(
-        target.old_target.as_ref().unwrap().message_type,
-        MessageType::Input
-    );
-}
-
-#[tokio::test]
-async fn test_reconstruct_retry_state_re_narrate_keeps_input() {
-    let input = crate::domain::model::message::Message::new(
-        "look".to_string(),
-        MessageType::Input,
-        None,
-        None,
-    );
-    let narration = crate::domain::model::message::Message::new(
-        "You look.".to_string(),
-        MessageType::Narration,
-        None,
-        None,
-    );
-    let messages = vec![input, narration.clone()];
-    let snapshot =
-        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &crate::test_support::fixtures::TestGameState::in_room("room1"),
-        );
-    let target = RetryTarget {
-        anchor_idx: 0,
-        snapshot_id: 1,
-        is_event: false,
-        mode: RetryMode::ReNarrate,
-        old_target: Some(narration),
-    };
-
-    let state = crate::application::pipeline::action_pipeline::core::ActionPipeline::reconstruct_retry_state(snapshot, messages, &target);
-    assert_eq!(state.narrative.history.len(), 1);
-    assert_eq!(
-        state.narrative.history.as_slice()[0].message_type,
-        MessageType::Input
-    );
-    assert!(state.narrative.retry_target.is_some());
-    assert_eq!(
-        state.narrative.retry_target.as_ref().unwrap().message_type,
-        MessageType::Narration
-    );
-}
-
-#[tokio::test]
-async fn test_reconstruct_retry_state_user_regen_removes_input() {
-    let input = make_input_with_replay("I look.", false);
-    let messages = vec![input.clone()];
-    let snapshot =
-        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &crate::test_support::fixtures::TestGameState::in_room("room1"),
-        );
-    let target = RetryTarget {
-        anchor_idx: 0,
-        snapshot_id: 1,
-        is_event: false,
-        mode: RetryMode::UserRegen,
-        old_target: Some(input),
-    };
-
-    let state = crate::application::pipeline::action_pipeline::core::ActionPipeline::reconstruct_retry_state(snapshot, messages, &target);
-    assert_eq!(state.narrative.history.len(), 0);
-    assert!(state.narrative.retry_target.is_some());
-    assert_eq!(
-        state.narrative.retry_target.as_ref().unwrap().message_type,
-        MessageType::Input
-    );
-}
-
-// Helpers for re-impersonate / user-regen direct tests.
-fn make_retry_state(app: &AppState, text: &str, impersonate: bool) -> GameState {
-    let mut state = app.message_service.load_or_fresh();
-    state.add_message(text.to_string(), MessageType::Input);
-    app.message_service
-        .save_message_and_snapshot(&mut state)
-        .expect("setup: persist input message");
-    let mut input = state
+    let narration = final_state
         .narrative
         .history
-        .last()
-        .expect("setup: input message")
-        .clone();
-    state.narrative.history.clear();
-    input.swipes[0].replay = Some(crate::domain::model::message::GenerationReplay {
-        impersonate,
+        .iter()
+        .rev()
+        .find(|m| m.message_type == MessageType::Narration)
+        .expect("narration target survives the redo");
+    assert_eq!(
+        narration.swipes.len(),
+        2,
+        "the redo appends a swipe to the narration message"
+    );
+    assert_eq!(narration.active_swipe_index, 1);
+    assert_eq!(narration.text(), "Regenerated narration.");
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_impersonate_mode_runs_full_tail() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
+    );
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let replay = GenerationReplay {
+        impersonate: true,
         impersonate_direction: Some("A direction".to_string()),
         impersonate_preset_id: Some("impersonate_default".to_string()),
         guide: None,
-    });
-    state.narrative.retry_target = Some(input);
-    state
+    };
+    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
+        &storage,
+        "room_1",
+        "I look around.",
+        MessageType::Input,
+        Some(replay),
+    )
+    .expect("seed: impersonated input with stored inputs");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(matches!(result, ProcessActionResult::Started));
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "impersonate redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let target = final_state
+        .narrative
+        .history
+        .iter()
+        .find(|m| {
+            m.message_type == MessageType::Input
+                && m.swipes.first().is_some_and(|s| s.text == "I look around.")
+        })
+        .expect("impersonated input target survives the redo");
+    assert_eq!(
+        target.swipes.len(),
+        2,
+        "the redo appends a swipe to the impersonated input"
+    );
+    assert_eq!(target.active_swipe_index, 1);
+    assert_eq!(target.text(), "I look around cautiously.");
+    assert!(
+        target.replay().is_some_and(|r| r.impersonate),
+        "the new swipe inherits the stored inputs"
+    );
+    // The full tail (the deliberate behavior change): the quantifier ran.
+    assert!(
+        final_state.scene.quantifier_confidence.is_some(),
+        "impersonate redo now runs the full post-narration tail"
+    );
+    app.shutdown_token.cancel();
 }
+
+#[tokio::test]
+async fn test_retry_flow_user_regen_mode_stays_tail_less() {
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["Replacement line.".to_string()]));
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
+        &storage,
+        "room_1",
+        "look around",
+        MessageType::Input,
+        None,
+    )
+    .expect("seed: plain input");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(matches!(result, ProcessActionResult::Started));
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "user-regen redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let target = final_state
+        .narrative
+        .history
+        .iter()
+        .find(|m| {
+            m.message_type == MessageType::Input
+                && m.swipes.first().is_some_and(|s| s.text == "look around")
+        })
+        .expect("plain input target survives the redo");
+    assert_eq!(target.swipes.len(), 2, "the redo appends a swipe");
+    assert_eq!(target.active_swipe_index, 1);
+    assert_eq!(target.text(), "Replacement line.");
+    assert_eq!(
+        target.message_type,
+        MessageType::Input,
+        "the target keeps its Input type"
+    );
+    // No tail: a plain user input never gets one.
+    assert!(
+        final_state.scene.quantifier_confidence.is_none(),
+        "user-regen redo must stay tail-less"
+    );
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_event_mode_continues_trigger() {
+    let (app, storage) = make_test_app_with_storage();
+
+    setup_event_flow(&app, &storage);
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(matches!(result, ProcessActionResult::Started));
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "event redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let event_message = final_state
+        .narrative
+        .history
+        .iter()
+        .rev()
+        .find(|m| m.event_header().is_some())
+        .expect("event message survives the redo");
+    assert_eq!(
+        event_message.swipes.len(),
+        2,
+        "the trigger continuation lands as a new swipe on the event message"
+    );
+    app.shutdown_token.cancel();
+}
+
+// ---- retry_user_regen call-site error branches ----
+// These cover retry_user_regen's own `Err(e) => finalize_phase_error` and
+// cancellation arms — the shared-prefix failures themselves are covered in
+// narration_generation_tests.rs.
 
 fn assert_error_status(app: &AppState, expected_substring: &str) {
     let state = app.message_service.load_or_fresh();
@@ -1445,254 +1497,15 @@ fn assert_error_status(app: &AppState, expected_substring: &str) {
     );
 }
 
-#[tokio::test]
-async fn test_retry_reimpersonate_happy_path() {
-    let narrator = Arc::new(
-        MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
-    );
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, _storage) = TestAppBuilder::default_test()
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let state = make_retry_state(&app, "I look around.", true);
-    let _ = app.pipeline.retry_reimpersonate(state);
-
-    let final_state = app.message_service.load_or_fresh();
-    assert!(
-        matches!(
-            final_state.narrative.input_buffer.status,
-            GenerationStatus::Idle
-        ),
-        "Happy path should end Idle, got {:?}",
-        final_state.narrative.input_buffer.status
-    );
-    let has_generated_input =
-        final_state.narrative.history.iter().any(|m| {
-            m.message_type == MessageType::Input && m.text() == "I look around cautiously."
-        });
-    assert!(
-        has_generated_input,
-        "re-impersonate should add generated input text"
-    );
-}
-
-#[tokio::test]
-async fn test_retry_reimpersonate_load_world_bundle_fails() {
-    let data = TestDataBuilder::default_test().build();
-    let (storage, handle) = {
-        let base = Storage::new_in_memory();
-        data.seed_into(&base);
-        base.with_test_failures()
-    };
-    handle.set(
-        "get_world",
-        TestOverride::internal("simulated get_world failure"),
-    );
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::new(MockBackend::default())),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, _storage) = TestAppBuilder::with_data(data)
-        .storage(Arc::new(storage))
-        .skip_seeding(true)
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let state = make_retry_state(&app, "I look around.", true);
-    let _ = app.pipeline.retry_reimpersonate(state);
-
-    assert_error_status(&app, "simulated get_world failure");
-}
-
-#[tokio::test]
-async fn test_retry_reimpersonate_room_not_found() {
-    let (app, _storage) = make_test_app_with_storage();
-
-    let mut state = make_retry_state(&app, "I look around.", true);
-    state.movement.current_room_id = "non_existent_room".to_string();
-
-    let _ = app.pipeline.retry_reimpersonate(state);
-
-    assert_error_status(&app, "Room not found");
-}
-
-#[tokio::test]
-async fn test_retry_reimpersonate_missing_target() {
-    let (app, _storage) = make_test_app_with_storage();
-
+fn make_user_regen_state(app: &AppState, text: &str) -> GameState {
     let mut state = app.message_service.load_or_fresh();
-    let input = crate::domain::model::message::Message::new(
-        "I look around.".to_string(),
+    state.narrative.retry_target = Some(crate::domain::model::message::Message::new(
+        text,
         MessageType::Input,
         None,
         None,
-    );
-    state.narrative.history.append(input);
-    // retry_target deliberately None
-    state.narrative.retry_target = None;
-
-    let _ = app.pipeline.retry_reimpersonate(state);
-
-    assert_error_status(&app, "missing impersonate target");
-}
-
-#[tokio::test]
-async fn test_retry_reimpersonate_no_replay() {
-    let (app, _storage) = make_test_app_with_storage();
-
-    let mut state = app.message_service.load_or_fresh();
-    let input = crate::domain::model::message::Message::new(
-        "I look around.".to_string(),
-        MessageType::Input,
-        None,
-        None,
-    );
-    state.narrative.retry_target = Some(input.clone());
-    state.narrative.history.append(input);
-
-    let _ = app.pipeline.retry_reimpersonate(state);
-
-    assert_error_status(&app, "impersonate target has no replay");
-}
-
-#[tokio::test]
-async fn test_retry_reimpersonate_narrator_fails() {
-    let narrator = Arc::new(MockBackend::default().with_fail());
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, _storage) = TestAppBuilder::default_test()
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let state = make_retry_state(&app, "I look around.", true);
-    let _ = app.pipeline.retry_reimpersonate(state);
-
-    assert_error_status(&app, "configured_failure");
-}
-
-#[tokio::test]
-async fn test_retry_reimpersonate_persist_fails() {
-    let (base_storage, handle) = Storage::new_in_memory().with_test_failures();
-    let data = TestDataBuilder::default_test().build();
-    data.seed_into(&base_storage);
-    let storage = Arc::new(base_storage);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::new(
-            MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
-        )),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, _storage) = TestAppBuilder::with_data(data)
-        .storage(Arc::clone(&storage))
-        .skip_seeding(true)
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let state = make_retry_state(&app, "I look around.", true);
-
-    handle.set(
-        "insert_swipe",
-        TestOverride::internal("simulated insert_swipe failure"),
-    );
-
-    let _ = app.pipeline.retry_reimpersonate(state);
-
-    handle.clear("insert_swipe");
-
-    assert_error_status(&app, "simulated insert_swipe failure");
-}
-
-#[tokio::test]
-async fn test_retry_user_regen_happy_path() {
-    let narrator =
-        Arc::new(MockBackend::default().with_narrations(vec!["I sprint forward.".to_string()]));
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, _storage) = TestAppBuilder::default_test()
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let state = make_retry_state(&app, "I walk forward.", false);
-    let _ = app.pipeline.retry_user_regen(state);
-
-    let final_state = app.message_service.load_or_fresh();
-    assert!(
-        matches!(
-            final_state.narrative.input_buffer.status,
-            GenerationStatus::Idle
-        ),
-        "Happy path should end Idle, got {:?}",
-        final_state.narrative.input_buffer.status
-    );
-    let has_generated_input = final_state
-        .narrative
-        .history
-        .iter()
-        .any(|m| m.message_type == MessageType::Input && m.text() == "I sprint forward.");
-    assert!(
-        has_generated_input,
-        "user-regen should add generated input text"
-    );
-}
-
-#[tokio::test]
-async fn test_retry_user_regen_load_world_bundle_fails() {
-    let data = TestDataBuilder::default_test().build();
-    let (storage, handle) = {
-        let base = Storage::new_in_memory();
-        data.seed_into(&base);
-        base.with_test_failures()
-    };
-    handle.set(
-        "get_world",
-        TestOverride::internal("simulated get_world failure"),
-    );
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::new(MockBackend::default())),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, _storage) = TestAppBuilder::with_data(data)
-        .storage(Arc::new(storage))
-        .skip_seeding(true)
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let state = make_retry_state(&app, "I walk forward.", false);
-    let _ = app.pipeline.retry_user_regen(state);
-
-    assert_error_status(&app, "simulated get_world failure");
-}
-
-#[tokio::test]
-async fn test_retry_user_regen_room_not_found() {
-    let (app, _storage) = make_test_app_with_storage();
-
-    let mut state = make_retry_state(&app, "I walk forward.", false);
-    state.movement.current_room_id = "non_existent_room".to_string();
-
-    let _ = app.pipeline.retry_user_regen(state);
-
-    assert_error_status(&app, "Room not found");
+    ));
+    state
 }
 
 #[tokio::test]
@@ -1701,7 +1514,7 @@ async fn test_retry_user_regen_missing_target() {
 
     let mut state = app.message_service.load_or_fresh();
     let input = crate::domain::model::message::Message::new(
-        "I walk forward.".to_string(),
+        "I walk forward.",
         MessageType::Input,
         None,
         None,
@@ -1719,7 +1532,7 @@ async fn test_retry_user_regen_narrator_fails() {
     let narrator = Arc::new(MockBackend::default().with_fail());
     let pipeline = make_test_pipeline_with_mock_quantifier(
         Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        make_test_recorder(narrator as Arc<_>),
         Arc::new(MockBackend::default())
             as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     );
@@ -1727,42 +1540,171 @@ async fn test_retry_user_regen_narrator_fails() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    let state = make_retry_state(&app, "I walk forward.", false);
+    let state = make_user_regen_state(&app, "I walk forward.");
     let _ = app.pipeline.retry_user_regen(state);
 
     assert_error_status(&app, "configured_failure");
 }
 
 #[tokio::test]
-async fn test_retry_user_regen_persist_fails() {
-    let (base_storage, handle) = Storage::new_in_memory().with_test_failures();
-    let data = TestDataBuilder::default_test().build();
-    data.seed_into(&base_storage);
-    let storage = Arc::new(base_storage);
+async fn test_retry_user_regen_cancelled() {
+    use std::sync::atomic::Ordering;
+    use std::thread;
+
+    // The only Cancelled producer in the narration path is check_game_unchanged,
+    // so the test flips the game id while the delayed narrator call is in flight.
+    let mock_backend = Arc::new(MockBackend::default().with_delay(200));
     let pipeline = make_test_pipeline_with_mock_quantifier(
         Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::new(
-            MockBackend::default().with_narrations(vec!["I sprint forward.".to_string()]),
-        )),
+        make_test_recorder(Arc::clone(&mock_backend) as Arc<_>),
         Arc::new(MockBackend::default())
             as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     );
-    let (app, _storage) = TestAppBuilder::with_data(data)
-        .storage(Arc::clone(&storage))
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let initial_game_id = app.game_catalogue.current_game_id();
+    let storage_for_thread = Arc::clone(&storage);
+    let backend_for_thread = Arc::clone(&mock_backend);
+    let flipper = thread::spawn(move || {
+        while !backend_for_thread.narration_started.load(Ordering::SeqCst) {
+            std::hint::spin_loop();
+        }
+        storage_for_thread.set_game_id(initial_game_id.wrapping_add(1));
+    });
+
+    let state = make_user_regen_state(&app, "I walk forward.");
+    let outcome = app.pipeline.retry_user_regen(state);
+
+    flipper
+        .join()
+        .expect("game-id flipper thread should complete");
+
+    assert!(
+        matches!(
+            outcome,
+            Err(crate::application::pipeline::PhaseError::Cancelled)
+        ),
+        "expected Err(PhaseError::Cancelled), got {outcome:?}"
+    );
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
+        "cancellation must reset status to Idle, got {:?}",
+        state.narrative.input_buffer.status
+    );
+}
+
+// ---- reachable defensive-branch coverage ----
+
+#[tokio::test]
+async fn test_retry_renarrate_with_no_input_persists_error() {
+    let (app, storage) = make_test_app_with_storage();
+
+    // History has no Input anywhere: a plain Narration anchor plus an event
+    // Narration on top. Retry resolves to ReNarrate (event mode), truncates to
+    // the plain-Narration anchor, and finds no input text.
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message("You look around.".to_string(), MessageType::Narration);
+    let anchor_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
+    let anchor_id = storage.save_snapshot(&anchor_snapshot).unwrap();
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(anchor_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    state.add_message("Event narration".to_string(), MessageType::Narration);
+    state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let final_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
+    let final_id = storage.save_snapshot(&final_snapshot).unwrap();
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    app.pipeline.retry_last_response();
+
+    assert_error_status(&app, "no input to retry");
+}
+
+#[tokio::test]
+async fn test_retry_returns_internal_error_when_no_anchor_message() {
+    // Reachable no-anchor shape: an event-flagged Input passes the Input
+    // check but leaves find_retry_anchor_msg's event path (rposition of the
+    // last non-event message) with no match.
+    let (app, storage) = make_test_app_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message("test input".to_string(), MessageType::Input);
+    state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let last = state.narrative.history.last().unwrap();
+    insert_message_with_swipe(&app, &storage, last);
+
+    let result = app.pipeline.retry(&app.generation_gate);
+
+    assert!(
+        matches!(
+            result,
+            Err(ApplicationError::Engine(EngineError::Internal(_)))
+        ),
+        "retry() should return ApplicationError::internal when no anchor message exists, got {result:?}"
+    );
+    assert_error_status(&app, "no anchor message");
+}
+
+#[tokio::test]
+async fn test_retry_returns_internal_error_when_snapshot_load_errors() {
+    let data = TestDataBuilder::default_test().build();
+    let (base_storage, handle) = {
+        let base = Storage::new_in_memory();
+        data.seed_into(&base);
+        base.with_test_failures()
+    };
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::new(MockBackend::default()) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::with_data(data)
+        .storage(Arc::new(base_storage))
         .skip_seeding(true)
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    let state = make_retry_state(&app, "I walk forward.", false);
+    let _input_id = add_input_and_save(&app, &storage, "test input");
 
     handle.set(
-        "insert_swipe",
-        TestOverride::internal("simulated insert_swipe failure"),
+        "load_snapshot_by_id",
+        TestOverride::internal("simulated load_by_id failure"),
     );
 
-    let _ = app.pipeline.retry_user_regen(state);
+    let result = app.pipeline.retry(&app.generation_gate);
+    handle.clear("load_snapshot_by_id");
 
-    handle.clear("insert_swipe");
-
-    assert_error_status(&app, "simulated insert_swipe failure");
+    assert!(
+        matches!(
+            result,
+            Err(ApplicationError::Engine(EngineError::Internal(_)))
+        ),
+        "retry() should return ApplicationError::internal when the snapshot load errors, got {result:?}"
+    );
+    assert_error_status(&app, "simulated load_by_id failure");
 }

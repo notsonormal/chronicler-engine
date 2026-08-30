@@ -104,94 +104,6 @@ fn create_test_history() -> Vec<MessageEntry> {
 }
 
 #[test]
-fn test_narrator_message_renders_without_sender_prefix() {
-    let world = create_test_world();
-    let room = create_test_room();
-    let player = create_test_player();
-    let preset = create_test_preset();
-
-    let history = vec![
-        MessageEntry {
-            id: 1,
-            text: "Welcome to the game!".to_string(),
-            message_type: MessageType::Narration,
-            timestamp: chrono::Utc::now(),
-            ..Default::default()
-        },
-        MessageEntry {
-            id: 2,
-            text: "The ceiling collapses.".to_string(),
-            message_type: MessageType::Narrator,
-            timestamp: chrono::Utc::now(),
-            ..Default::default()
-        },
-        MessageEntry {
-            id: 3,
-            text: "I look around.".to_string(),
-            message_type: MessageType::Input,
-            timestamp: chrono::Utc::now(),
-            ..Default::default()
-        },
-    ];
-
-    let context = PromptContext::new(
-        &world,
-        &room,
-        NpcContext {
-            all_npcs: &[],
-            npcs_in_area: &[],
-        },
-        &player,
-        "Continue.",
-        &history,
-    );
-
-    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
-    let result = assembler
-        .assemble(&context, &preset, &world.global_rules, None)
-        .expect("assemble should succeed");
-
-    let history_block = result
-        .user_prompt
-        .split("<ConversationHistory>\n")
-        .nth(1)
-        .and_then(|s| s.split("</ConversationHistory>").next())
-        .expect("history block should exist");
-
-    // Narrator entry renders as bare text, no `sender:` prefix.
-    assert!(
-        history_block.contains("The ceiling collapses."),
-        "narrator text should appear in history"
-    );
-    assert!(
-        !history_block.contains("Narrator: The ceiling collapses."),
-        "narrator entry must not carry a sender prefix"
-    );
-    assert!(
-        !history_block.contains("None: The ceiling collapses."),
-        "narrator entry must not fall back to a None-derived prefix"
-    );
-
-    // Other types keep the `{sender}: {text}` format.
-    assert!(
-        history_block.contains("Narrator: Welcome to the game!"),
-        "narration entry should keep its sender prefix"
-    );
-    assert!(
-        history_block.contains("Test Player: I look around."),
-        "input entry should keep its sender prefix"
-    );
-}
-
-#[test]
-fn test_message_type_narrator_serde_round_trip() {
-    let json = serde_json::to_string(&MessageType::Narrator).expect("serialize");
-    assert_eq!(json, "\"Narrator\"");
-    let parsed: MessageType = serde_json::from_str(&json).expect("deserialize");
-    assert_eq!(parsed, MessageType::Narrator);
-}
-
-#[test]
 fn test_assemble_includes_all_layers() {
     let world = create_test_world();
     let room = create_test_room();
@@ -780,7 +692,7 @@ fn test_assemble_injects_narrative_voice_from_world_posture() {
         preset_type: crate::domain::model::prompt_preset::PresetType::System,
     };
 
-    let context = PromptContext::new(
+    let mut context = PromptContext::new(
         &world,
         &room,
         NpcContext {
@@ -791,6 +703,9 @@ fn test_assemble_injects_narrative_voice_from_world_posture() {
         "go north",
         &history,
     );
+    // The caller carries conflicting voice; the owner's stamp must win.
+    context.template_vars.narrative_perspective = "third".to_string();
+    context.template_vars.narrative_tense = "past".to_string();
 
     let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS)
         .with_settings(Arc::new(RwLock::new(AppSettings::default())));
@@ -802,12 +717,22 @@ fn test_assemble_injects_narrative_voice_from_world_posture() {
         result
             .user_prompt
             .contains("second-person limited perspective"),
-        "world narrative_perspective must be injected into user prompt: {:#?}",
+        "owner's world-posture stamp must overwrite the caller's conflicting voice: {:#?}",
         result.user_prompt
     );
     assert!(
         result.user_prompt.contains("present tense"),
-        "world narrative_tense must be injected into user prompt: {:#?}",
+        "owner's world-posture stamp must overwrite the caller's conflicting voice: {:#?}",
+        result.user_prompt
+    );
+    assert!(
+        !result.user_prompt.contains("third-person"),
+        "caller-stamped voice must not survive assemble: {:#?}",
+        result.user_prompt
+    );
+    assert!(
+        !result.user_prompt.contains("past tense"),
+        "caller-stamped voice must not survive assemble: {:#?}",
         result.user_prompt
     );
 }

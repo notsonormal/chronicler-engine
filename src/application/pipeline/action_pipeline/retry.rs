@@ -7,7 +7,6 @@ use crate::application::errors::{ApplicationError, ProcessActionResult};
 use crate::application::generation::gate::GenerationGate;
 use crate::application::pipeline::PhaseError;
 use crate::application::pipeline::pipeline_run::PipelineRun;
-use crate::application::prompting::{NpcContext, PromptContext};
 use super::core::ActionPipeline;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
@@ -104,7 +103,9 @@ impl ActionPipeline {
                 }
             }
             RetryMode::ReImpersonate => {
-                let outcome = self.retry_reimpersonate(state);
+                // Redo = fresh Impersonate from the Swipe's stored inputs, with the
+                // full tail (quantifier → engine commit → trigger).
+                let outcome = self.retry_main_narration(state, String::new());
                 self.log_cancellation(outcome);
             }
             RetryMode::UserRegen => {
@@ -129,14 +130,16 @@ impl ActionPipeline {
 
         let mode = if is_event || old_target.message_type == MessageType::Narration {
             RetryMode::ReNarrate
-        } else if old_target.message_type == MessageType::Input {
+        } else {
+            // The find filter above yields only Narration | Input targets, so
+            // this arm is Input (non-event). The debug_assert pins that
+            // invariant instead of a dead `else => return None` arm.
+            debug_assert_eq!(old_target.message_type, MessageType::Input);
             if old_target.replay().is_some_and(|replay| replay.impersonate) {
                 RetryMode::ReImpersonate
             } else {
                 RetryMode::UserRegen
             }
-        } else {
-            return None;
         };
 
         Some(RetryTarget {
@@ -194,159 +197,9 @@ impl ActionPipeline {
         }
     }
 
-    pub(crate) fn retry_reimpersonate(&self, mut state: GameState) -> Result<(), PhaseError> {
-        let started_for = self.storage.current_game_id();
-        let run = PipelineRun::new(self, started_for);
-
-        let bundle = match self.load_world_bundle(started_for) {
-            Ok(b) => b,
-            Err(e) => {
-                Self::finalize_phase_error(
-                    &run,
-                    Some(&mut state),
-                    PhaseError::FetchFailed(e.to_string()),
-                );
-                return Ok(());
-            }
-        };
-
-        let Some(room) = bundle
-            .map
-            .get_room_by_id(&state.movement.current_room_id)
-            .or_else(|| {
-                state
-                    .movement
-                    .dynamic_rooms
-                    .get(&state.movement.current_room_id)
-            })
-        else {
-            Self::finalize_phase_error(
-                &run,
-                Some(&mut state),
-                PhaseError::NarratorFailed("Room not found".to_string()),
-            );
-            return Ok(());
-        };
-
-        let Some(target) = state.narrative.retry_target.as_ref() else {
-            Self::finalize_phase_error(
-                &run,
-                Some(&mut state),
-                PhaseError::NarratorFailed("Retry failed: missing impersonate target".to_string()),
-            );
-            return Ok(());
-        };
-
-        let Some(replay) = target.replay().cloned() else {
-            Self::finalize_phase_error(
-                &run,
-                Some(&mut state),
-                PhaseError::NarratorFailed(
-                    "Retry failed: impersonate target has no replay".to_string(),
-                ),
-            );
-            return Ok(());
-        };
-
-        let (preset, response_length) = match run
-            .load_impersonate_preset_and_response_length(replay.impersonate_preset_id.as_deref())
-        {
-            Ok(p) => p,
-            Err(msg) => {
-                Self::finalize_phase_error(&run, Some(&mut state), PhaseError::NarratorFailed(msg));
-                return Ok(());
-            }
-        };
-
-        let impersonate_direction = replay.impersonate_direction.unwrap_or_default();
-        let all_npcs: Vec<_> = bundle.npcs.values().cloned().collect();
-        let history = state.narrative.history();
-        let context = PromptContext::new(
-            &bundle.world,
-            room,
-            NpcContext {
-                all_npcs: &all_npcs,
-                npcs_in_area: &state.scene.npcs_in_area,
-            },
-            &bundle.persona,
-            &impersonate_direction,
-            &history,
-        )
-        .with_impersonate(true);
-
-        state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-
-        let (narration_text, _backend, _model) =
-            match run.call_narrator(&context, &preset, &response_length) {
-                Ok(triple) => triple,
-                Err(msg) => {
-                    Self::finalize_phase_error(
-                        &run,
-                        Some(&mut state),
-                        PhaseError::NarratorFailed(msg),
-                    );
-                    return Ok(());
-                }
-            };
-
-        run.check_game_unchanged(started_for)?;
-
-        state.add_message(narration_text, MessageType::Input);
-
-        if let Err(source) = self.message_service.save_message_and_snapshot(&mut state) {
-            Self::finalize_phase_error(
-                &run,
-                Some(&mut state),
-                PhaseError::PersistFailed {
-                    label: "re-impersonate swipe",
-                    source,
-                },
-            );
-            return Ok(());
-        }
-
-        if let Some(target) = state.narrative.retry_target.take() {
-            state.narrative.history.append(target);
-        }
-
-        run.phase_finalize(&mut state);
-        Ok(())
-    }
-
     pub(crate) fn retry_user_regen(&self, mut state: GameState) -> Result<(), PhaseError> {
         let started_for = self.storage.current_game_id();
         let run = PipelineRun::new(self, started_for);
-
-        let bundle = match self.load_world_bundle(started_for) {
-            Ok(b) => b,
-            Err(e) => {
-                Self::finalize_phase_error(
-                    &run,
-                    Some(&mut state),
-                    PhaseError::FetchFailed(e.to_string()),
-                );
-                return Ok(());
-            }
-        };
-
-        let Some(room) = bundle
-            .map
-            .get_room_by_id(&state.movement.current_room_id)
-            .or_else(|| {
-                state
-                    .movement
-                    .dynamic_rooms
-                    .get(&state.movement.current_room_id)
-            })
-        else {
-            Self::finalize_phase_error(
-                &run,
-                Some(&mut state),
-                PhaseError::NarratorFailed("Room not found".to_string()),
-            );
-            return Ok(());
-        };
 
         let Some(target) = state.narrative.retry_target.as_ref() else {
             Self::finalize_phase_error(
@@ -356,60 +209,29 @@ impl ActionPipeline {
             );
             return Ok(());
         };
+        let instruction = self.build_user_regen_instruction(target.text());
 
-        let (preset, response_length) = match run.load_preset_and_response_length() {
-            Ok(p) => p,
-            Err(msg) => {
-                Self::finalize_phase_error(&run, Some(&mut state), PhaseError::NarratorFailed(msg));
-                return Ok(());
-            }
+        // The message lands as a Swipe on the retry target (no tail — a plain
+        // user input never gets one).
+        let inputs = crate::application::pipeline::narration_generation::GenerationInputs {
+            input: instruction,
+            guide: None,
+            impersonate: None,
         };
-
-        let user_message = self.build_user_regen_instruction(target.text());
-        let all_npcs: Vec<_> = bundle.npcs.values().cloned().collect();
-        let history = state.narrative.history();
-        let context = PromptContext::new(
-            &bundle.world,
-            room,
-            NpcContext {
-                all_npcs: &all_npcs,
-                npcs_in_area: &state.scene.npcs_in_area,
-            },
-            &bundle.persona,
-            &user_message,
-            &history,
-        );
-
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
 
-        let (narration_text, _backend, _model) =
-            match run.call_narrator(&context, &preset, &response_length) {
-                Ok(triple) => triple,
-                Err(msg) => {
-                    Self::finalize_phase_error(
-                        &run,
-                        Some(&mut state),
-                        PhaseError::NarratorFailed(msg),
-                    );
-                    return Ok(());
-                }
-            };
-
-        run.check_game_unchanged(started_for)?;
-
-        state.add_message(narration_text, MessageType::Input);
-
-        if let Err(source) = self.message_service.save_message_and_snapshot(&mut state) {
-            Self::finalize_phase_error(
-                &run,
-                Some(&mut state),
-                PhaseError::PersistFailed {
-                    label: "user-regen swipe",
-                    source,
-                },
-            );
-            return Ok(());
+        match crate::application::pipeline::narration_generation::NarrationGeneration::new(
+            &run, inputs,
+        )
+        .run(&mut state)
+        {
+            Err(PhaseError::Cancelled) => return Err(run.handle_cancellation()),
+            Err(e) => {
+                Self::finalize_phase_error(&run, Some(&mut state), e);
+                return Ok(());
+            }
+            Ok(_) => {}
         }
 
         if let Some(target) = state.narrative.retry_target.take() {

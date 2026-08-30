@@ -79,8 +79,8 @@ mapping is htmx's contract, not ours.
 Given the dashboard is loaded and the command input #command-form input[name="command"] is rendered
 When the client types "/" into the command input
 Then a #slash-menu element appears in the DOM
-And #slash-menu contains three .slash-suggestion elements
-And the suggestions are /narrator, /impersonate, and /guide
+And #slash-menu contains two .slash-suggestion elements
+And the suggestions are /impersonate and /guide
 ```
 
 #### Scenario 17.2: Typing a prefix filters the suggestions
@@ -160,16 +160,6 @@ When the client submits "/guide look around"
 And the generation completes
 Then at least one new .log-entry.narration appears in #story-log
 And no .log-entry.input whose text is "/guide look around" appears
-```
-
-#### Scenario 17.10: Submitting `/narrator` persists a Narrator log entry
-
-```gherkin
-Given the dashboard is loaded and the command input is rendered
-When the client submits "/narrator the room is dark"
-And the generation completes
-Then a new .log-entry.narrator appears in #story-log
-And at least one new .log-entry.narration appears in #story-log
 ```
 
 Note: the test replaces `#action-area` innerHTML directly rather than
