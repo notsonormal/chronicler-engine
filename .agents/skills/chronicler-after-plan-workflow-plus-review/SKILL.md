@@ -1,9 +1,6 @@
 ---
 name: chronicler-after-plan-workflow-plus-review
 description: Chronicler skill used to update the chronicler tests and documentions after a successful plan
-metadata:
-  language: rust
-  workspace: chronicler_engine
 ---
 
 
@@ -23,9 +20,7 @@ Create a task list (using `TaskCreate`) for all these steps.
 9. Run the `/code-simplification` skill against the (usually uncommited) changes
 10. Run the `/chronicler-comment-fixer` skill against the (usually uncommited) changes. Sometimes comments are written in lieu of fixing issues, surface any comments like that for investigation.
 11. Run the full build with the script `build.py`. **All Tests Must Pass**. Failing tests should be fixed even if they are failing for reasons that seem unrelated to the recent changes. "Seems unrelated" is a subjective opinion that is often wrong.
-12. Run the 3 different subagents for each of the 3 skills `/thermo-nuclear-code-quality-review`, `/code-review`, `test-police`. The first two subagents should be expliclty instructed now to run tests or to build, as we've already done both as they can't both run `build.py` as the same time. The `/test-police` does not need this instruction as re-running the build/tests is part of its workflow. 
-13. Report the reviews of the 3 different reviews to user. It should detail every finding, grouping by priority and de-duplicated. Analyse each finding yourself, do not blindly trust each finding as they might be invalid or focusing on the wrong thing. 
+12. Run the subagents for each of the 3 skills `/thermo-nuclear-code-quality-review`, `/code-review`, `test-police`. The thermo nuclear code review and code review subagents should be expliclty instructed not to run tests or to build, as we've already done both as they can't both run `build.py` as the same time. The `/test-police` does not need this instruction as re-running the build/tests is part of its workflow. 
+13. Report the results of the different reviews to user. It should detail every finding, grouping by priority and de-duplicated. Analyse each finding yourself, do not blindly trust each finding as they might be invalid or focusing on the wrong thing. 
 
 This is intentionally a copy of `.agents/skills/chronicler-after-plan-workflow/SKILL.md`. Everything is the same except for the additional review step and removal of the code coverage step (handled by `test-police`).
-
-_See `.agents/skills/_shared/chronicler-shared.md` for documentation sync and visual verification steps.
