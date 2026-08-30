@@ -51,12 +51,8 @@ shapes, not code. Writing the accepted refactors is the next effort
   helper absorption, not the branch-introduced steering shallows. A decision
   here may sharpen those; it does not resolve them.
 - **Ticket ordering.** Tickets are numbered in recommended resolution order,
-  not candidate order. Ticket 06 (revise the branch's conceptual model) is
-  now the recommended starting point: it blocks 01, 02, and 04, which all
-  assume the branch-introduced Steering / replay-blob / retry framing. Once
-  06 resolves, 01 (narration core), 02 (replay carrier), and 04 (steering
-  prompt policy) resume; 03 (steering entry dispatcher) and 05 (narrative
-  voice) may also relate and are clarified by 06's grilling.
+  not candidate order. Tickets 06, 01, 02, 03, 04, and 05 are resolved. The
+  frontier is 07 — open, unblocked, unclaimed.
 - No ADRs exist in `docs/adr/`. If a candidate is rejected with a
   load-bearing reason that future reviews should not re-suggest, offer an ADR
   during that ticket's grilling.
@@ -76,20 +72,60 @@ shapes, not code. Writing the accepted refactors is the next effort
   the inputs that produced it; a new swipe redoes the last generation.
   Review terms NarrationTurn / ReplaySteering / SteeringPromptPolicy
   avoided. Tickets 01, 02, 04 unblocked and re-framed; 03 re-framed.
+- [01 — Deepen a narration-generation module](issues/01-deepen-narration-turn-module.md)
+  — Committed. New module `narration_generation` under
+  `src/application/pipeline/` owns the narrate-and-persist prefix behind
+  `run(state, GenerationInputs) → Result<NarrationOutcome, PhaseError>`;
+  callers resolve inputs (branch-free core, no redo flag). Impersonate redo
+  folds into the impersonate flow and gains the full tail (behavior
+  change); `retry_reimpersonate` dissolves. No redo-policy seam — anchor
+  query stays in `message_service`, classification/reconstruction stay
+  `pub(crate)` plumbing. 19 `pub(crate)` helper tests retire; the core is
+  driven directly, redo modes via `retry()` flow tests.
+- [02 — Does the stored-generation-inputs flow need an owning module?](issues/02-deepen-replay-steering-module.md)
+  — Rejected (no ADR). After 06 and 01 the stored-inputs flow is plain
+  data flow; the deletion test shows an owner module would be shallow.
+  Attachment and redo-swipe inheritance stay on `GameState::push_message`;
+  the guide/impersonate mutual-exclusion question passed to ticket 04.
+  Execution note for 01: the `pending_replay` staging buffer's removal is
+  01 execution work.
+- [03 — Collapse action entry methods into one dispatcher](issues/03-collapse-steering-entry-dispatcher.md)
+  — Committed. One public gated `process_action(Action)` on
+  `ActionPipeline`; payloads ride the existing `Action` enum. Handler
+  shrinks to parse-plus-call (keeps parse for the text-check path);
+  variant→replay-inputs mapping and the empty-input→continue rule move
+  behind the dispatcher. Sync runner drops to `pub(crate)`; gated/sync
+  modes stay distinct. Impersonate preset stays pinned at entry (06's
+  swipe-stores-inputs rule); relocation to a prompt-policy module is
+  ticket 04's call. Tests at both layers: new dispatcher unit tests for
+  Guide/Impersonate stored inputs, plus extended HTTP integration
+  assertions; narrator tests retire with 06 execution.
+- [04 — Deepen a prompt-policy module for slash commands](issues/04-deepen-steering-prompt-policy.md)
+  — Rejected (no ADR). After 01/03/06 the splits shrink to one preset
+  branch in `narration_generation`'s prefix, two lines in the assembler,
+  and one defensive line — the deletion test fails. `PromptContext`
+  keeps its `guide`/`impersonate` fields; the entry preset pin stays
+  behind 03's dispatcher; exclusion keeps 02's enforcement (the
+  defensive line moves to caller-side input preparation under 01's
+  execution). Execution note for 01: merge the two preset loaders.
+  Observation: `allowed_modes` is enforced at HTTP selection time only,
+  not at generation time.
+- [05 — Single injection point for narrative-voice setting](issues/05-single-narrative-voice-injection.md)
+  — Committed, scoped to what survives narrator-modes ticket 06. The
+  prompt-construction module is the sole owner of voice application:
+  `TemplateVars::set_narrative_voice` is deleted, the stamper becomes a
+  module-private helper in `assembler.rs`, and arrival's (already-dead)
+  stamping is deleted; the ownership test proves callers cannot inject
+  voice. The voice *source* (game posture) is owned by the narrator-modes
+  map; a threading note was appended to its ticket 06. Fog graduated: the
+  accept/reject split is known, so both handoff questions became ticket 07.
 
 ## Not yet specified
 
 <!-- fog: suspected decisions that can't be pinned until the frontier advances -->
 
-- **Coordinated vs independent landing.** Once the accepted deepenings are
-  known, a question may graduate: do the accepted refactors land as one
-  coordinated pre-merge refactor, or as independent commits? Not yet
-  ticketable — the set of accepted decisions isn't known. Revisit after the
-  NarrationTurn ticket (01) and its dependents resolve.
-- **Merge strategy if some candidates are rejected.** If one or more
-  candidates are rejected, does the branch merge with the remaining shallows
-  and a follow-up issue, or block on the accepted set only? Can't sharpen
-  until the accept/reject split is known.
+<!-- both patches graduated to ticket 07 on 2026-08-30: the accept/reject
+     split and the accepted set are now known -->
 
 ## Out of scope
 
@@ -102,5 +138,8 @@ shapes, not code. Writing the accepted refactors is the next effort
   `.scratch/architecture-deepening/` belong to a separate effort (general
   main-branch architecture). This map does not resolve, supersede, or close
   them.
+- **The voice source of truth.** Whether posture is world-current or
+  per-game is owned by the narrator-modes map (its tickets 01, 05, 06),
+  not by this effort.
 - **Shallows not surfaced by this branch's review.** Branch-independent
   architecture issues belong to the general map, not here.

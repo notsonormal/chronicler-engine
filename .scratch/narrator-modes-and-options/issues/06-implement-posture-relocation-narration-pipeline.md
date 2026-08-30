@@ -27,3 +27,18 @@ Implement the narration-path half of the posture relocation: the narrator and ag
 - Build-green: novel mode must stay green; IF mode end-to-end still pending ticket 02.
 - Blocked by 05 (the game row must carry the fields first).
 - Skills: `/domain-modeling`.
+
+## Comments
+
+- 2026-08-30 — cross-map note from [guided-generations-architecture 05 — Single injection point for narrative-voice setting](../../guided-generations-architecture/issues/05-single-narrative-voice-injection.md):
+  voice-application ownership is settled there — the prompt-construction
+  module (`PromptAssembler::assemble`) is the sole owner of applying posture
+  to `TemplateVars`; `TemplateVars::set_narrative_voice` is being deleted and
+  replaced by a module-private helper in `assembler.rs`. When this ticket
+  threads posture from the game, thread the **resolved posture**
+  (perspective, tense) *to that owner*: callers resolve (game, with world
+  fallback in arrival) and supply it; `arrival_service` itself never stamps.
+  Scope items 1–2 then reduce to changing the *source* the owner stamps from
+  (world → game), not adding a second stamper. If this ticket lands before
+  05's pre-merge execution, apply the same single-owner shape here and 05's
+  cleanup will consume it.

@@ -1,7 +1,7 @@
 # 01 — Deepen a narration-generation module (architecture candidate 2)
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 
 > Re-framed 2026-08-29 after ticket 06 resolved: the name **NarrationTurn**
@@ -84,3 +84,85 @@ has now settled. Findings to carry into the resumed session:
   with the narrate core — and this ticket's scope shrinks to the narration
   core only (ReNarrate + the narrate step of `run_from_input`), excluding
   impersonate, unless the grilling reverses it.
+
+## Answer
+
+Resolved 2026-08-30 by grilling (rounds 1–3: Q1–Q7). The deepening is
+**committed**. Evidence was re-verified against the tree at `67c7824`
+before grilling (the review artifact predates the narrator-modes work):
+the choreography duplication, the `pub(crate)` test surface, and the
+anchor/classification split all hold; the narrator-modes work sharpened
+the duplication, since `phase_narrate` now resolves Impersonate steering
+itself and `retry_reimpersonate` re-implements that resolution.
+
+**Settled decisions:**
+
+1. **Commit; scope = the narrate-and-persist prefix** (Q1→A). The prefix:
+   load world bundle → resolve room → consume the preset choice → build
+   `PromptContext` → call narrator → `check_game_unchanged` → add Message
+   or Swipe → save Message + Snapshot. The post-narration tail
+   (quantifier → engine commit → trigger) stays with the calling paths —
+   it diverges legitimately by path. Excluded callers:
+   `retry_event_continuation` (never enters the narrate path) and
+   `arrival_service` (ticket 05's territory).
+2. **Interface** (Q4→accept):
+   `run(state: &mut GameState, inputs: GenerationInputs) -> Result<NarrationOutcome, PhaseError>`.
+   - `GenerationInputs` is caller-resolved: input text, optional guide,
+     optional Impersonate steering (direction + preset id). On a redo the
+     caller reads the Swipe's stored inputs; the core never reads
+     `retry_target` for steering.
+   - `NarrationOutcome` = narration text + backend name + model name (the
+     main path's tail needs all three).
+   - No redo flag: redo-ness rides in `state.narrative.retry_target`;
+     `push_message` and `save_message_and_snapshot` already turn it into
+     a Swipe.
+   - Errors return as `PhaseError`; the caller runs the existing
+     `finalize_phase_error` helper, replacing the inline finalization
+     `retry.rs` does today.
+   - Consequence: `phase_narrate`'s guide/impersonate branches
+     (`resolve_guide`/`resolve_impersonate`, including the replay
+     fallback) move out to the callers as input preparation; the core is
+     branch-free. Ticket 04 decides who produces the preset choice; this
+     module consumes it.
+3. **Impersonate redo folds into the impersonate generation flow**
+   (Q2→A, Q5→A). `retry_reimpersonate` dissolves as a separate
+   implementation; the redo re-runs the impersonate generation from the
+   Swipe's stored inputs through the same path as a fresh Impersonate,
+   and runs the full tail (quantifier → engine commit → trigger). This
+   changes today's stop-after-save redo behavior — believed accidental,
+   no recorded reason (inferred). Marinara prior art: Regenerate replays
+   stored inputs back through the impersonate path; there is no separate
+   retry-impersonate. UserRegen stays tail-less: a plain user input
+   never gets a tail in the fresh world either (its responding Narration
+   does). Swipe snapshots are captured pre-tail at message-add time in
+   every path, so `switch_swipe` semantics are unchanged.
+4. **No redo-policy seam** (Q3, dissolved on the user's correction).
+   Ticket 06 settled redo as internal plumbing; classification falls out
+   of the last message's type. The anchor query stays in
+   `message_service` as a history query; classification and
+   reconstruction stay `pub(crate)` plumbing in the pipeline's redo entry
+   path. The review's "localise both" supporting friction is rejected on
+   those grounds.
+5. **Name and placement** (Q6→A): new module `narration_generation`
+   under `src/application/pipeline/`, beside `pipeline_run.rs`. Not
+   `application/generation/` — that namespace holds per-game gating
+   (`GenerationGate`, `GenerationSlot`), not generation mechanics.
+6. **Tests** (Q7→A): new tests drive `narration_generation::run`
+   directly — one per prefix failure mode (bundle load, room not found,
+   preset missing, narrator error, cancellation, save failure) plus one
+   per input kind (free action, Guided Generation, Impersonate).
+   Redo-mode coverage moves to flow tests through the public `retry()`
+   entry, one per mode (narration, impersonate, user-regen, event). All
+   19 direct `pub(crate)` helper tests retire (13 choreography +
+   6 plumbing); the 29 flow tests survive unchanged. Execution must
+   extend `test_support` fixtures to build replay-carrying swipes so the
+   impersonate and user-regen modes can be driven through `retry()` —
+   the pre-existing gap the review flagged.
+
+**Consequences for the map:** weakens ticket 02's remaining case — with
+caller-resolved inputs and no redo seam, the stored-inputs flow is plain
+data flow (Swipe stores inputs → caller reads them → core consumes
+them). Ticket 03's dispatcher consumes the same classification the redo
+entry keeps. Ticket 04 gains a fixed consumer: `narration_generation`
+consumes the preset choice it produces. No fog graduates; "coordinated
+vs independent landing" stays unspecifiable until 02–05 resolve.
