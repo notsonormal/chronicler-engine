@@ -1,6 +1,6 @@
 ---
-description: Software architect for implementation planning
-model: glm-5.3-flash
+description: Code review specialist for changes and diffs (read-only)
+model: synthetic/hf:moonshotai/Kimi-K3
 tools: read, bash, grep, find, ls
 permission:
   bash:
