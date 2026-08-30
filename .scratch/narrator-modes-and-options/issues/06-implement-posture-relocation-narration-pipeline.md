@@ -42,3 +42,17 @@ Implement the narration-path half of the posture relocation: the narrator and ag
   (world → game), not adding a second stamper. If this ticket lands before
   05's pre-merge execution, apply the same single-owner shape here and 05's
   cleanup will consume it.
+- 2026-08-30 — sequencing settled by [guided-generations-architecture 07 —
+  Pre-merge handoff: landing shape and merge
+  strategy](../../guided-generations-architecture/issues/07-pre-merge-handoff-shape.md):
+  the guided-generations pre-merge execution (including that map's ticket 05
+  voice-ownership cleanup) lands FIRST, as one commit, and
+  `guided-generations` merges before this effort resumes. By the time this
+  ticket runs, the single-owner shape is already in place —
+  `TemplateVars::set_narrative_voice` deleted, a module-private helper in
+  `assembler.rs` owning the stamp — so scope items 1–2 reduce exactly as
+  the comment above describes: change the *source* the owner stamps from
+  (world → game), never add a second stamper. Note also: the same pre-merge
+  commit removes Narrator Action entirely (guided-generations-architecture
+  ticket 06), so this map's destination point 3 and Out-of-scope references
+  to "narrator-action" are stale — reconcile them when the effort resumes.

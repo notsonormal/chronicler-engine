@@ -51,8 +51,10 @@ shapes, not code. Writing the accepted refactors is the next effort
   helper absorption, not the branch-introduced steering shallows. A decision
   here may sharpen those; it does not resolve them.
 - **Ticket ordering.** Tickets are numbered in recommended resolution order,
-  not candidate order. Tickets 06, 01, 02, 03, 04, and 05 are resolved. The
-  frontier is 07 — open, unblocked, unclaimed.
+  not candidate order. All seven tickets are resolved (06, then 01–05, then
+  07). **Map complete (2026-08-30): the destination is met — every
+  candidate is decided and the handoff shape is settled. The next effort is
+  pre-merge execution.** Its spec: [docs/plans/guided-generations-pre-merge-execution.md](../../docs/plans/guided-generations-pre-merge-execution.md).
 - No ADRs exist in `docs/adr/`. If a candidate is rejected with a
   load-bearing reason that future reviews should not re-suggest, offer an ADR
   during that ticket's grilling.
@@ -119,6 +121,15 @@ shapes, not code. Writing the accepted refactors is the next effort
   voice. The voice *source* (game posture) is owned by the narrator-modes
   map; a threading note was appended to its ticket 06. Fog graduated: the
   accept/reject split is known, so both handoff questions became ticket 07.
+- [07 — Pre-merge handoff: landing shape and merge strategy](issues/07-pre-merge-handoff-shape.md)
+  — One single commit carries all four execution pieces (Narrator Action
+  removal, 05's voice cleanup, 03's dispatcher, 01's
+  `narration_generation` module with 02's and 04's folded execution
+  notes); merge gates on `python build.py` green with that commit landed.
+  No follow-up issue for the rejected shallows; the `allowed_modes`
+  pinned-preset edge went to narrator-modes ticket 15. This work lands
+  first; the narrator-modes effort resumes after the merge. **Map
+  complete — destination met; hand off to pre-merge execution.**
 
 ## Not yet specified
 
