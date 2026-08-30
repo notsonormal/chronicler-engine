@@ -67,7 +67,15 @@ shapes, not code. Writing the accepted refactors is the next effort
 
 <!-- one line per closed ticket: gist + link. Empty until the first ticket resolves. -->
 
-_None yet._
+- [06 — Revise the branch's conceptual model](issues/06-revise-branch-conceptual-model.md)
+  — Steering, replay blob, and retry retired as concepts; Narrator Action
+  retired entirely (command, `Action::Narrator`, `MessageType::Narrator` —
+  removal is execution work). Settled model: the engine generates text;
+  player inputs are free actions / Guided Generation / Impersonate (all
+  slash-command inputs transient); every Message has Swipes; a Swipe stores
+  the inputs that produced it; a new swipe redoes the last generation.
+  Review terms NarrationTurn / ReplaySteering / SteeringPromptPolicy
+  avoided. Tickets 01, 02, 04 unblocked and re-framed; 03 re-framed.
 
 ## Not yet specified
 

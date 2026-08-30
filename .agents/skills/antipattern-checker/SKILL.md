@@ -1,7 +1,6 @@
 ---
 name: antipattern-checker
-description: Detect abstraction anti-patterns in Chronicler Engine Rust code. Explicit invocation only.
-user-invocable: true
+description: Detect abstraction anti-patterns in Chronicler Engine Rust code.
 ---
 
 # Antipattern Checker

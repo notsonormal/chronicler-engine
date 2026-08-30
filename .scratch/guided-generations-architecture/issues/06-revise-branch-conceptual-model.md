@@ -1,7 +1,7 @@
 # 06 — Revise the branch's conceptual model before deepening the steering and regeneration candidates
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 
 ## Question
@@ -93,3 +93,65 @@ shapes — those return to candidates 1, 2, and 4 once this resolves.
 Candidate 3 (steering entry dispatcher) and candidate 5 (narrative-voice
 injection) may also relate; the grilling clarifies whether they unblock
 independently.
+
+## Answer
+
+Resolved 2026-08-29 by grilling (Q1–Q8). The branch's conceptual model is
+revised: its invented umbrella terms are retired, Narrator Action is retired
+entirely, and the architecture review's proposed terms are avoided.
+
+**Settled decisions:**
+
+1. **Steering — retired** (Q1→C, Q4→A). The umbrella did not group its
+   members so much as set them apart from "normal" narration. The engine
+   treats free actions, Guided Generation, and Impersonate as the same
+   thing — assemble a prompt, generate text, save the output. Nothing
+   replaces it; each feature stands alone with its own properties. Marinara
+   prior art: "steer" is a verb only there, never a concept name.
+2. **Replay blob — not a concept** (Q5→C). `GenerationReplay` is data stored
+   on the Swipe, transferred through the system like any other payload; the
+   data sent for a first generation and for a new swipe differ only in
+   values. The name "replay blob" drops from prose and CONTEXT.md; the Swipe
+   definition carries the property "a Swipe stores the inputs that produced
+   its generation." The data flow is unchanged — this retires the
+   terminology, not the mechanism. Marinara prior art for the mechanism:
+   `generationReplay` (code), "Stored guidance" (UI).
+3. **Retry — not a concept** (Q6→C). The umbrella's work is internal
+   plumbing (classify the last message, share anchor/snapshot/truncation
+   code, dispatch) plus a vocabulary word the UI already owns: the operation
+   is a **new swipe** (`/swipe/new` → `retry_handler`). `RetryMode` stays
+   `pub(crate)` with no glossary entry. What regeneration runs falls out of
+   what the last message *is* (Narration / impersonated Input / plain
+   Input). Where impersonate-redo's *code* lives — folded into the
+   impersonate flow, per Marinara's single-path prior art — is ticket 01's
+   module-shape question.
+4. **Review's terms — all avoided** (Q7→A). `NarrationTurn` collides with
+   the deprecated term Turn; `ReplaySteering` and `SteeringPromptPolicy` are
+   named on retired concepts. The module-shape questions return to tickets
+   01, 02, 04 under re-framed names.
+5. **Narrator Action — retired entirely** (Q8→A). Marinara demoted the
+   permanent player command (`/narrator` → alias of `/guided`) and kept the
+   narrator role only for engine-generated content (scene summaries #3641,
+   session recaps, merged narrator replies #5282/#5336, TTS voice routing,
+   narrator bubbles). Chronicler has no engine-generated Narrator messages —
+   `action.rs:120` is the only producer of `MessageType::Narrator` — so
+   Marinara's kept case does not exist here and its demoted case is what the
+   branch built. Removal scope (execution effort, not this map): the
+   `/narrator` slash command, `Action::Narrator`,
+   `narrator_action`/`process_action_with_narrator`, the handler,
+   `MessageType::Narrator` and its render branches (`assembler.rs:354`,
+   quantifier prompt, view models), and the two HTTP tests
+   (`tests/http/actions.rs:748,773`). If engine-generated recaps arrive
+   later, Marinara's usage is the prior art for re-introducing a narrator
+   message type.
+
+**Resulting model:** the engine generates text. Player inputs are free
+actions, Guided Generation, or Impersonate — all slash-command inputs are
+transient. Every Message has Swipes; a Swipe stores the inputs that produced
+it; making a new swipe redoes the last generation, re-applying the stored
+inputs.
+
+**Consequences for the map:** tickets 01, 02, 04 unblocked and re-framed;
+03 re-framed (loses the narrator entry); 05 untouched. CONTEXT.md updated:
+Steering and Narrator Action entries removed, Guided Generation rewritten,
+Swipe gained the stored-inputs clause, retired terms moved to Deprecated.
