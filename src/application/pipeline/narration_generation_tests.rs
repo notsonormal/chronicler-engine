@@ -236,28 +236,26 @@ fn test_run_narrator_error_sets_error_status() {
 #[test]
 fn test_run_game_changed_returns_cancelled() {
     let (app, _storage) = make_app_with_narrations(vec!["ignored".to_string()]);
-    // A game switch after run construction: the phase-boundary check reads the
-    // new current game and cancels.
+    // A game switch before run construction: the phase-boundary check reads
+    // the new current game and cancels.
     let game1 = app.pipeline.storage.current_game_id();
     let game2 = app
         .game_catalogue
         .create_game("test", "test_player")
         .expect("create_game should succeed");
-    assert_ne!(game2, game1, "reset must produce a distinct game id");
+    assert_ne!(game2, game1, "create_game must produce a distinct game id");
     let pipeline_run = PipelineRun::new(&app.pipeline, game1);
     let mut state = app.message_service.load_or_fresh();
+    let history_len_before = state.narrative.history.len();
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     assert!(
         matches!(outcome, Err(PhaseError::Cancelled)),
         "expected Cancelled, got {outcome:?}"
     );
-    assert!(
-        !state
-            .narrative
-            .history
-            .iter()
-            .any(|m| m.text().contains("MockNarration")),
+    assert_eq!(
+        state.narrative.history.len(),
+        history_len_before,
         "cancelled generation must not add a message"
     );
 }

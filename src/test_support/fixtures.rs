@@ -654,7 +654,7 @@ pub fn insert_message_with_swipe(
         swipe.snapshot_id = msg.snapshot_id();
         swipe.location_header = msg.location_header().map(|s| s.to_string());
         swipe.event_header = msg.event_header().map(|s| s.to_string());
-        let _ = storage.insert_swipe(id, &swipe, 0);
+        storage.insert_swipe(id, &swipe, 0)?;
     }
     Ok(())
 }

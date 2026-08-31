@@ -252,7 +252,7 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
 - **I.2** Retry (`POST /swipe/new`) never adds a new message to
   `narrative.history`. It appends a swipe to an existing message. Re-impersonate
   and user-regen retries append the new swipe to the existing Input message.
-- **I.4** Retry never modifies an existing Input message's text. Main
+- **I.4** Retry never modifies the text of any prior swipe. Main
   retry uses the input's current active swipe text, which the user may
   have edited before clicking retry, but the retry itself does not
   change it. Re-impersonate and user-regen retries generate a new

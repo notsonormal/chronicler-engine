@@ -6,7 +6,7 @@ See [`STRATEGY.md`](STRATEGY.md) for the normative tier-placement rules (unit / 
 
 ## LLM Testing
 
-`python build.py` runs the fast suite only. LLM tests are `#[ignore]'`d by default.
+`python build.py` runs the fast suite only. LLM tests are `#[ignore]`d by default.
 
 ### Test Mirror Convention
 

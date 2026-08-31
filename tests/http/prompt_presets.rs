@@ -580,9 +580,9 @@ async fn test_activate_system_preset_renders_active_badge() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
-    assert!(body.contains("Active"));
+    assert!(body.contains("Active · Novel"));
     assert!(!body.contains(&format!(
-        r#"hx-post="/prompt-presets/{preset_id}/activate""#
+        r#"hx-post="/prompt-presets/{preset_id}/activate?mode=novel""#
     )));
 }
 
@@ -635,5 +635,98 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
     assert_eq!(
         body,
         "<span class='error'>Preset not allowed for novel mode</span>"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.25
+#[tokio::test]
+async fn test_activate_if_only_preset_via_if_mode_populates_if_bundle() {
+    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+    use chronicler_engine::domain::model::settings::NarratorMode;
+
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let preset = PromptPreset {
+        id: "if-only".to_string(),
+        name: "IF Only".to_string(),
+        instructions: Some("IF.".to_string()),
+        allowed_modes: vec![NarratorMode::InteractiveFiction],
+        is_default: false,
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    storage.save_preset(&preset).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let response = app
+        .clone()
+        .oneshot(empty_post_request(
+            "/prompt-presets/if-only/activate?mode=interactive_fiction",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+    assert!(
+        body.contains("Active · IF"),
+        "IF activation must badge the preset Active · IF"
+    );
+
+    let settings = storage.get_settings().unwrap();
+    let if_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::InteractiveFiction);
+    assert_eq!(
+        if_bundle.system_prompt_preset_id, "if-only",
+        "IF activation must write the IF bundle's system slot"
+    );
+    let novel_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel);
+    assert_ne!(
+        novel_bundle.system_prompt_preset_id, "if-only",
+        "IF activation must not touch the Novel bundle"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.26
+#[tokio::test]
+async fn test_panel_gates_activation_buttons_by_allowed_modes() {
+    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+    use chronicler_engine::domain::model::settings::NarratorMode;
+
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let preset = PromptPreset {
+        id: "if-only".to_string(),
+        name: "IF Only".to_string(),
+        instructions: Some("IF.".to_string()),
+        allowed_modes: vec![NarratorMode::InteractiveFiction],
+        is_default: false,
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    storage.save_preset(&preset).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let response = app
+        .oneshot(get_request("/fragment/prompt-presets"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+    assert!(
+        body.contains(r#"hx-post="/prompt-presets/if-only/activate?mode=interactive_fiction""#),
+        "IF-only preset must render an IF activation button"
+    );
+    assert!(
+        !body.contains(r#"hx-post="/prompt-presets/if-only/activate?mode=novel""#),
+        "IF-only preset must not render a Novel activation button"
     );
 }

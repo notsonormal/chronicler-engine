@@ -15,7 +15,7 @@ use crate::test_support::{
     make_test_app_without_snapshot,
     make_test_pipeline_app_with_storage as make_test_app_with_storage,
     make_test_pipeline_with_backends, make_test_pipeline_with_mock_quantifier, make_test_recorder,
-    TestAppBuilder, TestDataBuilder,
+    make_test_recorder_with_storage, TestAppBuilder, TestDataBuilder,
 };
 use crate::test_support::fixtures::TestGameState;
 
@@ -1373,6 +1373,153 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
     assert!(
         final_state.scene.quantifier_confidence.is_some(),
         "impersonate redo now runs the full post-narration tail"
+    );
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["Ominous retake.".to_string()]));
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    // A guide-only turn: narration with a guide replay, no Input row.
+    let replay = GenerationReplay {
+        guide: Some("make it ominous".to_string()),
+        ..Default::default()
+    };
+    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
+        &storage,
+        "room_1",
+        "A guided narration.",
+        MessageType::Narration,
+        Some(replay),
+    )
+    .expect("seed: guided narration with stored inputs");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(
+        matches!(result, ProcessActionResult::Started),
+        "guide-only retry should claim the slot, got {result:?}"
+    );
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "guide-only redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let target = final_state
+        .narrative
+        .history
+        .iter()
+        .find(|m| {
+            m.message_type == MessageType::Narration
+                && m.swipes
+                    .first()
+                    .is_some_and(|s| s.text == "A guided narration.")
+        })
+        .expect("guided narration target survives the redo");
+    assert_eq!(
+        target.swipes.len(),
+        2,
+        "the guide-only redo appends a swipe"
+    );
+    assert_eq!(target.active_swipe_index, 1);
+    assert_eq!(target.text(), "Ominous retake.");
+    assert!(
+        target.replay().is_some_and(|r| r.guide.is_some()),
+        "the new swipe inherits the guide replay"
+    );
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["Ominous retake.".to_string()]));
+    let forensics_storage = Arc::new(Storage::new_in_memory());
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder_with_storage(
+            Arc::clone(&narrator) as Arc<_>,
+            Arc::clone(&forensics_storage),
+        ),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    // History carries an older player input, then a guided turn.
+    let _ = add_input_and_save(&app, &storage, "the older player input");
+    let replay = GenerationReplay {
+        guide: Some("make it ominous".to_string()),
+        ..Default::default()
+    };
+    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
+        &storage,
+        "room_1",
+        "A guided narration.",
+        MessageType::Narration,
+        Some(replay),
+    )
+    .expect("seed: guided narration with stored inputs");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(matches!(result, ProcessActionResult::Started));
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "guided redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+
+    // The redo's prompt must carry the empty input the original guided
+    // generation used — not the older turn's player input. Forensics land on
+    // the recorder's storage (the pipeline is rebound to the builder's).
+    let forensics = forensics_storage
+        .list_latest_llm_messages(10)
+        .expect("list llm forensics");
+    let narrator_call = forensics
+        .iter()
+        .find(|m| m.agent_name.contains("narrator"))
+        .expect("narrator forensics recorded");
+    assert!(
+        !narrator_call
+            .user_prompt
+            .contains("<PlayerInput>\nthe older player input"),
+        "guided redo must render an empty <PlayerInput>, not an older turn's input"
     );
     app.shutdown_token.cancel();
 }

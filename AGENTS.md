@@ -213,7 +213,7 @@ This project relies on a comprehensive suite of unit and integration tests as th
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
 
-Integration tests go in the `test/` folder.
+Integration tests go in the `tests/` folder.
 
 ### Test Failure Handling
 

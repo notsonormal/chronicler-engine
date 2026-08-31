@@ -14,7 +14,35 @@ use crate::adapters::driving::http::utils::handler_helpers::{
     generate_preset_id, parse_preset_type, render_template,
 };
 
-use crate::adapters::driving::http::prompt_presets::templates::prompt_presets::PromptPresetsTemplate;
+use crate::adapters::driving::http::prompt_presets::templates::prompt_presets::{
+    ModeActiveIds, PromptPresetsTemplate,
+};
+
+/// Per-mode active preset ids for the panel, derived from the mode registry.
+fn mode_active_ids(
+    settings: &crate::domain::model::settings::AppSettings,
+) -> (ModeActiveIds, ModeActiveIds, ModeActiveIds) {
+    let novel = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel);
+    let interactive_fiction = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::InteractiveFiction);
+    (
+        ModeActiveIds {
+            novel: novel.system_prompt_preset_id.clone(),
+            interactive_fiction: interactive_fiction.system_prompt_preset_id.clone(),
+        },
+        ModeActiveIds {
+            novel: novel.quantifier_prompt_preset_id.clone(),
+            interactive_fiction: interactive_fiction.quantifier_prompt_preset_id.clone(),
+        },
+        ModeActiveIds {
+            novel: novel.impersonate_prompt_preset_id.clone(),
+            interactive_fiction: interactive_fiction.impersonate_prompt_preset_id.clone(),
+        },
+    )
+}
 
 macro_rules! try_lock {
     ($lock:expr) => {
@@ -74,17 +102,15 @@ pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
         .unwrap_or_default();
 
     let settings = try_lock!(app_state.settings.read());
-    let novel_bundle = settings
-        .mode_preset_registry
-        .bundle_for(NarratorMode::Novel);
+    let (active_system, active_quantifier, active_impersonate) = mode_active_ids(&settings);
 
     render_template(PromptPresetsTemplate {
         system_presets,
         quantifier_presets,
         impersonate_presets,
-        active_system_id: novel_bundle.system_prompt_preset_id.clone(),
-        active_quantifier_id: novel_bundle.quantifier_prompt_preset_id.clone(),
-        active_impersonate_id: novel_bundle.impersonate_prompt_preset_id.clone(),
+        active_system,
+        active_quantifier,
+        active_impersonate,
     })
 }
 
@@ -293,15 +319,13 @@ pub async fn activate_preset_handler(
         .list_presets(PresetType::Impersonate)
         .unwrap_or_default();
 
-    let novel_bundle = settings
-        .mode_preset_registry
-        .bundle_for(NarratorMode::Novel);
+    let (active_system, active_quantifier, active_impersonate) = mode_active_ids(&settings);
     render_template(PromptPresetsTemplate {
         system_presets,
         quantifier_presets,
         impersonate_presets,
-        active_system_id: novel_bundle.system_prompt_preset_id.clone(),
-        active_quantifier_id: novel_bundle.quantifier_prompt_preset_id.clone(),
-        active_impersonate_id: novel_bundle.impersonate_prompt_preset_id.clone(),
+        active_system,
+        active_quantifier,
+        active_impersonate,
     })
 }

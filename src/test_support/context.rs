@@ -40,6 +40,23 @@ pub fn seed_default_preset(storage: &Storage) {
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
         .expect("test setup: save_preset must succeed for default preset");
 
+    // The default Interactive Fiction bundle selects this id; without it an
+    // IF-mode game built on this fixture fails preset resolution.
+    storage
+        .save_preset(&PromptPreset {
+            id: "system_if_default".to_string(),
+            name: "Test Interactive Fiction".to_string(),
+            role: Some("You are a test interactive fiction narrator.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            allowed_modes: vec![NarratorMode::InteractiveFiction],
+            is_default: true,
+            preset_type: PresetType::System,
+        })
+        // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+        .expect("test setup: save_preset must succeed for IF default preset");
+
     seed_default_impersonate_preset(storage);
 }
 

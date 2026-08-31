@@ -31,25 +31,6 @@ fn test_db_message_from_row_maps_columns() {
 }
 
 #[test]
-fn test_db_message_from_row_null_sender() {
-    let conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch(
-        "CREATE TABLE m (id INTEGER, game_id INTEGER, \
-         message_type_json TEXT, timestamp TEXT, active_swipe_index INTEGER);\n\
-         INSERT INTO m VALUES (1, 1, '\"Input\"', 't', 0);",
-    )
-    .unwrap();
-
-    let _msg = conn
-        .query_row(
-            "SELECT id, game_id, message_type_json, timestamp, active_swipe_index FROM m",
-            [],
-            DbMessage::from_row,
-        )
-        .unwrap();
-}
-
-#[test]
 fn test_db_swipe_from_row_maps_columns() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(

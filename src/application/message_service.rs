@@ -230,9 +230,16 @@ impl MessageService {
         let anchor_idx = if is_event {
             messages.iter().rposition(|m| m.event_header().is_none())?
         } else {
+            // A guided turn appends no Input row, so the fallback anchor is
+            // the guided Narration itself (the retry target).
             messages
                 .iter()
-                .rposition(|m| m.message_type == MessageType::Input)?
+                .rposition(|m| m.message_type == MessageType::Input)
+                .or_else(|| {
+                    messages
+                        .iter()
+                        .rposition(|m| m.message_type == MessageType::Narration)
+                })?
         };
         Some((anchor_idx, &messages[anchor_idx]))
     }

@@ -9,7 +9,7 @@ The engine assembles a structured prompt for every Game Master call from the act
 
 ## Layered Prompt Architecture
 
-The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layer 7 is conditional; the remaining seven layers are always present. A post-history splice sits between Layer 5 and Layer 6.
+The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3 and 7 are conditional — Layer 3 (`<PlayerCharacter>`) is dropped on an impersonated turn and Layer 7 (`<Guide>`) renders only on a guided turn; the remaining six layers are always present. A post-history splice sits between Layer 5 and Layer 6.
 
 | Layer | Name | SillyTavern Equivalent | Role | Content |
 |-------|------|----------------------|------|---------|

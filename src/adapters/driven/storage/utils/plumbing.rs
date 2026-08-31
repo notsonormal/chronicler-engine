@@ -378,12 +378,37 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         }
 
         // Games inherit posture from their world (the new source of truth).
+        // COALESCE keeps the migration alive for a game whose world_key has
+        // no matching world row — the subquery would otherwise produce NULL
+        // and fail the NOT NULL constraint, aborting startup.
         exec(
             "UPDATE games SET \
-               narrator_mode = (SELECT narrator_mode FROM worlds WHERE worlds.key = games.world_key), \
-               narrative_perspective = (SELECT narrative_perspective FROM worlds WHERE worlds.key = games.world_key), \
-               narrative_tense = (SELECT narrative_tense FROM worlds WHERE worlds.key = games.world_key)",
+               narrator_mode = COALESCE((SELECT narrator_mode FROM worlds WHERE worlds.key = games.world_key), 'novel'), \
+               narrative_perspective = COALESCE((SELECT narrative_perspective FROM worlds WHERE worlds.key = games.world_key), 'third'), \
+               narrative_tense = COALESCE((SELECT narrative_tense FROM worlds WHERE worlds.key = games.world_key), 'past')",
         )?;
+
+        // The COALESCE fallback above silently repairs orphaned games; these
+        // warnings keep the data-integrity signal visible in the logs.
+        let orphans: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT name FROM games \
+                     WHERE world_key NOT IN (SELECT key FROM worlds)",
+                )
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
+        };
+        for key in &orphans {
+            tracing::warn!(
+                "migration v19: game '{key}' references world_key with no matching world row; \
+                 posture defaulted to novel/third/past"
+            );
+        }
 
         // Mode-preset registry column on settings. Backfill from the legacy
         // per-type columns before they are dropped below.

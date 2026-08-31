@@ -140,8 +140,10 @@ def get_test_cmd(include_llm=False):
 
 # nextest per-test result line, e.g.:
 #   "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x"
+# The progress counter is optional: nextest only prints it in some
+# --show-progress modes, and the timing report must survive config drift.
 _NEXTEST_RESULT_RE = re.compile(
-    r"^\s*(?:PASS|FAIL|SKIP)\s*\[([^\]]*)\]\s*\([^)]*\)\s*(\S.*)$"
+    r"^\s*(?:PASS|FAIL|SKIP)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
 )
 
 

@@ -12,7 +12,7 @@ Two steering surfaces let the player shape what the narrator generates. Both ent
 | Surface | What it steers | Persisted to history | Output message type | Retry re-applies via |
 |---|---|---|---|---|
 | Guided generation | content — what the AI says | no, transient | `Narration` | the replay blob on the swipe |
-| Impersonate | speaker — who says it | no, transient | `Narration` | the replay blob on the swipe |
+| Impersonate | speaker — who says it | no, transient | `Input` | the replay blob on the swipe |
 
 Both surfaces are transient: their steering lives for one generation and never becomes a history entry.
 
@@ -49,7 +49,7 @@ For an impersonated turn, the impersonate preset replaces the system preset. The
 
 The `<PlayerCharacter>` layer is dropped for an impersonated turn. The context layers stay: `<GameState>`, `<KnownNpcs>` / `<NpcsInRoom>`, `<WorldLore>`, and `<ConversationHistory>` remain. Persona data reaches the prompt through the impersonate preset, not through the dropped layer.
 
-The impersonate output is saved as a player-voiced dialogue entry — the sender is the persona name. An optional `/impersonate <direction>` text steers the impersonated action without forcing an implausible leap; with no direction, the persona acts in character.
+The impersonate output is saved as an `Input` entry — the player-voiced message type — so the story log renders it as the persona speaking. The steering itself (direction, preset) never becomes a history entry. An optional `/impersonate <direction>` text steers the impersonated action without forcing an implausible leap; with no direction, the persona acts in character.
 
 The replay blob on the swipe makes a retry re-impersonate using the same preset.
 

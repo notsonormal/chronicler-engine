@@ -111,6 +111,16 @@ impl PromptPreset {
         self.allowed_modes.contains(&mode)
     }
 
+    /// No-arg [`Self::allows`] form for askama templates (per-mode activation buttons).
+    pub fn allows_novel(&self) -> bool {
+        self.allows(NarratorMode::Novel)
+    }
+
+    /// No-arg [`Self::allows`] form for askama templates (per-mode activation buttons).
+    pub fn allows_interactive_fiction(&self) -> bool {
+        self.allows(NarratorMode::InteractiveFiction)
+    }
+
     pub fn preview_text(&self) -> &str {
         self.role
             .as_deref()

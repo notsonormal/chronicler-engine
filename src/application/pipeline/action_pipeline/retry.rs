@@ -41,7 +41,7 @@ impl ActionPipeline {
         self.claim_and_spawn(
             generation_gate,
             |_game_id, game_state| {
-                if game_state.narrative.history.last_input_text().is_none() {
+                if !game_state.narrative.history.last_turn_is_retryable() {
                     return Err(ApplicationError::validation("No input to retry"));
                 }
                 Ok(())
@@ -87,11 +87,22 @@ impl ActionPipeline {
 
         match target.mode {
             RetryMode::ReNarrate => {
-                let input_text = match state.narrative.history.last_input_text() {
-                    Some(text) => text,
-                    None => {
-                        self.persist_generation_error("Retry failed: no input to retry");
-                        return;
+                // A guided turn carries its input on the swipe replay, not in
+                // an Input row — redo it with the same empty input the
+                // original generation used, not with an older turn's input.
+                let target_is_guided = target
+                    .old_target
+                    .as_ref()
+                    .is_some_and(|m| m.replay().is_some_and(|r| r.guide.is_some()));
+                let input_text = if target_is_guided {
+                    String::new()
+                } else {
+                    match state.narrative.history.last_input_text() {
+                        Some(text) => text,
+                        None => {
+                            self.persist_generation_error("Retry failed: no input to retry");
+                            return;
+                        }
                     }
                 };
                 if target.is_event {
@@ -157,8 +168,17 @@ impl ActionPipeline {
         target: &RetryTarget,
     ) -> GameState {
         let mut state = GameState::from_snapshot(&snapshot);
+        // When the anchor IS the target (a guided Narration with no prior
+        // Input), truncate exclusively so the target lands only in
+        // `retry_target` — the same shape the ReImpersonate/UserRegen paths
+        // use for Input targets.
+        let anchor_is_target = messages
+            .get(target.anchor_idx)
+            .zip(target.old_target.as_ref())
+            .is_some_and(|(anchor, old)| anchor.id == old.id);
         let mut truncated = messages;
         match target.mode {
+            RetryMode::ReNarrate if anchor_is_target => truncated.truncate(target.anchor_idx),
             RetryMode::ReNarrate => truncated.truncate(target.anchor_idx + 1),
             RetryMode::ReImpersonate | RetryMode::UserRegen => {
                 truncated.truncate(target.anchor_idx)

@@ -1,7 +1,14 @@
 use askama::Template;
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::adapters::driving::http::prompt_presets::templates::PromptPresetsTemplate;
+use crate::adapters::driving::http::prompt_presets::templates::{ModeActiveIds, PromptPresetsTemplate};
+
+fn mode_ids(novel: &str, interactive_fiction: &str) -> ModeActiveIds {
+    ModeActiveIds {
+        novel: novel.into(),
+        interactive_fiction: interactive_fiction.into(),
+    }
+}
 
 #[test]
 fn test_prompt_presets_template_renders_system_presets() {
@@ -23,10 +30,10 @@ fn test_prompt_presets_template_renders_system_presets() {
             },
         ],
         quantifier_presets: vec![],
-        active_system_id: "custom-1".into(),
-        active_quantifier_id: "default".into(),
+        active_system: mode_ids("custom-1", "default"),
+        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate_id: "default".into(),
+        active_impersonate: mode_ids("default", "default"),
     };
 
     let html = template.render().unwrap();
@@ -46,10 +53,10 @@ fn test_prompt_presets_template_shows_active_badge() {
             ..Default::default()
         }],
         quantifier_presets: vec![],
-        active_system_id: "custom-1".into(),
-        active_quantifier_id: "default".into(),
+        active_system: mode_ids("custom-1", "default"),
+        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate_id: "default".into(),
+        active_impersonate: mode_ids("default", "default"),
     };
 
     let html = template.render().unwrap();
@@ -69,10 +76,10 @@ fn test_prompt_presets_template_shows_default_badge() {
             ..Default::default()
         }],
         quantifier_presets: vec![],
-        active_system_id: "other".into(),
-        active_quantifier_id: "default".into(),
+        active_system: mode_ids("other", "other"),
+        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate_id: "default".into(),
+        active_impersonate: mode_ids("default", "default"),
     };
 
     let html = template.render().unwrap();
@@ -84,10 +91,10 @@ fn test_prompt_presets_template_has_add_forms() {
     let template = PromptPresetsTemplate {
         system_presets: vec![],
         quantifier_presets: vec![],
-        active_system_id: "default".into(),
-        active_quantifier_id: "default".into(),
+        active_system: mode_ids("default", "default"),
+        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate_id: "default".into(),
+        active_impersonate: mode_ids("default", "default"),
     };
 
     let html = template.render().unwrap();
@@ -108,10 +115,10 @@ fn test_prompt_presets_template_shows_full_preview() {
             ..Default::default()
         }],
         quantifier_presets: vec![],
-        active_system_id: "default".into(),
-        active_quantifier_id: "default".into(),
+        active_system: mode_ids("default", "default"),
+        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate_id: "default".into(),
+        active_impersonate: mode_ids("default", "default"),
     };
 
     let html = template.render().unwrap();

@@ -296,7 +296,7 @@ fn test_settings_table_singleton_constraint() {
 }
 
 #[test]
-fn test_migration_v20_reshapes_registry_and_backfills_flags() {
+fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     use crate::adapters::driven::storage::utils::run_migrations;
     use crate::domain::model::settings::ModePresetRegistry;
 

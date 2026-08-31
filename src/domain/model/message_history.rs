@@ -123,6 +123,21 @@ impl MessageHistory {
         Some(input.text().to_string())
     }
 
+    /// The last Narration/Input turn is retryable when it carries its own
+    /// player input, or when its swipe replay records a guide (a guided turn
+    /// appends no Input row — the guide on the swipe is the turn's input).
+    pub fn last_turn_is_retryable(&self) -> bool {
+        self.last_input_text().is_some()
+            || self
+                .messages
+                .iter()
+                .rev()
+                .find(|m| {
+                    m.message_type == MessageType::Narration || m.message_type == MessageType::Input
+                })
+                .is_some_and(|m| m.replay().is_some_and(|r| r.guide.is_some()))
+    }
+
     pub fn is_last_ai_response_event_continuation(&self) -> bool {
         self.messages
             .iter()
