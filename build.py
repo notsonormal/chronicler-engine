@@ -711,7 +711,7 @@ def main():
             both_print("=== Build Complete ===")
             return
 
-        total_steps = 11  # Non-format validation, packaging, tests, and report steps.
+        total_steps = 12  # Non-format validation, packaging, tests, and report steps.
         if not args.no_fmt:
             total_steps += 1
         steps = StepCounter(total_steps)
@@ -795,6 +795,15 @@ def main():
         # DB lives inside the target folder so each build profile has its own instance.
         target_data_dir = target_dir / "data"
         clean_sqlite_dbs(target_data_dir)
+
+        # Run the fast guardrail/architecture binaries first and fail the build
+        # immediately (check=True) — otherwise a guardrail failure only surfaces
+        # after the full ~2-minute nextest suite has already run.
+        timed_step(
+            "Running guardrail tests...",
+            "cargo nextest run --no-fail-fast --test guardrails --test architecture",
+            env=cargo_env,
+        )
 
         if args.coverage:
             if args.test_timings:
@@ -881,6 +890,11 @@ def main():
         both_print(f"Full build log: {log_path}")
         both_print("=" * 60)
 
+    # check=False steps (e.g. the test suite) record failures in step_failures
+    # without raising SystemExit. Propagate them into the process exit code so
+    # callers that trust the exit code (agents, pre-commit, CI) see the failure.
+    if exit_code == 0 and step_failures:
+        exit_code = 1
     return exit_code
 
 
