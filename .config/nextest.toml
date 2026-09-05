@@ -11,6 +11,14 @@ slow-timeout = { period = "60s", terminate-after = 1, on-timeout = "fail" }
 filter = 'binary(architecture)'
 slow-timeout = { period = "180s", terminate-after = 1, on-timeout = "fail" }
 
+# Each browser test spawns an engine server + Chromium; at 4-way parallelism
+# startup can exceed the 30s server-ready timeout and the whole binary flakes
+# (retries cannot help while the contention persists). Run each browser test
+# alone so spawns never oversubscribe.
+[[profile.default.overrides]]
+filter = 'binary(browser)'
+threads-required = "num-test-threads"
+
 [profile.llm]
 inherits = "default"
 slow-timeout = { period = "300s", terminate-after = 1, on-timeout = "fail" }

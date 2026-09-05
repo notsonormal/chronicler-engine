@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::thread;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
@@ -6,6 +9,8 @@ use crate::adapters::driving::http::AppState;
 use crate::application::ports::llm_provider::LlmCallResult;
 use crate::application::errors::ApplicationError;
 use crate::application::errors::ProcessActionResult;
+use crate::domain::model::map::Room;
+use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
@@ -1053,10 +1058,6 @@ async fn retry_records_canonical_game_not_found_when_game_missing() {
 
 #[tokio::test]
 async fn test_retry_last_response_cancelled_at_phase_boundary() {
-    use std::sync::atomic::Ordering;
-    use std::sync::Arc;
-    use std::thread;
-
     let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
     let agent_registry = AgentRegistry::default();
@@ -1302,8 +1303,6 @@ async fn test_retry_flow_narration_mode_makes_new_swipe() {
 
 #[tokio::test]
 async fn test_retry_flow_impersonate_mode_runs_full_tail() {
-    use crate::domain::model::message::GenerationReplay;
-
     let narrator = Arc::new(
         MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
     );
@@ -1379,8 +1378,6 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
 
 #[tokio::test]
 async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
-    use crate::domain::model::message::GenerationReplay;
-
     let narrator =
         Arc::new(MockBackend::default().with_narrations(vec!["Ominous retake.".to_string()]));
     let pipeline = make_test_pipeline_with_mock_quantifier(
@@ -1454,8 +1451,6 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
 
 #[tokio::test]
 async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
-    use crate::domain::model::message::GenerationReplay;
-
     let narrator =
         Arc::new(MockBackend::default().with_narrations(vec!["Ominous retake.".to_string()]));
     let forensics_storage = Arc::new(Storage::new_in_memory());
@@ -1468,7 +1463,23 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         Arc::new(MockBackend::default())
             as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     );
+    // A second room distinguishes the guided Narration's snapshot (room
+    // `marker`) from the older Input's snapshot (the app's starting room). The
+    // redo prompt renders `Current Location: <room name>`, so the room name
+    // proves which snapshot the redo reconstructed from.
+    let data = TestDataBuilder::default_test()
+        .room(Room {
+            id: "marker".to_string(),
+            name: "Marker Room".to_string(),
+            description: "A room that marks the guided turn's snapshot.".to_string(),
+            exits: HashMap::new(),
+            items: vec![],
+            image_path: None,
+            navigation_description: None,
+        })
+        .build();
     let (app, storage) = TestAppBuilder::default_test()
+        .data(data)
         .pipeline(pipeline)
         .build_service_with_storage();
 
@@ -1480,7 +1491,7 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
     };
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
-        "room_1",
+        "marker",
         "A guided narration.",
         MessageType::Narration,
         Some(replay),
@@ -1515,11 +1526,33 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         .iter()
         .find(|m| m.agent_name.contains("narrator"))
         .expect("narrator forensics recorded");
+    // The guided Narration is the anchor, so the redo reconstructs from its
+    // snapshot — the prompt's room is `Marker Room`. Under the old anchoring
+    // (older Input) it would render the starting room's name instead.
     assert!(
-        !narrator_call
+        narrator_call
             .user_prompt
-            .contains("<PlayerInput>\nthe older player input"),
-        "guided redo must render an empty <PlayerInput>, not an older turn's input"
+            .contains("Current Location: Marker Room"),
+        "guided redo must reconstruct from the guided Narration's snapshot; prompt was: {}",
+        narrator_call.user_prompt
+    );
+    // The current-turn <PlayerInput> block must be empty — the older turn's
+    // input must not leak into it. Assert on the last block directly so the
+    // check does not depend on the exact tag/newline layout; the older input
+    // text still appears legitimately inside <ConversationHistory>.
+    let prompt = &narrator_call.user_prompt;
+    let start = prompt
+        .rfind("<PlayerInput>")
+        .expect("PlayerInput tag present")
+        + "<PlayerInput>".len();
+    let end = prompt[start..]
+        .find("</PlayerInput>")
+        .map(|i| start + i)
+        .expect("PlayerInput closing tag present");
+    assert!(
+        prompt[start..end].trim().is_empty(),
+        "guided redo must render an empty <PlayerInput>; older-turn input must not leak, got {:?}",
+        &prompt[start..end]
     );
     app.shutdown_token.cancel();
 }
@@ -1627,7 +1660,6 @@ async fn test_retry_flow_event_mode_continues_trigger() {
     app.shutdown_token.cancel();
 }
 
-// ---- retry_user_regen call-site error branches ----
 // These cover retry_user_regen's own `Err(e) => finalize_phase_error` and
 // cancellation arms — the shared-prefix failures themselves are covered in
 // narration_generation_tests.rs.
@@ -1695,9 +1727,6 @@ async fn test_retry_user_regen_narrator_fails() {
 
 #[tokio::test]
 async fn test_retry_user_regen_cancelled() {
-    use std::sync::atomic::Ordering;
-    use std::thread;
-
     // The only Cancelled producer in the narration path is check_game_unchanged,
     // so the test flips the game id while the delayed narrator call is in flight.
     let mock_backend = Arc::new(MockBackend::default().with_delay(200));
@@ -1742,8 +1771,6 @@ async fn test_retry_user_regen_cancelled() {
         state.narrative.input_buffer.status
     );
 }
-
-// ---- reachable defensive-branch coverage ----
 
 #[tokio::test]
 async fn test_retry_renarrate_with_no_input_persists_error() {

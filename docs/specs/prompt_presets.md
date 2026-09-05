@@ -275,7 +275,7 @@ When the client POST /prompt-presets/{id}/activate?mode=novel
 Then the response is 200
 And the response body contains "<div class=\"prompt-presets-panel\">"
 And the body contains an "Active · Novel" badge in the system preset's card-badges
-And the body does not contain a "Set Active (Novel)" button for that preset (it is now active for the Novel bundle)
+And that preset's card does not contain a "Set Active (Novel)" button (it is now active for the Novel bundle)
 ```
 
 Activating a quantifier preset follows the same shape, writing to the
@@ -304,8 +304,8 @@ And activating the same preset without the mode parameter returns "<span class='
 ```gherkin
 Given a fresh app state with a seeded system preset whose allowed_modes is ["interactive_fiction"]
 When the client GET /fragment/prompt-presets
-Then the response body contains a "Set Active (IF)" button for that preset
-And the response body does not contain a "Set Active (Novel)" button for that preset
+Then that preset's card contains a "Set Active (IF)" button
+And that preset's card does not contain a "Set Active (Novel)" button
 ```
 
 #### Scenario 21.24: Activate a nonexistent preset returns an error span
