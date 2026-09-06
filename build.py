@@ -2,9 +2,20 @@
 
 Uses cargo-nextest for parallel test execution.
 
+Two invocation modes:
+
+- Full gate (default): ``python build.py`` runs fmt, validation, clippy,
+  guardrails, the full test suite, and packaging.
+- Step mode: ``python build.py <step>`` runs one registry step (e.g.
+  ``clippy``, ``fmt``, ``nextest <pattern>``) with a minimal prelude — no
+  port-3000 kill, no asset copy, no SQLite cleanup. ``--target-dir`` and
+  ``--strict`` are accepted on either side of the step; all other top-level
+  flags are gate-only and rejected next to a step.
+
 Stdout carries the agent-facing decision signal + tailable progress (banner,
 step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
-banner with log path). Full output is written to ``logs/build_*.log``.
+banner with log path). Full output is written to ``logs/build_*.log``; each
+log's first line is a session stamp (see ``_stamp_session_id``).
 """
 
 import argparse
@@ -12,6 +23,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import sqlite3
@@ -21,6 +33,7 @@ import tempfile
 import time
 from collections import defaultdict
 from pathlib import Path
+from typing import NamedTuple
 
 # Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
 if sys.platform == "win32":
@@ -132,7 +145,7 @@ def require_nextest():
 
 def get_test_cmd(include_llm=False):
     """Return the test command using nextest."""
-    cmd = "cargo nextest run --no-fail-fast"
+    cmd = _NEXTEST_RUN
     if include_llm:
         cmd += " --profile llm --run-ignored all"
     return cmd
@@ -233,6 +246,341 @@ def run_with_test_timings(cmd, env=None, check=True):
 def get_coverage_cmd():
     """Return the coverage test command using nextest."""
     return "cargo llvm-cov nextest --no-report --no-fail-fast"
+
+
+class StepSpec(NamedTuple):
+    """One runnable build step, shared by the full gate and step subcommands.
+
+    The registry is the single source of truth for step commands: the full
+    gate and the step subcommands consume the same spec, so the two modes
+    cannot drift into different command strings.
+    """
+
+    name: str
+    label: str
+    cmd: str
+    needs_nextest: bool = False
+    pattern_arg: bool = False
+    help: str = ""
+
+
+_NEXTEST_RUN = "cargo nextest run --no-fail-fast"
+
+REGISTRY: dict[str, StepSpec] = {
+    spec.name: spec
+    for spec in [
+        StepSpec(
+            "fmt",
+            "Formatting...",
+            "cargo fmt",
+            help="Format sources in place (same as the full gate's fmt step).",
+        ),
+        StepSpec(
+            "validate-data",
+            "Validating JSON data...",
+            "python scripts/validate_data.py",
+            help="Validate JSON data files against schemas.",
+        ),
+        StepSpec(
+            "check",
+            "Checking compilation...",
+            "cargo check --all-targets --all-features",
+            help="Fast compile check across all targets; no lint (lighter than clippy).",
+        ),
+        StepSpec(
+            "clippy",
+            "Running clippy...",
+            "cargo clippy --all-targets --all-features -- -D warnings",
+            help="Lint Rust sources; warnings are errors.",
+        ),
+        StepSpec(
+            "test-structure",
+            "Running test structure guardrail...",
+            "python scripts/check_test_structure.py",
+            help="Enforce Rust unit-test structure rules.",
+        ),
+        StepSpec(
+            "docstrings",
+            "Running Python docstring guardrail...",
+            "python scripts/check_python_docstrings.py",
+            help="Check Python scripts for missing module docstrings.",
+        ),
+        StepSpec(
+            "py-tests",
+            "Running Python tests...",
+            "python -m unittest discover scripts/tests -v",
+            help="Run the Python unit tests under scripts/tests.",
+        ),
+        StepSpec(
+            "http-routes-check",
+            "Checking http_routes.md freshness...",
+            "python scripts/extract_http_routes.py --check",
+            help="Fail when the generated http_routes.md is stale.",
+        ),
+        StepSpec(
+            "guardrails-doc-check",
+            "Checking guardrails.md freshness...",
+            "python scripts/generate_guardrails_doc.py --check",
+            help="Fail when the generated guardrails doc is stale.",
+        ),
+        StepSpec(
+            "validate-docs",
+            "Validating markdown docs...",
+            "python scripts/validate_docs.py",
+            help="Validate markdown docs and DOC anchors under docs/.",
+        ),
+        StepSpec(
+            "architecture",
+            "Running architecture tests...",
+            f"{_NEXTEST_RUN} --test architecture",
+            needs_nextest=True,
+            help="Run the architecture integration tests.",
+        ),
+        StepSpec(
+            "guardrails",
+            "Running guardrail tests...",
+            f"{_NEXTEST_RUN} --test guardrails",
+            needs_nextest=True,
+            help="Run the guardrail integration tests.",
+        ),
+        StepSpec(
+            "unit",
+            "Running unit tests...",
+            "cargo test --lib",
+            help="Run the Rust unit tests (lib target only).",
+        ),
+        StepSpec(
+            "integration",
+            "Running integration tests...",
+            f"{_NEXTEST_RUN} --tests",
+            needs_nextest=True,
+            help="Run the integration test suite (~1-2 minutes).",
+        ),
+        StepSpec(
+            "nextest",
+            "Running nextest pattern...",
+            _NEXTEST_RUN,
+            needs_nextest=True,
+            pattern_arg=True,
+            help="Run cargo nextest with a test-name pattern.",
+        ),
+    ]
+}
+
+# Full-gate step order. "COPY" expands to the deployment-asset copy step,
+# "TESTS" to the composite test step (coverage/timings variants), and
+# "REPORT" to the coverage report (or the skip note when coverage is off).
+#
+# The order is load-bearing: the architecture/guardrail binaries run before
+# the ~2-minute full suite and fail the build immediately (check=True) —
+# otherwise a guardrail failure only surfaces after the full suite has run.
+GATE_ORDER = [
+    "fmt",
+    "validate-data",
+    "clippy",
+    "test-structure",
+    "docstrings",
+    "py-tests",
+    "http-routes-check",
+    "guardrails-doc-check",
+    "validate-docs",
+    "COPY",
+    "architecture",
+    "guardrails",
+    "TESTS",
+    "REPORT",
+]
+
+# Top-level flags that only make sense for the full gate. Rejected next to a
+# step subcommand so invalid combinations fail at parse time.
+_GATE_ONLY_FLAGS = (
+    "coverage",
+    "release",
+    "include_llm",
+    "llm_only",
+    "no_fmt",
+    "cleanup",
+    "diagnostic_benchmark",
+    "test_timings",
+)
+
+
+def parse_args(argv=None):
+    """Parse CLI arguments into a namespace. Pure: no filesystem or subprocess
+    side effects.
+
+    Step subcommands share the top-level ``--target-dir`` and ``--strict``
+    flags; the shared copies use ``SUPPRESS`` defaults so a value given before
+    the subcommand is not clobbered by the subparser.
+    """
+    parser = argparse.ArgumentParser(description="Chronicler Engine build script")
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Run tests with coverage instrumentation (slower, useful for CI)",
+    )
+    parser.add_argument(
+        "--release",
+        action="store_true",
+        help="Build and package in release mode",
+    )
+    parser.add_argument(
+        "--include-llm",
+        action="store_true",
+        dest="include_llm",
+        help="Include slow LLM tests in the test suite",
+    )
+    parser.add_argument(
+        "--llm-only",
+        action="store_true",
+        dest="llm_only",
+        help=(
+            "Run only the slow LLM tests (skips formatting, clippy, guardrails, and other tests)"
+        ),
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Enable strict mode: warnings are errors, debug assertions enabled",
+    )
+    parser.add_argument(
+        "--target-dir",
+        dest="target_dir",
+        default=None,
+        help="Custom cargo target directory for isolated builds (e.g., target/agent2)",
+    )
+    parser.add_argument(
+        "--no-fmt",
+        action="store_true",
+        dest="no_fmt",
+        help="Skip cargo fmt (useful for secondary agents to avoid source-file races)",
+    )
+    parser.add_argument(
+        "--cleanup",
+        action="store_true",
+        dest="cleanup",
+        help="Kill lingering chronicler processes and clean build artifacts",
+    )
+    parser.add_argument(
+        "--diagnostic-benchmark",
+        action="store_true",
+        dest="diagnostic_benchmark",
+        help="Run the diagnostic signal quality benchmark and generate a report",
+    )
+    parser.add_argument(
+        "--test-timings",
+        action="store_true",
+        dest="test_timings",
+        help=(
+            "Print a per-test timing report after the test step: the slowest tests"
+            " sorted by wall-clock duration, plus per-binary totals."
+            " Surfaces nextest's per-test durations without a separate command."
+        ),
+    )
+
+    sub = parser.add_subparsers(dest="command", metavar="<step>")
+    for spec in REGISTRY.values():
+        step_parser = sub.add_parser(spec.name, help=spec.help)
+        step_parser.add_argument(
+            "--target-dir",
+            dest="target_dir",
+            default=argparse.SUPPRESS,
+            help=argparse.SUPPRESS,
+        )
+        step_parser.add_argument(
+            "--strict",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help=argparse.SUPPRESS,
+        )
+        if spec.pattern_arg:
+            step_parser.add_argument(
+                "pattern", help="Test-name pattern passed to cargo nextest"
+            )
+
+    args = parser.parse_args(argv)
+    _reject_gate_flags_with_step(parser, args)
+    return args
+
+
+def _reject_gate_flags_with_step(parser, args):
+    """Fail at parse time when gate-only flags are mixed with a step subcommand."""
+    if args.command is None:
+        return
+    offenders = [
+        f"--{name.replace('_', '-')}"
+        for name in _GATE_ONLY_FLAGS
+        if getattr(args, name, False)
+    ]
+    if offenders:
+        parser.error(
+            f"{', '.join(offenders)} only apply to the full gate and cannot be"
+            f" combined with the '{args.command}' step"
+        )
+
+
+def _stamp_session_id():
+    """Stamp the log with the originating pi session id, when known.
+
+    Written as the first log line. mrn-context (.pi/extensions/mrn-context)
+    reads this header and only surfaces the build-log pointer to the session
+    that produced the build (unstamped logs stay visible to everyone).
+    """
+    session_id = os.environ.get("PI_SESSION_ID", "").strip()
+    if session_id:
+        log_status(f"Session-Id: {session_id}")
+
+
+def _target_paths(args) -> tuple[Path, Path]:
+    """Return (cargo_target_dir, profile target dir) for the given args."""
+    cargo_target_dir = (
+        Path(args.target_dir) if getattr(args, "target_dir", None) else Path("target")
+    )
+    build_profile = "release" if args.release else "debug"
+    return cargo_target_dir, cargo_target_dir / build_profile
+
+
+def _cargo_env_for(args) -> dict:
+    """Cargo environment shared by gate and step runs."""
+    env = {"NEXTEST_STATUS_LEVEL": "fail"}
+    if getattr(args, "target_dir", None):
+        env["CARGO_TARGET_DIR"] = str(Path(args.target_dir).resolve())
+    return env
+
+
+def _apply_strict(args):
+    """Enable strict mode: warnings treated as errors via RUSTFLAGS."""
+    if getattr(args, "strict", False):
+        os.environ["RUSTFLAGS"] = "-D warnings"
+        both_print("Strict mode enabled: warnings treated as errors.")
+
+
+def _warn_if_target_locked(cargo_target_dir: Path, custom: bool):
+    """Warn when cargo holds the target directory (another agent may be building)."""
+    if not is_target_locked(cargo_target_dir):
+        return
+    if custom:
+        both_print(
+            f"WARNING: Target directory {cargo_target_dir} appears to be "
+            "locked by another cargo process."
+        )
+        both_print("         Another agent may be building in this directory.")
+    else:
+        both_print(
+            "WARNING: Default target directory (target/) appears to be "
+            "locked by another cargo process."
+        )
+        both_print(
+            "         Use --target-dir to build in a unique folder and avoid conflicts:"
+        )
+        both_print("         python build.py --target-dir target/<unique-name>")
+
+
+def _step_command(spec: StepSpec, pattern: str | None = None) -> str:
+    """Assemble the shell command for a step spec (quotes the nextest pattern)."""
+    if spec.pattern_arg:
+        return f"{spec.cmd} {shlex.quote(pattern)}"
+    return spec.cmd
 
 
 def kill_port(port: int):
@@ -502,72 +850,344 @@ def _print_step_summary(step_timings, step_failures, log_path):
     both_print("---")
 
 
+
+
+class StepRecord:
+    """Mutable record of executed steps, shared between handlers and the epilogue."""
+
+    def __init__(self):
+        self.timings = []
+        self.failures = []
+
+
+def _record_step(record, label, start, *, failed):
+    """Append one step outcome to the epilogue record."""
+    record.timings.append(
+        {
+            "step": label,
+            "elapsed_sec": round(time.time() - start, 2),
+            "failed": failed,
+        }
+    )
+    if failed:
+        record.failures.append(label)
+
+
+def _timed_run(counter, record, label, cmd, check=True, env=None, timings=False):
+    """Run one step, print progress, and record its timing and outcome."""
+    counter.next(label)
+    start = time.time()
+    try:
+        if timings:
+            rc = run_with_test_timings(cmd, env=env, check=check)
+        else:
+            rc = run(cmd, check=check, env=env)
+    except SystemExit:
+        _record_step(record, label, start, failed=True)
+        raise
+    else:
+        _record_step(record, label, start, failed=rc != 0)
+
+
+class GateStep(NamedTuple):
+    """One entry of the expanded gate plan.
+
+    Every plan entry advances the step counter, so the counter total is
+    structurally len(plan). The "tests" handler prints the LLM-skip note
+    itself (the note is not a counted step, matching the original behavior).
+    """
+
+    kind: str  # "cmd" | "copy" | "tests" | "coverage_report" | "note"
+    label: str
+    cmd: str = ""
+    check: bool = True
+    timings: bool = False
+
+
+def _plan_gate_steps(args) -> list[GateStep]:
+    """Expand GATE_ORDER into the concrete gate step list.
+
+    The step counter total is derived from this list (len(plan)), never
+    hardcoded, so the count cannot drift from the steps actually run.
+    """
+    plan: list[GateStep] = []
+    for name in GATE_ORDER:
+        if name == "COPY":
+            plan.append(GateStep("copy", "Copying data and assets for deployment..."))
+            continue
+        if name == "TESTS":
+            if args.coverage:
+                label = (
+                    "Running all tests with coverage and timings..."
+                    if args.test_timings
+                    else "Running all tests with coverage..."
+                )
+                plan.append(
+                    GateStep(
+                        "tests",
+                        label,
+                        get_coverage_cmd(),
+                        check=False,
+                        timings=args.test_timings,
+                    )
+                )
+            else:
+                label = (
+                    "Running all tests with timings..."
+                    if args.test_timings
+                    else "Running all tests..."
+                )
+                plan.append(
+                    GateStep(
+                        "tests",
+                        label,
+                        get_test_cmd(include_llm=args.include_llm),
+                        check=False,
+                        timings=args.test_timings,
+                    )
+                )
+            continue
+        if name == "REPORT":
+            if args.coverage:
+                plan.append(GateStep("coverage_report", "Generating coverage report..."))
+            else:
+                plan.append(
+                    GateStep("note", "Skipping coverage report (use --coverage to enable)")
+                )
+            continue
+        spec = REGISTRY[name]
+        if name == "fmt" and args.no_fmt:
+            continue
+        plan.append(GateStep("cmd", spec.label, spec.cmd))
+    return plan
+
+
+def _execute_gate_plan(plan, args, cargo_env, record):
+    """Run the expanded gate plan. The counter total is len(plan)."""
+    counter = StepCounter(len(plan))
+    for step in plan:
+        if step.kind == "cmd":
+            _timed_run(
+                counter,
+                record,
+                step.label,
+                step.cmd,
+                check=step.check,
+                env=cargo_env,
+                timings=step.timings,
+            )
+        elif step.kind == "copy":
+            counter.next(step.label)
+            _copy_deployment_assets(args)
+        elif step.kind == "tests":
+            _timed_run(
+                counter,
+                record,
+                step.label,
+                step.cmd,
+                check=step.check,
+                env=cargo_env,
+                timings=step.timings,
+            )
+            if not args.coverage and not args.include_llm:
+                both_print(
+                    "    NOTE: 2 LLM tests were skipped. "
+                    "Run 'python build.py --llm-only' to execute them."
+                )
+        elif step.kind == "coverage_report":
+            counter.next(step.label)
+            _generate_coverage_report(args, cargo_env)
+        elif step.kind == "note":
+            counter.next(step.label)
+        else:  # pragma: no cover - guarded by construction
+            raise ValueError(f"Unknown gate step kind: {step.kind}")
+
+
+def _copy_deployment_assets(args):
+    """Copy data/ and assets/ into the target dir and prepare the package layout."""
+    _, target_dir = _target_paths(args)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    for src_name in ("data", "assets"):
+        src = Path(src_name)
+        if not src.exists():
+            continue
+        dest = target_dir / src_name
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(src, dest)
+        log_status(f"  Copied {src_name}/ -> {dest}")
+
+    (target_dir / "logs").mkdir(exist_ok=True)
+    log_status("  Created logs/")
+
+    log_status(f"  Package ready in {target_dir}/")
+    log_status(f"  Deployment: copy {target_dir}/ folder to your target machine")
+
+    # DB lives inside the target folder so each build profile has its own instance.
+    clean_sqlite_dbs(target_dir / "data")
+
+
+def _generate_coverage_report(args, cargo_env):
+    """Generate the llvm-cov JSON report and print the parsed summary."""
+    cargo_target_dir, _ = _target_paths(args)
+    json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    # Exclude: server infra (integration tests), test_support, bootstrap CLI, LLM backends (mock servers)
+    ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]init_game\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
+    run(
+        f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
+        check=False,
+        env=cargo_env,
+    )
+    if json_path.exists():
+        run(
+            f'python scripts/parse_coverage.py --json "{json_path}"',
+            check=False,
+            env=cargo_env,
+        )
+    else:
+        both_print("Warning: Could not generate coverage JSON.")
+
+
+def _gate_tail(args):
+    """Post-test housekeeping: tmp cleanup and SQLite dump. Gate mode only."""
+    project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
+    engine_tmp = Path("tmp")
+    clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=30)
+
+    _, target_dir = _target_paths(args)
+    db_path = target_dir / "data" / "chronicler.db"
+    if db_path.exists():
+        dump_dir = Path("tmp") / "db_dumps"
+        dump_sqlite_to_jsonl(db_path, dump_dir)
+
+
+def _gate_prelude(args) -> dict:
+    """Gate-mode prelude: strict env, port-3000 kill, target-dir env + lock warning."""
+    _apply_strict(args)
+
+    # Always kill manual runs on the default port first — this may release
+    # the target directory lock if a manual `cargo run` was holding it.
+    log_status("Checking for processes on port 3000...")
+    kill_port(3000)
+
+    cargo_target_dir, _ = _target_paths(args)
+    cargo_env = _cargo_env_for(args)
+    custom = bool(getattr(args, "target_dir", None))
+    if custom:
+        log_status(f"Using custom target directory: {cargo_target_dir}")
+    _warn_if_target_locked(cargo_target_dir, custom=custom)
+    return cargo_env
+
+
+def run_gate(args, record):
+    """Full gate: fmt + validation + clippy + guardrails + tests + packaging."""
+    check_rust_version()
+    require_nextest()
+
+    cargo_env = _gate_prelude(args)
+    if args.no_fmt:
+        both_print("Skipping formatting (--no-fmt set).")
+    plan = _plan_gate_steps(args)
+    _execute_gate_plan(plan, args, cargo_env, record)
+    _gate_tail(args)
+
+
+def run_step(args, record):
+    """Single-step mode: run one registry step with a minimal prelude.
+
+    Skips the gate-only prelude (port-3000 kill, asset copy, SQLite cleanup)
+    so quick iteration does not disturb a running dev server.
+    """
+    check_rust_version()
+    spec = REGISTRY[args.command]
+    if spec.needs_nextest:
+        require_nextest()
+
+    _apply_strict(args)
+    cargo_env = _cargo_env_for(args)
+    cargo_target_dir, _ = _target_paths(args)
+    _warn_if_target_locked(
+        cargo_target_dir,
+        custom=bool(getattr(args, "target_dir", None)),
+    )
+
+    counter = StepCounter(1)
+    _timed_run(
+        counter,
+        record,
+        spec.label,
+        _step_command(spec, getattr(args, "pattern", None)),
+        check=True,
+        env=cargo_env,
+    )
+
+
+def run_cleanup(args, record):
+    """Cleanup mode: kill lingering processes and remove build artifacts."""
+    both_print("=== Cleanup Mode ===")
+    log_status("Killing lingering chronicler processes...")
+    kill_by_name("chronicler")
+
+    lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
+    if lock_dir.exists():
+        log_status(f"Cleaning stale port locks from {lock_dir}...")
+        shutil.rmtree(lock_dir)
+
+    cargo_target_dir, _ = _target_paths(args)
+    if cargo_target_dir.exists():
+        log_status(f"Removing build directory: {cargo_target_dir}")
+        shutil.rmtree(cargo_target_dir)
+    else:
+        log_status(f"Build directory does not exist: {cargo_target_dir}")
+
+    both_print("=== Cleanup Complete ===")
+
+
+def run_diagnostic(args, record):
+    """Diagnostic benchmark mode."""
+    both_print("=== Diagnostic Benchmark Mode ===")
+    benchmark_script = Path(__file__).parent / "scripts" / "diagnostic_benchmark.py"
+    if benchmark_script.exists():
+        run(f'python "{benchmark_script}"')
+    else:
+        both_print(f"ERROR: Benchmark script not found: {benchmark_script}")
+        sys.exit(1)
+    both_print("=== Diagnostic Benchmark Complete ===")
+
+
+def run_llm_only(args, record):
+    """LLM-only mode: build, then run only the slow LLM tests."""
+    check_rust_version()
+    require_nextest()
+
+    cargo_env = _gate_prelude(args)
+
+    counter = StepCounter(3)
+    counter.next("Building...")
+    run(
+        f"cargo build {'--release' if args.release else ''}".strip(),
+        env=cargo_env,
+    )
+
+    counter.next("Running LLM tests only...")
+    both_print("=" * 60)
+    both_print("NOTE: LLM tests contact the real OpenRouter API.")
+    both_print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
+    both_print("      Do not interrupt. Set your tool timeout to >= 600s.")
+    both_print("=" * 60)
+    # get_test_cmd always returns nextest; the --test llm filter selects the
+    # LLM binary inside the llm profile run.
+    llm_cmd = get_test_cmd(include_llm=True) + " --test llm"
+    run(llm_cmd, check=True, env=cargo_env)
+
+    counter.next("Done")
+    both_print("=== Build Complete ===")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Chronicler Engine build script")
-    parser.add_argument(
-        "--coverage",
-        action="store_true",
-        help="Run tests with coverage instrumentation (slower, useful for CI)",
-    )
-    parser.add_argument(
-        "--release",
-        action="store_true",
-        help="Build and package in release mode",
-    )
-    parser.add_argument(
-        "--include-llm",
-        action="store_true",
-        dest="include_llm",
-        help="Include slow LLM tests in the test suite",
-    )
-    parser.add_argument(
-        "--llm-only",
-        action="store_true",
-        dest="llm_only",
-        help=(
-            "Run only the slow LLM tests (skips formatting, clippy, guardrails, and other tests)"
-        ),
-    )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Enable strict mode: warnings are errors, debug assertions enabled",
-    )
-    parser.add_argument(
-        "--target-dir",
-        dest="target_dir",
-        default=None,
-        help="Custom cargo target directory for isolated builds (e.g., target/agent2)",
-    )
-    parser.add_argument(
-        "--no-fmt",
-        action="store_true",
-        dest="no_fmt",
-        help="Skip cargo fmt (useful for secondary agents to avoid source-file races)",
-    )
-    parser.add_argument(
-        "--cleanup",
-        action="store_true",
-        dest="cleanup",
-        help="Kill lingering chronicler processes and clean build artifacts",
-    )
-    parser.add_argument(
-        "--diagnostic-benchmark",
-        action="store_true",
-        dest="diagnostic_benchmark",
-        help="Run the diagnostic signal quality benchmark and generate a report",
-    )
-    parser.add_argument(
-        "--test-timings",
-        action="store_true",
-        dest="test_timings",
-        help=(
-            "Print a per-test timing report after the test step: the slowest tests"
-            " sorted by wall-clock duration, plus per-binary totals."
-            " Surfaces nextest's per-test durations without a separate command."
-        ),
-    )
-    args = parser.parse_args()
+    args = parse_args()
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
 
@@ -577,41 +1197,9 @@ def main():
     log_path = log_dir / f"build_{time.strftime('%Y%m%d_%H%M%S')}.log"
     log_fh = open(log_path, "w", encoding="utf-8")
     _set_log_fh(log_fh)
+    _stamp_session_id()
 
-    # Defined before the try block so the finally can always reach them.
-    step_timings = []
-    step_failures = []
-
-    def timed_step(label, cmd, check=True, env=None, timings=False):
-        steps.next(label)
-        start = time.time()
-        try:
-            if timings:
-                rc = run_with_test_timings(cmd, env=env, check=check)
-            else:
-                rc = run(cmd, check=check, env=env)
-            elapsed = time.time() - start
-            failed = rc != 0
-            step_timings.append(
-                {
-                    "step": label,
-                    "elapsed_sec": round(elapsed, 2),
-                    "failed": failed,
-                }
-            )
-            if failed:
-                step_failures.append(label)
-        except SystemExit:
-            elapsed = time.time() - start
-            step_timings.append(
-                {
-                    "step": label,
-                    "elapsed_sec": round(elapsed, 2),
-                    "failed": True,
-                }
-            )
-            step_failures.append(label)
-            raise
+    record = StepRecord()
 
     exit_code = 0
     try:
@@ -620,253 +1208,16 @@ def main():
         both_print(f"Full build log: {log_path}")
         both_print("=" * 60)
 
-        cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
-        build_profile = "release" if args.release else "debug"
-        target_dir = cargo_target_dir / build_profile
-
-        if args.diagnostic_benchmark:
-            both_print("=== Diagnostic Benchmark Mode ===")
-            benchmark_script = Path(__file__).parent / "scripts" / "diagnostic_benchmark.py"
-            if benchmark_script.exists():
-                run(f'python "{benchmark_script}"')
-            else:
-                both_print(f"ERROR: Benchmark script not found: {benchmark_script}")
-                exit_code = 1
-                return
-            both_print("=== Diagnostic Benchmark Complete ===")
-            return
-
-        if args.cleanup:
-            both_print("=== Cleanup Mode ===")
-            log_status("Killing lingering chronicler processes...")
-            kill_by_name("chronicler")
-
-            lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
-            if lock_dir.exists():
-                log_status(f"Cleaning stale port locks from {lock_dir}...")
-                shutil.rmtree(lock_dir)
-
-            if cargo_target_dir.exists():
-                log_status(f"Removing build directory: {cargo_target_dir}")
-                shutil.rmtree(cargo_target_dir)
-            else:
-                log_status(f"Build directory does not exist: {cargo_target_dir}")
-
-            both_print("=== Cleanup Complete ===")
-            return
-
-        check_rust_version()
-        require_nextest()
-
-        if args.strict:
-            os.environ["RUSTFLAGS"] = "-D warnings"
-            both_print("Strict mode enabled: warnings treated as errors.")
-
-        # Always kill manual runs on the default port first — this may release
-        # the target directory lock if a manual `cargo run` was holding it.
-        log_status("Checking for processes on port 3000...")
-        kill_port(3000)
-
-        cargo_env = {"NEXTEST_STATUS_LEVEL": "fail"}
-        if args.target_dir:
-            cargo_env["CARGO_TARGET_DIR"] = str(cargo_target_dir.resolve())
-            log_status(f"Using custom target directory: {cargo_target_dir}")
-            if is_target_locked(cargo_target_dir):
-                both_print(
-                    f"WARNING: Target directory {cargo_target_dir} appears to be "
-                    "locked by another cargo process."
-                )
-                both_print("         Another agent may be building in this directory.")
+        if args.command:
+            run_step(args, record)
+        elif args.diagnostic_benchmark:
+            run_diagnostic(args, record)
+        elif args.cleanup:
+            run_cleanup(args, record)
+        elif args.llm_only:
+            run_llm_only(args, record)
         else:
-            if is_target_locked(cargo_target_dir):
-                both_print(
-                    "WARNING: Default target directory (target/) appears to be "
-                    "locked by another cargo process."
-                )
-                both_print("         Use --target-dir to build in a unique folder and avoid conflicts:")
-                both_print("         python build.py --target-dir target/<unique-name>")
-
-        if args.llm_only:
-            steps = StepCounter(3)
-            steps.next("Building...")
-            run(
-                f"cargo build {'--release' if args.release else ''}".strip(),
-                env=cargo_env,
-            )
-
-            steps.next("Running LLM tests only...")
-            both_print("=" * 60)
-            both_print("NOTE: LLM tests contact the real OpenRouter API.")
-            both_print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
-            both_print("      Do not interrupt. Set your tool timeout to >= 600s.")
-            both_print("=" * 60)
-            llm_cmd = get_test_cmd(include_llm=True)
-            if "nextest" in llm_cmd:
-                llm_cmd += " --test llm"
-            else:
-                llm_cmd += " llm -- --ignored"
-            run(llm_cmd, check=True, env=cargo_env)
-
-            steps.next("Done")
-            both_print("=== Build Complete ===")
-            return
-
-        total_steps = 12  # Non-format validation, packaging, tests, and report steps.
-        if not args.no_fmt:
-            total_steps += 1
-        steps = StepCounter(total_steps)
-
-        if not args.no_fmt:
-            timed_step("Formatting...", "cargo fmt", env=cargo_env)
-        else:
-            both_print("Skipping formatting (--no-fmt set).")
-
-        timed_step(
-            "Validating JSON data...",
-            "python scripts/validate_data.py",
-            env=cargo_env,
-        )
-
-        timed_step(
-            "Running clippy...",
-            "cargo clippy --all-targets --all-features -- -D warnings",
-            env=cargo_env,
-        )
-
-        timed_step(
-            "Running test structure guardrail...",
-            "python scripts/check_test_structure.py",
-            env=cargo_env,
-        )
-
-        timed_step(
-            "Running Python docstring guardrail...",
-            "python scripts/check_python_docstrings.py",
-            env=cargo_env,
-        )
-
-        timed_step(
-            "Running Python tests...",
-            "python -m unittest discover scripts/tests -v",
-            env=cargo_env,
-        )
-
-        timed_step(
-            "Checking http_routes.md freshness...",
-            "python scripts/extract_http_routes.py --check",
-            env=cargo_env,
-        )
-
-        timed_step(
-            "Checking guardrails.md freshness...",
-            "python scripts/generate_guardrails_doc.py --check",
-            env=cargo_env,
-        )
-
-        timed_step(
-            "Validating markdown docs...",
-            "python scripts/validate_docs.py",
-            env=cargo_env,
-        )
-
-        steps.next("Copying data and assets for deployment...")
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        if Path("data").exists():
-            dest_data = target_dir / "data"
-            if dest_data.exists():
-                shutil.rmtree(dest_data)
-            shutil.copytree("data", dest_data)
-            log_status(f"  Copied data/ -> {dest_data}")
-
-        if Path("assets").exists():
-            dest_assets = target_dir / "assets"
-            if dest_assets.exists():
-                shutil.rmtree(dest_assets)
-            shutil.copytree("assets", dest_assets)
-            log_status(f"  Copied assets/ -> {dest_assets}")
-
-        (target_dir / "logs").mkdir(exist_ok=True)
-        log_status("  Created logs/")
-
-        log_status(f"  Package ready in {target_dir}/")
-        log_status(f"  Deployment: copy {target_dir}/ folder to your target machine")
-
-        # DB lives inside the target folder so each build profile has its own instance.
-        target_data_dir = target_dir / "data"
-        clean_sqlite_dbs(target_data_dir)
-
-        # Run the fast guardrail/architecture binaries first and fail the build
-        # immediately (check=True) — otherwise a guardrail failure only surfaces
-        # after the full ~2-minute nextest suite has already run.
-        timed_step(
-            "Running guardrail tests...",
-            "cargo nextest run --no-fail-fast --test guardrails --test architecture",
-            env=cargo_env,
-        )
-
-        if args.coverage:
-            if args.test_timings:
-                timed_step(
-                    "Running all tests with coverage and timings...",
-                    get_coverage_cmd(),
-                    check=False,
-                    env=cargo_env,
-                    timings=True,
-                )
-            else:
-                timed_step(
-                    "Running all tests with coverage...", get_coverage_cmd(), check=False, env=cargo_env
-                )
-
-            steps.next("Generating coverage report...")
-            json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
-            json_path.parent.mkdir(parents=True, exist_ok=True)
-            # Exclude: server infra (integration tests), test_support, bootstrap CLI, LLM backends (mock servers)
-            ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]init_game\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
-            run(
-                f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
-                check=False,
-                env=cargo_env,
-            )
-            if json_path.exists():
-                run(
-                    f'python scripts/parse_coverage.py --json "{json_path}"',
-                    check=False,
-                )
-            else:
-                both_print("Warning: Could not generate coverage JSON.")
-        else:
-            if args.test_timings:
-                timed_step(
-                    "Running all tests with timings...",
-                    get_test_cmd(include_llm=args.include_llm),
-                    check=False,
-                    env=cargo_env,
-                    timings=True,
-                )
-            else:
-                timed_step(
-                    "Running all tests...",
-                    get_test_cmd(include_llm=args.include_llm),
-                    check=False,
-                    env=cargo_env,
-                )
-            if not args.include_llm:
-                both_print(
-                    "    NOTE: 2 LLM tests were skipped. "
-                    "Run 'python build.py --llm-only' to execute them."
-                )
-            steps.next("Skipping coverage report (use --coverage to enable)")
-
-        project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
-        engine_tmp = Path("tmp")
-        clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=30)
-
-        db_path = target_dir / "data" / "chronicler.db"
-        if db_path.exists():
-            dump_dir = Path("tmp") / "db_dumps"
-            dump_sqlite_to_jsonl(db_path, dump_dir)
+            run_gate(args, record)
     except SystemExit as e:
         # Step failure (check=True) re-raises SystemExit. Capture the code so
         # the finally can print the summary, then propagate.
@@ -877,7 +1228,7 @@ def main():
         # written into the log file, not only to stdout. Closing last preserves
         # the "agent can read a targeted slice immediately" rationale — the
         # close is delayed only by in-process writes, not by any I/O wait.
-        _print_step_summary(step_timings, step_failures, log_path)
+        _print_step_summary(record.timings, record.failures, log_path)
 
         both_print("=" * 60)
         both_print("=== Build Complete ===")
@@ -891,10 +1242,10 @@ def main():
             pass
         _LogState.fh = None
 
-    # check=False steps (e.g. the test suite) record failures in step_failures
+    # check=False steps (e.g. the test suite) record failures in the record
     # without raising SystemExit. Propagate them into the process exit code so
     # callers that trust the exit code (agents, pre-commit, CI) see the failure.
-    if exit_code == 0 and step_failures:
+    if exit_code == 0 and record.failures:
         exit_code = 1
     return exit_code
 

@@ -12,7 +12,7 @@ title: Testing
 UI tests run via Playwright (`playwright-rs`). The browser binary is `tests/browser/`. Setup requires Node 18+ and `npx playwright install chromium`. The canonical entry-point for new browser tests is the page-fixture helper at `tests/test_utils/browser.rs`, which spawns the real engine on a file-locked test port and returns a typed page wrapper.
 
 ```bash
-HEADED=1 cargo nextest run --test browser <test_name>
+HEADED=1 python build.py nextest <test_name>
 ```
 
 Diagnostics on failure land in `tmp/screenshots/` (PNG) and `tmp/test_diagnostics/` (DOM dumps).

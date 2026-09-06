@@ -121,4 +121,4 @@ Severity levels:
 
 # Stay Focused On Fixing Comments
 
-Do NOT build or run tests. Only run a simple `cargo check` after updating the comments to ensure the code still compiles. 
+Do NOT build or run tests. Only run `python build.py check` after updating the comments to ensure the code still compiles. 

@@ -153,7 +153,7 @@ def main():
     if json_path is None or not os.path.exists(json_path):
         print("Error: Could not find coverage JSON file.", file=sys.stderr)
         print(
-            "Run: cargo llvm-cov nextest --json --output-path target/llvm-cov/coverage.json",
+            "Run: python build.py --coverage",
             file=sys.stderr,
         )
         sys.exit(1)

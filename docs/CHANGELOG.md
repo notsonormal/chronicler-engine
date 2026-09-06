@@ -2,6 +2,18 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-09-06
+
+### Changed
+
+- **`build.py` restructured into mode handlers with a shared step registry**. The god-method `main()` split into `parse_args` (pure, subparser-based) plus `run_gate` / `run_step` / `run_cleanup` / `run_llm_only` / `run_diagnostic` handlers. Every gating step is now also a subcommand (`python build.py clippy`, `fmt`, `unit`, `architecture`, `guardrails`, `integration`, `nextest <pattern>`, `validate-data`, `test-structure`, `docstrings`, `py-tests`, `http-routes-check`, `guardrails-doc-check`, `validate-docs`), driven by the same `REGISTRY`/`GATE_ORDER` tables the gate consumes, so the two modes cannot drift into different command strings. Gate-only flags (`--coverage`, `--no-fmt`, ...) are rejected next to a step at parse time (exit 2); `--target-dir` and `--strict` are accepted on either side of the subcommand. Step mode skips the gate-only prelude (port-3000 kill, asset copy, SQLite cleanup). The gate's combined guardrail/architecture test step split into two steps (14 steps with fmt, 13 with `--no-fmt`); the step counter total is now derived from the expanded plan instead of hardcoded. Clippy semantics unified on `--all-features` (the old AGENTS.md iteration line omitted it).
+- **`mrn-context` build-log pointer is now within-turn fresh**. `before_agent_start` only fires when a prompt is submitted, so a build run inside the agent loop surfaced the pointer only at the next prompt. A new `context` handler appends the pointer non-persistently on every LLM call until the next `before_agent_start` persists it.
+- **Build logs are session-attributed**. `build.py` stamps each `logs/build_*.log` first line with `Session-Id: <PI_SESSION_ID>` when the env var is present (pi injects it into tool subprocesses). The `mrn-context` extension (`.pi/extensions/mrn-context/index.ts`) reads the stamp and surfaces the newest log pointer only when it is unstamped (manual terminal runs) or stamped with the current session (`ctx.sessionManager.getSessionId()`); logs from other pi sessions are suppressed, so a concurrent agent's build no longer masquerades as yours.
+- **AGENTS.md iteration commands migrated** from raw `cargo` invocations to `build.py` subcommands. `cargo run -- --world redmist_estate --port 3000` stays raw cargo — the server is not a gate action.
+- **`check` step added** (`python build.py check`): `cargo check --all-targets --all-features`, a lighter compile check than clippy. Step-only; the gate does not need it because the clippy step already compiles all targets.
+- **Remaining raw-cargo command references migrated to `build.py`** across `.agents/skills/chronicler-comment-fixer/SKILL.md` and the diataxis docs (`how-to/debugging.md`, `reference/coding_standards/testing.md`, `reference/coding_standards/integration_test_standards.md`). The `parse_coverage.py` missing-JSON hint now points at `python build.py --coverage`. Manual server spawns keep raw `cargo run` (the documented exception); mechanism prose that names cargo/nextest as tools stays.
+- **Dead `cargo test` fallback removed** from `--llm-only`; the LLM test command is always nextest now.
+
 ## 2026-08-13
 
 ### Changed

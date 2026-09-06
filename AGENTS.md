@@ -256,16 +256,22 @@ Pi wraps commands with rtk and condenses git/diff output; redirect command outpu
 ### Commands
 
 #### Iteration (use these while fixing)
+All build actions go through `build.py`. Every run writes `logs/build_*.log`, stamped with the pi session id so the `mrn-context` extension attributes the log to the session that ran it.
+
 ```bash
-cargo fmt                                       # Check formatting
-cargo clippy --all-targets -- -D warnings       # ~10s — fix warnings here
-cargo test --lib                                # Run the unit tests
-cargo nextest run --test architecture           # Run the architecture tests
-cargo nextest run --test guardrails             # Run the guardrails tests
-cargo nextest run <test_name>                   # Run one test or pattern
-cargo nextest run --tests                       # Run integration test suite (~1–2 min)
-cargo run -- --world redmist_estate --port 3000 # Run the server
+python build.py fmt                             # Format sources (rewrites files in place)
+python build.py check                           # Fast compile check across all targets (no lint)
+python build.py clippy                          # ~10s — fix warnings here
+python build.py unit                            # Run the unit tests
+python build.py architecture                    # Run the architecture tests
+python build.py guardrails                      # Run the guardrails tests
+python build.py nextest <test_name>             # Run one test or pattern
+python build.py integration                     # Run integration test suite (~1–2 min)
+python build.py validate-docs                   # Validate markdown docs
+cargo run -- --world redmist_estate --port 3000 # Run the server (raw cargo; not a gate action)
 ```
+
+Almost every full-gate step is also a subcommand — see `python build.py --help`. Only the packaging, test-suite, and coverage-report phases stay gate-internal. `--target-dir` and `--strict` work on either side of the subcommand; all other top-level flags are full-gate only.
 
 #### Final Validation (run once before considering done)
 
@@ -273,7 +279,7 @@ cargo run -- --world redmist_estate --port 3000 # Run the server
 python build.py # Full gate: fmt + clippy + guardrails + tests (~1 min)
 ```
 
-A majority of the time taken by `build.py` is the integration tests. Running the full integration tests just before running the `build.py` is inefficient. Either run targeted `cargo nextest` or skip them and run `build.py` straight away.
+A majority of the time taken by `build.py` is the integration tests. Running the full integration tests just before running the `build.py` is inefficient. Either run a targeted step (`python build.py nextest <pattern>`) or skip them and run `build.py` straight away.
 
 ## Concurrent Builds
 Multiple agents building simultaneously can conflict because:

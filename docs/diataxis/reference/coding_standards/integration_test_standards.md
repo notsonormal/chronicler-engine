@@ -276,7 +276,7 @@ The Mock auto-injection is gated by the `use_mock` boolean; `with_test_page` def
 - `HEADED=1` → `options.headless = Some(false)` (run Playwright in headed mode, surfacing the browser window for interactive debugging).
 - `SLOW_MO=<ms>` → `options.slow_mo = Some(<ms>)` (introduce a pause between Playwright steps).
 
-Both default off. Run `HEADED=1 SLOW_MO=500 cargo nextest run --test browser <name>` to debug a single browser test interactively; default to headless in CI.
+Both default off. Run `HEADED=1 SLOW_MO=500 python build.py nextest <name>` to debug a single browser test interactively; default to headless in CI.
 
 This convention exists **only** for the browser binary. The LLM binary does not override Playwright launch — when an LLM test runs through `with_test_page` (if it did), it would inherit the same `HEADED` / `SLOW_MO` discipline. Today it uses `TestServer::new` directly, not `with_test_page`.
 
@@ -327,13 +327,12 @@ if !has_llm_api_key() {
 }
 ```
 
-Defense-in-depth: the `#[ignore]` keeps the tests out of `cargo test` runs; the runtime check keeps them short-circuiting under `cargo nextest run --test llm --run-ignored` where `--ignore` is honoured. Both tests are skipped when the env var is unset, so the LLM binary runs in ~1s in CI without the key and ~30s locally with it.
+Defense-in-depth: the `#[ignore]` keeps the tests out of default runs (`python build.py`, `python build.py integration`); the runtime check keeps them short-circuiting under `python build.py --llm-only`, which forces them in via `--run-ignored`. Both tests are skipped when the env var is unset, so the LLM binary runs in ~1s in CI without the key and ~30s locally with it.
 
 **Where this is wired.** `tests/llm/` (only file in the binary). Invoked via:
 
-- `cargo nextest run --test llm` (default: ignored, ~1s)
-- `cargo nextest run --test llm --run-ignored` (with key: real LLM, ~30s)
-- `python build.py --llm-only` (the build.py convenience invocation that aggregates LLM tests across the tree; see `tests/AGENTS.md`).
+- `python build.py integration` (default: the ignored LLM tests are skipped, ~1s)
+- `python build.py --llm-only` (with `OPENROUTER_API_KEY` set: real LLM calls; see `tests/AGENTS.md`).
 
 The `--llm-only` invocation is the canonical one for the integration-tier LLM tests. When modifying `src/application/narrative_prompt/` or `src/adapters/driven/llm/`, or LLM-parsing code, run `--llm-only` once locally with a valid `OPENROUTER_API_KEY` to confirm the tests still pass — CI does not exercise the ignored tests.
 
