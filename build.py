@@ -47,6 +47,17 @@ class _LogState:
     fh = None
 
 
+class _NextestSummary:
+    """Last nextest summary line captured this run, re-printed at the epilogue.
+
+    Module state (like _LogState) because run() sys.exits on a checked
+    failure before its caller could inspect the captured output; main()'s
+    finally must still be able to print the pass/fail counts at the tail.
+    """
+
+    line = None
+
+
 def _set_log_fh(fh):
     """Register the log file handle for the current build run."""
     _LogState.fh = fh
@@ -159,6 +170,49 @@ _NEXTEST_RESULT_RE = re.compile(
     r"^\s*(?:PASS|FAIL|SKIP)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
 )
 
+# nextest final summary line, e.g.:
+#   "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped"
+#   "     Summary [   1.497s] 119 tests run: 118 passed, 1 failed, 0 skipped"
+# Counts are matched independently of segment order so a nextest format
+# change cannot silently break the epilogue one-liner.
+_NEXTEST_SUMMARY_RE = re.compile(r"^\s*Summary \[[^\]]*\]\s+\d+ tests? run:")
+
+
+def _summary_count(line: str, label: str) -> str | None:
+    """Return the count preceding ``label`` in a Summary line, or None."""
+    m = re.search(rf"(\d+) {label}", line)
+    return m.group(1) if m else None
+
+
+def _nextest_summary_line(output: str) -> str | None:
+    """Render nextest's final Summary line as a compact epilogue one-liner.
+
+    Returns e.g. "nextest: 118 passed, 1 failed", or None when the output
+    carries no nextest summary (compile error, non-nextest command).
+    nextest omits the "failed" segment when nothing failed, but the epilogue
+    line always shows it (0 when absent) so a clean run still reads as clean.
+    A zero "skipped" segment is omitted; a nonzero one is kept so the counts
+    still add up to the total run.
+    """
+    rendered = None
+    for line in output.splitlines():
+        if not _NEXTEST_SUMMARY_RE.match(line):
+            continue
+        passed = _summary_count(line, "passed") or "?"
+        failed = _summary_count(line, "failed") or "0"
+        skipped = _summary_count(line, "skipped")
+        rendered = f"nextest: {passed} passed, {failed} failed"
+        if skipped and skipped != "0":
+            rendered += f", {skipped} skipped"
+    return rendered
+
+
+def _stash_nextest_summary(output: str) -> None:
+    """Capture nextest's final summary line for the closing epilogue."""
+    line = _nextest_summary_line(output)
+    if line is not None:
+        _NextestSummary.line = line
+
 
 def _nextest_duration_to_secs(token: str) -> float:
     """Convert a nextest duration token (e.g. "18.645s", "1m23s") to seconds."""
@@ -211,6 +265,11 @@ def run_with_test_timings(cmd, env=None, check=True):
         if secs == 0.0 and "SKIP" in line:
             continue
         timings.append((secs, name))
+    _stash_nextest_summary(
+        "\n".join(
+            (result.stdout or "").splitlines() + (result.stderr or "").splitlines()
+        )
+    )
 
     both_print("")
     both_print("--- Test Timing Report ---")
@@ -772,6 +831,9 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                 if _CARGO_PROGRESS_RE.match(line):
                     continue
                 _log_write(line)
+        # Stash before the check: a checked failure sys.exits below, and the
+        # epilogue must still be able to print the pass/fail counts.
+        _stash_nextest_summary(out or "")
         if check and process.returncode != 0:
             both_print(f"FAILED with code {process.returncode}")
             sys.exit(process.returncode)
@@ -797,6 +859,9 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                 if _CARGO_PROGRESS_RE.match(line):
                     continue
                 _log_write(line)
+        _stash_nextest_summary(
+            (result.stdout or "") + "\n" + (result.stderr or "")
+        )
         if check and result.returncode != 0:
             both_print(f"FAILED with code {result.returncode}")
             sys.exit(result.returncode)
@@ -1229,6 +1294,11 @@ def main():
         # the "agent can read a targeted slice immediately" rationale — the
         # close is delayed only by in-process writes, not by any I/O wait.
         _print_step_summary(record.timings, record.failures, log_path)
+
+        # The pass/fail counts, one line, right before the banner: an agent
+        # tailing stdout gets the test verdict without grepping the full log.
+        if _NextestSummary.line:
+            both_print(_NextestSummary.line)
 
         both_print("=" * 60)
         both_print("=== Build Complete ===")
