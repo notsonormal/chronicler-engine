@@ -45,7 +45,6 @@
 
       <!-- Static shell: form stays in DOM, never replaced -->
       <div class="action-area" id="action-area">
-        <!-- Form targets hidden div, status updates via WS + JS -->
         <form
           id="command-form"
           hx-post="/action/check"
@@ -142,13 +141,11 @@
         }
       }
 
-      // Called after form submission to disable button immediately
       // The server returns status and MutationObserver will re-enable it
       function updateButtonState() {
         setButtonState(true); // Immediately disable button on submit
       }
 
-      // Called after HTMX polls /status/generating
       // The endpoint returns phase names or "idle" (plain text)
       function onStatusPoll(el) {
         const text = el.textContent.trim();
@@ -172,16 +169,13 @@
         // If text is empty or unexpected, do nothing
       }
 
-      // Watch status display for changes
       const statusDisplay = document.getElementById("status-display");
       const errorNotification = document.getElementById("error-notification");
 
-      // Show error notification at top of screen
       function showError(message) {
         if (errorNotification) {
           errorNotification.textContent = message;
           errorNotification.classList.add("visible");
-          // Auto-hide after 5 seconds
           setTimeout(() => {
             errorNotification.classList.remove("visible");
           }, 5000);
@@ -207,7 +201,6 @@
         if (storyLog) {
           originalTrigger = storyLog.getAttribute("hx-trigger");
           storyLog.setAttribute("hx-trigger", "none");
-          // Force HTMX to re-read the trigger attribute
           htmx.process(storyLog);
         }
       }
@@ -239,7 +232,6 @@
           const rawText = entry.getAttribute("data-raw-text") || "";
           originalText = textSpan.innerHTML;
 
-          // Replace text with textarea containing raw text
           textSpan.innerHTML = "";
           const textarea = document.createElement("textarea");
           textarea.id = "edit-textarea";
@@ -250,18 +242,15 @@
           const textareaExtra = 10;
           textarea.style.height = originalHeight + textareaExtra + "px";
 
-          // Auto-resize on input so the textarea grows if the user types more
           textarea.addEventListener("input", function () {
             autoResizeTextarea(this);
           });
 
-          // Replace action buttons with save/cancel
           const actionsContainer = entry.querySelector(".message-actions");
           if (actionsContainer) {
             actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save">✓</button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel">✗</button>`;
           }
 
-          // Pause HTMX polling while editing
           pausePolling();
         }
       }
@@ -276,7 +265,6 @@
         currentEditId = null;
         originalText = null;
         resumePolling();
-        // Refresh to restore original button layout
         htmx.trigger("#story-log", "htmx:refresh");
       }
 
@@ -290,9 +278,7 @@
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: formData,
         }).then(() => {
-          // Resume polling before refresh
           resumePolling();
-          // Refresh story log
           htmx.trigger("#story-log", "htmx:refresh");
         });
         currentEditId = null;
@@ -304,7 +290,6 @@
         fetch("/swipe/new", { method: "POST" })
           .then((response) => response.text())
           .then(() => {
-            // Refresh story log
             htmx.trigger("#story-log", "htmx:refresh");
           });
       }
@@ -434,7 +419,163 @@
         }
       }
 
-      // Create a MutationObserver to watch for status changes
+      const SLASH_COMMANDS = [
+        { cmd: "/impersonate", desc: "Write as the player persona" },
+        { cmd: "/guide", desc: "Steer the next generation (transient)" },
+      ];
+      let slashMenu = null;
+      let slashMatches = [];
+      let slashActiveIndex = -1;
+
+      function commandInput() {
+        return document.querySelector('#command-form input[name="command"]');
+      }
+
+      function closeSlashMenu() {
+        if (slashMenu) {
+          slashMenu.remove();
+          slashMenu = null;
+        }
+        slashMatches = [];
+        slashActiveIndex = -1;
+      }
+
+      function slashMatchesFor(value) {
+        const v = value.trimStart();
+        if (!v.startsWith("/")) return [];
+        return SLASH_COMMANDS.filter((c) => c.cmd.startsWith(v));
+      }
+
+      function positionSlashMenu(input) {
+        if (!slashMenu) return;
+        const rect = input.getBoundingClientRect();
+        slashMenu.style.left = rect.left + "px";
+        slashMenu.style.bottom = window.innerHeight - rect.top + 4 + "px";
+      }
+
+      function renderSlashMenu(input) {
+        if (slashMatches.length === 0) {
+          closeSlashMenu();
+          return;
+        }
+        if (!slashMenu) {
+          slashMenu = document.createElement("div");
+          slashMenu.className = "slash-menu";
+          slashMenu.id = "slash-menu";
+          document.body.appendChild(slashMenu);
+        }
+        slashMenu.innerHTML = "";
+        slashMatches.forEach((m, i) => {
+          const item = document.createElement("div");
+          item.className = "slash-suggestion" + (i === slashActiveIndex ? " active" : "");
+          item.dataset.cmd = m.cmd;
+          const cmdSpan = document.createElement("span");
+          cmdSpan.className = "slash-cmd";
+          cmdSpan.textContent = m.cmd;
+          const descSpan = document.createElement("span");
+          descSpan.className = "slash-desc";
+          descSpan.textContent = m.desc;
+          item.appendChild(cmdSpan);
+          item.appendChild(descSpan);
+          slashMenu.appendChild(item);
+        });
+        positionSlashMenu(input);
+      }
+
+      function openSlashMenu(input) {
+        slashMatches = slashMatchesFor(input.value);
+        slashActiveIndex = slashMatches.length > 0 ? 0 : -1;
+        renderSlashMenu(input);
+      }
+
+      function selectSlash(cmd, input) {
+        input.value = cmd + " ";
+        input.focus();
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+        closeSlashMenu();
+      }
+
+      function setSlashActive(index) {
+        slashActiveIndex = index;
+        if (slashMenu) {
+          slashMenu.querySelectorAll(".slash-suggestion").forEach((el, i) => {
+            el.classList.toggle("active", i === slashActiveIndex);
+          });
+        }
+      }
+
+      document.addEventListener("input", function (e) {
+        const input = e.target;
+        if (!(input instanceof HTMLElement)) return;
+        if (!input.matches('#command-form input[name="command"]')) return;
+        openSlashMenu(input);
+      });
+
+      document.addEventListener("keydown", function (e) {
+        const input = commandInput();
+        if (!input || e.target !== input) return;
+        if (!slashMenu) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          if (slashMatches.length > 0) {
+            setSlashActive((slashActiveIndex + 1) % slashMatches.length);
+          }
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          if (slashMatches.length > 0) {
+            setSlashActive((slashActiveIndex - 1 + slashMatches.length) % slashMatches.length);
+          }
+        } else if (e.key === "Enter") {
+          if (slashMatches.length > 0 && slashActiveIndex >= 0) {
+            e.preventDefault();
+            selectSlash(slashMatches[slashActiveIndex].cmd, input);
+          } else {
+            closeSlashMenu();
+          }
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          closeSlashMenu();
+        }
+      });
+
+      // mousedown on a suggestion selects (fires before the input blurs).
+      document.addEventListener("mousedown", function (e) {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+        const item = target.closest(".slash-suggestion");
+        if (item && slashMenu && slashMenu.contains(item)) {
+          e.preventDefault();
+          const input = commandInput();
+          if (input) selectSlash(item.dataset.cmd, input);
+          return;
+        }
+        // Click outside the menu and the input closes the menu.
+        if (slashMenu && !slashMenu.contains(target) && target !== commandInput()) {
+          closeSlashMenu();
+        }
+      });
+
+      // Close the menu when the input loses focus (focusout bubbles).
+      document.addEventListener("focusout", function (e) {
+        if (!slashMenu) return;
+        if (e.target === commandInput()) {
+          setTimeout(() => {
+            if (commandInput() !== document.activeElement && slashMenu) {
+              closeSlashMenu();
+            }
+          }, 150);
+        }
+      });
+
+      // Close on form submit — the text-check swap recreates the input.
+      document.addEventListener("submit", closeSlashMenu, true);
+
+      // Close on scroll/resize — the fixed position is stale once the
+      // viewport moves.
+      window.addEventListener("scroll", closeSlashMenu, true);
+      window.addEventListener("resize", closeSlashMenu);
+
       const statusObserver = new MutationObserver(function (mutations) {
         mutations.forEach(function (mutation) {
           if (
@@ -458,7 +599,6 @@
         });
       });
 
-      // Start observing when DOM is ready
       document.body.addEventListener("action-area-refresh", function () {
         htmx.ajax("GET", "/fragment/action-area", {
           target: "#action-area",
@@ -473,7 +613,6 @@
           subtree: true,
         });
 
-        // Also check initial state
         if (statusDisplay.textContent.includes("Thinking")) {
           setButtonState(true);
         }
@@ -492,7 +631,6 @@
               .getElementById(btn.dataset.tab + "-tab")
               .classList.add("active");
 
-            // Refresh LLM messages when switching to that tab
             if (btn.dataset.tab === "llm-messages") {
               const panel = document.querySelector(".llm-messages-panel");
               if (panel) {

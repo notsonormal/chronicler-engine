@@ -44,7 +44,8 @@ When the client GET /fragment/prompt-presets/{id} for that preset's id
 Then the response is 200
 And the response body contains "<div class=\"preset-card"
 And the body contains the preset name "My System"
-And the body contains a "Set Active" button (the preset is not active)
+And the body contains a "Set Active (Novel)" button (the preset is not active for the Novel bundle)
+And the body contains a "Set Active (IF)" button (the preset is not active for the Interactive Fiction bundle)
 And the body contains an "Edit" button
 And the body contains a "Delete" button
 And the body contains a "Duplicate" button
@@ -270,16 +271,42 @@ And the response body is "<span class='error'>Preset not found</span>"
 
 ```gherkin
 Given a fresh app state with a seeded non-default system preset that is not the active system preset
-When the client POST /prompt-presets/{id}/activate
+When the client POST /prompt-presets/{id}/activate?mode=novel
 Then the response is 200
 And the response body contains "<div class=\"prompt-presets-panel\">"
-And the body contains an "Active" badge in the system preset's card-badges
-And the body does not contain a "Set Active" button for that preset (it is now active)
+And the body contains an "Active · Novel" badge in the system preset's card-badges
+And that preset's card does not contain a "Set Active (Novel)" button (it is now active for the Novel bundle)
 ```
 
 Activating a quantifier preset follows the same shape, writing to the
 quantifier slot instead of the system slot. Not enumerated as a
 separate scenario; this one covers the shape.
+
+Activation is per narrator mode: the `mode` query parameter selects the
+bundle the preset becomes active in (absent or invalid falls back to
+`novel`). Each card renders one activation button per allowed mode,
+gated by the preset's allowed_modes and hidden for the bundle the
+preset already leads.
+
+#### Scenario 21.25: Activate an Interactive Fiction-only preset for the IF bundle
+
+```gherkin
+Given a fresh app state with a seeded system preset whose allowed_modes is ["interactive_fiction"]
+When the client POST /prompt-presets/{id}/activate?mode=interactive_fiction
+Then the response is 200
+And the response body contains an "Active · IF" badge in that preset's card-badges
+And the Interactive Fiction bundle's system slot holds that preset's id
+And activating the same preset without the mode parameter returns "<span class='error'>Preset not allowed for novel mode</span>"
+```
+
+#### Scenario 21.26: Panel gates activation buttons by allowed_modes
+
+```gherkin
+Given a fresh app state with a seeded system preset whose allowed_modes is ["interactive_fiction"]
+When the client GET /fragment/prompt-presets
+Then that preset's card contains a "Set Active (IF)" button
+And that preset's card does not contain a "Set Active (Novel)" button
+```
 
 #### Scenario 21.24: Activate a nonexistent preset returns an error span
 

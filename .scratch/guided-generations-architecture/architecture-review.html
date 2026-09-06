@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — Chronicler Engine (guided-generations branch)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; }
+      .module-box { border: 1.5px solid #475569; border-radius: 6px; }
+      .iface { border-top: 3px solid #0ea5e9; }
+      .shallow-iface { border-top: 3px solid #f59e0b; }
+      .red-arrow { stroke: #dc2626; stroke-width: 2; marker-end: url(#redhead); }
+      .grey-arrow { stroke: #64748b; stroke-width: 1.5; marker-end: url(#greyhead); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <div class="flex items-baseline justify-between">
+          <h1 class="text-3xl font-serif text-slate-800">Architecture review</h1>
+          <span class="text-sm text-slate-500 font-mono">guided-generations · 2026-08-23</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-2xl">
+          Branch implements three Steering surfaces (Guided Generation, Narrator Action, Impersonate)
+          through slash commands. ~8,600 lines across 158 files. This review finds five deepening
+          opportunities, framed in the <span class="font-mono">codebase-design</span> vocabulary:
+          module, interface, depth, seam, adapter, leverage, locality.
+        </p>
+        <div class="flex flex-wrap gap-4 text-xs text-slate-600 border-t border-slate-200 pt-4">
+          <span><span class="inline-block w-4 h-4 align-middle border border-slate-500 rounded-sm"></span> module</span>
+          <span><span class="inline-block w-6 h-0 align-middle border-t-2 border-dashed border-slate-500"></span> seam</span>
+          <span><span class="inline-block w-6 h-0 align-middle border-t-2 border-red-600"></span> leakage</span>
+          <span><span class="inline-block w-4 h-4 align-middle deep rounded-sm"></span> deep module</span>
+        </div>
+      </header>
+
+      <!-- ====================== CANDIDATE 1 ====================== -->
+      <section id="candidates" class="space-y-10">
+        <article class="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-sm">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <h2 class="text-xl font-serif text-slate-800">1. The replay blob has no owning module</h2>
+            <div class="flex gap-2">
+              <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">in-process</span>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Files</p>
+            <p class="font-mono text-sm text-slate-700 leading-relaxed">
+              src/domain/model/message.rs · src/domain/model/state/narrative_state.rs<br/>
+              src/domain/model/state/game_state.rs (push_message) · src/application/pipeline/action_pipeline/action.rs<br/>
+              src/application/pipeline/pipeline_run.rs (resolve_guide / resolve_impersonate) · src/application/pipeline/action_pipeline/retry.rs
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- BEFORE -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">Before — blob lifecycle scattered</p>
+              <pre class="mermaid">
+flowchart TD
+  A[action.rs<br/>builds blob] --> B[narrative_state<br/>pending_replay]
+  B --> C[game_state<br/>push_message copies onto swipe]
+  C --> D[pipeline_run<br/>reads blob back via resolve_*]
+  D --> E[retry.rs<br/>reconstructs mode from blob]
+  A -.leak.-> E
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#7f1d1d;
+  class A,B,C,D,E leak
+              </pre>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">After — one ReplayBlob module</p>
+              <div class="h-[260px] relative flex items-center justify-center">
+                <div class="deep rounded-lg p-5 w-4/5 text-center">
+                  <p class="text-xs uppercase tracking-wider text-slate-300">ReplaySteering module</p>
+                  <p class="text-sm font-mono mt-2 text-slate-100">stage() · attach_to_swipe() · resolve_for_turn() · resolve_for_retry()</p>
+                  <p class="text-xs text-slate-400 mt-3">owns the invariant: steering is transient, rides on the swipe, re-applied on retry</p>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 text-center mt-1">action.rs, game_state, pipeline_run, retry all call the same 4-method interface</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Problem</p>
+              <p class="text-slate-700">The invariant "steering is transient and rides on the swipe's replay blob" is enforced by no single module. Six files jointly maintain it; understanding the lifecycle means bouncing between all six. Lost locality.</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Solution</p>
+              <p class="text-slate-700">A ReplaySteering module owns stage → attach → resolve-for-turn → resolve-for-retry. The blob value type stays in <span class="font-mono">message.rs</span>; the <em>lifecycle</em> moves behind one interface.</p>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Wins</p>
+            <ul class="text-sm text-slate-700 space-y-1 list-disc list-inside">
+              <li>locality: blob invariants concentrate in one module</li>
+              <li>interface shrinks: 4 methods replace 6 scattered reads/writes</li>
+              <li>leverage: retry + pipeline + game_state all cross one seam</li>
+              <li>tests hit one interface, not pub(crate) internals</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ====================== CANDIDATE 2 ====================== -->
+        <article class="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-sm">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <h2 class="text-xl font-serif text-slate-800">2. Retry is a shallow mixer duplicating the narrate turn</h2>
+            <div class="flex gap-2">
+              <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">in-process</span>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Files</p>
+            <p class="font-mono text-sm text-slate-700 leading-relaxed">
+              src/application/pipeline/action_pipeline/retry.rs (+345)<br/>
+              src/application/pipeline/pipeline_run.rs (phase_narrate, +177)<br/>
+              src/application/message_service.rs (find_retry_anchor_msg)
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- BEFORE: mass diagram showing shallow -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">Before — two shallow modules, duplicated choreography</p>
+              <div class="space-y-3 p-2">
+                <div class="module-box shallow-iface bg-white p-2">
+                  <p class="text-[10px] uppercase tracking-wider text-amber-700">retry.rs interface (wide)</p>
+                  <p class="font-mono text-[11px] text-slate-600">retry_reimpersonate · retry_user_regen · retry_event · retry_main · resolve_target · reconstruct_state</p>
+                </div>
+                <div class="module-box bg-white p-2 border-t-0">
+                  <p class="text-[10px] uppercase tracking-wider text-slate-500">implementation: load bundle → room → preset → PromptContext → narrator → save (copied)</p>
+                </div>
+                <div class="text-center text-red-600 text-xs">≈ duplicate of ↓</div>
+                <div class="module-box shallow-iface bg-white p-2">
+                  <p class="text-[10px] uppercase tracking-wider text-amber-700">phase_narrate interface (wide)</p>
+                  <p class="font-mono text-[11px] text-slate-600">load bundle → room → preset → PromptContext → narrator → save</p>
+                </div>
+              </div>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">After — one deep NarrationTurn module</p>
+              <div class="h-[260px] relative flex flex-col items-center justify-center gap-3">
+                <div class="deep rounded-lg p-4 w-4/5 text-center">
+                  <p class="text-xs uppercase tracking-wider text-slate-300">NarrationTurn module</p>
+                  <p class="text-sm font-mono mt-2 text-slate-100">run(state, steering) → Outcome</p>
+                  <p class="text-xs text-slate-400 mt-2">owns: bundle load, room resolve, preset select, prompt build, narrator call, save</p>
+                </div>
+                <div class="flex gap-3 text-xs text-slate-500">
+                  <span class="module-box bg-stone-50 px-2 py-1">phase_narrate calls it</span>
+                  <span class="module-box bg-stone-50 px-2 py-1">retry_* calls it</span>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 text-center mt-1">retry becomes mode-routing only; choreography lives once</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Problem</p>
+              <p class="text-slate-700"><span class="font-mono">retry_reimpersonate</span> and <span class="font-mono">retry_user_regen</span> duplicate <span class="font-mono">phase_narrate</span>'s choreography (bundle → room → preset → context → narrator → save). No deep module owns "run one narration turn from a prepared GameState." Retry tests reach into <span class="font-mono">pub(crate)</span> helpers because the public flow can't be driven with blobs.</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Solution</p>
+              <p class="text-slate-700">Extract a NarrationTurn module with one interface: <span class="font-mono">run(state, steering) → Outcome</span>. <span class="font-mono">phase_narrate</span> and all retry modes call it; retry keeps only mode-routing (ReNarrate / ReImpersonate / UserRegen) and anchor selection.</p>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Wins</p>
+            <ul class="text-sm text-slate-700 space-y-1 list-disc list-inside">
+              <li>locality: one narration-turn implementation, not three</li>
+              <li>leverage: phase_narrate + 3 retry modes share one interface</li>
+              <li>interface shrinks: retry drops ~150 lines of duplicated choreography</li>
+              <li>tests drive the public seam; pub(crate) helpers retire</li>
+              <li>retry-mode policy (anchor + mode) localises with message_service split resolved</li>
+            </ul>
+          </div>
+
+          <div class="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <strong>Supporting friction:</strong> retry-mode policy is itself split — <span class="font-mono">message_service.rs::find_retry_anchor_msg</span> picks the anchor, <span class="font-mono">retry.rs::resolve_retry_target</span> classifies the mode. Deepening retry concentrates both.
+          </div>
+        </article>
+
+        <!-- ====================== CANDIDATE 3 ====================== -->
+        <article class="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-sm">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <h2 class="text-xl font-serif text-slate-800">3. Steering-mode routing proliferates entry methods</h2>
+            <div class="flex gap-2">
+              <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">in-process</span>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Files</p>
+            <p class="font-mono text-sm text-slate-700 leading-relaxed">
+              src/application/pipeline/action_pipeline/action.rs (7 entry methods)<br/>
+              src/domain/model/action.rs (slash-command parser)<br/>
+              src/application/pipeline/pipeline_run.rs (phase_narrate mode branches)
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- BEFORE -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">Before — one method per steering surface</p>
+              <pre class="mermaid">
+flowchart TD
+  H[HTTP handler<br/>maps slash → Action]
+  H --> P[process_action]
+  H --> PG[process_action_with_guide]
+  H --> PR[process_action_with_replay]
+  H --> PN[process_action_with_narrator]
+  H --> G[guide_narration]
+  H --> N[narrator_action]
+  H --> I[impersonate]
+  PG --> PR
+  G --> PG
+  I --> PR
+  classDef wide stroke:#f59e0b,stroke-width:2px;
+  class P,PG,PR,PN,G,N,I wide
+              </pre>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">After — one dispatcher behind the Action seam</p>
+              <pre class="mermaid">
+flowchart TD
+  H[HTTP handler] --> A[Action enum<br/>parser already exists]
+  A --> D[process_action Action]
+  D --> T{match steering}
+  T -->|Free| F[free-turn path]
+  T -->|Guide| S[Steering payload]
+  T -->|Narrator| S
+  T -->|Impersonate| S
+  S --> R[stage replay blob]
+  classDef deep fill:#1e293b,color:#f8fafc,stroke:#0f172a;
+  class D deep
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Problem</p>
+              <p class="text-slate-700">HTTP already maps slash commands to <span class="font-mono">Action</span> variants cleanly. The pipeline then re-derives the same mapping through seven entry methods. <span class="font-mono">impersonate</span> also reads <span class="font-mono">settings.active_impersonate_prompt_preset_id</span> directly, coupling the entry path to preset management. Shallow routing: interface nearly as wide as the implementation.</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Solution</p>
+              <p class="text-slate-700">Collapse the seven methods into one <span class="font-mono">process_action(Action)</span> dispatcher. Steering payload (guide / impersonate preset id / direction) rides on the Action enum, which already exists. Preset resolution moves behind the dispatcher, not into the entry method.</p>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Wins</p>
+            <ul class="text-sm text-slate-700 space-y-1 list-disc list-inside">
+              <li>interface shrinks: 7 methods → 1, parametrised by Action</li>
+              <li>locality: steering routing concentrates at the Action seam</li>
+              <li>leverage: HTTP and tests cross the same dispatcher</li>
+              <li>preset lookup stops leaking into the entry path</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ====================== CANDIDATE 4 ====================== -->
+        <article class="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-sm">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <h2 class="text-xl font-serif text-slate-800">4. Prompt-construction seam split between assembler and pipeline_run</h2>
+            <div class="flex gap-2">
+              <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">in-process</span>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Files</p>
+            <p class="font-mono text-sm text-slate-700 leading-relaxed">
+              src/application/prompting/assembler.rs (PromptContext, render_persona_layer, render_guide_layer)<br/>
+              src/application/pipeline/pipeline_run.rs (phase_narrate preset selection)
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- BEFORE: cross-section -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">Before — impersonate knowledge in two places</p>
+              <div class="space-y-1.5 text-xs">
+                <div class="border-l-4 border-sky-500 bg-white px-2 py-1.5">
+                  <span class="font-mono">pipeline_run</span>: selects impersonate preset (swaps system preset)
+                </div>
+                <div class="border-l-4 border-amber-500 bg-white px-2 py-1.5">
+                  <span class="font-mono">assembler</span>: drops player-character layer on impersonate
+                </div>
+                <div class="border-l-4 border-amber-500 bg-white px-2 py-1.5">
+                  <span class="font-mono">PromptContext::with_impersonate</span>: clears guide (mutual-exclusion rule)
+                </div>
+                <div class="border-l-4 border-red-500 bg-white px-2 py-1.5 text-red-800">
+                  no single module knows "what impersonate means for the prompt"
+                </div>
+              </div>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">After — impersonate policy behind one interface</p>
+              <div class="h-[260px] relative flex flex-col items-center justify-center gap-3">
+                <div class="deep rounded-lg p-4 w-4/5 text-center">
+                  <p class="text-xs uppercase tracking-wider text-slate-300">SteeringPromptPolicy module</p>
+                  <p class="text-sm font-mono mt-2 text-slate-100">resolve(steering) → PresetChoice + LayerSet</p>
+                  <p class="text-xs text-slate-400 mt-2">owns: preset swap, layer drop, guide/impersonate mutual exclusion</p>
+                </div>
+                <div class="flex gap-3 text-xs text-slate-500">
+                  <span class="module-box bg-stone-50 px-2 py-1">pipeline_run calls it</span>
+                  <span class="module-box bg-stone-50 px-2 py-1">assembler calls it</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Problem</p>
+              <p class="text-slate-700">"What impersonate does to the prompt" is split: preset swap in <span class="font-mono">pipeline_run</span>, layer drop in <span class="font-mono">assembler</span>, mutual-exclusion in <span class="font-mono">PromptContext</span>. Neither module is deep on its own; they form a tightly coupled seam. A change to impersonate's prompt shape touches both.</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Solution</p>
+              <p class="text-slate-700">A SteeringPromptPolicy module returns the preset choice and the layer set for a given steering. <span class="font-mono">pipeline_run</span> and <span class="font-mono">assembler</span> consume its output; neither owns impersonate specifics.</p>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Wins</p>
+            <ul class="text-sm text-slate-700 space-y-1 list-disc list-inside">
+              <li>locality: impersonate prompt shape lives in one module</li>
+              <li>interface shrinks: PromptContext drops guide/impersonate fields</li>
+              <li>mutual-exclusion rule stops hiding in a builder method</li>
+              <li>tests: one interface for "what does steering X do to the prompt"</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ====================== CANDIDATE 5 ====================== -->
+        <article class="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-sm">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <h2 class="text-xl font-serif text-slate-800">5. Narrative-voice setting leaks across two injection points</h2>
+            <div class="flex gap-2">
+              <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">in-process</span>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Files</p>
+            <p class="font-mono text-sm text-slate-700 leading-relaxed">
+              src/application/prompting/assembler.rs (assemble → set_narrative_voice)<br/>
+              src/application/arrival_service.rs (ArrivalTaskContext::run → set_narrative_voice)<br/>
+              src/domain/model/template.rs (TemplateVars::set_narrative_voice)
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- BEFORE -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">Before — two callers must remember</p>
+              <pre class="mermaid">
+flowchart LR
+  S[AppSettings<br/>narrative_voice] --> A1[assembler.assemble<br/>set_narrative_voice]
+  S --> A2[arrival_service.run<br/>set_narrative_voice]
+  A1 -.leak.-> T[TemplateVars]
+  A2 -.leak.-> T
+  T --> D[defaults to 3rd/past<br/>silent wrong voice]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class A1,A2 leak
+              </pre>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2 text-center">After — assembler owns voice application</p>
+              <pre class="mermaid">
+flowchart LR
+  S[AppSettings] --> A[assembler.assemble]
+  A --> T[TemplateVars<br/>voice applied once]
+  A2[arrival_service] --> A
+  classDef deep fill:#1e293b,color:#f8fafc;
+  class A deep
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Problem</p>
+              <p class="text-slate-700"><span class="font-mono">set_narrative_voice</span> is called in both <span class="font-mono">assembler.assemble</span> and <span class="font-mono">arrival_service</span>. Any future caller that builds a <span class="font-mono">PromptContext</span> must remember to apply it; forgetting it silently produces third-person-past output. A leaking seam.</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Solution</p>
+              <p class="text-slate-700">The assembler already holds <span class="font-mono">AppSettings</span> and applies voice in <span class="font-mono">assemble</span>. Route <span class="font-mono">arrival_service</span> through the assembler (or a shared TemplateVars builder) so voice is applied at the single owner of prompt construction.</p>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Wins</p>
+            <ul class="text-sm text-slate-700 space-y-1 list-disc list-inside">
+              <li>locality: voice policy lives in the prompt-construction module</li>
+              <li>one call site, not two — silent-wrong-voice failure mode gone</li>
+              <li>leverage: any new PromptContext caller gets voice for free</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <!-- ====================== TOP RECOMMENDATION ====================== -->
+      <section id="top-recommendation">
+        <div class="rounded-xl deep p-7 space-y-3">
+          <p class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</p>
+          <h2 class="text-2xl font-serif text-white">Start with Candidate 2 — extract the NarrationTurn module</h2>
+          <p class="text-slate-300 text-sm max-w-3xl">
+            It unblocks the others. A deep <span class="font-mono text-slate-100">NarrationTurn</span> module that owns
+            "run one narration turn from a prepared GameState" gives Candidate 1 (ReplaySteering) a single consumer to
+            call against, retires the <span class="font-mono">pub(crate)</span> test helpers, and removes ~150 lines of
+            duplicated choreography between <span class="font-mono">retry.rs</span> and <span class="font-mono">phase_narrate</span>.
+            Candidates 3 and 4 then layer on top of a stable narration-turn seam. Candidate 5 is independent and small —
+            a safe parallel win.
+          </p>
+          <p class="text-slate-400 text-xs"><a href="#candidates" class="underline">↑ back to candidates</a></p>
+        </div>
+      </section>
+
+      <footer class="text-xs text-slate-400 border-t border-slate-200 pt-4">
+        Vocabulary: module · interface · implementation · depth · seam · adapter · leverage · locality.
+        Source: <span class="font-mono">codebase-design</span> skill + <span class="font-mono">CONTEXT.md</span>.
+        No interfaces proposed yet — this report is friction inventory only.
+      </footer>
+
+    </main>
+  </body>
+</html>

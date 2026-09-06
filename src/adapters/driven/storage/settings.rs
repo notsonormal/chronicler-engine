@@ -14,7 +14,7 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                    "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, created_at, updated_at FROM settings WHERE id = 1",
+                    "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at FROM settings WHERE id = 1",
                 )?;
                 let result = stmt.query_row([], DbSettings::from_row);
                 match result {
@@ -39,9 +39,12 @@ impl Storage {
                 let agents_json = serde_json::to_string(&settings.agents)
                     .map_err(|e| EngineError::Parse(format!("Failed to serialize agents: {e}")))?;
 
+                let mode_preset_registry_json = serde_json::to_string(&settings.mode_preset_registry)
+                    .map_err(|e| EngineError::Parse(format!("Failed to serialize mode_preset_registry: {e}")))?;
+
                 conn.execute(
-                    "INSERT OR REPLACE INTO settings (id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, created_at, updated_at)
-                     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO settings (id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at)
+                     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     rusqlite::params![
                         &connections_json,
                         &settings.narration_connection_id,
@@ -49,8 +52,7 @@ impl Storage {
                         &settings.response_length,
                         &text_check_json,
                         &agents_json,
-                        &settings.active_system_prompt_preset_id,
-                        &settings.active_quantifier_prompt_preset_id,
+                        &mode_preset_registry_json,
                         &now,
                         &now,
                     ],

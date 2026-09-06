@@ -269,5 +269,261 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 15 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if !column_exists(conn, "message_swipes", "replay") {
+            exec("ALTER TABLE message_swipes ADD COLUMN replay TEXT")?;
+        }
+        conn.pragma_update(None, "user_version", 15)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 16 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if !column_exists(conn, "settings", "active_impersonate_prompt_preset_id") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN active_impersonate_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'impersonate_default'",
+            )?;
+        }
+        conn.pragma_update(None, "user_version", 16)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 17 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if column_exists(conn, "messages", "sender") {
+            exec("ALTER TABLE messages DROP COLUMN sender")?;
+        }
+        conn.pragma_update(None, "user_version", 17)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 18 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if !column_exists(conn, "settings", "narrative_perspective") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN narrative_perspective \
+                 TEXT NOT NULL DEFAULT 'third'",
+            )?;
+        }
+        if !column_exists(conn, "settings", "narrative_tense") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN narrative_tense \
+                 TEXT NOT NULL DEFAULT 'past'",
+            )?;
+        }
+        conn.pragma_update(None, "user_version", 18)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 19 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        if !column_exists(conn, "worlds", "narrator_mode") {
+            exec("ALTER TABLE worlds ADD COLUMN narrator_mode TEXT NOT NULL DEFAULT 'novel'")?;
+        }
+        if !column_exists(conn, "worlds", "narrative_perspective") {
+            exec(
+                "ALTER TABLE worlds ADD COLUMN narrative_perspective TEXT NOT NULL DEFAULT 'third'",
+            )?;
+        }
+        if !column_exists(conn, "worlds", "narrative_tense") {
+            exec("ALTER TABLE worlds ADD COLUMN narrative_tense TEXT NOT NULL DEFAULT 'past'")?;
+        }
+
+        if !column_exists(conn, "games", "narrator_mode") {
+            exec("ALTER TABLE games ADD COLUMN narrator_mode TEXT NOT NULL DEFAULT 'novel'")?;
+        }
+        if !column_exists(conn, "games", "narrative_perspective") {
+            exec(
+                "ALTER TABLE games ADD COLUMN narrative_perspective TEXT NOT NULL DEFAULT 'third'",
+            )?;
+        }
+        if !column_exists(conn, "games", "narrative_tense") {
+            exec("ALTER TABLE games ADD COLUMN narrative_tense TEXT NOT NULL DEFAULT 'past'")?;
+        }
+        if !column_exists(conn, "games", "active_system_prompt_preset_id") {
+            exec(
+                "ALTER TABLE games ADD COLUMN active_system_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'system_default'",
+            )?;
+        }
+        if !column_exists(conn, "games", "active_quantifier_prompt_preset_id") {
+            exec(
+                "ALTER TABLE games ADD COLUMN active_quantifier_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'quantifier_default'",
+            )?;
+        }
+        if !column_exists(conn, "games", "active_impersonate_prompt_preset_id") {
+            exec(
+                "ALTER TABLE games ADD COLUMN active_impersonate_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'impersonate_default'",
+            )?;
+        }
+
+        // Games inherit posture from their world (the new source of truth).
+        // COALESCE keeps the migration alive for a game whose world_key has
+        // no matching world row — the subquery would otherwise produce NULL
+        // and fail the NOT NULL constraint, aborting startup.
+        exec(
+            "UPDATE games SET \
+               narrator_mode = COALESCE((SELECT narrator_mode FROM worlds WHERE worlds.key = games.world_key), 'novel'), \
+               narrative_perspective = COALESCE((SELECT narrative_perspective FROM worlds WHERE worlds.key = games.world_key), 'third'), \
+               narrative_tense = COALESCE((SELECT narrative_tense FROM worlds WHERE worlds.key = games.world_key), 'past')",
+        )?;
+
+        // The COALESCE fallback above silently repairs orphaned games; these
+        // warnings keep the data-integrity signal visible in the logs.
+        let orphans: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT name FROM games \
+                     WHERE world_key NOT IN (SELECT key FROM worlds)",
+                )
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
+        };
+        for key in &orphans {
+            tracing::warn!(
+                "migration v19: game '{key}' references world_key with no matching world row; \
+                 posture defaulted to novel/third/past"
+            );
+        }
+
+        // Mode-preset registry column on settings. Backfill from the legacy
+        // per-type columns before they are dropped below.
+        if !column_exists(conn, "settings", "mode_preset_registry") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN mode_preset_registry TEXT NOT NULL DEFAULT '{}'",
+            )?;
+            // Fresh default for rows that took the '{}' default (no legacy columns).
+            exec(
+                "UPDATE settings SET mode_preset_registry = '{\"novel\":{\"system_prompt_preset_id\":\"system_default\",\"quantifier_prompt_preset_id\":\"quantifier_default\",\"impersonate_prompt_preset_id\":\"impersonate_default\"},\"interactive_fiction\":{\"system_prompt_preset_id\":\"system_if_default\",\"quantifier_prompt_preset_id\":\"quantifier_default\",\"impersonate_prompt_preset_id\":\"impersonate_default\"}}' \
+               WHERE mode_preset_registry = '{}'",
+            )?;
+            // Migrate legacy per-type columns into the Novel bundle, where present.
+            exec(
+                "UPDATE settings SET mode_preset_registry = json_set(mode_preset_registry, '$.novel.system_prompt_preset_id', active_system_prompt_preset_id) \
+               WHERE active_system_prompt_preset_id IS NOT NULL",
+            )?;
+            exec(
+                "UPDATE settings SET mode_preset_registry = json_set(mode_preset_registry, '$.novel.quantifier_prompt_preset_id', active_quantifier_prompt_preset_id) \
+               WHERE active_quantifier_prompt_preset_id IS NOT NULL",
+            )?;
+            exec(
+                "UPDATE settings SET mode_preset_registry = json_set(mode_preset_registry, '$.novel.impersonate_prompt_preset_id', active_impersonate_prompt_preset_id) \
+               WHERE active_impersonate_prompt_preset_id IS NOT NULL",
+            )?;
+            // IF bundle keeps quantifier/impersonate in step with the migrated Novel values.
+            exec(
+                "UPDATE settings SET mode_preset_registry = json_set(mode_preset_registry, '$.interactive_fiction.quantifier_prompt_preset_id', mode_preset_registry->'$.novel.quantifier_prompt_preset_id')",
+            )?;
+            exec(
+                "UPDATE settings SET mode_preset_registry = json_set(mode_preset_registry, '$.interactive_fiction.impersonate_prompt_preset_id', mode_preset_registry->'$.novel.impersonate_prompt_preset_id')",
+            )?;
+        }
+
+        if column_exists(conn, "settings", "narrative_perspective") {
+            exec("ALTER TABLE settings DROP COLUMN narrative_perspective")?;
+        }
+        if column_exists(conn, "settings", "narrative_tense") {
+            exec("ALTER TABLE settings DROP COLUMN narrative_tense")?;
+        }
+        if column_exists(conn, "settings", "active_system_prompt_preset_id") {
+            exec("ALTER TABLE settings DROP COLUMN active_system_prompt_preset_id")?;
+        }
+        if column_exists(conn, "settings", "active_quantifier_prompt_preset_id") {
+            exec("ALTER TABLE settings DROP COLUMN active_quantifier_prompt_preset_id")?;
+        }
+        if column_exists(conn, "settings", "active_impersonate_prompt_preset_id") {
+            exec("ALTER TABLE settings DROP COLUMN active_impersonate_prompt_preset_id")?;
+        }
+
+        conn.pragma_update(None, "user_version", 19)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 20 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Per-preset mode-allow flags on the presets table. The column is
+        // born all-allowed on every existing row — no user value can
+        // pre-exist a column at birth.
+        if !column_exists(conn, "prompt_presets", "allowed_modes") {
+            exec(
+                "ALTER TABLE prompt_presets ADD COLUMN allowed_modes \
+                 TEXT NOT NULL DEFAULT '[\"novel\",\"interactive_fiction\"]'",
+            )?;
+        }
+        // One-time tighten of the novel system seed; every other row keeps
+        // its all-allowed birth value.
+        exec(
+            "UPDATE prompt_presets SET allowed_modes = '[\"novel\"]' \
+             WHERE id = 'system_default'",
+        )?;
+
+        // Reshape the settings registry from the v19 object-keyed JSON to the
+        // mode-tagged list, preserving user-customized bundle values. The RHS
+        // is evaluated against the pre-update column value (SQLite semantics).
+        // The json_type guard keeps a partially applied block safe to re-run.
+        exec(
+            "UPDATE settings SET mode_preset_registry = json_array( \
+               json_object('mode', 'novel', \
+                 'system_prompt_preset_id', json_extract(mode_preset_registry, '$.novel.system_prompt_preset_id'), \
+                 'quantifier_prompt_preset_id', json_extract(mode_preset_registry, '$.novel.quantifier_prompt_preset_id'), \
+                 'impersonate_prompt_preset_id', json_extract(mode_preset_registry, '$.novel.impersonate_prompt_preset_id')), \
+               json_object('mode', 'interactive_fiction', \
+                 'system_prompt_preset_id', json_extract(mode_preset_registry, '$.interactive_fiction.system_prompt_preset_id'), \
+                 'quantifier_prompt_preset_id', json_extract(mode_preset_registry, '$.interactive_fiction.quantifier_prompt_preset_id'), \
+                 'impersonate_prompt_preset_id', json_extract(mode_preset_registry, '$.interactive_fiction.impersonate_prompt_preset_id'))) \
+             WHERE json_type(mode_preset_registry) = 'object'",
+        )?;
+
+        conn.pragma_update(None, "user_version", 20)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 21 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Per-game posture is dead data: the prompt assembler stamps world
+        // posture as the sole owner, and no code reads the per-game copies.
+        if column_exists(conn, "games", "narrative_perspective") {
+            exec("ALTER TABLE games DROP COLUMN narrative_perspective")?;
+        }
+        if column_exists(conn, "games", "narrative_tense") {
+            exec("ALTER TABLE games DROP COLUMN narrative_tense")?;
+        }
+
+        conn.pragma_update(None, "user_version", 21)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

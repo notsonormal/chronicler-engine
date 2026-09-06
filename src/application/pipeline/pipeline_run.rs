@@ -12,22 +12,15 @@ use crate::domain::model::quantifier::{NpcEventList, QuantifierConfidence, Quant
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::world::WorldCard;
 use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
+
+use crate::adapters::driven::storage::worlds::WorldBundle;
 
 use super::phase_error::PhaseError;
 use super::action_pipeline::core::ActionPipeline;
 
-pub struct PipelineInputs {
-    pub input: String,
-    pub world: Arc<WorldCard>,
-    pub map: Arc<MapDef>,
-    pub persona: Arc<PersonaCard>,
-    pub all_npcs: Vec<NpcCard>,
-}
-
-pub(super) struct PipelineRun<'a> {
+pub(crate) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
     pub(super) started_for: u64,
 }
@@ -40,7 +33,7 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    fn check_game_unchanged(&self, started_for: u64) -> Result<(), PhaseError> {
+    pub(super) fn check_game_unchanged(&self, started_for: u64) -> Result<(), PhaseError> {
         let current = self.pipeline.storage.current_game_id();
         if current != started_for {
             tracing::info!(
@@ -79,55 +72,25 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    fn set_error(&self, state: &mut GameState, msg: String) -> PhaseError {
+    pub(super) fn set_error(&self, state: &mut GameState, msg: String) -> PhaseError {
         state.narrative.input_buffer.status = GenerationStatus::Error(msg.clone());
         PhaseError::NarratorFailed(msg)
     }
 
-    pub(super) fn phase_narrate(
+    pub(super) fn call_narrator(
         &self,
-        state: &mut GameState,
-        inputs: &PipelineInputs,
-    ) -> Result<(String, String, String), PhaseError> {
-        let Some(room) = inputs
-            .map
-            .get_room_by_id(&state.movement.current_room_id)
-            .or_else(|| {
-                state
-                    .movement
-                    .dynamic_rooms
-                    .get(&state.movement.current_room_id)
-            })
-        else {
-            return Err(self.set_error(state, "Room not found".to_string()));
-        };
-        let history = state.narrative.history();
-
-        let (preset, response_length) = match self.load_preset_and_response_length() {
-            Ok(p) => p,
-            Err(msg) => return Err(self.set_error(state, msg)),
-        };
-
-        let context = PromptContext::new(
-            &inputs.world,
-            room,
-            NpcContext {
-                all_npcs: &inputs.all_npcs,
-                npcs_in_area: &state.scene.npcs_in_area,
-            },
-            &inputs.persona,
-            &inputs.input,
-            &history,
-        );
-
+        context: &PromptContext,
+        preset: &PromptPreset,
+        response_length: &str,
+    ) -> Result<(String, String, String), String> {
         let assembled = match self.pipeline.prompt_assembler.assemble(
-            &context,
-            &preset,
-            &inputs.world.global_rules,
-            Some(&response_length),
+            context,
+            preset,
+            &context.world.global_rules,
+            Some(response_length),
         ) {
             Ok(a) => a,
-            Err(e) => return Err(self.set_error(state, e.llm_error_string())),
+            Err(e) => return Err(e.llm_error_string()),
         };
 
         tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
@@ -138,19 +101,14 @@ impl<'a> PipelineRun<'a> {
             Some(assembled.max_tokens),
         ) {
             Ok(result) => result,
-            Err(e) => return Err(self.set_error(state, e.llm_error_string())),
+            Err(e) => return Err(e.llm_error_string()),
         };
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;
 
-        self.check_game_unchanged(self.started_for)?;
-
         if narration_text.trim().is_empty() {
-            return Err(self.set_error(state, "LLM Error: empty response".to_string()));
+            return Err("LLM Error: empty response".to_string());
         }
-
-        state.add_message(narration_text.clone(), None, MessageType::Narration);
-        self.persist_snapshot_or_err(state, "pre-quantifier narration")?;
 
         Ok((
             narration_text,
@@ -196,7 +154,6 @@ impl<'a> PipelineRun<'a> {
             quantifier_result.npcs.confidence = QuantifierConfidence::Low;
             state.add_message(
                 "[System] NPC detection uncertain — using room defaults".to_string(),
-                None,
                 MessageType::System,
             );
         }
@@ -244,7 +201,6 @@ impl<'a> PipelineRun<'a> {
                 tracing::error!("Trigger narration failed: {e}");
                 state.add_message(
                     format!("[Trigger narration failed: {e}]"),
-                    None,
                     MessageType::System,
                 );
                 return Err(self.set_error(state, format!("Trigger narration failed: {e}")));
@@ -321,7 +277,7 @@ impl<'a> PipelineRun<'a> {
         &self,
         state: &GameState,
         narration_text: &str,
-        inputs: &PipelineInputs,
+        bundle: &WorldBundle,
         trigger_match: &TriggerMatch,
     ) -> Option<StoredTriggerContext> {
         let continuation_user_msg = format!(
@@ -331,7 +287,7 @@ impl<'a> PipelineRun<'a> {
             narration_text, trigger_match.trigger_narration_prompt
         );
 
-        let room_data = inputs
+        let room_data = bundle
             .map
             .get_room_by_id(&state.movement.current_room_id)
             .or_else(|| {
@@ -342,16 +298,27 @@ impl<'a> PipelineRun<'a> {
             })?;
         let history = state.narrative.history();
 
-        let (preset, response_length) = self.load_preset_and_response_length().ok()?;
+        let preset_id = {
+            let settings = self
+                .pipeline
+                .settings
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            self.pipeline.storage.active_system_preset_id(&settings)
+        };
+        let (preset, response_length) = self
+            .load_preset_and_response_length(&preset_id, PresetKind::System)
+            .ok()?;
 
+        let all_npcs: Vec<NpcCard> = bundle.npcs.values().cloned().collect();
         let trigger_ctx = PromptContext::new(
-            &inputs.world,
+            &bundle.world,
             room_data,
             NpcContext {
-                all_npcs: &inputs.all_npcs,
+                all_npcs: &all_npcs,
                 npcs_in_area: &state.scene.npcs_in_area,
             },
-            &inputs.persona,
+            &bundle.persona,
             &continuation_user_msg,
             &history,
         );
@@ -362,7 +329,7 @@ impl<'a> PipelineRun<'a> {
             .assemble(
                 &trigger_ctx,
                 &preset,
-                &inputs.world.global_rules,
+                &bundle.world.global_rules,
                 Some(&response_length),
             )
             .ok()?;
@@ -379,26 +346,48 @@ impl<'a> PipelineRun<'a> {
         })
     }
 
-    pub(super) fn load_preset_and_response_length(&self) -> Result<(PromptPreset, String), String> {
+    pub(super) fn load_preset_and_response_length(
+        &self,
+        preset_id: &str,
+        kind: PresetKind,
+    ) -> Result<(PromptPreset, String), String> {
         let settings = self
             .pipeline
             .settings
             .read()
             .unwrap_or_else(|e| e.into_inner());
-        let preset_id = settings.active_system_prompt_preset_id.clone();
         let response_length = settings.response_length.clone();
-        match self.pipeline.storage.get_preset(&preset_id) {
+        match self.pipeline.storage.get_preset(preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
                 tracing::error!(
-                    "active system preset '{preset_id}' not found — defaults not seeded?"
+                    "active {} preset '{preset_id}' not found — defaults not seeded?",
+                    kind.label()
                 );
-                Err("Active system preset not found".to_string())
+                Err(format!("Active {} preset not found", kind.label()))
             }
             Err(e) => {
                 tracing::error!("preset storage inaccessible: {e}");
                 Err("Preset storage inaccessible".to_string())
             }
+        }
+    }
+}
+
+/// Which preset branch a load serves — names the not-found error.
+#[derive(Clone, Copy)]
+pub(crate) enum PresetKind {
+    /// The active system preset (narration and trigger generations).
+    System,
+    /// The active impersonate preset (impersonate generations).
+    Impersonate,
+}
+
+impl PresetKind {
+    fn label(self) -> &'static str {
+        match self {
+            PresetKind::System => "system",
+            PresetKind::Impersonate => "impersonate",
         }
     }
 }

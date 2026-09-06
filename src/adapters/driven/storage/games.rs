@@ -2,7 +2,8 @@
 //! Game storage operations
 
 use crate::error::EngineError;
-use crate::domain::model::game::Game;
+use crate::domain::model::game::{Game, NewGame};
+use crate::domain::model::settings::{AppSettings, ModePresetBundle, NarratorMode};
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
 
@@ -13,7 +14,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
                          FROM games
                          ORDER BY updated_at DESC",
                     )
@@ -62,6 +63,38 @@ impl Storage {
                     name: name.to_string(),
                     created_at: now,
                     updated_at: now,
+                    narrator_mode: NarratorMode::Novel,
+                    active_system_prompt_preset_id: "system_default".to_string(),
+                    active_quantifier_prompt_preset_id: "quantifier_default".to_string(),
+                    active_impersonate_prompt_preset_id: "impersonate_default".to_string(),
+                });
+                Ok(id)
+            }
+        })
+    }
+
+    pub fn create_game_from_request(&self, request: &NewGame) -> Result<u64, EngineError> {
+        self.with_backend_mut("create_game", |backend| match backend {
+            Backend::Sqlite { pool } => pool.insert_game_from_request(request),
+            Backend::InMemory(data) => {
+                let id = data.next_game_id;
+                data.next_game_id += 1;
+                let now = chrono::Utc::now();
+                data.games.push(Game {
+                    id,
+                    world_name: request.world_name.clone(),
+                    world_key: request.world_key.clone(),
+                    persona_key: request.persona_key.clone(),
+                    persona_name: request.persona_name.clone(),
+                    name: request.name.clone(),
+                    created_at: now,
+                    updated_at: now,
+                    narrator_mode: request.narrator_mode,
+                    active_system_prompt_preset_id: request.system_prompt_preset_id.clone(),
+                    active_quantifier_prompt_preset_id: request.quantifier_prompt_preset_id.clone(),
+                    active_impersonate_prompt_preset_id: request
+                        .impersonate_prompt_preset_id
+                        .clone(),
                 });
                 Ok(id)
             }
@@ -92,25 +125,14 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
                          FROM games
                          WHERE id = ?1
                          LIMIT 1",
                     )
                     .map_err(|e| EngineError::Config(format!("Failed to prepare get game: {e}")))?;
 
-                let db_result = stmt.query_row(rusqlite::params![id as i64], |row| {
-                    Ok(DbGame {
-                        id: row.get(0)?,
-                        world_name: row.get(1)?,
-                        name: row.get(2)?,
-                        created_at: row.get(3)?,
-                        updated_at: row.get(4)?,
-                        world_key: row.get(5)?,
-                        persona_key: row.get(6)?,
-                        persona_name: row.get(7)?,
-                    })
-                });
+                let db_result = stmt.query_row(rusqlite::params![id as i64], DbGame::from_row);
 
                 match db_result {
                     Ok(db) => Ok(Some(db.to_game()?)),
@@ -122,11 +144,55 @@ impl Storage {
         })
     }
 
-    /// Required-read of a game row by id. Absence becomes
-    /// [`EngineError::GameNotFound`]. Optional / fallback / existence /
-    /// validation callers should stay on [`Storage::get_game`](Self::get_game).
     pub fn require_game(&self, id: u64) -> Result<Game, EngineError> {
         self.get_game(id)?
             .ok_or_else(|| EngineError::GameNotFound(id))
+    }
+
+    pub fn active_system_preset_id(&self, settings: &AppSettings) -> String {
+        self.resolve_active_preset_id(
+            settings,
+            |g| g.active_system_prompt_preset_id.as_str(),
+            |b| b.system_prompt_preset_id.as_str(),
+        )
+    }
+
+    pub fn active_quantifier_preset_id(&self, settings: &AppSettings) -> String {
+        self.resolve_active_preset_id(
+            settings,
+            |g| g.active_quantifier_prompt_preset_id.as_str(),
+            |b| b.quantifier_prompt_preset_id.as_str(),
+        )
+    }
+
+    pub fn active_impersonate_preset_id(&self, settings: &AppSettings) -> String {
+        self.resolve_active_preset_id(
+            settings,
+            |g| g.active_impersonate_prompt_preset_id.as_str(),
+            |b| b.impersonate_prompt_preset_id.as_str(),
+        )
+    }
+
+    // Falls back to the registry's Novel bundle when the current game is absent.
+    fn resolve_active_preset_id<G, B>(
+        &self,
+        settings: &AppSettings,
+        game_slot: G,
+        bundle_slot: B,
+    ) -> String
+    where
+        G: FnOnce(&Game) -> &str,
+        B: FnOnce(&ModePresetBundle) -> &str,
+    {
+        match self.get_game(self.current_game_id()).ok().flatten() {
+            Some(game) => game_slot(&game).to_string(),
+            None => {
+                tracing::warn!("current game missing; falling back to registry novel preset");
+                let bundle = settings
+                    .mode_preset_registry
+                    .bundle_for(NarratorMode::Novel);
+                bundle_slot(&bundle).to_string()
+            }
+        }
     }
 }

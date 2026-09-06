@@ -1,0 +1,39 @@
+log_dir: default
+
+backend:
+  models:
+    # This name is a litellm routing directive (openai/ prefix ->
+    # OPENAI_API_BASE), not the pi-facing model id. The proxy ignores the
+    # model field of incoming requests and always uses this entry.
+    - name: openai/hf:zai-org/GLM-5.3-Flash
+      api_key: $SYNTHETIC_API_KEY
+      # Synthetic answers 429 "Too many concurrent requests" above ~5 in
+      # flight; best-of-3 keeps 2 active + 1 queued and survived observed
+      # load. 5 lost candidates to rejections in practice.
+      num_candidates: 3
+      temperature: 1
+      max_tokens: 16384         # reasoning shares this budget with the answer
+
+verifier:
+  model:
+    name: hf:zai-org/GLM-5.3-Flash            # no prefix -> id passed through as-is
+    base_url: https://api.synthetic.new/openai/v1
+    api_key: $SYNTHETIC_API_KEY
+
+  majority_voting: true        # skip the tournament when candidates agree (cheaper)
+
+  method:
+    name: pivot_tournament
+    pivots: 2
+    n_verifications: 1         # raise to 4 for the paper's default (4x verifier calls)
+    seed: 0
+    note: >-
+      There is no reference solution available. Judge each response purely on
+      how plausibly it solved the task correctly.
+    criteria:
+      - name: Task Success
+        description: >-
+          How likely the response correctly and completely solves the task.
+          The strongest signal is the response verifying its own solution
+          against the task's specific requirements. Response length, number
+          of steps, and apparent confidence do not predict correctness.

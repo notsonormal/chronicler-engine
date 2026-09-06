@@ -7,8 +7,8 @@ use crate::error::EngineError;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::AppSettings;
-use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense};
+use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::template::render_template;
 use crate::domain::model::world::WorldCard;
@@ -37,6 +37,10 @@ pub struct PromptContext<'a> {
     pub user_message: &'a str,
     pub history: &'a [MessageEntry],
     pub template_vars: TemplateVars,
+    /// Transient: never persisted; rendered as the final prompt layer.
+    pub guide: Option<String>,
+    /// Drops the player-character layer; the impersonate preset supplies the voice.
+    pub impersonate: bool,
 }
 
 pub struct PromptAssembler {
@@ -73,9 +77,16 @@ impl PromptAssembler {
         global_rules: &[String],
         response_length: Option<&str>,
     ) -> Result<AssembledPrompt, EngineError> {
-        let system_prompt = build_system_prompt(preset, global_rules, &context.template_vars);
+        let mut template_vars = context.template_vars.clone();
+        Self::apply_posture(
+            &mut template_vars,
+            context.world.narrative_perspective,
+            context.world.narrative_tense,
+        );
+
+        let system_prompt = build_system_prompt(preset, global_rules, &template_vars);
         let post_history_prompt =
-            build_post_history_prompt(preset, response_length, &context.template_vars);
+            build_post_history_prompt(preset, response_length, &template_vars);
 
         let renderer = LayerRenderer {
             world: context.world,
@@ -86,7 +97,9 @@ impl PromptAssembler {
             history: context.history,
             system_prompt,
             post_history_prompt,
-            template_vars: &context.template_vars,
+            template_vars: &template_vars,
+            guide: context.guide.as_deref(),
+            impersonate: context.impersonate,
         };
 
         let (max_context_tokens, requested_max_tokens) = self.resolve_budget();
@@ -108,6 +121,16 @@ impl PromptAssembler {
         let conn = guard.narration_connection();
         (conn.resolve_max_context_tokens(), conn.max_tokens)
     }
+
+    /// Sole owner of narrative-voice application. Callers never stamp.
+    fn apply_posture(
+        template_vars: &mut TemplateVars,
+        perspective: NarrativePerspective,
+        tense: NarrativeTense,
+    ) {
+        template_vars.narrative_perspective = perspective.as_str().to_string();
+        template_vars.narrative_tense = tense.as_str().to_string();
+    }
 }
 
 impl PromptContext<'_> {
@@ -126,8 +149,23 @@ impl PromptContext<'_> {
             persona,
             user_message,
             history,
-            template_vars: TemplateVars::new(&persona.sheet.name),
+            template_vars: TemplateVars::from_persona(persona),
+            guide: None,
+            impersonate: false,
         }
+    }
+
+    pub fn with_guide(mut self, guide: Option<String>) -> Self {
+        self.guide = guide;
+        self
+    }
+
+    pub fn with_impersonate(mut self, impersonate: bool) -> Self {
+        self.impersonate = impersonate;
+        if impersonate {
+            self.guide = None;
+        }
+        self
     }
 
     pub fn build_narration_prompt(
@@ -156,6 +194,8 @@ struct LayerRenderer<'a> {
     system_prompt: String,
     post_history_prompt: String,
     template_vars: &'a TemplateVars,
+    guide: Option<&'a str>,
+    impersonate: bool,
 }
 
 impl<'a> LayerRenderer<'a> {
@@ -174,6 +214,7 @@ impl<'a> LayerRenderer<'a> {
             self.render_history_layer(),
             self.post_history_prompt.clone(),
             self.render_user_layer(),
+            self.render_guide_layer(),
         ]
         .into_iter()
         .filter(|s| !s.is_empty())
@@ -264,6 +305,9 @@ impl<'a> LayerRenderer<'a> {
     }
 
     fn render_persona_layer(&self) -> String {
+        if self.impersonate {
+            return String::new();
+        }
         let mut output = String::from("<PlayerCharacter>\n");
         output.push_str("Name: ");
         output.push_str(&self.persona.sheet.name);
@@ -317,8 +361,18 @@ impl<'a> LayerRenderer<'a> {
 
         let mut history_text = String::new();
         for entry in self.history {
-            let sender = entry.sender.as_deref().unwrap_or("Narrator");
-            history_text.push_str(&format!("{}: {}\n", sender, entry.text));
+            match entry.message_type {
+                MessageType::Narration => {
+                    history_text.push_str(&format!("Narrator: {}\n", entry.text));
+                }
+                MessageType::Input => {
+                    history_text
+                        .push_str(&format!("{}: {}\n", self.persona.sheet.name, entry.text));
+                }
+                MessageType::System => {
+                    history_text.push_str(&format!("System: {}\n", entry.text));
+                }
+            }
         }
 
         let truncated = truncate_to_budget(&history_text, budget::MAX_HISTORY_TOKENS as usize);
@@ -334,6 +388,21 @@ impl<'a> LayerRenderer<'a> {
         output.push_str(&sanitized);
         output.push_str("\n</PlayerInput>\n");
 
+        output
+    }
+
+    fn render_guide_layer(&self) -> String {
+        let Some(guide) = self.guide else {
+            return String::new();
+        };
+        let guide = guide.trim();
+        if guide.is_empty() {
+            return String::new();
+        }
+        let mut output = String::from("<Guide>\n");
+        output.push_str("Take the following into special consideration for your next message: ");
+        output.push_str(guide);
+        output.push_str("\n</Guide>\n");
         output
     }
 }

@@ -15,6 +15,8 @@ fn make_system_preset(id: &str, name: &str) -> PromptPreset {
         instructions: Some("Test instructions".to_string()),
         writing_style: Some("Test style".to_string()),
         output_format: Some("Test format".to_string()),
+        allowed_modes:
+            chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
     }
@@ -28,6 +30,8 @@ fn make_quantifier_preset(id: &str, name: &str) -> PromptPreset {
         instructions: Some("Quantify instructions".to_string()),
         writing_style: Some("Quantify style".to_string()),
         output_format: Some("Quantify format".to_string()),
+        allowed_modes:
+            chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::Quantifier,
     }
@@ -83,11 +87,8 @@ fn test_list_presets_ordered_by_updated_at_desc() {
     let storage = create_storage();
     let first = make_system_preset("first", "First");
     storage.save_preset(&first).unwrap();
-    // NOTE: Sleeps are intentional and unavoidable here. This test verifies
-    // that presets are ordered by updated_at DESC. SQLite stores timestamps with
-    // millisecond precision, so we need explicit delays to ensure distinct timestamps.
-    // This is a legitimate use of sleep in tests - verifying time-based ordering.
-    // Save with explicit time gaps to ensure ordering by updated_at
+    // NOTE: Sleeps are intentional: SQLite stores timestamps with millisecond
+    // precision, so ordering by updated_at requires distinct timestamps.
     std::thread::sleep(std::time::Duration::from_millis(15));
     let second = make_system_preset("second", "Second");
     storage.save_preset(&second).unwrap();
@@ -177,6 +178,8 @@ fn test_get_preset_returns_all_fields() {
         instructions: Some("Instructions text".to_string()),
         writing_style: Some("Writing style text".to_string()),
         output_format: Some("Output format text".to_string()),
+        allowed_modes:
+            chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
     };
@@ -375,6 +378,8 @@ fn test_preset_with_empty_optional_fields() {
         instructions: None,
         writing_style: None,
         output_format: None,
+        allowed_modes:
+            chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
     };
@@ -398,6 +403,8 @@ fn test_preset_with_unicode_content() {
         instructions: Some("🎮 Instructions with emoji 🚀".to_string()),
         writing_style: Some("Style: 简体中文".to_string()),
         output_format: Some("Format & \"special\" <chars>".to_string()),
+        allowed_modes:
+            chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::Quantifier,
     };
@@ -419,6 +426,8 @@ fn test_preset_with_special_characters() {
         instructions: Some("Instructions with\nnewlines\tand\ttabs".to_string()),
         writing_style: Some("Style with    spaces".to_string()),
         output_format: Some("Format with\r\nwindows\r\nline endings".to_string()),
+        allowed_modes:
+            chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
     };
@@ -441,6 +450,8 @@ fn test_preset_with_long_content() {
         instructions: Some(long_text.clone()),
         writing_style: Some(long_text.clone()),
         output_format: Some(long_text.clone()),
+        allowed_modes:
+            chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
     };
@@ -517,4 +528,17 @@ fn test_preset_list_filtered_by_type_across_operations() {
         2,
         "Should still have 2 system presets after update"
     );
+}
+
+#[test]
+fn test_allowed_modes_round_trip() {
+    use chronicler_engine::domain::model::settings::NarratorMode;
+
+    let storage = create_storage();
+    let mut preset = make_system_preset("modes", "Modes");
+    preset.allowed_modes = vec![NarratorMode::Novel];
+    storage.save_preset(&preset).unwrap();
+
+    let loaded = storage.get_preset("modes").unwrap().unwrap();
+    assert_eq!(loaded.allowed_modes, vec![NarratorMode::Novel]);
 }

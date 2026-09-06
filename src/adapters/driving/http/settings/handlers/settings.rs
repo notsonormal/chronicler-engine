@@ -3,15 +3,14 @@
 
 use axum::{Form, extract::State, response::Html};
 
-use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{LlmProviderConfig, TextCheckMode};
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::connections::{
     connection_card_html, connection_edit_form_html,
 };
-use crate::adapters::driving::http::utils::handler_helpers::{opt_string, render_template};
-
 use crate::adapters::driving::http::settings::templates::settings::SettingsTemplate;
+use crate::adapters::driving::http::utils::handler_helpers::{opt_string, render_template};
+use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::settings::{LlmProviderConfig, TextCheckMode};
 
 macro_rules! try_lock {
     ($lock:expr) => {

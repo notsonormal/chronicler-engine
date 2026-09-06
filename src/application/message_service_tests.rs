@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::application::message_service::MessageService;
 use crate::application::world_catalogue::WorldCatalogue;
+use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::fixtures::{TestMap, TestPersona, TestWorld};
@@ -71,6 +72,67 @@ fn test_find_retry_anchor_empty_returns_none() {
 }
 
 #[test]
+fn test_find_retry_anchor_guided_narration_after_input_anchors_the_guided_narration() {
+    let (service, _) = make_service();
+    let mut state = GameState::new("start");
+    state.add_message("the older player input".to_string(), MessageType::Input);
+    state.add_message("a normal narration".to_string(), MessageType::Narration);
+    state.add_message_with_inputs(
+        "a guided narration".to_string(),
+        MessageType::Narration,
+        Some(GenerationReplay {
+            guide: Some("make it ominous".to_string()),
+            ..Default::default()
+        }),
+    );
+    let messages = state.narrative.history.as_slice().to_vec();
+
+    // The guided Narration is the retry target, so it must also be the anchor —
+    // not the older Input, whose snapshot predates the older turn's narration.
+    let (idx, anchor) = service
+        .find_retry_anchor_msg(&messages)
+        .expect("anchor for a guided turn after an input");
+    assert_eq!(idx, 2, "anchor must be the guided Narration");
+    assert_eq!(anchor.text(), "a guided narration");
+}
+
+#[test]
+fn test_find_retry_anchor_normal_turn_anchors_the_input() {
+    let (service, _) = make_service();
+    let mut state = GameState::new("start");
+    state.add_message("the player input".to_string(), MessageType::Input);
+    state.add_message("a narration".to_string(), MessageType::Narration);
+    let messages = state.narrative.history.as_slice().to_vec();
+
+    let (idx, anchor) = service
+        .find_retry_anchor_msg(&messages)
+        .expect("anchor for a normal turn");
+    assert_eq!(idx, 0, "anchor must be the Input whose narration follows");
+    assert_eq!(anchor.text(), "the player input");
+}
+
+#[test]
+fn test_find_retry_anchor_guide_only_turn_anchors_the_guided_narration() {
+    let (service, _) = make_service();
+    let mut state = GameState::new("start");
+    state.add_message_with_inputs(
+        "a guided narration".to_string(),
+        MessageType::Narration,
+        Some(GenerationReplay {
+            guide: Some("make it ominous".to_string()),
+            ..Default::default()
+        }),
+    );
+    let messages = state.narrative.history.as_slice().to_vec();
+
+    let (idx, anchor) = service
+        .find_retry_anchor_msg(&messages)
+        .expect("anchor for a guide-only turn");
+    assert_eq!(idx, 0, "anchor must be the guided Narration itself");
+    assert_eq!(anchor.text(), "a guided narration");
+}
+
+#[test]
 fn test_switch_swipe_rejects_concurrent_generation() {
     let (service, _, _game_id) = make_service_with_game();
     let err = service.switch_swipe(true, 1, 0).unwrap_err();
@@ -85,7 +147,7 @@ fn test_delete_last_removes_message_and_snapshot() {
     let (service, _storage, _game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
-    state.add_message("hello".to_string(), None, MessageType::Narration);
+    state.add_message("hello".to_string(), MessageType::Narration);
     service.save_message_and_snapshot(&mut state).unwrap();
 
     let before = service.load_messages().unwrap();
@@ -102,7 +164,7 @@ fn test_edit_history_updates_text_and_snapshot() {
     let (service, _storage, _game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
-    state.add_message("old".to_string(), None, MessageType::Narration);
+    state.add_message("old".to_string(), MessageType::Narration);
     service.save_message_and_snapshot(&mut state).unwrap();
 
     let messages = service.load_messages().unwrap();
@@ -119,7 +181,7 @@ fn test_save_message_and_snapshot_assigns_snapshot_id_to_message() {
     let (service, _storage, _game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
-    state.add_message("hello".to_string(), None, MessageType::Narration);
+    state.add_message("hello".to_string(), MessageType::Narration);
     assert!(
         state
             .narrative

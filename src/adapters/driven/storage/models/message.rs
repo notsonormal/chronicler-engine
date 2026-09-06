@@ -4,7 +4,6 @@
 pub struct DbMessage {
     pub id: i64,
     pub game_id: i64,
-    pub sender: Option<String>,
     pub message_type_json: String,
     pub timestamp: String,
     pub active_swipe_index: i64,
@@ -16,10 +15,9 @@ impl DbMessage {
         Ok(DbMessage {
             id: row.get(0)?,
             game_id: row.get(1)?,
-            sender: row.get(2)?,
-            message_type_json: row.get(3)?,
-            timestamp: row.get(4)?,
-            active_swipe_index: row.get(5)?,
+            message_type_json: row.get(2)?,
+            timestamp: row.get(3)?,
+            active_swipe_index: row.get(4)?,
             is_deleted: 0,
         })
     }

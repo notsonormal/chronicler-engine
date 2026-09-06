@@ -1,6 +1,7 @@
-//! Unit tests for retry entry path.
-
+use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::thread;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
@@ -8,6 +9,8 @@ use crate::adapters::driving::http::AppState;
 use crate::application::ports::llm_provider::LlmCallResult;
 use crate::application::errors::ApplicationError;
 use crate::application::errors::ProcessActionResult;
+use crate::domain::model::map::Room;
+use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
@@ -17,9 +20,11 @@ use crate::test_support::{
     make_test_app_without_snapshot,
     make_test_pipeline_app_with_storage as make_test_app_with_storage,
     make_test_pipeline_with_backends, make_test_pipeline_with_mock_quantifier, make_test_recorder,
-    TestAppBuilder, TestDataBuilder,
+    make_test_recorder_with_storage, TestAppBuilder, TestDataBuilder,
 };
 use crate::test_support::fixtures::TestGameState;
+
+use super::action_tests::wait_for_gate_idle;
 
 fn make_test_state() -> GameState {
     TestGameState::in_room("start")
@@ -57,8 +62,8 @@ pub(super) fn add_input_and_save(
     text: &str,
 ) -> u64 {
     let mut state = app.message_service.load_or_fresh();
-    let player_name = "Player".to_string();
-    state.add_message(text.to_string(), Some(player_name), MessageType::Input);
+    let _player_name = "Player".to_string();
+    state.add_message(text.to_string(), MessageType::Input);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -77,7 +82,7 @@ pub(super) fn add_narration_and_save(
     text: &str,
 ) -> u64 {
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(text.to_string(), None, MessageType::Narration);
+    state.add_message(text.to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -124,7 +129,7 @@ pub(super) fn setup_event_flow(
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -136,7 +141,7 @@ pub(super) fn setup_event_flow(
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -162,7 +167,7 @@ pub(super) fn setup_event_flow_without_trigger(
     let _ = save_pre_main(app, storage);
 
     let mut pre_event_state = app.message_service.load_or_fresh();
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -174,7 +179,7 @@ pub(super) fn setup_event_flow_without_trigger(
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -229,15 +234,9 @@ async fn test_retry_load_messages_error() {
 async fn test_retry_no_input() {
     let (app, storage) = make_test_app_with_storage();
 
-    let sys = crate::domain::model::message::Message::new(
-        None,
-        "System boot",
-        MessageType::System,
-        None,
-        None,
-    );
+    let sys =
+        crate::domain::model::message::Message::new("System boot", MessageType::System, None, None);
     let nar = crate::domain::model::message::Message::new(
-        None,
         "You see a room.",
         MessageType::Narration,
         None,
@@ -264,7 +263,7 @@ async fn test_retry_event_with_no_pre_event_fallback_to_main() {
     let _input_id = add_input_and_save(&app, &storage, "test input");
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    state.add_message("Event narration".to_string(), MessageType::Narration);
     state
         .narrative
         .history
@@ -285,7 +284,7 @@ async fn test_retry_event_with_no_pre_event_and_no_input() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message("Event only".to_string(), None, MessageType::Narration);
+    state.add_message("Event only".to_string(), MessageType::Narration);
     state
         .narrative
         .history
@@ -375,7 +374,7 @@ async fn test_retry_event_continuation_cancels_before_llm() {
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -467,7 +466,7 @@ async fn test_retry_event_empty_continuation_text() {
     let _pre_event_with_trigger_id = storage.save_snapshot(&snapshot).unwrap();
 
     let mut final_state = state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -488,18 +487,14 @@ async fn test_retry_main_no_pre_main_snapshot() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    let player_name = "Player".to_string();
-    state.add_message(
-        "test input".to_string(),
-        Some(player_name),
-        MessageType::Input,
-    );
+    let _player_name = "Player".to_string();
+    state.add_message("test input".to_string(), MessageType::Input);
     if let Some(last) = state.narrative.history.last_mut() {
         insert_message_with_swipe(&app, &storage, last);
     }
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message("Narration text".to_string(), None, MessageType::Narration);
+    state.add_message("Narration text".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -517,7 +512,8 @@ async fn test_retry_main_no_pre_main_snapshot() {
             state.narrative.input_buffer.status,
             GenerationStatus::Error(_)
         ),
-        "Should set error status when anchor message has no snapshot_id"
+        "Should set error status when pre-main snapshot is missing, got {:?}",
+        state.narrative.input_buffer.status
     );
 }
 
@@ -531,7 +527,7 @@ async fn test_retry_event_continuation_happy_path() {
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -543,7 +539,7 @@ async fn test_retry_event_continuation_happy_path() {
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -628,7 +624,8 @@ async fn test_retry_recovers_after_llm_failure() {
 
     let _input_id = add_input_and_save(&app, &storage, "look");
 
-    app.pipeline.execute_action("look".to_string());
+    app.pipeline
+        .execute_action_with_replay("look".to_string(), None);
     let after_fail = app.message_service.load_or_fresh();
     assert!(
         after_fail
@@ -640,6 +637,10 @@ async fn test_retry_recovers_after_llm_failure() {
         "First action should fail, got {:?}",
         after_fail.narrative.input_buffer.status
     );
+
+    // Retry operates on the last message; seed a Narration so the test exercises
+    // re-narrate recovery rather than user-regen.
+    add_narration_and_save(&app, &storage, "You look around.");
 
     app.pipeline.retry_last_response();
 
@@ -667,12 +668,19 @@ async fn test_retry_room_not_found_sets_error() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(
-        "look".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
     state.movement.current_room_id = "non_existent_room".to_string();
+    state.add_message("look".to_string(), MessageType::Input);
+    let input_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
+    let input_id = storage.save_snapshot(&input_snapshot).unwrap();
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(input_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    state.add_message("You look around.".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -846,7 +854,7 @@ async fn test_retry_event_empty_continuation_triggers_error() {
     let mut pre_event_state = app.message_service.load_or_fresh();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
@@ -858,7 +866,7 @@ async fn test_retry_event_empty_continuation_triggers_error() {
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
     final_state
         .narrative
         .history
@@ -902,6 +910,7 @@ async fn test_retry_appends_swipe_to_same_message() {
         snapshot_id: Some(_pre_main_id),
         location_header: None,
         event_header: None,
+        replay: None,
     };
     storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
@@ -1049,10 +1058,6 @@ async fn retry_records_canonical_game_not_found_when_game_missing() {
 
 #[tokio::test]
 async fn test_retry_last_response_cancelled_at_phase_boundary() {
-    use std::sync::atomic::Ordering;
-    use std::sync::Arc;
-    use std::thread;
-
     let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
     let agent_registry = AgentRegistry::default();
@@ -1107,7 +1112,6 @@ async fn test_retry_event_continuation_handles_state_without_input_message() {
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     state.add_message(
         "Narration without prior input".to_string(),
-        None,
         MessageType::Narration,
     );
 
@@ -1121,12 +1125,8 @@ async fn test_retry_records_missing_snapshot_id() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    let player_name = "Player".to_string();
-    state.add_message(
-        "test input".to_string(),
-        Some(player_name),
-        MessageType::Input,
-    );
+    let _player_name = "Player".to_string();
+    state.add_message("test input".to_string(), MessageType::Input);
     if let Some(last) = state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(MISSING_ID));
         insert_message_with_swipe(&app, &storage, last);
@@ -1152,11 +1152,7 @@ async fn test_retry_returns_internal_error_when_anchor_has_no_snapshot_id() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(
-        "test input".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
+    state.add_message("test input".to_string(), MessageType::Input);
     let last = state.narrative.history.last().unwrap();
     insert_message_with_swipe(&app, &storage, last);
 
@@ -1185,11 +1181,7 @@ async fn test_retry_returns_internal_error_when_snapshot_row_missing() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
-    state.add_message(
-        "test input".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
+    state.add_message("test input".to_string(), MessageType::Input);
     if let Some(last) = state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(MISSING_ID));
         insert_message_with_swipe(&app, &storage, last);
@@ -1249,4 +1241,644 @@ async fn test_retry_returns_shutting_down_when_token_cancelled() {
         matches!(result, Ok(ProcessActionResult::ShuttingDown)),
         "retry() should return Ok(ShuttingDown) when token is cancelled, got {result:?}"
     );
+}
+
+// Redo-mode coverage through the public retry() entry: one test per mode.
+
+#[tokio::test]
+async fn test_retry_flow_narration_mode_makes_new_swipe() {
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["Regenerated narration.".to_string()]),
+    );
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let _ = add_input_and_save(&app, &storage, "test input");
+    let _ = save_pre_main(&app, &storage);
+    let _ = add_narration_and_save(&app, &storage, "Narration text");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(
+        matches!(result, ProcessActionResult::Started),
+        "retry should claim the slot, got {result:?}"
+    );
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let narration = final_state
+        .narrative
+        .history
+        .iter()
+        .rev()
+        .find(|m| m.message_type == MessageType::Narration)
+        .expect("narration target survives the redo");
+    assert_eq!(
+        narration.swipes.len(),
+        2,
+        "the redo appends a swipe to the narration message"
+    );
+    assert_eq!(narration.active_swipe_index, 1);
+    assert_eq!(narration.text(), "Regenerated narration.");
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_impersonate_mode_runs_full_tail() {
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
+    );
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let replay = GenerationReplay {
+        impersonate: true,
+        impersonate_direction: Some("A direction".to_string()),
+        impersonate_preset_id: Some("impersonate_default".to_string()),
+        guide: None,
+    };
+    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
+        &storage,
+        "room_1",
+        "I look around.",
+        MessageType::Input,
+        Some(replay),
+    )
+    .expect("seed: impersonated input with stored inputs");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(matches!(result, ProcessActionResult::Started));
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "impersonate redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let target = final_state
+        .narrative
+        .history
+        .iter()
+        .find(|m| {
+            m.message_type == MessageType::Input
+                && m.swipes.first().is_some_and(|s| s.text == "I look around.")
+        })
+        .expect("impersonated input target survives the redo");
+    assert_eq!(
+        target.swipes.len(),
+        2,
+        "the redo appends a swipe to the impersonated input"
+    );
+    assert_eq!(target.active_swipe_index, 1);
+    assert_eq!(target.text(), "I look around cautiously.");
+    assert!(
+        target.replay().is_some_and(|r| r.impersonate),
+        "the new swipe inherits the stored inputs"
+    );
+    // The full tail (the deliberate behavior change): the quantifier ran.
+    assert!(
+        final_state.scene.quantifier_confidence.is_some(),
+        "impersonate redo now runs the full post-narration tail"
+    );
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["Ominous retake.".to_string()]));
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    // A guide-only turn: narration with a guide replay, no Input row.
+    let replay = GenerationReplay {
+        guide: Some("make it ominous".to_string()),
+        ..Default::default()
+    };
+    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
+        &storage,
+        "room_1",
+        "A guided narration.",
+        MessageType::Narration,
+        Some(replay),
+    )
+    .expect("seed: guided narration with stored inputs");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(
+        matches!(result, ProcessActionResult::Started),
+        "guide-only retry should claim the slot, got {result:?}"
+    );
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "guide-only redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let target = final_state
+        .narrative
+        .history
+        .iter()
+        .find(|m| {
+            m.message_type == MessageType::Narration
+                && m.swipes
+                    .first()
+                    .is_some_and(|s| s.text == "A guided narration.")
+        })
+        .expect("guided narration target survives the redo");
+    assert_eq!(
+        target.swipes.len(),
+        2,
+        "the guide-only redo appends a swipe"
+    );
+    assert_eq!(target.active_swipe_index, 1);
+    assert_eq!(target.text(), "Ominous retake.");
+    assert!(
+        target.replay().is_some_and(|r| r.guide.is_some()),
+        "the new swipe inherits the guide replay"
+    );
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["Ominous retake.".to_string()]));
+    let forensics_storage = Arc::new(Storage::new_in_memory());
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder_with_storage(
+            Arc::clone(&narrator) as Arc<_>,
+            Arc::clone(&forensics_storage),
+        ),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    // A second room distinguishes the guided Narration's snapshot (room
+    // `marker`) from the older Input's snapshot (the app's starting room). The
+    // redo prompt renders `Current Location: <room name>`, so the room name
+    // proves which snapshot the redo reconstructed from.
+    let data = TestDataBuilder::default_test()
+        .room(Room {
+            id: "marker".to_string(),
+            name: "Marker Room".to_string(),
+            description: "A room that marks the guided turn's snapshot.".to_string(),
+            exits: HashMap::new(),
+            items: vec![],
+            image_path: None,
+            navigation_description: None,
+        })
+        .build();
+    let (app, storage) = TestAppBuilder::default_test()
+        .data(data)
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    // History carries an older player input, then a guided turn.
+    let _ = add_input_and_save(&app, &storage, "the older player input");
+    let replay = GenerationReplay {
+        guide: Some("make it ominous".to_string()),
+        ..Default::default()
+    };
+    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
+        &storage,
+        "marker",
+        "A guided narration.",
+        MessageType::Narration,
+        Some(replay),
+    )
+    .expect("seed: guided narration with stored inputs");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(matches!(result, ProcessActionResult::Started));
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "guided redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+
+    // The redo's prompt must carry the empty input the original guided
+    // generation used — not the older turn's player input. Forensics land on
+    // the recorder's storage (the pipeline is rebound to the builder's).
+    let forensics = forensics_storage
+        .list_latest_llm_messages(10)
+        .expect("list llm forensics");
+    let narrator_call = forensics
+        .iter()
+        .find(|m| m.agent_name.contains("narrator"))
+        .expect("narrator forensics recorded");
+    // The guided Narration is the anchor, so the redo reconstructs from its
+    // snapshot — the prompt's room is `Marker Room`. Under the old anchoring
+    // (older Input) it would render the starting room's name instead.
+    assert!(
+        narrator_call
+            .user_prompt
+            .contains("Current Location: Marker Room"),
+        "guided redo must reconstruct from the guided Narration's snapshot; prompt was: {}",
+        narrator_call.user_prompt
+    );
+    // The current-turn <PlayerInput> block must be empty — the older turn's
+    // input must not leak into it. Assert on the last block directly so the
+    // check does not depend on the exact tag/newline layout; the older input
+    // text still appears legitimately inside <ConversationHistory>.
+    let prompt = &narrator_call.user_prompt;
+    let start = prompt
+        .rfind("<PlayerInput>")
+        .expect("PlayerInput tag present")
+        + "<PlayerInput>".len();
+    let end = prompt[start..]
+        .find("</PlayerInput>")
+        .map(|i| start + i)
+        .expect("PlayerInput closing tag present");
+    assert!(
+        prompt[start..end].trim().is_empty(),
+        "guided redo must render an empty <PlayerInput>; older-turn input must not leak, got {:?}",
+        &prompt[start..end]
+    );
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_user_regen_mode_stays_tail_less() {
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["Replacement line.".to_string()]));
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
+        &storage,
+        "room_1",
+        "look around",
+        MessageType::Input,
+        None,
+    )
+    .expect("seed: plain input");
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(matches!(result, ProcessActionResult::Started));
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "user-regen redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let target = final_state
+        .narrative
+        .history
+        .iter()
+        .find(|m| {
+            m.message_type == MessageType::Input
+                && m.swipes.first().is_some_and(|s| s.text == "look around")
+        })
+        .expect("plain input target survives the redo");
+    assert_eq!(target.swipes.len(), 2, "the redo appends a swipe");
+    assert_eq!(target.active_swipe_index, 1);
+    assert_eq!(target.text(), "Replacement line.");
+    assert_eq!(
+        target.message_type,
+        MessageType::Input,
+        "the target keeps its Input type"
+    );
+    // No tail: a plain user input never gets one.
+    assert!(
+        final_state.scene.quantifier_confidence.is_none(),
+        "user-regen redo must stay tail-less"
+    );
+    app.shutdown_token.cancel();
+}
+
+#[tokio::test]
+async fn test_retry_flow_event_mode_continues_trigger() {
+    let (app, storage) = make_test_app_with_storage();
+
+    setup_event_flow(&app, &storage);
+
+    let game_id = app.game_catalogue.current_game_id();
+    let result = app
+        .pipeline
+        .retry(&app.generation_gate)
+        .expect("retry claim");
+    assert!(matches!(result, ProcessActionResult::Started));
+    wait_for_gate_idle(&app.generation_gate, game_id).await;
+
+    let final_state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Idle
+        ),
+        "event redo should end Idle, got {:?}",
+        final_state.narrative.input_buffer.status
+    );
+    let event_message = final_state
+        .narrative
+        .history
+        .iter()
+        .rev()
+        .find(|m| m.event_header().is_some())
+        .expect("event message survives the redo");
+    assert_eq!(
+        event_message.swipes.len(),
+        2,
+        "the trigger continuation lands as a new swipe on the event message"
+    );
+    app.shutdown_token.cancel();
+}
+
+// These cover retry_user_regen's own `Err(e) => finalize_phase_error` and
+// cancellation arms — the shared-prefix failures themselves are covered in
+// narration_generation_tests.rs.
+
+fn assert_error_status(app: &AppState, expected_substring: &str) {
+    let state = app.message_service.load_or_fresh();
+    let msg = match &state.narrative.input_buffer.status {
+        GenerationStatus::Error(m) => m.clone(),
+        other => panic!("expected GenerationStatus::Error, got {other:?}"),
+    };
+    assert!(
+        msg.contains(expected_substring),
+        "expected '{expected_substring}' in error message, got: {msg}"
+    );
+}
+
+fn make_user_regen_state(app: &AppState, text: &str) -> GameState {
+    let mut state = app.message_service.load_or_fresh();
+    state.narrative.retry_target = Some(crate::domain::model::message::Message::new(
+        text,
+        MessageType::Input,
+        None,
+        None,
+    ));
+    state
+}
+
+#[tokio::test]
+async fn test_retry_user_regen_missing_target() {
+    let (app, _storage) = make_test_app_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    let input = crate::domain::model::message::Message::new(
+        "I walk forward.",
+        MessageType::Input,
+        None,
+        None,
+    );
+    state.narrative.history.append(input);
+    state.narrative.retry_target = None;
+
+    let _ = app.pipeline.retry_user_regen(state);
+
+    assert_error_status(&app, "missing user-regen target");
+}
+
+#[tokio::test]
+async fn test_retry_user_regen_narrator_fails() {
+    let narrator = Arc::new(MockBackend::default().with_fail());
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(narrator as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, _storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let state = make_user_regen_state(&app, "I walk forward.");
+    let _ = app.pipeline.retry_user_regen(state);
+
+    assert_error_status(&app, "configured_failure");
+}
+
+#[tokio::test]
+async fn test_retry_user_regen_cancelled() {
+    // The only Cancelled producer in the narration path is check_game_unchanged,
+    // so the test flips the game id while the delayed narrator call is in flight.
+    let mock_backend = Arc::new(MockBackend::default().with_delay(200));
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::clone(&mock_backend) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let initial_game_id = app.game_catalogue.current_game_id();
+    let storage_for_thread = Arc::clone(&storage);
+    let backend_for_thread = Arc::clone(&mock_backend);
+    let flipper = thread::spawn(move || {
+        while !backend_for_thread.narration_started.load(Ordering::SeqCst) {
+            std::hint::spin_loop();
+        }
+        storage_for_thread.set_game_id(initial_game_id.wrapping_add(1));
+    });
+
+    let state = make_user_regen_state(&app, "I walk forward.");
+    let outcome = app.pipeline.retry_user_regen(state);
+
+    flipper
+        .join()
+        .expect("game-id flipper thread should complete");
+
+    assert!(
+        matches!(
+            outcome,
+            Err(crate::application::pipeline::PhaseError::Cancelled)
+        ),
+        "expected Err(PhaseError::Cancelled), got {outcome:?}"
+    );
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
+        "cancellation must reset status to Idle, got {:?}",
+        state.narrative.input_buffer.status
+    );
+}
+
+#[tokio::test]
+async fn test_retry_renarrate_with_no_input_persists_error() {
+    let (app, storage) = make_test_app_with_storage();
+
+    // History has no Input anywhere: a plain Narration anchor plus an event
+    // Narration on top. Retry resolves to ReNarrate (event mode), truncates to
+    // the plain-Narration anchor, and finds no input text.
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message("You look around.".to_string(), MessageType::Narration);
+    let anchor_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
+    let anchor_id = storage.save_snapshot(&anchor_snapshot).unwrap();
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(anchor_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    state.add_message("Event narration".to_string(), MessageType::Narration);
+    state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let final_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
+    let final_id = storage.save_snapshot(&final_snapshot).unwrap();
+    if let Some(last) = state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    app.pipeline.retry_last_response();
+
+    assert_error_status(&app, "no input to retry");
+}
+
+#[tokio::test]
+async fn test_retry_returns_internal_error_when_no_anchor_message() {
+    // Reachable no-anchor shape: an event-flagged Input passes the Input
+    // check but leaves find_retry_anchor_msg's event path (rposition of the
+    // last non-event message) with no match.
+    let (app, storage) = make_test_app_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message("test input".to_string(), MessageType::Input);
+    state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let last = state.narrative.history.last().unwrap();
+    insert_message_with_swipe(&app, &storage, last);
+
+    let result = app.pipeline.retry(&app.generation_gate);
+
+    assert!(
+        matches!(
+            result,
+            Err(ApplicationError::Engine(EngineError::Internal(_)))
+        ),
+        "retry() should return ApplicationError::internal when no anchor message exists, got {result:?}"
+    );
+    assert_error_status(&app, "no anchor message");
+}
+
+#[tokio::test]
+async fn test_retry_returns_internal_error_when_snapshot_load_errors() {
+    let data = TestDataBuilder::default_test().build();
+    let (base_storage, handle) = {
+        let base = Storage::new_in_memory();
+        data.seed_into(&base);
+        base.with_test_failures()
+    };
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::new(MockBackend::default()) as Arc<_>),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::with_data(data)
+        .storage(Arc::new(base_storage))
+        .skip_seeding(true)
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    let _input_id = add_input_and_save(&app, &storage, "test input");
+
+    handle.set(
+        "load_snapshot_by_id",
+        TestOverride::internal("simulated load_by_id failure"),
+    );
+
+    let result = app.pipeline.retry(&app.generation_gate);
+    handle.clear("load_snapshot_by_id");
+
+    assert!(
+        matches!(
+            result,
+            Err(ApplicationError::Engine(EngineError::Internal(_)))
+        ),
+        "retry() should return ApplicationError::internal when the snapshot load errors, got {result:?}"
+    );
+    assert_error_status(&app, "simulated load_by_id failure");
 }

@@ -30,7 +30,6 @@
     /* Colors - Log Entry Variants */
     --color-log-input: #2a2a2a;
     --color-log-narration: #1a3a3a;
-    --color-log-dialogue: #3a2a1a;
     --color-log-system: #3a3a1a;
 
     /* Colors - Error Notification */
@@ -42,7 +41,6 @@
     --font-size-base: 14px;
     --font-size-small: 12px;
     --font-size-xs: 11px;
-    --font-size-sender: 13px;
 
     /* Spacing */
     --spacing-xs: 4px;
@@ -254,13 +252,6 @@ body {
     border-bottom-left-radius: 4px;
 }
 
-/* Dialogue - Left Aligned, Orange Tinted */
-.log-entry.dialogue {
-    margin-right: auto;
-    background: var(--color-log-dialogue);
-    border-bottom-left-radius: 4px;
-}
-
 /* System - Centered, Yellow */
 .log-entry.system {
     margin-left: auto;
@@ -275,15 +266,6 @@ body {
     display: block;
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
-    margin-bottom: var(--spacing-xs);
-}
-
-/* Sender Name - Bold, Above Message */
-.log-entry .sender {
-    display: block;
-    font-size: var(--font-size-sender);
-    font-weight: bold;
-    color: var(--color-accent-pink);
     margin-bottom: var(--spacing-xs);
 }
 
@@ -323,29 +305,12 @@ body {
     color: var(--color-accent-cyan);
 }
 
-.log-entry.dialogue .text {
-    color: var(--color-accent-orange);
-    font-style: italic;
-}
-
 .log-entry.system .text {
     color: var(--color-accent-yellow);
 }
 
 .log-entry.input .text {
     color: #cccccc;
-}
-
-.log-entry.narration .sender {
-    color: #00cccc;
-}
-
-.log-entry.dialogue .sender {
-    color: var(--color-accent-orange);
-}
-
-.log-entry.input .sender {
-    color: var(--color-text-muted);
 }
 
 /* Location Header - Inline with Timestamp */
@@ -501,6 +466,46 @@ body {
 
 #command-form input::placeholder {
     color: var(--color-text-placeholder);
+}
+
+/* Slash-command auto-suggestion menu */
+.slash-menu {
+    position: fixed;
+    z-index: 1000;
+    min-width: 280px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+}
+
+.slash-suggestion {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    gap: var(--spacing-md);
+}
+
+.slash-suggestion.active {
+    background: var(--color-bg-header);
+}
+
+.slash-suggestion .slash-cmd {
+    color: var(--color-accent-cyan);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.slash-suggestion .slash-desc {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-small);
+    text-align: right;
+    white-space: nowrap;
 }
 
 #command-form button {

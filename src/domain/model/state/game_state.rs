@@ -15,7 +15,7 @@ use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::error::{EngineError, Result};
 #[cfg(feature = "diagnostics")]
 use crate::error::InternalError;
-use crate::domain::model::message::{Message, Swipe};
+use crate::domain::model::message::{GenerationReplay, Message, Swipe};
 use super::message_types::MessageType;
 use super::movement::MovementState;
 use super::narrative_state::NarrativeState;
@@ -114,20 +114,27 @@ impl GameState {
         }
     }
 
-    fn push_message(&mut self, text: String, sender: Option<String>, message_type: MessageType) {
+    fn push_message(
+        &mut self,
+        text: String,
+        message_type: MessageType,
+        stored_inputs: Option<GenerationReplay>,
+    ) {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
 
-        if message_type == MessageType::Narration || message_type == MessageType::Dialogue {
+        if message_type == MessageType::Narration || message_type == MessageType::Input {
             if let Some(ref mut target) = self.narrative.retry_target {
                 let target_is_event = target.event_header().is_some();
                 let new_is_event = event_header.is_some();
                 if target_is_event == new_is_event {
+                    let replay = target.replay().cloned();
                     let swipe = Swipe {
                         text: text.clone(),
                         snapshot_id: None,
                         location_header: location_header.clone(),
                         event_header: event_header.clone(),
+                        replay,
                     };
                     target.swipes.push(swipe);
                     target.set_active_swipe(target.swipes.len() - 1);
@@ -136,12 +143,26 @@ impl GameState {
             }
         }
 
-        let message = Message::new(sender, text, message_type, location_header, event_header);
+        let mut message = Message::new(text, message_type, location_header, event_header);
+        if let Some(replay) = stored_inputs {
+            message.set_replay(Some(replay));
+        }
         self.narrative.history.append(message);
     }
 
-    pub fn add_message(&mut self, text: String, sender: Option<String>, message_type: MessageType) {
-        self.push_message(text, sender, message_type);
+    pub fn add_message(&mut self, text: String, message_type: MessageType) {
+        self.push_message(text, message_type, None);
+    }
+
+    /// Add a message carrying the inputs that produced its generation — the
+    /// Swipe stores them so a redo re-applies them.
+    pub fn add_message_with_inputs(
+        &mut self,
+        text: String,
+        message_type: MessageType,
+        stored_inputs: Option<GenerationReplay>,
+    ) {
+        self.push_message(text, message_type, stored_inputs);
     }
 
     pub fn inject_scenario_logs(
@@ -164,7 +185,7 @@ impl GameState {
 
         self.narrative.pending_location = Some(room_name);
         let text = render_template(&scenario.text, &TemplateVars::new(&player.sheet.name));
-        self.add_message(text, None, MessageType::Narration);
+        self.add_message(text, MessageType::Narration);
     }
 }
 
@@ -197,7 +218,6 @@ impl GameState {
                     Room::new_dynamic(destination, "A place you have never seen before.");
                 self.add_message(
                     format!("[System] Entered unknown location: {}", dynamic_room.id),
-                    None,
                     MessageType::System,
                 );
                 self.movement
@@ -290,7 +310,7 @@ impl GameState {
         }
         self.narrative.last_trigger = Some(trigger.clone());
         self.narrative.pending_event = Some(trigger.trigger_name.clone());
-        self.add_message(continuation_text.to_string(), None, MessageType::Narration);
+        self.add_message(continuation_text.to_string(), MessageType::Narration);
         if !trigger.trigger_repeat {
             self.npc_encounter_log
                 .mark_trigger_fired(&trigger.npc_id, trigger.trigger_idx);

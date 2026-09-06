@@ -37,6 +37,7 @@ fn test_insert_message_preserves_swipes() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     });
 
     let _id = storage.insert_message(&msg).unwrap();
@@ -275,61 +276,10 @@ fn test_purge_multiple_ids() {
 }
 
 #[test]
-fn test_message_with_sender_user() {
-    let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg = Message::new(
-        Some("User".to_string()),
-        "hello",
-        MessageType::Input,
-        None,
-        None,
-    );
-    storage.insert_message(&msg).unwrap();
-
-    let rows = storage.load_message_rows().unwrap();
-    assert_eq!(rows[0].sender, Some("User".to_string()));
-}
-
-#[test]
-fn test_message_with_sender_system() {
-    let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg = Message::new(
-        Some("System".to_string()),
-        "info",
-        MessageType::System,
-        None,
-        None,
-    );
-    storage.insert_message(&msg).unwrap();
-
-    let rows = storage.load_message_rows().unwrap();
-    assert_eq!(rows[0].sender, Some("System".to_string()));
-}
-
-#[test]
-fn test_message_with_sender_none() {
-    let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg = Message::new(None, "anonymous", MessageType::Input, None, None);
-    storage.insert_message(&msg).unwrap();
-
-    let rows = storage.load_message_rows().unwrap();
-    assert_eq!(rows[0].sender, None);
-}
-
-#[test]
 fn test_message_input_type() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "action",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let msg = Message::new("action", MessageType::Input, None, None);
     storage.insert_message(&msg).unwrap();
 
     let rows = storage.load_message_rows().unwrap();
@@ -340,13 +290,7 @@ fn test_message_input_type() {
 fn test_message_narration_type() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
-    let msg = Message::new(
-        Some("Narrator".to_string()),
-        "response",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg = Message::new("response", MessageType::Narration, None, None);
     storage.insert_message(&msg).unwrap();
     let rows = storage.load_message_rows().unwrap();
     assert_eq!(rows[0].message_type, MessageType::Narration);

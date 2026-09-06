@@ -8,7 +8,7 @@ use tower::util::ServiceExt;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
-use chronicler_engine::domain::model::message::Message;
+use chronicler_engine::domain::model::message::{GenerationReplay, Message};
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -426,13 +426,7 @@ async fn test_retry_anchor_no_snapshot_returns_500_http() {
         .build_with_state();
 
     // Seed an Input message with snapshot_id = None (broken integrity).
-    let input_msg = Message::new(
-        Some("Player".to_string()),
-        "look",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let input_msg = Message::new("look", MessageType::Input, None, None);
     insert_message_with_swipe(&storage, &input_msg).unwrap();
 
     let resp = post_empty(&app, "/swipe/new").await;
@@ -462,13 +456,7 @@ async fn test_retry_anchor_snapshot_deleted_returns_500_http() {
         .build_with_state();
 
     // Seed an Input message with a snapshot_id that doesn't exist in storage.
-    let mut input_msg = Message::new(
-        Some("Player".to_string()),
-        "look",
-        MessageType::Input,
-        None,
-        None,
-    );
+    let mut input_msg = Message::new("look", MessageType::Input, None, None);
     input_msg.set_snapshot_id(Some(999_999)); // non-existent snapshot
     insert_message_with_swipe(&storage, &input_msg).unwrap();
 
@@ -499,16 +487,8 @@ async fn test_retry_llm_failure_sets_error_http() {
     // Seed Input + Narration directly; the with_fail() narrator fails on retry.
     {
         let mut gs = state.message_service.load_or_fresh();
-        gs.add_message(
-            "look".to_string(),
-            Some("Player".to_string()),
-            MessageType::Input,
-        );
-        gs.add_message(
-            "Original narration.".to_string(),
-            None,
-            MessageType::Narration,
-        );
+        gs.add_message("look".to_string(), MessageType::Input);
+        gs.add_message("Original narration.".to_string(), MessageType::Narration);
         state
             .message_service
             .save_message_and_snapshot(&mut gs)
@@ -560,16 +540,8 @@ async fn test_retry_empty_narration_sets_error_http() {
 
     {
         let mut gs = state.message_service.load_or_fresh();
-        gs.add_message(
-            "look".to_string(),
-            Some("Player".to_string()),
-            MessageType::Input,
-        );
-        gs.add_message(
-            "Original narration.".to_string(),
-            None,
-            MessageType::Narration,
-        );
+        gs.add_message("look".to_string(), MessageType::Input);
+        gs.add_message("Original narration.".to_string(), MessageType::Narration);
         state
             .message_service
             .save_message_and_snapshot(&mut gs)
@@ -627,11 +599,7 @@ async fn test_retry_room_not_found_sets_error_http() {
     // Seed an Input whose snapshot points at a non-existent room (retry anchor).
     let mut gs = state.message_service.load_or_fresh();
     gs.movement.current_room_id = "non_existent_room".to_string();
-    gs.add_message(
-        "look".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
+    gs.add_message("look".to_string(), MessageType::Input);
     let snap = GameStateSnapshot::from_game_state(&gs);
     let input_snap_id = storage.save_snapshot(&snap).unwrap();
     if let Some(last) = gs.narrative.history.last_mut() {
@@ -644,7 +612,7 @@ async fn test_retry_room_not_found_sets_error_http() {
 
     // Seed a non-event Narration as the last message (spec 11.7 Given).
     let mut gs = state.message_service.load_or_fresh();
-    gs.add_message("A calm scene.".to_string(), None, MessageType::Narration);
+    gs.add_message("A calm scene.".to_string(), MessageType::Narration);
     let snap = GameStateSnapshot::from_game_state(&gs);
     let narration_snap_id = storage.save_snapshot(&snap).unwrap();
     if let Some(last) = gs.narrative.history.last_mut() {
@@ -747,11 +715,7 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
 
     let mut game_state = state.message_service.load_or_fresh();
-    game_state.add_message(
-        "test input".to_string(),
-        Some("Player".to_string()),
-        MessageType::Input,
-    );
+    game_state.add_message("test input".to_string(), MessageType::Input);
     state
         .message_service
         .save_message_and_snapshot(&mut game_state)
@@ -774,5 +738,179 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
     assert!(
         body_str.contains("Still thinking..."),
         "expected 'Still thinking...' in body, got: {body_str}"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 22.1
+#[tokio::test]
+async fn test_retry_re_impersonate_generates_input_swipe_http() {
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
+    );
+    let (app, state) = app_with_narrator(narrator);
+
+    {
+        let mut gs = state.message_service.load_or_fresh();
+        let mut input = Message::new("I look around.".to_string(), MessageType::Input, None, None);
+        input.swipes[0].replay = Some(GenerationReplay {
+            impersonate: true,
+            impersonate_direction: Some("I look around.".to_string()),
+            impersonate_preset_id: Some("impersonate_default".to_string()),
+            guide: None,
+        });
+        gs.narrative.history.append(input);
+        state
+            .message_service
+            .save_message_and_snapshot(&mut gs)
+            .expect("seed impersonate input");
+    }
+
+    let swipes_before = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .into_iter()
+        .find(|m| m.message_type == MessageType::Input)
+        .map(|m| m.swipes.len())
+        .unwrap_or(0);
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "retry should complete");
+
+    let gs = state.message_service.load_or_fresh();
+    assert!(matches!(
+        gs.narrative.input_buffer.status,
+        GenerationStatus::Idle
+    ));
+
+    let messages = state.message_service.load_messages().unwrap();
+    let inputs: Vec<_> = messages
+        .into_iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .collect();
+    assert_eq!(inputs.len(), 1, "exactly one Input message");
+    let input = &inputs[0];
+    assert_eq!(
+        input.swipes.len(),
+        swipes_before + 1,
+        "retry appended a swipe to the Input"
+    );
+    assert_eq!(
+        input.text(),
+        "I look around cautiously.",
+        "active swipe is the regenerated impersonation"
+    );
+    assert!(
+        input.replay().map(|r| r.impersonate).unwrap_or(false),
+        "new swipe remains an impersonation"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 22.2
+#[tokio::test]
+async fn test_retry_user_regen_generates_input_swipe_http() {
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["I sprint forward.".to_string()]));
+    let (app, state) = app_with_narrator(narrator);
+
+    {
+        let mut gs = state.message_service.load_or_fresh();
+        let input = Message::new(
+            "I walk forward.".to_string(),
+            MessageType::Input,
+            None,
+            None,
+        );
+        gs.narrative.history.append(input);
+        state
+            .message_service
+            .save_message_and_snapshot(&mut gs)
+            .expect("seed plain input");
+    }
+
+    let swipes_before = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .into_iter()
+        .find(|m| m.message_type == MessageType::Input)
+        .map(|m| m.swipes.len())
+        .unwrap_or(0);
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "retry should complete");
+
+    let gs = state.message_service.load_or_fresh();
+    assert!(matches!(
+        gs.narrative.input_buffer.status,
+        GenerationStatus::Idle
+    ));
+
+    let messages = state.message_service.load_messages().unwrap();
+    let inputs: Vec<_> = messages
+        .into_iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .collect();
+    assert_eq!(inputs.len(), 1, "exactly one Input message");
+    let input = &inputs[0];
+    assert_eq!(
+        input.swipes.len(),
+        swipes_before + 1,
+        "retry appended a swipe to the Input"
+    );
+    assert_eq!(
+        input.text(),
+        "I sprint forward.",
+        "active swipe is the regenerated user message"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 22.3
+#[tokio::test]
+async fn test_retry_re_impersonate_preserves_record_http() {
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["I sneak past the guard.".to_string()]),
+    );
+    let (app, state) = app_with_narrator(narrator);
+
+    {
+        let mut gs = state.message_service.load_or_fresh();
+        let mut input = Message::new("I sneak past.".to_string(), MessageType::Input, None, None);
+        input.swipes[0].replay = Some(GenerationReplay {
+            impersonate: true,
+            impersonate_direction: Some("Sneak past the guard.".to_string()),
+            impersonate_preset_id: Some("impersonate_default".to_string()),
+            guide: None,
+        });
+        gs.narrative.history.append(input);
+        state
+            .message_service
+            .save_message_and_snapshot(&mut gs)
+            .expect("seed impersonate input with record");
+    }
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "retry should complete");
+
+    let messages = state.message_service.load_messages().unwrap();
+    let input = messages
+        .into_iter()
+        .find(|m| m.message_type == MessageType::Input)
+        .expect("Input message exists");
+    let replay = input.replay().expect("new swipe preserves replay");
+    assert!(
+        replay.impersonate,
+        "record still marks the turn as impersonated"
+    );
+    assert_eq!(
+        replay.impersonate_direction.as_deref(),
+        Some("Sneak past the guard.")
+    );
+    assert_eq!(
+        replay.impersonate_preset_id.as_deref(),
+        Some("impersonate_default")
     );
 }

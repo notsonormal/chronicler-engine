@@ -3,19 +3,19 @@
 
 use crate::error::EngineError;
 use crate::domain::model::agent::AgentConfig;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckSettings};
+use crate::domain::model::settings::{
+    AppSettings, LlmProviderConfig, ModePresetRegistry, TextCheckSettings,
+};
 
-/// Database row for `settings` table (singleton, id=1).
 pub struct DbSettings {
     pub id: i64,
     pub connections: String, // JSON: Vec<LlmProviderConfig>
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     pub response_length: String,
-    pub text_check: String, // JSON: TextCheckSettings
-    pub agents: String,     // JSON: Vec<AgentConfig>
-    pub active_system_prompt_preset_id: String,
-    pub active_quantifier_prompt_preset_id: String,
+    pub text_check: String,           // JSON: TextCheckSettings
+    pub agents: String,               // JSON: Vec<AgentConfig>
+    pub mode_preset_registry: String, // JSON: ModePresetRegistry
     pub created_at: String,
     pub updated_at: String,
 }
@@ -30,10 +30,9 @@ impl DbSettings {
             response_length: row.get(4)?,
             text_check: row.get(5)?,
             agents: row.get(6)?,
-            active_system_prompt_preset_id: row.get(7)?,
-            active_quantifier_prompt_preset_id: row.get(8)?,
-            created_at: row.get(9)?,
-            updated_at: row.get(10)?,
+            mode_preset_registry: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
         })
     }
 
@@ -44,6 +43,10 @@ impl DbSettings {
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize text_check: {e}")))?;
         let agents: Vec<AgentConfig> = serde_json::from_str(&self.agents)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize agents: {e}")))?;
+        let mode_preset_registry: ModePresetRegistry =
+            serde_json::from_str(&self.mode_preset_registry).map_err(|e| {
+                EngineError::Parse(format!("Failed to deserialize mode_preset_registry: {e}"))
+            })?;
 
         Ok(AppSettings {
             connections,
@@ -52,8 +55,7 @@ impl DbSettings {
             response_length: self.response_length.clone(),
             text_check,
             agents,
-            active_system_prompt_preset_id: self.active_system_prompt_preset_id.clone(),
-            active_quantifier_prompt_preset_id: self.active_quantifier_prompt_preset_id.clone(),
+            mode_preset_registry,
         })
     }
 }

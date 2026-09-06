@@ -127,6 +127,19 @@ impl TestDataBuilder {
         self
     }
 
+    /// Add a room to the first region's room list — keeps the default
+    /// starting room (`room_1`) reachable while seeding extra rooms.
+    pub fn room(mut self, room: Room) -> Self {
+        let region = self
+            .map
+            .overworld
+            .regions
+            .get_mut(0)
+            .expect("test map has at least one region");
+        region.rooms.push(room);
+        self
+    }
+
     pub fn build(self) -> TestData {
         TestData {
             world: Arc::new(self.world),

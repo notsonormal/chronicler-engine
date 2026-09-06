@@ -168,7 +168,7 @@ impl ArrivalTaskContext {
 
         match narration {
             Ok(result) => {
-                state.add_message(result.text, None, MessageType::Narration);
+                state.add_message(result.text, MessageType::Narration);
                 state.narrative.input_buffer.status = GenerationStatus::Idle;
             }
             Err(e) => {

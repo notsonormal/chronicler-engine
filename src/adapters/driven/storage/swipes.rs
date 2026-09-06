@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::error::EngineError;
 use crate::domain::model::message::Swipe;
 use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::mappers::message::parse_swipe_replay;
 
 impl Storage {
     pub fn insert_swipe(
@@ -17,9 +18,16 @@ impl Storage {
         self.with_backend_mut("insert_swipe", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
+                let replay_json = match &swipe.replay {
+                    Some(replay) => Some(
+                        serde_json::to_string(replay)
+                            .map_err(|e| EngineError::Config(format!("Failed to serialize swipe replay: {e}")))?,
+                    ),
+                    None => None,
+                };
                 conn.execute(
-                    "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header, replay)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     rusqlite::params![
                         message_id as i64,
                         index as i64,
@@ -27,6 +35,7 @@ impl Storage {
                         swipe.snapshot_id.map(|id| id as i64),
                         swipe.location_header.as_deref(),
                         swipe.event_header.as_deref(),
+                        replay_json.as_deref(),
                     ],
                 )
                 .map_err(|e| EngineError::Config(format!("Failed to insert swipe: {e}")))?;
@@ -99,7 +108,7 @@ impl Storage {
                     .collect::<Vec<_>>()
                     .join(",");
                 let sql = format!(
-                    "SELECT message_id, swipe_index, text, snapshot_id, location_header, event_header
+                    "SELECT message_id, swipe_index, text, snapshot_id, location_header, event_header, replay
                      FROM message_swipes
                      WHERE message_id IN ({placeholders})
                      ORDER BY message_id, swipe_index"
@@ -113,6 +122,7 @@ impl Storage {
                     .query_map(
                         rusqlite::params_from_iter(message_ids.iter().map(|id| *id as i64)),
                         |row| {
+                            let replay_json: Option<String> = row.get(6)?;
                             Ok((
                                 row.get::<_, i64>(0)? as u64,
                                 Swipe {
@@ -120,6 +130,7 @@ impl Storage {
                                     snapshot_id: row.get::<_, Option<i64>>(3)?.map(|id| id as u64),
                                     location_header: row.get(4)?,
                                     event_header: row.get(5)?,
+                                    replay: parse_swipe_replay(replay_json.as_deref()),
                                 },
                             ))
                         },

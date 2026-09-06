@@ -1,9 +1,17 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
-//! Message types and conversation history
+//! [DOC: docs/diataxis/reference/storage.md]
+//! Message types and conversation history (Message, Swipe, replay blob)
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use crate::domain::model::state::message_types::MessageType;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct GenerationReplay {
+    pub guide: Option<String>,
+    pub impersonate: bool,
+    pub impersonate_direction: Option<String>,
+    pub impersonate_preset_id: Option<String>,
+}
 
 /// Swipe variant of a [`Message`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -12,6 +20,8 @@ pub struct Swipe {
     pub snapshot_id: Option<u64>,
     pub location_header: Option<String>,
     pub event_header: Option<String>,
+    #[serde(default)]
+    pub replay: Option<GenerationReplay>,
 }
 
 /// Message in the narrative history.
@@ -20,7 +30,6 @@ pub struct Swipe {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub id: u64,
-    pub sender: Option<String>,
     pub message_type: MessageType,
     pub timestamp: DateTime<Utc>,
     pub active_swipe_index: usize,
@@ -31,7 +40,6 @@ pub struct Message {
 impl Message {
     /// Create new message with a single initial swipe.
     pub fn new(
-        sender: Option<String>,
         text: impl Into<String>,
         message_type: MessageType,
         location_header: Option<String>,
@@ -43,10 +51,10 @@ impl Message {
             snapshot_id: None,
             location_header,
             event_header,
+            replay: None,
         };
         Self {
             id: 0,
-            sender,
             message_type,
             timestamp: Utc::now(),
             active_swipe_index: 0,
@@ -88,6 +96,10 @@ impl Message {
         self.active_swipe().and_then(|s| s.snapshot_id)
     }
 
+    pub fn replay(&self) -> Option<&GenerationReplay> {
+        self.active_swipe().and_then(|s| s.replay.as_ref())
+    }
+
     /// Set active swipe index (content accessors use this).
     pub fn set_active_swipe(&mut self, index: usize) {
         if index >= self.swipes.len() {
@@ -114,7 +126,6 @@ impl Message {
     /// Construct message from database values.
     pub(crate) fn from_db(
         id: u64,
-        sender: Option<String>,
         message_type: MessageType,
         timestamp: DateTime<Utc>,
         active_swipe_index: usize,
@@ -122,7 +133,6 @@ impl Message {
     ) -> Self {
         Self {
             id,
-            sender,
             message_type,
             timestamp,
             active_swipe_index,
@@ -148,6 +158,13 @@ impl Message {
     pub fn set_event_header(&mut self, header: Option<String>) {
         if let Some(swipe) = self.active_swipe_mut() {
             swipe.event_header = header;
+        }
+    }
+
+    /// Set the `GenerationReplay` blob on the active swipe.
+    pub fn set_replay(&mut self, replay: Option<GenerationReplay>) {
+        if let Some(swipe) = self.active_swipe_mut() {
+            swipe.replay = replay;
         }
     }
 }

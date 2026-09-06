@@ -52,6 +52,7 @@ fn test_preset_card_html_default_and_active_preset() {
         id: "default-active".into(),
         name: "Default Active".into(),
         instructions: Some("Default active prompt.".into()),
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         ..Default::default()
     };
@@ -185,6 +186,7 @@ fn test_preset_view_form_html_renders() {
         instructions: Some("Instructions text.".into()),
         writing_style: Some("Style text.".into()),
         output_format: Some("Format text.".into()),
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
     };
@@ -227,6 +229,7 @@ fn test_preset_view_form_html_with_json_content() {
         instructions: Some("Your task is to determine which NPCs are present in the current room and whether the player actually moved to a new location.\n\nHow to determine movement:\n1. Read <CurrentRoom> — this is where the player is right now.".into()),
         writing_style: None,
         output_format: Some("Respond ONLY with a JSON object in this exact format:\n{\"npcs_in_room\": [\"id1\", \"id2\"], \"movement\": {\"type\": \"entering|in|leaving\", \"destination\": \"room_id\"}}".into()),
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::Quantifier,
     };

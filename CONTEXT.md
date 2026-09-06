@@ -53,17 +53,37 @@ A single entry in a Game's conversation history — player input, narration outp
 _Avoid_: Line, entry, chat
 
 **Swipe**:
-An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Switching swipes restores the corresponding state snapshot.
+An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Switching swipes restores the corresponding state snapshot. A Swipe stores the inputs that produced its generation, so making a new swipe re-applies them.
 _Avoid_: Variant, version, alternate
 
 **Snapshot**:
 A serialized mutable game sub-state, message-aligned and persisted immediately with its corresponding Message. Every snapshot is immediately valid for restore. Immutable world data lives in Storage only; the orchestrator fetches each field it needs and passes it to the engine function.
 _Avoid_: Save, checkpoint, dump
 
+**Guided Generation**:
+A transient slash-command input that steers what the narrator says for one generation. Rendered as the final prompt layer (`<Guide>`). Stored on the Swipe with the generation's other inputs — it never enters history.
+_Avoid_: hint, nudge, steering (use Guided Generation for the feature)
+
+**Impersonate**:
+Forcing the next narration to be written as the player's persona. Uses the impersonate preset (replacing the system preset), drops the `<PlayerCharacter>` layer, and saves the output as an `Input` message — the same type as a typed player line, since impersonate is the player speaking. No auto-narration follows; the impersonated line can be redone as an alternate Swipe.
+_Avoid_: roleplay as, pose as, pretend (use Impersonate)
+
 ## Deprecated Terms
 
 **Turn**:
 Don't use. Use Message + Swipe.
+
+**Steering**:
+Don't use. Guided Generation and Impersonate stand alone — there is no umbrella concept.
+
+**Narrator Action**:
+Don't use. Player direction is transient (Guided Generation); lasting facts go in-world through free actions.
+
+**Replay blob**:
+Don't use. The inputs a Swipe stores about its generation have no name of their own.
+
+**Retry**:
+Don't use for the operation. Redoing the last generation is a new Swipe.
 
 ## Notes
 

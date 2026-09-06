@@ -1,6 +1,6 @@
 ---
 description: Software architect for implementation planning
-model: kimi-for-coding
+model: glm-5.3-flash
 tools: read, bash, grep, find, ls
 permission:
   bash:

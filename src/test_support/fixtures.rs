@@ -9,6 +9,8 @@ use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
@@ -287,6 +289,7 @@ impl TestPromptPreset {
             instructions: Some(format!("{name}.")),
             writing_style: None,
             output_format: None,
+            allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type: PresetType::System,
         }
@@ -300,6 +303,7 @@ impl TestPromptPreset {
             instructions: Some(format!("{name}.")),
             writing_style: None,
             output_format: None,
+            allowed_modes: vec![NarratorMode::Novel],
             is_default: true,
             preset_type: PresetType::System,
         }
@@ -330,6 +334,9 @@ impl TestWorldManifest {
             scenarios: vec![],
             default_scenario_id: None,
             default_room_image: None,
+            narrator_mode: crate::domain::model::settings::NarratorMode::Novel,
+            narrative_perspective: crate::domain::model::settings::NarrativePerspective::Third,
+            narrative_tense: crate::domain::model::settings::NarrativeTense::Past,
         }
     }
 }
@@ -604,13 +611,7 @@ pub fn sqlite_storage() -> Result<Storage, crate::error::EngineError> {
 }
 
 pub fn dummy_message(text: &str) -> Message {
-    Message::new(
-        Some("Player".to_string()),
-        text,
-        MessageType::Input,
-        None,
-        None,
-    )
+    Message::new(text, MessageType::Input, None, None)
 }
 
 pub fn dummy_swipe(text: &str) -> Swipe {
@@ -619,6 +620,7 @@ pub fn dummy_swipe(text: &str) -> Swipe {
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     }
 }
 
@@ -652,9 +654,36 @@ pub fn insert_message_with_swipe(
         swipe.snapshot_id = msg.snapshot_id();
         swipe.location_header = msg.location_header().map(|s| s.to_string());
         swipe.event_header = msg.event_header().map(|s| s.to_string());
-        let _ = storage.insert_swipe(id, &swipe, 0);
+        storage.insert_swipe(id, &swipe, 0)?;
     }
     Ok(())
+}
+
+/// Build a game state whose last message has a Swipe with stored generation
+/// inputs (`replay`) — the redo-entry fixture for retry flow tests.
+pub fn seed_swipe_with_stored_inputs(
+    storage: &Storage,
+    room_id: &str,
+    text: &str,
+    message_type: MessageType,
+    replay: Option<crate::domain::model::message::GenerationReplay>,
+) -> Result<u64, crate::error::EngineError> {
+    use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+
+    let mut state = TestGameState::in_room(room_id);
+    state.add_message(text.to_string(), message_type);
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let snapshot_id = storage.save_snapshot(&snapshot)?;
+    let mut message = state
+        .narrative
+        .history
+        .last()
+        .ok_or_else(|| crate::error::EngineError::Config("seed: no message appended".into()))?
+        .clone();
+    message.swipes[0].replay = replay;
+    message.set_snapshot_id(Some(snapshot_id));
+    insert_message_with_swipe(storage, &message)?;
+    Ok(snapshot_id)
 }
 
 /// Event retry flow: Input → Main narration (with `last_trigger`) →
@@ -667,11 +696,7 @@ pub fn seed_event_flow(
 
     let input_snap_id = {
         let mut gs = state.message_service.load_or_fresh();
-        gs.add_message(
-            "look".to_string(),
-            Some("Player".to_string()),
-            MessageType::Input,
-        );
+        gs.add_message("look".to_string(), MessageType::Input);
         let snap = GameStateSnapshot::from_game_state(&gs);
         let id = storage.save_snapshot(&snap)?;
         if let Some(last) = gs.narrative.history.last_mut() {
@@ -685,7 +710,7 @@ pub fn seed_event_flow(
     let _pre_event_id = {
         let mut gs = state.message_service.load_or_fresh();
         gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
-        gs.add_message("Main narration".to_string(), None, MessageType::Narration);
+        gs.add_message("Main narration".to_string(), MessageType::Narration);
         let snap = GameStateSnapshot::from_game_state(&gs);
         let id = storage.save_snapshot(&snap)?;
         if let Some(last) = gs.narrative.history.last_mut() {
@@ -698,7 +723,7 @@ pub fn seed_event_flow(
     let _final_id = {
         let mut gs = state.message_service.load_or_fresh();
         gs.narrative.pending_event = Some("Event".to_string());
-        gs.add_message("Event narration".to_string(), None, MessageType::Narration);
+        gs.add_message("Event narration".to_string(), MessageType::Narration);
         if let Some(last) = gs.narrative.history.last_mut() {
             last.set_event_header(Some("Event".to_string()));
         }

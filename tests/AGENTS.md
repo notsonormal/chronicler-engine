@@ -1,10 +1,14 @@
 # `tests/`
 
-### TEST STRATEGY
+## Test Strategy
 
 See [`STRATEGY.md`](STRATEGY.md) for the normative tier-placement rules (unit / HTTP E2E / browser / driven-adapter) and the overlap/SCENARIO-tag conventions.
 
-### TEST MIRROR CONVENTION
+## LLM Testing
+
+`python build.py` runs the fast suite only. LLM tests are `#[ignore]`d by default.
+
+### Test Mirror Convention
 
 Integration test structure mirrors `src/` paths **within each test binary**. The test **binary** is chosen by fixture weight (integration/http/browser/llm/infrastructure); inside each binary, file paths mirror `src/` subpaths.
 
@@ -21,7 +25,7 @@ Examples:
     - `run_branches.rs` — Smoke tests covering uncovered startup branches in `bootstrap::run()`.
 - **browser/**
     - `behaviour.rs` — Browser behaviour tests: click→DOM change, htmx swap persistence, polling-pause, status wiring. Tagged against `docs/specs/browser.md`.
-    - `invariants.rs` — Rendering invariants (named exemption in STRATEGY.md): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these.
+    - `invariants.rs` — Rendering invariants (named exemption in STRATEGY.md): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
     - `mod.rs` — Browser test binary root (Playwright-driven): `behaviour` (client-side JS interaction, tagged against `docs/specs/browser.md`) + `invariants` (CSS/layout rendering invariants, named exemption — no spec, test code is the definition).
 - **helpers/**
     - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.

@@ -1,6 +1,6 @@
 use crate::domain::model::{
     agent::{AgentConfig, BackendSelector, ExecutionPhase},
-    settings::{AppSettings, LlmProviderConfig, TextCheckMode, TextCheckSettings},
+    settings::{AppSettings, LlmProviderConfig, NarratorMode, TextCheckMode, TextCheckSettings},
 };
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::storage::db::DbPool;
@@ -43,7 +43,7 @@ fn test_save_then_get_settings_roundtrip() {
     let pool = DbPool::new(":memory:").unwrap();
     let storage = Storage::new_sqlite(pool, 1);
 
-    let custom = AppSettings {
+    let mut custom = AppSettings {
         connections: vec![LlmProviderConfig::new(
             "test",
             "Test",
@@ -64,9 +64,13 @@ fn test_save_then_get_settings_roundtrip() {
             backend: BackendSelector::UseMain,
             phase: ExecutionPhase::PreGeneration,
         }],
-        active_system_prompt_preset_id: "preset-sys".into(),
-        active_quantifier_prompt_preset_id: "preset-quant".into(),
+        ..Default::default()
     };
+    let mut novel = custom.mode_preset_registry.bundle_for(NarratorMode::Novel);
+    novel.system_prompt_preset_id = "preset-sys".into();
+    novel.quantifier_prompt_preset_id = "preset-quant".into();
+    novel.impersonate_prompt_preset_id = "preset-imp".into();
+    custom.mode_preset_registry.set_bundle(novel);
 
     storage.save_settings(&custom).expect("should save");
     let loaded = storage.get_settings().expect("should get");
@@ -80,8 +84,27 @@ fn test_save_then_get_settings_roundtrip() {
     assert_eq!(loaded.text_check.ignored_words, vec!["foobar"]);
     assert_eq!(loaded.agents.len(), 1);
     assert_eq!(loaded.agents[0].name, "TestAgent");
-    assert_eq!(loaded.active_system_prompt_preset_id, "preset-sys");
-    assert_eq!(loaded.active_quantifier_prompt_preset_id, "preset-quant");
+    assert_eq!(
+        loaded
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .system_prompt_preset_id,
+        "preset-sys"
+    );
+    assert_eq!(
+        loaded
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .quantifier_prompt_preset_id,
+        "preset-quant"
+    );
+    assert_eq!(
+        loaded
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .impersonate_prompt_preset_id,
+        "preset-imp"
+    );
 }
 
 #[test]
@@ -245,7 +268,6 @@ fn test_settings_table_singleton_constraint() {
         ..Default::default()
     };
 
-    // Save twice - the second should REPLACE the first due to CHECK (id = 1) constraint
     storage
         .save_settings(&settings1)
         .expect("first save should succeed");
@@ -253,14 +275,12 @@ fn test_settings_table_singleton_constraint() {
         .save_settings(&settings2)
         .expect("second save should succeed (REPLACE)");
 
-    // Verify only the second value persists (singleton behavior)
     let loaded = storage.get_settings().expect("should get settings");
     assert_eq!(
         loaded.response_length, "second",
         "should have the second value (first was replaced)"
     );
 
-    // Save a third time to confirm continued singleton behavior
     let settings3 = AppSettings {
         response_length: "third".into(),
         ..Default::default()
@@ -273,4 +293,82 @@ fn test_settings_table_singleton_constraint() {
         loaded2.response_length, "third",
         "singleton constraint maintained across multiple saves"
     );
+}
+
+#[test]
+fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
+    use crate::adapters::driven::storage::utils::run_migrations;
+    use crate::domain::model::settings::ModePresetRegistry;
+
+    let pool = DbPool::new(":memory:").unwrap();
+    let conn = pool.conn();
+
+    // Simulate a v19 database: object-keyed registry with user-customized
+    // novel-bundle ids, plus an existing system_default preset row (whose
+    // allowed_modes column is born all-allowed).
+    conn.execute_batch(
+        "INSERT INTO settings (id, created_at, updated_at, mode_preset_registry) \
+         VALUES (1, 't', 't', '{\"novel\":{\"system_prompt_preset_id\":\"custom_sys\",\"quantifier_prompt_preset_id\":\"custom_quant\",\"impersonate_prompt_preset_id\":\"custom_imp\"},\"interactive_fiction\":{\"system_prompt_preset_id\":\"system_if_default\",\"quantifier_prompt_preset_id\":\"quantifier_default\",\"impersonate_prompt_preset_id\":\"impersonate_default\"}}'); \
+         INSERT INTO prompt_presets (id, name, preset_type, is_default, created_at, updated_at) \
+         VALUES ('system_default', 'Default', 'system', 1, 't', 't'); \
+         PRAGMA user_version = 19;",
+    )
+    .unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    // Registry reshaped to the mode-tagged list; user values preserved.
+    let registry_json: String = conn
+        .query_row(
+            "SELECT mode_preset_registry FROM settings WHERE id = 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let registry: ModePresetRegistry = serde_json::from_str(&registry_json).unwrap();
+    assert_eq!(registry.0.len(), 2);
+    let novel = registry.bundle_for(NarratorMode::Novel);
+    assert_eq!(novel.mode, NarratorMode::Novel);
+    assert_eq!(novel.system_prompt_preset_id, "custom_sys");
+    assert_eq!(novel.quantifier_prompt_preset_id, "custom_quant");
+    assert_eq!(novel.impersonate_prompt_preset_id, "custom_imp");
+    let if_bundle = registry.bundle_for(NarratorMode::InteractiveFiction);
+    assert_eq!(if_bundle.system_prompt_preset_id, "system_if_default");
+
+    // Flags: column born all-allowed, system_default tightened to novel-only.
+    let allowed: String = conn
+        .query_row(
+            "SELECT allowed_modes FROM prompt_presets WHERE id = 'system_default'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(allowed, "[\"novel\"]");
+
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 21);
+}
+
+#[test]
+fn test_corrupt_mode_preset_registry_in_db_errors_as_parse() {
+    use crate::error::EngineError;
+
+    let pool = DbPool::new(":memory:").unwrap();
+    let storage = Storage::new_sqlite(pool.clone(), 1);
+    storage
+        .seed_settings(&AppSettings::default())
+        .expect("seeding default settings should succeed");
+    pool.conn()
+        .execute(
+            "UPDATE settings SET mode_preset_registry = 'not-json' WHERE id = 1",
+            [],
+        )
+        .unwrap();
+
+    match storage.get_settings() {
+        Err(EngineError::Parse(_)) => {}
+        other => panic!("expected EngineError::Parse, got {other:?}"),
+    }
 }

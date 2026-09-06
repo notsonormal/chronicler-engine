@@ -1,6 +1,8 @@
 //! [DOC: docs/diataxis/reference/architecture_system.md]
 //! Settings and configuration types
 
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::agent::AgentConfig;
@@ -18,6 +20,176 @@ pub enum TextCheckMode {
     Grammar,
     /// Spell and grammar checks both applied.
     SpellGrammar,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NarratorMode {
+    /// Novel/RP posture — default.
+    #[default]
+    Novel,
+    /// Interactive-fiction/CYOA posture (second-person narration of commanded actions).
+    InteractiveFiction,
+}
+
+impl NarratorMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Novel => "novel",
+            Self::InteractiveFiction => "interactive_fiction",
+        }
+    }
+
+    pub fn parse_or_default(s: &str) -> Self {
+        Self::from_str(s).unwrap_or_else(|e| {
+            tracing::warn!("Invalid narrator mode '{s}', falling back to Novel: {e}");
+            Self::Novel
+        })
+    }
+}
+
+impl FromStr for NarratorMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "novel" => Ok(Self::Novel),
+            "interactive_fiction" => Ok(Self::InteractiveFiction),
+            _ => Err(format!("Unknown narrator mode: {s}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ModePresetBundle {
+    #[serde(default = "settings_defaults::default_narrator_mode")]
+    pub mode: NarratorMode,
+    #[serde(default = "settings_defaults::default_active_system_prompt_preset_id")]
+    pub system_prompt_preset_id: String,
+    #[serde(default = "settings_defaults::default_active_quantifier_prompt_preset_id")]
+    pub quantifier_prompt_preset_id: String,
+    #[serde(default = "settings_defaults::default_active_impersonate_prompt_preset_id")]
+    pub impersonate_prompt_preset_id: String,
+}
+
+/// Mode-tagged JSON list of per-mode default preset bundles. The list may be
+/// partial (or empty) — `bundle_for` falls back to constructed defaults for a
+/// missing entry, so a missing mode never fails a lookup.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModePresetRegistry(pub Vec<ModePresetBundle>);
+
+impl Default for ModePresetRegistry {
+    fn default() -> Self {
+        Self(vec![
+            settings_defaults::default_bundle_for_mode(NarratorMode::Novel),
+            settings_defaults::default_bundle_for_mode(NarratorMode::InteractiveFiction),
+        ])
+    }
+}
+
+impl ModePresetRegistry {
+    /// The bundle for `mode`, or the constructed default when the list has
+    /// no entry for it.
+    pub fn bundle_for(&self, mode: NarratorMode) -> ModePresetBundle {
+        self.0
+            .iter()
+            .find(|b| b.mode == mode)
+            .cloned()
+            .unwrap_or_else(|| settings_defaults::default_bundle_for_mode(mode))
+    }
+
+    /// Insert or replace the entry for `bundle.mode`.
+    pub fn set_bundle(&mut self, bundle: ModePresetBundle) {
+        match self.0.iter_mut().find(|b| b.mode == bundle.mode) {
+            Some(slot) => *slot = bundle,
+            None => self.0.push(bundle),
+        }
+    }
+
+    /// Whether any mode's bundle defaults to the preset `id`.
+    pub fn references(&self, id: &str) -> bool {
+        self.0.iter().any(|b| {
+            b.system_prompt_preset_id == id
+                || b.quantifier_prompt_preset_id == id
+                || b.impersonate_prompt_preset_id == id
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum NarrativePerspective {
+    /// Second person ("you walked") — classic interactive-fiction/CYOA voice.
+    Second,
+    /// Third person ("she walked") — default novel/RP voice.
+    #[default]
+    Third,
+}
+
+impl NarrativePerspective {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Second => "second",
+            Self::Third => "third",
+        }
+    }
+
+    pub fn parse_or_default(s: &str) -> Self {
+        Self::from_str(s).unwrap_or_else(|e| {
+            tracing::warn!("Invalid narrative perspective '{s}', falling back to Third: {e}");
+            Self::Third
+        })
+    }
+}
+
+impl FromStr for NarrativePerspective {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "second" => Ok(Self::Second),
+            "third" => Ok(Self::Third),
+            _ => Err(format!("Unknown narrative perspective: {s}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum NarrativeTense {
+    /// Present tense ("she walks").
+    Present,
+    /// Past tense ("she walked") — default.
+    #[default]
+    Past,
+}
+
+impl NarrativeTense {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Present => "present",
+            Self::Past => "past",
+        }
+    }
+
+    pub fn parse_or_default(s: &str) -> Self {
+        Self::from_str(s).unwrap_or_else(|e| {
+            tracing::warn!("Invalid narrative tense '{s}', falling back to Past: {e}");
+            Self::Past
+        })
+    }
+}
+
+impl FromStr for NarrativeTense {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "present" => Ok(Self::Present),
+            "past" => Ok(Self::Past),
+            _ => Err(format!("Unknown narrative tense: {s}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -72,8 +244,6 @@ impl LlmProviderConfig {
         }
     }
 
-    /// Resolve the API key for this connection.
-    /// Checks stored value first, then falls back to OPENROUTER_API_KEY env var for OpenRouter/DeepSeek.
     pub fn resolve_api_key(&self) -> Option<String> {
         if let Some(key) = &self.api_key {
             return Some(key.clone());
@@ -86,7 +256,6 @@ impl LlmProviderConfig {
         }
     }
 
-    /// Resolve the base URL for this connection.
     pub fn resolve_base_url(&self) -> String {
         if let Some(url) = &self.base_url {
             return url.clone();
@@ -100,7 +269,6 @@ impl LlmProviderConfig {
         }
     }
 
-    /// Resolve the context window size for this connection.
     pub fn resolve_max_context_tokens(&self) -> u32 {
         self.max_context_tokens.unwrap_or(match self.provider {
             LlmBackendType::Ollama => 8192,
@@ -121,10 +289,8 @@ pub struct AppSettings {
     pub text_check: TextCheckSettings,
     #[serde(default = "AgentConfig::defaults")]
     pub agents: Vec<AgentConfig>,
-    #[serde(default = "settings_defaults::default_active_system_prompt_preset_id")]
-    pub active_system_prompt_preset_id: String,
-    #[serde(default = "settings_defaults::default_active_quantifier_prompt_preset_id")]
-    pub active_quantifier_prompt_preset_id: String,
+    #[serde(default)]
+    pub mode_preset_registry: ModePresetRegistry,
 }
 
 impl Default for AppSettings {
@@ -169,10 +335,7 @@ impl Default for AppSettings {
             response_length: settings_defaults::default_response_length(),
             text_check: TextCheckSettings::default(),
             agents: AgentConfig::defaults(),
-            active_system_prompt_preset_id:
-                settings_defaults::default_active_system_prompt_preset_id(),
-            active_quantifier_prompt_preset_id:
-                settings_defaults::default_active_quantifier_prompt_preset_id(),
+            mode_preset_registry: ModePresetRegistry::default(),
         }
     }
 }
@@ -194,14 +357,12 @@ impl AppSettings {
         self.find_connection(&self.quantifier_connection_id)
     }
 
-    /// Resolved narration connection with Mock fallback.
     pub fn narration_connection(&self) -> LlmProviderConfig {
         self.get_narration_connection()
             .cloned()
             .unwrap_or_else(|| LlmProviderConfig::new("default", "Default", LlmBackendType::Mock))
     }
 
-    /// Resolved quantifier connection with Mock fallback.
     pub fn quantifier_connection(&self) -> LlmProviderConfig {
         self.get_quantifier_connection()
             .cloned()

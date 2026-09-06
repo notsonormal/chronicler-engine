@@ -2,6 +2,7 @@
 //! Quantifier prompt construction
 
 use crate::domain::model::template::TemplateVars;
+use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::utils::template::render_template;
 use crate::application::agents::quantifier::types::QuantifierPromptContext;
 
@@ -82,11 +83,19 @@ impl<'a> QuantifierPromptBuilder<'a> {
         if !self.context.recent_history.is_empty() {
             prompt.push_str("<RecentHistory>\n");
             for entry in self.context.recent_history {
-                let sender = entry.sender.as_deref().unwrap_or("Narrator");
-                prompt.push_str(&format!(
-                    "  <Entry sender=\"{}\">{}</Entry>\n",
-                    sender, entry.text
-                ));
+                let sender_label = match entry.message_type {
+                    MessageType::Narration => "Narrator",
+                    MessageType::Input => self.context.player_name,
+                    MessageType::System => "System",
+                };
+                if sender_label.is_empty() {
+                    prompt.push_str(&format!("  <Entry>{}</Entry>\n", entry.text));
+                } else {
+                    prompt.push_str(&format!(
+                        "  <Entry sender=\"{}\">{}</Entry>\n",
+                        sender_label, entry.text
+                    ));
+                }
             }
             prompt.push_str("</RecentHistory>\n\n");
         }

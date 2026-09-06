@@ -16,6 +16,7 @@ fn make_game(id: u64, world_key: &str, name: &str) -> Game {
         name: name.to_string(),
         created_at: now,
         updated_at: now,
+        ..Default::default()
     }
 }
 

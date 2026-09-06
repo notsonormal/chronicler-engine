@@ -1,12 +1,11 @@
-use crate::domain::model::message::Message;
+use crate::domain::model::message::{GenerationReplay, Message};
 use crate::domain::model::state::message_types::MessageType;
-use crate::adapters::driven::storage::mappers::message::model_swipes_to_db;
+use crate::adapters::driven::storage::mappers::message::{model_swipes_to_db, parse_swipe_replay};
 use crate::adapters::driven::storage::models::message::DbMessage;
 
 #[test]
 fn test_message_roundtrip() {
     let mut original = Message::new(
-        Some("System".to_string()),
         "Hello world",
         MessageType::System,
         Some("Room A".to_string()),
@@ -18,13 +17,13 @@ fn test_message_roundtrip() {
         snapshot_id: Some(3),
         location_header: Some("Room A".to_string()),
         event_header: None,
+        replay: None,
     }];
     let db = DbMessage::try_from((&original, 1)).unwrap();
     let swipes = model_swipes_to_db(&original);
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert_eq!(original.id, back.id);
-    assert_eq!(original.sender, back.sender);
     assert_eq!(original.text(), back.text());
     assert_eq!(original.message_type, back.message_type);
     assert_eq!(original.timestamp, back.timestamp);
@@ -37,7 +36,6 @@ fn test_message_roundtrip() {
 #[test]
 fn test_message_unpersisted_roundtrip() {
     let mut original = Message::new(
-        None,
         "Input text",
         MessageType::Input,
         None,
@@ -48,36 +46,36 @@ fn test_message_unpersisted_roundtrip() {
         snapshot_id: None,
         location_header: None,
         event_header: Some("Event".to_string()),
+        replay: None,
     }];
     let db = DbMessage::try_from((&original, 2)).unwrap();
     let swipes = model_swipes_to_db(&original);
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert_eq!(back.id, 0);
-    assert!(back.sender.is_none());
     assert_eq!(back.message_type, MessageType::Input);
     assert_eq!(db.game_id, 2);
 }
 
 #[test]
 fn test_message_log_type_json_serialization() {
-    let mut msg = Message::new(None, "test", MessageType::Dialogue, None, None);
+    let mut msg = Message::new("test", MessageType::Input, None, None);
     msg.swipes = vec![crate::domain::model::message::Swipe {
         text: "test".to_string(),
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     }];
     let db = DbMessage::try_from((&msg, 1)).unwrap();
     let _swipes = model_swipes_to_db(&msg);
 
-    assert_eq!(db.message_type_json, "\"Dialogue\"");
+    assert_eq!(db.message_type_json, "\"Input\"");
 }
 
 #[test]
 fn test_active_swipe_index_out_of_bounds_fallback() {
     let mut original = Message::new(
-        Some("Narrator".to_string()),
         "First swipe",
         MessageType::Narration,
         Some("Room A".to_string()),
@@ -90,12 +88,14 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
             snapshot_id: Some(1),
             location_header: Some("Room A".to_string()),
             event_header: None,
+            replay: None,
         },
         crate::domain::model::message::Swipe {
             text: "Second swipe".to_string(),
             snapshot_id: Some(2),
             location_header: Some("Room B".to_string()),
             event_header: Some("Event B".to_string()),
+            replay: None,
         },
     ];
     let db = DbMessage::try_from((&original, 1)).unwrap();
@@ -109,4 +109,32 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
     assert_eq!(back.text(), "First swipe");
     assert_eq!(back.location_header(), Some("Room A"));
     assert_eq!(back.snapshot_id(), Some(1));
+}
+
+fn sample_replay() -> GenerationReplay {
+    GenerationReplay {
+        guide: Some("steer toward the cellar".to_string()),
+        impersonate: true,
+        impersonate_direction: Some("as the player".to_string()),
+        impersonate_preset_id: Some("impersonate_default".to_string()),
+    }
+}
+
+#[test]
+fn parse_swipe_replay_returns_none_for_none_or_empty() {
+    assert!(parse_swipe_replay(None).is_none());
+    assert!(parse_swipe_replay(Some("")).is_none());
+}
+
+#[test]
+fn parse_swipe_replay_parses_valid_json() {
+    let expected = sample_replay();
+    let json = serde_json::to_string(&expected).unwrap();
+    assert_eq!(parse_swipe_replay(Some(&json)), Some(expected));
+}
+
+#[test]
+fn parse_swipe_replay_discards_corrupt_json() {
+    // Corrupt JSON must degrade to None (plain retry), not panic or propagate.
+    assert!(parse_swipe_replay(Some("{not json")).is_none());
 }

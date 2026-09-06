@@ -33,8 +33,6 @@ impl DbPool {
         }
     }
 
-    /// Insert a new games row and return the new rowid.
-    /// Single source of truth for the `games` INSERT column list.
     pub fn insert_game(
         &self,
         world_name: &str,
@@ -49,6 +47,32 @@ impl DbPool {
             "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, created_at, updated_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
             rusqlite::params![world_name, world_key, persona_key, persona_name, name, &now],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
+        Ok(conn.last_insert_rowid() as u64)
+    }
+
+    pub fn insert_game_from_request(
+        &self,
+        request: &crate::domain::model::game::NewGame,
+    ) -> Result<u64, crate::error::EngineError> {
+        let conn = self.conn();
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, created_at, updated_at, narrator_mode, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                request.world_name,
+                request.world_key,
+                request.persona_key,
+                request.persona_name,
+                request.name,
+                &now,
+                request.narrator_mode.as_str(),
+                request.system_prompt_preset_id,
+                request.quantifier_prompt_preset_id,
+                request.impersonate_prompt_preset_id,
+            ],
         )
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
         Ok(conn.last_insert_rowid() as u64)

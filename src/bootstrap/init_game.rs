@@ -8,7 +8,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::Message;
-use crate::domain::model::settings::AppSettings;
+use crate::domain::model::settings::{AppSettings, ModePresetRegistry};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
@@ -26,6 +26,7 @@ pub(crate) fn resolve_game_id(
     world: &WorldCard,
     persona_key: &str,
     persona_name: &str,
+    registry: &ModePresetRegistry,
 ) -> crate::error::Result<u64> {
     match find_latest_game_for_world(db_pool, &world.key)? {
         Some((id, name)) => {
@@ -38,8 +39,19 @@ pub(crate) fn resolve_game_id(
                 &world.name,
                 &existing_names,
             );
-            let id =
-                db_pool.insert_game(&world.name, &world.key, persona_key, persona_name, &name)?;
+            let bundle = registry.bundle_for(world.narrator_mode);
+            let request = crate::domain::model::game::NewGame {
+                world_name: world.name.clone(),
+                world_key: world.key.clone(),
+                persona_key: persona_key.to_string(),
+                persona_name: persona_name.to_string(),
+                name: name.clone(),
+                narrator_mode: world.narrator_mode,
+                system_prompt_preset_id: bundle.system_prompt_preset_id.clone(),
+                quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id.clone(),
+                impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id.clone(),
+            };
+            let id = db_pool.insert_game_from_request(&request)?;
             tracing::info!("Created new game '{name}' (id={id}) with persona '{persona_key}'");
             Ok(id)
         }
@@ -130,13 +142,15 @@ pub fn spawn_arrival_task_if_needed(
 
     let (arrival_preset, response_length, max_context_tokens, max_tokens) =
         with_settings(settings, |guard| {
-            let preset_id = &guard.active_system_prompt_preset_id;
-            let preset = storage.get_preset(preset_id).ok().flatten();
+            let preset_id = storage.active_system_preset_id(guard);
+            let preset = storage.get_preset(&preset_id).ok().flatten();
             let conn = guard.narration_connection();
-            let max_context_tokens = conn.resolve_max_context_tokens();
-            let max_tokens = conn.max_tokens;
-            let response_length = guard.response_length.clone();
-            (preset, response_length, max_context_tokens, max_tokens)
+            (
+                preset,
+                guard.response_length.clone(),
+                conn.resolve_max_context_tokens(),
+                conn.max_tokens,
+            )
         });
 
     let recorder = Arc::clone(pipeline.recorder());

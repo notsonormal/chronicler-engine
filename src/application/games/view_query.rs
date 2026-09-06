@@ -186,9 +186,11 @@ impl GameViewQuery {
     }
 
     pub fn active_quantifier_prompt(&self) -> String {
+        // Scope the read guard to the resolution step; the preset lookup and
+        // assembly below must not hold the settings lock.
         let preset_id = {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
-            settings.active_quantifier_prompt_preset_id.clone()
+            self.storage.active_quantifier_preset_id(&settings)
         };
         match self.storage.get_preset(&preset_id) {
             Ok(Some(preset)) => preset.assemble_text(&[], None, None),

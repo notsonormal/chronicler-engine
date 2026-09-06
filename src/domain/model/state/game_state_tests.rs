@@ -50,8 +50,8 @@ fn test_generation_state_status() {
 fn test_log_ordering() {
     let mut state = TestGameState::in_room("room1");
 
-    state.add_message("Message 1".into(), None, MessageType::Narration);
-    state.add_message("Message 2".into(), None, MessageType::Narration);
+    state.add_message("Message 1".into(), MessageType::Narration);
+    state.add_message("Message 2".into(), MessageType::Narration);
 
     assert_eq!(state.narrative.history().len(), 2);
     assert_eq!(state.narrative.history()[0].text, "Message 1");
@@ -62,8 +62,8 @@ fn test_log_ordering() {
 fn test_delete_last_log_recalculates_ids() {
     let mut state = TestGameState::in_room("room1");
 
-    state.add_message("go north".into(), Some("Player".into()), MessageType::Input);
-    state.add_message("You walk north.".into(), None, MessageType::Narration);
+    state.add_message("go north".into(), MessageType::Input);
+    state.add_message("You walk north.".into(), MessageType::Narration);
 
     assert_eq!(state.narrative.history.len(), 2);
 
@@ -73,7 +73,7 @@ fn test_delete_last_log_recalculates_ids() {
 
     state.narrative.history.delete_last().unwrap();
     assert!(state.narrative.history.is_empty());
-    state.add_message("go south".into(), Some("Player".into()), MessageType::Input);
+    state.add_message("go south".into(), MessageType::Input);
     assert_eq!(state.narrative.history.last().unwrap().text(), "go south");
 }
 
@@ -82,7 +82,6 @@ fn test_push_message_appends_swipe_on_retry_target() {
     let mut state = TestGameState::in_room("room1");
 
     let target = crate::domain::model::message::Message::new(
-        None,
         "Original narration",
         MessageType::Narration,
         None,
@@ -90,7 +89,7 @@ fn test_push_message_appends_swipe_on_retry_target() {
     );
     state.narrative.retry_target = Some(target);
 
-    state.add_message("Retried narration".into(), None, MessageType::Narration);
+    state.add_message("Retried narration".into(), MessageType::Narration);
 
     assert_eq!(state.narrative.history.len(), 0);
 
@@ -103,11 +102,38 @@ fn test_push_message_appends_swipe_on_retry_target() {
 }
 
 #[test]
+fn test_push_message_inherits_replay_on_retry_swipe() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let mut state = TestGameState::in_room("room1");
+
+    let mut target = crate::domain::model::message::Message::new(
+        "Original narration",
+        MessageType::Narration,
+        None,
+        None,
+    );
+    let replay = GenerationReplay {
+        guide: Some("steer toward the cellar".to_string()),
+        impersonate: true,
+        impersonate_direction: Some("as the player".to_string()),
+        impersonate_preset_id: Some("impersonate_default".to_string()),
+    };
+    target.swipes[0].replay = Some(replay.clone());
+    state.narrative.retry_target = Some(target);
+
+    state.add_message("Retried narration".into(), MessageType::Narration);
+
+    let target = state.narrative.retry_target.unwrap();
+    assert_eq!(target.swipes.len(), 2);
+    assert_eq!(target.swipes[1].replay.as_ref(), Some(&replay));
+}
+
+#[test]
 fn test_push_message_creates_new_message_when_event_header_mismatches() {
     let mut state = TestGameState::in_room("room1");
 
     let target = crate::domain::model::message::Message::new(
-        None,
         "Original narration",
         MessageType::Narration,
         None,
@@ -116,7 +142,7 @@ fn test_push_message_creates_new_message_when_event_header_mismatches() {
     state.narrative.retry_target = Some(target);
 
     state.narrative.pending_event = Some("Trigger Event".to_string());
-    state.add_message("Event narration".into(), None, MessageType::Narration);
+    state.add_message("Event narration".into(), MessageType::Narration);
 
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(
@@ -137,7 +163,7 @@ fn test_push_message_creates_new_message_when_event_header_mismatches() {
 fn test_push_message_creates_new_message_when_no_retry_target() {
     let mut state = TestGameState::in_room("room1");
 
-    state.add_message("Normal narration".into(), None, MessageType::Narration);
+    state.add_message("Normal narration".into(), MessageType::Narration);
 
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(
@@ -147,6 +173,64 @@ fn test_push_message_creates_new_message_when_no_retry_target() {
     assert!(state.narrative.retry_target.is_none());
 }
 
+#[test]
+fn test_push_message_writes_stored_inputs_on_new_narration_message() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let mut state = TestGameState::in_room("room1");
+    let replay = GenerationReplay {
+        guide: Some("steer toward the cellar".to_string()),
+        ..Default::default()
+    };
+
+    state.add_message_with_inputs(
+        "Guided narration".into(),
+        MessageType::Narration,
+        Some(replay.clone()),
+    );
+
+    let message = state.narrative.history.last().unwrap();
+    assert_eq!(message.text(), "Guided narration");
+    assert_eq!(message.replay().cloned(), Some(replay));
+}
+
+#[test]
+fn test_push_message_no_stored_inputs_leaves_swipe_replay_none() {
+    let mut state = TestGameState::in_room("room1");
+
+    state.add_message("Normal narration".into(), MessageType::Narration);
+
+    let message = state.narrative.history.last().unwrap();
+    assert!(
+        message.replay().is_none(),
+        "swipe replay stays None without stored inputs"
+    );
+}
+
+#[test]
+fn test_push_message_writes_impersonate_inputs_on_player_voiced_input() {
+    use crate::domain::model::message::GenerationReplay;
+
+    let mut state = TestGameState::in_room("room1");
+    let replay = GenerationReplay {
+        impersonate: true,
+        impersonate_direction: Some("ask about the artifact".to_string()),
+        impersonate_preset_id: Some("impersonate_default".to_string()),
+        ..Default::default()
+    };
+
+    state.add_message_with_inputs(
+        "I ask about the artifact.".into(),
+        MessageType::Input,
+        Some(replay.clone()),
+    );
+
+    let message = state.narrative.history.last().unwrap();
+    assert_eq!(message.text(), "I ask about the artifact.");
+    assert_eq!(message.message_type, MessageType::Input);
+    assert_eq!(message.replay().cloned(), Some(replay));
+}
+
 fn log_text_strategy() -> impl Strategy<Value = String> {
     "[a-zA-Z0-9 ]{1,50}"
 }
@@ -154,7 +238,6 @@ fn log_text_strategy() -> impl Strategy<Value = String> {
 fn log_type_strategy() -> impl Strategy<Value = MessageType> {
     prop_oneof![
         Just(MessageType::Narration),
-        Just(MessageType::Dialogue),
         Just(MessageType::System),
         Just(MessageType::Input),
     ]
@@ -171,7 +254,7 @@ proptest! {
     ) {
         let mut expected = Vec::new();
         for (text, log_type) in entries {
-            state.add_message(text.clone(), None, log_type.clone());
+            state.add_message(text.clone(), log_type.clone());
             expected.push((text, log_type));
         }
         let history = state.narrative.history();
@@ -191,7 +274,7 @@ proptest! {
         )
     ) {
         for (text, log_type) in entries {
-            state.add_message(text, None, log_type);
+            state.add_message(text, log_type);
         }
         prop_assert!(
             state.narrative.history.len() <= 1000,
@@ -360,11 +443,7 @@ fn make_test_state() -> GameState {
 fn test_execute_freeaction_impl_no_movement() {
     let deps = deps_with_carla("room1");
     let mut state = TestGameState::in_room("room1");
-    state.add_message(
-        "You examine the room.".to_string(),
-        None,
-        MessageType::Narration,
-    );
+    state.add_message("You examine the room.".to_string(), MessageType::Narration);
 
     let result = state.execute_freeaction_impl(
         &FreeActionContext {
@@ -627,11 +706,7 @@ fn test_trigger_split_architecture_produces_event_header() {
     );
     let deps = engine_deps(single_room_named("test_room", "Test Room"), vec![npc]);
     let mut state = TestGameState::in_room("test_room");
-    state.add_message(
-        "You enter the room.".to_string(),
-        None,
-        MessageType::Narration,
-    );
+    state.add_message("You enter the room.".to_string(), MessageType::Narration);
 
     let turn_result = state
         .execute_freeaction_impl(
@@ -903,7 +978,7 @@ proptest! {
     ) {
         let mut state = create_minimal_test_state();
         let npc_id = "shopkeeper";
-        state.add_message(narration_text.clone(), None, MessageType::Narration);
+        state.add_message(narration_text.clone(), MessageType::Narration);
         let npc_ids = if has_npc { vec![npc_id.to_string()] } else { vec![] };
 
         let quantifier = QuantifierResult {
@@ -1460,7 +1535,6 @@ fn test_state_mutation_order() {
 
     state.add_message(
         "You look around the shop.".to_string(),
-        None,
         MessageType::Narration,
     );
 

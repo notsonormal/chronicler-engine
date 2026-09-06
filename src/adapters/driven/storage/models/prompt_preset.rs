@@ -3,6 +3,7 @@
 
 use crate::error::EngineError;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::settings::NarratorMode;
 
 pub struct DbPromptPreset {
     pub id: String,
@@ -15,6 +16,7 @@ pub struct DbPromptPreset {
     pub is_default: i64,
     pub created_at: String,
     pub updated_at: String,
+    pub allowed_modes: String, // JSON: Vec<NarratorMode>
 }
 
 impl DbPromptPreset {
@@ -30,12 +32,15 @@ impl DbPromptPreset {
             is_default: row.get(7)?,
             created_at: row.get(8)?,
             updated_at: row.get(9)?,
+            allowed_modes: row.get(10)?,
         })
     }
 
     pub(crate) fn into_preset(self) -> Result<PromptPreset, EngineError> {
         let preset_type =
             PresetType::try_from(self.preset_type.as_str()).map_err(EngineError::Parse)?;
+        let allowed_modes: Vec<NarratorMode> = serde_json::from_str(&self.allowed_modes)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize allowed_modes: {e}")))?;
         Ok(PromptPreset {
             id: self.id,
             name: self.name,
@@ -43,6 +48,7 @@ impl DbPromptPreset {
             instructions: self.instructions,
             writing_style: self.writing_style,
             output_format: self.output_format,
+            allowed_modes,
             is_default: self.is_default != 0,
             preset_type,
         })

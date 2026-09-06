@@ -7,7 +7,7 @@ title: UI Design
 
 The dashboard's visual language is defined by a small set of CSS custom properties (design tokens) and a structured set of component specifications. Tokens are the source of truth for colors, typography, spacing, sizing, and animation timings; components declare the token-derived styling for each dashboard surface. The static stylesheet at `assets/styles.css` is the binding code that consumes both.
 
-This doc carries the token tables verbatim because the tokens ARE the reference — there is no single source in code that an LLM can grep to recover the `--color-accent-green` value. Component specs describe structure and behavior in prose, with the CSS implementation deferred to `assets/styles.css`.
+This doc carries the token tables verbatim because the tokens ARE the reference — there is no single source in code that an LLM can grep to recover the `--color-accent-green` value. Component specs describe structure and visual state in prose; enforced interaction contracts live in `docs/specs/browser.md`, and the CSS implementation lives in `assets/styles.css`.
 
 ## Design Tokens
 
@@ -83,7 +83,7 @@ This doc carries the token tables verbatim because the tokens ARE the reference 
 - Height: `--header-height`
 - Background: `--color-bg-header`
 - Border-bottom: 1px solid `--color-border`
-- Contains: game title (left), current game name, location, connection status, and reset button (right)
+- Contains: game title (left), current game name, connection status, and reset button (right)
 - Location is **not** in the header — it appears in the story log as the active-room location header
 - Reset button (`.reset-btn`): margin-left auto, margin-right `var(--spacing-sm)`, font-size `--font-size-xs`, padding `4px var(--spacing-sm)`, red gradient with `--color-accent-red` border and text; hover deepens gradient and adds a red glow
 
@@ -189,6 +189,27 @@ This doc carries the token tables verbatim because the tokens ARE the reference 
 - Flex: 1 (consumes remaining width in `#command-form`)
 - Focus: border-color `--color-accent-green`, box-shadow `0 0 8px rgba(0, 255, 0, 0.2)`
 - Placeholder color: `--color-text-placeholder`
+
+### Slash-Command Auto-Suggestion Menu
+
+A position-fixed palette that appears above the command input while the input value starts with `/`, listing the steering slash commands.
+
+- Container: `.slash-menu`
+  - `position: fixed`, `z-index: 1000`
+  - Min-width: `280px`
+  - Background: `--color-bg-secondary`
+  - Border: `1px solid var(--color-border)`
+  - Border-radius: `6px`
+  - Box-shadow: `0 -4px 16px rgba(0, 0, 0, 0.5)`
+  - Font: inherit, `--font-size-base`
+- Item: `.slash-suggestion`
+  - Display: flex, `justify-content: space-between`, `align-items: center`
+  - Padding: `var(--spacing-sm) var(--spacing-md)`
+  - Cursor: pointer
+  - Gap: `var(--spacing-md)`
+  - Active state (`.active`): background `--color-bg-header`
+- Command text (`.slash-cmd`): `--color-accent-cyan`, `font-weight: 600`, `white-space: nowrap`
+- Description text (`.slash-desc`): `--color-text-muted`, `--font-size-small`, `text-align: right`, `white-space: nowrap`
 
 ### Send Button
 
@@ -323,10 +344,7 @@ Replaces the action area when text-check preflight surfaces issues.
 - Original text (read-only): label uppercase muted, value strikethrough muted
 - Corrected text (editable textarea): label uppercase muted, value green (`--color-accent-green`), word-break
 - Issue tags: orange (spell), pink (grammar), yellow (capitalization), blue-cyan (style), muted (formatting/other)
-- Three buttons:
-  - **Send Corrected** — submits the corrected text
-  - **Send Original** — submits the original text
-  - **Cancel** — restores the action area from `data-original-html`
+- Three buttons: **Send Corrected**, **Send Original**, **Cancel**
 - The check button itself (`.btn-check`): transparent background, cyan border+text, padding `8px 14px`, height `var(--input-height)`, bold; hover adds a cyan glow
 
 When the action area contains a `.text-check-preview`, the parent `.action-area` expands: `height: auto; min-height: var(--action-area-height); align-items: flex-start; padding-top/bottom: var(--spacing-md)`.

@@ -209,6 +209,47 @@ And the pipeline returns to idle
 Then message_service.load_messages() contains exactly 2 Input entries
 ```
 
+### Slash commands
+
+#### Scenario 1.9: `/impersonate` dispatches as impersonate and produces an Input message
+
+```gherkin
+Given a fresh game state with narrative.history empty
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action with command="/impersonate hello"
+And the pipeline returns to idle
+Then message_service.load_messages() contains exactly one Input entry
+And message_service.load_messages() contains zero Dialogue entries
+And message_service.load_messages() contains zero Input entries whose text is "/impersonate hello"
+And message_service.load_or_fresh().narrative.input_buffer.status is Idle
+```
+
+#### Scenario 1.10: `/guide` dispatches as guided generation and does not persist an Input message
+
+```gherkin
+Given a fresh game state with narrative.history empty
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action with command="/guide look around"
+And the pipeline returns to idle
+Then message_service.load_messages() contains at least one Narration entry
+And message_service.load_messages() contains zero Input entries
+And message_service.load_or_fresh().narrative.input_buffer.status is Idle
+```
+
+#### Scenario 1.12: Recognized steering commands bypass the player-input text check
+
+```gherkin
+Given a fresh game state with narrative.history empty
+And text check mode is Spell with auto-check enabled
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action/check with command="/guide look at the casle" (a deliberate misspelling the spell check would flag)
+Then the response contains no text-check preview
+And the guide action is dispatched directly
+And the pipeline returns to idle
+When the client POST /action/check with command="look at the casle" (same words, plain input)
+Then the response contains a text-check preview
+```
+
 ## Invariants
 
 These properties hold across every `POST /action` and are observable

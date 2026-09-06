@@ -18,6 +18,7 @@ fn create_test_preset() -> PromptPreset {
         instructions: Some("Be descriptive.".to_string()),
         writing_style: Some("Write in second person.".to_string()),
         output_format: Some("Format as prose.".to_string()),
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: crate::domain::model::prompt_preset::PresetType::System,
     }
@@ -87,7 +88,6 @@ fn create_test_history() -> Vec<MessageEntry> {
     vec![
         MessageEntry {
             id: 1,
-            sender: Some("Narrator".to_string()),
             text: "Welcome to the game!".to_string(),
             message_type: MessageType::Narration,
             timestamp: chrono::Utc::now(),
@@ -95,7 +95,6 @@ fn create_test_history() -> Vec<MessageEntry> {
         },
         MessageEntry {
             id: 2,
-            sender: Some("Player".to_string()),
             text: "I look around.".to_string(),
             message_type: MessageType::Input,
             timestamp: chrono::Utc::now(),
@@ -202,6 +201,7 @@ fn test_assemble_empty_preset_sections() {
         instructions: None,
         writing_style: None,
         output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: crate::domain::model::prompt_preset::PresetType::System,
     };
@@ -266,7 +266,6 @@ fn test_assemble_budget_trimming() {
     let long_history: Vec<MessageEntry> = (0..100)
         .map(|i| MessageEntry {
             id: i,
-            sender: Some(format!("Speaker {i}")),
             text: format!(
                 "This is a very long message number {i} with lots of text to consume tokens."
             ),
@@ -372,7 +371,6 @@ fn test_budget_read_from_settings_per_call() {
     let long_history: Vec<MessageEntry> = (0..100)
         .map(|i| MessageEntry {
             id: i,
-            sender: Some(format!("Speaker {i}")),
             text: "a".repeat(80),
             message_type: MessageType::Narration,
             timestamp: chrono::Utc::now(),
@@ -395,7 +393,7 @@ fn test_budget_read_from_settings_per_call() {
     let small = assembler
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
         .expect("small budget assemble should succeed");
-    let small_count = small.user_prompt.matches("Speaker ").count();
+    let small_count = small.user_prompt.matches("Narrator:").count();
 
     {
         let mut guard = settings.write().unwrap();
@@ -405,7 +403,7 @@ fn test_budget_read_from_settings_per_call() {
     let large = assembler
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
         .expect("large budget assemble should succeed");
-    let large_count = large.user_prompt.matches("Speaker ").count();
+    let large_count = large.user_prompt.matches("Narrator:").count();
 
     assert!(
         large_count > small_count,
@@ -445,5 +443,348 @@ fn test_budget_read_from_settings_per_call() {
     assert!(
         small_budget <= 50,
         "small budget should be bounded by requested max_tokens=50: {small_budget}"
+    );
+}
+
+#[test]
+fn test_assemble_guide_layer_renders_last_with_wrapper() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = create_test_preset();
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "I look around.",
+        &history,
+    )
+    .with_guide(Some("Add tension.".to_string()));
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        result.user_prompt.contains("<Guide>"),
+        "user should contain Guide layer when guide is set"
+    );
+    assert!(
+        result.user_prompt.contains(
+            "Take the following into special consideration for your next message: Add tension."
+        ),
+        "guide layer must use the verbatim Marinara wrapper around the guide text"
+    );
+
+    let player_pos = result
+        .user_prompt
+        .rfind("<PlayerInput>")
+        .expect("PlayerInput present");
+    let guide_pos = result.user_prompt.rfind("<Guide>").expect("Guide present");
+    assert!(
+        guide_pos > player_pos,
+        "Guide layer must render after PlayerInput (guide wins recency)"
+    );
+}
+
+#[test]
+fn test_assemble_no_guide_omits_guide_layer() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = create_test_preset();
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "I look around.",
+        &history,
+    );
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        !result.user_prompt.contains("<Guide>"),
+        "no Guide layer when guide is None"
+    );
+}
+
+#[test]
+fn test_assemble_blank_guide_omits_guide_layer() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = create_test_preset();
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "I look around.",
+        &history,
+    )
+    .with_guide(Some("   ".to_string()));
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        !result.user_prompt.contains("<Guide>"),
+        "whitespace-only guide must not render a Guide layer"
+    );
+}
+
+#[test]
+fn test_assemble_impersonate_drops_player_character_layer() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = PromptPreset {
+        id: "impersonate-test".to_string(),
+        name: "Impersonate".to_string(),
+        role: Some("Write as {{user}}. {{persona_description}}".to_string()),
+        instructions: Some("{{persona_personality}} / {{persona_background}}".to_string()),
+        writing_style: Some("First person.".to_string()),
+        output_format: Some("Write the next message.".to_string()),
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
+        is_default: true,
+        preset_type: crate::domain::model::prompt_preset::PresetType::Impersonate,
+    };
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "Ask about the artifact.",
+        &history,
+    )
+    .with_impersonate(true);
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        !result.user_prompt.contains("<PlayerCharacter>"),
+        "impersonate must drop the PlayerCharacter reference-card layer"
+    );
+    assert!(
+        !result.user_prompt.contains("<Guide>"),
+        "impersonate must not render a Guide layer (mutually exclusive)"
+    );
+    assert!(
+        result.user_prompt.contains("<GameState>"),
+        "impersonate keeps the GameState context layer"
+    );
+    assert!(
+        result.user_prompt.contains("<ConversationHistory>"),
+        "impersonate keeps the ConversationHistory context layer"
+    );
+}
+
+#[test]
+fn test_assemble_impersonate_injects_persona_macros_into_preset() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = PromptPreset {
+        id: "impersonate-test".to_string(),
+        name: "Impersonate".to_string(),
+        role: Some("Write as {{user}}. {{persona_description}}".to_string()),
+        instructions: Some("{{persona_personality}} / {{persona_background}}".to_string()),
+        writing_style: None,
+        output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
+        is_default: true,
+        preset_type: crate::domain::model::prompt_preset::PresetType::Impersonate,
+    };
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "",
+        &history,
+    )
+    .with_impersonate(true);
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    let player_name = create_test_player().sheet.name;
+    assert!(
+        result
+            .system_prompt
+            .contains(&format!("Write as {player_name}.")),
+        "{{user}} macro must substitute the player name in the impersonate role"
+    );
+    assert!(
+        result.system_prompt.contains(&player.sheet.description),
+        "{{persona_description}} macro must inject the persona description"
+    );
+    assert!(
+        result.system_prompt.contains(&format!(
+            "{} / {}",
+            player.sheet.personality, player.sheet.scenario
+        )),
+        "{{persona_personality}} and {{persona_background}} must inject into instructions"
+    );
+}
+
+#[test]
+fn test_assemble_injects_narrative_voice_from_world_posture() {
+    use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
+
+    let mut world = create_test_world();
+    world.narrative_perspective = NarrativePerspective::Second;
+    world.narrative_tense = NarrativeTense::Present;
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = PromptPreset {
+        id: "voice-test".to_string(),
+        name: "Voice Test".to_string(),
+        role: None,
+        instructions: None,
+        writing_style: Some(
+            "{{narrative_perspective}}-person limited perspective. {{narrative_tense}} tense."
+                .to_string(),
+        ),
+        output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
+        is_default: true,
+        preset_type: crate::domain::model::prompt_preset::PresetType::System,
+    };
+
+    let mut context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "go north",
+        &history,
+    );
+    // The caller carries conflicting voice; the owner's stamp must win.
+    context.template_vars.narrative_perspective = "third".to_string();
+    context.template_vars.narrative_tense = "past".to_string();
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS)
+        .with_settings(Arc::new(RwLock::new(AppSettings::default())));
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        result
+            .user_prompt
+            .contains("second-person limited perspective"),
+        "owner's world-posture stamp must overwrite the caller's conflicting voice: {:#?}",
+        result.user_prompt
+    );
+    assert!(
+        result.user_prompt.contains("present tense"),
+        "owner's world-posture stamp must overwrite the caller's conflicting voice: {:#?}",
+        result.user_prompt
+    );
+    assert!(
+        !result.user_prompt.contains("third-person"),
+        "caller-stamped voice must not survive assemble: {:#?}",
+        result.user_prompt
+    );
+    assert!(
+        !result.user_prompt.contains("past tense"),
+        "caller-stamped voice must not survive assemble: {:#?}",
+        result.user_prompt
+    );
+}
+
+#[test]
+fn test_assemble_without_settings_uses_default_voice() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+    let history = create_test_history();
+    let preset = PromptPreset {
+        id: "voice-test".to_string(),
+        name: "Voice Test".to_string(),
+        role: None,
+        instructions: None,
+        writing_style: Some(
+            "{{narrative_perspective}}-person limited perspective. {{narrative_tense}} tense."
+                .to_string(),
+        ),
+        output_format: None,
+        allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
+        is_default: true,
+        preset_type: crate::domain::model::prompt_preset::PresetType::System,
+    };
+
+    let context = PromptContext::new(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "go north",
+        &history,
+    );
+
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let result = assembler
+        .assemble(&context, &preset, &world.global_rules, None)
+        .expect("assemble should succeed");
+
+    assert!(
+        result
+            .user_prompt
+            .contains("third-person limited perspective"),
+        "default narrative_perspective must render when assembler has no settings: {:#?}",
+        result.user_prompt
+    );
+    assert!(
+        result.user_prompt.contains("past tense"),
+        "default narrative_tense must render when assembler has no settings: {:#?}",
+        result.user_prompt
     );
 }

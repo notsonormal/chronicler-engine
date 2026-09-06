@@ -56,6 +56,9 @@ fn test_world_manifest_to_card() {
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
+        narrator_mode: crate::domain::model::settings::NarratorMode::Novel,
+        narrative_perspective: crate::domain::model::settings::NarrativePerspective::Third,
+        narrative_tense: crate::domain::model::settings::NarrativeTense::Past,
     };
 
     let card: WorldCard = manifest.into();

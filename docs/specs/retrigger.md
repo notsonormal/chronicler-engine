@@ -54,7 +54,7 @@ Then the response is 400 Bad Request
 
 ```gherkin
 Given a game state where narrative.last_trigger is set
-And the last message is an Input message (not a Narration or Dialogue)
+And the last message is an Input message (not a Narration)
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 ```

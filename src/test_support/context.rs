@@ -16,9 +16,10 @@ use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::AppSettings;
+use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+use crate::domain::model::utils::settings_defaults;
 use crate::error::Result;
 use crate::test_support::TestData;
 use crate::test_support::{make_test_recorder, TestAppBuilder, TestDataBuilder};
@@ -32,11 +33,48 @@ pub fn seed_default_preset(storage: &Storage) {
             instructions: None,
             writing_style: None,
             output_format: None,
+            allowed_modes: vec![NarratorMode::Novel],
             is_default: true,
             preset_type: PresetType::System,
         })
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
         .expect("test setup: save_preset must succeed for default preset");
+
+    // The default Interactive Fiction bundle selects this id; without it an
+    // IF-mode game built on this fixture fails preset resolution.
+    storage
+        .save_preset(&PromptPreset {
+            id: "system_if_default".to_string(),
+            name: "Test Interactive Fiction".to_string(),
+            role: Some("You are a test interactive fiction narrator.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            allowed_modes: vec![NarratorMode::InteractiveFiction],
+            is_default: true,
+            preset_type: PresetType::System,
+        })
+        // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+        .expect("test setup: save_preset must succeed for IF default preset");
+
+    seed_default_impersonate_preset(storage);
+}
+
+pub fn seed_default_impersonate_preset(storage: &Storage) {
+    storage
+        .save_preset(&PromptPreset {
+            id: "impersonate_default".to_string(),
+            name: "Default Test Impersonate".to_string(),
+            role: Some("You are writing as {{user}}. {{persona_description}}".to_string()),
+            instructions: Some("Write only as {{user}}.".to_string()),
+            writing_style: Some("First person as {{user}}.".to_string()),
+            output_format: Some("Write {{user}}'s next message.".to_string()),
+            allowed_modes: settings_defaults::default_allowed_modes(),
+            is_default: true,
+            preset_type: PresetType::Impersonate,
+        })
+        // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+        .expect("test setup: save_preset must succeed for default impersonate preset");
 }
 
 pub fn build_test_message_service(storage: Arc<Storage>) -> Arc<MessageService> {

@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MessageType {
     Narration,
-    Dialogue,
     System,
     Input,
 }
@@ -16,7 +15,6 @@ pub enum MessageType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessageEntry {
     pub id: u64,
-    pub sender: Option<String>,
     pub text: String,
     pub message_type: MessageType,
     pub timestamp: DateTime<Utc>,
@@ -34,7 +32,6 @@ impl Default for MessageEntry {
     fn default() -> Self {
         Self {
             id: 0,
-            sender: None,
             text: String::new(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
@@ -50,7 +47,6 @@ impl From<&crate::domain::model::message::Message> for MessageEntry {
     fn from(msg: &crate::domain::model::message::Message) -> Self {
         Self {
             id: msg.id,
-            sender: msg.sender.clone(),
             text: msg.text().to_string(),
             message_type: msg.message_type.clone(),
             timestamp: msg.timestamp,

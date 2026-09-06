@@ -16,6 +16,7 @@ fn make_test_world(key: &str, name: &str) -> WorldCard {
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: Some("/images/test.png".to_string()),
+        ..Default::default()
     }
 }
 
@@ -41,6 +42,7 @@ fn test_delete_world_success() {
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
+        ..Default::default()
     };
     let map = MapDef {
         overworld: Overworld {

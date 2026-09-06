@@ -80,7 +80,11 @@ fn build_wired_app(
     let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
     let persona_catalogue = PersonaCatalogue::new(Arc::clone(&storage));
     let generation_gate = GenerationGate::new();
-    let game_catalogue = GameCatalogue::new(Arc::clone(&storage), Arc::clone(&message_service));
+    let game_catalogue = GameCatalogue::new(
+        Arc::clone(&storage),
+        Arc::clone(&message_service),
+        Arc::clone(&settings),
+    );
     let game_view_query = GameViewQuery::new(
         Arc::clone(&storage),
         Arc::clone(&message_service),

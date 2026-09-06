@@ -63,6 +63,25 @@ fn extract_first_preset_id(body: &str) -> String {
     body[id_start..delete_pos].to_string()
 }
 
+/// HTML slice covering one preset's card. Cards carry no data-id, so the
+/// slice is located via the always-rendered duplicate URL and bounded by the
+/// next card (or the end of the body).
+fn preset_card_slice<'a>(body: &'a str, preset_id: &str) -> &'a str {
+    let anchor = body
+        .find(&format!(
+            r#"hx-post="/prompt-presets/{preset_id}/duplicate""#
+        ))
+        .unwrap_or_else(|| panic!("preset card for {preset_id} missing: no duplicate button"));
+    let start = body[..anchor]
+        .rfind("<div class=\"preset-card")
+        .expect("preset-card div opens before the duplicate button");
+    let end = body[anchor..]
+        .find("<div class=\"preset-card")
+        .map(|offset| anchor + offset)
+        .unwrap_or(body.len());
+    &body[start..end]
+}
+
 // [docs/specs/prompt_presets.md] SCENARIO: 21.1
 #[tokio::test]
 async fn test_prompt_presets_panel_renders_full_surface() {
@@ -580,10 +599,18 @@ async fn test_activate_system_preset_renders_active_badge() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
-    assert!(body.contains("Active"));
-    assert!(!body.contains(&format!(
-        r#"hx-post="/prompt-presets/{preset_id}/activate""#
-    )));
+    // Scope both assertions to the activated preset's card: the panel holds
+    // several presets, and a panel-wide check can pass or fail on an
+    // unrelated preset's badge or buttons.
+    let card = preset_card_slice(&body, &preset_id);
+    assert!(
+        card.contains("Active · Novel"),
+        "activated preset's card must carry the Active · Novel badge"
+    );
+    assert!(
+        !card.contains("Set Active (Novel)"),
+        "activated preset's card must hide its Set Active (Novel) button once active"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.24
@@ -601,4 +628,142 @@ async fn test_activate_missing_preset_returns_error() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
     assert_eq!(body, "<span class='error'>Preset not found</span>");
+}
+
+#[tokio::test]
+async fn test_activate_refuses_preset_not_allowed_for_mode() {
+    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+    use chronicler_engine::domain::model::settings::NarratorMode;
+
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let preset = PromptPreset {
+        id: "if-only".to_string(),
+        name: "IF Only".to_string(),
+        instructions: Some("IF.".to_string()),
+        allowed_modes: vec![NarratorMode::InteractiveFiction],
+        is_default: false,
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    storage.save_preset(&preset).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    // No mode param resolves to Novel, which the preset does not allow.
+    let response = app
+        .oneshot(empty_post_request("/prompt-presets/if-only/activate"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+    assert_eq!(
+        body,
+        "<span class='error'>Preset not allowed for novel mode</span>"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.25
+#[tokio::test]
+async fn test_activate_if_only_preset_via_if_mode_populates_if_bundle() {
+    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+    use chronicler_engine::domain::model::settings::NarratorMode;
+
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let preset = PromptPreset {
+        id: "if-only".to_string(),
+        name: "IF Only".to_string(),
+        instructions: Some("IF.".to_string()),
+        allowed_modes: vec![NarratorMode::InteractiveFiction],
+        is_default: false,
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    storage.save_preset(&preset).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    // Captured before activation: equality (not inequality) proves that IF
+    // activation leaves the Novel bundle's system slot untouched.
+    let novel_before = storage
+        .get_settings()
+        .unwrap()
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel)
+        .system_prompt_preset_id
+        .clone();
+
+    let response = app
+        .clone()
+        .oneshot(empty_post_request(
+            "/prompt-presets/if-only/activate?mode=interactive_fiction",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+    assert!(
+        body.contains("Active · IF"),
+        "IF activation must badge the preset Active · IF"
+    );
+
+    let settings = storage.get_settings().unwrap();
+    let if_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::InteractiveFiction);
+    assert_eq!(
+        if_bundle.system_prompt_preset_id, "if-only",
+        "IF activation must write the IF bundle's system slot"
+    );
+    let novel_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::Novel);
+    assert_eq!(
+        novel_bundle.system_prompt_preset_id, novel_before,
+        "IF activation must not touch the Novel bundle"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.26
+#[tokio::test]
+async fn test_panel_gates_activation_buttons_by_allowed_modes() {
+    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+    use chronicler_engine::domain::model::settings::NarratorMode;
+
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let preset = PromptPreset {
+        id: "if-only".to_string(),
+        name: "IF Only".to_string(),
+        instructions: Some("IF.".to_string()),
+        allowed_modes: vec![NarratorMode::InteractiveFiction],
+        is_default: false,
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    storage.save_preset(&preset).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let response = app
+        .oneshot(get_request("/fragment/prompt-presets"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+    assert!(
+        body.contains(r#"hx-post="/prompt-presets/if-only/activate?mode=interactive_fiction""#),
+        "IF-only preset must render an IF activation button"
+    );
+    assert!(
+        !body.contains(r#"hx-post="/prompt-presets/if-only/activate?mode=novel""#),
+        "IF-only preset must not render a Novel activation button"
+    );
 }

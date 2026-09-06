@@ -1,11 +1,4 @@
 {
-  "subagents": {
-    "agentOverrides": {
-      "reviewer": {
-        "disabled": true
-      }
-    }
-  },
   "packages": [
     "extensions/pi-plan-mode",
     "npm:@agnishc/edb-todo"

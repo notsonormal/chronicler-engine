@@ -9,23 +9,33 @@ The engine assembles a structured prompt for every Game Master call from the act
 
 ## Layered Prompt Architecture
 
-The prompt is a fixed sequence of seven layers mapped from SillyTavern's Prompt Manager. A post-history splice sits between Layer 5 and Layer 6 (see the next section).
+The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3 and 7 are conditional — Layer 3 (`<PlayerCharacter>`) is dropped on an impersonated turn and Layer 7 (`<Guide>`) renders only on a guided turn; the remaining six layers are always present. A post-history splice sits between Layer 5 and Layer 6.
 
 | Layer | Name | SillyTavern Equivalent | Role | Content |
 |-------|------|----------------------|------|---------|
-| 0 | System | Main Prompt | System | XML-wrapped `<role>`, `<instructions>`, `<global_rules>` sections from the active preset |
+| 0 | System | Main Prompt | System | XML-wrapped `<role>` and `<instructions>` from the active preset, plus `<global_rules>` injected from `world.json` |
 | 1 | Game State | Context | User (data) | Current room name, description, present NPCs |
 | 2 | NPC Cards | Character Description | User (data) | `<KnownNpcs>` condensed roster for all known NPCs; `<NpcsInRoom>` full cards for NPCs in the current room |
 | 3 | Player | Persona Description | User (data) | `<PlayerCharacter>` persona sheet |
 | 4 | World Info | World Info / Lorebook | User (data) | `<WorldLore>` world name + description |
 | 5 | History | Chat History | User (data) | `<ConversationHistory>` full conversation history |
 | 6 | User Input | User Message | User (data) | `<PlayerInput>` sanitized current player input |
+| 7 | Guide | — | User (data) | Transient steering instruction on guided turns; omitted on plain turns |
 
-Layer 0 is the only system-role layer; Layers 1–6 are user-role data.
+Layer 0 is the only system-role layer; Layers 1–7 are user-role data.
 
 ### Post-History Splice (Between Layer 5 and Layer 6)
 
-The `<writing_style>` and `<output_format>` sections are rendered into the user message after `<ConversationHistory>` and before `<PlayerInput>`. They are assembled as a separate string and spliced between the history and user-input layers. The splice is not a layer — the seven-layer table is unchanged; the splice is a position in the rendered user message.
+The `<writing_style>` and `<output_format>` sections are rendered into the user message after `<ConversationHistory>` and before `<PlayerInput>`. They are assembled as a separate string and spliced between the history and user-input layers. The splice is not a layer; it is a position in the rendered user message.
+
+### Conditional Layers
+
+Two steering surfaces alter the prompt conditionally, without changing the base sequence.
+
+- **`<Guide>` (Layer 7)** — on a guided turn, this final layer is rendered after `<PlayerInput>`, carrying a transient steering instruction.
+- **`<PlayerCharacter>` drop** — on an impersonated turn, the `<PlayerCharacter>` layer (Layer 3) is omitted. Persona data reaches the prompt through the impersonate preset's template macros instead.
+
+Both are transient per-turn conditions; neither is persisted as a history entry. See the AI Steering reference for the steering behavior.
 
 ## Per-Layer Content
 
@@ -82,31 +92,7 @@ The system half of the message carries `<role>`, `<instructions>`, and (when pre
 
 ### Assembled Shape
 
-The system message has the following shape (per-layer prose is from `data/prompt_presets/system/default.json`; reproduce verbatim by opening that file):
-
-```xml
-<role>
-    You are an interactive fiction author with your own free will...
-</role>
-
-<instructions>
-    Input validation rules:
-    - ...
-
-    State tracking rules:
-    - ...
-
-    Narrative rules:
-    - ...
-</instructions>
-
-<global_rules>
-    - Rule from world.json
-    - Another rule from world.json
-</global_rules>
-```
-
-Empty sections are dropped. The `<role>` and `<instructions>` sections render the preset fields through the template engine (which substitutes `{{user}}` — see "Context Templates" below) before wrapping.
+The system message shape is illustrated by the default system preset at `data/prompt_presets/system/default.json`. Empty sections are dropped. The `<role>` and `<instructions>` sections render the preset fields through the template engine (which substitutes `{{user}}` — see "Context Templates" below) before wrapping.
 
 ### Dynamic Injection: Global Rules
 
@@ -155,27 +141,11 @@ The user's selected response length (from `AppSettings.response_length`, persist
 
 ## Context Templates
 
-The template engine supports a single variable:
-
-- **`{{user}}`** — substituted from the player persona's name at render time.
-
-No other `GameState`-derived variables are supported. Unknown placeholders are left in place. Substitution of `{{user}}` in author-controlled preset fields happens before user input reaches the assembler; the `{{variable}}` pattern in user input is stripped by `sanitize_for_prompt` (see "Prompt Injection Sanitization" above).
+The template engine substitutes player-persona fields into author-controlled preset fields at render time. Every preset can reach the player name. Presets that write as the persona can also reach the persona description, personality, and background. Unknown placeholders are left in place. Substitution in author-controlled preset fields happens before user input reaches the assembler; placeholder patterns in user input are stripped during prompt sanitization (see "Prompt Injection Sanitization" above).
 
 ## Character Card Format
 
-World-author data uses the SillyTavern character-card shape:
-
-```json
-{
-  "name": "Character Name",
-  "description": "Physical appearance, personality",
-  "personality": "Behavior traits",
-  "scenario": "Setting context",
-  "example_dialogue": "Sample conversations"
-}
-```
-
-`NpcCard` extends this with `id`, `summary` (3-line condensed form), and `relationships` (per-partner dynamic/static text). `PersonaCard` mirrors the same shape on the player side. Cards are stored as JSON files under `data/characters/<world>/` and hydrated at load time.
+World-author data uses the SillyTavern character-card shape, which carries name, description, personality, scenario, and example dialogue fields. The engine extends that shape for non-player characters with an identifier, a short summary, and relationship text per partner. The player persona mirrors the same shape. Cards live as JSON files under the world's character directory and are hydrated at load time.
 
 ## Quantifier Prompt (Separate)
 
@@ -183,12 +153,13 @@ The engine also uses a quantifier prompt — a separate secondary LLM call that 
 
 ## Prompt Presets
 
-The four editable sections are stored on `PromptPreset` records. The active preset id is held on `AppSettings.active_system_prompt_preset_id`. At assembly time, the assembler reads the preset fresh from storage; `AppSettings` holds only the active-id reference.
+The prompt system stores editable presets by role. The narrator preset controls the narrator voice. The quantifier preset drives the post-generation scene analysis, which runs as a separate secondary call. The impersonate preset controls the player-persona voice. Each role has its own active preset, selected through settings. At assembly time, the assembler reads the selected preset fresh from storage; settings hold only the active-preset references.
 
-Default presets ship as `data/prompt_presets/system/default.json` and are protected from edit or delete. The dashboard's Prompt Presets tab provides the create/copy/set-active surface.
+An impersonated turn selects the impersonate preset in place of the narrator preset; the quantifier preset runs independently. Default presets ship with the engine and are protected from edit or delete. The dashboard's Prompt Presets tab provides the create, copy, and set-active surface for each role.
 
 ## Document References
 
 - [`../../explanation/prompt_system_design.md`](../../explanation/prompt_system_design.md) — why the prompt system is shaped this way: system/user separation and two-tier NPC cards.
 - [`./agent_system.md`](./agent_system.md) — the quantifier prompt as a separate secondary prompt, hosted by the `QuantifierAgent`.
 - [`./narration_system.md`](./narration_system.md) — LLM transport, sanitization (response side + Gemma 4 workaround), forensics, and runtime tracing.
+- [`./ai_steering.md`](./ai_steering.md) — the `<Guide>` layer and the `<PlayerCharacter>` drop as steering surfaces, and the impersonate preset replacing the system preset.

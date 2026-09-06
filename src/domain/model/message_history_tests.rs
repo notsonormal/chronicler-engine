@@ -3,7 +3,7 @@ use crate::domain::model::message_history::MessageHistory;
 use crate::domain::model::state::message_types::MessageType;
 
 fn make_message(id: u64, text: &str, log_type: MessageType) -> Message {
-    let mut msg = Message::new(Some("Player".to_string()), text, log_type, None, None);
+    let mut msg = Message::new(text, log_type, None, None);
     msg.id = id;
     msg
 }
@@ -152,7 +152,7 @@ fn test_last_ai_response_index() {
     let mut history = MessageHistory::new();
     history.append(make_message(1, "input", MessageType::Input));
     history.append(make_message(2, "narration", MessageType::Narration));
-    history.append(make_message(3, "dialogue", MessageType::Dialogue));
+    history.append(make_message(3, "narration", MessageType::Narration));
     assert_eq!(history.last_ai_response_index(), Some(2));
 }
 
@@ -170,10 +170,7 @@ fn test_last_input_text() {
     history.append(make_message(1, "narration", MessageType::Narration));
     assert!(history.last_input_text().is_none());
     history.append(make_message(2, "go north", MessageType::Input));
-    assert_eq!(
-        history.last_input_text(),
-        Some(("Player".to_string(), "go north".to_string()))
-    );
+    assert_eq!(history.last_input_text(), Some("go north".to_string()));
 }
 
 #[test]

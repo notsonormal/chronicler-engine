@@ -15,11 +15,10 @@ impl Storage {
                 let conn = pool.conn();
                 let db_msg = DbMessage::try_from((msg, game_id as i64))?;
                 conn.execute(
-                    "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    "INSERT INTO messages (game_id, message_type, timestamp, active_swipe_index, is_deleted)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
                     rusqlite::params![
                         db_msg.game_id,
-                        db_msg.sender.as_deref(),
                         db_msg.message_type_json,
                         db_msg.timestamp,
                         db_msg.active_swipe_index,
@@ -69,7 +68,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, game_id, sender, message_type, timestamp, active_swipe_index
+                        "SELECT id, game_id, message_type, timestamp, active_swipe_index
                          FROM messages
                          WHERE game_id = ?1 AND is_deleted = 0
                          ORDER BY id ASC",

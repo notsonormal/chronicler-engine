@@ -43,7 +43,6 @@ pub fn make_history() -> Vec<MessageEntry> {
     vec![
         MessageEntry {
             id: 1,
-            sender: Some("Narrator".to_string()),
             text: "You enter the front gate.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
@@ -51,9 +50,8 @@ pub fn make_history() -> Vec<MessageEntry> {
         },
         MessageEntry {
             id: 2,
-            sender: Some("Carla".to_string()),
             text: "I'll follow you inside.".to_string(),
-            message_type: MessageType::Dialogue,
+            message_type: MessageType::Input,
             timestamp: Utc::now(),
             ..Default::default()
         },

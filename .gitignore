@@ -249,3 +249,10 @@ vectors.db
 # Project-level plan-mode defaults (extension is generic; values live per-project).
 !.pi/plan-mode.json
 context.md
+mutants.out/*
+
+# Turbo-agent proxy (tools/turbo-agent) regenerable state
+tools/turbo-agent/.venv/
+tools/turbo-agent/.turbo-agent/
+tools/turbo-agent/proxy.log
+tools/turbo-agent/proxy.pid

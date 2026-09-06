@@ -3,6 +3,7 @@
 Endpoints: 
  - `GET /fragment/settings`
  - `POST /settings`
+ - `POST /settings/text-check`
 
 ## Scenarios
 

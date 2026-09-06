@@ -4,7 +4,6 @@ use crate::domain::model::state::message_types::MessageType;
 #[test]
 fn test_message_new_sets_fields() {
     let msg = Message::new(
-        Some("Player".to_string()),
         "Hello world",
         MessageType::Input,
         Some("Location".to_string()),
@@ -12,7 +11,6 @@ fn test_message_new_sets_fields() {
     );
 
     assert_eq!(msg.id, 0);
-    assert_eq!(msg.sender, Some("Player".to_string()));
     assert_eq!(msg.text(), "Hello world");
     assert_eq!(msg.message_type, MessageType::Input);
     assert_eq!(msg.location_header(), Some("Location"));
@@ -21,7 +19,7 @@ fn test_message_new_sets_fields() {
 
 #[test]
 fn test_message_text_roundtrip() {
-    let mut msg = Message::new(None, "Original", MessageType::Narration, None, None);
+    let mut msg = Message::new("Original", MessageType::Narration, None, None);
     msg.update_active_swipe_text("Updated".to_string());
     assert_eq!(msg.text(), "Updated");
 }
@@ -29,7 +27,7 @@ fn test_message_text_roundtrip() {
 #[test]
 fn test_message_new_generates_timestamp() {
     let before = chrono::Utc::now();
-    let msg = Message::new(None, "Hello", MessageType::Narration, None, None);
+    let msg = Message::new("Hello", MessageType::Narration, None, None);
     let after = chrono::Utc::now();
 
     assert!(msg.timestamp >= before);
@@ -38,7 +36,6 @@ fn test_message_new_generates_timestamp() {
 #[test]
 fn test_message_set_event_header() {
     let mut msg = Message::new(
-        None,
         "Test narration",
         MessageType::Narration,
         Some("Test Location".to_string()),
@@ -55,16 +52,8 @@ fn test_message_set_event_header() {
 #[test]
 fn test_message_from_db() {
     let timestamp = chrono::Utc::now();
-    let msg = Message::from_db(
-        42,
-        Some("AI".to_string()),
-        MessageType::Narration,
-        timestamp,
-        0,
-        false,
-    );
+    let msg = Message::from_db(42, MessageType::Narration, timestamp, 0, false);
     assert_eq!(msg.id, 42);
-    assert_eq!(msg.sender, Some("AI".to_string()));
     assert_eq!(msg.message_type, MessageType::Narration);
     assert_eq!(msg.timestamp, timestamp);
     assert_eq!(msg.active_swipe_index, 0);
@@ -75,9 +64,8 @@ fn test_message_from_db() {
 #[test]
 fn test_message_from_db_with_deleted() {
     let timestamp = chrono::Utc::now();
-    let msg = Message::from_db(99, None, MessageType::Input, timestamp, 2, true);
+    let msg = Message::from_db(99, MessageType::Input, timestamp, 2, true);
     assert_eq!(msg.id, 99);
-    assert_eq!(msg.sender, None);
     assert_eq!(msg.message_type, MessageType::Input);
     assert_eq!(msg.active_swipe_index, 2);
     assert!(msg.is_deleted);
@@ -87,7 +75,6 @@ fn test_message_from_db_with_deleted() {
 fn test_message_swipe_fields_roundtrip() {
     // Create message with multiple swipes
     let mut msg = Message::new(
-        Some("AI".to_string()),
         "Original text",
         MessageType::Narration,
         Some("Room A".to_string()),
@@ -100,6 +87,7 @@ fn test_message_swipe_fields_roundtrip() {
         snapshot_id: None,
         location_header: Some("Room B".to_string()),
         event_header: Some("EventY".to_string()),
+        replay: None,
     });
 
     // Initially at index 0
@@ -137,12 +125,13 @@ fn test_message_swipe_fields_roundtrip() {
 
 #[test]
 fn test_message_set_snapshot_id_writes_active_swipe() {
-    let mut msg = Message::new(None, "Text", MessageType::Narration, None, None);
+    let mut msg = Message::new("Text", MessageType::Narration, None, None);
     msg.swipes.push(Swipe {
         text: "Alt".to_string(),
         snapshot_id: None,
         location_header: None,
         event_header: None,
+        replay: None,
     });
     msg.set_active_swipe(1);
 

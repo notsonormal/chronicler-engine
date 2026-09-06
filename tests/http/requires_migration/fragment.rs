@@ -254,7 +254,7 @@ async fn test_edit_history_handler_success() {
     storage.set_game_id(game_id);
 
     let app = TestAppBuilder::default_test()
-        .log("Original text", Some("Test"), MessageType::Narration)
+        .log("Original text", MessageType::Narration)
         .storage(Arc::clone(&storage))
         .build();
 
@@ -303,7 +303,7 @@ async fn test_edit_history_handler_not_found() {
 #[tokio::test]
 async fn test_delete_history_handler_success() {
     let app = TestAppBuilder::default_test()
-        .log("Test message", Some("Test"), MessageType::Narration)
+        .log("Test message", MessageType::Narration)
         .build();
 
     let req = Request::builder()
@@ -733,13 +733,7 @@ async fn test_switch_swipe_handler_success() {
     let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
     let snap_id = latest_snap.db_id.unwrap();
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "original",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg = Message::new("original", MessageType::Narration, None, None);
     let id = storage.insert_message(&msg).unwrap();
 
     storage
@@ -750,6 +744,7 @@ async fn test_switch_swipe_handler_success() {
                 snapshot_id: Some(snap_id),
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             0,
         )
@@ -762,6 +757,7 @@ async fn test_switch_swipe_handler_success() {
                 snapshot_id: Some(snap_id),
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             1,
         )
@@ -873,13 +869,7 @@ async fn test_switch_swipe_handler_not_last() {
     let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
     let snap_id = latest_snap.db_id.unwrap();
 
-    let msg1 = Message::new(
-        Some("Player".to_string()),
-        "first",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg1 = Message::new("first", MessageType::Narration, None, None);
     let id1 = storage.insert_message(&msg1).unwrap();
     storage
         .insert_swipe(
@@ -889,18 +879,13 @@ async fn test_switch_swipe_handler_not_last() {
                 snapshot_id: Some(snap_id),
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             0,
         )
         .unwrap();
 
-    let msg2 = Message::new(
-        Some("Player".to_string()),
-        "second",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg2 = Message::new("second", MessageType::Narration, None, None);
     let _id2 = storage.insert_message(&msg2).unwrap();
 
     let req = Request::builder()
@@ -928,13 +913,7 @@ async fn test_switch_swipe_handler_concurrent() {
     let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
     let snap_id = latest_snap.db_id.unwrap();
 
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "original",
-        MessageType::Narration,
-        None,
-        None,
-    );
+    let msg = Message::new("original", MessageType::Narration, None, None);
     let id = storage.insert_message(&msg).unwrap();
     storage
         .insert_swipe(
@@ -944,6 +923,7 @@ async fn test_switch_swipe_handler_concurrent() {
                 snapshot_id: Some(snap_id),
                 location_header: None,
                 event_header: None,
+                replay: None,
             },
             0,
         )

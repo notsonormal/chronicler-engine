@@ -1,6 +1,6 @@
 ---
 description: General-purpose agent for complex, multi-step implementation tasks
-model: kimi-for-coding
+model: glm-5.3-flash
 permission:
   bash:
     "git *": deny

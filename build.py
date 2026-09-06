@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import defaultdict
 from pathlib import Path
 
 # Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
@@ -135,6 +136,98 @@ def get_test_cmd(include_llm=False):
     if include_llm:
         cmd += " --profile llm --run-ignored all"
     return cmd
+
+
+# nextest per-test result line, e.g.:
+#   "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x"
+# The progress counter is optional: nextest only prints it in some
+# --show-progress modes, and the timing report must survive config drift.
+_NEXTEST_RESULT_RE = re.compile(
+    r"^\s*(?:PASS|FAIL|SKIP)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
+)
+
+
+def _nextest_duration_to_secs(token: str) -> float:
+    """Convert a nextest duration token (e.g. "18.645s", "1m23s") to seconds."""
+    token = token.strip()
+    total = 0.0
+    for value, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)([hms])", token):
+        n = float(value)
+        if unit == "h":
+            total += n * 3600.0
+        elif unit == "m":
+            total += n * 60.0
+        else:
+            total += n
+    return total
+
+
+def run_with_test_timings(cmd, env=None, check=True):
+    """Run nextest and print a per-test timing report: slowest tests (top 30)
+    and per-binary totals. Returns the exit code; exits on failure when check=True.
+    """
+    both_print(f"$ {cmd}  (with --test-timings)")
+    timed_cmd = f"{cmd} --final-status-level pass"
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    result = subprocess.run(
+        timed_cmd,
+        shell=True,
+        cwd=os.getcwd(),
+        env=merged_env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    # nextest writes its per-test report on stderr; log both streams and scan both.
+    for stream in (result.stdout, result.stderr):
+        if stream:
+            for line in stream.splitlines():
+                _log_write(line + "\n")
+
+    timings = []
+    for line in (result.stdout or "").splitlines() + (result.stderr or "").splitlines():
+        m = _NEXTEST_RESULT_RE.match(line)
+        if not m:
+            continue
+        secs = _nextest_duration_to_secs(m.group(1))
+        name = m.group(2).strip()
+        # SKIP lines carry no duration measurement.
+        if secs == 0.0 and "SKIP" in line:
+            continue
+        timings.append((secs, name))
+
+    both_print("")
+    both_print("--- Test Timing Report ---")
+    if not timings:
+        both_print("  No per-test durations parsed from nextest output.")
+    else:
+        # nextest test path is "<binary_id> <test_path>"; group by binary_id.
+        per_binary = defaultdict(float)
+        for secs, name in timings:
+            binary = name.split(" ", 1)[0] if " " in name else name
+            per_binary[binary] += secs
+
+        sorted_timings = sorted(timings, key=lambda t: t[0], reverse=True)
+        both_print(f"  Slowest tests (of {len(timings)} measured, top 30):")
+        for secs, name in sorted_timings[:30]:
+            both_print(f"    {secs:>8.3f}s  {name}")
+        both_print("")
+        both_print("  Per-binary totals:")
+        for binary, total in sorted(per_binary.items(), key=lambda kv: kv[1], reverse=True):
+            both_print(f"    {total:>8.2f}s  {binary}")
+        both_print(
+            f"    {'':>8}   Sum of measured: {sum(t[0] for t in timings):.2f}s"
+        )
+    both_print("---")
+
+    if result.returncode != 0:
+        both_print(f"FAILED with code {result.returncode}")
+        if check:
+            sys.exit(result.returncode)
+    return result.returncode
 
 
 def get_coverage_cmd():
@@ -464,6 +557,16 @@ def main():
         dest="diagnostic_benchmark",
         help="Run the diagnostic signal quality benchmark and generate a report",
     )
+    parser.add_argument(
+        "--test-timings",
+        action="store_true",
+        dest="test_timings",
+        help=(
+            "Print a per-test timing report after the test step: the slowest tests"
+            " sorted by wall-clock duration, plus per-binary totals."
+            " Surfaces nextest's per-test durations without a separate command."
+        ),
+    )
     args = parser.parse_args()
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
@@ -479,11 +582,14 @@ def main():
     step_timings = []
     step_failures = []
 
-    def timed_step(label, cmd, check=True, env=None):
+    def timed_step(label, cmd, check=True, env=None, timings=False):
         steps.next(label)
         start = time.time()
         try:
-            rc = run(cmd, check=check, env=env)
+            if timings:
+                rc = run_with_test_timings(cmd, env=env, check=check)
+            else:
+                rc = run(cmd, check=check, env=env)
             elapsed = time.time() - start
             failed = rc != 0
             step_timings.append(
@@ -605,7 +711,7 @@ def main():
             both_print("=== Build Complete ===")
             return
 
-        total_steps = 11  # Non-format validation, packaging, tests, and report steps.
+        total_steps = 12  # Non-format validation, packaging, tests, and report steps.
         if not args.no_fmt:
             total_steps += 1
         steps = StepCounter(total_steps)
@@ -690,10 +796,28 @@ def main():
         target_data_dir = target_dir / "data"
         clean_sqlite_dbs(target_data_dir)
 
+        # Run the fast guardrail/architecture binaries first and fail the build
+        # immediately (check=True) — otherwise a guardrail failure only surfaces
+        # after the full ~2-minute nextest suite has already run.
+        timed_step(
+            "Running guardrail tests...",
+            "cargo nextest run --no-fail-fast --test guardrails --test architecture",
+            env=cargo_env,
+        )
+
         if args.coverage:
-            timed_step(
-                "Running all tests with coverage...", get_coverage_cmd(), check=False, env=cargo_env
-            )
+            if args.test_timings:
+                timed_step(
+                    "Running all tests with coverage and timings...",
+                    get_coverage_cmd(),
+                    check=False,
+                    env=cargo_env,
+                    timings=True,
+                )
+            else:
+                timed_step(
+                    "Running all tests with coverage...", get_coverage_cmd(), check=False, env=cargo_env
+                )
 
             steps.next("Generating coverage report...")
             json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
@@ -713,20 +837,27 @@ def main():
             else:
                 both_print("Warning: Could not generate coverage JSON.")
         else:
-            timed_step(
-                "Running all tests...",
-                get_test_cmd(include_llm=args.include_llm),
-                check=False,
-                env=cargo_env,
-            )
+            if args.test_timings:
+                timed_step(
+                    "Running all tests with timings...",
+                    get_test_cmd(include_llm=args.include_llm),
+                    check=False,
+                    env=cargo_env,
+                    timings=True,
+                )
+            else:
+                timed_step(
+                    "Running all tests...",
+                    get_test_cmd(include_llm=args.include_llm),
+                    check=False,
+                    env=cargo_env,
+                )
             if not args.include_llm:
                 both_print(
                     "    NOTE: 2 LLM tests were skipped. "
                     "Run 'python build.py --llm-only' to execute them."
                 )
             steps.next("Skipping coverage report (use --coverage to enable)")
-
-        both_print("=== Build Complete ===")
 
         project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
         engine_tmp = Path("tmp")
@@ -742,14 +873,10 @@ def main():
         exit_code = int(e.code) if e.code is not None else 1
         raise
     finally:
-        # Flush + close the log so an agent can read a targeted slice immediately.
-        try:
-            log_fh.flush()
-            log_fh.close()
-        except Exception:
-            pass
-        _LogState.fh = None
-
+        # Print the epilogue BEFORE closing the log so the summary + banner are
+        # written into the log file, not only to stdout. Closing last preserves
+        # the "agent can read a targeted slice immediately" rationale — the
+        # close is delayed only by in-process writes, not by any I/O wait.
         _print_step_summary(step_timings, step_failures, log_path)
 
         both_print("=" * 60)
@@ -757,6 +884,18 @@ def main():
         both_print(f"Full build log: {log_path}")
         both_print("=" * 60)
 
+        try:
+            log_fh.flush()
+            log_fh.close()
+        except Exception:
+            pass
+        _LogState.fh = None
+
+    # check=False steps (e.g. the test suite) record failures in step_failures
+    # without raising SystemExit. Propagate them into the process exit code so
+    # callers that trust the exit code (agents, pre-commit, CI) see the failure.
+    if exit_code == 0 and step_failures:
+        exit_code = 1
     return exit_code
 
 

@@ -126,7 +126,7 @@ impl MessageService {
 
             let text = render_template(&scenario.text, &TemplateVars::new(&persona.sheet.name));
             if !text.is_empty() {
-                initial_state.add_message(text, None, MessageType::Narration);
+                initial_state.add_message(text, MessageType::Narration);
             }
 
             initial_state.init_scenario_npcs(scenario, &npcs_map);
@@ -230,9 +230,22 @@ impl MessageService {
         let anchor_idx = if is_event {
             messages.iter().rposition(|m| m.event_header().is_none())?
         } else {
-            messages
-                .iter()
-                .rposition(|m| m.message_type == MessageType::Input)?
+            // A guided turn appends no Input row: its Narration is the retry
+            // target AND the anchor — the redo must reconstruct from that
+            // turn's own snapshot, not from an older Input's older snapshot.
+            let last_turn_idx = messages.iter().rposition(|m| {
+                m.message_type == MessageType::Narration || m.message_type == MessageType::Input
+            })?;
+            let last_is_guided = messages[last_turn_idx]
+                .replay()
+                .is_some_and(|r| r.guide.is_some());
+            if last_is_guided {
+                last_turn_idx
+            } else {
+                messages
+                    .iter()
+                    .rposition(|m| m.message_type == MessageType::Input)?
+            }
         };
         Some((anchor_idx, &messages[anchor_idx]))
     }

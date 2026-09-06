@@ -137,6 +137,23 @@ fn test_db_message_swipes_table_exists() {
 }
 
 #[test]
+fn test_db_message_swipes_has_replay_column() {
+    let pool = DbPool::new(":memory:").unwrap();
+    let conn = pool.conn();
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name='replay'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        count, 1,
+        "message_swipes.replay column must exist after v15 migration"
+    );
+}
+
+#[test]
 fn test_db_cascade_delete_game() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();
@@ -156,8 +173,8 @@ fn test_db_cascade_delete_game() {
     .unwrap();
 
     conn.execute(
-        "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted)
-         VALUES (?1, NULL, 'Narration', '1', 0, 0)",
+        "INSERT INTO messages (game_id, message_type, timestamp, active_swipe_index, is_deleted)
+         VALUES (?1, 'Narration', '1', 0, 0)",
         rusqlite::params![game_id],
     )
     .unwrap();

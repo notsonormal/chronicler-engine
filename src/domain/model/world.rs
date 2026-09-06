@@ -4,9 +4,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::scenario::StartingScenario;
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::world_defaults;
 
-/// Runtime world descriptor sourced from the DB. No filesystem pointers.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorldCard {
     #[serde(default)]
@@ -20,11 +20,15 @@ pub struct WorldCard {
     pub default_scenario_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_room_image: Option<String>,
+    #[serde(default = "world_defaults::default_world_narrator_mode")]
+    pub narrator_mode: NarratorMode,
+    #[serde(default = "world_defaults::default_world_narrative_perspective")]
+    pub narrative_perspective: NarrativePerspective,
+    #[serde(default = "world_defaults::default_world_narrative_tense")]
+    pub narrative_tense: NarrativeTense,
 }
 
-/// Bootstrap manifest deserialized from `worlds/<id>/world.json`.
-/// Contains file pointer fields (`map_file`, `characters_dir`) used ONLY during
-/// initial seeding in `bootstrap/load.rs`. Runtime data lives in the DB afterwards.
+/// Bootstrap manifest deserialized from `worlds/<id>/world.json`; file-pointer fields are used only during seeding in `bootstrap/load.rs`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldManifest {
     pub id: String,
@@ -41,6 +45,12 @@ pub struct WorldManifest {
     pub default_scenario_id: Option<String>,
     #[serde(default)]
     pub default_room_image: Option<String>,
+    #[serde(default = "world_defaults::default_world_narrator_mode")]
+    pub narrator_mode: NarratorMode,
+    #[serde(default = "world_defaults::default_world_narrative_perspective")]
+    pub narrative_perspective: NarrativePerspective,
+    #[serde(default = "world_defaults::default_world_narrative_tense")]
+    pub narrative_tense: NarrativeTense,
 }
 
 impl WorldManifest {
@@ -54,7 +64,6 @@ impl WorldCard {
         self.scenarios.first()
     }
 
-    /// Resolve starting room ID from default scenario, falling back to "start".
     pub fn starting_room_id(&self) -> String {
         self.default_scenario()
             .map(|s| s.starting_room_id.clone())
@@ -72,6 +81,9 @@ impl From<WorldManifest> for WorldCard {
             scenarios: manifest.scenarios,
             default_scenario_id: manifest.default_scenario_id,
             default_room_image: manifest.default_room_image,
+            narrator_mode: manifest.narrator_mode,
+            narrative_perspective: manifest.narrative_perspective,
+            narrative_tense: manifest.narrative_tense,
         }
     }
 }

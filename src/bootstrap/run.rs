@@ -92,8 +92,16 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
 
     let player = storage.require_persona(&args.persona)?;
 
-    let active_game_id =
-        super::init_game::resolve_game_id(&db_pool, &world_arc, &args.persona, &player.sheet.name)?;
+    let settings = load_settings(&storage).unwrap_or_else(|_| AppSettings::default());
+    let registry = settings.mode_preset_registry.clone();
+
+    let active_game_id = super::init_game::resolve_game_id(
+        &db_pool,
+        &world_arc,
+        &args.persona,
+        &player.sheet.name,
+        &registry,
+    )?;
     storage.set_game_id(active_game_id);
 
     Ok(PreparedData {
@@ -230,7 +238,11 @@ pub(crate) fn ensure_presets(
 ) -> crate::error::Result<()> {
     use crate::domain::model::prompt_preset::PresetType;
 
-    for preset_type in [PresetType::System, PresetType::Quantifier] {
+    for preset_type in [
+        PresetType::System,
+        PresetType::Quantifier,
+        PresetType::Impersonate,
+    ] {
         let dir = data_dir.join("prompt_presets").join(preset_type.as_str());
         if !dir.exists() {
             tracing::info!("Prompt preset seed directory not found: {}", dir.display());
@@ -260,6 +272,8 @@ fn process_preset_file(
     preset_type: crate::domain::model::prompt_preset::PresetType,
 ) -> Result<(), crate::error::EngineError> {
     use crate::domain::model::prompt_preset::PromptPreset;
+    use crate::domain::model::settings::NarratorMode;
+    use crate::domain::model::utils::settings_defaults;
 
     if path.extension().and_then(|s| s.to_str()) != Some("json") {
         return Ok(());
@@ -269,6 +283,21 @@ fn process_preset_file(
         crate::error::EngineError::Parse(format!("Invalid preset seed {}: {e}", path.display()))
     })?;
 
+    // Flags come from the seed at insert only; existing rows are never
+    // touched at boot — allowed_modes are user-owned from birth.
+    let allowed_modes = match seed.get("allowed_modes") {
+        None | Some(serde_json::Value::Null) => settings_defaults::default_allowed_modes(),
+        Some(value) => {
+            serde_json::from_value::<Vec<NarratorMode>>(value.clone()).unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Invalid allowed_modes in {}: {e}; allowing all modes",
+                    path.display()
+                );
+                settings_defaults::default_allowed_modes()
+            })
+        }
+    };
+
     let id = seed["id"].as_str().unwrap_or("default").to_string();
     let preset = PromptPreset {
         id: id.clone(),
@@ -277,6 +306,7 @@ fn process_preset_file(
         instructions: seed["instructions"].as_str().map(|s| s.to_string()),
         writing_style: seed["writing_style"].as_str().map(|s| s.to_string()),
         output_format: seed["output_format"].as_str().map(|s| s.to_string()),
+        allowed_modes,
         is_default: true,
         preset_type,
     };
@@ -288,6 +318,9 @@ fn process_preset_file(
                 || existing.writing_style.is_some()
                 || existing.output_format.is_some();
             if !has_content {
+                // Refresh content only; keep the existing row's flags.
+                let mut preset = preset;
+                preset.allowed_modes = existing.allowed_modes;
                 storage.save_preset(&preset)?;
                 tracing::info!("Updated {} prompt preset: {}", preset_type.as_str(), id);
             }

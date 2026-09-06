@@ -1,11 +1,12 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! GameCatalogue — game-lifecycle storage orchestration.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::application::errors::ApplicationError;
 use crate::application::message_service::MessageService;
 use crate::domain::model::game::Game;
+use crate::domain::model::settings::AppSettings;
 use crate::domain::model::utils::game_name::generate_game_name;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driven::storage::Storage;
@@ -14,13 +15,19 @@ use crate::adapters::driven::storage::Storage;
 pub struct GameCatalogue {
     storage: Arc<Storage>,
     message_service: Arc<MessageService>,
+    settings: Arc<RwLock<AppSettings>>,
 }
 
 impl GameCatalogue {
-    pub fn new(storage: Arc<Storage>, message_service: Arc<MessageService>) -> Self {
+    pub fn new(
+        storage: Arc<Storage>,
+        message_service: Arc<MessageService>,
+        settings: Arc<RwLock<AppSettings>>,
+    ) -> Self {
         Self {
             storage,
             message_service,
+            settings,
         }
     }
 
@@ -30,6 +37,7 @@ impl GameCatalogue {
             .get_world(world_key)?
             .ok_or_else(|| ApplicationError::validation("World not found"))?;
         let world_name = world_with_map.world_card.name.clone();
+        let world_card = &world_with_map.world_card;
         let player = storage
             .get_persona(persona_key)?
             .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
@@ -37,13 +45,26 @@ impl GameCatalogue {
         let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
         let name = generate_game_name(&world_name, &existing_names);
 
-        let new_id = storage.create_game(
-            &world_name,
-            world_key,
-            persona_key,
-            &player.sheet.name,
-            &name,
-        )?;
+        let bundle = {
+            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            settings
+                .mode_preset_registry
+                .bundle_for(world_card.narrator_mode)
+        };
+
+        let request = crate::domain::model::game::NewGame {
+            world_name: world_name.clone(),
+            world_key: world_key.to_string(),
+            persona_key: persona_key.to_string(),
+            persona_name: player.sheet.name.clone(),
+            name: name.clone(),
+            narrator_mode: world_card.narrator_mode,
+            system_prompt_preset_id: bundle.system_prompt_preset_id,
+            quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id,
+            impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id,
+        };
+
+        let new_id = storage.create_game_from_request(&request)?;
         let old_id = storage.current_game_id();
         self.storage.set_game_id(new_id);
 
@@ -98,6 +119,7 @@ impl GameCatalogue {
             .get_world(&world_key)?
             .ok_or_else(|| ApplicationError::validation("World not found"))?;
         let world_name = world_with_map.world_card.name.clone();
+        let world_card = &world_with_map.world_card;
         let player = storage
             .get_persona(&persona_key)?
             .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
@@ -112,13 +134,24 @@ impl GameCatalogue {
             .collect();
 
         let new_name = generate_game_name(&world_name, &existing_names);
-        let new_id = storage.create_game(
-            &world_name,
-            &world_key,
-            &persona_key,
-            &player.sheet.name,
-            &new_name,
-        )?;
+        let bundle = {
+            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            settings
+                .mode_preset_registry
+                .bundle_for(world_card.narrator_mode)
+        };
+        let request = crate::domain::model::game::NewGame {
+            world_name: world_name.clone(),
+            world_key: world_key.clone(),
+            persona_key: persona_key.clone(),
+            persona_name: player.sheet.name.clone(),
+            name: new_name.clone(),
+            narrator_mode: world_card.narrator_mode,
+            system_prompt_preset_id: bundle.system_prompt_preset_id,
+            quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id,
+            impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id,
+        };
+        let new_id = storage.create_game_from_request(&request)?;
         self.storage.set_game_id(new_id);
 
         let _ = self.persist_initial_state_with_swipes();

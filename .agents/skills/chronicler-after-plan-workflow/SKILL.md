@@ -24,5 +24,3 @@ Create a task list (using `TaskCreate`) for all these steps.
 10. Run the `/code-simplification` skill against the (usually uncommited) changes
 11. Run the `/chronicler-comment-fixer` skill against the (usually uncommited) changes. Sometimes comments are written in lieu of fixing issues, surface any comments like that for investigation.
 12. Run the full build with the script `build.py`. **All Tests Must Pass**. Failing tests should be fixed even if they are failing for reasons that seem unrelated to the recent changes. "Seems unrelated" is a subjective opinion that is often wrong.
-
-_See `.agents/skills/_shared/chronicler-shared.md` for documentation sync and visual verification steps.

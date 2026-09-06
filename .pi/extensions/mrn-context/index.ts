@@ -1,10 +1,9 @@
-// mrn-context: inject a compact context block (Model, Build Log, Git) into
-// each pi turn via before_agent_start. Two handlers: session_start resets
-// dedup state; before_agent_start collects three sources, per-source dedup,
-// returns one <pi-note> message when something changed.
+// mrn-context: inject a compact context block (Model, Build Log) into each
+// pi turn via before_agent_start. Two handlers: session_start resets dedup
+// state; before_agent_start collects two sources, per-source dedup, returns
+// one <pi-note> message when something changed.
 // @ts-nocheck
 
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -60,49 +59,9 @@ function getBuildLogNote(cwd: string): SourceResult | undefined {
   return { key: `${newestPath}:${Math.floor(newestMtime)}`, line: `Build Log: ${emitPath} (${ageStr})` };
 }
 
-function getGitNote(cwd: string): SourceResult | undefined {
-  const out = execFileSync(
-    "git",
-    ["--no-optional-locks", "status", "--porcelain=v2", "--branch"],
-    { cwd, timeout: 2000, encoding: "utf8" },
-  );
-  const line = parseGitPorcelainV2(out);
-  return line === undefined ? undefined : { key: line, line };
-}
-
-export function parseGitPorcelainV2(output: string): string | undefined {
-  if (typeof output !== "string" || output.length === 0) return undefined;
-
-  let branchName: string | null = null;
-  let oid: string | null = null;
-  let dirty = 0;
-
-  for (const line of output.split("\n")) {
-    if (line.startsWith("# branch.head ")) {
-      branchName = line.substring("# branch.head ".length);
-    } else if (line.startsWith("# branch.oid ")) {
-      oid = line.substring("# branch.oid ".length);
-    } else if (line.length > 0) {
-      const tag = line[0];
-      if (tag === "1" || tag === "2" || tag === "u") dirty++;
-    }
-  }
-
-  if (oid === null) return undefined;
-
-  const parts: string[] = [];
-  if (branchName !== null && branchName !== "HEAD" && branchName !== "(unborn)") {
-    parts.push(`branch ${branchName}`);
-  }
-  parts.push(`at ${oid.substring(0, 8)}`);
-  parts.push(`${dirty} uncommitted change${dirty === 1 ? "" : "s"}`);
-  return `Git: ${parts.join(", ")}`;
-}
-
 const SOURCES = [
   { name: "model", get: (ctx: any) => getModelNote(ctx) },
   { name: "buildLog", get: (ctx: any) => getBuildLogNote(ctx.cwd) },
-  { name: "git", get: (ctx: any) => getGitNote(ctx.cwd) },
 ] as const;
 
 const lastKeys: Record<string, string | undefined> = {};
