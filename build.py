@@ -859,8 +859,6 @@ def main():
                 )
             steps.next("Skipping coverage report (use --coverage to enable)")
 
-        both_print("=== Build Complete ===")
-
         project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
         engine_tmp = Path("tmp")
         clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=30)
@@ -875,20 +873,23 @@ def main():
         exit_code = int(e.code) if e.code is not None else 1
         raise
     finally:
-        # Flush + close the log so an agent can read a targeted slice immediately.
-        try:
-            log_fh.flush()
-            log_fh.close()
-        except Exception:
-            pass
-        _LogState.fh = None
-
+        # Print the epilogue BEFORE closing the log so the summary + banner are
+        # written into the log file, not only to stdout. Closing last preserves
+        # the "agent can read a targeted slice immediately" rationale — the
+        # close is delayed only by in-process writes, not by any I/O wait.
         _print_step_summary(step_timings, step_failures, log_path)
 
         both_print("=" * 60)
         both_print("=== Build Complete ===")
         both_print(f"Full build log: {log_path}")
         both_print("=" * 60)
+
+        try:
+            log_fh.flush()
+            log_fh.close()
+        except Exception:
+            pass
+        _LogState.fh = None
 
     # check=False steps (e.g. the test suite) record failures in step_failures
     # without raising SystemExit. Propagate them into the process exit code so

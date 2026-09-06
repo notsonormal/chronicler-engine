@@ -28,7 +28,7 @@ The script outputs file paths, line numbers, and comment text in the format:
 
 ---
 
-Review the file `chronicler_engine\AGENTS.md` to understand the coding standards around comments.
+Read `CODING_STANDARDS.md`, section `## Code comments` — repo-level comment rules that the detection tables below extend.
 
 # Detection Targets
 
