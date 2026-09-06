@@ -901,8 +901,8 @@ async fn test_retry_re_impersonate_preserves_record_http() {
 }
 
 // The impersonate preset resolves at generation time from the game's active
-// configuration — a redo picks up the preset's current content. Deliberately
-// untagged: no spec scenario covers this behavior yet.
+// configuration — a redo picks up the preset's current content.
+// [docs/specs/swipe_new.md] SCENARIO: 22.4
 #[tokio::test]
 async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     let narrator = Arc::new(
@@ -974,5 +974,20 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     assert!(
         prompt.contains(marker),
         "the redo must generate with the preset's CURRENT content; prompt was: {prompt}"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let input = messages
+        .into_iter()
+        .find(|m| m.message_type == MessageType::Input)
+        .expect("Input message exists");
+    assert!(
+        input.impersonated(),
+        "the redo's active swipe stays impersonated"
+    );
+    assert_eq!(
+        input.steering_instruction(),
+        Some("I look around."),
+        "the steering instruction re-applies on the redo"
     );
 }

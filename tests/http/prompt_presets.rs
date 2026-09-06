@@ -630,6 +630,7 @@ async fn test_activate_missing_preset_returns_error() {
     assert_eq!(body, "<span class='error'>Preset not found</span>");
 }
 
+// [docs/specs/prompt_presets.md] SCENARIO: 21.26
 #[tokio::test]
 async fn test_activate_refuses_preset_not_allowed_for_mode() {
     use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
