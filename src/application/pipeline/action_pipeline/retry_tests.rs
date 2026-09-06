@@ -10,7 +10,6 @@ use crate::application::ports::llm_provider::LlmCallResult;
 use crate::application::errors::ApplicationError;
 use crate::application::errors::ProcessActionResult;
 use crate::domain::model::map::Room;
-use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
@@ -625,7 +624,7 @@ async fn test_retry_recovers_after_llm_failure() {
     let _input_id = add_input_and_save(&app, &storage, "look");
 
     app.pipeline
-        .execute_action_with_replay("look".to_string(), None);
+        .execute_action_with_inputs("look".to_string(), false, None);
     let after_fail = app.message_service.load_or_fresh();
     assert!(
         after_fail
@@ -910,7 +909,8 @@ async fn test_retry_appends_swipe_to_same_message() {
         snapshot_id: Some(_pre_main_id),
         location_header: None,
         event_header: None,
-        replay: None,
+        impersonated: false,
+        direction: None,
     };
     storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
@@ -1316,18 +1316,13 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    let replay = GenerationReplay {
-        impersonate: true,
-        impersonate_direction: Some("A direction".to_string()),
-        impersonate_preset_id: Some("impersonate_default".to_string()),
-        guide: None,
-    };
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
         "room_1",
         "I look around.",
         MessageType::Input,
-        Some(replay),
+        true,
+        Some("A direction".to_string()),
     )
     .expect("seed: impersonated input with stored inputs");
 
@@ -1365,7 +1360,7 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
     assert_eq!(target.active_swipe_index, 1);
     assert_eq!(target.text(), "I look around cautiously.");
     assert!(
-        target.replay().is_some_and(|r| r.impersonate),
+        target.impersonated(),
         "the new swipe inherits the stored inputs"
     );
     // The full tail (the deliberate behavior change): the quantifier ran.
@@ -1390,17 +1385,14 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    // A guide-only turn: narration with a guide replay, no Input row.
-    let replay = GenerationReplay {
-        guide: Some("make it ominous".to_string()),
-        ..Default::default()
-    };
+    // A guide-only turn: narration with a guided direction, no Input row.
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
         "room_1",
         "A guided narration.",
         MessageType::Narration,
-        Some(replay),
+        false,
+        Some("make it ominous".to_string()),
     )
     .expect("seed: guided narration with stored inputs");
 
@@ -1443,8 +1435,8 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
     assert_eq!(target.active_swipe_index, 1);
     assert_eq!(target.text(), "Ominous retake.");
     assert!(
-        target.replay().is_some_and(|r| r.guide.is_some()),
-        "the new swipe inherits the guide replay"
+        target.is_guided(),
+        "the new swipe inherits the guide direction"
     );
     app.shutdown_token.cancel();
 }
@@ -1485,16 +1477,13 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
 
     // History carries an older player input, then a guided turn.
     let _ = add_input_and_save(&app, &storage, "the older player input");
-    let replay = GenerationReplay {
-        guide: Some("make it ominous".to_string()),
-        ..Default::default()
-    };
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
         "marker",
         "A guided narration.",
         MessageType::Narration,
-        Some(replay),
+        false,
+        Some("make it ominous".to_string()),
     )
     .expect("seed: guided narration with stored inputs");
 
@@ -1576,6 +1565,7 @@ async fn test_retry_flow_user_regen_mode_stays_tail_less() {
         "room_1",
         "look around",
         MessageType::Input,
+        false,
         None,
     )
     .expect("seed: plain input");

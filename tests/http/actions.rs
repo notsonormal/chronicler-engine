@@ -714,21 +714,14 @@ async fn test_slash_impersonate_produces_input_http() {
     );
 
     let input_entry = inputs.first().expect("exactly one Input entry");
-    let replay = input_entry
-        .replay()
-        .expect("impersonate swipe should carry the stored inputs");
     assert!(
-        replay.impersonate,
+        input_entry.impersonated(),
         "the impersonate flag must be stored on the swipe"
     );
     assert_eq!(
-        replay.impersonate_direction.as_deref(),
+        input_entry.direction(),
         Some("hello"),
         "the direction must be stored on the swipe"
-    );
-    assert!(
-        replay.impersonate_preset_id.is_some(),
-        "the active impersonate preset id must be pinned at entry time"
     );
 }
 
@@ -762,16 +755,13 @@ async fn test_slash_guide_does_not_persist_input_http() {
     assert_eq!(inputs.len(), 0, "guide should not persist an Input entry");
 
     let narration = narrations.first().expect("at least one Narration entry");
-    let replay = narration
-        .replay()
-        .expect("guide swipe should carry the stored inputs");
     assert_eq!(
-        replay.guide.as_deref(),
+        narration.direction(),
         Some("look around"),
         "the guide must be stored on the swipe"
     );
     assert!(
-        !replay.impersonate,
+        !narration.impersonated(),
         "guide inputs must not set the impersonate flag"
     );
 }

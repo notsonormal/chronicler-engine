@@ -135,7 +135,7 @@ impl MessageHistory {
                 .find(|m| {
                     m.message_type == MessageType::Narration || m.message_type == MessageType::Input
                 })
-                .is_some_and(|m| m.replay().is_some_and(|r| r.guide.is_some()))
+                .is_some_and(|m| m.is_guided())
     }
 
     pub fn is_last_ai_response_event_continuation(&self) -> bool {

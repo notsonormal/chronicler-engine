@@ -2,7 +2,7 @@
 
 Type: task
 Status: pending
-Blocked by: 05, 14
+Blocked by: (none)
 
 ## Question
 

@@ -59,7 +59,10 @@ fn test_v21_drops_per_game_posture_columns_and_keeps_rows() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 21, "migration must bump user_version to 21");
+    assert_eq!(
+        version, 22,
+        "the migration chain must land on the latest version"
+    );
 }
 
 #[test]
@@ -76,7 +79,7 @@ fn test_v21_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 21);
+    assert_eq!(version, 22);
 }
 
 #[test]
@@ -116,5 +119,116 @@ fn test_v19_defaults_posture_for_game_with_missing_world() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 21);
+    assert_eq!(version, 22);
+}
+
+#[test]
+fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
+    let conn = Connection::open_in_memory().unwrap();
+    run_migrations(&conn).unwrap();
+
+    // Recreate the pre-v22 shape: the v15 replay blob column, filled rows.
+    conn.execute("ALTER TABLE message_swipes ADD COLUMN replay TEXT", [])
+        .unwrap();
+    conn.execute(
+        "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
+         VALUES ('w', 'w', 'g', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO messages (game_id, message_type, timestamp) \
+         VALUES (1, '\"Narration\"', '2026-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    let blobs = [
+        // (replay json, expected impersonated, expected direction)
+        // guided row
+        (
+            Some(
+                r#"{"guide":"make it ominous","impersonate":false,"impersonate_direction":null,"impersonate_preset_id":null}"#,
+            ),
+            0,
+            Some("make it ominous"),
+        ),
+        // directed impersonation: the pinned preset id must be discarded
+        (
+            Some(
+                r#"{"guide":null,"impersonate":true,"impersonate_direction":"as the player","impersonate_preset_id":"gone_preset"}"#,
+            ),
+            1,
+            Some("as the player"),
+        ),
+        // bare impersonation
+        (
+            Some(
+                r#"{"guide":null,"impersonate":true,"impersonate_direction":null,"impersonate_preset_id":null}"#,
+            ),
+            1,
+            None,
+        ),
+        // plain row without a blob
+        (None, 0, None),
+        // corrupt blob: degrades to plain, mirroring the old parse-time behavior
+        (Some("{not json"), 0, None),
+    ];
+    for (idx, (blob, _, _)) in blobs.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO message_swipes (message_id, swipe_index, text, replay) \
+             VALUES (1, ?1, 't', ?2)",
+            rusqlite::params![idx as i64, blob],
+        )
+        .unwrap();
+    }
+    conn.pragma_update(None, "user_version", 21).unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    for (idx, (_, expected_impersonated, expected_direction)) in blobs.iter().enumerate() {
+        let (impersonated, direction): (i64, Option<String>) = conn
+            .query_row(
+                "SELECT impersonated, direction FROM message_swipes WHERE swipe_index = ?1",
+                rusqlite::params![idx as i64],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            impersonated, *expected_impersonated,
+            "row {idx}: impersonated flag"
+        );
+        assert_eq!(
+            direction.as_deref(),
+            *expected_direction,
+            "row {idx}: direction"
+        );
+    }
+
+    let columns = columns_of(&conn, "message_swipes");
+    assert!(
+        !columns.contains(&"replay".to_string()),
+        "replay must be dropped, got: {columns:?}"
+    );
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 22, "migration must bump user_version to 22");
+}
+
+#[test]
+fn test_v22_is_noop_on_fresh_databases() {
+    // Fresh installs never had the replay blob; the guarded migration must
+    // no-op cleanly and still land on user_version 22.
+    let conn = Connection::open_in_memory().unwrap();
+    run_migrations(&conn).unwrap();
+
+    let columns = columns_of(&conn, "message_swipes");
+    assert!(columns.contains(&"impersonated".to_string()));
+    assert!(columns.contains(&"direction".to_string()));
+    assert!(!columns.contains(&"replay".to_string()));
+
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 22);
 }

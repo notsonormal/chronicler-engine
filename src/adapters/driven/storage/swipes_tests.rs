@@ -1,4 +1,4 @@
-use crate::domain::model::message::{GenerationReplay, Swipe};
+use crate::domain::model::message::Swipe;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::{dummy_message, dummy_swipe, sqlite_storage};
 
@@ -291,7 +291,8 @@ fn test_swipe_with_text_only() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
-        replay: None,
+        impersonated: false,
+        direction: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -311,7 +312,8 @@ fn test_swipe_with_snapshot_id() {
         snapshot_id: Some(42),
         location_header: None,
         event_header: None,
-        replay: None,
+        impersonated: false,
+        direction: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -330,7 +332,8 @@ fn test_swipe_with_location_header() {
         snapshot_id: None,
         location_header: Some("Room-123".to_string()),
         event_header: None,
-        replay: None,
+        impersonated: false,
+        direction: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -352,7 +355,8 @@ fn test_swipe_with_event_header() {
         snapshot_id: None,
         location_header: None,
         event_header: Some("CombatStarted".to_string()),
-        replay: None,
+        impersonated: false,
+        direction: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -430,17 +434,12 @@ fn test_update_active_swipe_failure() {
     assert!(result.is_err());
 }
 
-fn sample_replay() -> GenerationReplay {
-    GenerationReplay {
-        guide: Some("steer toward the cellar".to_string()),
-        impersonate: false,
-        impersonate_direction: None,
-        impersonate_preset_id: None,
-    }
+fn sample_direction() -> Option<String> {
+    Some("steer toward the cellar".to_string())
 }
 
 #[test]
-fn test_swipe_replay_roundtrip_in_memory() {
+fn test_swipe_inputs_roundtrip_in_memory() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
@@ -450,43 +449,48 @@ fn test_swipe_replay_roundtrip_in_memory() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
-        replay: Some(sample_replay()),
+        impersonated: false,
+        direction: sample_direction(),
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
-    assert_eq!(swipes[&msg_id][0].replay.as_ref(), Some(&sample_replay()));
+    assert_eq!(swipes[&msg_id][0].direction, sample_direction());
+    assert!(!swipes[&msg_id][0].impersonated);
 }
 
 #[test]
-fn test_swipe_replay_roundtrip_sqlite() {
+fn test_swipe_inputs_roundtrip_sqlite() {
     let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 
     let swipe = Swipe {
-        text: "guided".to_string(),
+        text: "impersonated".to_string(),
         snapshot_id: None,
         location_header: None,
         event_header: None,
-        replay: Some(sample_replay()),
+        impersonated: true,
+        direction: sample_direction(),
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
-    assert_eq!(swipes[&msg_id][0].replay.as_ref(), Some(&sample_replay()));
+    assert!(swipes[&msg_id][0].impersonated);
+    assert_eq!(swipes[&msg_id][0].direction, sample_direction());
 }
 
 #[test]
-fn test_swipe_replay_none_roundtrip_sqlite() {
+fn test_swipe_inputs_none_roundtrip_sqlite() {
     let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 
     storage
-        .insert_swipe(msg_id, &dummy_swipe("no replay"), 0)
+        .insert_swipe(msg_id, &dummy_swipe("plain"), 0)
         .unwrap();
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
-    assert!(swipes[&msg_id][0].replay.is_none());
+    assert!(!swipes[&msg_id][0].impersonated);
+    assert!(swipes[&msg_id][0].direction.is_none());
 }

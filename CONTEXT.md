@@ -53,7 +53,7 @@ A single entry in a Game's conversation history — player input, narration outp
 _Avoid_: Line, entry, chat
 
 **Swipe**:
-An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Switching swipes restores the corresponding state snapshot. A Swipe stores the inputs that produced its generation, so making a new swipe re-applies them.
+An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Switching swipes restores the corresponding state snapshot. A Swipe stores its generation's player-typed inputs — whether it voiced the player (impersonated) and the steering direction that shaped it (direction) — so making a new swipe re-applies them.
 _Avoid_: Variant, version, alternate
 
 **Snapshot**:

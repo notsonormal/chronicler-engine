@@ -15,7 +15,6 @@ use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::adapters::driven::storage::Storage;
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
-use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
@@ -209,41 +208,41 @@ impl ActionPipeline {
         Ok(ProcessActionResult::Started)
     }
 
-    #[instrument(skip(self, fresh_replay), fields(input_length))]
+    #[instrument(skip(self, impersonated, direction), fields(input_length))]
     pub fn run_from_input(
         &self,
         mut state: GameState,
         input: String,
-        fresh_replay: Option<GenerationReplay>,
+        impersonated: bool,
+        direction: Option<String>,
     ) -> Result<(), PhaseError> {
         tracing::debug!("run_from_input: called");
         let started_for = self.storage.current_game_id();
         let run = PipelineRun::new(self, started_for);
 
-        // Guide and impersonate are mutually exclusive — impersonate wins.
-        let replay = fresh_replay.or_else(|| {
-            state
-                .narrative
-                .retry_target
-                .as_ref()
-                .and_then(|t| t.replay().cloned())
-        });
-        let impersonate = replay.as_ref().is_some_and(|r| r.impersonate);
+        // Fresh entry inputs win; a redo falls back to the retry target's
+        // stored inputs. Guide and impersonate cannot collide — one `direction`
+        // field, discriminated by `impersonated`.
+        let (impersonated, direction) = if impersonated || direction.is_some() {
+            (impersonated, direction)
+        } else {
+            match state.narrative.retry_target.as_ref() {
+                Some(target) => (
+                    target.impersonated(),
+                    target.direction().map(|d| d.to_string()),
+                ),
+                None => (false, None),
+            }
+        };
         let generation_inputs = narration_generation::GenerationInputs {
             input: input.clone(),
-            guide: if impersonate {
+            guide: if impersonated {
                 None
             } else {
-                replay.as_ref().and_then(|r| r.guide.clone())
+                direction.clone()
             },
-            impersonate: impersonate.then(|| narration_generation::ImpersonateInputs {
-                direction: replay
-                    .as_ref()
-                    .and_then(|r| r.impersonate_direction.clone()),
-                preset_id: replay
-                    .as_ref()
-                    .and_then(|r| r.impersonate_preset_id.clone()),
-            }),
+            impersonate: impersonated
+                .then_some(narration_generation::ImpersonateInputs { direction }),
         };
 
         if let Err(e) = run.phase_pre_main_snapshot(&mut state) {
@@ -561,7 +560,7 @@ impl ActionPipeline {
         state: GameState,
         input_text: String,
     ) -> Result<(), PhaseError> {
-        self.run_from_input(state, input_text, None)
+        self.run_from_input(state, input_text, false, None)
     }
 
     fn phase_engine_commit(

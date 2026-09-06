@@ -120,7 +120,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
-      - `message.rs` — Message types and conversation history (Message, Swipe, replay blob)
+      - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
       - `message_history.rs` — Message history tracking
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations

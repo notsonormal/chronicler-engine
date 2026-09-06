@@ -525,5 +525,35 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 22 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Swipe generation inputs flatten from the v15 replay blob into two direct
+        // columns. A corrupt blob degraded the turn to a plain retry at parse time,
+        // so the backfill skips non-JSON values. Producers never set
+        // impersonate_direction and guide together; the impersonate direction wins.
+        if !column_exists(conn, "message_swipes", "impersonated") {
+            exec("ALTER TABLE message_swipes ADD COLUMN impersonated INTEGER NOT NULL DEFAULT 0")?;
+        }
+        if !column_exists(conn, "message_swipes", "direction") {
+            exec("ALTER TABLE message_swipes ADD COLUMN direction TEXT")?;
+        }
+        if column_exists(conn, "message_swipes", "replay") {
+            exec(
+                "UPDATE message_swipes \
+                 SET impersonated = COALESCE(json_extract(replay, '$.impersonate'), 0), \
+                     direction = COALESCE(json_extract(replay, '$.impersonate_direction'), json_extract(replay, '$.guide')) \
+                 WHERE replay IS NOT NULL AND json_valid(replay)",
+            )?;
+            exec("ALTER TABLE message_swipes DROP COLUMN replay")?;
+        }
+
+        conn.pragma_update(None, "user_version", 22)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

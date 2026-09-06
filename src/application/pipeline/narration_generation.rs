@@ -7,7 +7,6 @@ use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::application::prompting::{NpcContext, PromptContext};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::{MapDef, Room};
-use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
@@ -28,9 +27,6 @@ pub(crate) struct GenerationInputs {
 #[derive(Debug, Clone)]
 pub(crate) struct ImpersonateInputs {
     pub direction: Option<String>,
-    /// Pinned at entry time; `None` falls back to the active impersonate
-    /// preset at generation time.
-    pub preset_id: Option<String>,
 }
 
 /// The tail (quantifier → engine commit → trigger) runs on the same bundle
@@ -107,8 +103,13 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
         self.run.check_game_unchanged(started_for)?;
 
-        let stored_inputs = Self::stored_inputs_from(&self.inputs);
-        state.add_message_with_inputs(narration_text.clone(), message_type, stored_inputs);
+        let (impersonated, direction) = Self::stored_inputs_from(&self.inputs);
+        state.add_message_with_inputs(
+            narration_text.clone(),
+            message_type,
+            impersonated,
+            direction,
+        );
         self.run
             .persist_snapshot_or_err(state, "pre-quantifier narration")?;
 
@@ -131,25 +132,23 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
     }
 
     fn resolve_preset_choice(&self) -> Result<(PromptPreset, String), String> {
+        // First run and redo alike resolve the game's current active preset —
+        // a preset is game configuration, not swipe data (ticket 15).
         let (preset_id, kind) = match self.inputs.impersonate.as_ref() {
-            Some(impersonate) => {
-                let pinned = impersonate
-                    .preset_id
-                    .clone()
-                    .filter(|id| !id.is_empty())
-                    .unwrap_or_else(|| {
-                        let settings = self
-                            .run
-                            .pipeline
-                            .settings
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner());
-                        self.run
-                            .pipeline
-                            .storage
-                            .active_impersonate_preset_id(&settings)
-                    });
-                (pinned, PresetKind::Impersonate)
+            Some(_) => {
+                let settings = self
+                    .run
+                    .pipeline
+                    .settings
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner());
+                (
+                    self.run
+                        .pipeline
+                        .storage
+                        .active_impersonate_preset_id(&settings),
+                    PresetKind::Impersonate,
+                )
             }
             None => {
                 let settings = self
@@ -167,18 +166,10 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
         self.run.load_preset_and_response_length(&preset_id, kind)
     }
 
-    fn stored_inputs_from(inputs: &GenerationInputs) -> Option<GenerationReplay> {
-        if let Some(impersonate) = &inputs.impersonate {
-            return Some(GenerationReplay {
-                impersonate: true,
-                impersonate_direction: impersonate.direction.clone(),
-                impersonate_preset_id: impersonate.preset_id.clone(),
-                ..Default::default()
-            });
+    fn stored_inputs_from(inputs: &GenerationInputs) -> (bool, Option<String>) {
+        match &inputs.impersonate {
+            Some(impersonate) => (true, impersonate.direction.clone()),
+            None => (false, inputs.guide.clone()),
         }
-        inputs.guide.clone().map(|guide| GenerationReplay {
-            guide: Some(guide),
-            ..Default::default()
-        })
     }
 }

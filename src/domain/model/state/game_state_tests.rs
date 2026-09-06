@@ -102,9 +102,7 @@ fn test_push_message_appends_swipe_on_retry_target() {
 }
 
 #[test]
-fn test_push_message_inherits_replay_on_retry_swipe() {
-    use crate::domain::model::message::GenerationReplay;
-
+fn test_push_message_inherits_stored_inputs_on_retry_swipe() {
     let mut state = TestGameState::in_room("room1");
 
     let mut target = crate::domain::model::message::Message::new(
@@ -113,20 +111,16 @@ fn test_push_message_inherits_replay_on_retry_swipe() {
         None,
         None,
     );
-    let replay = GenerationReplay {
-        guide: Some("steer toward the cellar".to_string()),
-        impersonate: true,
-        impersonate_direction: Some("as the player".to_string()),
-        impersonate_preset_id: Some("impersonate_default".to_string()),
-    };
-    target.swipes[0].replay = Some(replay.clone());
+    target.swipes[0].impersonated = true;
+    target.swipes[0].direction = Some("as the player".to_string());
     state.narrative.retry_target = Some(target);
 
     state.add_message("Retried narration".into(), MessageType::Narration);
 
     let target = state.narrative.retry_target.unwrap();
     assert_eq!(target.swipes.len(), 2);
-    assert_eq!(target.swipes[1].replay.as_ref(), Some(&replay));
+    assert!(target.swipes[1].impersonated);
+    assert_eq!(target.swipes[1].direction.as_deref(), Some("as the player"));
 }
 
 #[test]
@@ -175,60 +169,50 @@ fn test_push_message_creates_new_message_when_no_retry_target() {
 
 #[test]
 fn test_push_message_writes_stored_inputs_on_new_narration_message() {
-    use crate::domain::model::message::GenerationReplay;
-
     let mut state = TestGameState::in_room("room1");
-    let replay = GenerationReplay {
-        guide: Some("steer toward the cellar".to_string()),
-        ..Default::default()
-    };
 
     state.add_message_with_inputs(
         "Guided narration".into(),
         MessageType::Narration,
-        Some(replay.clone()),
+        false,
+        Some("steer toward the cellar".to_string()),
     );
 
     let message = state.narrative.history.last().unwrap();
     assert_eq!(message.text(), "Guided narration");
-    assert_eq!(message.replay().cloned(), Some(replay));
+    assert!(message.is_guided());
+    assert_eq!(message.direction(), Some("steer toward the cellar"));
 }
 
 #[test]
-fn test_push_message_no_stored_inputs_leaves_swipe_replay_none() {
+fn test_push_message_no_stored_inputs_leaves_swipe_inputs_empty() {
     let mut state = TestGameState::in_room("room1");
 
     state.add_message("Normal narration".into(), MessageType::Narration);
 
     let message = state.narrative.history.last().unwrap();
     assert!(
-        message.replay().is_none(),
-        "swipe replay stays None without stored inputs"
+        !message.impersonated() && message.direction().is_none(),
+        "swipe stays plain without stored inputs"
     );
 }
 
 #[test]
 fn test_push_message_writes_impersonate_inputs_on_player_voiced_input() {
-    use crate::domain::model::message::GenerationReplay;
-
     let mut state = TestGameState::in_room("room1");
-    let replay = GenerationReplay {
-        impersonate: true,
-        impersonate_direction: Some("ask about the artifact".to_string()),
-        impersonate_preset_id: Some("impersonate_default".to_string()),
-        ..Default::default()
-    };
 
     state.add_message_with_inputs(
         "I ask about the artifact.".into(),
         MessageType::Input,
-        Some(replay.clone()),
+        true,
+        Some("ask about the artifact".to_string()),
     );
 
     let message = state.narrative.history.last().unwrap();
     assert_eq!(message.text(), "I ask about the artifact.");
     assert_eq!(message.message_type, MessageType::Input);
-    assert_eq!(message.replay().cloned(), Some(replay));
+    assert!(message.impersonated());
+    assert_eq!(message.direction(), Some("ask about the artifact"));
 }
 
 fn log_text_strategy() -> impl Strategy<Value = String> {

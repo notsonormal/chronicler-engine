@@ -1,17 +1,9 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! Message types and conversation history (Message, Swipe, replay blob)
+//! Message types and conversation history (Message, Swipe, stored generation inputs)
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use crate::domain::model::state::message_types::MessageType;
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct GenerationReplay {
-    pub guide: Option<String>,
-    pub impersonate: bool,
-    pub impersonate_direction: Option<String>,
-    pub impersonate_preset_id: Option<String>,
-}
 
 /// Swipe variant of a [`Message`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -20,8 +12,14 @@ pub struct Swipe {
     pub snapshot_id: Option<u64>,
     pub location_header: Option<String>,
     pub event_header: Option<String>,
+    /// The swipe was generated as the player's persona speaking.
     #[serde(default)]
-    pub replay: Option<GenerationReplay>,
+    pub impersonated: bool,
+    /// Player-typed steering for this generation: the guide text (plain
+    /// generation) or the impersonate direction. `impersonated` is the
+    /// discriminator — a directed impersonation and a guide never coexist.
+    #[serde(default)]
+    pub direction: Option<String>,
 }
 
 /// Message in the narrative history.
@@ -51,7 +49,8 @@ impl Message {
             snapshot_id: None,
             location_header,
             event_header,
-            replay: None,
+            impersonated: false,
+            direction: None,
         };
         Self {
             id: 0,
@@ -96,8 +95,20 @@ impl Message {
         self.active_swipe().and_then(|s| s.snapshot_id)
     }
 
-    pub fn replay(&self) -> Option<&GenerationReplay> {
-        self.active_swipe().and_then(|s| s.replay.as_ref())
+    /// Whether the active swipe was generated as the player's persona speaking.
+    pub fn impersonated(&self) -> bool {
+        self.active_swipe().is_some_and(|s| s.impersonated)
+    }
+
+    /// The active swipe's stored steering input (guide text or impersonate direction).
+    pub fn direction(&self) -> Option<&str> {
+        self.active_swipe().and_then(|s| s.direction.as_deref())
+    }
+
+    /// A guided turn: plain generation steered by a direction, i.e. not
+    /// impersonated but carrying one. Serves the retry/anchor reads.
+    pub fn is_guided(&self) -> bool {
+        !self.impersonated() && self.direction().is_some()
     }
 
     /// Set active swipe index (content accessors use this).
@@ -161,10 +172,11 @@ impl Message {
         }
     }
 
-    /// Set the `GenerationReplay` blob on the active swipe.
-    pub fn set_replay(&mut self, replay: Option<GenerationReplay>) {
+    /// Set the active swipe's stored generation inputs.
+    pub fn set_stored_inputs(&mut self, impersonated: bool, direction: Option<String>) {
         if let Some(swipe) = self.active_swipe_mut() {
-            swipe.replay = replay;
+            swipe.impersonated = impersonated;
+            swipe.direction = direction;
         }
     }
 }
