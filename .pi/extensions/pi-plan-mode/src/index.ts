@@ -421,7 +421,7 @@ export default function planMode(pi: ExtensionAPI) {
 		if (!isSafeCommand(command)) {
 			return {
 				block: true,
-				reason: `Plan mode blocks mutating or non-allowlisted bash commands.\nCommand: ${command}`,
+				reason: `Plan mode blocked bash: ${explainUnsafeCommand(command)}.\nCommand: ${command}`,
 			};
 		}
 	});
@@ -1471,6 +1471,26 @@ export function isSafeCommand(command: string) {
 	if (MUTATING_BASH_PATTERNS.some((pattern) => pattern.test(trimmed)))
 		return false;
 	return SAFE_BASH_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+const OUTPUT_REDIRECT_SOURCES = new Set([/(^|[^<])>(?!>)/.source, />>/.source]);
+
+/**
+ * Explain why a command failed the plan-mode bash check, naming the tripped
+ * rule so the agent can fix the command instead of re-deriving the grammar by
+ * trial. Used in the bash denial reason.
+ */
+export function explainUnsafeCommand(command: string): string {
+	const trimmed = command.trim();
+	if (!trimmed) return "empty command";
+	const hit = MUTATING_BASH_PATTERNS.find((pattern) => pattern.test(trimmed));
+	if (hit) {
+		if (OUTPUT_REDIRECT_SOURCES.has(hit.source)) {
+			return "literal '>' found — Plan mode forbids any '>' in the command, including redirects like '2>/dev/null' and quoted tokens like 'Json<Game>'";
+		}
+		return `command matched mutating pattern ${hit}`;
+	}
+	return "command must start with an allowlisted read-only verb (cat, grep, rg, sed -n, git show/diff/log/status, …)";
 }
 
 export type WriteDecision = { allowed: true } | { allowed: false; reason: string };

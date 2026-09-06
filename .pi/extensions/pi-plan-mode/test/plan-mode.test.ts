@@ -12,6 +12,7 @@ import {
 	extractProposedPlan,
 	isPathInsideFolder,
 	isSafeCommand,
+	explainUnsafeCommand,
 	latestAssistantText,
 	loadDefaultToolsConfigFromPath,
 	normalizePlanModeQuestionParams,
@@ -43,6 +44,26 @@ test("isSafeCommand permits read-only commands and blocks mutating commands", ()
 	assert.equal(isSafeCommand("rm -rf build"), false);
 	assert.equal(isSafeCommand("npm install"), false);
 	assert.equal(isSafeCommand(""), false);
+});
+
+test("explainUnsafeCommand names the output-redirect ban for 2>/dev/null", () => {
+	assert.match(
+		explainUnsafeCommand("grep -rn x src/ 2>/dev/null | head"),
+		/literal '>'/,
+	);
+});
+
+test("explainUnsafeCommand names the output-redirect ban for quoted generics", () => {
+	assert.match(explainUnsafeCommand(`grep -rn "Json<Game>" src/`), /Json<Game>/);
+});
+
+test("explainUnsafeCommand renders the matched mutating word pattern", () => {
+	assert.match(explainUnsafeCommand("grep rm src/"), /\\brm\\b/);
+});
+
+test("explainUnsafeCommand explains non-allowlisted start words and empty input", () => {
+	assert.match(explainUnsafeCommand("nohup server &"), /allowlisted/);
+	assert.match(explainUnsafeCommand(""), /empty/);
 });
 
 test("normalizePlanModeQuestionParams validates question shape", () => {
