@@ -133,7 +133,7 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
     fn resolve_preset_choice(&self) -> Result<(PromptPreset, String), String> {
         // First run and redo alike resolve the game's current active preset —
-        // a preset is game configuration, not swipe data (ticket 15).
+        // a preset is game configuration, not swipe data.
         let (preset_id, kind) = match self.inputs.impersonate.as_ref() {
             Some(_) => {
                 let settings = self

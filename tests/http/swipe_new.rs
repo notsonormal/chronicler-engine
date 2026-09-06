@@ -901,8 +901,8 @@ async fn test_retry_re_impersonate_preserves_record_http() {
 }
 
 // The impersonate preset resolves at generation time from the game's active
-// configuration — a redo picks up the preset's current content. (The spec
-// scenario for this behavior lands with the options work, map ticket 12.)
+// configuration — a redo picks up the preset's current content. Deliberately
+// untagged: no spec scenario covers this behavior yet.
 #[tokio::test]
 async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     let narrator = Arc::new(

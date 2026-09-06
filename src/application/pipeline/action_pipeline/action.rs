@@ -20,7 +20,7 @@ impl ActionPipeline {
         action: Action,
     ) -> Result<ProcessActionResult, EngineError> {
         // The impersonate preset resolves at generation time from the game's
-        // active configuration — nothing is pinned at entry (ticket 15).
+        // active configuration — nothing is pinned at entry.
         let (input, impersonated, steering_instruction) = match action {
             Action::FreeAction(input) if input.is_empty() => (String::new(), false, None),
             Action::FreeAction(input) => (input, false, None),

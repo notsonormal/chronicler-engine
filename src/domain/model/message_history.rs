@@ -124,8 +124,8 @@ impl MessageHistory {
     }
 
     /// The last Narration/Input turn is retryable when it carries its own
-    /// player input, or when its swipe replay records a guide (a guided turn
-    /// appends no Input row — the guide on the swipe is the turn's input).
+    /// player input, or when its swipe stores a steering instruction (a guided
+    /// turn appends no Input row — the stored instruction is the turn's input).
     pub fn last_turn_is_retryable(&self) -> bool {
         self.last_input_text().is_some()
             || self

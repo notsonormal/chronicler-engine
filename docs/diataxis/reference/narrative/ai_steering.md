@@ -51,7 +51,7 @@ The `<PlayerCharacter>` layer is dropped for an impersonated turn. The context l
 
 The impersonate output is saved as an `Input` entry — the player-voiced message type — so the story log renders it as the persona speaking. The steering itself (direction, preset) never becomes a history entry. An optional `/impersonate <direction>` text steers the impersonated action without forcing an implausible leap; with no direction, the persona acts in character.
 
-The swipe stores the impersonation, so a retry re-impersonates with the stored steering instruction and the game's current impersonate preset — the preset is resolved at generation time, never pinned to the swipe.
+The swipe stores the impersonation, so a retry re-impersonates with the stored steering instruction and the game's current impersonate preset, resolved at generation time.
 
 ## Mutual Exclusivity
 

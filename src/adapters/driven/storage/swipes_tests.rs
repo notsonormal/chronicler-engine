@@ -469,6 +469,30 @@ fn test_swipe_inputs_roundtrip_sqlite() {
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 
     let swipe = Swipe {
+        text: "guided".to_string(),
+        snapshot_id: None,
+        location_header: None,
+        event_header: None,
+        impersonated: false,
+        steering_instruction: sample_steering_instruction(),
+    };
+    storage.insert_swipe(msg_id, &swipe, 0).unwrap();
+
+    let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
+    assert_eq!(
+        swipes[&msg_id][0].steering_instruction,
+        sample_steering_instruction()
+    );
+    assert!(!swipes[&msg_id][0].impersonated);
+}
+
+#[test]
+fn test_swipe_inputs_impersonated_roundtrip_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+
+    let swipe = Swipe {
         text: "impersonated".to_string(),
         snapshot_id: None,
         location_header: None,
