@@ -27,5 +27,6 @@ Shipped as scoped. `python build.py` fully green.
 
 ### Facts for later tickets
 
+- **Reversal (later commit a265682):** the glossary `**Steering**` umbrella-ban entry this ticket added was deleted in a later commit. Rationale: the entry was defensive scope disclaiming (banned by `docs/AGENTS.md`'s No-negative-explaining rule), and with `steering_instruction` now the one documented home for the word, no umbrella ban is needed. The underlying constraint (guide and impersonate are separate features) still lives in the map's Out-of-scope list.
 - The v22 backfill test's simulation must rename `steering_instruction` back to `direction` before adding the replay column — after v23, the fresh-run table has no `direction` column to backfill into.
 - The `/impersonate <direction>` slash-command grammar and the `Action::Impersonate` payload binding keep the `direction` name; only the stored/staged value chain renamed.

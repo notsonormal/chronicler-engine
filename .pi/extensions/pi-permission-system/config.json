@@ -19,7 +19,7 @@
       "*": "allow",
       "find *": "allow",
       "nohup *": "allow",      
-      "grep *": "allow",
+      "grep *": "allow",      
       "xargs": "deny",
       "xargs *": "deny",
       "timeout": "deny",

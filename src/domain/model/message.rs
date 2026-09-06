@@ -107,8 +107,7 @@ impl Message {
             .and_then(|s| s.steering_instruction.as_deref())
     }
 
-    /// A guided turn: plain generation steered by a steering instruction, i.e.
-    /// not impersonated but carrying one. Serves the retry/anchor reads.
+    /// A guided turn: a plain generation with a steering instruction.
     pub fn is_guided(&self) -> bool {
         !self.impersonated() && self.steering_instruction().is_some()
     }

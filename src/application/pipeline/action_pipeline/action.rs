@@ -22,7 +22,6 @@ impl ActionPipeline {
         // The impersonate preset resolves at generation time from the game's
         // active configuration — nothing is pinned at entry.
         let (input, impersonated, steering_instruction) = match action {
-            Action::FreeAction(input) if input.is_empty() => (String::new(), false, None),
             Action::FreeAction(input) => (input, false, None),
             // The steering rides on the Swipe's stored inputs (not history), so a redo re-applies it.
             Action::Guide(guide) => (String::new(), false, Some(guide)),
@@ -30,8 +29,6 @@ impl ActionPipeline {
         };
 
         let spawn_input = input.clone();
-        let spawn_impersonated = impersonated;
-        let spawn_steering_instruction = steering_instruction;
         self.claim_and_spawn(
             generation_gate,
             move |game_id, game_state| {
@@ -50,8 +47,8 @@ impl ActionPipeline {
             move |pipeline| {
                 pipeline.execute_action_with_inputs(
                     spawn_input,
-                    spawn_impersonated,
-                    spawn_steering_instruction,
+                    impersonated,
+                    steering_instruction,
                 );
             },
         )

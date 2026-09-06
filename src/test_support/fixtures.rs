@@ -661,7 +661,7 @@ pub fn insert_message_with_swipe(
 }
 
 /// Build a game state whose last message has a Swipe with stored generation
-/// inputs — the redo-entry fixture for retry flow tests.
+/// inputs.
 pub fn seed_swipe_with_stored_inputs(
     storage: &Storage,
     room_id: &str,

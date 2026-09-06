@@ -129,15 +129,16 @@ impl GameState {
                 let target_is_event = target.event_header().is_some();
                 let new_is_event = event_header.is_some();
                 if target_is_event == new_is_event {
-                    let impersonated = target.impersonated();
-                    let steering_instruction = target.steering_instruction().map(|d| d.to_string());
+                    let inherited_impersonated = target.impersonated();
+                    let inherited_steering_instruction =
+                        target.steering_instruction().map(|d| d.to_string());
                     let swipe = Swipe {
                         text: text.clone(),
                         snapshot_id: None,
                         location_header: location_header.clone(),
                         event_header: event_header.clone(),
-                        impersonated,
-                        steering_instruction,
+                        impersonated: inherited_impersonated,
+                        steering_instruction: inherited_steering_instruction,
                     };
                     target.swipes.push(swipe);
                     target.set_active_swipe(target.swipes.len() - 1);

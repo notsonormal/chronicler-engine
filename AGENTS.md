@@ -190,6 +190,8 @@ However, during code reviews you should not make code changes to fix problems.
 
 Label epistemic status when it matters: known, inferred, or guessed.
 
+If you don't know something, say "I don't know" instead of inventing an answer.
+
 When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
 
 ### Decision Making
@@ -199,6 +201,7 @@ When responding to user feedback or an analysis, explicitly say whether you agre
 Before implementing (e.g. during planning):
 
 - **State your assumptions explicitly.** If uncertain or something is unclear, stop, name what's confusing, and ask.
+- **If an instruction contradicts what you see, say so before acting.** Do not silently work around the mismatch or proceed as if the instruction were accurate.
 - **If multiple interpretations exist, present them** — Don't pick silently unless obvious.
 - **Hold a reasoned position.** Push back when a simpler approach exists, and if the user pushes back while your reasoning still holds, say why.
 - **Surface hidden trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
@@ -249,9 +252,11 @@ python scripts/install_git_hooks.py
 
 Temporary files should be written into tmp folders e.g. `tmp`.
 
-Pi wraps commands with rtk and condenses git/diff output; redirect command output to a file before filtering.
+Pi wraps commands with rtk and condenses long output — not just git/diff: piped `rg`, `grep`, and build tails get truncated or mangled too. Redirect any command you pipe or filter to a file first, then search that file.
 
-`build.py` writes logs to both standard output and to the `logs` folder. The standard build should take about 2-3 minute normally. If it times out or fails, check the build logs for failures. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
+`build.py` writes logs to both standard output and to the `logs/` folder. The standard build should take about 2-3 minute normally. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
+
+Use the Pi bash tool with a timeout of 600 seconds when calling `build.py`, or 1200 seconds if you are running with `--coverage`. Tail the last 10 lines to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`.  
 
 ### Commands
 
@@ -335,6 +340,8 @@ Use standard story points (1,3,5,8,13) to analyse the complexity of tasks. Tasks
 ## Permissions System
 
 Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
+
+Don't commit without explict approval, even if commiting is allowed in the permissions config.
 
 ## Doing Code Reviews
 

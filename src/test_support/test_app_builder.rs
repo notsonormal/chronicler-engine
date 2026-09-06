@@ -83,17 +83,15 @@ impl TestAppBuilder {
         self
     }
 
-    /// Sets the builder's storage. Injected pipelines (`.pipeline(...)`) are
-    /// rebound to this instance.
+    /// Injected pipelines (`.pipeline(...)`) are rebound to this storage instance.
     pub fn storage(mut self, storage: Arc<Storage>) -> Self {
         self.storage = Some(storage);
         self
     }
 
-    /// Overrides the wired action pipeline. The pipeline is rebound to this
-    /// builder's storage, so any storage instance used to construct it is
-    /// discarded. Pass the same `Arc` via `.storage(...)` when the test
-    /// mutates storage the pipeline should read.
+    /// The pipeline is rebound to this builder's storage, so any storage
+    /// instance used to construct it is discarded. Pass the same `Arc` via
+    /// `.storage(...)` when the test mutates storage the pipeline should read.
     pub fn pipeline(mut self, pipeline: ActionPipeline) -> Self {
         self.pipeline = Some(pipeline);
         self

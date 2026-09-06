@@ -538,38 +538,20 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         if !column_exists(conn, "message_swipes", "impersonated") {
             exec("ALTER TABLE message_swipes ADD COLUMN impersonated INTEGER NOT NULL DEFAULT 0")?;
         }
-        if !column_exists(conn, "message_swipes", "direction") {
-            exec("ALTER TABLE message_swipes ADD COLUMN direction TEXT")?;
+        if !column_exists(conn, "message_swipes", "steering_instruction") {
+            exec("ALTER TABLE message_swipes ADD COLUMN steering_instruction TEXT")?;
         }
         if column_exists(conn, "message_swipes", "replay") {
             exec(
                 "UPDATE message_swipes \
                  SET impersonated = COALESCE(json_extract(replay, '$.impersonate'), 0), \
-                     direction = COALESCE(json_extract(replay, '$.impersonate_direction'), json_extract(replay, '$.guide')) \
+                     steering_instruction = COALESCE(json_extract(replay, '$.impersonate_direction'), json_extract(replay, '$.guide')) \
                  WHERE replay IS NOT NULL AND json_valid(replay)",
             )?;
             exec("ALTER TABLE message_swipes DROP COLUMN replay")?;
         }
 
         conn.pragma_update(None, "user_version", 22)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
-    }
-
-    if version < 23 {
-        // Rename the swipe's merged steering text to a source-faithful name:
-        // `direction` collided with the domain's map Direction enum. Skip when
-        // a re-run meets the final shape (v22's guard re-adds the old name).
-        if column_exists(conn, "message_swipes", "direction")
-            && !column_exists(conn, "message_swipes", "steering_instruction")
-        {
-            conn.execute(
-                "ALTER TABLE message_swipes RENAME COLUMN direction TO steering_instruction",
-                [],
-            )
-            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
-        }
-
-        conn.pragma_update(None, "user_version", 23)
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 

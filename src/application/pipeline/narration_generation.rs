@@ -134,34 +134,24 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
     fn resolve_preset_choice(&self) -> Result<(PromptPreset, String), String> {
         // First run and redo alike resolve the game's current active preset —
         // a preset is game configuration, not swipe data.
+        let settings = self
+            .run
+            .pipeline
+            .settings
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let (preset_id, kind) = match self.inputs.impersonate.as_ref() {
-            Some(_) => {
-                let settings = self
-                    .run
+            Some(_) => (
+                self.run
                     .pipeline
-                    .settings
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner());
-                (
-                    self.run
-                        .pipeline
-                        .storage
-                        .active_impersonate_preset_id(&settings),
-                    PresetKind::Impersonate,
-                )
-            }
-            None => {
-                let settings = self
-                    .run
-                    .pipeline
-                    .settings
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner());
-                (
-                    self.run.pipeline.storage.active_system_preset_id(&settings),
-                    PresetKind::System,
-                )
-            }
+                    .storage
+                    .active_impersonate_preset_id(&settings),
+                PresetKind::Impersonate,
+            ),
+            None => (
+                self.run.pipeline.storage.active_system_preset_id(&settings),
+                PresetKind::System,
+            ),
         };
         self.run.load_preset_and_response_length(&preset_id, kind)
     }

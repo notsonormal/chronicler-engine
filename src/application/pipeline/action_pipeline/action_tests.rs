@@ -535,7 +535,7 @@ fn test_process_action_heals_stale_status_before_validation_error() {
 }
 
 #[tokio::test]
-async fn test_dispatcher_guide_stores_guide_on_swipe_replay() {
+async fn test_dispatcher_guide_stores_guide_on_swipe_stored_inputs() {
     use crate::application::errors::ProcessActionResult;
 
     let data = TestDataBuilder::default_test().build();
