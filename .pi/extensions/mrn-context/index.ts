@@ -11,7 +11,9 @@
 // The build-log key is the log path alone. build.py creates the file and
 // writes the first lines at launch, so appends during a build change the
 // mtime but not the key; only a new build (new file) re-triggers the note.
-// The model note re-anchors every 10 turns; the build log does not.
+// The model note posts once per key: at session start (keys reset) and on
+// every model change. No periodic re-anchor — after a compaction the
+// attribution may drop out of the outgoing context until the next change.
 //
 // Build logs are session-attributed: build.py stamps each log's first line
 // with "Session-Id: <uuid>" (from PI_SESSION_ID, injected into tool
@@ -102,24 +104,18 @@ const SOURCES = [
 ] as const;
 
 const lastKeys: Record<string, string | undefined> = {};
-let turnCount = 0;
 
 export default function (pi: any): void {
   pi.on("session_start", () => {
     for (const k of Object.keys(lastKeys)) lastKeys[k] = undefined;
-    turnCount = 0;
   });
 
   pi.on("before_agent_start", (_event: unknown, ctx: any) => {
-    turnCount += 1;
     const lines: string[] = [];
     for (const src of SOURCES) {
       const result = safeCall(() => src.get(ctx));
       if (result === undefined) continue;
-      // Periodic re-anchor is for evergreen notes (model) only; the build
-      // log is emitted once per file.
-      const reanchor = src.name !== "buildLog" && turnCount % 10 === 0;
-      if (!reanchor && result.key === lastKeys[src.name]) continue;
+      if (result.key === lastKeys[src.name]) continue;
       lastKeys[src.name] = result.key;
       lines.push(result.line);
     }

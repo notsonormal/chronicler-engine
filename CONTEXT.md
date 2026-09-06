@@ -62,7 +62,7 @@ _Avoid_: Save, checkpoint, dump
 
 **Guided Generation**:
 A transient slash-command input that steers what the narrator says for one generation. Rendered as the final prompt layer (`<Guide>`). Stored on the Swipe with the generation's other inputs — it never enters history.
-_Avoid_: hint, nudge, steering (use Guided Generation for the feature)
+_Avoid_: hint, nudge
 
 **Impersonate**:
 Forcing the next narration to be written as the player's persona. Uses the impersonate preset (replacing the system preset), drops the `<PlayerCharacter>` layer, and saves the output as an `Input` message — the same type as a typed player line, since impersonate is the player speaking. No auto-narration follows; the impersonated line can be redone as an alternate Swipe.
@@ -72,9 +72,6 @@ _Avoid_: roleplay as, pose as, pretend (use Impersonate)
 
 **Turn**:
 Don't use. Use Message + Swipe.
-
-**Steering**:
-Don't use as a feature umbrella — Guided Generation and Impersonate stand alone. The word survives only in `steering_instruction`, the name of the stored instruction text on a Swipe.
 
 **Narrator Action**:
 Don't use. Player direction is transient (Guided Generation); lasting facts go in-world through free actions.
