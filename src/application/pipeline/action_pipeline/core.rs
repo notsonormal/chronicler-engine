@@ -208,28 +208,29 @@ impl ActionPipeline {
         Ok(ProcessActionResult::Started)
     }
 
-    #[instrument(skip(self, impersonated, direction), fields(input_length))]
+    #[instrument(skip(self, impersonated, steering_instruction), fields(input_length))]
     pub fn run_from_input(
         &self,
         mut state: GameState,
         input: String,
         impersonated: bool,
-        direction: Option<String>,
+        steering_instruction: Option<String>,
     ) -> Result<(), PhaseError> {
         tracing::debug!("run_from_input: called");
         let started_for = self.storage.current_game_id();
         let run = PipelineRun::new(self, started_for);
 
         // Fresh entry inputs win; a redo falls back to the retry target's
-        // stored inputs. Guide and impersonate cannot collide — one `direction`
-        // field, discriminated by `impersonated`.
-        let (impersonated, direction) = if impersonated || direction.is_some() {
-            (impersonated, direction)
+        // stored inputs. Guide and impersonate cannot collide — one
+        // `steering_instruction` field, discriminated by `impersonated`.
+        let (impersonated, steering_instruction) = if impersonated || steering_instruction.is_some()
+        {
+            (impersonated, steering_instruction)
         } else {
             match state.narrative.retry_target.as_ref() {
                 Some(target) => (
                     target.impersonated(),
-                    target.direction().map(|d| d.to_string()),
+                    target.steering_instruction().map(|d| d.to_string()),
                 ),
                 None => (false, None),
             }
@@ -239,10 +240,11 @@ impl ActionPipeline {
             guide: if impersonated {
                 None
             } else {
-                direction.clone()
+                steering_instruction.clone()
             },
-            impersonate: impersonated
-                .then_some(narration_generation::ImpersonateInputs { direction }),
+            impersonate: impersonated.then_some(narration_generation::ImpersonateInputs {
+                steering_instruction,
+            }),
         };
 
         if let Err(e) = run.phase_pre_main_snapshot(&mut state) {

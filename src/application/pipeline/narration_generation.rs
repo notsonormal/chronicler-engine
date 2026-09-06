@@ -26,7 +26,7 @@ pub(crate) struct GenerationInputs {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ImpersonateInputs {
-    pub direction: Option<String>,
+    pub steering_instruction: Option<String>,
 }
 
 /// The tail (quantifier → engine commit → trigger) runs on the same bundle
@@ -71,7 +71,7 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
         let (user_message, message_type) = match &self.inputs.impersonate {
             Some(impersonate) => (
-                impersonate.direction.clone().unwrap_or_default(),
+                impersonate.steering_instruction.clone().unwrap_or_default(),
                 MessageType::Input,
             ),
             None => (self.inputs.input.clone(), MessageType::Narration),
@@ -103,12 +103,12 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
         self.run.check_game_unchanged(started_for)?;
 
-        let (impersonated, direction) = Self::stored_inputs_from(&self.inputs);
+        let (impersonated, steering_instruction) = Self::stored_inputs_from(&self.inputs);
         state.add_message_with_inputs(
             narration_text.clone(),
             message_type,
             impersonated,
-            direction,
+            steering_instruction,
         );
         self.run
             .persist_snapshot_or_err(state, "pre-quantifier narration")?;
@@ -168,7 +168,7 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
     fn stored_inputs_from(inputs: &GenerationInputs) -> (bool, Option<String>) {
         match &inputs.impersonate {
-            Some(impersonate) => (true, impersonate.direction.clone()),
+            Some(impersonate) => (true, impersonate.steering_instruction.clone()),
             None => (false, inputs.guide.clone()),
         }
     }

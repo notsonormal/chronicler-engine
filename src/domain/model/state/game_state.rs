@@ -119,7 +119,7 @@ impl GameState {
         text: String,
         message_type: MessageType,
         impersonated: bool,
-        direction: Option<String>,
+        steering_instruction: Option<String>,
     ) {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
@@ -130,14 +130,14 @@ impl GameState {
                 let new_is_event = event_header.is_some();
                 if target_is_event == new_is_event {
                     let impersonated = target.impersonated();
-                    let direction = target.direction().map(|d| d.to_string());
+                    let steering_instruction = target.steering_instruction().map(|d| d.to_string());
                     let swipe = Swipe {
                         text: text.clone(),
                         snapshot_id: None,
                         location_header: location_header.clone(),
                         event_header: event_header.clone(),
                         impersonated,
-                        direction,
+                        steering_instruction,
                     };
                     target.swipes.push(swipe);
                     target.set_active_swipe(target.swipes.len() - 1);
@@ -147,8 +147,8 @@ impl GameState {
         }
 
         let mut message = Message::new(text, message_type, location_header, event_header);
-        if impersonated || direction.is_some() {
-            message.set_stored_inputs(impersonated, direction);
+        if impersonated || steering_instruction.is_some() {
+            message.set_stored_inputs(impersonated, steering_instruction);
         }
         self.narrative.history.append(message);
     }
@@ -164,9 +164,9 @@ impl GameState {
         text: String,
         message_type: MessageType,
         impersonated: bool,
-        direction: Option<String>,
+        steering_instruction: Option<String>,
     ) {
-        self.push_message(text, message_type, impersonated, direction);
+        self.push_message(text, message_type, impersonated, steering_instruction);
     }
 
     pub fn inject_scenario_logs(

@@ -112,7 +112,7 @@ fn test_push_message_inherits_stored_inputs_on_retry_swipe() {
         None,
     );
     target.swipes[0].impersonated = true;
-    target.swipes[0].direction = Some("as the player".to_string());
+    target.swipes[0].steering_instruction = Some("as the player".to_string());
     state.narrative.retry_target = Some(target);
 
     state.add_message("Retried narration".into(), MessageType::Narration);
@@ -120,7 +120,10 @@ fn test_push_message_inherits_stored_inputs_on_retry_swipe() {
     let target = state.narrative.retry_target.unwrap();
     assert_eq!(target.swipes.len(), 2);
     assert!(target.swipes[1].impersonated);
-    assert_eq!(target.swipes[1].direction.as_deref(), Some("as the player"));
+    assert_eq!(
+        target.swipes[1].steering_instruction.as_deref(),
+        Some("as the player")
+    );
 }
 
 #[test]
@@ -181,7 +184,10 @@ fn test_push_message_writes_stored_inputs_on_new_narration_message() {
     let message = state.narrative.history.last().unwrap();
     assert_eq!(message.text(), "Guided narration");
     assert!(message.is_guided());
-    assert_eq!(message.direction(), Some("steer toward the cellar"));
+    assert_eq!(
+        message.steering_instruction(),
+        Some("steer toward the cellar")
+    );
 }
 
 #[test]
@@ -192,7 +198,7 @@ fn test_push_message_no_stored_inputs_leaves_swipe_inputs_empty() {
 
     let message = state.narrative.history.last().unwrap();
     assert!(
-        !message.impersonated() && message.direction().is_none(),
+        !message.impersonated() && message.steering_instruction().is_none(),
         "swipe stays plain without stored inputs"
     );
 }
@@ -212,7 +218,10 @@ fn test_push_message_writes_impersonate_inputs_on_player_voiced_input() {
     assert_eq!(message.text(), "I ask about the artifact.");
     assert_eq!(message.message_type, MessageType::Input);
     assert!(message.impersonated());
-    assert_eq!(message.direction(), Some("ask about the artifact"));
+    assert_eq!(
+        message.steering_instruction(),
+        Some("ask about the artifact")
+    );
 }
 
 fn log_text_strategy() -> impl Strategy<Value = String> {

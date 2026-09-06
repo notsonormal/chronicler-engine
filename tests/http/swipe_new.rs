@@ -894,9 +894,9 @@ async fn test_retry_re_impersonate_preserves_record_http() {
         "record still marks the turn as impersonated"
     );
     assert_eq!(
-        input.direction(),
+        input.steering_instruction(),
         Some("Sneak past the guard."),
-        "the direction re-applies on the redo"
+        "the steering instruction re-applies on the redo"
     );
 }
 

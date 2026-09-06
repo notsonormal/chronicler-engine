@@ -621,7 +621,7 @@ pub fn dummy_swipe(text: &str) -> Swipe {
         location_header: None,
         event_header: None,
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     }
 }
 
@@ -668,7 +668,7 @@ pub fn seed_swipe_with_stored_inputs(
     text: &str,
     message_type: MessageType,
     impersonated: bool,
-    direction: Option<String>,
+    steering_instruction: Option<String>,
 ) -> Result<u64, crate::error::EngineError> {
     use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 
@@ -682,7 +682,7 @@ pub fn seed_swipe_with_stored_inputs(
         .last()
         .ok_or_else(|| crate::error::EngineError::Config("seed: no message appended".into()))?
         .clone();
-    message.set_stored_inputs(impersonated, direction);
+    message.set_stored_inputs(impersonated, steering_instruction);
     message.set_snapshot_id(Some(snapshot_id));
     insert_message_with_swipe(storage, &message)?;
     Ok(snapshot_id)

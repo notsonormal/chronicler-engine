@@ -34,7 +34,7 @@ impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
                 location_header: db_swipe.location_header.clone(),
                 event_header: db_swipe.event_header.clone(),
                 impersonated: db_swipe.impersonated != 0,
-                direction: db_swipe.direction.clone(),
+                steering_instruction: db_swipe.steering_instruction.clone(),
             });
         }
 
@@ -84,7 +84,7 @@ pub fn model_swipes_to_db(msg: &Message) -> Vec<DbSwipe> {
             location_header: swipe.location_header.clone(),
             event_header: swipe.event_header.clone(),
             impersonated: if swipe.impersonated { 1 } else { 0 },
-            direction: swipe.direction.clone(),
+            steering_instruction: swipe.steering_instruction.clone(),
         })
         .collect()
 }

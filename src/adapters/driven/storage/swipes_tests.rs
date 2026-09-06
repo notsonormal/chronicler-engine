@@ -292,7 +292,7 @@ fn test_swipe_with_text_only() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -313,7 +313,7 @@ fn test_swipe_with_snapshot_id() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -333,7 +333,7 @@ fn test_swipe_with_location_header() {
         location_header: Some("Room-123".to_string()),
         event_header: None,
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -356,7 +356,7 @@ fn test_swipe_with_event_header() {
         location_header: None,
         event_header: Some("CombatStarted".to_string()),
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -434,7 +434,7 @@ fn test_update_active_swipe_failure() {
     assert!(result.is_err());
 }
 
-fn sample_direction() -> Option<String> {
+fn sample_steering_instruction() -> Option<String> {
     Some("steer toward the cellar".to_string())
 }
 
@@ -450,12 +450,15 @@ fn test_swipe_inputs_roundtrip_in_memory() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        direction: sample_direction(),
+        steering_instruction: sample_steering_instruction(),
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
-    assert_eq!(swipes[&msg_id][0].direction, sample_direction());
+    assert_eq!(
+        swipes[&msg_id][0].steering_instruction,
+        sample_steering_instruction()
+    );
     assert!(!swipes[&msg_id][0].impersonated);
 }
 
@@ -471,13 +474,16 @@ fn test_swipe_inputs_roundtrip_sqlite() {
         location_header: None,
         event_header: None,
         impersonated: true,
-        direction: sample_direction(),
+        steering_instruction: sample_steering_instruction(),
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
     assert!(swipes[&msg_id][0].impersonated);
-    assert_eq!(swipes[&msg_id][0].direction, sample_direction());
+    assert_eq!(
+        swipes[&msg_id][0].steering_instruction,
+        sample_steering_instruction()
+    );
 }
 
 #[test]
@@ -492,5 +498,5 @@ fn test_swipe_inputs_none_roundtrip_sqlite() {
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
     assert!(!swipes[&msg_id][0].impersonated);
-    assert!(swipes[&msg_id][0].direction.is_none());
+    assert!(swipes[&msg_id][0].steering_instruction.is_none());
 }

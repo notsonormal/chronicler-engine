@@ -577,7 +577,7 @@ async fn test_dispatcher_guide_stores_guide_on_swipe_replay() {
         .find(|e| e.message_type == MessageType::Narration)
         .expect("guide should produce a Narration message");
     assert_eq!(
-        narration.direction(),
+        narration.steering_instruction(),
         Some("make it ominous"),
         "the guide must be stored on the swipe"
     );
@@ -636,9 +636,9 @@ async fn test_dispatcher_impersonate_stores_direction() {
         "the impersonate flag must be stored on the swipe"
     );
     assert_eq!(
-        input_entry.direction(),
+        input_entry.steering_instruction(),
         Some("act wary"),
-        "the direction must be stored on the swipe"
+        "the steering instruction must be stored on the swipe"
     );
 
     app.shutdown_token.cancel();

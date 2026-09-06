@@ -53,7 +53,7 @@ A single entry in a Game's conversation history — player input, narration outp
 _Avoid_: Line, entry, chat
 
 **Swipe**:
-An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Switching swipes restores the corresponding state snapshot. A Swipe stores its generation's player-typed inputs — whether it voiced the player (impersonated) and the steering direction that shaped it (direction) — so making a new swipe re-applies them.
+An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Switching swipes restores the corresponding state snapshot. A Swipe stores its generation's player-typed inputs — whether it voiced the player (impersonated) and the steering instruction that shaped it (steering_instruction) — so making a new swipe re-applies them.
 _Avoid_: Variant, version, alternate
 
 **Snapshot**:
@@ -74,7 +74,7 @@ _Avoid_: roleplay as, pose as, pretend (use Impersonate)
 Don't use. Use Message + Swipe.
 
 **Steering**:
-Don't use. Guided Generation and Impersonate stand alone — there is no umbrella concept.
+Don't use as a feature umbrella — Guided Generation and Impersonate stand alone. The word survives only in `steering_instruction`, the name of the stored instruction text on a Swipe.
 
 **Narrator Action**:
 Don't use. Player direction is transient (Guided Generation); lasting facts go in-world through free actions.

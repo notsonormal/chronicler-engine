@@ -60,7 +60,7 @@ fn test_v21_drops_per_game_posture_columns_and_keeps_rows() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 22,
+        version, 23,
         "the migration chain must land on the latest version"
     );
 }
@@ -79,7 +79,7 @@ fn test_v21_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 22);
+    assert_eq!(version, 23);
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn test_v19_defaults_posture_for_game_with_missing_world() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 22);
+    assert_eq!(version, 23);
 }
 
 #[test]
@@ -127,7 +127,13 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
-    // Recreate the pre-v22 shape: the v15 replay blob column, filled rows.
+    // Recreate the pre-v22 shape: the v15 replay blob column, filled rows,
+    // and the v22-era column name for the merged steering text.
+    conn.execute(
+        "ALTER TABLE message_swipes RENAME COLUMN steering_instruction TO direction",
+        [],
+    )
+    .unwrap();
     conn.execute("ALTER TABLE message_swipes ADD COLUMN replay TEXT", [])
         .unwrap();
     conn.execute(
@@ -143,7 +149,7 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
     )
     .unwrap();
     let blobs = [
-        // (replay json, expected impersonated, expected direction)
+        // (replay json, expected impersonated, expected steering_instruction)
         // guided row
         (
             Some(
@@ -185,10 +191,11 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
 
     run_migrations(&conn).unwrap();
 
-    for (idx, (_, expected_impersonated, expected_direction)) in blobs.iter().enumerate() {
-        let (impersonated, direction): (i64, Option<String>) = conn
+    for (idx, (_, expected_impersonated, expected_steering_instruction)) in blobs.iter().enumerate()
+    {
+        let (impersonated, steering_instruction): (i64, Option<String>) = conn
             .query_row(
-                "SELECT impersonated, direction FROM message_swipes WHERE swipe_index = ?1",
+                "SELECT impersonated, steering_instruction FROM message_swipes WHERE swipe_index = ?1",
                 rusqlite::params![idx as i64],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
@@ -198,9 +205,9 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
             "row {idx}: impersonated flag"
         );
         assert_eq!(
-            direction.as_deref(),
-            *expected_direction,
-            "row {idx}: direction"
+            steering_instruction.as_deref(),
+            *expected_steering_instruction,
+            "row {idx}: steering_instruction"
         );
     }
 
@@ -212,23 +219,75 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 22, "migration must bump user_version to 22");
+    assert_eq!(version, 23, "migration must bump user_version to 23");
 }
 
 #[test]
 fn test_v22_is_noop_on_fresh_databases() {
     // Fresh installs never had the replay blob; the guarded migration must
-    // no-op cleanly and still land on user_version 22.
+    // no-op cleanly and still land on user_version 23.
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
     let columns = columns_of(&conn, "message_swipes");
     assert!(columns.contains(&"impersonated".to_string()));
-    assert!(columns.contains(&"direction".to_string()));
+    assert!(columns.contains(&"steering_instruction".to_string()));
     assert!(!columns.contains(&"replay".to_string()));
 
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 22);
+    assert_eq!(version, 23);
+}
+
+#[test]
+fn test_v23_renames_direction_to_steering_instruction() {
+    let conn = Connection::open_in_memory().unwrap();
+    run_migrations(&conn).unwrap();
+
+    // Recreate the v22 shape: flat columns with the old merged-text name.
+    conn.execute(
+        "ALTER TABLE message_swipes RENAME COLUMN steering_instruction TO direction",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
+         VALUES ('w', 'w', 'g', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO messages (game_id, message_type, timestamp) \
+         VALUES (1, '\"Narration\"', '2026-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO message_swipes (message_id, swipe_index, text, impersonated, direction) \
+         VALUES (1, 0, 't', 1, 'as the player')",
+        [],
+    )
+    .unwrap();
+    conn.pragma_update(None, "user_version", 22).unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    let columns = columns_of(&conn, "message_swipes");
+    assert!(columns.contains(&"steering_instruction".to_string()));
+    assert!(!columns.contains(&"direction".to_string()));
+    let (impersonated, steering_instruction): (i64, Option<String>) = conn
+        .query_row(
+            "SELECT impersonated, steering_instruction FROM message_swipes WHERE swipe_index = 0",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(impersonated, 1);
+    assert_eq!(steering_instruction.as_deref(), Some("as the player"));
+
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 23);
 }

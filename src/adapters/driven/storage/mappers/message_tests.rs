@@ -18,7 +18,7 @@ fn test_message_roundtrip() {
         location_header: Some("Room A".to_string()),
         event_header: None,
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     }];
     let db = DbMessage::try_from((&original, 1)).unwrap();
     let swipes = model_swipes_to_db(&original);
@@ -48,7 +48,7 @@ fn test_message_unpersisted_roundtrip() {
         location_header: None,
         event_header: Some("Event".to_string()),
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     }];
     let db = DbMessage::try_from((&original, 2)).unwrap();
     let swipes = model_swipes_to_db(&original);
@@ -68,7 +68,7 @@ fn test_message_log_type_json_serialization() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     }];
     let db = DbMessage::try_from((&msg, 1)).unwrap();
     let _swipes = model_swipes_to_db(&msg);
@@ -92,7 +92,7 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
             location_header: Some("Room A".to_string()),
             event_header: None,
             impersonated: false,
-            direction: None,
+            steering_instruction: None,
         },
         crate::domain::model::message::Swipe {
             text: "Second swipe".to_string(),
@@ -100,7 +100,7 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
             location_header: Some("Room B".to_string()),
             event_header: Some("Event B".to_string()),
             impersonated: false,
-            direction: None,
+            steering_instruction: None,
         },
     ];
     let db = DbMessage::try_from((&original, 1)).unwrap();
@@ -125,7 +125,7 @@ fn test_swipe_stored_inputs_roundtrip() {
         location_header: None,
         event_header: None,
         impersonated: true,
-        direction: Some("as the player".to_string()),
+        steering_instruction: Some("as the player".to_string()),
     }];
 
     let db = DbMessage::try_from((&original, 1)).unwrap();
@@ -133,5 +133,5 @@ fn test_swipe_stored_inputs_roundtrip() {
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert!(back.impersonated());
-    assert_eq!(back.direction(), Some("as the player"));
+    assert_eq!(back.steering_instruction(), Some("as the player"));
 }

@@ -719,9 +719,9 @@ async fn test_slash_impersonate_produces_input_http() {
         "the impersonate flag must be stored on the swipe"
     );
     assert_eq!(
-        input_entry.direction(),
+        input_entry.steering_instruction(),
         Some("hello"),
-        "the direction must be stored on the swipe"
+        "the steering instruction must be stored on the swipe"
     );
 }
 
@@ -756,7 +756,7 @@ async fn test_slash_guide_does_not_persist_input_http() {
 
     let narration = narrations.first().expect("at least one Narration entry");
     assert_eq!(
-        narration.direction(),
+        narration.steering_instruction(),
         Some("look around"),
         "the guide must be stored on the swipe"
     );

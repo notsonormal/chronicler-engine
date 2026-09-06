@@ -142,7 +142,7 @@ fn test_db_message_swipes_flat_input_columns() {
     let conn = pool.conn();
     let count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name IN ('impersonated', 'direction')",
+            "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name IN ('impersonated', 'steering_instruction')",
             [],
             |row| row.get(0),
         )

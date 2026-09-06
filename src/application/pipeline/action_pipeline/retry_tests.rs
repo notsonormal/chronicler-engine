@@ -910,7 +910,7 @@ async fn test_retry_appends_swipe_to_same_message() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        direction: None,
+        steering_instruction: None,
     };
     storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
@@ -1322,7 +1322,7 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
         "I look around.",
         MessageType::Input,
         true,
-        Some("A direction".to_string()),
+        Some("A steering instruction".to_string()),
     )
     .expect("seed: impersonated input with stored inputs");
 
@@ -1385,7 +1385,7 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    // A guide-only turn: narration with a guided direction, no Input row.
+    // A guide-only turn: narration with a guided steering instruction, no Input row.
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
         "room_1",
@@ -1436,7 +1436,7 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
     assert_eq!(target.text(), "Ominous retake.");
     assert!(
         target.is_guided(),
-        "the new swipe inherits the guide direction"
+        "the new swipe inherits the guide's steering instruction"
     );
     app.shutdown_token.cancel();
 }

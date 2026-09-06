@@ -21,7 +21,7 @@ impl ActionPipeline {
     ) -> Result<ProcessActionResult, EngineError> {
         // The impersonate preset resolves at generation time from the game's
         // active configuration — nothing is pinned at entry (ticket 15).
-        let (input, impersonated, direction) = match action {
+        let (input, impersonated, steering_instruction) = match action {
             Action::FreeAction(input) if input.is_empty() => (String::new(), false, None),
             Action::FreeAction(input) => (input, false, None),
             // The steering rides on the Swipe's stored inputs (not history), so a redo re-applies it.
@@ -31,7 +31,7 @@ impl ActionPipeline {
 
         let spawn_input = input.clone();
         let spawn_impersonated = impersonated;
-        let spawn_direction = direction;
+        let spawn_steering_instruction = steering_instruction;
         self.claim_and_spawn(
             generation_gate,
             move |game_id, game_state| {
@@ -51,23 +51,23 @@ impl ActionPipeline {
                 pipeline.execute_action_with_inputs(
                     spawn_input,
                     spawn_impersonated,
-                    spawn_direction,
+                    spawn_steering_instruction,
                 );
             },
         )
     }
 
-    #[instrument(skip(self, impersonated, direction), fields(input_length))]
+    #[instrument(skip(self, impersonated, steering_instruction), fields(input_length))]
     pub(crate) fn execute_action_with_inputs(
         &self,
         input: String,
         impersonated: bool,
-        direction: Option<String>,
+        steering_instruction: Option<String>,
     ) {
         let mut state = self.message_service.load_or_fresh();
         state.narrative.last_trigger = None;
         if let Err(PhaseError::Cancelled) =
-            self.run_from_input(state, input, impersonated, direction)
+            self.run_from_input(state, input, impersonated, steering_instruction)
         {
             tracing::debug!("Pipeline cancelled");
         }

@@ -745,7 +745,7 @@ async fn test_switch_swipe_handler_success() {
                 location_header: None,
                 event_header: None,
                 impersonated: false,
-                direction: None,
+                steering_instruction: None,
             },
             0,
         )
@@ -759,7 +759,7 @@ async fn test_switch_swipe_handler_success() {
                 location_header: None,
                 event_header: None,
                 impersonated: false,
-                direction: None,
+                steering_instruction: None,
             },
             1,
         )
@@ -882,7 +882,7 @@ async fn test_switch_swipe_handler_not_last() {
                 location_header: None,
                 event_header: None,
                 impersonated: false,
-                direction: None,
+                steering_instruction: None,
             },
             0,
         )
@@ -927,7 +927,7 @@ async fn test_switch_swipe_handler_concurrent() {
                 location_header: None,
                 event_header: None,
                 impersonated: false,
-                direction: None,
+                steering_instruction: None,
             },
             0,
         )

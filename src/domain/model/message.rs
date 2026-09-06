@@ -15,11 +15,11 @@ pub struct Swipe {
     /// The swipe was generated as the player's persona speaking.
     #[serde(default)]
     pub impersonated: bool,
-    /// Player-typed steering for this generation: the guide text (plain
-    /// generation) or the impersonate direction. `impersonated` is the
+    /// Player-typed steering instruction for this generation: the guide text
+    /// (plain generation) or the impersonate direction. `impersonated` is the
     /// discriminator — a directed impersonation and a guide never coexist.
     #[serde(default)]
-    pub direction: Option<String>,
+    pub steering_instruction: Option<String>,
 }
 
 /// Message in the narrative history.
@@ -50,7 +50,7 @@ impl Message {
             location_header,
             event_header,
             impersonated: false,
-            direction: None,
+            steering_instruction: None,
         };
         Self {
             id: 0,
@@ -100,15 +100,17 @@ impl Message {
         self.active_swipe().is_some_and(|s| s.impersonated)
     }
 
-    /// The active swipe's stored steering input (guide text or impersonate direction).
-    pub fn direction(&self) -> Option<&str> {
-        self.active_swipe().and_then(|s| s.direction.as_deref())
+    /// The active swipe's stored steering instruction (guide text or
+    /// impersonate direction).
+    pub fn steering_instruction(&self) -> Option<&str> {
+        self.active_swipe()
+            .and_then(|s| s.steering_instruction.as_deref())
     }
 
-    /// A guided turn: plain generation steered by a direction, i.e. not
-    /// impersonated but carrying one. Serves the retry/anchor reads.
+    /// A guided turn: plain generation steered by a steering instruction, i.e.
+    /// not impersonated but carrying one. Serves the retry/anchor reads.
     pub fn is_guided(&self) -> bool {
-        !self.impersonated() && self.direction().is_some()
+        !self.impersonated() && self.steering_instruction().is_some()
     }
 
     /// Set active swipe index (content accessors use this).
@@ -173,10 +175,10 @@ impl Message {
     }
 
     /// Set the active swipe's stored generation inputs.
-    pub fn set_stored_inputs(&mut self, impersonated: bool, direction: Option<String>) {
+    pub fn set_stored_inputs(&mut self, impersonated: bool, steering_instruction: Option<String>) {
         if let Some(swipe) = self.active_swipe_mut() {
             swipe.impersonated = impersonated;
-            swipe.direction = direction;
+            swipe.steering_instruction = steering_instruction;
         }
     }
 }

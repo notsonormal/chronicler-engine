@@ -18,7 +18,7 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute(
-                    "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, direction)
+                    "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, steering_instruction)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                     rusqlite::params![
                         message_id as i64,
@@ -28,7 +28,7 @@ impl Storage {
                         swipe.location_header.as_deref(),
                         swipe.event_header.as_deref(),
                         if swipe.impersonated { 1 } else { 0 },
-                        swipe.direction.as_deref(),
+                        swipe.steering_instruction.as_deref(),
                     ],
                 )
                 .map_err(|e| EngineError::Config(format!("Failed to insert swipe: {e}")))?;
@@ -101,7 +101,7 @@ impl Storage {
                     .collect::<Vec<_>>()
                     .join(",");
                 let sql = format!(
-                    "SELECT message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, direction
+                    "SELECT message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, steering_instruction
                      FROM message_swipes
                      WHERE message_id IN ({placeholders})
                      ORDER BY message_id, swipe_index"
@@ -124,7 +124,7 @@ impl Storage {
                                     location_header: row.get(4)?,
                                     event_header: row.get(5)?,
                                     impersonated: impersonated != 0,
-                                    direction: row.get(7)?,
+                                    steering_instruction: row.get(7)?,
                                 },
                             ))
                         },

@@ -11,8 +11,8 @@ Two steering surfaces let the player shape what the narrator generates. Both ent
 
 | Surface | What it steers | Persisted to history | Output message type | Retry re-applies via |
 |---|---|---|---|---|
-| Guided generation | content — what the AI says | no, transient | `Narration` | the swipe's stored direction |
-| Impersonate | speaker — who says it | no, transient | `Input` | the swipe's stored direction |
+| Guided generation | content — what the AI says | no, transient | `Narration` | the swipe's stored steering instruction |
+| Impersonate | speaker — who says it | no, transient | `Input` | the swipe's stored steering instruction |
 
 Both surfaces are transient: their steering lives for one generation and never becomes a history entry.
 
@@ -39,7 +39,7 @@ Take the following into special consideration for your next message: {guide}
 </Guide>
 ```
 
-A guided turn runs the continue path with no player input and no input history entry. The guide is staged on the in-flight narrative state and stored on the generated swipe as its direction. A retry of that swipe re-applies the stored direction.
+A guided turn runs the continue path with no player input and no input history entry. The guide is staged on the in-flight narrative state and stored on the generated swipe as its steering instruction. A retry of that swipe re-applies the stored steering instruction.
 
 ## Impersonate
 
@@ -51,7 +51,7 @@ The `<PlayerCharacter>` layer is dropped for an impersonated turn. The context l
 
 The impersonate output is saved as an `Input` entry — the player-voiced message type — so the story log renders it as the persona speaking. The steering itself (direction, preset) never becomes a history entry. An optional `/impersonate <direction>` text steers the impersonated action without forcing an implausible leap; with no direction, the persona acts in character.
 
-The swipe stores the impersonation, so a retry re-impersonates with the stored direction and the game's current impersonate preset — the preset is resolved at generation time, never pinned to the swipe.
+The swipe stores the impersonation, so a retry re-impersonates with the stored steering instruction and the game's current impersonate preset — the preset is resolved at generation time, never pinned to the swipe.
 
 ## Mutual Exclusivity
 
