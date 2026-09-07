@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::AppSettings;
+use crate::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::world::WorldCard;
 use crate::application::prompting::assembler::{PromptAssembler, PromptContext};
@@ -114,6 +114,8 @@ fn test_assemble_includes_all_layers() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &npcs,
@@ -208,6 +210,8 @@ fn test_assemble_empty_preset_sections() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -238,6 +242,8 @@ fn test_assemble_respects_max_tokens() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -277,6 +283,8 @@ fn test_assemble_budget_trimming() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -380,6 +388,8 @@ fn test_budget_read_from_settings_per_call() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -456,6 +466,8 @@ fn test_assemble_guide_layer_renders_last_with_wrapper() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -504,6 +516,8 @@ fn test_assemble_no_guide_omits_guide_layer() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -535,6 +549,8 @@ fn test_assemble_blank_guide_omits_guide_layer() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -577,6 +593,8 @@ fn test_assemble_impersonate_drops_player_character_layer() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -631,6 +649,8 @@ fn test_assemble_impersonate_injects_persona_macros_into_preset() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -668,12 +688,11 @@ fn test_assemble_impersonate_injects_persona_macros_into_preset() {
 }
 
 #[test]
-fn test_assemble_injects_narrative_voice_from_world_posture() {
-    use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
-
-    let mut world = create_test_world();
-    world.narrative_perspective = NarrativePerspective::Second;
-    world.narrative_tense = NarrativeTense::Present;
+fn test_assemble_injects_narrative_voice_from_resolved_posture() {
+    // The world keeps its shipped defaults (third/past); the context carries
+    // the game's resolved override (second/present). The resolved posture is
+    // the stamp source — the world's values no longer reach the prompt.
+    let world = create_test_world();
     let room = create_test_room();
     let player = create_test_player();
     let history = create_test_history();
@@ -694,6 +713,8 @@ fn test_assemble_injects_narrative_voice_from_world_posture() {
 
     let mut context = PromptContext::new(
         &world,
+        NarrativePerspective::Second,
+        NarrativeTense::Present,
         &room,
         NpcContext {
             all_npcs: &[],
@@ -717,12 +738,12 @@ fn test_assemble_injects_narrative_voice_from_world_posture() {
         result
             .user_prompt
             .contains("second-person limited perspective"),
-        "owner's world-posture stamp must overwrite the caller's conflicting voice: {:#?}",
+        "owner's resolved-posture stamp must overwrite the caller's conflicting voice: {:#?}",
         result.user_prompt
     );
     assert!(
         result.user_prompt.contains("present tense"),
-        "owner's world-posture stamp must overwrite the caller's conflicting voice: {:#?}",
+        "owner's resolved-posture stamp must overwrite the caller's conflicting voice: {:#?}",
         result.user_prompt
     );
     assert!(
@@ -760,6 +781,8 @@ fn test_assemble_without_settings_uses_default_voice() {
 
     let context = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &[],

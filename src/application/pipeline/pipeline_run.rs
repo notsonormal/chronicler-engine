@@ -12,6 +12,8 @@ use crate::domain::model::quantifier::{NpcEventList, QuantifierConfidence, Quant
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
+use crate::domain::model::world::WorldCard;
 use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
@@ -310,9 +312,12 @@ impl<'a> PipelineRun<'a> {
             .load_preset_and_response_length(&preset_id, PresetKind::System)
             .ok()?;
 
+        let (narrative_perspective, narrative_tense) = self.resolve_posture(&bundle.world);
         let all_npcs: Vec<NpcCard> = bundle.npcs.values().cloned().collect();
         let trigger_ctx = PromptContext::new(
             &bundle.world,
+            narrative_perspective,
+            narrative_tense,
             room_data,
             NpcContext {
                 all_npcs: &all_npcs,
@@ -344,6 +349,21 @@ impl<'a> PipelineRun<'a> {
             user_prompt: assembled.user_prompt,
             max_tokens: Some(assembled.max_tokens),
         })
+    }
+
+    /// Game-first posture for prompt assembly: the game this run started for,
+    /// falling back to the world's posture when that row is unreadable.
+    pub(super) fn resolve_posture(
+        &self,
+        world: &WorldCard,
+    ) -> (NarrativePerspective, NarrativeTense) {
+        match self.pipeline.storage.get_game(self.started_for) {
+            Ok(Some(game)) => (game.narrative_perspective, game.narrative_tense),
+            _ => {
+                tracing::warn!("game row unreadable; falling back to world posture");
+                (world.narrative_perspective, world.narrative_tense)
+            }
+        }
     }
 
     pub(super) fn load_preset_and_response_length(

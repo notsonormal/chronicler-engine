@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Game {
@@ -17,6 +17,8 @@ pub struct Game {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub narrator_mode: NarratorMode,
+    pub narrative_perspective: NarrativePerspective,
+    pub narrative_tense: NarrativeTense,
     pub active_system_prompt_preset_id: String,
     pub active_quantifier_prompt_preset_id: String,
     pub active_impersonate_prompt_preset_id: String,
@@ -30,6 +32,8 @@ pub struct NewGame {
     pub persona_name: String,
     pub name: String,
     pub narrator_mode: NarratorMode,
+    pub narrative_perspective: NarrativePerspective,
+    pub narrative_tense: NarrativeTense,
     pub system_prompt_preset_id: String,
     pub quantifier_prompt_preset_id: String,
     pub impersonate_prompt_preset_id: String,

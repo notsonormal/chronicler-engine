@@ -314,3 +314,60 @@ fn test_run_save_failure_returns_persist_failed() {
         reloaded.narrative.input_buffer.status
     );
 }
+
+#[test]
+fn test_resolve_posture_reads_the_game_not_the_world() {
+    let (app, storage) = make_app_with_narrations(vec!["ignored".to_string()]);
+    let game_id = storage
+        .create_game_from_request(&crate::domain::model::game::NewGame {
+            world_name: "Test World".to_string(),
+            world_key: "test".to_string(),
+            persona_key: "p".to_string(),
+            persona_name: "P".to_string(),
+            name: "posture-game".to_string(),
+            narrator_mode: crate::domain::model::settings::NarratorMode::InteractiveFiction,
+            narrative_perspective: crate::domain::model::settings::NarrativePerspective::Second,
+            narrative_tense: crate::domain::model::settings::NarrativeTense::Present,
+            system_prompt_preset_id: "system_if_default".to_string(),
+            quantifier_prompt_preset_id: "quantifier_default".to_string(),
+            impersonate_prompt_preset_id: "impersonate_default".to_string(),
+        })
+        .expect("game created");
+
+    // The shipped world keeps the novel defaults (third/past).
+    let world = crate::test_support::TestWorld::minimal();
+    let pipeline_run = PipelineRun::new(&app.pipeline, game_id);
+    let (perspective, tense) = pipeline_run.resolve_posture(&world);
+
+    assert_eq!(
+        perspective,
+        crate::domain::model::settings::NarrativePerspective::Second,
+        "the game's posture must win over the world's"
+    );
+    assert_eq!(
+        tense,
+        crate::domain::model::settings::NarrativeTense::Present,
+        "the game's posture must win over the world's"
+    );
+}
+
+#[test]
+fn test_resolve_posture_falls_back_to_world_when_game_missing() {
+    let (app, _storage) = make_app_with_narrations(vec!["ignored".to_string()]);
+    let mut world = crate::test_support::TestWorld::minimal();
+    world.narrative_tense = crate::domain::model::settings::NarrativeTense::Present;
+
+    let pipeline_run = PipelineRun::new(&app.pipeline, u64::MAX);
+    let (perspective, tense) = pipeline_run.resolve_posture(&world);
+
+    assert_eq!(
+        perspective,
+        crate::domain::model::settings::NarrativePerspective::Third,
+        "missing game row must fall back to the world's posture"
+    );
+    assert_eq!(
+        tense,
+        crate::domain::model::settings::NarrativeTense::Present,
+        "missing game row must fall back to the world's posture"
+    );
+}

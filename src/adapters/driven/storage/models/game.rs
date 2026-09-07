@@ -15,6 +15,8 @@ pub struct DbGame {
     pub persona_key: String,
     pub persona_name: String,
     pub narrator_mode: String,
+    pub narrative_perspective: String,
+    pub narrative_tense: String,
     pub active_system_prompt_preset_id: String,
     pub active_quantifier_prompt_preset_id: String,
     pub active_impersonate_prompt_preset_id: String,
@@ -32,9 +34,11 @@ impl DbGame {
             persona_key: row.get(6)?,
             persona_name: row.get(7)?,
             narrator_mode: row.get(8)?,
-            active_system_prompt_preset_id: row.get(9)?,
-            active_quantifier_prompt_preset_id: row.get(10)?,
-            active_impersonate_prompt_preset_id: row.get(11)?,
+            narrative_perspective: row.get(9)?,
+            narrative_tense: row.get(10)?,
+            active_system_prompt_preset_id: row.get(11)?,
+            active_quantifier_prompt_preset_id: row.get(12)?,
+            active_impersonate_prompt_preset_id: row.get(13)?,
         })
     }
 
@@ -50,6 +54,13 @@ impl DbGame {
             updated_at: parse_datetime(&self.updated_at, "updated_at")?,
             narrator_mode: crate::domain::model::settings::NarratorMode::parse_or_default(
                 &self.narrator_mode,
+            ),
+            narrative_perspective:
+                crate::domain::model::settings::NarrativePerspective::parse_or_default(
+                    &self.narrative_perspective,
+                ),
+            narrative_tense: crate::domain::model::settings::NarrativeTense::parse_or_default(
+                &self.narrative_tense,
             ),
             active_system_prompt_preset_id: self.active_system_prompt_preset_id.clone(),
             active_quantifier_prompt_preset_id: self.active_quantifier_prompt_preset_id.clone(),

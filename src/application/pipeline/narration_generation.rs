@@ -79,8 +79,11 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
         let history = state.narrative.history();
         let all_npcs: Vec<NpcCard> = bundle.npcs.values().cloned().collect();
+        let (narrative_perspective, narrative_tense) = self.run.resolve_posture(&bundle.world);
         let context = PromptContext::new(
             &bundle.world,
+            narrative_perspective,
+            narrative_tense,
             room,
             NpcContext {
                 all_npcs: &all_npcs,

@@ -555,5 +555,53 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 23 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Restore the per-game posture columns v21 dropped as write-only: the
+        // narration path now reads posture from the game, so the copies are
+        // live data again. Backfill mirrors v19.
+        if !column_exists(conn, "games", "narrative_perspective") {
+            exec(
+                "ALTER TABLE games ADD COLUMN narrative_perspective TEXT NOT NULL DEFAULT 'third'",
+            )?;
+        }
+        if !column_exists(conn, "games", "narrative_tense") {
+            exec("ALTER TABLE games ADD COLUMN narrative_tense TEXT NOT NULL DEFAULT 'past'")?;
+        }
+
+        exec(
+            "UPDATE games SET \
+               narrative_perspective = COALESCE((SELECT narrative_perspective FROM worlds WHERE worlds.key = games.world_key), 'third'), \
+               narrative_tense = COALESCE((SELECT narrative_tense FROM worlds WHERE worlds.key = games.world_key), 'past')",
+        )?;
+
+        let orphans: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT name FROM games \
+                     WHERE world_key NOT IN (SELECT key FROM worlds)",
+                )
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
+        };
+        for key in &orphans {
+            tracing::warn!(
+                "migration v23: game '{key}' references world_key with no matching world row; \
+                 posture defaulted to third/past"
+            );
+        }
+
+        conn.pragma_update(None, "user_version", 23)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

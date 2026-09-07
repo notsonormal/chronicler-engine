@@ -8,7 +8,7 @@ Blocked by: 05, 14
 
 Implement the data-layer half of options-autogeneration as decided in ticket 04. This is implementation per the map's Notes override (decide, then implement, then build-green).
 
-Blocked by ticket 05 because both touch the same storage migration and the world/game field pattern — serialize the migrations (05 shipped v19; ticket 14 ships v20; this ticket ships v21) and reuse the posture-relocation field pattern rather than racing it.
+Blocked by ticket 05 because both touch the same storage migration and the world/game field pattern — serialize the migrations (05 shipped v19; ticket 14 shipped v20; ticket 06 shipped v23; this ticket ships the next free version) and reuse the posture-relocation field pattern rather than racing it.
 
 ### Scope
 
@@ -23,7 +23,7 @@ Blocked by ticket 05 because both touch the same storage migration and the world
 
 4. **Active options preset id.** Options prompts are mode-AGNOSTIC (ticket 04: options serve both modes), so a single `active_options_prompt_preset_id` on `AppSettings` (default `options_default`), with the game inheriting it at creation per the ticket-01 decision-7 pattern. It does NOT join the per-mode registry (options are mode-agnostic; the registry is a mode-tagged list per ticket 13).
 
-5. **Storage migration v21.** Add `options_always_on` to `worlds` and `games` (backfill `false`), add the options preset-id to `settings` (backfill `options_default`). Bump `user_version` to 21 (v20 is ticket 14's). Follow the `if version < N { ... }` pattern in `src/adapters/driven/storage/utils/plumbing.rs`.
+5. **Storage migration (next free version).** Add `options_always_on` to `worlds` and `games` (backfill `false`), add the options preset-id to `settings` (backfill `options_default`). Bump `user_version` to the next free number — v21–v23 have since shipped to other tickets; re-check `plumbing.rs` at execution time. Follow the `if version < N { ... }` pattern in `src/adapters/driven/storage/utils/plumbing.rs`.
 
 ## Notes for the session
 
