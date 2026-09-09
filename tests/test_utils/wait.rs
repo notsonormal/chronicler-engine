@@ -34,6 +34,8 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     Err(())
 }
 
+/// Count-based wait, no strict mode — the helper for selectors that
+/// legitimately match several elements (visibility waits fail on multi-match).
 pub async fn wait_for_element_children(
     page: &playwright_rs::Page,
     selector: &str,
@@ -68,32 +70,26 @@ pub async fn wait_for_element_children(
     last_count
 }
 
-/// Wait for an element to become visible
-pub async fn wait_for_element_exists(
-    page: &playwright_rs::Page,
-    selector: &str,
-    max_attempts: u32,
-) {
+/// Poll-until-visible for a uniquely-matching selector (Playwright strict mode
+/// rejects a multi-element match — scope panel selectors by tab, e.g.
+/// `#worlds-tab select[name=..]`). An empty inline element stays invisible;
+/// wait on its populated container, then assert text on the status span.
+pub async fn wait_until_visible(page: &playwright_rs::Page, selector: &str, timeout: Duration) {
     let locator = page.locator(selector).await;
-    let timeout_ms = max_attempts as f64 * 50.0;
     if let Err(e) = playwright_rs::expect(locator)
-        .with_timeout(std::time::Duration::from_millis(timeout_ms as u64))
+        .with_timeout(timeout)
         .to_be_visible()
         .await
     {
-        capture_failure_state(page, &format!("wait_for_element_exists_{selector}")).await;
-        panic!("Element '{selector}' did not become visible: {e}");
+        capture_failure_state(page, &format!("wait_until_visible_{selector}")).await;
+        panic!("Element '{selector}' did not become visible within {timeout:?}: {e}");
     }
 }
 
-/// Wait for an element to become hidden
-pub async fn wait_for_element_not_exists(
-    page: &playwright_rs::Page,
-    selector: &str,
-    max_attempts: u32,
-) {
+/// Wait for an element to become hidden or detached.
+pub async fn wait_until_hidden(page: &playwright_rs::Page, selector: &str, timeout: Duration) {
     let locator = page.locator(selector).await;
-    let timeout_ms = max_attempts as f64 * 50.0;
+    let timeout_ms = timeout.as_millis() as f64;
     if let Err(e) = locator
         .wait_for(Some(playwright_rs::WaitForOptions {
             state: Some(playwright_rs::WaitForState::Hidden),
@@ -103,11 +99,11 @@ pub async fn wait_for_element_not_exists(
     {
         let still_visible = locator.is_visible().await.unwrap_or(true);
         eprintln!(
-            "⏱️  wait_for_element_not_exists('{selector}') TIMED OUT after {}ms \
+            "⏱️  wait_until_hidden('{selector}') TIMED OUT after {}ms \
              (still visible: {still_visible})",
             timeout_ms as u64
         );
-        capture_failure_state(page, &format!("wait_for_element_not_exists_{selector}")).await;
+        capture_failure_state(page, &format!("wait_until_hidden_{selector}")).await;
         panic!("Element '{selector}' did not become hidden: {e}");
     }
 }

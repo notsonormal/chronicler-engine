@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 use crate::application::errors::ApplicationError;
 use crate::application::message_service::MessageService;
 use crate::domain::model::game::Game;
-use crate::domain::model::settings::AppSettings;
+use crate::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::generate_game_name;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driven::storage::Storage;
@@ -106,6 +106,110 @@ impl GameCatalogue {
 
     pub fn current_game_id(&self) -> u64 {
         self.storage.current_game_id()
+    }
+
+    pub fn current_game(&self) -> Result<Option<Game>, ApplicationError> {
+        let id = self.storage.current_game_id();
+        self.storage.get_game(id).map_err(Into::into)
+    }
+
+    /// Override a game's perspective and tense (per-game posture override).
+    /// Mode is deliberately absent — switching mode is `switch_mode`, which
+    /// also retargets presets and nudges perspective.
+    pub fn set_posture(
+        &self,
+        id: u64,
+        perspective: NarrativePerspective,
+        tense: NarrativeTense,
+    ) -> Result<Game, ApplicationError> {
+        let mut game = self.require_game(id)?;
+        game.narrative_perspective = perspective;
+        game.narrative_tense = tense;
+        self.storage.update_game_config(&game)?;
+        Ok(game)
+    }
+
+    /// Switch a game's narrator mode (the distinct mode-switch action):
+    /// retarget the game's three preset-ids to the new mode's registry
+    /// bundle, nudge perspective only when it still sits at the other mode's
+    /// default, and persist. A deliberately-set perspective is never clobbered.
+    pub fn switch_mode(&self, id: u64, mode: NarratorMode) -> Result<Game, ApplicationError> {
+        let mut game = self.require_game(id)?;
+        if game.narrator_mode == mode {
+            return Ok(game);
+        }
+
+        let bundle = {
+            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            settings.mode_preset_registry.bundle_for(mode)
+        };
+        game.narrator_mode = mode;
+        game.active_system_prompt_preset_id = bundle.system_prompt_preset_id;
+        game.active_quantifier_prompt_preset_id = bundle.quantifier_prompt_preset_id;
+        game.active_impersonate_prompt_preset_id = bundle.impersonate_prompt_preset_id;
+
+        let other_default = match mode {
+            NarratorMode::Novel => NarratorMode::InteractiveFiction,
+            NarratorMode::InteractiveFiction => NarratorMode::Novel,
+        }
+        .default_perspective();
+        if game.narrative_perspective == other_default {
+            game.narrative_perspective = mode.default_perspective();
+        }
+
+        self.storage.update_game_config(&game)?;
+        Ok(game)
+    }
+
+    /// Set the game's per-game preset selection (the picker). Each id must
+    /// exist in the library; a mode-disallowed preset is accepted only when
+    /// unchanged, so the stored selection is never silently invalidated.
+    pub fn set_preset_selection(
+        &self,
+        id: u64,
+        system_id: &str,
+        quantifier_id: &str,
+        impersonate_id: &str,
+    ) -> Result<Game, ApplicationError> {
+        let mut game = self.require_game(id)?;
+        let selections = [
+            (system_id, game.active_system_prompt_preset_id.clone()),
+            (
+                quantifier_id,
+                game.active_quantifier_prompt_preset_id.clone(),
+            ),
+            (
+                impersonate_id,
+                game.active_impersonate_prompt_preset_id.clone(),
+            ),
+        ];
+        for (new_id, current_id) in selections {
+            // An unchanged stored id is a no-op slot: it skips validation so
+            // saving the form never fails on a stale or deleted selection.
+            if new_id == current_id {
+                continue;
+            }
+            let preset = self.storage.get_preset(new_id)?.ok_or_else(|| {
+                ApplicationError::validation(format!("Preset not found: {new_id}"))
+            })?;
+            if !preset.allows(game.narrator_mode) {
+                return Err(ApplicationError::validation(format!(
+                    "Preset not allowed for {} mode",
+                    game.narrator_mode.as_str()
+                )));
+            }
+        }
+        game.active_system_prompt_preset_id = system_id.to_string();
+        game.active_quantifier_prompt_preset_id = quantifier_id.to_string();
+        game.active_impersonate_prompt_preset_id = impersonate_id.to_string();
+        self.storage.update_game_config(&game)?;
+        Ok(game)
+    }
+
+    fn require_game(&self, id: u64) -> Result<Game, ApplicationError> {
+        self.storage
+            .get_game(id)?
+            .ok_or_else(|| ApplicationError::validation("Game not found"))
     }
 
     pub fn reset(&self) -> Result<(), ApplicationError> {

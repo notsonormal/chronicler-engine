@@ -57,6 +57,9 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/games` | `create_game_handler` |
 | POST | `/games/:id/switch` | `switch_game_handler` |
 | POST | `/games/:id/delete` | `delete_game_handler` |
+| POST | `/games/:id/mode` | `switch_game_mode_handler` |
+| POST | `/games/:id/posture` | `update_game_posture_handler` |
+| POST | `/games/:id/presets` | `update_game_presets_handler` |
 | GET | `/fragment/games` | `list_games_fragment` |
 
 ## Worlds
@@ -66,6 +69,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | GET | `/fragment/worlds` | `list_worlds_fragment` |
 | POST | `/worlds` | `create_world_handler` |
 | POST | `/worlds/:key` | `update_world_handler` |
+| POST | `/worlds/:key/posture` | `update_world_posture_handler` |
 | GET | `/fragment/worlds/new` | `new_world_form_handler` |
 | GET | `/worlds/:key/edit` | `edit_world_form_handler` |
 | POST | `/worlds/:key/delete` | `delete_world_handler` |

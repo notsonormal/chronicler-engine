@@ -46,6 +46,16 @@ impl NarratorMode {
             Self::Novel
         })
     }
+
+    /// The perspective a fresh game of this mode starts at. Also the nudge
+    /// target when a game switches into this mode while sitting at the other
+    /// mode's default perspective.
+    pub fn default_perspective(&self) -> NarrativePerspective {
+        match self {
+            Self::Novel => NarrativePerspective::Third,
+            Self::InteractiveFiction => NarrativePerspective::Second,
+        }
+    }
 }
 
 impl FromStr for NarratorMode {

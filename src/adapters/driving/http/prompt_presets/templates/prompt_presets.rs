@@ -7,7 +7,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
 
 #[derive(Template)]
 #[template(
-    source = r#"
+    source = r##"
 <div class="prompt-presets-panel">
     <div class="preset-section">
         <h2>System Prompts</h2>
@@ -188,7 +188,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
         </form>
     </div>
 </div>
-"#,
+"##,
     ext = "html"
 )]
 pub struct PromptPresetsTemplate {

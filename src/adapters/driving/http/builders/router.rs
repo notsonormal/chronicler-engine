@@ -97,6 +97,18 @@ pub fn build_router(app_state: AppState) -> Router {
             "/games/:id/delete",
             post(games::handlers::delete_game_handler),
         )
+        .route(
+            "/games/:id/mode",
+            post(games::handlers::switch_game_mode_handler),
+        )
+        .route(
+            "/games/:id/posture",
+            post(games::handlers::update_game_posture_handler),
+        )
+        .route(
+            "/games/:id/presets",
+            post(games::handlers::update_game_presets_handler),
+        )
         .route("/fragment/games", get(games::handlers::list_games_fragment))
         .route(
             "/fragment/worlds",
@@ -104,6 +116,10 @@ pub fn build_router(app_state: AppState) -> Router {
         )
         .route("/worlds", post(worlds::handlers::create_world_handler))
         .route("/worlds/:key", post(worlds::handlers::update_world_handler))
+        .route(
+            "/worlds/:key/posture",
+            post(worlds::handlers::update_world_posture_handler),
+        )
         .route(
             "/fragment/worlds/new",
             get(worlds::handlers::new_world_form_handler),
@@ -192,5 +208,6 @@ pub fn build_router(app_state: AppState) -> Router {
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))
+        .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(app_state)
 }

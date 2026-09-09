@@ -157,6 +157,32 @@ pub fn check_long_comment_runs(path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
+/// Flags `r#"` raw-string literals in askama template sources.
+///
+/// Markup such as `hx-target="#id"` contains the `"#` sequence that
+/// terminates an `r#"..."#` string (compile error: `error: prefix ... is
+/// unknown`). Templates must use `r##"..."##` delimiters.
+pub fn check_template_raw_strings(path: &str, content: &str) -> Vec<Violation> {
+    let in_template_scope = path.contains("templates/") || path.ends_with("templates.rs");
+    if !in_template_scope || path.ends_with("_tests.rs") {
+        return Vec::new();
+    }
+
+    let mut violations = Vec::new();
+    for (line_num, line) in content.lines().enumerate() {
+        if line.contains("r#\"") {
+            violations.push(Violation::error(
+                path,
+                line_num + 1,
+                "Template raw strings must use r##\"...\"## delimiters: markup like \
+                 hx-target=\"#id\" contains `\"#`, which terminates an r#\"...\"# string \
+                 (compile error: `error: prefix ... is unknown`).",
+            ));
+        }
+    }
+    violations
+}
+
 struct SingleLetterVisitor<'a> {
     file_path: &'a str,
     violations: &'a mut Vec<Violation>,

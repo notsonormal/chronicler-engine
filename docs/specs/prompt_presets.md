@@ -186,6 +186,7 @@ Then the response is 200
 And the response body contains "<div class=\"preset-card"
 And the body contains the new name "After"
 And the body does not contain the old name "Before"
+And the body preserves the stored allowed modes (the form omitted them)
 ```
 
 #### Scenario 21.15: Update a nonexistent preset returns an error span
@@ -315,4 +316,19 @@ Given a fresh app state
 When the client POST /prompt-presets/does-not-exist/activate
 Then the response is 200
 And the response body is "<span class='error'>Preset not found</span>"
+```
+
+### Editor mode flags
+
+The preset edit form renders an Allowed Modes checkbox group; saving the
+form stores the flags and the card's per-mode activation buttons follow
+them.
+
+#### Scenario 21.27: The editor exposes allowed-modes checkboxes and saving updates per-mode activation
+
+```gherkin
+Given the prompt presets panel is loaded with only default presets
+When the client duplicates a preset, clicks Edit on the copy, checks the interactive_fiction checkbox, and saves the form
+Then the edit form renders the Allowed Modes checkbox group reflecting the stored flags before saving
+And the saved card re-renders with a "Set Active (IF)" button
 ```

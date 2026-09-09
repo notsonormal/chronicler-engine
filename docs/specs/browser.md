@@ -170,3 +170,28 @@ action-area view model disables the input while generating
 delegation that re-binds to the recreated input; the htmx swap is htmx's
 mechanism, not ours. This mirrors scenario 16.7's synthetic-event
 approach for the same reason.
+
+### World posture editor
+
+The world edit form renders a Narrative Posture section. In edit mode each
+posture select auto-saves on change through `POST /worlds/:key/posture` and
+reports the result in `#world-posture-status`. On create the selects render
+without auto-save and carry their values through the normal form submit.
+
+#### Scenario 18.1: The world edit form renders the posture selects
+
+```gherkin
+Given the dashboard is loaded with the seeded world "test"
+When the client opens the Worlds tab and clicks Edit on the world card
+Then the world form renders narrator_mode, narrative_perspective, and narrative_tense selects
+And #world-posture-status is rendered
+```
+
+#### Scenario 18.2: Changing a world posture select auto-saves with a status report
+
+```gherkin
+Given the world edit form is open with #world-posture-status rendered
+When the client changes the narrative_tense select to "present"
+Then the browser POSTs /worlds/test/posture with the posture group
+And #world-posture-status contains "Saved"
+```

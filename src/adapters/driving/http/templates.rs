@@ -22,7 +22,7 @@ pub struct HeaderTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% endif %}{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last && entry.show_retrigger %}<button class="action-btn retrigger-btn" onclick="submitRetrigger()" title="Retrigger Event">&#9851;</button>{% endif %}</div></div><span class="text">{{ entry.text }}</span>{% if loop.last && (entry.log_type == "narration" || entry.log_type == "input") %}<div class="swipe-controls"><button class="action-btn swipe-btn" {% if entry.prev_swipe_index.is_none() %}disabled{% else %}onclick="switchSwipe({{ entry.id }}, {{ entry.prev_swipe_index.unwrap() }})"{% endif %} title="Previous swipe">&#9664;</button><span class="swipe-counter">{{ entry.active_swipe_index + 1 }} / {{ entry.swipe_count }}</span><button class="action-btn swipe-btn" {% if entry.next_swipe_index.is_some() %}onclick="switchSwipe({{ entry.id }}, {{ entry.next_swipe_index.unwrap() }})"{% else %}onclick="submitNewSwipe()"{% endif %} title="{% if entry.next_swipe_index.is_some() %}Next swipe{% else %}Retry{% endif %}">&#9654;</button></div>{% endif %}</div>{% endfor %}</div>"#,
+    source = r##"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% endif %}{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last && entry.show_retrigger %}<button class="action-btn retrigger-btn" onclick="submitRetrigger()" title="Retrigger Event">&#9851;</button>{% endif %}</div></div><span class="text">{{ entry.text }}</span>{% if loop.last && (entry.log_type == "narration" || entry.log_type == "input") %}<div class="swipe-controls"><button class="action-btn swipe-btn" {% if entry.prev_swipe_index.is_none() %}disabled{% else %}onclick="switchSwipe({{ entry.id }}, {{ entry.prev_swipe_index.unwrap() }})"{% endif %} title="Previous swipe">&#9664;</button><span class="swipe-counter">{{ entry.active_swipe_index + 1 }} / {{ entry.swipe_count }}</span><button class="action-btn swipe-btn" {% if entry.next_swipe_index.is_some() %}onclick="switchSwipe({{ entry.id }}, {{ entry.next_swipe_index.unwrap() }})"{% else %}onclick="submitNewSwipe()"{% endif %} title="{% if entry.next_swipe_index.is_some() %}Next swipe{% else %}Retry{% endif %}">&#9654;</button></div>{% endif %}</div>{% endfor %}</div>"##,
     ext = "html"
 )]
 pub struct NarrativeLogTemplate {
@@ -43,7 +43,7 @@ impl NarrativeLogTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r#"<div id="visual-sidebar" class="location-header-bar">{% if vm.room_has_image %}<div class="image-container location-image"><img src="{{ vm.room_src }}" alt="{{ vm.room_alt }}" /></div>{% else %}<div class="image-container no-image"><div class="placeholder">No Location Image</div></div>{% endif %}</div><div class="npc-portrait-divider"></div><div class="npc-portraits">{% for npc in vm.npcs %}<div class="image-container npc-portrait"><img src="{{ npc.image_path }}" alt="{{ npc.name }}" /></div>{% endfor %}</div>"#,
+    source = r##"<div id="visual-sidebar" class="location-header-bar">{% if vm.room_has_image %}<div class="image-container location-image"><img src="{{ vm.room_src }}" alt="{{ vm.room_alt }}" /></div>{% else %}<div class="image-container no-image"><div class="placeholder">No Location Image</div></div>{% endif %}</div><div class="npc-portrait-divider"></div><div class="npc-portraits">{% for npc in vm.npcs %}<div class="image-container npc-portrait"><img src="{{ npc.image_path }}" alt="{{ npc.name }}" /></div>{% endfor %}</div>"##,
     ext = "html"
 )]
 pub struct VisualSidebarTemplate {
@@ -58,7 +58,7 @@ impl VisualSidebarTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r#"{% for npc in npcs %}<div class="headshot" onclick="toggleVisualSidebar()"><img src="{{ npc.image_path }}" alt="{{ npc.name }}" /><div class="name">{{ npc.name }}</div></div>{% endfor %}"#,
+    source = r##"{% for npc in npcs %}<div class="headshot" onclick="toggleVisualSidebar()"><img src="{{ npc.image_path }}" alt="{{ npc.name }}" /><div class="name">{{ npc.name }}</div></div>{% endfor %}"##,
     ext = "html"
 )]
 pub struct CharacterHeadshotsTemplate {
@@ -135,7 +135,7 @@ impl TextCheckPreviewTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="llm-message-list" id="llm-message-list">
+    source = r##"<div class="llm-message-list" id="llm-message-list">
 {% for msg in messages %}
 <div class="llm-message-card" id="llm-msg-{{ msg.id }}">
     <div class="llm-message-header" onclick="toggleLlmMessage(this)">
@@ -175,7 +175,7 @@ impl TextCheckPreviewTemplate {
 {% if messages.is_empty() %}
 <div class="llm-message-empty">No LLM messages yet.</div>
 {% endif %}
-</div>"#,
+</div>"##,
     ext = "html"
 )]
 pub struct LlmMessagesTemplate {

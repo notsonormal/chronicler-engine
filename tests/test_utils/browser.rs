@@ -3,7 +3,9 @@
 use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
 
-use super::server::{TestServer, get_config_port, wait_for_server};
+use super::server::{
+    buffer_text, get_config_port, registered_server_logs, tail_lines, wait_for_server, TestServer,
+};
 pub use super::wait::wait_for_element_children;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
@@ -171,8 +173,10 @@ pub async fn wait_for_log_entries_below(page: &playwright_rs::Page, max_count: u
     panic!("Log entry count did not drop below {max_count} within 10s (last: {last_count})");
 }
 
-/// Capture screenshot and DOM dump when a test fails for debugging.
-/// Saves to `tmp/screenshots/` and `tmp/test_diagnostics/`.
+/// Capture failure diagnostics before panicking: screenshot to
+/// `tmp/screenshots/`, DOM dump + per-server engine logs to
+/// `tmp/test_diagnostics/`, and log tails printed into the failure output.
+/// Read these before re-running a failed test.
 pub async fn capture_failure_state(page: &playwright_rs::Page, test_name: &str) {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -201,5 +205,31 @@ pub async fn capture_failure_state(page: &playwright_rs::Page, test_name: &str) 
             }
         }
         Err(e) => println!("⚠️  Failed to get page content: {e}"),
+    }
+
+    // Engine output: full buffers to files, a tail into the test output.
+    // Locks recover from poisoning so one panicking test cannot break
+    // another test's diagnostics.
+    let logs = registered_server_logs();
+    if logs.is_empty() {
+        println!("⚠️  No engine logs registered (server already dropped?)");
+    }
+    for (port, buffers) in logs {
+        for (label, buffer) in [("stdout", &buffers.stdout), ("stderr", &buffers.stderr)] {
+            let text = buffer_text(buffer);
+            let log_path = diagnostics_dir.join(format!("{safe_name}_{port}_{label}.log"));
+            if let Err(e) = std::fs::write(&log_path, &text) {
+                println!("⚠️  Failed to write engine {label} dump: {e}");
+            } else {
+                println!(
+                    "🧾 Engine {label} (port {port}) saved: {}",
+                    log_path.display()
+                );
+            }
+            let tail = tail_lines(&text, 30);
+            if !tail.is_empty() {
+                eprintln!("--- engine {label} tail (port {port}) ---\n{tail}");
+            }
+        }
     }
 }

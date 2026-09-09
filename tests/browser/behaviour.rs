@@ -30,7 +30,7 @@ async fn test_edit_mode_activates_on_click() {
                 .unwrap();
             assert!(clicked, "Should find and click an edit button");
 
-            wait_for_element_exists(&page, "#edit-textarea", 10).await;
+            wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
         },
     )
     .await;
@@ -53,7 +53,7 @@ async fn test_edit_cancel_restores_original() {
             assert!(!original_text.is_empty(), "Should have original text");
 
             page.locator(".edit-btn").await.click(None).await.unwrap();
-            wait_for_element_exists(&page, "#edit-textarea", 10).await;
+            wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
             let modified = "Modified text for testing";
             page.locator("#edit-textarea")
@@ -63,7 +63,7 @@ async fn test_edit_cancel_restores_original() {
                 .unwrap();
 
             page.locator(".cancel-btn").await.click(None).await.unwrap();
-            wait_for_element_not_exists(&page, "#edit-textarea", 10).await;
+            wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
             let restored = page
                 .locator(".log-entry .text")
@@ -100,7 +100,7 @@ async fn test_polling_pauses_during_edit() {
             .await
             .unwrap();
 
-            wait_for_element_exists(&page, "#edit-textarea", 10).await;
+            wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
             let persisted =
                 wait_for_element_persist(&page, "#edit-textarea", Duration::from_secs(3)).await;
@@ -319,7 +319,7 @@ async fn test_slash_menu_opens_on_slash() {
         |page, _port| async move {
             type_into_command(&page, "/").await;
 
-            wait_for_element_exists(&page, "#slash-menu", 20).await;
+            wait_until_visible(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             let cmds: Vec<String> = page
                 .locator("#slash-menu .slash-suggestion .slash-cmd")
@@ -347,7 +347,12 @@ async fn test_slash_menu_filters_by_prefix() {
         |page, _port| async move {
             type_into_command(&page, "/g").await;
 
-            wait_for_element_exists(&page, "#slash-menu .slash-suggestion", 20).await;
+            wait_until_visible(
+                &page,
+                "#slash-menu .slash-suggestion",
+                Duration::from_millis(1000),
+            )
+            .await;
 
             let cmds: Vec<String> = page
                 .locator("#slash-menu .slash-suggestion .slash-cmd")
@@ -370,7 +375,7 @@ async fn test_slash_menu_filters_by_prefix() {
 async fn test_slash_menu_arrow_keys_move_active() {
     with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
         type_into_command(&page, "/").await;
-        wait_for_element_exists(&page, "#slash-menu", 20).await;
+        wait_until_visible(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
         let input = page.locator(COMMAND_INPUT_SELECTOR).await;
 
@@ -424,13 +429,13 @@ async fn test_slash_menu_enter_populates_input() {
         TEST_PERSONA,
         |page, _port| async move {
             type_into_command(&page, "/").await;
-            wait_for_element_exists(&page, "#slash-menu", 20).await;
+            wait_until_visible(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             let input = page.locator(COMMAND_INPUT_SELECTOR).await;
             // First suggestion (/impersonate) is active by default.
             input.press("Enter", None).await.unwrap();
 
-            wait_for_element_not_exists(&page, "#slash-menu", 20).await;
+            wait_until_hidden(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             let value: String = input.input_value(None).await.unwrap_or_default();
             assert_eq!(
@@ -451,12 +456,12 @@ async fn test_slash_menu_escape_closes() {
         TEST_PERSONA,
         |page, _port| async move {
             type_into_command(&page, "/g").await;
-            wait_for_element_exists(&page, "#slash-menu", 20).await;
+            wait_until_visible(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             let input = page.locator(COMMAND_INPUT_SELECTOR).await;
             input.press("Escape", None).await.unwrap();
 
-            wait_for_element_not_exists(&page, "#slash-menu", 20).await;
+            wait_until_hidden(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             let value: String = input.input_value(None).await.unwrap_or_default();
             assert_eq!(value, "/g", "Escape should leave the input value unchanged");
@@ -474,7 +479,7 @@ async fn test_slash_menu_click_populates_input() {
         TEST_PERSONA,
         |page, _port| async move {
             type_into_command(&page, "/").await;
-            wait_for_element_exists(&page, "#slash-menu", 20).await;
+            wait_until_visible(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             // Click the /guide suggestion by its command text, independent of menu order.
             page.locator("#slash-menu .slash-suggestion:has(.slash-cmd:text-is('/guide'))")
@@ -483,7 +488,7 @@ async fn test_slash_menu_click_populates_input() {
                 .await
                 .unwrap();
 
-            wait_for_element_not_exists(&page, "#slash-menu", 20).await;
+            wait_until_hidden(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             let value: String = page
                 .locator(COMMAND_INPUT_SELECTOR)
@@ -509,7 +514,7 @@ async fn test_slash_menu_reopens_after_action_area_rerender() {
         TEST_PERSONA,
         |page, _port| async move {
             type_into_command(&page, "/").await;
-            wait_for_element_exists(&page, "#slash-menu", 20).await;
+            wait_until_visible(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             page.evaluate::<(), ()>(
                 r##"(() => {
@@ -522,10 +527,10 @@ async fn test_slash_menu_reopens_after_action_area_rerender() {
             .await
             .unwrap();
 
-            wait_for_element_not_exists(&page, "#slash-menu", 20).await;
+            wait_until_hidden(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             type_into_command(&page, "/").await;
-            wait_for_element_exists(&page, "#slash-menu", 20).await;
+            wait_until_visible(&page, "#slash-menu", Duration::from_millis(1000)).await;
 
             let count: u32 = page
                 .locator("#slash-menu .slash-suggestion")
@@ -626,6 +631,358 @@ async fn test_slash_guide_does_not_persist_input_entry() {
             assert!(
                 narrations_after > narrations_before,
                 "/guide should produce at least one Narration entry"
+            );
+        },
+    )
+    .await;
+}
+
+// [docs/specs/games.md] SCENARIO: 20.1
+#[tokio::test]
+async fn test_games_panel_renders_posture_fragment() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            page.locator(r#".tab[data-tab="games"]"#)
+                .await
+                .click(None)
+                .await
+                .unwrap();
+            wait_until_visible(&page, "#game-posture-controls", Duration::from_millis(1000)).await;
+
+            let mode = page
+                .locator(r#"#game-posture-controls select[name="narrator_mode"]"#)
+                .await
+                .input_value(None)
+                .await
+                .unwrap_or_default();
+            assert_eq!(mode, "novel", "active game starts in Novel mode");
+
+            let perspective = page
+                .locator(r#"#game-posture-controls select[name="narrative_perspective"]"#)
+                .await
+                .input_value(None)
+                .await
+                .unwrap_or_default();
+            assert_eq!(perspective, "third", "active game starts in Third person");
+
+            let tense = page
+                .locator(r#"#game-posture-controls select[name="narrative_tense"]"#)
+                .await
+                .input_value(None)
+                .await
+                .unwrap_or_default();
+            assert_eq!(tense, "past", "active game starts in Past tense");
+
+            for name in [
+                "system_preset_id",
+                "quantifier_preset_id",
+                "impersonate_preset_id",
+            ] {
+                let select = page
+                    .locator(&format!(r#"#game-posture-controls select[name="{name}"]"#))
+                    .await;
+                assert!(
+                    select.is_visible().await.unwrap_or(false),
+                    "{name} select is rendered"
+                );
+            }
+        },
+    )
+    .await;
+}
+
+// [docs/specs/games.md] SCENARIO: 20.2
+#[tokio::test]
+async fn test_games_tense_change_autosaves_and_rerenders() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            page.locator(r#".tab[data-tab="games"]"#)
+                .await
+                .click(None)
+                .await
+                .unwrap();
+            wait_until_visible(&page, "#game-posture-controls", Duration::from_millis(1000)).await;
+
+            page.locator(r#"#game-posture-controls select[name="narrative_tense"]"#)
+                .await
+                .select_option("present", None)
+                .await
+                .unwrap();
+
+            // The POST /games/:id/posture response swaps the fragment
+            // (outerHTML), so the locator re-resolves to the fresh select.
+            let tense_select = page
+                .locator(r#"#game-posture-controls select[name="narrative_tense"]"#)
+                .await;
+            if let Err(e) = expect(tense_select)
+                .with_timeout(std::time::Duration::from_secs(5))
+                .to_have_value("present")
+                .await
+            {
+                panic!("fragment should re-render with tense present after auto-save: {e}");
+            }
+        },
+    )
+    .await;
+}
+
+// [docs/specs/games.md] SCENARIO: 20.3
+#[tokio::test]
+async fn test_games_mode_switch_retargets_and_nudges() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            page.locator(r#".tab[data-tab="games"]"#)
+                .await
+                .click(None)
+                .await
+                .unwrap();
+            wait_until_visible(&page, "#game-posture-controls", Duration::from_millis(1000)).await;
+
+            page.locator(r#"#game-posture-controls select[name="narrator_mode"]"#)
+                .await
+                .select_option("interactive_fiction", None)
+                .await
+                .unwrap();
+
+            let perspective_select = page
+                .locator(r#"#game-posture-controls select[name="narrative_perspective"]"#)
+                .await;
+            if let Err(e) = expect(perspective_select)
+                .with_timeout(std::time::Duration::from_secs(5))
+                .to_have_value("second")
+                .await
+            {
+                panic!("mode switch should nudge perspective to the IF default: {e}");
+            }
+
+            let system_select = page
+                .locator(r#"#game-posture-controls select[name="system_preset_id"]"#)
+                .await;
+            if let Err(e) = expect(system_select)
+                .with_timeout(std::time::Duration::from_secs(5))
+                .to_have_value("system_if_default")
+                .await
+            {
+                panic!("mode switch should retarget the system preset to the IF bundle: {e}");
+            }
+        },
+    )
+    .await;
+}
+
+/// Open the edit form for the seeded world "test" and wait for the posture
+/// status target. Shared by the world posture scenarios.
+///
+/// The worlds fragment and its hx-loader div share the `.worlds-panel` class
+/// (two matches before the first swap), so every wait scopes to an element
+/// unique to the loaded fragment and htmx's `querySelector`-first target
+/// resolution replaces the loader div with the form.
+async fn open_world_edit(page: &playwright_rs::Page) {
+    page.locator(r#".tab[data-tab="worlds"]"#)
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_for_element_children(page, "#worlds-tab .btn-cyan", 1).await;
+    page.locator("#worlds-tab .btn-cyan")
+        .await
+        .first()
+        .click(None)
+        .await
+        .unwrap();
+    // The Edit click fetches the form over HTTP — allow 5s for fetch + swap.
+    // Wait on the posture selects, not #world-posture-status: an empty
+    // (zero-sized) span never becomes visible, see wait_until_visible docs.
+    wait_until_visible(
+        page,
+        r#"#worlds-tab select[name="narrator_mode"]"#,
+        Duration::from_millis(5000),
+    )
+    .await;
+}
+
+// [docs/specs/browser.md] SCENARIO: 18.1
+#[tokio::test]
+async fn test_world_edit_form_renders_posture_selects() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            open_world_edit(&page).await;
+
+            for name in ["narrator_mode", "narrative_perspective", "narrative_tense"] {
+                let select = page
+                    .locator(&format!(r#"#worlds-tab select[name="{name}"]"#))
+                    .await;
+                assert!(
+                    select.is_visible().await.unwrap_or(false),
+                    "{name} select is rendered"
+                );
+            }
+        },
+    )
+    .await;
+}
+
+// [docs/specs/browser.md] SCENARIO: 18.2
+#[tokio::test]
+async fn test_world_posture_change_autosaves_status() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            open_world_edit(&page).await;
+
+            page.locator(r#"#worlds-tab select[name="narrative_tense"]"#)
+                .await
+                .select_option("present", None)
+                .await
+                .unwrap();
+
+            let status = page.locator("#world-posture-status").await;
+            if let Err(e) = expect(status)
+                .with_timeout(std::time::Duration::from_secs(5))
+                .to_contain_text("Saved")
+                .await
+            {
+                panic!("world posture auto-save should report Saved: {e}");
+            }
+        },
+    )
+    .await;
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.27
+#[tokio::test]
+async fn test_preset_editor_mode_flags_roundtrip() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            page.locator(r#".tab[data-tab="prompt-presets"]"#)
+                .await
+                .click(None)
+                .await
+                .unwrap();
+            // All seeded presets are defaults (View-only), so the duplicated
+            // copy is the only card with an Edit button.
+            wait_for_element_children(
+                &page,
+                r#"#prompt-presets-tab button[hx-post$="/duplicate"]"#,
+                1,
+            )
+            .await;
+            page.locator(r#"#prompt-presets-tab button[hx-post$="/duplicate"]"#)
+                .await
+                .first()
+                .click(None)
+                .await
+                .unwrap();
+            wait_for_element_children(&page, r#"#prompt-presets-tab button[hx-get$="/edit"]"#, 1)
+                .await;
+            page.locator(r#"#prompt-presets-tab button[hx-get$="/edit"]"#)
+                .await
+                .first()
+                .click(None)
+                .await
+                .unwrap();
+            wait_until_visible(&page, ".preset-card.edit-form", Duration::from_millis(1000)).await;
+
+            let name = page
+                .locator(r#".preset-card.edit-form input[name="name"]"#)
+                .await
+                .input_value(None)
+                .await
+                .unwrap_or_default();
+            assert!(!name.is_empty(), "edit form renders the copy's name");
+
+            let novel_box = page
+                .locator(r#".preset-card.edit-form input[name="allowed_mode_novel"]"#)
+                .await;
+            assert!(
+                novel_box.is_checked().await.unwrap_or(false),
+                "copy of the Novel-only default checks the novel flag"
+            );
+            let if_box = page
+                .locator(r#".preset-card.edit-form input[name="allowed_mode_if"]"#)
+                .await;
+            assert!(
+                !if_box.is_checked().await.unwrap_or(true),
+                "copy of the Novel-only default leaves the IF flag unchecked"
+            );
+
+            if_box.check(None).await.unwrap();
+            page.locator(r#".preset-card.edit-form button[type="submit"]"#)
+                .await
+                .click(None)
+                .await
+                .unwrap();
+
+            // The update swaps the card in place; the edit form disappears.
+            let edit_gone = page.locator(".preset-card.edit-form").await;
+            if let Err(e) = expect(edit_gone)
+                .with_timeout(std::time::Duration::from_secs(5))
+                .to_be_hidden()
+                .await
+            {
+                panic!("saving should swap the edit form away: {e}");
+            }
+
+            let saved = page
+                .evaluate::<String, bool>(
+                    r#"(name) => {
+                    const cards = [...document.querySelectorAll('.preset-card')];
+                    const card = cards.find((c) => {
+                        const title = c.querySelector('.card-title');
+                        return title && title.textContent.includes(name);
+                    });
+                    if (!card) return false;
+                    return !!card.querySelector(
+                        'button[hx-post$="activate?mode=interactive_fiction"]'
+                    );
+                }"#,
+                    Some(&name),
+                )
+                .await
+                .unwrap_or(false);
+            assert!(
+                saved,
+                "saved card should offer Set Active (IF) after enabling the IF flag"
+            );
+        },
+    )
+    .await;
+}
+
+// Infrastructure health check, not a spec scenario (no tag). The engine's
+// stdout tee is the artifact every failure dump reads; if it goes missing,
+// every diagnostic in this tier goes dark with it.
+#[tokio::test]
+async fn test_engine_output_teed_to_file() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |_page, port| async move {
+            let tee_path = format!("tmp/test_server_logs/{port}_stdout.log");
+            let content = std::fs::read_to_string(&tee_path)
+                .unwrap_or_else(|e| panic!("engine stdout tee missing at {tee_path}: {e}"));
+            assert!(
+                content.contains("HTMX Dashboard running"),
+                "tee should contain the engine boot line, tail: {}",
+                content.lines().last().unwrap_or("")
             );
         },
     )

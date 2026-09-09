@@ -155,6 +155,55 @@ impl Storage {
             .ok_or_else(|| EngineError::GameNotFound(id))
     }
 
+    /// Persists the posture triple and active preset ids; narrative state is untouched.
+    pub fn update_game_config(&self, game: &Game) -> Result<(), EngineError> {
+        self.with_backend_mut("update_game_config", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let now = chrono::Utc::now().to_rfc3339();
+                let affected = conn
+                    .execute(
+                        "UPDATE games SET narrator_mode=?, narrative_perspective=?, narrative_tense=?, active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, updated_at=? WHERE id=?",
+                        rusqlite::params![
+                            game.narrator_mode.as_str(),
+                            game.narrative_perspective.as_str(),
+                            game.narrative_tense.as_str(),
+                            game.active_system_prompt_preset_id,
+                            game.active_quantifier_prompt_preset_id,
+                            game.active_impersonate_prompt_preset_id,
+                            &now,
+                            game.id as i64,
+                        ],
+                    )
+                    .map_err(|e| {
+                        EngineError::Config(format!("Failed to update game config: {e}"))
+                    })?;
+                if affected == 0 {
+                    return Err(EngineError::GameNotFound(game.id));
+                }
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                let stored = data
+                    .games
+                    .iter_mut()
+                    .find(|g| g.id == game.id)
+                    .ok_or(EngineError::GameNotFound(game.id))?;
+                stored.narrator_mode = game.narrator_mode;
+                stored.narrative_perspective = game.narrative_perspective;
+                stored.narrative_tense = game.narrative_tense;
+                stored.active_system_prompt_preset_id =
+                    game.active_system_prompt_preset_id.clone();
+                stored.active_quantifier_prompt_preset_id =
+                    game.active_quantifier_prompt_preset_id.clone();
+                stored.active_impersonate_prompt_preset_id =
+                    game.active_impersonate_prompt_preset_id.clone();
+                stored.updated_at = chrono::Utc::now();
+                Ok(())
+            }
+        })
+    }
+
     pub fn active_system_preset_id(&self, settings: &AppSettings) -> String {
         self.resolve_active_preset_id(
             settings,
