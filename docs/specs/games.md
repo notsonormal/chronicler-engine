@@ -83,15 +83,6 @@ Then the response status is "200 OK"
 
 ### Per-game posture, mode, and presets
 
-The games panel renders a posture-override fragment (`#game-posture-controls`)
-for the active game. Perspective and tense changes auto-save through
-`POST /games/:id/posture`. The mode dropdown is the distinct mode-switch
-action (`POST /games/:id/mode`): it retargets the game's preset ids to the
-new mode's registry bundle and nudges perspective to the mode default
-(Novel→Third, Interactive Fiction→Second) only when it sits at the other
-mode's default. Preset selects auto-save through `POST /games/:id/presets`.
-All three re-render the fragment in place.
-
 #### Scenario 20.1: The games panel renders the posture fragment for the active game
 
 ```gherkin

@@ -66,13 +66,6 @@ Then #error-notification gains the .visible class
 And #error-notification displays the response body with HTML tags stripped ("Internal server error")
 ```
 
-Note: the test dispatches the `htmx:beforeSwap` event directly because
-this playwright-rs version's `route.fulfill` is broken for status/body,
-and the real server has no path that returns 500 from `/action` without
-production-code changes. The body-level listener that calls `showError`
-on `isError` is the app code under test; htmx's 500→`isError=true`
-mapping is htmx's contract, not ours.
-
 #### Scenario 17.1: Typing slash opens the command suggestion menu
 
 ```gherkin
@@ -162,21 +155,7 @@ Then at least one new .log-entry.narration appears in #story-log
 And no .log-entry.input whose text is "/guide look around" appears
 ```
 
-Note: the test replaces `#action-area` innerHTML directly rather than
-submitting the form, because a real submit starts a generation and the
-action-area view model disables the input while generating
-(`is_disabled = status.is_generating()`), which would block the final
-"type `/`" step. The app code under test is the document-level event
-delegation that re-binds to the recreated input; the htmx swap is htmx's
-mechanism, not ours. This mirrors scenario 16.7's synthetic-event
-approach for the same reason.
-
 ### World posture editor
-
-The world edit form renders a Narrative Posture section. In edit mode each
-posture select auto-saves on change through `POST /worlds/:key/posture` and
-reports the result in `#world-posture-status`. On create the selects render
-without auto-save and carry their values through the normal form submit.
 
 #### Scenario 18.1: The world edit form renders the posture selects
 

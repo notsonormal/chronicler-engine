@@ -320,10 +320,6 @@ And the response body is "<span class='error'>Preset not found</span>"
 
 ### Editor mode flags
 
-The preset edit form renders an Allowed Modes checkbox group; saving the
-form stores the flags and the card's per-mode activation buttons follow
-them.
-
 #### Scenario 21.27: The editor exposes allowed-modes checkboxes and saving updates per-mode activation
 
 ```gherkin
