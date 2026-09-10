@@ -8,7 +8,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::Message;
-use crate::domain::model::settings::{AppSettings, ModePresetRegistry};
+use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
@@ -26,7 +26,7 @@ pub(crate) fn resolve_game_id(
     world: &WorldCard,
     persona_key: &str,
     persona_name: &str,
-    registry: &ModePresetRegistry,
+    settings: &AppSettings,
 ) -> crate::error::Result<u64> {
     match find_latest_game_for_world(db_pool, &world.key)? {
         Some((id, name)) => {
@@ -39,7 +39,9 @@ pub(crate) fn resolve_game_id(
                 &world.name,
                 &existing_names,
             );
-            let bundle = registry.bundle_for(world.narrator_mode);
+            let bundle = settings
+                .mode_preset_registry
+                .bundle_for(world.narrator_mode);
             let request = crate::domain::model::game::NewGame {
                 world_name: world.name.clone(),
                 world_key: world.key.clone(),
@@ -52,6 +54,8 @@ pub(crate) fn resolve_game_id(
                 system_prompt_preset_id: bundle.system_prompt_preset_id.clone(),
                 quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id.clone(),
                 impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id.clone(),
+                options_prompt_preset_id: settings.active_options_prompt_preset_id.clone(),
+                options_always_on: world.options_always_on,
             };
             let id = db_pool.insert_game_from_request(&request)?;
             tracing::info!("Created new game '{name}' (id={id}) with persona '{persona_key}'");

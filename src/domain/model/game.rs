@@ -22,6 +22,10 @@ pub struct Game {
     pub active_system_prompt_preset_id: String,
     pub active_quantifier_prompt_preset_id: String,
     pub active_impersonate_prompt_preset_id: String,
+    /// Mode-agnostic options preset; inherited from `AppSettings` at creation.
+    pub active_options_prompt_preset_id: String,
+    /// Per-game override of the world's always-on options toggle.
+    pub options_always_on: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -37,4 +41,6 @@ pub struct NewGame {
     pub system_prompt_preset_id: String,
     pub quantifier_prompt_preset_id: String,
     pub impersonate_prompt_preset_id: String,
+    pub options_prompt_preset_id: String,
+    pub options_always_on: bool,
 }

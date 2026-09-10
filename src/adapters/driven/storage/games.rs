@@ -16,7 +16,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on
                          FROM games
                          ORDER BY updated_at DESC",
                     )
@@ -71,6 +71,8 @@ impl Storage {
                     active_system_prompt_preset_id: "system_default".to_string(),
                     active_quantifier_prompt_preset_id: "quantifier_default".to_string(),
                     active_impersonate_prompt_preset_id: "impersonate_default".to_string(),
+                    active_options_prompt_preset_id: "options_default".to_string(),
+                    options_always_on: false,
                 });
                 Ok(id)
             }
@@ -101,6 +103,8 @@ impl Storage {
                     active_impersonate_prompt_preset_id: request
                         .impersonate_prompt_preset_id
                         .clone(),
+                    active_options_prompt_preset_id: request.options_prompt_preset_id.clone(),
+                    options_always_on: request.options_always_on,
                 });
                 Ok(id)
             }
@@ -131,7 +135,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on
                          FROM games
                          WHERE id = ?1
                          LIMIT 1",
@@ -163,7 +167,7 @@ impl Storage {
                 let now = chrono::Utc::now().to_rfc3339();
                 let affected = conn
                     .execute(
-                        "UPDATE games SET narrator_mode=?, narrative_perspective=?, narrative_tense=?, active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, updated_at=? WHERE id=?",
+                        "UPDATE games SET narrator_mode=?, narrative_perspective=?, narrative_tense=?, active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, active_options_prompt_preset_id=?, options_always_on=?, updated_at=? WHERE id=?",
                         rusqlite::params![
                             game.narrator_mode.as_str(),
                             game.narrative_perspective.as_str(),
@@ -171,6 +175,8 @@ impl Storage {
                             game.active_system_prompt_preset_id,
                             game.active_quantifier_prompt_preset_id,
                             game.active_impersonate_prompt_preset_id,
+                            game.active_options_prompt_preset_id,
+                            game.options_always_on as i64,
                             &now,
                             game.id as i64,
                         ],
@@ -198,6 +204,9 @@ impl Storage {
                     game.active_quantifier_prompt_preset_id.clone();
                 stored.active_impersonate_prompt_preset_id =
                     game.active_impersonate_prompt_preset_id.clone();
+                stored.active_options_prompt_preset_id =
+                    game.active_options_prompt_preset_id.clone();
+                stored.options_always_on = game.options_always_on;
                 stored.updated_at = chrono::Utc::now();
                 Ok(())
             }

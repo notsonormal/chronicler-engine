@@ -26,6 +26,10 @@ pub struct WorldCard {
     pub narrative_perspective: NarrativePerspective,
     #[serde(default = "world_defaults::default_world_narrative_tense")]
     pub narrative_tense: NarrativeTense,
+    /// Author default: generate pickable options after every narration turn.
+    /// Games inherit this at creation (per-game override on `Game`).
+    #[serde(default = "world_defaults::default_options_always_on")]
+    pub options_always_on: bool,
 }
 
 /// Bootstrap manifest deserialized from `worlds/<id>/world.json`; file-pointer fields are used only during seeding in `bootstrap/load.rs`.
@@ -51,6 +55,8 @@ pub struct WorldManifest {
     pub narrative_perspective: NarrativePerspective,
     #[serde(default = "world_defaults::default_world_narrative_tense")]
     pub narrative_tense: NarrativeTense,
+    #[serde(default = "world_defaults::default_options_always_on")]
+    pub options_always_on: bool,
 }
 
 impl WorldManifest {
@@ -84,6 +90,7 @@ impl From<WorldManifest> for WorldCard {
             narrator_mode: manifest.narrator_mode,
             narrative_perspective: manifest.narrative_perspective,
             narrative_tense: manifest.narrative_tense,
+            options_always_on: manifest.options_always_on,
         }
     }
 }

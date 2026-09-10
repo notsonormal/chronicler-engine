@@ -198,13 +198,14 @@ Then the response is 200
 And the response body is "<span class='error'>Preset not found</span>"
 ```
 
-#### Scenario 21.16: Update with an invalid preset_type returns an error span
+#### Scenario 21.16: Update ignores the form's preset_type and keeps the stored type
 
 ```gherkin
 Given a fresh app state with a seeded non-default system preset
-When the client POST /prompt-presets/{id} with name="Updated" and instructions="Updated." and preset_type="invalid"
+When the client POST /prompt-presets/{id} with name="Updated" and instructions="Updated." and preset_type="quantifier"
 Then the response is 200
-And the response body is "<span class='error'>Invalid preset type</span>"
+And the response body contains "preset-card" and no error span
+And the stored preset still has preset_type "system" and name "Updated"
 ```
 
 #### Scenario 21.17: Update a default preset returns an error span

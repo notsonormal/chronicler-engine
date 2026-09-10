@@ -18,3 +18,7 @@ pub fn default_world_narrative_perspective() -> NarrativePerspective {
 pub fn default_world_narrative_tense() -> NarrativeTense {
     NarrativeTense::Past
 }
+
+pub fn default_options_always_on() -> bool {
+    false
+}

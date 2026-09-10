@@ -16,6 +16,7 @@ pub enum PresetType {
     System,
     Quantifier,
     Impersonate,
+    Options,
 }
 
 impl PresetType {
@@ -24,15 +25,16 @@ impl PresetType {
             PresetType::System => "system",
             PresetType::Quantifier => "quantifier",
             PresetType::Impersonate => "impersonate",
+            PresetType::Options => "options",
         }
     }
 
-    /// The preset-id this type holds in `bundle`'s per-type slots.
     pub fn bundle_slot(self, bundle: &ModePresetBundle) -> &str {
         match self {
             PresetType::System => &bundle.system_prompt_preset_id,
             PresetType::Quantifier => &bundle.quantifier_prompt_preset_id,
             PresetType::Impersonate => &bundle.impersonate_prompt_preset_id,
+            PresetType::Options => "",
         }
     }
 
@@ -42,6 +44,7 @@ impl PresetType {
             PresetType::System => bundle.system_prompt_preset_id = id,
             PresetType::Quantifier => bundle.quantifier_prompt_preset_id = id,
             PresetType::Impersonate => bundle.impersonate_prompt_preset_id = id,
+            PresetType::Options => {}
         }
     }
 }
@@ -54,6 +57,7 @@ impl TryFrom<&str> for PresetType {
             "system" => Ok(PresetType::System),
             "quantifier" => Ok(PresetType::Quantifier),
             "impersonate" => Ok(PresetType::Impersonate),
+            "options" => Ok(PresetType::Options),
             other => Err(format!("unknown preset type: {other}")),
         }
     }
@@ -77,10 +81,6 @@ pub struct PromptPreset {
     pub instructions: Option<String>,
     pub writing_style: Option<String>,
     pub output_format: Option<String>,
-    /// Which narrator modes a preset may be selected for. Gates selection
-    /// surfaces only (picker, retarget, activation) — the narrate path never
-    /// re-validates a game's stored preset ids. Missing in seed/settings JSON =
-    /// allowed for all modes (back-compat).
     #[serde(default = "settings_defaults::default_allowed_modes")]
     pub allowed_modes: Vec<NarratorMode>,
     pub is_default: bool,
@@ -96,8 +96,6 @@ impl Default for PromptPreset {
             instructions: None,
             writing_style: None,
             output_format: None,
-            // Agrees with the serde field default: a preset built via
-            // `..Default::default()` is selectable everywhere, not nowhere.
             allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type: PresetType::default(),

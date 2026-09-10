@@ -1,6 +1,6 @@
 ---
 name: commit-and-push
-description: Generate commit message, run pre-commit hooks, stage changes, commit, and push. Handles docs index regeneration automatically.
+description: Generate commit message, run pre-commit hooks, stage changes, commit, and push. Handles docs index regeneration automatically. Use for any commit or push — keeps each commit scoped to the current task's changes and asks before including unrelated or untracked files.
 argument-hint: "[commit message hints...]"
 action-required: EXECUTES — runs actual git commands (stage, commit, push) when invoked
 ---

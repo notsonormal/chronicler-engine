@@ -59,6 +59,7 @@ fn test_world_manifest_to_card() {
         narrator_mode: crate::domain::model::settings::NarratorMode::Novel,
         narrative_perspective: crate::domain::model::settings::NarrativePerspective::Third,
         narrative_tense: crate::domain::model::settings::NarrativeTense::Past,
+        options_always_on: false,
     };
 
     let card: WorldCard = manifest.into();

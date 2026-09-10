@@ -254,9 +254,11 @@ Temporary files should be written into tmp folders e.g. `tmp`.
 
 Pi wraps commands with rtk and condenses long output — not just git/diff: piped `rg`, `grep`, and build tails get truncated or mangled too. Redirect any command you pipe or filter to a file first, then search that file.
 
+Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
+
 `build.py` writes logs to both standard output and to the `logs/` folder. The standard build should take about 2-3 minute normally. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
 
-Use the Pi bash tool with a timeout of 600 seconds when calling `build.py`, or 1200 seconds if you are running with `--coverage`. Tail the last 10 lines to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`.  
+Use the Pi bash tool with a timeout of 600 seconds when calling `build.py`, or 1200 seconds if you are running with `--coverage`. Tail the last 10 lines of the run's log file (`logs/build_*.log`) — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`.  
 
 ### Commands
 
@@ -342,6 +344,8 @@ Use standard story points (1,3,5,8,13) to analyse the complexity of tasks. Tasks
 Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
 
 Don't commit without explict approval, even if commiting is allowed in the permissions config.
+
+The permission system blocks `find` in bash commands; use `rg --files`, `ls`, or `grep -r` for file discovery.
 
 ## Doing Code Reviews
 

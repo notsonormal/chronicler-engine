@@ -20,7 +20,7 @@ fn resolve_game_id_auto_creates_with_persona() {
         &world,
         "julian",
         "Julian",
-        &crate::domain::model::settings::AppSettings::default().mode_preset_registry,
+        &crate::domain::model::settings::AppSettings::default(),
     )
     .unwrap();
     assert!(game_id > 0);
@@ -42,7 +42,7 @@ fn resolve_game_id_auto_creates_with_persona() {
         &world,
         "julian",
         "Julian",
-        &crate::domain::model::settings::AppSettings::default().mode_preset_registry,
+        &crate::domain::model::settings::AppSettings::default(),
     )
     .unwrap();
     assert_eq!(again, game_id);
@@ -76,7 +76,7 @@ fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
         &world,
         "julian",
         "Julian",
-        &crate::domain::model::settings::AppSettings::default().mode_preset_registry,
+        &crate::domain::model::settings::AppSettings::default(),
     )
     .unwrap();
     assert!(game_id > 0);

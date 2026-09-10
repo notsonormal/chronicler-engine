@@ -35,19 +35,29 @@ pub struct WorldForm {
 }
 
 impl WorldForm {
-    fn into_world_card(self) -> Result<(WorldCard, MapDef), String> {
-        let map: MapDef =
-            serde_json::from_str(&self.map_json).map_err(|e| format!("Invalid map JSON: {e}"))?;
+    fn parse_map(&self) -> Result<MapDef, String> {
+        serde_json::from_str(&self.map_json).map_err(|e| format!("Invalid map JSON: {e}"))
+    }
 
-        let scenarios: Vec<StartingScenario> = serde_json::from_str(&self.scenarios_json)
-            .map_err(|e| format!("Invalid scenarios JSON: {e}"))?;
+    fn parse_scenarios(&self) -> Result<Vec<StartingScenario>, String> {
+        serde_json::from_str(&self.scenarios_json)
+            .map_err(|e| format!("Invalid scenarios JSON: {e}"))
+    }
 
-        let global_rules: Vec<String> = self
-            .global_rules
+    fn global_rules_list(&self) -> Vec<String> {
+        self.global_rules
             .lines()
             .filter(|l| !l.trim().is_empty())
             .map(|l| l.trim().to_string())
-            .collect();
+            .collect()
+    }
+
+    fn into_world_card(self) -> Result<(WorldCard, MapDef), String> {
+        let map = self.parse_map()?;
+
+        let scenarios = self.parse_scenarios()?;
+
+        let global_rules = self.global_rules_list();
 
         let world_card = WorldCard {
             key: self.key,
@@ -72,6 +82,7 @@ impl WorldForm {
                 .as_deref()
                 .map(NarrativeTense::parse_or_default)
                 .unwrap_or_default(),
+            options_always_on: false,
         };
 
         Ok((world_card, map))
@@ -145,29 +156,40 @@ pub async fn update_world_handler(
     Path(key): Path<String>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let (world_id, stored_card, _) = match state.world_catalogue.get_world(&key) {
+    let (world_id, mut world_card, _) = match state.world_catalogue.get_world(&key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
     };
 
-    let posture_provided = form.narrator_mode.is_some()
-        || form.narrative_perspective.is_some()
-        || form.narrative_tense.is_some();
-
-    let (mut world_card, map) = match form.into_world_card() {
-        Ok(w) => w,
+    let map = match form.parse_map() {
+        Ok(m) => m,
+        Err(e) => return bad_request(e),
+    };
+    let scenarios = match form.parse_scenarios() {
+        Ok(s) => s,
         Err(e) => return bad_request(e),
     };
 
-    world_card.key = key;
 
-    // A post without posture fields (legacy client) must not reset the
-    // stored posture; the edit form always sends all three selects.
-    if !posture_provided {
-        world_card.narrator_mode = stored_card.narrator_mode;
-        world_card.narrative_perspective = stored_card.narrative_perspective;
-        world_card.narrative_tense = stored_card.narrative_tense;
+    world_card.default_scenario_id = world_card
+        .default_scenario_id
+        .filter(|id| scenarios.iter().any(|s| &s.id == id));
+    world_card.scenarios = scenarios;
+    world_card.global_rules = form.global_rules_list();
+    world_card.name = form.name;
+    world_card.description = form.description;
+    world_card.default_room_image = form.default_room_image.filter(|s| !s.is_empty());
+
+
+    if let Some(mode) = form.narrator_mode {
+        world_card.narrator_mode = NarratorMode::parse_or_default(&mode);
+    }
+    if let Some(perspective) = form.narrative_perspective {
+        world_card.narrative_perspective = NarrativePerspective::parse_or_default(&perspective);
+    }
+    if let Some(tense) = form.narrative_tense {
+        world_card.narrative_tense = NarrativeTense::parse_or_default(&tense);
     }
 
     match state

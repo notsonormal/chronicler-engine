@@ -331,6 +331,8 @@ fn test_resolve_posture_reads_the_game_not_the_world() {
             system_prompt_preset_id: "system_if_default".to_string(),
             quantifier_prompt_preset_id: "quantifier_default".to_string(),
             impersonate_prompt_preset_id: "impersonate_default".to_string(),
+            options_prompt_preset_id: "options_default".to_string(),
+            options_always_on: false,
         })
         .expect("game created");
 

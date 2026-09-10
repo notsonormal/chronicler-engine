@@ -603,5 +603,63 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 24 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Options autogeneration, on the v19/v23 posture pattern: world-default
+        // toggle with per-game override. The options preset id is mode-agnostic;
+        // games inherit a copy from settings at creation.
+        if !column_exists(conn, "worlds", "options_always_on") {
+            exec("ALTER TABLE worlds ADD COLUMN options_always_on INTEGER NOT NULL DEFAULT 0")?;
+        }
+        if !column_exists(conn, "games", "options_always_on") {
+            exec("ALTER TABLE games ADD COLUMN options_always_on INTEGER NOT NULL DEFAULT 0")?;
+        }
+        if !column_exists(conn, "games", "active_options_prompt_preset_id") {
+            exec(
+                "ALTER TABLE games ADD COLUMN active_options_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'options_default'",
+            )?;
+        }
+        if !column_exists(conn, "settings", "active_options_prompt_preset_id") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN active_options_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'options_default'",
+            )?;
+        }
+
+        // Games inherit the toggle from their world (mirrors v19/v23 backfill).
+        exec(
+            "UPDATE games SET \
+               options_always_on = COALESCE((SELECT options_always_on FROM worlds WHERE worlds.key = games.world_key), 0)",
+        )?;
+
+        let orphans: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT name FROM games \
+                     WHERE world_key NOT IN (SELECT key FROM worlds)",
+                )
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
+        };
+        for key in &orphans {
+            tracing::warn!(
+                "migration v24: game '{key}' references world_key with no matching world row; \
+                 options_always_on defaulted to off"
+            );
+        }
+
+        conn.pragma_update(None, "user_version", 24)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

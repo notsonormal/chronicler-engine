@@ -223,31 +223,29 @@ pub async fn update_preset_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<PresetForm>,
 ) -> Html<String> {
-    let existing = require_preset!(app_state.prompt_preset_service, &id);
+    let mut preset = require_preset!(app_state.prompt_preset_service, &id);
 
-    if existing.is_default {
+    if preset.is_default {
         return Html("<span class='error'>Cannot edit default presets</span>".to_string());
     }
 
-    let preset_type = match parse_preset_type(&form.preset_type) {
-        Some(pt) => pt,
-        None => {
-            return Html("<span class='error'>Invalid preset type</span>".to_string());
-        }
-    };
-
-    // Both-false = field absent (or everything unchecked): preserve the
-    // user-owned flags instead of guessing — urlencoded checkboxes cannot
-    // distinguish "unchecked all" from "field omitted".
+    // preset_type is fixed at creation, so the form's hidden input is
+    // ignored. Both-false = flags absent — urlencoded checkboxes cannot
+    // distinguish "unchecked all" from "field omitted", so preserve.
     let allowed_modes = if !form.allowed_mode_novel && !form.allowed_mode_if {
-        existing.allowed_modes.clone()
+        preset.allowed_modes.clone()
     } else {
         form_allowed_modes(form.allowed_mode_novel, form.allowed_mode_if)
     };
 
-    let updated = form.into_preset(id, preset_type, allowed_modes);
+    preset.name = form.name;
+    preset.role = form.role;
+    preset.instructions = form.instructions;
+    preset.writing_style = form.writing_style;
+    preset.output_format = form.output_format;
+    preset.allowed_modes = allowed_modes;
 
-    if let Err(e) = app_state.prompt_preset_service.save_preset(&updated) {
+    if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
         return Html(format!("<span class='error'>Update failed: {e}</span>"));
     }
 
@@ -258,7 +256,7 @@ pub async fn update_preset_handler(
     let if_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::InteractiveFiction);
-    Html(preset_card_html(&updated, &novel_bundle, &if_bundle))
+    Html(preset_card_html(&preset, &novel_bundle, &if_bundle))
 }
 
 pub async fn delete_preset_handler(

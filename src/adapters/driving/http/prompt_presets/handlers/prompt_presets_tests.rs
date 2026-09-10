@@ -207,22 +207,36 @@ async fn test_save_preset_invalid_type_returns_error() {
     assert!(response.0.contains("Invalid preset type"));
 }
 
+/// A preset's type is fixed at creation: update takes it from the stored row
+/// and ignores the form's hidden `preset_type` input, whatever it carries.
 #[tokio::test]
-async fn test_update_preset_invalid_type_returns_error() {
+async fn test_update_preset_ignores_form_preset_type() {
     let preset = crate::test_support::TestPromptPreset::system("custom", "Custom");
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = update_preset_handler(
-        axum::extract::State(app_state),
+        axum::extract::State(app_state.clone()),
         axum::extract::Path("custom".to_string()),
         axum::extract::Form(PresetForm {
             name: "Updated".into(),
             instructions: Some("Updated.".into()),
-            preset_type: "invalid".into(),
+            preset_type: "quantifier".into(),
             ..Default::default()
         }),
     )
     .await;
-    assert!(response.0.contains("Invalid preset type"));
+    assert!(
+        !response.0.contains("error"),
+        "update must succeed: {}",
+        response.0
+    );
+
+    let stored = app_state
+        .prompt_preset_service
+        .get_preset("custom")
+        .unwrap()
+        .expect("preset still present");
+    assert_eq!(stored.preset_type, preset.preset_type);
+    assert_eq!(stored.name, "Updated");
 }
 
 #[tokio::test]
