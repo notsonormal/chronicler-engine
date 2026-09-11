@@ -101,6 +101,10 @@ impl WorldsPanelTemplate {
             <span id="world-posture-status"></span>
         </div>
 
+        <div class="form-group">
+            <label class="checkbox-label"><input type="checkbox" name="options_always_on" value="true" {% if options_always_on %}checked{% endif %} /> Auto-generate options after each turn</label>
+        </div>
+
         <label>Map JSON:
             <textarea name="map_json" class="json-editor" placeholder="{{ map_placeholder }}">{{ map_json }}</textarea>
         </label>
@@ -131,6 +135,7 @@ pub struct WorldFormTemplate {
     pub narrator_mode: String,
     pub narrative_perspective: String,
     pub narrative_tense: String,
+    pub options_always_on: bool,
     pub form_action: String,
     pub is_readonly: bool,
     pub map_placeholder: String,
@@ -177,6 +182,7 @@ impl WorldFormTemplate {
             map_json: map_json_str,
             scenarios_json: scenarios_json_str,
             narrator_mode: w.narrator_mode.as_str().to_string(),
+            options_always_on: w.options_always_on,
             narrative_perspective: w.narrative_perspective.as_str().to_string(),
             narrative_tense: w.narrative_tense.as_str().to_string(),
             form_action: if is_edit {

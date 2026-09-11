@@ -8,6 +8,10 @@ See [`STRATEGY.md`](STRATEGY.md) for the normative tier-placement rules (unit / 
 
 `python build.py` runs the fast suite only. LLM tests are `#[ignore]`d by default.
 
+## Engine log tee
+
+Every spawned test server tees engine stdout/stderr incrementally to `tmp/test_server_logs/{port}_{stream}.log` (`tests/test_utils/server.rs::drain_to_buffer_and_tee`). Files persist after the run, pass or fail — read them to diagnose engine-side behaviour without editing tests (one log per port; ports are recycled, so check the timestamp).
+
 ### Test Mirror Convention
 
 Integration test structure mirrors `src/` paths **within each test binary**. The test **binary** is chosen by fixture weight (integration/http/browser/llm/infrastructure); inside each binary, file paths mirror `src/` subpaths.

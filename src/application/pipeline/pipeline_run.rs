@@ -160,7 +160,7 @@ impl<'a> PipelineRun<'a> {
             );
         }
 
-        // Best-effort: quantifier metadata (swipes) is not load-bearing for the turn commit.
+        // Best-effort: the turn commit does not depend on quantifier metadata (swipes).
         if let Err(e) = self
             .pipeline
             .message_service

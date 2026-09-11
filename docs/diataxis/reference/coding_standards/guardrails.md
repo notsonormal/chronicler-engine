@@ -89,5 +89,5 @@ Coverage is measured via `cargo-llvm-cov` with file-level exclusions configured 
 
 ## Document References
 
-- [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Architectural commitments](../../explanation/architecture.md#architectural-commitments) lists the load-bearing guarantees the static guardrails enforce.
+- [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Architectural commitments](../../explanation/architecture.md#architectural-commitments) lists the guarantees the static guardrails enforce.
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — the trigger-evaluation mutation sequence is the same one the `execute_freeaction_impl` tests observe.

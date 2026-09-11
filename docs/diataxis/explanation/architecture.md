@@ -70,7 +70,7 @@ The engine deploys as one process against one SQLite file. The per-game generati
 
 ## Architectural commitments
 
-A small set of guarantees follow from the shape above. Each is machine-checked or load-bearing in code; see `## Document References` for the formal enumeration and test references. The architectural intent, in one line each:
+A small set of guarantees follow from the shape above. Each is machine-checked or relied on directly by the code; see `## Document References` for the formal enumeration and test references. The architectural intent, in one line each:
 
 - Domain purity — domain code has no `tokio`, no I/O, no HTTP types. Tested without a runtime.
 - Single-process deployment — one engine, one database; the gate and registry are process-local.

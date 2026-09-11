@@ -72,8 +72,8 @@ And #error-notification displays the response body with HTML tags stripped ("Int
 Given the dashboard is loaded and the command input #command-form input[name="command"] is rendered
 When the client types "/" into the command input
 Then a #slash-menu element appears in the DOM
-And #slash-menu contains two .slash-suggestion elements
-And the suggestions are /impersonate and /guide
+And #slash-menu contains three .slash-suggestion elements
+And the suggestions are /impersonate, /guide, and /options
 ```
 
 #### Scenario 17.2: Typing a prefix filters the suggestions

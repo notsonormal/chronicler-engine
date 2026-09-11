@@ -36,11 +36,9 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
 
 /// Count-based wait, no strict mode — the helper for selectors that
 /// legitimately match several elements (visibility waits fail on multi-match).
-pub async fn wait_for_element_children(
-    page: &playwright_rs::Page,
-    selector: &str,
-    min_count: u32,
-) -> u32 {
+/// Panics on timeout after `capture_failure_state` — a missing element is a
+/// failed test, never a soft skip.
+pub async fn wait_for_element_children(page: &playwright_rs::Page, selector: &str, min_count: u32) {
     let locator = page.locator(selector).await;
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_secs(10);
@@ -48,12 +46,8 @@ pub async fn wait_for_element_children(
 
     while start.elapsed() < timeout {
         match locator.count().await {
-            Ok(count) => {
-                last_count = count as u32;
-                if last_count >= min_count {
-                    return last_count;
-                }
-            }
+            Ok(count) if count >= min_count as usize => return,
+            Ok(count) => last_count = count as u32,
             Err(e) => {
                 eprintln!("⚠️  wait_for_element_children('{selector}') count() failed: {e}");
             }
@@ -67,7 +61,7 @@ pub async fn wait_for_element_children(
          (expected ≥ {min_count}, found {last_count})"
     );
     capture_failure_state(page, &format!("wait_for_element_children_{selector}")).await;
-    last_count
+    panic!("wait_for_element_children('{selector}'): expected ≥ {min_count}, found {last_count}");
 }
 
 /// Poll-until-visible for a uniquely-matching selector (Playwright strict mode

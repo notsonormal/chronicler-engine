@@ -44,6 +44,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | GET | `/fragment/story-log` | `story_log_fragment` |
 | GET | `/fragment/visual-sidebar` | `visual_sidebar_fragment` |
 | GET | `/fragment/action-area` | `action_area_fragment` |
+| GET | `/fragment/options-dock` | `options_dock_fragment` |
 | GET | `/fragment/character-headshots` | `character_headshots_fragment` |
 | GET | `/status/ready` | `status_ready_handler` |
 | GET | `/status/generating` | `generating_status_handler` |

@@ -9,10 +9,10 @@ use askama::Template;
 use crate::adapters::driving::http::builders::headers::render_header_unlocked;
 use crate::adapters::driving::http::templates::{
     ActionAreaTemplate, CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrativeLogTemplate,
-    VisualSidebarTemplate,
+    OptionsDockTemplate, VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
-    ActionAreaViewModel, NpcPortraitView, VisualSidebarViewModel,
+    ActionAreaViewModel, NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
@@ -137,6 +137,23 @@ impl AppState {
         template
             .render()
             .map_err(|e| EngineError::Template(Self::render_error_context("action area", e)))
+    }
+
+    pub fn render_options_dock(&self) -> Result<String> {
+        let options = self
+            .game_view_query
+            .get_current_options()
+            .map_err(|e| EngineError::Config(Self::render_error_context("options dock", e)))?;
+        let (status, _phase) = self
+            .game_view_query
+            .get_generating_status()
+            .map_err(|e| EngineError::Config(Self::render_error_context("options dock", e)))?;
+
+        let vm = OptionsDockViewModel::new(options, status.is_generating());
+        let template = OptionsDockTemplate::new(vm);
+        template
+            .render()
+            .map_err(|e| EngineError::Template(Self::render_error_context("options dock", e)))
     }
 
     pub fn render_character_headshots(&self) -> Result<String> {

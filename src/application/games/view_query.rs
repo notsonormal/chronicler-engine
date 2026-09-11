@@ -159,6 +159,14 @@ impl GameViewQuery {
         Ok((entries, has_last_trigger))
     }
 
+    /// The offered option set for the input-surface dock. The set is current
+    /// game state — it survives a page reload and clears at every turn end
+    /// (the pipeline rewrites it, never the UI).
+    pub fn get_current_options(&self) -> Result<Vec<String>, ApplicationError> {
+        let game_state = self.message_service.load_or_fresh();
+        Ok(game_state.narrative.current_options.clone())
+    }
+
     pub fn get_current_game_name(&self) -> Result<String, ApplicationError> {
         let storage = &self.storage;
         match storage.get_game(storage.current_game_id())? {

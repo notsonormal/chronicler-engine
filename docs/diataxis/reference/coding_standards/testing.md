@@ -5,7 +5,7 @@ title: Testing
 
 ## Real-LLM Tests
 
-`tests/llm/` is the only binary that exercises real LLM providers. It gates itself on `has_llm_api_key()` — the runtime check returns early when `OPENROUTER_API_KEY` is unset in the environment, so no provider call happens by default. The suite runs only under `python build.py --llm-only`. The gatestand mechanism is in `tests/llm/flow_llm_tests.rs::with_real_llm`.
+`tests/llm/` is the only binary that exercises real LLM providers. It gates itself on `has_llm_api_key()`. The runtime check returns early when `OPENROUTER_API_KEY` is unset, so no provider call happens by default. The suite runs only under `python build.py --llm-only`. The gating mechanism is in `tests/llm/flow_llm_tests.rs::with_real_llm`.
 
 ## UI Tests
 

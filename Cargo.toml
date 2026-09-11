@@ -41,6 +41,7 @@ harper-core = "0.25.0"
 [dev-dependencies]
 playwright-rs = "0.9"
 reqwest = { version = "0.13", features = ["json", "form"] }
+serde_urlencoded = "0.7"
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 libc = "0.2"

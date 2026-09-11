@@ -7,8 +7,8 @@ use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::view_models::{
-    ActionAreaViewModel, LlmMessageView, MessageEntryView, NpcPortraitView, PreviewIssueView,
-    VisualSidebarViewModel,
+    ActionAreaViewModel, LlmMessageView, MessageEntryView, NpcPortraitView, OptionsDockViewModel,
+    PreviewIssueView, VisualSidebarViewModel,
 };
 
 #[derive(Template)]
@@ -82,6 +82,24 @@ pub struct ActionAreaTemplate {
 
 impl ActionAreaTemplate {
     pub fn new(vm: ActionAreaViewModel) -> Self {
+        Self { vm }
+    }
+}
+
+/// The options dock — vertical stack of pickable options above the command
+/// form. Renders the CURRENT set from game state; an empty set renders an
+/// empty body so the polling container in the action area survives.
+#[derive(Template)]
+#[template(
+    source = r##"{% if !vm.options.is_empty() %}<div class="options-strip"><div class="options-label"><span>options — pick one, or type your own</span><form class="options-regen-form" hx-post="/action/check" hx-target="#status-display" hx-swap="innerHTML" hx-sync="this:drop"><input type="hidden" name="command" value="/options" /><button type="submit" class="mini-btn" title="Regenerate options" hx-on::before-request="updateToThinking()" {% if vm.is_busy %}disabled{% endif %}>&#9851;</button></form></div>{% for option in vm.options %}<div class="option-item"><button type="button" class="option-btn" onclick="useOption(this)" {% if vm.is_busy %}disabled{% endif %}>{{ option }}</button><button type="button" class="mini-btn" onclick="editOption(this)" title="Edit before send" {% if vm.is_busy %}disabled{% endif %}>&#9998;</button></div>{% endfor %}</div>{% endif %}"##,
+    ext = "html"
+)]
+pub struct OptionsDockTemplate {
+    pub vm: OptionsDockViewModel,
+}
+
+impl OptionsDockTemplate {
+    pub fn new(vm: OptionsDockViewModel) -> Self {
         Self { vm }
     }
 }

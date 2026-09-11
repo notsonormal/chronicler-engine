@@ -388,34 +388,6 @@ async fn post_world_update(
     (status, String::from_utf8_lossy(&body).to_string())
 }
 
-/// Update is a read-modify-write patch: fields the form does not model
-/// (`options_always_on`) must keep their stored values.
-#[tokio::test]
-async fn test_update_world_preserves_options_always_on() {
-    let world = WorldCard {
-        key: "test".to_string(),
-        name: "Test World".to_string(),
-        options_always_on: true,
-        ..Default::default()
-    };
-    let data = TestDataBuilder::default_test().world(world).build();
-    let (app, state) = TestAppBuilder::with_data(data).build_with_state();
-
-    let form_data = world_update_form_with("[]", "");
-    let (status, body) = post_world_update(&app, "test", form_data).await;
-    assert!(
-        status.is_success(),
-        "Expected success: {status:?} body: {body}"
-    );
-
-    let (_, stored, _) = state
-        .world_catalogue
-        .get_world("test")
-        .unwrap()
-        .expect("world still present");
-    assert!(stored.options_always_on, "toggle must survive a form edit");
-}
-
 /// Update is a read-modify-write patch: `default_scenario_id` is not a form
 /// field and must keep its stored value while the referenced scenario exists.
 #[tokio::test]

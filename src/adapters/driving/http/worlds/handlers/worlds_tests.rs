@@ -2,7 +2,9 @@
 
 use axum::{body::to_bytes, extract::Path};
 
-use crate::adapters::driving::http::worlds::handlers::{update_world_posture_handler, WorldPostureForm};
+use crate::adapters::driving::http::worlds::handlers::{
+    update_world_handler, update_world_posture_handler, WorldForm, WorldPostureForm,
+};
 use crate::adapters::driving::http::AppState;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
@@ -139,4 +141,67 @@ async fn test_world_posture_omitted_field_keeps_stored_value() {
         "omitted perspective must keep the stored value"
     );
     assert_eq!(world.narrative_tense, NarrativeTense::Present);
+}
+
+#[test]
+fn test_world_form_options_always_on_checkbox_grammar() {
+    // Checked checkbox: the body carries an explicit value="true".
+    let checked = "key=w&name=N&description=D&global_rules=&map_json={}&scenarios_json=[]&options_always_on=true";
+    let form: WorldForm = serde_urlencoded::from_str(checked).unwrap();
+    assert!(form.options_always_on);
+
+    // Unchecked checkbox posts nothing for the field; serde default fills
+    // false (same grammar as the PresetForm allowed-mode flags).
+    let unchecked = "key=w&name=N&description=D&global_rules=&map_json={}&scenarios_json=[]";
+    let form: WorldForm = serde_urlencoded::from_str(unchecked).unwrap();
+    assert!(!form.options_always_on);
+}
+
+#[tokio::test]
+async fn test_update_world_handler_flips_options_always_on_from_form() {
+    let state = TestAppBuilder::default_test().build_service();
+    seed_world(&state, "toggle_world");
+
+    let map_json = serde_json::to_string(&MapDef::default()).unwrap();
+    let post = |always_on: Option<&str>| {
+        let body = match always_on {
+            Some(v) => format!(
+                "key=toggle_world&name=Posture World&description=D&global_rules=&default_room_image=&map_json={map_json}&scenarios_json=[]&options_always_on={v}"
+            ),
+            None => format!(
+                "key=toggle_world&name=Posture World&description=D&global_rules=&default_room_image=&map_json={map_json}&scenarios_json=[]"
+            ),
+        };
+        let form: WorldForm = serde_urlencoded::from_str(&body).unwrap();
+        form
+    };
+
+    // Absent checkbox (unchecked save) resets to false — the absent→reset
+    // contract shared with the posture fields.
+    update_world_handler(
+        axum::extract::State(state.clone()),
+        axum::extract::Path("toggle_world".to_string()),
+        axum::extract::Form(post(None)),
+    )
+    .await;
+    let (_, world, _) = state
+        .world_catalogue
+        .get_world("toggle_world")
+        .unwrap()
+        .expect("world should exist");
+    assert!(!world.options_always_on);
+
+    // Checked save flips it on.
+    update_world_handler(
+        axum::extract::State(state.clone()),
+        axum::extract::Path("toggle_world".to_string()),
+        axum::extract::Form(post(Some("true"))),
+    )
+    .await;
+    let (_, world, _) = state
+        .world_catalogue
+        .get_world("toggle_world")
+        .unwrap()
+        .expect("world should exist");
+    assert!(world.options_always_on);
 }

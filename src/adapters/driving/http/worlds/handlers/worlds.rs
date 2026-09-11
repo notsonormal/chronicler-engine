@@ -32,6 +32,10 @@ pub struct WorldForm {
     pub narrator_mode: Option<String>,
     pub narrative_perspective: Option<String>,
     pub narrative_tense: Option<String>,
+    // Urlencoded checkbox: posts value="true" only when checked; an absent
+    // field defaults to false (same grammar as the PresetForm flags).
+    #[serde(default)]
+    pub options_always_on: bool,
 }
 
 impl WorldForm {
@@ -82,7 +86,7 @@ impl WorldForm {
                 .as_deref()
                 .map(NarrativeTense::parse_or_default)
                 .unwrap_or_default(),
-            options_always_on: false,
+            options_always_on: self.options_always_on,
         };
 
         Ok((world_card, map))
@@ -189,6 +193,7 @@ pub async fn update_world_handler(
     if let Some(tense) = form.narrative_tense {
         world_card.narrative_tense = NarrativeTense::parse_or_default(&tense);
     }
+    world_card.options_always_on = form.options_always_on;
 
     match state
         .world_catalogue

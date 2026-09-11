@@ -98,7 +98,7 @@ flowchart TD
 
 - **`games → game_state_snapshots`** and **`games → messages`** — one-to-many. Deleting a game removes its snapshots and messages.
 - **`messages → message_swipes`** — one-to-many. The swipe index is unique per message.
-- **`message_swipes.snapshot_id → game_state_snapshots.id`** — **not a SQL FK**, deliberately. Each swipe carries the snapshot of the state captured *after* the swipe was created; switching swipes restores that exact state. Declaring it as a FK would cascade snapshot deletion to swipes, which the retry semantics don't want. The relationship is load-bearing but referential integrity is the application's responsibility.
+- **`message_swipes.snapshot_id → game_state_snapshots.id`** — **not a SQL FK**, deliberately. Each swipe carries the snapshot of the state captured *after* the swipe was created; switching swipes restores that exact state. Declaring it as a FK would cascade snapshot deletion to swipes, which the retry semantics don't want. The retry flow depends on this relationship; referential integrity is the application's responsibility.
 
 ### World catalogue cluster
 
@@ -129,7 +129,7 @@ flowchart TD
 
 ### Cross-cluster logical references (no SQL FKs)
 
-Several relationships between clusters are load-bearing but are **not** SQL foreign keys — either because the target table predates the column (added in a later migration) or because declaring the FK would impose a CASCADE that the application semantics don't want. Integrity for these is the application's responsibility:
+Several relationships between clusters are **not** SQL foreign keys, either because the target table predates the column (added in a later migration) or because declaring the FK would impose a CASCADE the application semantics don't want. Integrity for these is the application's responsibility:
 
 - **`games.world_key → worlds.key`** (game state → world catalogue) — pins the world a game was created with. Added in migration v12.
 - **`games.persona_key → personas.key`** (game state → world catalogue) — pins the persona a game was created with. Added in migration v13; persona binding moved from world to game in this migration.
@@ -166,7 +166,7 @@ The read/write contract (accessors, mutators, intent-named methods) lives at `sr
 
 ### Persistence notes
 
-The load-bearing split — identity fields (`id`, `sender`, `message_type`, `timestamp`, `active_swipe_index`, `is_deleted`) live on `messages`, content fields (`text`, `location_header`, `event_header`, `snapshot_id`) live on `message_swipes` — mirrors the per-swipe content-field invariant. The per-row DDL is not restated here.
+The split mirrors the per-swipe content-field invariant: identity fields (`id`, `sender`, `message_type`, `timestamp`, `active_swipe_index`, `is_deleted`) live on `messages`, content fields (`text`, `location_header`, `event_header`, `snapshot_id`) live on `message_swipes`. The per-row DDL is not restated here.
 
 Two message-specific observations the schema does not say directly:
 

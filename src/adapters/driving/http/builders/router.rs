@@ -72,6 +72,10 @@ pub fn build_router(app_state: AppState) -> Router {
             get(layout::handlers::action_area_fragment),
         )
         .route(
+            "/fragment/options-dock",
+            get(layout::handlers::options_dock_fragment),
+        )
+        .route(
             "/fragment/character-headshots",
             get(layout::handlers::character_headshots_fragment),
         )

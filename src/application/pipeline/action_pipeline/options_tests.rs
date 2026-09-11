@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use super::action_tests::wait_for_gate_idle;
+use super::super::pipeline_run::PipelineRun;
 use crate::adapters::driven::llm::providers::MockBackend;
-use crate::adapters::driven::storage::Storage;
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::application::agents::options::OptionsAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::ports::llm_provider::LlmProvider;
@@ -141,6 +142,67 @@ fn test_toggle_off_clears_set_after_turn() {
     assert!(
         current_options(&app).is_empty(),
         "a non-impersonate turn with the toggle off clears the stale set"
+    );
+}
+
+#[test]
+fn test_world_toggle_does_not_enable_always_on_for_running_game() {
+    // The effective toggle is the GAME row's value, inherited from the
+    // world at game creation. Flipping the world row afterwards must not
+    // retroactively enable always-on for an existing game.
+    let (app, storage) = make_app(Some(tagged_options_provider()));
+    let world = storage
+        .get_world("test")
+        .expect("world read should succeed")
+        .expect("fixture seeds world 'test'");
+    let mut card = world.world_card;
+    card.options_always_on = true;
+    storage
+        .update_world(world.world_id, &card, &world.map)
+        .expect("world update should succeed");
+    set_prior_options(&app, &["Stale option"]);
+
+    app.pipeline
+        .execute_action_with_inputs("look".to_string(), false, None);
+
+    assert!(
+        current_options(&app).is_empty(),
+        "game row owns the toggle: a world flip must not enable a running game"
+    );
+}
+
+#[test]
+fn test_unreadable_game_row_falls_back_to_world_toggle() {
+    // Resolution is game-row-first: a readable game row wins even when the
+    // world row disagrees, and only an unreadable row falls back to the
+    // world's default. Pinned at the resolution level because a turn with a
+    // failing get_game dies before it reaches the rewrite.
+    let (app, storage) = make_app(Some(tagged_options_provider()));
+    let world = storage
+        .get_world("test")
+        .expect("world read should succeed")
+        .expect("fixture seeds world 'test'");
+    let mut card = world.world_card;
+    card.options_always_on = true;
+    storage
+        .update_world(world.world_id, &card, &world.map)
+        .expect("world update should succeed");
+
+    let game_id = storage.current_game_id();
+    let run = PipelineRun::new(&app.pipeline, game_id);
+
+    assert!(
+        !run.resolve_options_always_on(&card),
+        "readable game row wins: its false must override the world's true"
+    );
+
+    storage.add_failure(
+        "get_game",
+        TestOverride::config("simulated game row read failure"),
+    );
+    assert!(
+        run.resolve_options_always_on(&card),
+        "unreadable game row falls back to the world's toggle"
     );
 }
 

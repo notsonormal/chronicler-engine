@@ -51,7 +51,7 @@ These aren't exceptions to the model — they're the unit and driven-adapter
 tiers doing their job. A scenario that can't be expressed through HTTP simply
 doesn't get an HTTP E2E test.
 
-**Spec completeness is load-bearing.** The model only prevents drift if specs
+**Spec completeness is mandatory.** The model only prevents drift if specs
 are complete — every failure mode, every edge case. A half-written spec +
 HTTP E2E + comprehensive unit tests is less safe than the old component tier,
 because the component tier was catching unspecified behaviour the new model
