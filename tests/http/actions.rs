@@ -798,6 +798,29 @@ async fn test_slash_command_bypasses_text_check_http() {
         "guide action should complete"
     );
 
+    // An /options leg runs next: it is an engine command and bypasses the
+    // check the same way /guide does (spec 1.12). The /guide leg above has
+    // created scene history, so the dispatch does not hit the empty-history
+    // validation error. The fixture carries no options agent, so generation
+    // itself surfaces the unavailable-agent message — outcome assertions are
+    // unit-tier (options_tests.rs); this leg pins only the bypass.
+    let resp = post_action_check(&app, "/options").await;
+    assert!(resp.status().is_success());
+    assert!(
+        resp.headers().get("HX-Retarget").is_some(),
+        "/options is an engine command and should dispatch directly (HX-Retarget set)"
+    );
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        !body_str.contains("text-check-preview"),
+        "/options must bypass the text check: {body_str}"
+    );
+    assert!(
+        wait_idle(&state, 1000).await,
+        "/options action should complete"
+    );
+
     // Same words as plain input: the spell check must surface a preview.
     let resp = post_action_check(&app, "look at the casle").await;
     assert!(resp.status().is_success());

@@ -12,6 +12,19 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Driven adapters: outbound external systems (storage, LLM providers, text check)
       - **llm/**
         - `mod.rs` — LLM driven adapters: provider implementations and HTTP transport
+        - **providers/**
+          - `deepseek.rs` — DeepSeek LLM provider
+          - `mock.rs` — Mock LLM provider for testing
+          - `mod.rs` — LLM provider implementations
+          - `ollama.rs` — Ollama LLM provider
+          - `openrouter.rs` — OpenRouter LLM provider
+        - **transport/**
+          - `mod.rs` — LLM client interface
+          - **utils/**
+            - `client.rs` — LLM client implementation
+            - `mod.rs` — LLM transport implementation helpers.
+            - `request.rs` — LLM request building
+            - `response.rs` — LLM response parsing
       - **storage/**
         - `characters.rs` — Character storage backend operations
         - `core.rs` — Storage backend trait and core abstractions
@@ -28,6 +41,27 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `swipes.rs` — Swipe data storage
         - `test_support.rs` — Test infrastructure types for storage failure injection
         - `worlds.rs` — World storage backend operations
+        - **mappers/**
+          - `llm_message.rs` — LLM message mapper
+          - `message.rs` — Message mapper
+          - `mod.rs` — Row-to-domain object mapping
+          - `state_snapshot.rs` — State snapshot mapper
+        - **models/**
+          - `character.rs` — Character database model
+          - `game.rs` — Game database model
+          - `game_state_snapshot.rs` — Game state snapshot model
+          - `llm_message.rs` — LLM message database model
+          - `map.rs` — Database row struct for the `maps` table
+          - `message.rs` — Database row struct for the `messages` table
+          - `mod.rs` — Database schema entity definitions
+          - `persona.rs` — Persona database model
+          - `prompt_preset.rs` — Prompt preset model
+          - `settings.rs` — Settings database model
+          - `swipe.rs` — Database row struct for the `swipes` table
+          - `world.rs` — Database row struct for the `worlds` table
+        - **utils/**
+          - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
+          - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -43,6 +77,85 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `mod.rs` — HTTP server and API endpoints
         - `templates.rs` — Template rendering utilities
         - `view_models.rs` — View models decouple templates from domain types.
+        - **action/**
+          - `mod.rs` — Action route handlers.
+          - **handlers/**
+            - `actions.rs` — Action fragment handlers
+            - `mod.rs` — Action route handlers.
+        - **bootstrap/**
+          - `mod.rs` — HTTP bootstrap — server bring-up
+          - `port.rs` — Port management utilities
+          - `server.rs` — Server implementation
+        - **builders/**
+          - `connections.rs` — LLM-connection card + edit-form HTML builders.
+          - `forms.rs` — Textarea field HTML builders.
+          - `headers.rs` — Header fragment + status-swap header builders.
+          - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
+          - `presets.rs` — Prompt-preset card + form HTML builders.
+          - `router.rs` — HTTP router composition.
+        - **chat_window/**
+          - `mod.rs` — Chat window HTTP handlers.
+          - **handlers/**
+            - `chat_window.rs` — Chat window HTTP request handlers.
+            - `mod.rs` — Chat window route handlers.
+        - **debug/**
+          - `mod.rs` — Debug HTTP handlers.
+          - **handlers/**
+            - `debug.rs` — Debug utilities and endpoints
+            - `mod.rs` — Debug route handlers.
+        - **games/**
+          - `mod.rs` — Games module.
+          - **handlers/**
+            - `games.rs` — Games fragment handlers
+            - `mod.rs` — Games route handlers.
+          - **templates/**
+            - `games.rs` — Games templates
+            - `mod.rs` — Games askama templates.
+        - **history/**
+          - `mod.rs` — History route handlers.
+          - **handlers/**
+            - `history.rs` — History fragment handlers
+            - `mod.rs` — History route handlers.
+        - **layout/**
+          - `mod.rs` — Layout module (route handlers).
+          - **handlers/**
+            - `endpoints.rs` — Fragment endpoints
+            - `mod.rs` — Layout route handlers (partials + status endpoints).
+        - **prompt_presets/**
+          - `mod.rs` — Prompt presets module.
+          - **handlers/**
+            - `mod.rs` — Prompt presets route handlers.
+            - `prompt_presets.rs` — Prompt preset handlers
+          - **templates/**
+            - `mod.rs` — Prompt presets askama templates.
+            - `prompt_presets.rs` — Prompt preset templates
+        - **settings/**
+          - `mod.rs` — Settings module.
+          - **handlers/**
+            - `mod.rs` — Settings route handlers.
+            - `settings.rs` — Settings handlers
+          - **templates/**
+            - `mod.rs` — Settings askama templates.
+            - `settings.rs` — Settings templates
+        - **utils/**
+          - `error.rs` — Error rendering helpers for HTTP fragments.
+          - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
+          - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
+          - `locks.rs` — Shared poison-recovering lock helpers for the HTTP layer.
+          - `mod.rs` — HTTP utility modules.
+          - `port_utils.rs` — Port management helpers used by `bind_with_retry`.
+          - `response.rs` — HTTP response helpers
+          - `template_helpers.rs` — Settings template rendering helpers (provider options HTML).
+          - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
+          - `view_models.rs` — View-model helpers shared between template code and tests.
+        - **worlds/**
+          - `mod.rs` — Worlds module.
+          - **handlers/**
+            - `mod.rs` — Worlds route handlers.
+            - `worlds.rs` — Worlds management handlers
+          - **templates/**
+            - `mod.rs` — Worlds askama templates.
+            - `worlds.rs` — Worlds templates
   - **application/**
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
@@ -58,11 +171,24 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Agent registry and trait definitions
       - `registry.rs` — Runtime agent lookup and lifecycle
       - `trait_def.rs` — Agent trait definitions
+      - **options/**
+        - `agent.rs` — Options agent implementation.
+        - `mod.rs` — Options agent system — generates the pickable next-action option set.
+        - `prompt.rs` — Options prompt construction
+        - `types.rs` — Options agent type definitions
+        - **utils/**
+          - `mod.rs` — Options agent shared helpers
+          - `orchestration.rs` — Options orchestration — LLM call + result processing + entry point.
+          - `parser.rs` — Options output parsing — accepts both seeded prompt shapes.
       - **quantifier/**
         - `agent.rs` — Quantifier agent implementation.
         - `mod.rs` — Quantifier agent system
         - `prompt.rs` — Quantifier prompt construction
         - `types.rs` — Quantifier type definitions
+        - **utils/**
+          - `mod.rs` — Quantifier utility modules.
+          - `orchestration.rs` — Quantifier orchestration — LLM call + result processing + entry point.
+          - `parser.rs` — Quantifier response parsing helpers.
     - **debug/**
       - `dto.rs` — DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
       - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint.
@@ -85,6 +211,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `action.rs` — Action entry path for the pipeline.
         - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
         - `mod.rs` — ActionPipeline type-split: the struct and all its inherent impls.
+        - `options.rs` — Options pipeline slice — on-demand entry, agent dispatch, and the
         - `retrigger.rs` — Retrigger entry path for the pipeline.
         - `retry.rs` — Retry entry path for the pipeline.
     - **ports/**

@@ -361,6 +361,20 @@ impl ActionPipeline {
             }
         }
 
+        // Always-on options trigger: non-impersonate narration turns rewrite
+        // the offered set at turn end (impersonate output IS the player
+        // acting).
+        if !impersonated {
+            let options_enabled = run.resolve_options_always_on(&outcome.bundle.world);
+            self.rewrite_options_after_turn(
+                &mut post_commit_state,
+                &map,
+                &persona,
+                &npcs,
+                options_enabled,
+            );
+        }
+
         run.phase_finalize(&mut post_commit_state);
         tracing::debug!("run_from_input: done");
         Ok(())
@@ -454,7 +468,11 @@ impl ActionPipeline {
             .agents_for_phase(ExecutionPhase::PostGeneration)
             .filter_map(|agent| match agent.execute(&agent_ctx) {
                 Ok(AgentResult::StatePatch(patch)) => Some(patch),
-                Ok(AgentResult::NoOp) | Ok(AgentResult::PromptDirective(_)) => None,
+                // Options agents dispatch by phase at gated call sites, never
+                // through this merge loop; the variant is unreachable here.
+                Ok(AgentResult::NoOp)
+                | Ok(AgentResult::PromptDirective(_))
+                | Ok(AgentResult::Options(_)) => None,
                 Err(e) => {
                     tracing::warn!("Agent {} failed: {e}", agent.name());
                     None
@@ -509,6 +527,7 @@ impl ActionPipeline {
             .last_input_text()
             .unwrap_or_default();
         let WorldBundle {
+            world,
             map,
             persona,
             npcs: npcs_map,
@@ -553,6 +572,11 @@ impl ActionPipeline {
         if let Some(target) = state.narrative.retry_target.take() {
             state.narrative.history.append(target);
         }
+        // An event-only retry is a narration-producing turn: the offered set
+        // follows the same turn-end rewrite rule (impersonation is not a
+        // concept here — retries never are).
+        let options_enabled = run.resolve_options_always_on(&world);
+        self.rewrite_options_after_turn(state, &map, &persona, &npcs_map, options_enabled);
         run.phase_finalize(state);
         Ok(())
     }

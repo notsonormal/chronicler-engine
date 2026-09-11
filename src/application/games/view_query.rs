@@ -148,6 +148,7 @@ impl GameViewQuery {
             quantifier_confidence: game_state.scene.quantifier_confidence.clone(),
             backend_name: game_state.narrative.last_backend_name.clone(),
             model_name: game_state.narrative.last_model_name.clone(),
+            current_options: game_state.narrative.current_options.clone(),
         })
     }
 

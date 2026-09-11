@@ -171,7 +171,6 @@ pub async fn update_world_handler(
         Err(e) => return bad_request(e),
     };
 
-
     world_card.default_scenario_id = world_card
         .default_scenario_id
         .filter(|id| scenarios.iter().any(|s| &s.id == id));
@@ -180,7 +179,6 @@ pub async fn update_world_handler(
     world_card.name = form.name;
     world_card.description = form.description;
     world_card.default_room_image = form.default_room_image.filter(|s| !s.is_empty());
-
 
     if let Some(mode) = form.narrator_mode {
         world_card.narrator_mode = NarratorMode::parse_or_default(&mode);

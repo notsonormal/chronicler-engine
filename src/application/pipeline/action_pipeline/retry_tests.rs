@@ -24,6 +24,9 @@ use crate::test_support::{
 use crate::test_support::fixtures::TestGameState;
 
 use super::action_tests::wait_for_gate_idle;
+use super::options_tests::{
+    current_options, make_app, set_always_on, set_prior_options, tagged_options_provider,
+};
 
 fn make_test_state() -> GameState {
     TestGameState::in_room("start")
@@ -562,6 +565,124 @@ async fn test_retry_event_continuation_happy_path() {
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Should finish with Idle status, got {:?}",
         state.narrative.input_buffer.status
+    );
+}
+
+/// Event-only retry is a narration-producing turn: the offered set follows
+/// the same turn-end rewrite rule as ordinary turns. Toggle on + options
+/// agent registered — the stale set is replaced with a fresh one.
+#[test]
+fn test_retry_event_continuation_rewrites_options_when_enabled() {
+    let (app, storage) = make_app(Some(tagged_options_provider()));
+    set_always_on(&storage, true);
+
+    let _input_id = add_input_and_save(&app, &storage, "test input");
+    let _pre_main_id = save_pre_main(&app, &storage);
+
+    let mut pre_event_state = app.message_service.load_or_fresh();
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
+    set_prior_options(&app, &["Stale option"]);
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &pre_event_state,
+        );
+    let pre_event_id = storage.save_snapshot(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(pre_event_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    let mut final_state = pre_event_state;
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
+    final_state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let final_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &final_state,
+        );
+    let _ = storage.save_snapshot(&final_snapshot);
+    if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_snapshot.db_id.unwrap_or(0)));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    app.pipeline.retry_last_response();
+
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
+        "Should finish with Idle status, got {:?}",
+        state.narrative.input_buffer.status
+    );
+    let options = current_options(&app);
+    assert_eq!(
+        options.len(),
+        3,
+        "event-retry tail must install a fresh set: {options:?}"
+    );
+    assert!(options.contains(&"Search the desk".to_string()));
+}
+
+/// Same rewrite rule with the toggle off: the stale set must clear (no
+/// system failure message — a cleared set with the toggle off is normal).
+#[test]
+fn test_retry_event_continuation_clears_options_when_disabled() {
+    let (app, storage) = make_app(None);
+    set_always_on(&storage, false);
+
+    let _input_id = add_input_and_save(&app, &storage, "test input");
+    let _pre_main_id = save_pre_main(&app, &storage);
+
+    let mut pre_event_state = app.message_service.load_or_fresh();
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
+    set_prior_options(&app, &["Stale option"]);
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &pre_event_state,
+        );
+    let pre_event_id = storage.save_snapshot(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(pre_event_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    let mut final_state = pre_event_state;
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
+    final_state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let final_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &final_state,
+        );
+    let _ = storage.save_snapshot(&final_snapshot);
+    if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_snapshot.db_id.unwrap_or(0)));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    app.pipeline.retry_last_response();
+
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
+        "Should finish with Idle status, got {:?}",
+        state.narrative.input_buffer.status
+    );
+    assert!(
+        current_options(&app).is_empty(),
+        "a toggle-off event retry must clear the stale set"
     );
 }
 

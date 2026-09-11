@@ -116,37 +116,66 @@ async fn test_polling_pauses_during_edit() {
 // [docs/specs/browser.md] SCENARIO: 16.4
 #[tokio::test]
 async fn test_delete_removes_message() {
-    with_test_page(CONFIG_PATH, TEST_WORLD, TEST_PERSONA, |page, _port| async move {
-        let initial = count_log_entries(&page).await;
-        if initial < 2 {
-            send_action(&page, "look").await;
-            wait_for_status_ready(&page).await;
-        }
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            let initial = count_log_entries(&page).await;
+            if initial < 2 {
+                send_action(&page, "look").await;
+                wait_for_status_ready(&page).await;
+            }
 
-        let count_before_delete = count_log_entries(&page).await;
-        assert!(
-            count_before_delete >= 2,
-            "Need at least 2 entries for delete button, have {count_before_delete}"
-        );
+            // The story log renders on its own 2s poll, independent of the 5s
+            // status poll — status "Ready" does not mean the log shows the
+            // completed turn. Wait for the DOM to catch up before reading the
+            // baseline. wait_for_element_children captures failure state but
+            // RETURNS on timeout, so this assert is load-bearing.
+            let rendered = wait_for_element_children(&page, "#story-log .log-entry", 2).await;
+            assert!(
+                rendered >= 2,
+                "Need at least 2 rendered entries for the delete button, have {rendered}"
+            );
 
-        page.evaluate::<(), ()>(
-            r#"(() => {
+            // Target one specific entry: capture the last entry's data-id, then
+            // wait for THAT id to leave the DOM. A count-vs-baseline comparison
+            // cannot distinguish a successful delete from a concurrent log
+            // refresh that adds entries.
+            let deleted_id: Option<String> = page
+                .evaluate::<(), Option<String>>(
+                    r#"(() => {
+                    const entries = document.querySelectorAll('#story-log .log-entry');
+                    const last = entries[entries.length - 1];
+                    return last ? last.getAttribute('data-id') : null;
+                })()"#,
+                    None,
+                )
+                .await
+                .unwrap();
+            let deleted_id = deleted_id.expect("log must contain an entry to delete");
+
+            page.evaluate::<(), ()>(
+                r#"(() => {
                 window.confirm = () => true;
             })()"#,
-            None,
-        )
-        .await
-        .unwrap();
+                None,
+            )
+            .await
+            .unwrap();
 
-        page.locator(".delete-btn").await.click(None).await.unwrap();
+            page.locator(".delete-btn").await.click(None).await.unwrap();
 
-        let current_count = wait_for_log_entries_below(&page, count_before_delete).await;
-
-        assert!(
-            current_count < count_before_delete,
-            "Delete should remove the message (expected < {count_before_delete}, got {current_count})"
-        );
-    })
+            // Detached counts as hidden — the log refresh replaces #story-log's
+            // innerHTML, dropping the deleted entry from the DOM.
+            wait_until_hidden(
+                &page,
+                &format!(".log-entry[data-id='{deleted_id}']"),
+                Duration::from_secs(10),
+            )
+            .await;
+        },
+    )
     .await;
 }
 
@@ -250,10 +279,9 @@ async fn test_error_toast_on_action_failure() {
             // page as status 200 with empty body — verified via a fetch probe),
             // so we cannot produce a real 500 through route interception, and
             // the real server has no path that returns 500 from /action/check
-            // without production-code changes (out of scope for this ticket).
-            // ponytail: skip the 5s auto-hide setTimeout — asserting it would
-            // burn 5s and add flake for no authority gain; the setTimeout is
-            // trivial JS.
+            // without production-code changes. Skip the 5s auto-hide
+            // setTimeout — asserting it would burn 5s and add flake; the
+            // setTimeout is trivial JS.
             page.evaluate::<(), ()>(
                 r#"(() => {
                     const evt = new CustomEvent('htmx:beforeSwap', {

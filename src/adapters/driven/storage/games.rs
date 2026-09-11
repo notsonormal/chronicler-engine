@@ -237,6 +237,19 @@ impl Storage {
         )
     }
 
+    /// Game-first options preset id. Options presets are mode-agnostic and
+    /// sit outside the per-mode registry, so the fallback is the settings
+    /// column rather than a mode bundle.
+    pub fn active_options_preset_id(&self, settings: &AppSettings) -> String {
+        match self.get_game(self.current_game_id()).ok().flatten() {
+            Some(game) => game.active_options_prompt_preset_id.clone(),
+            None => {
+                tracing::warn!("current game missing; falling back to settings options preset");
+                settings.active_options_prompt_preset_id.clone()
+            }
+        }
+    }
+
     // Falls back to the registry's Novel bundle when the current game is absent.
     fn resolve_active_preset_id<G, B>(
         &self,

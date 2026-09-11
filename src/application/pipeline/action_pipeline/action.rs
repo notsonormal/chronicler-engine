@@ -26,6 +26,7 @@ impl ActionPipeline {
             // The steering rides on the Swipe's stored inputs (not history), so a redo re-applies it.
             Action::Guide(guide) => (String::new(), false, Some(guide)),
             Action::Impersonate(direction) => (String::new(), true, direction),
+            Action::Options => return self.process_options(generation_gate),
         };
 
         let spawn_input = input.clone();

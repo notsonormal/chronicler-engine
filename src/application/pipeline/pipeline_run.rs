@@ -366,6 +366,18 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
+    /// Game-first always-on options toggle for the game this run started for,
+    /// falling back to the world's default when that row is unreadable.
+    pub(super) fn resolve_options_always_on(&self, world: &WorldCard) -> bool {
+        match self.pipeline.storage.get_game(self.started_for) {
+            Ok(Some(game)) => game.options_always_on,
+            _ => {
+                tracing::warn!("game row unreadable; falling back to world options toggle");
+                world.options_always_on
+            }
+        }
+    }
+
     pub(super) fn load_preset_and_response_length(
         &self,
         preset_id: &str,

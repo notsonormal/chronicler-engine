@@ -5,13 +5,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::model::state::game_state::GameState;
 
-/// [TRIVIAL_ENUM]
+/// The registry's dispatch axis — agents declare the pipeline position
+/// where they run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionPhase {
+    /// Agents that run before narration is generated.
     #[default]
     PreGeneration,
+    /// Agents the generic post-narration loop runs, whose `StatePatch`
+    /// output merges into the quantifier result.
     PostGeneration,
+    /// Agents dispatched only at gated call sites — the turn-end offered-set
+    /// rewrite and the `/options` entry path. The generic PostGeneration
+    /// merge loop never runs them.
+    OptionsGeneration,
 }
 
 /// [TRIVIAL_ENUM]
@@ -36,13 +44,22 @@ pub struct AgentConfig {
 
 impl AgentConfig {
     pub fn defaults() -> Vec<Self> {
-        vec![Self {
-            name: "quantifier".to_string(),
-            agent_type: "quantifier".to_string(),
-            enabled: true,
-            backend: BackendSelector::UseNamed("quantifier".to_string()),
-            phase: ExecutionPhase::PostGeneration,
-        }]
+        vec![
+            Self {
+                name: "quantifier".to_string(),
+                agent_type: "quantifier".to_string(),
+                enabled: true,
+                backend: BackendSelector::UseNamed("quantifier".to_string()),
+                phase: ExecutionPhase::PostGeneration,
+            },
+            Self {
+                name: "options".to_string(),
+                agent_type: "options".to_string(),
+                enabled: true,
+                backend: BackendSelector::UseNamed("options".to_string()),
+                phase: ExecutionPhase::OptionsGeneration,
+            },
+        ]
     }
 }
 
@@ -98,11 +115,19 @@ pub struct StatePatch {
     pub confidence: Confidence,
 }
 
-/// [TRIVIAL_ENUM]
+/// What an agent produced for one pipeline run.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AgentResult {
+    /// A directive the agent wants folded into the next narration prompt;
+    /// the current merge loop carries and ignores it.
     PromptDirective(String),
+    /// Structured state mutations (scene NPCs, movement, confidence) merged
+    /// into the quantifier result.
     StatePatch(StatePatch),
+    /// A generated pickable-option set; the options dispatch sites write it
+    /// to the game's current options state.
+    Options(Vec<String>),
+    /// The agent ran and has nothing to contribute this turn.
     NoOp,
 }
 
