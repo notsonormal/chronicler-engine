@@ -399,7 +399,7 @@ python build.py clippy                          # ~10s — fix warnings here
 python build.py unit                            # Run the unit tests
 python build.py architecture                    # Run the architecture tests
 python build.py guardrails                      # Run the guardrails tests
-python build.py nextest <test_name>             # Run one test or pattern
+python build.py nextest "action_pipeline::options_tests" # Run tests matching a substring of the full test path
 python build.py integration                     # Run integration test suite (~1–2 min)
 python build.py validate-docs                   # Validate markdown docs
 cargo run -- --world redmist_estate --port 3000 # Run the server (raw cargo; not a gate action)
