@@ -1,6 +1,6 @@
 ---
 description: General-purpose agent for complex, multi-step implementation tasks
-model: glm-5.3-flash
+model: synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash
 permission:
   bash:
     "git *": deny
