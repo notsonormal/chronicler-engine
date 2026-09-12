@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chronicler Engine</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=3" />
+    <link rel="stylesheet" href="/assets/styles.css?v=4" />
     <link rel="stylesheet" href="/assets/worlds.css?v=4" />
     <link rel="stylesheet" href="/assets/games.css?v=1" />
   </head>
@@ -44,6 +44,14 @@
       </div>
 
       <!-- Static shell: form stays in DOM, never replaced -->
+      <!-- Options dock: sibling bar above the action area (V4 shape); its
+           inner content self-polls and is empty until options exist. -->
+      <div
+        id="options-dock"
+        hx-get="/fragment/options-dock"
+        hx-trigger="load, every 2s"
+        hx-swap="innerHTML"
+      ></div>
       <div class="action-area" id="action-area">
         <form
           id="command-form"
@@ -155,12 +163,14 @@
         } else if (
           text === "narrating" ||
           text === "quantifying" ||
-          text === "generating-event"
+          text === "generating-event" ||
+          text === "options"
         ) {
           const phaseMap = {
             narrating: "Generating narration...",
             quantifying: "Quantifying scene...",
             "generating-event": "Generating event...",
+            options: "Generating options...",
           };
           el.innerHTML =
             '<span class="status thinking">' + phaseMap[text] + "</span>";
@@ -364,6 +374,24 @@
         }
       }
 
+      // Options dock: an option IS a pre-written player input (ticket 04).
+      // Use submits its text through the normal /action/check path; Edit
+      // copies it into the input for modification (e.g. prepend /guide).
+      function useOption(btn) {
+        const input = commandInput();
+        if (!input || input.disabled) return;
+        input.value = btn.textContent;
+        document.getElementById("command-form").requestSubmit();
+      }
+
+      function editOption(btn) {
+        const input = commandInput();
+        if (!input || input.disabled) return;
+        const optionBtn = btn.closest(".option-item").querySelector(".option-btn");
+        input.value = optionBtn.textContent;
+        input.focus();
+      }
+
       function checkCurrentInput() {
         const input = document.querySelector(
           '#command-form input[name="command"]',
@@ -422,6 +450,7 @@
       const SLASH_COMMANDS = [
         { cmd: "/impersonate", desc: "Write as the player persona" },
         { cmd: "/guide", desc: "Steer the next generation (transient)" },
+        { cmd: "/options", desc: "Suggest actions (generate pickable options)" },
       ];
       let slashMenu = null;
       let slashMatches = [];

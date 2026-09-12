@@ -183,6 +183,20 @@ impl LlmProvider for MockBackend {
                     user_prompt,
                 ));
             }
+            if agent_name == "options" {
+                // The options agent needs parseable output in the default
+                // seed shape (<suggestion> tags) so browser/E2E runs
+                // exercise the real generation path. Seeded responses keep
+                // priority for pipeline-level tests.
+                return Ok(self.make_result(
+                    agent_name,
+                    "<suggestion>Option one from the mock.</suggestion>\n\
+                     <suggestion>Option two from the mock.</suggestion>\n\
+                     <suggestion>Option three from the mock.</suggestion>",
+                    _system_prompt,
+                    user_prompt,
+                ));
+            }
             Ok(self.make_result(
                 agent_name,
                 format!(

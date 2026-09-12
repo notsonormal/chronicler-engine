@@ -121,6 +121,77 @@ pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violatio
     violations
 }
 
+/// Flags collection-typed fields on HTTP form structs.
+///
+/// axum's `Form` (serde_urlencoded) cannot decode `Vec`/`HashMap` from
+/// urlencoded bodies — a single checked checkbox posts one scalar value and
+/// the extractor rejects the request with 422. Use per-value boolean fields
+/// with `#[serde(default)]`.
+pub fn check_form_fields_urlencoded_safe(file_path: &str, content: &str) -> Vec<Violation> {
+    const UNSAFE_COLLECTIONS: [&str; 6] = [
+        "Vec<",
+        "HashMap<",
+        "BTreeMap<",
+        "HashSet<",
+        "LinkedList<",
+        "VecDeque<",
+    ];
+
+    let mut violations = Vec::new();
+
+    let normalized_path = file_path.replace('\\', "/");
+    if !normalized_path.starts_with("adapters/driving/http/")
+        || !normalized_path.contains("/handlers/")
+        || normalized_path.ends_with("_tests.rs")
+    {
+        return violations;
+    }
+
+    for (line_no, line) in content.lines().enumerate() {
+        let line_num = line_no + 1;
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("//") || trimmed.starts_with("*") {
+            continue;
+        }
+        if !trimmed.starts_with("pub ") {
+            continue;
+        }
+
+        // A `pub fn` parameter matches the `pub <name>: <type>` shape but is
+        // not a deserialized form field.
+        if trimmed.starts_with("pub fn ")
+            || trimmed.starts_with("pub async fn ")
+            || trimmed.starts_with("pub const fn ")
+            || trimmed.starts_with("pub unsafe fn ")
+        {
+            continue;
+        }
+
+        let Some(colon) = trimmed.find(':') else {
+            continue;
+        };
+        let field_type = trimmed[colon + 1..].trim_start();
+
+        if UNSAFE_COLLECTIONS
+            .iter()
+            .any(|collection| field_type.starts_with(collection))
+        {
+            violations.push(Violation::error(
+                file_path,
+                line_num,
+                "form field is a collection: serde_urlencoded cannot decode \
+                 `Vec`/`HashMap` from urlencoded bodies (a single checked checkbox \
+                 posts one scalar value, so the `Form` extractor rejects with 422) — \
+                 use one boolean field per value with `#[serde(default)]`; if this \
+                 struct is not a `Form` payload, move it out of the handlers module",
+            ));
+        }
+    }
+
+    violations
+}
+
 /// Prevents server-layer files from referencing `GameState` directly.
 pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
@@ -375,6 +446,80 @@ mod tests {
         let violations = check_http_storage_leak(
             "adapters/driving/http/settings.rs",
             "// crate::adapters::driven::storage::Storage\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_form_fields_urlencoded_safe_catches_violation() {
+        let violations = check_form_fields_urlencoded_safe(
+            "adapters/driving/http/prompt_presets/handlers/prompt_presets.rs",
+            "pub allowed_modes: Vec<String>,\n",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("boolean field"));
+    }
+
+    #[test]
+    fn test_check_form_fields_urlencoded_safe_catches_hashmap() {
+        let violations = check_form_fields_urlencoded_safe(
+            "adapters/driving/http/games/handlers/games.rs",
+            "pub flags: HashMap<String, bool>,\n",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("serde_urlencoded"));
+    }
+
+    #[test]
+    fn test_check_form_fields_urlencoded_safe_allows_correct() {
+        let violations = check_form_fields_urlencoded_safe(
+            "adapters/driving/http/prompt_presets/handlers/prompt_presets.rs",
+            "pub allowed_mode_novel: bool,\npub name: String,\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_form_fields_urlencoded_safe_skips_tests() {
+        let violations = check_form_fields_urlencoded_safe(
+            "adapters/driving/http/prompt_presets/handlers/prompt_presets_tests.rs",
+            "pub allowed_modes: Vec<String>,\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_form_fields_urlencoded_safe_skips_non_handler_path() {
+        let violations = check_form_fields_urlencoded_safe(
+            "adapters/driving/http/prompt_presets/templates/prompt_presets.rs",
+            "pub allowed_modes: Vec<String>,\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_form_fields_urlencoded_safe_skips_comments() {
+        let violations = check_form_fields_urlencoded_safe(
+            "adapters/driving/http/prompt_presets/handlers/prompt_presets.rs",
+            "// pub allowed_modes: Vec<String>,\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_form_fields_urlencoded_safe_skips_non_pub() {
+        let violations = check_form_fields_urlencoded_safe(
+            "adapters/driving/http/prompt_presets/handlers/prompt_presets.rs",
+            "    allowed_modes: Vec<String>,\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_form_fields_urlencoded_safe_allows_pub_fn_with_vec_param() {
+        let violations = check_form_fields_urlencoded_safe(
+            "adapters/driving/http/games/handlers/games.rs",
+            "pub async fn handler(items: Vec<String>) {}\n",
         );
         assert_eq!(violations.len(), 0);
     }

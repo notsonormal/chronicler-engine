@@ -236,7 +236,7 @@ And message_service.load_messages() contains zero Input entries
 And message_service.load_or_fresh().narrative.input_buffer.status is Idle
 ```
 
-#### Scenario 1.12: Recognized steering commands bypass the player-input text check
+#### Scenario 1.12: Recognized engine commands bypass the player-input text check
 
 ```gherkin
 Given a fresh game state with narrative.history empty
@@ -246,9 +246,18 @@ When the client POST /action/check with command="/guide look at the casle" (a de
 Then the response contains no text-check preview
 And the guide action is dispatched directly
 And the pipeline returns to idle
+And a narration turn has created scene history
+When the client POST /action/check with command="/options" (an engine command the dispatch layer handles)
+Then the response contains no text-check preview
+And the options action is dispatched directly
+And the pipeline returns to idle
 When the client POST /action/check with command="look at the casle" (same words, plain input)
 Then the response contains a text-check preview
 ```
+
+Engine commands are the slash commands the dispatch layer itself handles
+(`Action::is_engine_command`: `/guide`, `/impersonate`, `/options`); unknown
+slash commands stay free text and are checked like ordinary player input.
 
 ## Invariants
 

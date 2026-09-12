@@ -525,5 +525,141 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 22 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Swipe generation inputs flatten from the v15 replay blob into two direct
+        // columns. A corrupt blob degraded the turn to a plain retry at parse time,
+        // so the backfill skips non-JSON values. Producers never set
+        // impersonate_direction and guide together; the impersonate direction wins.
+        if !column_exists(conn, "message_swipes", "impersonated") {
+            exec("ALTER TABLE message_swipes ADD COLUMN impersonated INTEGER NOT NULL DEFAULT 0")?;
+        }
+        if !column_exists(conn, "message_swipes", "steering_instruction") {
+            exec("ALTER TABLE message_swipes ADD COLUMN steering_instruction TEXT")?;
+        }
+        if column_exists(conn, "message_swipes", "replay") {
+            exec(
+                "UPDATE message_swipes \
+                 SET impersonated = COALESCE(json_extract(replay, '$.impersonate'), 0), \
+                     steering_instruction = COALESCE(json_extract(replay, '$.impersonate_direction'), json_extract(replay, '$.guide')) \
+                 WHERE replay IS NOT NULL AND json_valid(replay)",
+            )?;
+            exec("ALTER TABLE message_swipes DROP COLUMN replay")?;
+        }
+
+        conn.pragma_update(None, "user_version", 22)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 23 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Restore the per-game posture columns v21 dropped as write-only: the
+        // narration path now reads posture from the game, so the copies are
+        // live data again. Backfill mirrors v19.
+        if !column_exists(conn, "games", "narrative_perspective") {
+            exec(
+                "ALTER TABLE games ADD COLUMN narrative_perspective TEXT NOT NULL DEFAULT 'third'",
+            )?;
+        }
+        if !column_exists(conn, "games", "narrative_tense") {
+            exec("ALTER TABLE games ADD COLUMN narrative_tense TEXT NOT NULL DEFAULT 'past'")?;
+        }
+
+        exec(
+            "UPDATE games SET \
+               narrative_perspective = COALESCE((SELECT narrative_perspective FROM worlds WHERE worlds.key = games.world_key), 'third'), \
+               narrative_tense = COALESCE((SELECT narrative_tense FROM worlds WHERE worlds.key = games.world_key), 'past')",
+        )?;
+
+        let orphans: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT name FROM games \
+                     WHERE world_key NOT IN (SELECT key FROM worlds)",
+                )
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
+        };
+        for key in &orphans {
+            tracing::warn!(
+                "migration v23: game '{key}' references world_key with no matching world row; \
+                 posture defaulted to third/past"
+            );
+        }
+
+        conn.pragma_update(None, "user_version", 23)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 24 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Options autogeneration, on the v19/v23 posture pattern: world-default
+        // toggle with per-game override. The options preset id is mode-agnostic;
+        // games inherit a copy from settings at creation.
+        if !column_exists(conn, "worlds", "options_always_on") {
+            exec("ALTER TABLE worlds ADD COLUMN options_always_on INTEGER NOT NULL DEFAULT 0")?;
+        }
+        if !column_exists(conn, "games", "options_always_on") {
+            exec("ALTER TABLE games ADD COLUMN options_always_on INTEGER NOT NULL DEFAULT 0")?;
+        }
+        if !column_exists(conn, "games", "active_options_prompt_preset_id") {
+            exec(
+                "ALTER TABLE games ADD COLUMN active_options_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'options_default'",
+            )?;
+        }
+        if !column_exists(conn, "settings", "active_options_prompt_preset_id") {
+            exec(
+                "ALTER TABLE settings ADD COLUMN active_options_prompt_preset_id \
+                 TEXT NOT NULL DEFAULT 'options_default'",
+            )?;
+        }
+
+        // Games inherit the toggle from their world (mirrors v19/v23 backfill).
+        exec(
+            "UPDATE games SET \
+               options_always_on = COALESCE((SELECT options_always_on FROM worlds WHERE worlds.key = games.world_key), 0)",
+        )?;
+
+        let orphans: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT name FROM games \
+                     WHERE world_key NOT IN (SELECT key FROM worlds)",
+                )
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
+        };
+        for key in &orphans {
+            tracing::warn!(
+                "migration v24: game '{key}' references world_key with no matching world row; \
+                 options_always_on defaulted to off"
+            );
+        }
+
+        conn.pragma_update(None, "user_version", 24)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     Ok(())
 }

@@ -9,6 +9,19 @@ use tracing_subscriber::{
 };
 
 pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
+    // Test harnesses set this to route logs to stdout (captured per-process
+    // by the test server drain) instead of the shared daily file.
+    if std::env::var("CHRONICLER_LOG_CONSOLE").is_ok() {
+        let env_filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+        tracing_subscriber::fmt()
+            .with_env_filter(env_filter)
+            .with_ansi(false)
+            .init();
+        tracing::info!("Logging initialized (console only)");
+        return tracing_appender::non_blocking(std::io::stdout()).1;
+    }
+
     let log_dir = Path::new("logs");
     if !log_dir.exists() {
         if let Err(e) = fs::create_dir_all(log_dir) {

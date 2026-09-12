@@ -29,6 +29,10 @@ pub fn default_if_system_prompt_preset_id() -> String {
     "system_if_default".to_string()
 }
 
+pub fn default_active_options_prompt_preset_id() -> String {
+    "options_default".to_string()
+}
+
 pub fn default_allowed_modes() -> Vec<crate::domain::model::settings::NarratorMode> {
     use crate::domain::model::settings::NarratorMode;
     vec![NarratorMode::Novel, NarratorMode::InteractiveFiction]

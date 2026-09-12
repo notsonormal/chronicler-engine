@@ -12,6 +12,19 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Driven adapters: outbound external systems (storage, LLM providers, text check)
       - **llm/**
         - `mod.rs` — LLM driven adapters: provider implementations and HTTP transport
+        - **providers/**
+          - `deepseek.rs` — DeepSeek LLM provider
+          - `mock.rs` — Mock LLM provider for testing
+          - `mod.rs` — LLM provider implementations
+          - `ollama.rs` — Ollama LLM provider
+          - `openrouter.rs` — OpenRouter LLM provider
+        - **transport/**
+          - `mod.rs` — LLM client interface
+          - **utils/**
+            - `client.rs` — LLM client implementation
+            - `mod.rs` — LLM transport implementation helpers.
+            - `request.rs` — LLM request building
+            - `response.rs` — LLM response parsing
       - **storage/**
         - `characters.rs` — Character storage backend operations
         - `core.rs` — Storage backend trait and core abstractions
@@ -28,6 +41,27 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `swipes.rs` — Swipe data storage
         - `test_support.rs` — Test infrastructure types for storage failure injection
         - `worlds.rs` — World storage backend operations
+        - **mappers/**
+          - `llm_message.rs` — LLM message mapper
+          - `message.rs` — Message mapper
+          - `mod.rs` — Row-to-domain object mapping
+          - `state_snapshot.rs` — State snapshot mapper
+        - **models/**
+          - `character.rs` — Character database model
+          - `game.rs` — Game database model
+          - `game_state_snapshot.rs` — Game state snapshot model
+          - `llm_message.rs` — LLM message database model
+          - `map.rs` — Database row struct for the `maps` table
+          - `message.rs` — Database row struct for the `messages` table
+          - `mod.rs` — Database schema entity definitions
+          - `persona.rs` — Persona database model
+          - `prompt_preset.rs` — Prompt preset model
+          - `settings.rs` — Settings database model
+          - `swipe.rs` — Database row struct for the `swipes` table
+          - `world.rs` — Database row struct for the `worlds` table
+        - **utils/**
+          - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
+          - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -43,6 +77,85 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `mod.rs` — HTTP server and API endpoints
         - `templates.rs` — Template rendering utilities
         - `view_models.rs` — View models decouple templates from domain types.
+        - **action/**
+          - `mod.rs` — Action route handlers.
+          - **handlers/**
+            - `actions.rs` — Action fragment handlers
+            - `mod.rs` — Action route handlers.
+        - **bootstrap/**
+          - `mod.rs` — HTTP bootstrap — server bring-up
+          - `port.rs` — Port management utilities
+          - `server.rs` — Server implementation
+        - **builders/**
+          - `connections.rs` — LLM-connection card + edit-form HTML builders.
+          - `forms.rs` — Textarea field HTML builders.
+          - `headers.rs` — Header fragment + status-swap header builders.
+          - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
+          - `presets.rs` — Prompt-preset card + form HTML builders.
+          - `router.rs` — HTTP router composition.
+        - **chat_window/**
+          - `mod.rs` — Chat window HTTP handlers.
+          - **handlers/**
+            - `chat_window.rs` — Chat window HTTP request handlers.
+            - `mod.rs` — Chat window route handlers.
+        - **debug/**
+          - `mod.rs` — Debug HTTP handlers.
+          - **handlers/**
+            - `debug.rs` — Debug utilities and endpoints
+            - `mod.rs` — Debug route handlers.
+        - **games/**
+          - `mod.rs` — Games module.
+          - **handlers/**
+            - `games.rs` — Games fragment handlers
+            - `mod.rs` — Games route handlers.
+          - **templates/**
+            - `games.rs` — Games templates
+            - `mod.rs` — Games askama templates.
+        - **history/**
+          - `mod.rs` — History route handlers.
+          - **handlers/**
+            - `history.rs` — History fragment handlers
+            - `mod.rs` — History route handlers.
+        - **layout/**
+          - `mod.rs` — Layout module (route handlers).
+          - **handlers/**
+            - `endpoints.rs` — Fragment endpoints
+            - `mod.rs` — Layout route handlers (partials + status endpoints).
+        - **prompt_presets/**
+          - `mod.rs` — Prompt presets module.
+          - **handlers/**
+            - `mod.rs` — Prompt presets route handlers.
+            - `prompt_presets.rs` — Prompt preset handlers
+          - **templates/**
+            - `mod.rs` — Prompt presets askama templates.
+            - `prompt_presets.rs` — Prompt preset templates
+        - **settings/**
+          - `mod.rs` — Settings module.
+          - **handlers/**
+            - `mod.rs` — Settings route handlers.
+            - `settings.rs` — Settings handlers
+          - **templates/**
+            - `mod.rs` — Settings askama templates.
+            - `settings.rs` — Settings templates
+        - **utils/**
+          - `error.rs` — Error rendering helpers for HTTP fragments.
+          - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
+          - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
+          - `locks.rs` — Shared poison-recovering lock helpers for the HTTP layer.
+          - `mod.rs` — HTTP utility modules.
+          - `port_utils.rs` — Port management helpers used by `bind_with_retry`.
+          - `response.rs` — HTTP response helpers
+          - `template_helpers.rs` — Settings template rendering helpers (provider options HTML).
+          - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
+          - `view_models.rs` — View-model helpers shared between template code and tests.
+        - **worlds/**
+          - `mod.rs` — Worlds module.
+          - **handlers/**
+            - `mod.rs` — Worlds route handlers.
+            - `worlds.rs` — Worlds management handlers
+          - **templates/**
+            - `mod.rs` — Worlds askama templates.
+            - `worlds.rs` — Worlds templates
   - **application/**
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
@@ -58,11 +171,24 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Agent registry and trait definitions
       - `registry.rs` — Runtime agent lookup and lifecycle
       - `trait_def.rs` — Agent trait definitions
+      - **options/**
+        - `agent.rs` — Options agent implementation.
+        - `mod.rs` — Options agent system — generates the pickable next-action option set.
+        - `prompt.rs` — Options prompt construction
+        - `types.rs` — Options agent type definitions
+        - **utils/**
+          - `mod.rs` — Options agent shared helpers
+          - `orchestration.rs` — Options orchestration — LLM call + result processing + entry point.
+          - `parser.rs` — Options output parsing — accepts both seeded prompt shapes.
       - **quantifier/**
         - `agent.rs` — Quantifier agent implementation.
         - `mod.rs` — Quantifier agent system
         - `prompt.rs` — Quantifier prompt construction
         - `types.rs` — Quantifier type definitions
+        - **utils/**
+          - `mod.rs` — Quantifier utility modules.
+          - `orchestration.rs` — Quantifier orchestration — LLM call + result processing + entry point.
+          - `parser.rs` — Quantifier response parsing helpers.
     - **debug/**
       - `dto.rs` — DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
       - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint.
@@ -85,6 +211,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `action.rs` — Action entry path for the pipeline.
         - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
         - `mod.rs` — ActionPipeline type-split: the struct and all its inherent impls.
+        - `options.rs` — Options pipeline slice — on-demand entry, agent dispatch, and the
         - `retrigger.rs` — Retrigger entry path for the pipeline.
         - `retry.rs` — Retry entry path for the pipeline.
     - **ports/**
@@ -120,7 +247,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
-      - `message.rs` — Message types and conversation history (Message, Swipe, replay blob)
+      - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
       - `message_history.rs` — Message history tracking
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
@@ -190,6 +317,8 @@ However, during code reviews you should not make code changes to fix problems.
 
 Label epistemic status when it matters: known, inferred, or guessed.
 
+If you don't know something, say "I don't know" instead of inventing an answer.
+
 When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
 
 ### Decision Making
@@ -199,6 +328,7 @@ When responding to user feedback or an analysis, explicitly say whether you agre
 Before implementing (e.g. during planning):
 
 - **State your assumptions explicitly.** If uncertain or something is unclear, stop, name what's confusing, and ask.
+- **If an instruction contradicts what you see, say so before acting.** Do not silently work around the mismatch or proceed as if the instruction were accurate.
 - **If multiple interpretations exist, present them** — Don't pick silently unless obvious.
 - **Hold a reasoned position.** Push back when a simpler approach exists, and if the user pushes back while your reasoning still holds, say why.
 - **Surface hidden trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
@@ -249,9 +379,17 @@ python scripts/install_git_hooks.py
 
 Temporary files should be written into tmp folders e.g. `tmp`.
 
-Pi wraps commands with rtk and condenses git/diff output; redirect command output to a file before filtering.
+Pi wraps commands with rtk and condenses long output — not just git/diff: piped `rg`, `grep`, and build tails get truncated or mangled too. Redirect any command you pipe or filter to a file first, then search that file.
 
-`build.py` writes logs to both standard output and to the `logs` folder. The standard build should take about 2-3 minute normally. If it times out or fails, check the build logs for failures. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
+Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
+
+`build.py` writes logs to both standard output and to the `logs/` folder. The standard build should take about 2-3 minute normally. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
+
+Use the Pi bash tool with a timeout of 600 seconds when calling `build.py`, or 1200 seconds if you are running with `--coverage`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
+
+```bash
+tail -n 10 "$(ls -t logs/build_*.log | head -1)"
+```  
 
 ### Commands
 
@@ -265,7 +403,7 @@ python build.py clippy                          # ~10s — fix warnings here
 python build.py unit                            # Run the unit tests
 python build.py architecture                    # Run the architecture tests
 python build.py guardrails                      # Run the guardrails tests
-python build.py nextest <test_name>             # Run one test or pattern
+python build.py nextest "action_pipeline::options_tests" # Run tests matching a substring of the full test path
 python build.py integration                     # Run integration test suite (~1–2 min)
 python build.py validate-docs                   # Validate markdown docs
 cargo run -- --world redmist_estate --port 3000 # Run the server (raw cargo; not a gate action)
@@ -335,6 +473,10 @@ Use standard story points (1,3,5,8,13) to analyse the complexity of tasks. Tasks
 ## Permissions System
 
 Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
+
+Don't commit without explict approval, even if commiting is allowed in the permissions config.
+
+The permission system blocks `find` in bash commands; use `rg --files`, `ls`, or `grep -r` for file discovery.
 
 ## Doing Code Reviews
 

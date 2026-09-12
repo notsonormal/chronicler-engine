@@ -61,9 +61,10 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | wiredapp scope | Restricts `WiredApp` imports to composition-root, HTTP, test-support, and test scopes. | `tests/infrastructure/guardrails/layers.rs:13` |
 | messages swipes separation | Ensures `storage/messages.rs` never references the `message_swipes` table. | `tests/infrastructure/guardrails/layers.rs:54` |
 | handler return type | Requires server handlers to return `Response<Body>` instead of `(StatusCode, String)`. | `tests/infrastructure/guardrails/layers.rs:86` |
-| server layer boundaries | Prevents server-layer files from referencing `GameState` directly. | `tests/infrastructure/guardrails/layers.rs:125` |
-| http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:157` |
-| test layer boundaries | Prevents component tests from constructing or importing `GameState` directly. | `tests/infrastructure/guardrails/layers.rs:191` |
+| form fields urlencoded safe | Flags collection-typed fields on HTTP form structs. | `tests/infrastructure/guardrails/layers.rs:130` |
+| server layer boundaries | Prevents server-layer files from referencing `GameState` directly. | `tests/infrastructure/guardrails/layers.rs:196` |
+| http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:228` |
+| test layer boundaries | Prevents component tests from constructing or importing `GameState` directly. | `tests/infrastructure/guardrails/layers.rs:262` |
 | test file naming | Rejects unit-test files with the singular `_test.rs` suffix in favor of `_tests.rs`. | `tests/infrastructure/guardrails/location.rs:7` |
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |
@@ -77,8 +78,9 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | test module header | Test files must have a single-line `//!` summary on the first non-blank line. | `tests/infrastructure/guardrails/structure.rs:328` |
 | import ordering | Enforces import ordering: std/core/alloc, then external crates, then crate/super/self. | `tests/infrastructure/guardrails/style.rs:9` |
 | long comment runs | Warns when five or more countable comment lines appear consecutively. | `tests/infrastructure/guardrails/style.rs:124` |
-| separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:219` |
-| single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:234` |
+| template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:165` |
+| separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:245` |
+| single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:260` |
 <!-- AUTO-GUARDRAILS: syn END -->
 
 ## 4. Coverage Exclusion Policy
@@ -87,5 +89,5 @@ Coverage is measured via `cargo-llvm-cov` with file-level exclusions configured 
 
 ## Document References
 
-- [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Architectural commitments](../../explanation/architecture.md#architectural-commitments) lists the load-bearing guarantees the static guardrails enforce.
+- [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Architectural commitments](../../explanation/architecture.md#architectural-commitments) lists the guarantees the static guardrails enforce.
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — the trigger-evaluation mutation sequence is the same one the `execute_freeaction_impl` tests observe.

@@ -15,7 +15,10 @@ Two invocation modes:
 Stdout carries the agent-facing decision signal + tailable progress (banner,
 step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
 banner with log path). Full output is written to ``logs/build_*.log``; each
-log's first line is a session stamp (see ``_stamp_session_id``).
+log's first line is a session stamp (see ``_stamp_session_id``). Every
+completed run also appends one pipe-delimited summary line (timestamp,
+duration, exit code, args) to the append-only journal
+``logs/build_history.txt`` — see ``_append_history``.
 """
 
 import argparse
@@ -35,6 +38,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
 
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl; journal locking is skipped there.
+    fcntl = None
+
 # Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -45,6 +53,17 @@ class _LogState:
     """Module-level log handle for the current build run."""
 
     fh = None
+
+
+class _NextestSummary:
+    """Last nextest summary line captured this run, re-printed at the epilogue.
+
+    Module state (like _LogState) because run() sys.exits on a checked
+    failure before its caller could inspect the captured output; main()'s
+    finally must still be able to print the pass/fail counts at the tail.
+    """
+
+    line = None
 
 
 def _set_log_fh(fh):
@@ -159,6 +178,49 @@ _NEXTEST_RESULT_RE = re.compile(
     r"^\s*(?:PASS|FAIL|SKIP)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
 )
 
+# nextest final summary line, e.g.:
+#   "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped"
+#   "     Summary [   1.497s] 119 tests run: 118 passed, 1 failed, 0 skipped"
+# Counts are matched independently of segment order so a nextest format
+# change cannot silently break the epilogue one-liner.
+_NEXTEST_SUMMARY_RE = re.compile(r"^\s*Summary \[[^\]]*\]\s+\d+ tests? run:")
+
+
+def _summary_count(line: str, label: str) -> str | None:
+    """Return the count preceding ``label`` in a Summary line, or None."""
+    m = re.search(rf"(\d+) {label}", line)
+    return m.group(1) if m else None
+
+
+def _nextest_summary_line(output: str) -> str | None:
+    """Render nextest's final Summary line as a compact epilogue one-liner.
+
+    Returns e.g. "nextest: 118 passed, 1 failed", or None when the output
+    carries no nextest summary (compile error, non-nextest command).
+    nextest omits the "failed" segment when nothing failed, but the epilogue
+    line always shows it (0 when absent) so a clean run still reads as clean.
+    A zero "skipped" segment is omitted; a nonzero one is kept so the counts
+    still add up to the total run.
+    """
+    rendered = None
+    for line in output.splitlines():
+        if not _NEXTEST_SUMMARY_RE.match(line):
+            continue
+        passed = _summary_count(line, "passed") or "?"
+        failed = _summary_count(line, "failed") or "0"
+        skipped = _summary_count(line, "skipped")
+        rendered = f"nextest: {passed} passed, {failed} failed"
+        if skipped and skipped != "0":
+            rendered += f", {skipped} skipped"
+    return rendered
+
+
+def _stash_nextest_summary(output: str) -> None:
+    """Capture nextest's final summary line for the closing epilogue."""
+    line = _nextest_summary_line(output)
+    if line is not None:
+        _NextestSummary.line = line
+
 
 def _nextest_duration_to_secs(token: str) -> float:
     """Convert a nextest duration token (e.g. "18.645s", "1m23s") to seconds."""
@@ -211,6 +273,11 @@ def run_with_test_timings(cmd, env=None, check=True):
         if secs == 0.0 and "SKIP" in line:
             continue
         timings.append((secs, name))
+    _stash_nextest_summary(
+        "\n".join(
+            (result.stdout or "").splitlines() + (result.stderr or "").splitlines()
+        )
+    )
 
     both_print("")
     both_print("--- Test Timing Report ---")
@@ -300,6 +367,12 @@ REGISTRY: dict[str, StepSpec] = {
             help="Enforce Rust unit-test structure rules.",
         ),
         StepSpec(
+            "spec-coverage",
+            "Running spec-coverage guardrail...",
+            "python scripts/validate_feature_spec.py",
+            help="Enforce spec-scenario coverage and SCENARIO-tag rules.",
+        ),
+        StepSpec(
             "docstrings",
             "Running Python docstring guardrail...",
             "python scripts/check_python_docstrings.py",
@@ -379,6 +452,7 @@ GATE_ORDER = [
     "validate-data",
     "clippy",
     "test-structure",
+    "spec-coverage",
     "docstrings",
     "py-tests",
     "http-routes-check",
@@ -772,6 +846,9 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                 if _CARGO_PROGRESS_RE.match(line):
                     continue
                 _log_write(line)
+        # Stash before the check: a checked failure sys.exits below, and the
+        # epilogue must still be able to print the pass/fail counts.
+        _stash_nextest_summary(out or "")
         if check and process.returncode != 0:
             both_print(f"FAILED with code {process.returncode}")
             sys.exit(process.returncode)
@@ -797,6 +874,9 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                 if _CARGO_PROGRESS_RE.match(line):
                     continue
                 _log_write(line)
+        _stash_nextest_summary(
+            (result.stdout or "") + "\n" + (result.stderr or "")
+        )
         if check and result.returncode != 0:
             both_print(f"FAILED with code {result.returncode}")
             sys.exit(result.returncode)
@@ -1186,8 +1266,55 @@ def run_llm_only(args, record):
     both_print("=== Build Complete ===")
 
 
+_HISTORY_FILE = Path("logs/build_history.txt")
+_HISTORY_HEADER = "timestamp | duration_s | exit_code | args"
+_HISTORY_MAX_LINES = 1000
+
+
+def _append_history(path: Path, args_str: str, duration_sec: float, exit_code: int) -> None:
+    """Append one run record to the build-history journal, then trim.
+
+    One pipe-delimited line per run, columns per ``_HISTORY_HEADER``, newest
+    last so ``tail`` shows recent runs. The trim keeps the header plus the
+    newest records, rewritten in place while still holding the lock — flock
+    keeps concurrent agents (shared ``logs/``) from interleaving appends or
+    racing the rewrite. Callers treat any failure as ignorable: the journal
+    must never break a build.
+    """
+    args_str = args_str.replace("|", "/").replace("\n", " ").strip()
+    line = (
+        f"{time.strftime('%Y-%m-%dT%H:%M:%S')} | {duration_sec:.1f} | "
+        f"{exit_code} | {args_str}\n"
+    )
+    with open(path, "a+", encoding="utf-8") as fh:
+        if fcntl is not None:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            fh.seek(0)
+            lines = fh.readlines()
+            if not lines or lines[0].rstrip("\n") != _HISTORY_HEADER:
+                lines.insert(0, _HISTORY_HEADER + "\n")
+            lines.append(line)
+            if len(lines) > _HISTORY_MAX_LINES:
+                lines = lines[:1] + lines[-(_HISTORY_MAX_LINES - 1) :]
+            # "a+" writes land at EOF (O_APPEND), but truncate empties the
+            # file first, so the rewrite starts back at the top.
+            fh.seek(0)
+            fh.truncate()
+            fh.writelines(lines)
+            fh.flush()
+        finally:
+            if fcntl is not None:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 def main():
     args = parse_args()
+
+    # Journal inputs, captured before any chdir so the record reflects
+    # exactly what the caller invoked.
+    _run_start = time.time()
+    history_args = " ".join(sys.argv[1:]).strip() or "(full gate)"
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
 
@@ -1230,6 +1357,11 @@ def main():
         # close is delayed only by in-process writes, not by any I/O wait.
         _print_step_summary(record.timings, record.failures, log_path)
 
+        # The pass/fail counts, one line, right before the banner: an agent
+        # tailing stdout gets the test verdict without grepping the full log.
+        if _NextestSummary.line:
+            both_print(_NextestSummary.line)
+
         both_print("=" * 60)
         both_print("=== Build Complete ===")
         both_print(f"Full build log: {log_path}")
@@ -1242,11 +1374,25 @@ def main():
             pass
         _LogState.fh = None
 
-    # check=False steps (e.g. the test suite) record failures in the record
-    # without raising SystemExit. Propagate them into the process exit code so
-    # callers that trust the exit code (agents, pre-commit, CI) see the failure.
-    if exit_code == 0 and record.failures:
-        exit_code = 1
+        # check=False steps (e.g. the test suite) record failures in the record
+        # without raising SystemExit. Propagate them into the process exit code
+        # so callers that trust the exit code (agents, pre-commit, CI) — and
+        # the history journal below — see the true outcome. Done inside the
+        # finally (not after the try) because the finally runs on every exit
+        # path, so the journal can never disagree with the process exit code.
+        if exit_code == 0 and record.failures:
+            exit_code = 1
+
+        try:
+            _append_history(
+                _HISTORY_FILE,
+                history_args,
+                time.time() - _run_start,
+                exit_code,
+            )
+        except Exception:
+            pass  # Best-effort bookkeeping; never fail a run over it.
+
     return exit_code
 
 

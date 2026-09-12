@@ -31,6 +31,10 @@ pub struct AssembledPrompt {
 #[derive(Debug, Clone)]
 pub struct PromptContext<'a> {
     pub world: &'a WorldCard,
+    /// Resolved narrative posture (game-first, world fallback). Callers supply
+    /// it; `assemble` is the sole owner that stamps it onto the template vars.
+    pub narrative_perspective: NarrativePerspective,
+    pub narrative_tense: NarrativeTense,
     pub room: &'a Room,
     pub npcs: NpcContext<'a>,
     pub persona: &'a PersonaCard,
@@ -80,8 +84,8 @@ impl PromptAssembler {
         let mut template_vars = context.template_vars.clone();
         Self::apply_posture(
             &mut template_vars,
-            context.world.narrative_perspective,
-            context.world.narrative_tense,
+            context.narrative_perspective,
+            context.narrative_tense,
         );
 
         let system_prompt = build_system_prompt(preset, global_rules, &template_vars);
@@ -134,8 +138,11 @@ impl PromptAssembler {
 }
 
 impl PromptContext<'_> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
         world: &'a WorldCard,
+        narrative_perspective: NarrativePerspective,
+        narrative_tense: NarrativeTense,
         room: &'a Room,
         npcs: NpcContext<'a>,
         persona: &'a PersonaCard,
@@ -144,6 +151,8 @@ impl PromptContext<'_> {
     ) -> PromptContext<'a> {
         PromptContext {
             world,
+            narrative_perspective,
+            narrative_tense,
             room,
             npcs,
             persona,

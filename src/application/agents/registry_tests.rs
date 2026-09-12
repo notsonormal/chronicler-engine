@@ -1,11 +1,19 @@
 use std::sync::{Arc, RwLock};
 
+use crate::adapters::driven::llm::providers::MockBackend;
+use crate::application::agents::Agent;
+use crate::application::agents::registry::AgentRegistry;
+use crate::application::llm_recorder::LlmCallRecorder;
 use crate::domain::model::agent::{
     AgentConfig, AgentContext, AgentResult, BackendSelector, ExecutionPhase,
 };
 use crate::domain::model::settings::AppSettings;
-use crate::application::agents::Agent;
-use crate::application::agents::registry::AgentRegistry;
+use crate::error::Result;
+use crate::test_support::make_test_recorder;
+
+fn mock_recorder() -> Arc<LlmCallRecorder> {
+    make_test_recorder(Arc::new(MockBackend::new()))
+}
 
 #[derive(Debug)]
 struct MockAgent {
@@ -23,7 +31,7 @@ impl Agent for MockAgent {
     fn backend_selector(&self) -> BackendSelector {
         BackendSelector::UseMain
     }
-    fn execute(&self, _ctx: &AgentContext) -> crate::error::Result<AgentResult> {
+    fn execute(&self, _ctx: &AgentContext) -> Result<AgentResult> {
         Ok(AgentResult::NoOp)
     }
 }
@@ -64,9 +72,8 @@ fn test_registry_from_configs_rejects_unknown_type() {
     }];
     let result = AgentRegistry::from_configs_with_storage(
         &configs,
-        crate::test_support::make_test_recorder(Arc::new(
-            crate::adapters::driven::llm::providers::MockBackend::new(),
-        )),
+        mock_recorder(),
+        mock_recorder(),
         None,
         Arc::new(RwLock::new(AppSettings::default())),
     );
@@ -77,19 +84,25 @@ fn test_registry_from_configs_rejects_unknown_type() {
 fn test_registry_from_configs_empty_uses_defaults() {
     let registry = AgentRegistry::from_configs_with_storage(
         &[],
-        crate::test_support::make_test_recorder(Arc::new(
-            crate::adapters::driven::llm::providers::MockBackend::new(),
-        )),
+        mock_recorder(),
+        mock_recorder(),
         None,
         Arc::new(RwLock::new(AppSettings::default())),
     )
     .unwrap();
-    // Should contain the default quantifier agent
+    // Defaults must register both the quantifier and the options agent.
     let post: Vec<_> = registry
         .agents_for_phase(ExecutionPhase::PostGeneration)
         .collect();
     assert_eq!(post.len(), 1);
     assert_eq!(post[0].name(), "quantifier");
+
+    let options: Vec<_> = registry
+        .agents_for_phase(ExecutionPhase::OptionsGeneration)
+        .collect();
+    assert_eq!(options.len(), 1);
+    assert_eq!(options[0].name(), "options");
+    assert_eq!(options[0].phase(), ExecutionPhase::OptionsGeneration);
 }
 
 #[test]
@@ -144,9 +157,8 @@ fn test_registry_from_configs_disabled_skipped() {
     }];
     let registry = AgentRegistry::from_configs_with_storage(
         &configs,
-        crate::test_support::make_test_recorder(Arc::new(
-            crate::adapters::driven::llm::providers::MockBackend::new(),
-        )),
+        mock_recorder(),
+        mock_recorder(),
         None,
         Arc::new(RwLock::new(AppSettings::default())),
     )

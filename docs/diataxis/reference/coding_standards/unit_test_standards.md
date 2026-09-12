@@ -47,7 +47,7 @@ fn test_<method>_sqlite() {
 }
 ```
 
-The two tests must be character-for-character identical except for the storage construction. This is the rule that makes the pair actually test parity.
+The two tests must be character-for-character identical except for the storage construction. This is what makes the pair test parity.
 
 ## Pattern 3 — LLM provider trait
 
@@ -157,7 +157,7 @@ Tests are `#[tokio::test]` + `async fn test_…`.
 
 ## Pattern 7 — Fragment renderer / template
 
-**Purpose.** Test that an HTML fragment renderer or Askama template renders correctly for an input context. The output HTML is the system under test. **These tests are load-bearing for XSS regression** — never delete an XSS assertion without replacement.
+**Purpose.** Test that an HTML fragment renderer or Askama template renders correctly for an input context. The output HTML is the system under test. **These tests guard against XSS regression.** Never delete an XSS assertion without replacement.
 
 **The standard.**
 
@@ -239,7 +239,7 @@ Applied at storage, action-pipeline, and HTTP-fragment tiers (`storage/*_tests.r
 
 ### Cross-cutting B — XSS regression checks
 
-**Purpose.** Test any HTML renderer that interpolates user-controlled data. **Always required for renderer tests.** These tests are load-bearing — never delete one without replacement.
+**Purpose.** Test any HTML renderer that interpolates user-controlled data. **Always required for renderer tests. Never delete one without replacement.**
 
 **The standard.**
 

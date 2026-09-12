@@ -17,9 +17,11 @@
    },
     "bash": {
       "*": "allow",
+      "find": "allow",
       "find *": "allow",
       "nohup *": "allow",      
-      "grep *": "allow",
+      "grep": "allow",          
+      "grep *": "allow",      
       "xargs": "deny",
       "xargs *": "deny",
       "timeout": "deny",
@@ -45,7 +47,7 @@
       "git clean -f *": "deny",
       "git clean --force *": "deny",
       "git pull": "deny",
-      "git pull *": "deny"
+      "git pull *": "deny" 
     }
   }
 }

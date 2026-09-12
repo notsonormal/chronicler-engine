@@ -714,21 +714,14 @@ async fn test_slash_impersonate_produces_input_http() {
     );
 
     let input_entry = inputs.first().expect("exactly one Input entry");
-    let replay = input_entry
-        .replay()
-        .expect("impersonate swipe should carry the stored inputs");
     assert!(
-        replay.impersonate,
+        input_entry.impersonated(),
         "the impersonate flag must be stored on the swipe"
     );
     assert_eq!(
-        replay.impersonate_direction.as_deref(),
+        input_entry.steering_instruction(),
         Some("hello"),
-        "the direction must be stored on the swipe"
-    );
-    assert!(
-        replay.impersonate_preset_id.is_some(),
-        "the active impersonate preset id must be pinned at entry time"
+        "the steering instruction must be stored on the swipe"
     );
 }
 
@@ -762,16 +755,13 @@ async fn test_slash_guide_does_not_persist_input_http() {
     assert_eq!(inputs.len(), 0, "guide should not persist an Input entry");
 
     let narration = narrations.first().expect("at least one Narration entry");
-    let replay = narration
-        .replay()
-        .expect("guide swipe should carry the stored inputs");
     assert_eq!(
-        replay.guide.as_deref(),
+        narration.steering_instruction(),
         Some("look around"),
         "the guide must be stored on the swipe"
     );
     assert!(
-        !replay.impersonate,
+        !narration.impersonated(),
         "guide inputs must not set the impersonate flag"
     );
 }
@@ -806,6 +796,29 @@ async fn test_slash_command_bypasses_text_check_http() {
     assert!(
         wait_idle(&state, 1000).await,
         "guide action should complete"
+    );
+
+    // An /options leg runs next: it is an engine command and bypasses the
+    // check the same way /guide does (spec 1.12). The /guide leg above has
+    // created scene history, so the dispatch does not hit the empty-history
+    // validation error. The fixture carries no options agent, so generation
+    // itself surfaces the unavailable-agent message — outcome assertions are
+    // unit-tier (options_tests.rs); this leg pins only the bypass.
+    let resp = post_action_check(&app, "/options").await;
+    assert!(resp.status().is_success());
+    assert!(
+        resp.headers().get("HX-Retarget").is_some(),
+        "/options is an engine command and should dispatch directly (HX-Retarget set)"
+    );
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        !body_str.contains("text-check-preview"),
+        "/options must bypass the text check: {body_str}"
+    );
+    assert!(
+        wait_idle(&state, 1000).await,
+        "/options action should complete"
     );
 
     // Same words as plain input: the spell check must surface a preview.

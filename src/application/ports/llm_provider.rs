@@ -8,6 +8,7 @@ pub const AGENT_NARRATOR: &str = "narrator";
 pub const AGENT_QUANTIFIER: &str = "quantifier";
 pub const AGENT_TRIGGER: &str = "trigger";
 pub const AGENT_DIALOGUE: &str = "dialogue";
+pub const AGENT_OPTIONS: &str = "options";
 
 #[derive(Debug)]
 pub struct LlmCallResult {

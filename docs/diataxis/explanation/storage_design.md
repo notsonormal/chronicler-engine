@@ -29,7 +29,7 @@ Settings live the same way: a singleton row in the `settings` table, seeded once
 
 ## The seeding contract
 
-Seeding is the contract that makes the bootstrap boundary safe to re-run during development. The contract has four properties, and each one is load-bearing for a different class of dev/iteration workflow.
+Seeding is the contract that makes the bootstrap boundary safe to re-run during development. The contract has four properties, and each one supports a different class of dev/iteration workflow.
 
 Idempotent. Existing rows are not duplicated. The seeder checks for the row by primary key before writing — insert-without-conflict semantics for the rows the seeder creates. A re-run over an already-seeded database is a no-op on the populated rows; the engine can be stopped, restarted, and rebooted without rebuilding the world catalogue.
 

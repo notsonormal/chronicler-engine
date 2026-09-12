@@ -565,6 +565,86 @@ body {
     color: var(--color-accent-red);
 }
 
+/* Options dock — vertical stack of pickable options docked above the input
+   area (ticket 04 V4: options are part of the input surface, not the last
+   message). The container (#options-dock) self-polls and renders nothing
+   while the option set is empty. */
+.options-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px var(--spacing-md);
+    background: var(--color-bg-header);
+    border: 1px solid var(--color-border);
+    border-bottom: none;
+    flex-shrink: 0;
+}
+
+.options-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.options-label .mini-btn {
+    flex-shrink: 0;
+}
+
+.option-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.option-btn {
+    flex: 1;
+    width: 100%;
+    text-align: left;
+    background: rgba(0, 255, 255, 0.06);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-accent-cyan);
+    border-radius: 6px;
+    color: var(--color-text-primary);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    font-family: var(--font-family);
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.option-btn:hover:not(:disabled) {
+    background: rgba(0, 255, 255, 0.14);
+    border-color: var(--color-accent-cyan);
+}
+
+.option-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.mini-btn {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.mini-btn:hover:not(:disabled) {
+    border-color: var(--color-accent-cyan);
+    color: var(--color-accent-cyan);
+}
+
+.mini-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
 /* Tab Bar */
 .tab-bar {
     display: flex;

@@ -83,11 +83,15 @@ impl TestAppBuilder {
         self
     }
 
+    /// Injected pipelines (`.pipeline(...)`) are rebound to this storage instance.
     pub fn storage(mut self, storage: Arc<Storage>) -> Self {
         self.storage = Some(storage);
         self
     }
 
+    /// The pipeline is rebound to this builder's storage, so any storage
+    /// instance used to construct it is discarded. Pass the same `Arc` via
+    /// `.storage(...)` when the test mutates storage the pipeline should read.
     pub fn pipeline(mut self, pipeline: ActionPipeline) -> Self {
         self.pipeline = Some(pipeline);
         self
@@ -121,6 +125,7 @@ impl TestAppBuilder {
     }
 
     /// Build returning `(AppState, Arc<Storage>)`.
+    /// The returned storage is the instance the wired pipeline holds.
     pub fn build_service_with_storage(mut self) -> (AppState, Arc<Storage>) {
         let test_data = self.test_data.expect(
             "test setup: TestAppBuilder requires test_data (use default_test() or with_data())",

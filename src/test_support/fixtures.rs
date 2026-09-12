@@ -337,6 +337,7 @@ impl TestWorldManifest {
             narrator_mode: crate::domain::model::settings::NarratorMode::Novel,
             narrative_perspective: crate::domain::model::settings::NarrativePerspective::Third,
             narrative_tense: crate::domain::model::settings::NarrativeTense::Past,
+            options_always_on: false,
         }
     }
 }
@@ -620,7 +621,8 @@ pub fn dummy_swipe(text: &str) -> Swipe {
         snapshot_id: None,
         location_header: None,
         event_header: None,
-        replay: None,
+        impersonated: false,
+        steering_instruction: None,
     }
 }
 
@@ -660,13 +662,14 @@ pub fn insert_message_with_swipe(
 }
 
 /// Build a game state whose last message has a Swipe with stored generation
-/// inputs (`replay`) — the redo-entry fixture for retry flow tests.
+/// inputs.
 pub fn seed_swipe_with_stored_inputs(
     storage: &Storage,
     room_id: &str,
     text: &str,
     message_type: MessageType,
-    replay: Option<crate::domain::model::message::GenerationReplay>,
+    impersonated: bool,
+    steering_instruction: Option<String>,
 ) -> Result<u64, crate::error::EngineError> {
     use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 
@@ -680,7 +683,7 @@ pub fn seed_swipe_with_stored_inputs(
         .last()
         .ok_or_else(|| crate::error::EngineError::Config("seed: no message appended".into()))?
         .clone();
-    message.swipes[0].replay = replay;
+    message.set_stored_inputs(impersonated, steering_instruction);
     message.set_snapshot_id(Some(snapshot_id));
     insert_message_with_swipe(storage, &message)?;
     Ok(snapshot_id)

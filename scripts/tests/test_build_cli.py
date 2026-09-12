@@ -127,6 +127,7 @@ class StepCommandTests(unittest.TestCase):
         "check": "cargo check --all-targets --all-features",
         "clippy": "cargo clippy --all-targets --all-features -- -D warnings",
         "test-structure": "python scripts/check_test_structure.py",
+        "spec-coverage": "python scripts/validate_feature_spec.py",
         "docstrings": "python scripts/check_python_docstrings.py",
         "py-tests": "python -m unittest discover scripts/tests -v",
         "http-routes-check": "python scripts/extract_http_routes.py --check",
@@ -180,16 +181,16 @@ class GatePlanTests(unittest.TestCase):
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_full_gate_has_fmt_first_and_14_steps(self):
+    def test_full_gate_has_fmt_first_and_15_steps(self):
         plan = build._plan_gate_steps(self.gate_args())
         self.assertEqual(plan[0].label, "Formatting...")
-        self.assertEqual(len(plan), 14)
+        self.assertEqual(len(plan), 15)
 
     def test_no_fmt_prunes_fmt_only(self):
         plan = build._plan_gate_steps(self.gate_args(no_fmt=True))
         labels = [step.label for step in plan]
         self.assertNotIn("Formatting...", labels)
-        self.assertEqual(len(plan), 13)
+        self.assertEqual(len(plan), 14)
 
     def test_coverage_mode_swaps_test_and_report_steps(self):
         plan = build._plan_gate_steps(self.gate_args(coverage=True))
@@ -272,6 +273,141 @@ class SessionStampTests(unittest.TestCase):
         with mock.patch.dict(os.environ, env, clear=True):
             build._stamp_session_id()
         self.assertEqual(self.buffer.getvalue(), "")
+
+
+class NextestSummaryLineTests(unittest.TestCase):
+    """_nextest_summary_line renders nextest's Summary as a compact one-liner."""
+
+    def test_single_test_pass_summary(self):
+        output = "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped\n"
+        self.assertEqual(
+            build._nextest_summary_line(output), "nextest: 1 passed, 0 failed"
+        )
+
+    def test_fail_summary_omits_zero_skipped(self):
+        output = (
+            "     Summary [   1.497s] 119 tests run: 118 passed, 1 failed, 0 skipped\n"
+        )
+        self.assertEqual(
+            build._nextest_summary_line(output), "nextest: 118 passed, 1 failed"
+        )
+
+    def test_nonzero_skipped_is_kept(self):
+        output = "     Summary [   2.000s] 26 tests run: 21 passed, 0 failed, 5 skipped\n"
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 21 passed, 0 failed, 5 skipped",
+        )
+
+    def test_failed_segment_absent_means_zero_failed(self):
+        # Real nextest output omits the "failed" segment on clean runs.
+        output = "     Summary [   0.174s] 21 tests run: 21 passed, 1462 skipped\n"
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 21 passed, 0 failed, 1462 skipped",
+        )
+
+    def test_last_summary_line_wins(self):
+        output = (
+            "     Summary [   1.000s] 2 tests run: 1 passed, 1 failed\n"
+            "     Summary [   3.000s] 4 tests run: 4 passed, 0 failed\n"
+        )
+        self.assertEqual(
+            build._nextest_summary_line(output), "nextest: 4 passed, 0 failed"
+        )
+
+    def test_no_summary_returns_none(self):
+        self.assertIsNone(build._nextest_summary_line("error: could not compile\n"))
+
+    def test_compilation_output_without_summary_returns_none(self):
+        output = "   Compiling chronicler-engine v0.1.0\n     Running unittests\n"
+        self.assertIsNone(build._nextest_summary_line(output))
+
+
+class NextestStashTests(unittest.TestCase):
+    """run() stashes the summary even when a checked failure sys.exits."""
+
+    def setUp(self):
+        build._NextestSummary.line = None
+
+    def tearDown(self):
+        build._NextestSummary.line = None
+
+    @staticmethod
+    def _fake_process(out, returncode):
+        fake = mock.Mock()
+        fake.communicate.return_value = (out, None)
+        fake.returncode = returncode
+        return fake
+
+    def _run_silenced(self, out, returncode, check=True):
+        fake = self._fake_process(out, returncode)
+        with mock.patch.object(
+            build.subprocess, "Popen", return_value=fake
+        ), mock.patch("builtins.print"):
+            return build.run("cargo nextest run", check=check)
+
+    def test_run_stashes_summary_on_success(self):
+        rc = self._run_silenced(
+            "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped\n", 0
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(build._NextestSummary.line, "nextest: 1 passed, 0 failed")
+
+    def test_run_stashes_summary_on_checked_failure(self):
+        with self.assertRaises(SystemExit):
+            self._run_silenced(
+                "     Summary [   1.497s] 3 tests run: 2 passed, 1 failed\n", 1
+            )
+        self.assertEqual(build._NextestSummary.line, "nextest: 2 passed, 1 failed")
+
+    def test_run_without_summary_leaves_stash_unset(self):
+        with self.assertRaises(SystemExit):
+            self._run_silenced("error: could not compile\n", 101)
+        self.assertIsNone(build._NextestSummary.line)
+
+
+class NextestEpilogueTests(unittest.TestCase):
+    """The epilogue prints the one-liner directly before the build banner."""
+
+    def setUp(self):
+        build._NextestSummary.line = None
+
+    def tearDown(self):
+        build._NextestSummary.line = None
+
+    @staticmethod
+    def _run_main(printed):
+        memlog = _MemLog()
+        gate_args = SimpleNamespace(
+            command=None,
+            cleanup=False,
+            diagnostic_benchmark=False,
+            llm_only=False,
+        )
+        with mock.patch.object(
+            build, "parse_args", return_value=gate_args
+        ), mock.patch.object(build, "run_gate"), mock.patch.object(
+            build, "clean_old_logs"
+        ), mock.patch(
+            "builtins.print", side_effect=lambda msg="": printed.append(msg)
+        ), mock.patch(
+            "builtins.open", return_value=memlog
+        ):
+            return build.main()
+
+    def test_summary_printed_between_step_summary_and_banner(self):
+        printed = []
+        build._NextestSummary.line = "nextest: 21 passed, 0 failed"
+        self.assertEqual(self._run_main(printed), 0)
+        idx = printed.index("nextest: 21 passed, 0 failed")
+        self.assertEqual(printed[idx + 1], "=" * 60)
+        self.assertEqual(printed[idx + 2], "=== Build Complete ===")
+
+    def test_no_summary_prints_no_extra_line(self):
+        printed = []
+        self.assertEqual(self._run_main(printed), 0)
+        self.assertFalse(any(msg.startswith("nextest:") for msg in printed))
 
 
 class _MemLog(io.StringIO):

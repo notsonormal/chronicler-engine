@@ -1,8 +1,8 @@
 # Task: Posture relocation — narration + pipeline (read posture + presets from the game)
 
 Type: task
-Status: pending
-Blocked by: 05, 14
+Status: resolved
+Blocked by: (none)
 
 ## Question
 
@@ -27,6 +27,20 @@ Implement the narration-path half of the posture relocation: the narrator and ag
 - Build-green: novel mode must stay green; IF mode end-to-end still pending ticket 02.
 - Blocked by 05 (the game row must carry the fields first).
 - Skills: `/domain-modeling`.
+
+## Answer
+
+Resolved 2026-09-07 — shipped; build fully green (1082 unit + 1485 integration nextest; full `python build.py` gate).
+
+**Premise repair (the headline).** The ticket's premise — "the game row must carry the fields first" — had been broken by migration **v21** (commit d03c337, guided-generations pre-merge), which dropped `games.narrative_perspective` / `narrative_tense` as write-only. They were write-only only because *this* ticket hadn't landed its reads yet; guided-generations ticket 05's own cross-map note said "no removal — vindicated by narrator-modes 06". Ticket 01's resolved decision (posture is per-game, inherited from world; mode-switch nudges *that game's* perspective) and ticket 07's in-game-override scope both require the columns. So v21 is reversed as cleanup-overshoot: **migration v23** re-adds the columns and re-backfills from the world's posture (COALESCE + orphan warn, mirroring v19). No user data was ever lost — nothing wrote per-game posture between v19 and v23 other than inheritance itself.
+
+**Threading decision.** `PromptContext` gains `narrative_perspective` / `narrative_tense` as required constructor params (after `world`) — posture is not optional, so no builder default; forgetting it is a compile error, which is the silent-wrong-voice failure mode guided-generations 05 grilled against. `PromptAssembler::assemble` remains the sole stamper, now from the context instead of the world. `PipelineRun::resolve_posture(&world)` is the game-first resolver (game this run started for → world fallback + warn-log, mirroring `resolve_active_preset_id`'s shape); narration generation and the trigger-continuation path both use it. Arrival passes its already-loaded `game` fields directly — the cross-map note's "world fallback in arrival" proved unnecessary: `require_game` hard-fails on a missing row and the columns are NOT NULL.
+
+**Preset-id half (scope items 3–5) was already shipped** by ticket 05's storage helpers: `narration_generation.resolve_preset_choice` reads `active_system_preset_id` / `active_impersonate_preset_id`, the quantifier agent reads `active_quantifier_preset_id`, all game-first with registry-Novel fallback. Items 3–5 reduced to verification; no changes needed there.
+
+**Tests.** `test_assemble_injects_narrative_voice_from_resolved_posture` (renamed) now proves the resolved posture wins over both the world's shipped values and conflicting caller template_vars. New `resolve_posture` game-first / world-fallback pair in `narration_generation_tests.rs`. Migration tests: v21-era terminal assertions rewritten for the composed chain (v19 add → v21 drop → v23 restore), plus `test_v23_backfills_game_posture_from_world`.
+
+**Map maintenance.** Ticket 09's "this ticket ships v21" migration reference is stale (v21–v23 all shipped by other work); its body updated to take the next free version. Ticket 07 is now unblocked (06 and 14 both resolved).
 
 ## Comments
 

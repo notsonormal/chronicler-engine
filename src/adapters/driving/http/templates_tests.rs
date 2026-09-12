@@ -4,10 +4,11 @@ use chrono::Utc;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::adapters::driving::http::templates::{
-    ActionAreaTemplate, HeaderTemplate, NarrativeLogTemplate, VisualSidebarTemplate,
+    ActionAreaTemplate, HeaderTemplate, NarrativeLogTemplate, OptionsDockTemplate,
+    VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
-    ActionAreaViewModel, NpcPortraitView, VisualSidebarViewModel,
+    ActionAreaViewModel, NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
 
 #[test]
@@ -558,4 +559,42 @@ fn test_markdown_to_html_xss_prevention() {
     let output = crate::adapters::driving::http::utils::view_models::markdown_to_html(input);
     assert!(output.contains("&lt;script&gt;"));
     assert!(!output.contains("<script>"));
+}
+
+#[test]
+fn test_options_dock_empty_set_renders_empty_body() {
+    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(vec![], false));
+    let rendered = template.render().unwrap();
+    assert!(rendered.trim().is_empty());
+}
+
+#[test]
+fn test_options_dock_renders_escaped_option_rows() {
+    let options = vec![
+        "Open the creaking door".to_string(),
+        "Search the foyer <quietly>".to_string(),
+    ];
+    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(options, false));
+    let rendered = template.render().unwrap();
+
+    assert_eq!(rendered.matches("option-btn").count(), 2);
+    assert_eq!(rendered.matches("editOption(this)").count(), 2);
+    assert_eq!(rendered.matches("useOption(this)").count(), 2);
+    assert!(rendered.contains("options — pick one, or type your own"));
+    assert!(rendered.contains(r#"value="/options""#));
+    assert!(rendered.contains("Open the creaking door"));
+    // Askama escapes element content with numeric entities.
+    assert!(!rendered.contains("<quietly>"));
+    assert!(rendered.contains("&#60;quietly&#62;"));
+    assert!(!rendered.contains("disabled"));
+}
+
+#[test]
+fn test_options_dock_busy_disables_all_controls() {
+    let options = vec!["Wait".to_string(), "Listen".to_string()];
+    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(options, true));
+    let rendered = template.render().unwrap();
+
+    // 2 option buttons + 2 edit buttons + the regenerate button.
+    assert_eq!(rendered.matches("disabled").count(), 5);
 }

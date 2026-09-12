@@ -11,10 +11,14 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::application::agents::registry::AgentRegistry;
-use chronicler_engine::domain::model::settings::AppSettings;
+use chronicler_engine::domain::model::map::MapDef;
+use chronicler_engine::domain::model::settings::{
+    AppSettings, NarrativePerspective, NarrativeTense, NarratorMode,
+};
+use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder, TestMap, TestPersona,
-    TestWorld,
+    make_test_pipeline_with_backends, make_test_recorder_with_storage, TestAppBuilder, TestMap,
+    TestPersona, TestWorld,
 };
 
 use crate::test_utils::wait_for_condition_async;
@@ -129,19 +133,81 @@ pub fn app_with_narrator(narrator: Arc<MockBackend>) -> (axum::Router, AppState)
     app_with_narrator_and_settings(narrator, AppSettings::default())
 }
 
+/// Core narrator-wired test app: fresh in-memory storage, a storage-backed
+/// narrator recorder, the given agent registry and settings. Returns
+/// `(router, state, storage)` so tests can assert on recorded prompts and
+/// stored state.
+pub fn app_with_narrator_and_registry(
+    narrator: Arc<MockBackend>,
+    registry: AgentRegistry,
+    settings: AppSettings,
+) -> (axum::Router, AppState, Arc<Storage>) {
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder =
+        make_test_recorder_with_storage(narrator as Arc<dyn LlmProvider>, Arc::clone(&storage));
+    let pipeline = make_test_pipeline_with_backends(Arc::clone(&storage), recorder, registry);
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .pipeline(pipeline)
+        .settings(settings)
+        .build_with_state();
+    (app, state, storage)
+}
+
 /// Build an app with a custom narrator backend and explicit settings (default quantifier).
 pub fn app_with_narrator_and_settings(
     narrator: Arc<MockBackend>,
     settings: AppSettings,
 ) -> (axum::Router, AppState) {
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_backends(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        AgentRegistry::default(),
-    );
-    TestAppBuilder::default_test()
-        .pipeline(pipeline)
-        .settings(settings)
-        .build_with_state()
+    let (app, state, _storage) =
+        app_with_narrator_and_registry(narrator, AgentRegistry::default(), settings);
+    (app, state)
+}
+
+/// POST a url-encoded body to an arbitrary URI.
+pub async fn post_form(
+    app: &axum::Router,
+    uri: &str,
+    body: &str,
+) -> axum::response::Response<Body> {
+    let req = Request::builder()
+        .uri(uri)
+        .method(Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    app.clone().oneshot(req).await.unwrap()
+}
+
+/// An Interactive Fiction world with second-person present-tense posture.
+pub fn if_world() -> WorldCard {
+    WorldCard {
+        key: "if_world".to_string(),
+        name: "IF World".to_string(),
+        description: "An Interactive Fiction test world.".to_string(),
+        narrator_mode: NarratorMode::InteractiveFiction,
+        narrative_perspective: NarrativePerspective::Second,
+        narrative_tense: NarrativeTense::Present,
+        ..Default::default()
+    }
+}
+
+/// Build a urlencoded `WorldForm` body for the worlds update endpoint.
+/// Posture fields and the options toggle are appended by callers, so each
+/// test controls exactly which fields the form carries.
+pub fn world_form_body(world: &WorldCard, map: &MapDef) -> String {
+    let map_json = serde_json::to_string(map).expect("map serializes");
+    let scenarios_json = serde_json::to_string(&world.scenarios).expect("scenarios serialize");
+    let pairs = vec![
+        ("key", world.key.clone()),
+        ("name", world.name.clone()),
+        ("description", world.description.clone()),
+        ("global_rules", world.global_rules.join("\n")),
+        ("map_json", map_json),
+        ("scenarios_json", scenarios_json),
+    ];
+    serde_urlencoded::to_string(pairs).expect("world form body serializes")
 }

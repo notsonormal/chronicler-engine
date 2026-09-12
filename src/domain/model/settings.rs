@@ -46,6 +46,16 @@ impl NarratorMode {
             Self::Novel
         })
     }
+
+    /// The perspective a fresh game of this mode starts at. Also the nudge
+    /// target when a game switches into this mode while sitting at the other
+    /// mode's default perspective.
+    pub fn default_perspective(&self) -> NarrativePerspective {
+        match self {
+            Self::Novel => NarrativePerspective::Third,
+            Self::InteractiveFiction => NarrativePerspective::Second,
+        }
+    }
 }
 
 impl FromStr for NarratorMode {
@@ -291,6 +301,8 @@ pub struct AppSettings {
     pub agents: Vec<AgentConfig>,
     #[serde(default)]
     pub mode_preset_registry: ModePresetRegistry,
+    #[serde(default = "settings_defaults::default_active_options_prompt_preset_id")]
+    pub active_options_prompt_preset_id: String,
 }
 
 impl Default for AppSettings {
@@ -336,6 +348,8 @@ impl Default for AppSettings {
             text_check: TextCheckSettings::default(),
             agents: AgentConfig::defaults(),
             mode_preset_registry: ModePresetRegistry::default(),
+            active_options_prompt_preset_id:
+                settings_defaults::default_active_options_prompt_preset_id(),
         }
     }
 }

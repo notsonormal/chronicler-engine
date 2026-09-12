@@ -17,16 +17,8 @@ The tier is defined by **what's faked**, not by sync vs async.
 
 `#[tokio::test]` with fakes is a unit test. The unit tier includes async
 scenarios (cancellation, mid-flight timing) that need in-process seams — these
-are unit tests doing their job, not exceptions.
-
-## What was dissolved
-
-The pipeline-level component tier (`tests/integration/application/` and
-`tests/integration/flow/`) — tests that called pipeline methods directly on
-`AppState` with real SQLite and asserted on `GameState` — is dissolved. Those
-tests duplicated the unit tier's job (same methods, same `GameState`
-assertions) at a heavier harness cost. They port down to unit (branch
-coverage) or up to HTTP E2E (spec validation).
+are unit tests doing their job, not exceptions. There is no component tier;
+former pipeline-level tests moved to the unit tier or to HTTP E2E.
 
 ## Spec scenarios and HTTP E2E
 
@@ -51,7 +43,7 @@ These aren't exceptions to the model — they're the unit and driven-adapter
 tiers doing their job. A scenario that can't be expressed through HTTP simply
 doesn't get an HTTP E2E test.
 
-**Spec completeness is load-bearing.** The model only prevents drift if specs
+**Spec completeness is mandatory.** The model only prevents drift if specs
 are complete — every failure mode, every edge case. A half-written spec +
 HTTP E2E + comprehensive unit tests is less safe than the old component tier,
 because the component tier was catching unspecified behaviour the new model
@@ -79,29 +71,37 @@ the placement rule is the guardrail.
 ## SCENARIO tags
 
 `SCENARIO:` tags (format: `// [spec-path] SCENARIO: N.N`) go on HTTP E2E tests
-in `tests/http/` and browser behaviour tests in
-`tests/browser/behaviour.rs`. Scenarios that live at the unit or
-driven-adapter tier don't carry SCENARIO tags — they're covered by tests
-whose names describe the behaviour. Tags must not appear in
-`tests/storage/` or `tests/browser/invariants.rs`.
+in `tests/http/` and browser tests in `tests/browser/`. Scenarios at the unit
+or driven-adapter tier get no tags; tests whose names describe the behaviour
+cover them there.
 
-`tests/browser/invariants.rs` carries a named exemption: no tags, no
-spec link, test code is the definition (same shape as unit branch tests
-— STRATEGY.md's "every branch needs a unit test" rule doesn't produce a
-per-branch doc; the test is the definition).
+**Per-surface specs (browser tier).** DOM-observed scenarios live in
+`docs/specs/browser_<feature>.md`; HTTP-observed scenarios stay in
+`<feature>.md` — one scenario = one observation surface = one spec file = one
+tag. Test files mirror the specs: `tests/browser/<feature>.rs` covers
+`docs/specs/browser_<feature>.md` (e.g. `browser_slash_menu.md` ↔
+`slash_menu.rs`). Dashboard-chrome scenarios no feature panel owns live in
+`browser_dashboard.md` / `dashboard.rs` (static command form, status display,
+error toast).
 
-Mechanical enforcement lives in `scripts/validate_feature_spec.py` via
-the `TEST_DIRS` list (scans `tests/http/` + `tests/browser/` for
-`// SCENARIO:` comments). The "tags only in `tests/http/` +
-`tests/browser/behaviour.rs`" rule is a social convention layered on top;
-the validator scans the whole browser dir but `invariants.rs` has no
-tags to contribute.
+`scripts/validate_feature_spec.py` enforces the rules in the `spec-coverage`
+gate step of `build.py`:
 
-## Placement test
+- Every declared spec scenario has at least one covering test, and every tag
+  references a declared scenario.
+- Surface consistency: `browser_*.md` specs are tagged only from
+  `tests/browser/`, and non-`browser_*` specs are never tagged from
+  `tests/browser/`.
+- Every test under `tests/http/` and `tests/browser/` carries a tag, unless
+  the script declares an exemption with its reason (`TAG_EXEMPT_DIRS`,
+  `TAG_EXEMPT_FILES`, `TAG_EXEMPT_TESTS`). Exempt today:
+  `tests/browser/invariants.rs` (no spec link; test code is the definition)
+  and the stdout-tee health check in `dashboard.rs`.
+- `tests/http/requires_migration/` is the legacy quarantine: untagged by
+  design. `REQUIRES_MIGRATION_TEST_COUNT` in the script pins its size, and
+  the count may only go down. Migrating a test off the quarantine lowers
+  the constant deliberately; a new untagged test in the folder fails the
+  gate.
 
-The question is **which tier's purpose does this test serve?**
-
-- Branch coverage → **unit** (`src/`)
-- Spec validation through the driving adapter → **HTTP E2E** (`tests/http/`)
-- Persistence integrity → **driven-adapter** (`tests/integration/storage/`)
-- DOM/CSS/JS → **browser** (`tests/browser/`)
+The validator scans only `tests/http/` and `tests/browser/`. Put no tags in
+`tests/storage/` or any other tier.

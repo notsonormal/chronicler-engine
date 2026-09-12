@@ -321,7 +321,7 @@ class TestRealRouter(unittest.TestCase):
 
         rows = re.findall(r"^\| (?:GET|POST) \|", rendered, flags=re.MULTILINE)
         self.assertEqual(len(rows), len(routes))
-        self.assertEqual(len(rows), 52)
+        self.assertEqual(len(rows), 57)
 
 
 

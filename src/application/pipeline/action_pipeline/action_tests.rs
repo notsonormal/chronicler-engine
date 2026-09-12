@@ -53,7 +53,7 @@ fn test_execute_action_clears_last_trigger() {
         .expect("save_state should succeed");
 
     app.pipeline
-        .execute_action_with_replay("look".to_string(), None);
+        .execute_action_with_inputs("look".to_string(), false, None);
 
     let final_state = app.message_service.load_or_fresh();
     assert!(
@@ -88,7 +88,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     let handle = thread::spawn(move || {
         app_clone
             .pipeline
-            .execute_action_with_replay("look around".to_string(), None);
+            .execute_action_with_inputs("look around".to_string(), false, None);
     });
 
     let start = std::time::Instant::now();
@@ -145,7 +145,7 @@ fn test_execute_action_completes_and_persists_state() {
         .pipeline(service)
         .build_service();
     app.pipeline
-        .execute_action_with_replay("look".to_string(), None);
+        .execute_action_with_inputs("look".to_string(), false, None);
     let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -177,7 +177,7 @@ fn test_execute_action_handles_narration_error() {
         .pipeline(service)
         .build_service();
     app.pipeline
-        .execute_action_with_replay("look".to_string(), None);
+        .execute_action_with_inputs("look".to_string(), false, None);
     let final_state = app.message_service.load_or_fresh();
     assert!(
         matches!(
@@ -203,7 +203,7 @@ fn test_execute_action_handles_cancellation() {
         .build_service();
     app.shutdown_token.cancel();
     app.pipeline
-        .execute_action_with_replay("look".to_string(), None);
+        .execute_action_with_inputs("look".to_string(), false, None);
     let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -226,7 +226,7 @@ fn test_execute_action_preserves_existing_input_log() {
         .pipeline(service)
         .build_service();
     app.pipeline
-        .execute_action_with_replay("examine room".to_string(), None);
+        .execute_action_with_inputs("examine room".to_string(), false, None);
     let final_state = app.message_service.load_or_fresh();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
@@ -301,7 +301,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     let handle = thread::spawn(move || {
         app_for_thread
             .pipeline
-            .execute_action_with_replay("look".to_string(), None);
+            .execute_action_with_inputs("look".to_string(), false, None);
     });
 
     entered.wait();
@@ -350,7 +350,7 @@ fn test_narration_saved_before_quantifying_phase() {
     let handle = thread::spawn(move || {
         app_for_thread
             .pipeline
-            .execute_action_with_replay("test".to_string(), None);
+            .execute_action_with_inputs("test".to_string(), false, None);
     });
 
     entered.wait();
@@ -535,7 +535,7 @@ fn test_process_action_heals_stale_status_before_validation_error() {
 }
 
 #[tokio::test]
-async fn test_dispatcher_guide_stores_guide_on_swipe_replay() {
+async fn test_dispatcher_guide_stores_guide_on_swipe_stored_inputs() {
     use crate::application::errors::ProcessActionResult;
 
     let data = TestDataBuilder::default_test().build();
@@ -576,16 +576,13 @@ async fn test_dispatcher_guide_stores_guide_on_swipe_replay() {
         .iter()
         .find(|e| e.message_type == MessageType::Narration)
         .expect("guide should produce a Narration message");
-    let replay = narration
-        .replay()
-        .expect("narration swipe should carry the stored inputs");
     assert_eq!(
-        replay.guide.as_deref(),
+        narration.steering_instruction(),
         Some("make it ominous"),
         "the guide must be stored on the swipe"
     );
     assert!(
-        !replay.impersonate,
+        !narration.impersonated(),
         "guide inputs must not set the impersonate flag"
     );
 
@@ -593,7 +590,7 @@ async fn test_dispatcher_guide_stores_guide_on_swipe_replay() {
 }
 
 #[tokio::test]
-async fn test_dispatcher_impersonate_pins_preset_and_stores_direction() {
+async fn test_dispatcher_impersonate_stores_direction() {
     use crate::application::errors::ProcessActionResult;
 
     let data = TestDataBuilder::default_test().build();
@@ -608,15 +605,6 @@ async fn test_dispatcher_impersonate_pins_preset_and_stores_direction() {
         .pipeline(service)
         .build_service();
     let game_id = app.game_catalogue.current_game_id();
-
-    let expected_preset_id = {
-        let settings = app
-            .pipeline
-            .settings
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
-        app.pipeline.storage.active_impersonate_preset_id(&settings)
-    };
 
     let result = app
         .pipeline
@@ -643,26 +631,14 @@ async fn test_dispatcher_impersonate_pins_preset_and_stores_direction() {
         .iter()
         .find(|e| e.message_type == MessageType::Input)
         .expect("impersonate should produce an Input message");
-    let replay = input_entry
-        .replay()
-        .expect("impersonate swipe should carry the stored inputs");
     assert!(
-        replay.impersonate,
+        input_entry.impersonated(),
         "the impersonate flag must be stored on the swipe"
     );
     assert_eq!(
-        replay.impersonate_direction.as_deref(),
+        input_entry.steering_instruction(),
         Some("act wary"),
-        "the direction must be stored on the swipe"
-    );
-    assert_eq!(
-        replay.impersonate_preset_id.as_deref(),
-        Some(expected_preset_id.as_str()),
-        "the active impersonate preset id must be pinned at entry time"
-    );
-    assert!(
-        replay.guide.is_none(),
-        "impersonate inputs must not carry a guide"
+        "the steering instruction must be stored on the swipe"
     );
 
     app.shutdown_token.cancel();

@@ -133,6 +133,8 @@ impl ArrivalTaskContext {
 
         let prompt_context = PromptContext::new(
             &world,
+            game.narrative_perspective,
+            game.narrative_tense,
             room,
             NpcContext {
                 all_npcs: &self.all_npcs,

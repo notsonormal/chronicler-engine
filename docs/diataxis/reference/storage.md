@@ -64,7 +64,7 @@ Every game and every world row can be referred to by multiple tables; the standa
 - **`games`** — top-level game session record. Every snapshot and message belongs to a game. The game pins one world and one persona at creation time (the world and persona keys are logical references, not SQL FKs — see Logical References below). Multiple games can exist in the same database. On first startup for a world, a new `games` row is auto-created with a generated name.
 - **`game_state_snapshots`** — frozen point-in-time captures of the mutable game state. Used to load the latest state on server startup and to retry a message by loading the snapshot referenced by a message's `snapshot_id`. **Snapshot invariant:** messages are **not** stored in the snapshot JSON; they live in `messages` and are hydrated after a snapshot load.
 - **`messages`** — chronological narrative history. Each row is one log entry (player input, narration, system message, dialogue), persisted incrementally. There is exactly one message history per game. Messages can be soft-deleted.
-- **`message_swipes`** — per-message swipe versions. Each row is one alternative generation for a message. Deleting a message removes its swipes; the swipe index is unique per message. Each swipe carries an optional `snapshot_id` referencing `game_state_snapshots.id` that is **not** declared as a SQL FK — see Relationships. A swipe also carries an optional replay blob — the steering conditions (a guide, or an impersonation with its direction and preset id) that produced the swipe, so a retry of that swipe re-applies the same steering.
+- **`message_swipes`** — per-message swipe versions. Each row is one alternative generation for a message. Deleting a message removes its swipes; the swipe index is unique per message. Each swipe carries an optional `snapshot_id` referencing `game_state_snapshots.id` that is **not** declared as a SQL FK — see Relationships. A swipe also carries the player-typed inputs of its generation — an impersonation flag and the steering instruction (a guide, or an impersonate direction) — so a retry of that swipe re-applies the same steering.
 
 ### World catalogue cluster
 
@@ -98,7 +98,7 @@ flowchart TD
 
 - **`games → game_state_snapshots`** and **`games → messages`** — one-to-many. Deleting a game removes its snapshots and messages.
 - **`messages → message_swipes`** — one-to-many. The swipe index is unique per message.
-- **`message_swipes.snapshot_id → game_state_snapshots.id`** — **not a SQL FK**, deliberately. Each swipe carries the snapshot of the state captured *after* the swipe was created; switching swipes restores that exact state. Declaring it as a FK would cascade snapshot deletion to swipes, which the retry semantics don't want. The relationship is load-bearing but referential integrity is the application's responsibility.
+- **`message_swipes.snapshot_id → game_state_snapshots.id`** — **not a SQL FK**, deliberately. Each swipe carries the snapshot of the state captured *after* the swipe was created; switching swipes restores that exact state. Declaring it as a FK would cascade snapshot deletion to swipes, which the retry semantics don't want. The retry flow depends on this relationship; referential integrity is the application's responsibility.
 
 ### World catalogue cluster
 
@@ -129,7 +129,7 @@ flowchart TD
 
 ### Cross-cluster logical references (no SQL FKs)
 
-Several relationships between clusters are load-bearing but are **not** SQL foreign keys — either because the target table predates the column (added in a later migration) or because declaring the FK would impose a CASCADE that the application semantics don't want. Integrity for these is the application's responsibility:
+Several relationships between clusters are **not** SQL foreign keys, either because the target table predates the column (added in a later migration) or because declaring the FK would impose a CASCADE the application semantics don't want. Integrity for these is the application's responsibility:
 
 - **`games.world_key → worlds.key`** (game state → world catalogue) — pins the world a game was created with. Added in migration v12.
 - **`games.persona_key → personas.key`** (game state → world catalogue) — pins the persona a game was created with. Added in migration v13; persona binding moved from world to game in this migration.
@@ -166,7 +166,7 @@ The read/write contract (accessors, mutators, intent-named methods) lives at `sr
 
 ### Persistence notes
 
-The load-bearing split — identity fields (`id`, `sender`, `message_type`, `timestamp`, `active_swipe_index`, `is_deleted`) live on `messages`, content fields (`text`, `location_header`, `event_header`, `snapshot_id`) live on `message_swipes` — mirrors the per-swipe content-field invariant. The per-row DDL is not restated here.
+The split mirrors the per-swipe content-field invariant: identity fields (`id`, `sender`, `message_type`, `timestamp`, `active_swipe_index`, `is_deleted`) live on `messages`, content fields (`text`, `location_header`, `event_header`, `snapshot_id`) live on `message_swipes`. The per-row DDL is not restated here.
 
 Two message-specific observations the schema does not say directly:
 
@@ -178,4 +178,4 @@ Two message-specific observations the schema does not say directly:
 - [Storage design](../explanation/storage_design.md) — current-understanding rationale for the storage layer, bootstrap flow, seed-as-template pattern, database authority, backend decorator, single-test-layer invariant, and the message-swipe design.
 - [Startup and Bootstrap](./startup.md) — bootstrap boundary, seeding order, schema files, and seed-file invariants.
 - [Dashboard](./frontend/dashboard.md) — worlds management UI and the worlds tab.
-- [AI Steering](./narrative/ai_steering.md) — the replay blob on a swipe as the retry mechanism for guided generation and impersonate.
+- [AI Steering](./narrative/ai_steering.md) — a swipe's stored steering inputs as the retry mechanism for guided generation and impersonate.

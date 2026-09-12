@@ -15,7 +15,6 @@ use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::adapters::driven::storage::Storage;
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
-use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
@@ -209,40 +208,42 @@ impl ActionPipeline {
         Ok(ProcessActionResult::Started)
     }
 
-    #[instrument(skip(self, fresh_replay), fields(input_length))]
+    #[instrument(skip(self, impersonated, steering_instruction), fields(input_length))]
     pub fn run_from_input(
         &self,
         mut state: GameState,
         input: String,
-        fresh_replay: Option<GenerationReplay>,
+        impersonated: bool,
+        steering_instruction: Option<String>,
     ) -> Result<(), PhaseError> {
         tracing::debug!("run_from_input: called");
         let started_for = self.storage.current_game_id();
         let run = PipelineRun::new(self, started_for);
 
-        // Guide and impersonate are mutually exclusive — impersonate wins.
-        let replay = fresh_replay.or_else(|| {
-            state
-                .narrative
-                .retry_target
-                .as_ref()
-                .and_then(|t| t.replay().cloned())
-        });
-        let impersonate = replay.as_ref().is_some_and(|r| r.impersonate);
+        // Fresh entry inputs win; a redo falls back to the retry target's
+        // stored inputs. Guide and impersonate cannot collide — one
+        // `steering_instruction` field, discriminated by `impersonated`.
+        let (impersonated, steering_instruction) = if impersonated || steering_instruction.is_some()
+        {
+            (impersonated, steering_instruction)
+        } else {
+            match state.narrative.retry_target.as_ref() {
+                Some(target) => (
+                    target.impersonated(),
+                    target.steering_instruction().map(|d| d.to_string()),
+                ),
+                None => (false, None),
+            }
+        };
         let generation_inputs = narration_generation::GenerationInputs {
             input: input.clone(),
-            guide: if impersonate {
+            guide: if impersonated {
                 None
             } else {
-                replay.as_ref().and_then(|r| r.guide.clone())
+                steering_instruction.clone()
             },
-            impersonate: impersonate.then(|| narration_generation::ImpersonateInputs {
-                direction: replay
-                    .as_ref()
-                    .and_then(|r| r.impersonate_direction.clone()),
-                preset_id: replay
-                    .as_ref()
-                    .and_then(|r| r.impersonate_preset_id.clone()),
+            impersonate: impersonated.then_some(narration_generation::ImpersonateInputs {
+                steering_instruction,
             }),
         };
 
@@ -360,6 +361,20 @@ impl ActionPipeline {
             }
         }
 
+        // Always-on options trigger: non-impersonate narration turns rewrite
+        // the offered set at turn end (impersonate output IS the player
+        // acting).
+        if !impersonated {
+            let options_enabled = run.resolve_options_always_on(&outcome.bundle.world);
+            self.rewrite_options_after_turn(
+                &mut post_commit_state,
+                &map,
+                &persona,
+                &npcs,
+                options_enabled,
+            );
+        }
+
         run.phase_finalize(&mut post_commit_state);
         tracing::debug!("run_from_input: done");
         Ok(())
@@ -453,7 +468,11 @@ impl ActionPipeline {
             .agents_for_phase(ExecutionPhase::PostGeneration)
             .filter_map(|agent| match agent.execute(&agent_ctx) {
                 Ok(AgentResult::StatePatch(patch)) => Some(patch),
-                Ok(AgentResult::NoOp) | Ok(AgentResult::PromptDirective(_)) => None,
+                // Options agents dispatch by phase at gated call sites, never
+                // through this merge loop; the variant is unreachable here.
+                Ok(AgentResult::NoOp)
+                | Ok(AgentResult::PromptDirective(_))
+                | Ok(AgentResult::Options(_)) => None,
                 Err(e) => {
                     tracing::warn!("Agent {} failed: {e}", agent.name());
                     None
@@ -508,6 +527,7 @@ impl ActionPipeline {
             .last_input_text()
             .unwrap_or_default();
         let WorldBundle {
+            world,
             map,
             persona,
             npcs: npcs_map,
@@ -552,6 +572,11 @@ impl ActionPipeline {
         if let Some(target) = state.narrative.retry_target.take() {
             state.narrative.history.append(target);
         }
+        // An event-only retry is a narration-producing turn: the offered set
+        // follows the same turn-end rewrite rule (impersonation is not a
+        // concept here — retries never are).
+        let options_enabled = run.resolve_options_always_on(&world);
+        self.rewrite_options_after_turn(state, &map, &persona, &npcs_map, options_enabled);
         run.phase_finalize(state);
         Ok(())
     }
@@ -561,7 +586,7 @@ impl ActionPipeline {
         state: GameState,
         input_text: String,
     ) -> Result<(), PhaseError> {
-        self.run_from_input(state, input_text, None)
+        self.run_from_input(state, input_text, false, None)
     }
 
     fn phase_engine_commit(

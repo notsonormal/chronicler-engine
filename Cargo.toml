@@ -18,7 +18,7 @@ image = "0.25.10"
 axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
-tower-http = { version = "0.5", features = ["fs"] }
+tower-http = { version = "0.5", features = ["fs", "trace"] }
 http = "1"
 futures-util = "0.3"
 thiserror = "2.0.18"
@@ -41,6 +41,7 @@ harper-core = "0.25.0"
 [dev-dependencies]
 playwright-rs = "0.9"
 reqwest = { version = "0.13", features = ["json", "form"] }
+serde_urlencoded = "0.7"
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 libc = "0.2"
@@ -59,7 +60,7 @@ urlencoding = "2.1"
 [features]
 default = ["testing"]
 diagnostics = []
-testing = []
+testing = ["diagnostics"]
 [[test]]
 name = "architecture"
 path = "tests/infrastructure/architecture.rs"

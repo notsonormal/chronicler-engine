@@ -49,6 +49,20 @@ fn recorder_for(config: &LlmProviderConfig, storage: Arc<Storage>) -> Result<Arc
     Ok(Arc::new(LlmCallRecorder::new(provider, save_fn)))
 }
 
+/// Named-backend seam: a connection whose id is "options" routes options
+/// generation to it (Roadway's cheap-model pattern); absent, `fallback`
+/// serves.
+fn options_recorder_for(
+    settings: &AppSettings,
+    storage: &Arc<Storage>,
+    fallback: &Arc<LlmCallRecorder>,
+) -> Result<Arc<LlmCallRecorder>> {
+    match settings.find_connection("options") {
+        Some(config) => recorder_for(config, Arc::clone(storage)),
+        None => Ok(Arc::clone(fallback)),
+    }
+}
+
 pub struct WiredApp {
     pub settings_service: SettingsService,
     pub prompt_preset_service: PromptPresetService,
@@ -134,9 +148,11 @@ pub fn build_app_graph(
         let narration_recorder = recorder_for(&guard.narration_connection(), Arc::clone(&storage))?;
         let quantifier_recorder =
             recorder_for(&guard.quantifier_connection(), Arc::clone(&storage))?;
+        let options_recorder = options_recorder_for(&guard, &storage, &narration_recorder)?;
         let registry = AgentRegistry::from_configs_with_storage(
             &guard.agents,
             Arc::clone(&quantifier_recorder),
+            options_recorder,
             Some(Arc::clone(&storage)),
             Arc::clone(&settings),
         )
@@ -176,9 +192,11 @@ pub fn build_app_graph_for_tests(
         let registry = if pipeline_override.is_some() {
             AgentRegistry::default()
         } else {
+            let options_recorder = options_recorder_for(&guard, &storage, &recorder)?;
             AgentRegistry::from_configs_with_storage(
                 &guard.agents,
                 Arc::clone(&recorder),
+                options_recorder,
                 Some(Arc::clone(&storage)),
                 Arc::clone(&settings),
             )

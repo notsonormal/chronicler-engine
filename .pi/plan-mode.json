@@ -19,5 +19,5 @@
     "graphify"
   ],
   "planFolder": "docs/plans",
-  "scratchFolders": ["tmp", "docs/plans", ".scratch"]
+  "scratchFolders": ["/tmp", "tmp", "docs/plans", ".scratch"]
 }

@@ -63,7 +63,7 @@ impl WorldsPanelTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r#"
+    source = r##"
 <div class="worlds-panel">
 <div class="world-form-container">
     <h2>{% if is_edit %}Edit World{% else %}Create New World{% endif %}</h2>
@@ -78,6 +78,32 @@ impl WorldsPanelTemplate {
         <label>Global Rules (one per line): <textarea name="global_rules">{{ global_rules }}</textarea></label>
 
         <label>Default Room Image: <input type="text" name="default_room_image" value="{{ default_room_image }}" /></label>
+
+        <div class="form-group posture-group">
+            <label>Narrator Mode:
+                <select name="narrator_mode" {% if is_edit %}hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML"{% endif %}>
+                    <option value="novel" {% if narrator_mode == "novel" %}selected{% endif %}>Novel</option>
+                    <option value="interactive_fiction" {% if narrator_mode == "interactive_fiction" %}selected{% endif %}>Interactive Fiction</option>
+                </select>
+            </label>
+            <label>Perspective:
+                <select name="narrative_perspective" {% if is_edit %}hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML"{% endif %}>
+                    <option value="second" {% if narrative_perspective == "second" %}selected{% endif %}>Second person</option>
+                    <option value="third" {% if narrative_perspective == "third" %}selected{% endif %}>Third person</option>
+                </select>
+            </label>
+            <label>Tense:
+                <select name="narrative_tense" {% if is_edit %}hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML"{% endif %}>
+                    <option value="past" {% if narrative_tense == "past" %}selected{% endif %}>Past</option>
+                    <option value="present" {% if narrative_tense == "present" %}selected{% endif %}>Present</option>
+                </select>
+            </label>
+            <span id="world-posture-status"></span>
+        </div>
+
+        <div class="form-group">
+            <label class="checkbox-label"><input type="checkbox" name="options_always_on" value="true" {% if options_always_on %}checked{% endif %} /> Auto-generate options after each turn</label>
+        </div>
 
         <label>Map JSON:
             <textarea name="map_json" class="json-editor" placeholder="{{ map_placeholder }}">{{ map_json }}</textarea>
@@ -94,7 +120,7 @@ impl WorldsPanelTemplate {
     </form>
 </div>
 </div>
-"#,
+"##,
     ext = "html"
 )]
 pub struct WorldFormTemplate {
@@ -106,6 +132,10 @@ pub struct WorldFormTemplate {
     pub default_room_image: String,
     pub map_json: String,
     pub scenarios_json: String,
+    pub narrator_mode: String,
+    pub narrative_perspective: String,
+    pub narrative_tense: String,
+    pub options_always_on: bool,
     pub form_action: String,
     pub is_readonly: bool,
     pub map_placeholder: String,
@@ -137,7 +167,7 @@ impl WorldFormTemplate {
             (String::new(), String::new())
         } else {
             (
-                r#"{"overworld":{"id":"overworld","name":"Overworld","regions":[]}}"#.to_string(),
+                r##"{"overworld":{"id":"overworld","name":"Overworld","regions":[]}}"##.to_string(),
                 "[]".to_string(),
             )
         };
@@ -151,6 +181,10 @@ impl WorldFormTemplate {
             default_room_image: w.default_room_image.clone().unwrap_or_default(),
             map_json: map_json_str,
             scenarios_json: scenarios_json_str,
+            narrator_mode: w.narrator_mode.as_str().to_string(),
+            options_always_on: w.options_always_on,
+            narrative_perspective: w.narrative_perspective.as_str().to_string(),
+            narrative_tense: w.narrative_tense.as_str().to_string(),
             form_action: if is_edit {
                 format!("/worlds/{}", w.key)
             } else {
