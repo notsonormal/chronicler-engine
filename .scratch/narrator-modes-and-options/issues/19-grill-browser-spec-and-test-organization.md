@@ -1,7 +1,7 @@
 # Grill: browser-tier spec tags + test-file organization
 
 Type: grilling
-Status: claimed
+Status: resolved
 Blocked by: (none) — follow-up to ticket 12 (resolved)
 
 ## Question
@@ -35,4 +35,15 @@ Raised during ticket 12 close-out (2026-09-12): options.md scenarios 24.3/24.8/2
 
 ## Answer
 
-(to fill after grilling)
+Resolved 2026-09-12 (grilling, two rounds after the round-1 proposal reshaped the tree). Decision: **per-surface spec files**.
+
+1. **Spec organization** — DOM-observed scenarios live in `docs/specs/browser_<feature>.md`; HTTP-observed scenarios stay in `<feature>.md`. One scenario = one observation surface = one spec file = one tag. This refines ticket 12's close-out ruling ("splitting scenarios by tier couples the spec to an implementation choice"): the browser is a user-facing observation surface, not an implementation choice, and STRATEGY.md's "Browser placement test" already forces browser scenarios to be DOM-flavored. The ticket-12 principle survives as "each scenario text picks exactly one observation surface" — already enforced as one-tag-per-test by its post-close correction.
+2. **Shell rename** (Q1=A) — `browser.md` → `browser_shell.md`: dashboard shell mechanics only (16.x edit/toast, 17.x slash menu); ids kept, texts unmoved, `dashboard.md`'s 17.1–17.9 cite stays valid. `browser_<feature>.md` prefix chosen because the tier is the primary axis of "where does this scenario go" and the prefix groups browser specs in sorted listings.
+3. **Full migration** (Q2=A) — all 9 misplaced texts move: options 24.3/24.8/24.9 → `browser_options.md`; games 20.1–20.3 → `browser_games.md`; prompt_presets 21.27 → `browser_prompt_presets.md`; browser.md 18.1–18.2 (world posture editor) → `browser_worlds.md`. Partial migration rejected: it would ship the convention with built-in exceptions — the re-litigation magnet this ticket exists to kill.
+4. **Numbering** (Q3=B + confirmations) — new files take fresh ranges in migration order: options=26, games=27, prompt_presets=28, worlds=29. `browser_shell.md` keeps 16.x/17.x (rename ≠ new file). Stay-behind scenarios keep their ids, gaps tolerated (games.md 20.4–20.6 lead the section; options.md has holes at 24.3/24.8/24.9). Existing numbering has no global scheme (games.md owns 17–20, settings.md owns a 20.x) — tolerated, not re-litigated.
+5. **Test organization** — `tests/browser/<feature>.rs` mirrors `browser_<feature>.md`; the options 3-test tail cut is verified mechanical; games (3 tests) and prompt_presets (1 test) cut too if they prove clean section cuts, else retag-in-place + defer; `behaviour.rs` ends holding shell tags + the stdout-tee exemption only.
+6. **Convention + enforcement** (Q4=B) — STRATEGY.md "SCENARIO tags" rewrite states the per-surface rule + file mirroring; `validate_feature_spec.py` gains a surface-consistency rule (`browser_*.md` ⇔ tagged only from `tests/browser/`; non-`browser_*` specs never tagged from `tests/browser/`). Mechanical enforcement chosen over prose alone per ticket 18's design ruling.
+7. **invariants.rs** (Q6=A) — untagged, named exemption, unchanged; the invariant/behaviour boundary survives the split.
+8. **Bookkeeping on landing** — amend ticket 12's `## Answer` + the map's 12-line (they describe the old behaviour.rs placement); update `dashboard.md:82` link + `ui_design.md:10` prose; regenerate `tests/AGENTS.md`; validate-docs + full gate green. Historical records (CHANGELOG, docs/plans/*, old ticket bodies) keep old ids/paths.
+
+Graduates to: **ticket 20 — Task: per-surface spec + test-file reorganization** (full landing spec carried in its body).

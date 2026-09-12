@@ -892,7 +892,10 @@ proptest! {
         let deps = deps_for_npc_ids(TestMap::two_rooms("room1", "room2"), &new_npc_ids);
         let mut state = make_two_room_state();
         state.handle_movement( destination, &new_npc_ids, &deps.map, &deps.npcs).unwrap();
-        state.assert_state_consistency(&deps.map, &deps.npcs).ok();
+        prop_assert!(
+            state.assert_state_consistency(&deps.map, &deps.npcs).is_ok(),
+            "state inconsistent after handle_movement"
+        );
     }
 
     #[test]
@@ -916,7 +919,10 @@ proptest! {
             })
             .collect();
         state.apply_npc_events(&events, &deps.map, &deps.npcs).unwrap();
-        state.assert_state_consistency(&deps.map, &deps.npcs).ok();
+        prop_assert!(
+            state.assert_state_consistency(&deps.map, &deps.npcs).is_ok(),
+            "state inconsistent after apply_npc_events"
+        );
     }
 
     #[test]
@@ -961,7 +967,12 @@ proptest! {
             result.err()
         );
         let next_state = result.unwrap().post_commit_state;
-        next_state.assert_state_consistency(&deps.map, &deps.npcs).ok();
+        prop_assert!(
+            next_state
+                .assert_state_consistency(&deps.map, &deps.npcs)
+                .is_ok(),
+            "state inconsistent after execute_freeaction_impl"
+        );
     }
 
     #[test]

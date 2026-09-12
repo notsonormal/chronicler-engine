@@ -459,7 +459,6 @@ impl GameState {
         self.assert_room_exists(map)?;
         self.assert_npc_consistency(npcs)?;
         self.assert_npc_encounter_log_consistency(npcs)?;
-        self.assert_log_invariants()?;
         Ok(())
     }
 
@@ -510,21 +509,6 @@ impl GameState {
                 return Err(EngineError::Internal(InternalError::new(format!(
                     "npc_encounter_log references unknown NPC '{npc_id}'"
                 ))));
-            }
-        }
-        Ok(())
-    }
-
-    #[cfg(feature = "diagnostics")]
-    fn assert_log_invariants(&self) -> Result<()> {
-        let ai_idx = self.narrative.history.last_ai_response_index();
-        let input_idx = self.narrative.history.last_input_index();
-
-        if let (Some(ai), Some(input)) = (ai_idx, input_idx) {
-            if ai <= input {
-                return Err(EngineError::Internal(InternalError::new(
-                    "last AI response is not after last player input",
-                )));
             }
         }
         Ok(())

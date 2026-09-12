@@ -28,15 +28,6 @@ And GET /fragment/options-dock renders no options strip
 
 ### Using the offered set
 
-#### Scenario 24.3: Clicking Use posts the option as the player's input and narrates
-
-```gherkin
-Given the dock shows a generated option
-When the player clicks the option's Use button
-Then the command input is filled with the option text and submitted
-And the story log gains one Input entry with the option text followed by a Narration entry
-```
-
 #### Scenario 24.4: Regenerating replaces the set and adds no history entries
 
 ```gherkin
@@ -87,25 +78,6 @@ When the client POST /action with command="look"
 And the pipeline returns to idle
 Then the dock renders no options strip
 And the offered set is empty
-```
-
-### Set lifetime
-
-#### Scenario 24.8: The current set survives a page reload
-
-```gherkin
-Given the dock shows a generated option set
-When the player reloads the page
-Then the dock repopulates with the same option set
-```
-
-#### Scenario 24.9: Clicking Edit fills the input without submitting
-
-```gherkin
-Given the dock shows a generated option
-When the player clicks the option's Edit button
-Then the command input is filled with the option text and focused
-And no new story-log entry is created
 ```
 
 ### Response shapes

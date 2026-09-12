@@ -37,9 +37,15 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `mod.rs` — Bootstrap smoke test binary: startup branches in `bootstrap::run()`.
     - `run_branches.rs` — Smoke tests covering uncovered startup branches in `bootstrap::run()`.
 - **browser/**
-    - `behaviour.rs` — Browser behaviour tests: click→DOM change, htmx swap persistence, polling-pause, status wiring. Tagged against `docs/specs/browser.md`.
+    - `dashboard.rs` — Browser dashboard-chrome tests: static command form, status display, error toast. Tagged against `docs/specs/browser_dashboard.md`; the stdout-tee health check is a named exemption.
+    - `games.rs` — Browser games-panel tests: posture fragment render, auto-save, mode switch. Tagged against `docs/specs/browser_games.md`.
     - `invariants.rs` — Rendering invariants (named exemption in STRATEGY.md): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
-    - `mod.rs` — Browser test binary root (Playwright-driven): `behaviour` (client-side JS interaction, tagged against `docs/specs/browser.md`) + `invariants` (CSS/layout rendering invariants, named exemption — no spec, test code is the definition).
+    - `mod.rs` — Browser test binary root (Playwright-driven): per-surface behaviour modules mirroring the `docs/specs/browser_<feature>.md` specs (`dashboard`, `games`, `options`, `prompt_presets`, `slash_menu`, `story_log`, `worlds`) + `invariants` (CSS/layout rendering invariants, named exemption — no spec, test code is the definition).
+    - `options.rs` — Browser options-dock tests: Use/Edit interactions, reload persistence. Tagged against `docs/specs/browser_options.md`.
+    - `prompt_presets.rs` — Browser prompt-presets tests: allowed-modes editor roundtrip. Tagged against `docs/specs/browser_prompt_presets.md`.
+    - `slash_menu.rs` — Browser slash-command palette tests: open, filter, navigate, submit flows. Tagged against `docs/specs/browser_slash_menu.md`.
+    - `story_log.rs` — Browser story-log tests: edit-in-place, polling persistence, delete. Tagged against `docs/specs/browser_story_log.md`.
+    - `worlds.rs` — Browser worlds-panel tests: world posture editor render + auto-save. Tagged against `docs/specs/browser_worlds.md`.
 - **helpers/**
     - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage instances with deterministic defaults so tests can focus on the behaviour under test.

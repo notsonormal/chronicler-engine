@@ -71,20 +71,32 @@ the placement rule is the guardrail.
 ## SCENARIO tags
 
 `SCENARIO:` tags (format: `// [spec-path] SCENARIO: N.N`) go on HTTP E2E tests
-in `tests/http/` and browser behaviour tests in
-`tests/browser/behaviour.rs`. Scenarios at the unit or driven-adapter tier
-get no tags; tests whose names describe the behaviour cover them there.
+in `tests/http/` and browser tests in `tests/browser/`. Scenarios at the unit
+or driven-adapter tier get no tags; tests whose names describe the behaviour
+cover them there.
 
-`scripts/validate_feature_spec.py` enforces the rule in the `spec-coverage`
+**Per-surface specs (browser tier).** DOM-observed scenarios live in
+`docs/specs/browser_<feature>.md`; HTTP-observed scenarios stay in
+`<feature>.md` — one scenario = one observation surface = one spec file = one
+tag. Test files mirror the specs: `tests/browser/<feature>.rs` covers
+`docs/specs/browser_<feature>.md` (e.g. `browser_slash_menu.md` ↔
+`slash_menu.rs`). Dashboard-chrome scenarios no feature panel owns live in
+`browser_dashboard.md` / `dashboard.rs` (static command form, status display,
+error toast).
+
+`scripts/validate_feature_spec.py` enforces the rules in the `spec-coverage`
 gate step of `build.py`:
 
 - Every declared spec scenario has at least one covering test, and every tag
   references a declared scenario.
+- Surface consistency: `browser_*.md` specs are tagged only from
+  `tests/browser/`, and non-`browser_*` specs are never tagged from
+  `tests/browser/`.
 - Every test under `tests/http/` and `tests/browser/` carries a tag, unless
   the script declares an exemption with its reason (`TAG_EXEMPT_DIRS`,
   `TAG_EXEMPT_FILES`, `TAG_EXEMPT_TESTS`). Exempt today:
   `tests/browser/invariants.rs` (no spec link; test code is the definition)
-  and the stdout-tee health check in `behaviour.rs`.
+  and the stdout-tee health check in `dashboard.rs`.
 - `tests/http/requires_migration/` is the legacy quarantine: untagged by
   design. `REQUIRES_MIGRATION_TEST_COUNT` in the script pins its size, and
   the count may only go down. Migrating a test off the quarantine lowers

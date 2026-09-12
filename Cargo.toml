@@ -60,7 +60,7 @@ urlencoding = "2.1"
 [features]
 default = ["testing"]
 diagnostics = []
-testing = []
+testing = ["diagnostics"]
 [[test]]
 name = "architecture"
 path = "tests/infrastructure/architecture.rs"

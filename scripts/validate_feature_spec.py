@@ -1,17 +1,19 @@
 """Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
 
-It also enforces the SCENARIO-tag rule of `tests/STRATEGY.md`
+It also enforces the SCENARIO-tag rules of `tests/STRATEGY.md`
 ("SCENARIO tags"): every test under `tests/http/` and `tests/browser/`
 carries a `// [spec] SCENARIO: X.Y` tag, unless an exemption constant
-below spares it. `tests/http/requires_migration/` is the legacy
-quarantine: untagged by design, count-pinned by
+below spares it, and tags match their observation surface: `browser_*.md`
+specs are tagged only from `tests/browser/`, and non-`browser_*` specs are
+never tagged from `tests/browser/`. `tests/http/requires_migration/` is the
+legacy quarantine: untagged by design, count-pinned by
 `REQUIRES_MIGRATION_TEST_COUNT` (the count may only go down).
 
 Exit codes:
     0  all declared scenarios covered, tag rule satisfied
     1  gaps (declared scenario with no test), orphans (annotation with no
-       matching declared scenario), untagged tests, or a quarantine count
-       above the pin
+       matching declared scenario), untagged tests, surface mismatches, or
+       a quarantine count above the pin
     2  parse error (missing dirs, unreadable files, no specs)
 
 Run from anywhere:
@@ -53,7 +55,10 @@ COMMENT_LOOKAHEAD = 5
 #
 # Every #[test] / #[tokio::test] under tests/http/ and tests/browser/ must
 # carry a `// [spec] SCENARIO: N.N` tag. Each exemption below is declared
-# with its reason.
+# with its reason. The surface-consistency rule (same STRATEGY.md section)
+# is checked in find_surface_violations: `browser_*.md` specs are tagged
+# only from tests/browser/, and non-`browser_*` specs never from
+# tests/browser/.
 
 # Directories exempt from the tag rule (matched by path prefix).
 TAG_EXEMPT_DIRS = {
@@ -73,7 +78,7 @@ TAG_EXEMPT_FILES = {
 # Individual tests exempt by (file, fn name).
 TAG_EXEMPT_TESTS = {
     (
-        Path("tests/browser/behaviour.rs"),
+        Path("tests/browser/dashboard.rs"),
         "test_engine_output_teed_to_file",
     ): (
         "infrastructure health check (engine stdout tee), not a spec scenario"
@@ -182,6 +187,42 @@ def find_untagged_tests(
     return violations
 
 
+def find_surface_violations(
+    test_files: list[Path],
+) -> list[tuple[Path, int, str, str]]:
+    """Return (path, line, spec_path, reason) for every SCENARIO tag whose
+    observation surface does not match its test directory: `browser_*.md`
+    specs must be tagged only from `tests/browser/`, and non-`browser_*`
+    specs never from `tests/browser/` (contract: tests/STRATEGY.md
+    "SCENARIO tags", per-surface rule)."""
+    violations: list[tuple[Path, int, str, str]] = []
+    browser_dir = Path("tests/browser")
+    for path in test_files:
+        rel = path.relative_to(ENGINE_ROOT)
+        in_browser = rel.is_relative_to(browser_dir)
+        for _cmt, _attr, spec_path, _sid in parse_test_annotations(path):
+            is_browser_spec = Path(spec_path).name.startswith("browser_")
+            if is_browser_spec and not in_browser:
+                violations.append(
+                    (
+                        path,
+                        _cmt,
+                        spec_path,
+                        "browser_* spec tagged outside tests/browser/",
+                    )
+                )
+            elif not is_browser_spec and in_browser:
+                violations.append(
+                    (
+                        path,
+                        _cmt,
+                        spec_path,
+                        "non-browser_* spec tagged from tests/browser/",
+                    )
+                )
+    return violations
+
+
 def count_quarantine_tests() -> int:
     """Count test attributes in the requires_migration quarantine."""
     total = 0
@@ -242,14 +283,15 @@ def main() -> int:
     gap_count = len(gaps)
     orphan_count = len(orphans)
     untagged = find_untagged_tests(test_files)
+    surface = find_surface_violations(test_files)
     quarantine = count_quarantine_tests()
     ratchet_exceeded = quarantine > REQUIRES_MIGRATION_TEST_COUNT
 
     print(
         f"{declared_count} declared, {covered_count} covered, "
         f"{gap_count} gap(s), {orphan_count} orphan(s), "
-        f"{len(untagged)} untagged, quarantine {quarantine}"
-        f"/{REQUIRES_MIGRATION_TEST_COUNT}"
+        f"{len(untagged)} untagged, {len(surface)} surface mismatch(es), "
+        f"quarantine {quarantine}/{REQUIRES_MIGRATION_TEST_COUNT}"
     )
 
     if gaps:
@@ -272,6 +314,14 @@ def main() -> int:
             rel = path.relative_to(ENGINE_ROOT)
             print(f"  {rel}:{lineno}  {fn_name}")
 
+    if surface:
+        print(
+            "\nSurface mismatches (tag's spec surface does not match its "
+            "test directory; see STRATEGY.md \"SCENARIO tags\"):")
+        for path, lineno, spec_path, reason in surface:
+            rel = path.relative_to(ENGINE_ROOT)
+            print(f"  {rel}:{lineno}  [{spec_path}]  {reason}")
+
     if ratchet_exceeded:
         print(
             f"\nQuarantine count exceeded: {quarantine} untagged tests in "
@@ -280,7 +330,13 @@ def main() -> int:
             "lower the constant in this script."
         )
 
-    if gap_count > 0 or orphan_count > 0 or untagged or ratchet_exceeded:
+    if (
+        gap_count > 0
+        or orphan_count > 0
+        or untagged
+        or surface
+        or ratchet_exceeded
+    ):
         return 1
     return 0
 

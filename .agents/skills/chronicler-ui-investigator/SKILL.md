@@ -214,7 +214,7 @@ All **POST**. A GET returns 405 and a bodyless POST returns 415 — send a JSON 
 
 For gameplay flows (click Send, switch swipe, retrigger), drive the real DOM from `chrome_devtools_evaluate` or fall back to the Rust harness — a fetch only proves the endpoint responds, not that the UI updates.
 
-Selector vocabulary for DOM work comes from `docs/specs/browser.md`, enforced by `tests/browser/behaviour.rs`: `.log-entry`, `.edit-btn` / `#edit-textarea` / `.cancel-btn` (edit mode), `.delete-btn`, `#command-form input[name="command"]`, `#status-display`, `#error-notification.visible`, `#slash-menu` / `.slash-suggestion`, `#world-posture-status`. Slash commands (`/impersonate`, `/guide`, `/options`) are client-side flows through `#slash-menu` (spec 17.1–17.9) that submit via `/action`.
+Selector vocabulary for DOM work comes from `docs/specs/browser_*.md`, enforced by the per-surface `tests/browser/<feature>.rs` files: `.log-entry`, `.edit-btn` / `#edit-textarea` / `.cancel-btn` (edit mode), `.delete-btn`, `#command-form input[name="command"]`, `#status-display`, `#error-notification.visible`, `#slash-menu` / `.slash-suggestion`, `#world-posture-status`. Slash commands (`/impersonate`, `/guide`, `/options`) are client-side flows through `#slash-menu` (spec `browser_slash_menu.md` 31.1–31.9) that submit via `/action`.
 
 ---
 
