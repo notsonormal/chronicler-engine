@@ -127,6 +127,7 @@ class StepCommandTests(unittest.TestCase):
         "check": "cargo check --all-targets --all-features",
         "clippy": "cargo clippy --all-targets --all-features -- -D warnings",
         "test-structure": "python scripts/check_test_structure.py",
+        "spec-coverage": "python scripts/validate_feature_spec.py",
         "docstrings": "python scripts/check_python_docstrings.py",
         "py-tests": "python -m unittest discover scripts/tests -v",
         "http-routes-check": "python scripts/extract_http_routes.py --check",
@@ -180,16 +181,16 @@ class GatePlanTests(unittest.TestCase):
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_full_gate_has_fmt_first_and_14_steps(self):
+    def test_full_gate_has_fmt_first_and_15_steps(self):
         plan = build._plan_gate_steps(self.gate_args())
         self.assertEqual(plan[0].label, "Formatting...")
-        self.assertEqual(len(plan), 14)
+        self.assertEqual(len(plan), 15)
 
     def test_no_fmt_prunes_fmt_only(self):
         plan = build._plan_gate_steps(self.gate_args(no_fmt=True))
         labels = [step.label for step in plan]
         self.assertNotIn("Formatting...", labels)
-        self.assertEqual(len(plan), 13)
+        self.assertEqual(len(plan), 14)
 
     def test_coverage_mode_swaps_test_and_report_steps(self):
         plan = build._plan_gate_steps(self.gate_args(coverage=True))

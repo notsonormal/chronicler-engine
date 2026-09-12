@@ -359,6 +359,12 @@ REGISTRY: dict[str, StepSpec] = {
             help="Enforce Rust unit-test structure rules.",
         ),
         StepSpec(
+            "spec-coverage",
+            "Running spec-coverage guardrail...",
+            "python scripts/validate_feature_spec.py",
+            help="Enforce spec-scenario coverage and SCENARIO-tag rules.",
+        ),
+        StepSpec(
             "docstrings",
             "Running Python docstring guardrail...",
             "python scripts/check_python_docstrings.py",
@@ -438,6 +444,7 @@ GATE_ORDER = [
     "validate-data",
     "clippy",
     "test-structure",
+    "spec-coverage",
     "docstrings",
     "py-tests",
     "http-routes-check",
