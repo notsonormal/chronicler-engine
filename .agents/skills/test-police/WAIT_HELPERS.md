@@ -26,13 +26,9 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()>
 ```rust
 // Poll until `selector` matches ≥ min_count elements (10s timeout).
 // Story-log growth idiom: wait_for_element_children(&page, "#story-log .log-entry", 2).
-// NOTE: captures failure state but RETURNS the last count on timeout —
-// it does not panic. The caller's assert on the returned count is load-bearing.
-pub async fn wait_for_element_children(
-    page: &Page,
-    selector: &str,
-    min_count: u32,
-) -> u32
+// Panics on timeout after `capture_failure_state` — a missing element is a
+// failed test, never a soft skip. No return value to assert on.
+pub async fn wait_for_element_children(page: &Page, selector: &str, min_count: u32)
 
 // Wait for a uniquely-matching selector to become visible; panics on timeout.
 // Playwright strict mode rejects multi-element matches — scope the selector
@@ -142,9 +138,8 @@ use std::time::Duration;
 
 let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
 
-// Wait for the story log to render at least 2 entries, then assert.
-let entries = wait_for_element_children(&page, "#story-log .log-entry", 2).await;
-assert!(entries >= 2, "log must render the completed turn");
+// Wait for the story log to render at least 2 entries; panics on timeout.
+wait_for_element_children(&page, "#story-log .log-entry", 2).await;
 
 // Wait for a specific entry to leave the DOM after a delete.
 wait_until_hidden(&page, ".log-entry[data-id='42']", Duration::from_secs(10)).await;
@@ -155,10 +150,10 @@ let llm_result = wait_for_llm_idle(port, Duration::from_secs(30)).await;
 ## Failure state capture
 
 All UI-wait helpers that panic on timeout (`wait_until_visible`,
-`wait_until_hidden`, `wait_for_status_ready`, `wait_for_status_generating`)
-call `capture_failure_state(page, <label>)` from `tests/test_utils/browser.rs`
-first, saving diagnostic context. The returning helpers
-(`wait_for_element_children`, `wait_for_status_ready_or_error`,
-`wait_for_condition_*`) also capture on timeout but hand the decision back to
-the caller — always assert on what they return. When a wait times out, check
-the captured failure state before re-running.
+`wait_until_hidden`, `wait_for_element_children`, `wait_for_status_ready`,
+`wait_for_status_generating`) call `capture_failure_state(page, <label>)`
+from `tests/test_utils/browser.rs` first, saving diagnostic context. The
+returning helpers (`wait_for_status_ready_or_error`, `wait_for_condition_*`)
+also capture on timeout but hand the decision back to the caller — always
+assert on what they return. When a wait times out, check the captured
+failure state before re-running.

@@ -1371,7 +1371,7 @@ function describeAllowedFolders(
 	}
 	return [
 		`- Write/edit tools: allowed only inside ${parts.join(" and ")}.`,
-		"- Bash: allowlisted to read-only / non-mutating commands regardless of folder (no `>`, `>>`, installs, `rm`, `mv`, etc.).",
+		"- Bash: allowlisted to read-only / non-mutating commands regardless of folder (no file-writing redirects — `>`, `>>` — installs, `rm`, `mv`, etc.; the stderr idioms `2>&1` and `2>/dev/null` are allowed).",
 		"- Final plan auto-persists to the plan folder when the user exits Plan Mode from the ready menu (implement/stay/exit); the extension writes it, not the agent.",
 	].join("\n");
 }
@@ -1465,12 +1465,21 @@ function readCommand(input: unknown) {
 	return typeof command?.command === "string" ? command.command : "";
 }
 
+/**
+ * Stderr idioms that never write a file: `2>&1` duplicates stderr into
+ * stdout and `2>/dev/null` discards it. Stripped before the mutating-pattern
+ * scan so read-only pipelines can keep them.
+ */
+const SAFE_STDERR_IDIOM = /\b2>\s*(?:&\s*1\b|\/dev\/null\b)/g;
+
 export function isSafeCommand(command: string) {
 	const trimmed = command.trim();
 	if (!trimmed) return false;
-	if (MUTATING_BASH_PATTERNS.some((pattern) => pattern.test(trimmed)))
+	const normalized = trimmed.replace(SAFE_STDERR_IDIOM, "").trim();
+	if (!normalized) return false;
+	if (MUTATING_BASH_PATTERNS.some((pattern) => pattern.test(normalized)))
 		return false;
-	return SAFE_BASH_PATTERNS.some((pattern) => pattern.test(trimmed));
+	return SAFE_BASH_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
 const OUTPUT_REDIRECT_SOURCES = new Set([/(^|[^<])>(?!>)/.source, />>/.source]);
@@ -1486,7 +1495,7 @@ export function explainUnsafeCommand(command: string): string {
 	const hit = MUTATING_BASH_PATTERNS.find((pattern) => pattern.test(trimmed));
 	if (hit) {
 		if (OUTPUT_REDIRECT_SOURCES.has(hit.source)) {
-			return "literal '>' found — Plan mode forbids any '>' in the command, including redirects like '2>/dev/null' and quoted tokens like 'Json<Game>'";
+			return "output redirect found — Plan mode allows only the stderr idioms '2>&1' and '2>/dev/null'; any other '>' (file redirects like '>f', '>>f', quoted tokens like 'Json<Game>') is forbidden";
 		}
 		return `command matched mutating pattern ${hit}`;
 	}

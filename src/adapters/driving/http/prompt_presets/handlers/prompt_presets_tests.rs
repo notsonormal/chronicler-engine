@@ -750,3 +750,25 @@ async fn test_save_preset_defaults_to_both_modes_when_form_omits_flags() {
         "panel-created presets default to every mode"
     );
 }
+
+// The urlencoded checkbox grammar, pinned at the parse layer: a checked box
+// posts `allowed_mode_<mode>=true`, an unchecked box posts nothing and
+// serde-defaults to false. A `Vec<String>` checkbox group here surfaced as a
+// browser-only 422.
+#[test]
+fn test_preset_form_urlencoded_parses_checked_flags() {
+    let form: PresetForm = serde_urlencoded::from_str(
+        "name=N&instructions=I&preset_type=system&allowed_mode_novel=true",
+    )
+    .expect("the posted body must parse");
+    assert!(form.allowed_mode_novel);
+    assert!(!form.allowed_mode_if);
+}
+
+#[test]
+fn test_preset_form_urlencoded_defaults_flags_to_false() {
+    let form: PresetForm = serde_urlencoded::from_str("name=N&instructions=I&preset_type=system")
+        .expect("a body without flags must parse");
+    assert!(!form.allowed_mode_novel);
+    assert!(!form.allowed_mode_if);
+}

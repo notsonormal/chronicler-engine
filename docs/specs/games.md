@@ -110,3 +110,33 @@ When the client changes the narrator_mode select to "interactive_fiction"
 Then #game-posture-controls is re-rendered with narrative_perspective "second" selected
 And the system_preset_id select's selected option is the Interactive Fiction bundle's system preset ("system_if_default")
 ```
+
+#### Scenario 20.4: A posture auto-save that fails storage surfaces a 500 error span
+
+```gherkin
+Given #game-posture-controls is rendered for the active game
+And the storage rejects game-config writes
+When the client POST /games/{game_id}/posture with a valid posture row
+Then the response status is "500 INTERNAL_SERVER_ERROR"
+And the response body is an error span naming the storage failure
+```
+
+#### Scenario 20.5: A presets auto-save that fails storage surfaces a 500 error span
+
+```gherkin
+Given the per-game preset picker is rendered for the active game
+And the storage rejects game-config writes
+When the client POST /games/{game_id}/presets with a valid preset selection
+Then the response status is "500 INTERNAL_SERVER_ERROR"
+And the response body is an error span naming the storage failure
+```
+
+#### Scenario 20.6: A mode switch that fails storage surfaces a 500 error span
+
+```gherkin
+Given the active game is in Novel mode
+And the storage rejects game-config writes
+When the client POST /games/{game_id}/mode with narrator_mode="interactive_fiction"
+Then the response status is "500 INTERNAL_SERVER_ERROR"
+And the response body is an error span naming the storage failure
+```

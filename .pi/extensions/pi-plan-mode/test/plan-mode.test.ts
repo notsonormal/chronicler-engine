@@ -46,10 +46,23 @@ test("isSafeCommand permits read-only commands and blocks mutating commands", ()
 	assert.equal(isSafeCommand(""), false);
 });
 
-test("explainUnsafeCommand names the output-redirect ban for 2>/dev/null", () => {
+test("isSafeCommand permits the stderr idioms 2>&1 and 2>/dev/null", () => {
+	assert.equal(isSafeCommand("grep -rn x src/ 2>/dev/null | head"), true);
+	assert.equal(isSafeCommand("git status 2>&1"), true);
+	assert.equal(isSafeCommand("grep -rn x src/ 2> /dev/null"), true);
+});
+
+test("isSafeCommand still blocks file-writing redirects alongside stderr idioms", () => {
+	assert.equal(isSafeCommand("echo hi > out.txt"), false);
+	assert.equal(isSafeCommand("echo hi > out.txt 2>&1"), false);
+	assert.equal(isSafeCommand("echo hi 2>err.txt"), false);
+	assert.equal(isSafeCommand("echo hi >> out.txt 2>/dev/null"), false);
+});
+
+test("explainUnsafeCommand names the output-redirect ban for file redirects", () => {
 	assert.match(
-		explainUnsafeCommand("grep -rn x src/ 2>/dev/null | head"),
-		/literal '>'/,
+		explainUnsafeCommand("grep -rn x src/ > capture.txt"),
+		/output redirect/,
 	);
 });
 

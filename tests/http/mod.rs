@@ -6,9 +6,12 @@ pub use test_utils::settings_guard::SettingsTestGuard;
 pub use test_utils::TEST_PERSONA;
 
 mod actions;
+mod games_config;
 mod games_create;
 mod games_delete;
 mod games_switch;
+mod narrator_mode;
+mod options;
 mod prompt_presets;
 mod reset;
 mod retrigger;
@@ -16,5 +19,6 @@ mod settings;
 mod story_log;
 mod swipe_new;
 mod test_helpers;
+mod worlds;
 
 mod requires_migration;

@@ -22,6 +22,15 @@ Examples:
 - `src/adapters/driving/http/action/handlers/actions.rs` ↔ `tests/http/actions.rs` (http test binary mirrors the http subset)
 - `src/adapters/driven/storage/db.rs` ↔ `tests/storage/message_storage.rs` (driven-adapter storage seam)
 
+## Seam recipes
+
+Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep API details there.
+
+- Assert what the narrator was sent → storage-backed recorder (`make_test_recorder_with_storage`, `src/test_support/fixtures.rs`) + `Storage::list_latest_llm_messages`
+- Inject a storage failure → `Storage::with_failure` + `TestOverride::internal`, exemplar `tests/http/settings.rs`
+- Wire an options agent → `OptionsAgent::with_provider` registered in `AgentRegistry`, exemplar `src/application/pipeline/action_pipeline/options_tests.rs`
+- Observe generated options in the UI → `GET /fragment/options-dock` (`src/adapters/driving/http/builders/router.rs`)
+
 ## STRUCTURE
 <!-- AUTO-STRUCTURE-TESTS START -->
 - **bootstrap/**
@@ -38,10 +47,13 @@ Examples:
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
+    - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error spans instead of panics.
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
     - `games_delete.rs` — HTTP E2E tests for game deletion (POST /games/:id/delete).
     - `games_switch.rs` — HTTP E2E tests for game switching (POST /games/:id/switch).
     - `mod.rs` — HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, server wiring, and the per-endpoint text-check suite.
+    - `narrator_mode.rs` — HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
+    - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on turn-end hook, and response-shape parsing.
     - `prompt_presets.rs` — HTTP E2E tests for the prompt-presets endpoints.
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).
     - `retrigger.rs` — HTTP E2E tests for the retrigger endpoint (POST /retrigger).
@@ -49,6 +61,7 @@ Examples:
     - `story_log.rs` — HTTP E2E tests for the story-log delete endpoint (POST /history/delete).
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `test_helpers.rs` — Shared test helpers for HTTP tests
+    - `worlds.rs` — HTTP E2E tests for the worlds update endpoint: the posture merge contract and the options-toggle checkbox grammar.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.

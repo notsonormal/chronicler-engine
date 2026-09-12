@@ -14,6 +14,7 @@ exclude = [
     "**/target/**",
     "**/tests/**",
     "**/*_tests.rs",
+    "**/.pi/**",
 ]
 # `*_tests.rs` excluded: arch-lint 0.4.3 cannot distinguish a test fake
 # (e.g. Storage::new_in_memory()) from a production leak.
