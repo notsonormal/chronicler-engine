@@ -1,7 +1,7 @@
 # Grill: browser-tier spec tags + test-file organization
 
 Type: grilling
-Status: pending
+Status: claimed
 Blocked by: (none) — follow-up to ticket 12 (resolved)
 
 ## Question

@@ -15,7 +15,10 @@ Two invocation modes:
 Stdout carries the agent-facing decision signal + tailable progress (banner,
 step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
 banner with log path). Full output is written to ``logs/build_*.log``; each
-log's first line is a session stamp (see ``_stamp_session_id``).
+log's first line is a session stamp (see ``_stamp_session_id``). Every
+completed run also appends one pipe-delimited summary line (timestamp,
+duration, exit code, args) to the append-only journal
+``logs/build_history.txt`` — see ``_append_history``.
 """
 
 import argparse
@@ -34,6 +37,11 @@ import time
 from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
+
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl; journal locking is skipped there.
+    fcntl = None
 
 # Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
 if sys.platform == "win32":
@@ -1258,8 +1266,55 @@ def run_llm_only(args, record):
     both_print("=== Build Complete ===")
 
 
+_HISTORY_FILE = Path("logs/build_history.txt")
+_HISTORY_HEADER = "timestamp | duration_s | exit_code | args"
+_HISTORY_MAX_LINES = 1000
+
+
+def _append_history(path: Path, args_str: str, duration_sec: float, exit_code: int) -> None:
+    """Append one run record to the build-history journal, then trim.
+
+    One pipe-delimited line per run, columns per ``_HISTORY_HEADER``, newest
+    last so ``tail`` shows recent runs. The trim keeps the header plus the
+    newest records, rewritten in place while still holding the lock — flock
+    keeps concurrent agents (shared ``logs/``) from interleaving appends or
+    racing the rewrite. Callers treat any failure as ignorable: the journal
+    must never break a build.
+    """
+    args_str = args_str.replace("|", "/").replace("\n", " ").strip()
+    line = (
+        f"{time.strftime('%Y-%m-%dT%H:%M:%S')} | {duration_sec:.1f} | "
+        f"{exit_code} | {args_str}\n"
+    )
+    with open(path, "a+", encoding="utf-8") as fh:
+        if fcntl is not None:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            fh.seek(0)
+            lines = fh.readlines()
+            if not lines or lines[0].rstrip("\n") != _HISTORY_HEADER:
+                lines.insert(0, _HISTORY_HEADER + "\n")
+            lines.append(line)
+            if len(lines) > _HISTORY_MAX_LINES:
+                lines = lines[:1] + lines[-(_HISTORY_MAX_LINES - 1) :]
+            # "a+" writes land at EOF (O_APPEND), but truncate empties the
+            # file first, so the rewrite starts back at the top.
+            fh.seek(0)
+            fh.truncate()
+            fh.writelines(lines)
+            fh.flush()
+        finally:
+            if fcntl is not None:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 def main():
     args = parse_args()
+
+    # Journal inputs, captured before any chdir so the record reflects
+    # exactly what the caller invoked.
+    _run_start = time.time()
+    history_args = " ".join(sys.argv[1:]).strip() or "(full gate)"
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
 
@@ -1319,11 +1374,25 @@ def main():
             pass
         _LogState.fh = None
 
-    # check=False steps (e.g. the test suite) record failures in the record
-    # without raising SystemExit. Propagate them into the process exit code so
-    # callers that trust the exit code (agents, pre-commit, CI) see the failure.
-    if exit_code == 0 and record.failures:
-        exit_code = 1
+        # check=False steps (e.g. the test suite) record failures in the record
+        # without raising SystemExit. Propagate them into the process exit code
+        # so callers that trust the exit code (agents, pre-commit, CI) — and
+        # the history journal below — see the true outcome. Done inside the
+        # finally (not after the try) because the finally runs on every exit
+        # path, so the journal can never disagree with the process exit code.
+        if exit_code == 0 and record.failures:
+            exit_code = 1
+
+        try:
+            _append_history(
+                _HISTORY_FILE,
+                history_args,
+                time.time() - _run_start,
+                exit_code,
+            )
+        except Exception:
+            pass  # Best-effort bookkeeping; never fail a run over it.
+
     return exit_code
 
 
