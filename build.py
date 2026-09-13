@@ -56,14 +56,41 @@ class _LogState:
 
 
 class _NextestSummary:
-    """Last nextest summary line captured this run, re-printed at the epilogue.
+    """nextest summary lines captured this run, re-printed at the epilogue.
 
-    Module state (like _LogState) because run() sys.exits on a checked
-    failure before its caller could inspect the captured output; main()'s
-    finally must still be able to print the pass/fail counts at the tail.
+    One entry per test tier: the gate runs the integration and browser tiers as
+    separate nextest invocations. Module state (like _LogState) because run()
+    sys.exits on a checked failure before its caller could inspect the captured
+    output; main()'s finally must still print the counts at the tail.
+
+    ``label`` names the step the next captured summary belongs to; ``_timed_run``
+    sets it before dispatch. ``flaky`` holds one (label, test name) entry per
+    test that passed only on a retry — nextest exits 0 for those, so the
+    epilogue must surface them or the retry goes unnoticed.
     """
 
-    line = None
+    lines: list[tuple[str, str]] = []
+    flaky: list[tuple[str, str]] = []
+    label = ""
+
+    @classmethod
+    def line_text(cls) -> str:
+        """Render every captured summary as the epilogue's one-liner block."""
+        return "\n".join(
+            f"{text}  ({label})" if label else text for label, text in cls.lines
+        )
+
+    @classmethod
+    def flaky_text(cls) -> str:
+        """Render a warning naming every test that needed a retry."""
+        lines = [
+            f"                 {name}  ({label})" if label else f"                 {name}"
+            for label, name in cls.flaky
+        ]
+        header = (
+            f"WARNING: {len(cls.flaky)} flaky test(s) passed only on a retry:"
+        )
+        return "\n".join([header, *lines])
 
 
 def _set_log_fh(fh):
@@ -162,9 +189,35 @@ def require_nextest():
         sys.exit(1)
 
 
+# The browser binary runs the Playwright tier: each test spawns a real engine
+# server plus Chromium. Splitting it from the CPU-light tiers keeps
+# `python build.py integration` to ~20s and gives each tier its own epilogue
+# verdict.
+_BROWSER_FILTER = "binary(browser)"
+_NON_BROWSER_FILTER = "not binary(browser)"
+
+
 def get_test_cmd(include_llm=False):
     """Return the test command using nextest."""
     cmd = _NEXTEST_RUN
+    if include_llm:
+        cmd += " --profile llm --run-ignored all"
+    return cmd
+
+
+def get_browser_test_cmd():
+    """Return the command running only the browser (Playwright) binary."""
+    return f"{_NEXTEST_RUN} -E '{_BROWSER_FILTER}'"
+
+
+def get_integration_test_cmd(include_llm=False):
+    """Return the command running every test binary except `browser`.
+
+    The engine, http, storage, bootstrap and llm tiers are CPU-light; excluding
+    the browser binary keeps this step to ~20s, so it works as a standalone
+    check.
+    """
+    cmd = f"{_NEXTEST_RUN} -E '{_NON_BROWSER_FILTER}'"
     if include_llm:
         cmd += " --profile llm --run-ignored all"
     return cmd
@@ -185,6 +238,14 @@ _NEXTEST_RESULT_RE = re.compile(
 # change cannot silently break the epilogue one-liner.
 _NEXTEST_SUMMARY_RE = re.compile(r"^\s*Summary \[[^\]]*\]\s+\d+ tests? run:")
 
+# nextest retry line, e.g.:
+#   "   FLAKY 2/2 [   0.056s] (1487/1588) chronicler_engine::http story_log::foo"
+# A flaky test passed only on a retry: the run exits 0, so this line is the
+# sole signal that a test is unstable.
+_NEXTEST_FLAKY_RE = re.compile(
+    r"^\s*FLAKY\s+\d+/\d+\s*\[[^\]]*\]\s*(?:\([^)]*\))?\s*(\S.*)$"
+)
+
 
 def _summary_count(line: str, label: str) -> str | None:
     """Return the count preceding ``label`` in a Summary line, or None."""
@@ -200,7 +261,8 @@ def _nextest_summary_line(output: str) -> str | None:
     nextest omits the "failed" segment when nothing failed, but the epilogue
     line always shows it (0 when absent) so a clean run still reads as clean.
     A zero "skipped" segment is omitted; a nonzero one is kept so the counts
-    still add up to the total run.
+    still add up to the total run. A nonzero "flaky" segment is kept for the
+    same reason: those tests passed, but only after a retry.
     """
     rendered = None
     for line in output.splitlines():
@@ -209,17 +271,32 @@ def _nextest_summary_line(output: str) -> str | None:
         passed = _summary_count(line, "passed") or "?"
         failed = _summary_count(line, "failed") or "0"
         skipped = _summary_count(line, "skipped")
+        flaky = _summary_count(line, "flaky")
         rendered = f"nextest: {passed} passed, {failed} failed"
         if skipped and skipped != "0":
             rendered += f", {skipped} skipped"
+        if flaky and flaky != "0":
+            rendered += f", {flaky} flaky"
     return rendered
+
+
+def _nextest_flaky_tests(output: str) -> list[str]:
+    """Return the names of tests that needed a retry, in report order."""
+    names = []
+    for line in output.splitlines():
+        m = _NEXTEST_FLAKY_RE.match(line)
+        if m:
+            names.append(m.group(1).strip())
+    return names
 
 
 def _stash_nextest_summary(output: str) -> None:
     """Capture nextest's final summary line for the closing epilogue."""
     line = _nextest_summary_line(output)
     if line is not None:
-        _NextestSummary.line = line
+        _NextestSummary.lines.append((_NextestSummary.label, line))
+    for name in _nextest_flaky_tests(output):
+        _NextestSummary.flaky.append((_NextestSummary.label, name))
 
 
 def _nextest_duration_to_secs(token: str) -> float:
@@ -310,9 +387,19 @@ def run_with_test_timings(cmd, env=None, check=True):
     return result.returncode
 
 
-def get_coverage_cmd():
-    """Return the coverage test command using nextest."""
-    return "cargo llvm-cov nextest --no-report --no-fail-fast"
+def get_coverage_cmd(exclude_browser=False):
+    """Return the coverage test command using nextest.
+
+    ``exclude_browser`` mirrors the gate's browser/integration split: the
+    coverage step runs twice, once per half, so both profiling runs share the
+    single merged report that ``--no-report`` defers.
+    """
+    cmd = "cargo llvm-cov nextest --no-report --no-fail-fast"
+    if exclude_browser:
+        cmd += f" -E '{_NON_BROWSER_FILTER}'"
+    else:
+        cmd += f" -E '{_BROWSER_FILTER}'"
+    return cmd
 
 
 class StepSpec(NamedTuple):
@@ -425,9 +512,16 @@ REGISTRY: dict[str, StepSpec] = {
         StepSpec(
             "integration",
             "Running integration tests...",
-            f"{_NEXTEST_RUN} --tests",
+            get_integration_test_cmd(),
             needs_nextest=True,
-            help="Run the integration test suite (~1-2 minutes).",
+            help="Run every test binary except browser (~1 min).",
+        ),
+        StepSpec(
+            "browser",
+            "Running browser tests...",
+            get_browser_test_cmd(),
+            needs_nextest=True,
+            help="Run only the browser (Playwright) test binary (~4.5 min).",
         ),
         StepSpec(
             "nextest",
@@ -957,6 +1051,7 @@ def _timed_run(counter, record, label, cmd, check=True, env=None, timings=False)
     """Run one step, print progress, and record its timing and outcome."""
     counter.next(label)
     start = time.time()
+    _NextestSummary.label = label
     try:
         if timings:
             rc = run_with_test_timings(cmd, env=env, check=check)
@@ -977,7 +1072,7 @@ class GateStep(NamedTuple):
     itself (the note is not a counted step, matching the original behavior).
     """
 
-    kind: str  # "cmd" | "copy" | "tests" | "coverage_report" | "note"
+    kind: str  # "cmd" | "copy" | "tests" | "browser" | "coverage_report" | "note"
     label: str
     cmd: str = ""
     check: bool = True
@@ -997,31 +1092,59 @@ def _plan_gate_steps(args) -> list[GateStep]:
             continue
         if name == "TESTS":
             if args.coverage:
-                label = (
-                    "Running all tests with coverage and timings..."
+                int_label = (
+                    "Running integration tests with coverage and timings..."
                     if args.test_timings
-                    else "Running all tests with coverage..."
+                    else "Running integration tests with coverage..."
+                )
+                browser_label = (
+                    "Running browser tests with coverage and timings..."
+                    if args.test_timings
+                    else "Running browser tests with coverage..."
                 )
                 plan.append(
                     GateStep(
                         "tests",
-                        label,
-                        get_coverage_cmd(),
+                        int_label,
+                        get_coverage_cmd(exclude_browser=True),
+                        check=False,
+                        timings=args.test_timings,
+                    )
+                )
+                plan.append(
+                    GateStep(
+                        "browser",
+                        browser_label,
+                        get_coverage_cmd(exclude_browser=False),
                         check=False,
                         timings=args.test_timings,
                     )
                 )
             else:
-                label = (
-                    "Running all tests with timings..."
+                int_label = (
+                    "Running integration tests with timings..."
                     if args.test_timings
-                    else "Running all tests..."
+                    else "Running integration tests..."
+                )
+                browser_label = (
+                    "Running browser tests with timings..."
+                    if args.test_timings
+                    else "Running browser tests..."
                 )
                 plan.append(
                     GateStep(
                         "tests",
-                        label,
-                        get_test_cmd(include_llm=args.include_llm),
+                        int_label,
+                        get_integration_test_cmd(include_llm=args.include_llm),
+                        check=False,
+                        timings=args.test_timings,
+                    )
+                )
+                plan.append(
+                    GateStep(
+                        "browser",
+                        browser_label,
+                        get_browser_test_cmd(),
                         check=False,
                         timings=args.test_timings,
                     )
@@ -1074,6 +1197,16 @@ def _execute_gate_plan(plan, args, cargo_env, record):
                     "    NOTE: 2 LLM tests were skipped. "
                     "Run 'python build.py --llm-only' to execute them."
                 )
+        elif step.kind == "browser":
+            _timed_run(
+                counter,
+                record,
+                step.label,
+                step.cmd,
+                check=step.check,
+                env=cargo_env,
+                timings=step.timings,
+            )
         elif step.kind == "coverage_report":
             counter.next(step.label)
             _generate_coverage_report(args, cargo_env)
@@ -1357,10 +1490,12 @@ def main():
         # close is delayed only by in-process writes, not by any I/O wait.
         _print_step_summary(record.timings, record.failures, log_path)
 
-        # The pass/fail counts, one line, right before the banner: an agent
-        # tailing stdout gets the test verdict without grepping the full log.
-        if _NextestSummary.line:
-            both_print(_NextestSummary.line)
+        # The pass/fail counts, one line per test tier, right before the banner:
+        # an agent tailing stdout gets the verdict without grepping the full log.
+        if _NextestSummary.lines:
+            both_print(_NextestSummary.line_text())
+        if _NextestSummary.flaky:
+            both_print(_NextestSummary.flaky_text())
 
         both_print("=" * 60)
         both_print("=== Build Complete ===")

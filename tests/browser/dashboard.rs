@@ -1,4 +1,4 @@
-//! Browser dashboard-chrome tests: static command form, status display, error toast. Tagged against `docs/specs/browser_dashboard.md`; the stdout-tee health check is a named exemption.
+//! Browser dashboard-chrome tests: static command form, status display, error toast. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 
@@ -148,29 +148,6 @@ async fn test_error_toast_on_action_failure() {
                 toast_state.1, "Internal server error",
                 "#error-notification should display the response body with tags stripped, got {:?}",
                 toast_state.1
-            );
-        },
-    )
-    .await;
-}
-
-// Infrastructure health check, not a spec scenario (no tag). The engine's
-// stdout tee is the artifact every failure dump reads; if it goes missing,
-// every diagnostic in this tier goes dark with it.
-#[tokio::test]
-async fn test_engine_output_teed_to_file() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |_page, port| async move {
-            let tee_path = format!("tmp/test_server_logs/{port}_stdout.log");
-            let content = std::fs::read_to_string(&tee_path)
-                .unwrap_or_else(|e| panic!("engine stdout tee missing at {tee_path}: {e}"));
-            assert!(
-                content.contains("HTMX Dashboard running"),
-                "tee should contain the engine boot line, tail: {}",
-                content.lines().last().unwrap_or("")
             );
         },
     )

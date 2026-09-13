@@ -76,14 +76,7 @@ TAG_EXEMPT_FILES = {
 }
 
 # Individual tests exempt by (file, fn name).
-TAG_EXEMPT_TESTS = {
-    (
-        Path("tests/browser/dashboard.rs"),
-        "test_engine_output_teed_to_file",
-    ): (
-        "infrastructure health check (engine stdout tee), not a spec scenario"
-    ),
-}
+TAG_EXEMPT_TESTS: dict[tuple[Path, str], str] = {}
 
 # Pins the requires_migration quarantine: the count may only go down.
 # Migration cleanups lower it deliberately; a new test in the folder fails

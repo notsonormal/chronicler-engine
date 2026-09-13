@@ -95,8 +95,10 @@ gate step of `build.py`:
 - Every test under `tests/http/` and `tests/browser/` carries a tag, unless
   the script declares an exemption with its reason (`TAG_EXEMPT_DIRS`,
   `TAG_EXEMPT_FILES`, `TAG_EXEMPT_TESTS`). Exempt today:
-  `tests/browser/invariants.rs` (no spec link; test code is the definition)
-  and the stdout-tee health check in `dashboard.rs`.
+  `tests/browser/invariants.rs` (no spec link; test code is the definition).
+  The stdout-tee health check (`test_engine_output_teed_to_file`) is not an
+  exemption: it moved to `tests/bootstrap/run_branches.rs`, outside this
+  validator's scan scope, because it needs a real server but no browser.
 - `tests/http/requires_migration/` is the legacy quarantine: untagged by
   design. `REQUIRES_MIGRATION_TEST_COUNT` in the script pins its size, and
   the count may only go down. Migrating a test off the quarantine lowers

@@ -259,24 +259,6 @@ proptest! {
     }
 
     #[test]
-    fn prop_log_turns_never_exceed_max_capacity(
-        mut state in Just(TestGameState::in_room("room1")),
-        entries in prop::collection::vec(
-            (log_text_strategy(), log_type_strategy()),
-            1000..1050
-        )
-    ) {
-        for (text, log_type) in entries {
-            state.add_message(text, log_type);
-        }
-        prop_assert!(
-            state.narrative.history.len() <= 1000,
-            "message count {} exceeds max 1000",
-            state.narrative.history.len()
-        );
-    }
-
-    #[test]
     fn prop_npcs_in_area_are_always_known(
         mut state in Just(TestGameState::in_room("room1")),
     ) {
@@ -298,6 +280,32 @@ proptest! {
         for npc_id in state.npc_encounter_log.npcs.keys() {
             prop_assert!(!npc_id.is_empty(), "encounter-log npc_id should be non-empty");
         }
+    }
+}
+
+// The cap is one boundary at 1000 entries, so a handful of cases covers it.
+// `MessageHistory::append` drops the oldest via `Vec::remove(0)` (O(n)), which
+// makes each oversized case costly; the 1000..1050 overshoot still straddles
+// the cap.
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(4))]
+
+    #[test]
+    fn prop_log_turns_never_exceed_max_capacity(
+        mut state in Just(TestGameState::in_room("room1")),
+        entries in prop::collection::vec(
+            (log_text_strategy(), log_type_strategy()),
+            1000..1050
+        )
+    ) {
+        for (text, log_type) in entries {
+            state.add_message(text, log_type);
+        }
+        prop_assert!(
+            state.narrative.history.len() <= 1000,
+            "message count {} exceeds max 1000",
+            state.narrative.history.len()
+        );
     }
 }
 

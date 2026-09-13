@@ -136,7 +136,8 @@ class StepCommandTests(unittest.TestCase):
         "architecture": "cargo nextest run --no-fail-fast --test architecture",
         "guardrails": "cargo nextest run --no-fail-fast --test guardrails",
         "unit": "cargo test --lib",
-        "integration": "cargo nextest run --no-fail-fast --tests",
+        "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser)'",
+        "browser": "cargo nextest run --no-fail-fast -E 'binary(browser)'",
         "nextest": "cargo nextest run --no-fail-fast",
     }
 
@@ -181,21 +182,33 @@ class GatePlanTests(unittest.TestCase):
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_full_gate_has_fmt_first_and_15_steps(self):
+    def test_full_gate_has_fmt_first_and_16_steps(self):
         plan = build._plan_gate_steps(self.gate_args())
         self.assertEqual(plan[0].label, "Formatting...")
-        self.assertEqual(len(plan), 15)
+        self.assertEqual(len(plan), 16)
+
+    def test_gate_splits_browser_from_integration(self):
+        """The gate runs the browser binary as its own step, not merged in."""
+        plan = build._plan_gate_steps(self.gate_args())
+        labels = [step.label for step in plan]
+        self.assertIn("Running integration tests...", labels)
+        self.assertIn("Running browser tests...", labels)
+        by_kind = {step.kind: step for step in plan}
+        self.assertIn("-E 'not binary(browser)'", by_kind["tests"].cmd)
+        self.assertIn("-E 'binary(browser)'", by_kind["browser"].cmd)
+        self.assertNotIn("not binary(browser)", by_kind["browser"].cmd)
 
     def test_no_fmt_prunes_fmt_only(self):
         plan = build._plan_gate_steps(self.gate_args(no_fmt=True))
         labels = [step.label for step in plan]
         self.assertNotIn("Formatting...", labels)
-        self.assertEqual(len(plan), 14)
+        self.assertEqual(len(plan), 15)
 
     def test_coverage_mode_swaps_test_and_report_steps(self):
         plan = build._plan_gate_steps(self.gate_args(coverage=True))
         labels = [step.label for step in plan]
-        self.assertIn("Running all tests with coverage...", labels)
+        self.assertIn("Running integration tests with coverage...", labels)
+        self.assertIn("Running browser tests with coverage...", labels)
         self.assertIn("Generating coverage report...", labels)
         self.assertNotIn(
             "Skipping coverage report (use --coverage to enable)", labels
@@ -323,15 +336,63 @@ class NextestSummaryLineTests(unittest.TestCase):
         output = "   Compiling chronicler-engine v0.1.0\n     Running unittests\n"
         self.assertIsNone(build._nextest_summary_line(output))
 
+    def test_flaky_segment_is_kept(self):
+        output = (
+            "     Summary [ 196.432s] 26 tests run: 26 passed (1 flaky), 0 skipped\n"
+        )
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 26 passed, 0 failed, 1 flaky",
+        )
+
+    def test_zero_flaky_segment_is_omitted(self):
+        output = "     Summary [   1.000s] 5 tests run: 5 passed, 0 failed\n"
+        self.assertEqual(
+            build._nextest_summary_line(output), "nextest: 5 passed, 0 failed"
+        )
+
+    def test_flaky_and_skipped_render_together(self):
+        output = "     Summary [   9.000s] 30 tests run: 28 passed (2 flaky), 2 skipped\n"
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 28 passed, 0 failed, 2 skipped, 2 flaky",
+        )
+
+
+class NextestFlakyTestsTests(unittest.TestCase):
+    """_nextest_flaky_tests names the tests that needed a retry."""
+
+    def test_names_are_extracted_from_flaky_lines(self):
+        output = (
+            "   FLAKY 2/2 [   0.056s] (1487/1588) chronicler_engine::http story_log::foo\n"
+            "   FLAKY 2/2 [   4.055s] (26/26) chronicler_engine::browser worlds::bar\n"
+        )
+        self.assertEqual(
+            build._nextest_flaky_tests(output),
+            ["chronicler_engine::http story_log::foo", "chronicler_engine::browser worlds::bar"],
+        )
+
+    def test_no_flaky_lines_yields_empty_list(self):
+        output = "     Summary [   1.000s] 5 tests run: 5 passed, 0 failed\n"
+        self.assertEqual(build._nextest_flaky_tests(output), [])
+
+    def test_singular_retry_prefix_is_matched(self):
+        output = "   FLAKY 1/2 [   1.000s] (1/1) pkg::m test_fn\n"
+        self.assertEqual(build._nextest_flaky_tests(output), ["pkg::m test_fn"])
+
 
 class NextestStashTests(unittest.TestCase):
     """run() stashes the summary even when a checked failure sys.exits."""
 
     def setUp(self):
-        build._NextestSummary.line = None
+        build._NextestSummary.lines = []
+        build._NextestSummary.flaky = []
+        build._NextestSummary.label = ""
 
     def tearDown(self):
-        build._NextestSummary.line = None
+        build._NextestSummary.lines = []
+        build._NextestSummary.flaky = []
+        build._NextestSummary.label = ""
 
     @staticmethod
     def _fake_process(out, returncode):
@@ -352,29 +413,52 @@ class NextestStashTests(unittest.TestCase):
             "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped\n", 0
         )
         self.assertEqual(rc, 0)
-        self.assertEqual(build._NextestSummary.line, "nextest: 1 passed, 0 failed")
+        self.assertEqual(
+            build._NextestSummary.lines, [("", "nextest: 1 passed, 0 failed")]
+        )
 
     def test_run_stashes_summary_on_checked_failure(self):
         with self.assertRaises(SystemExit):
             self._run_silenced(
                 "     Summary [   1.497s] 3 tests run: 2 passed, 1 failed\n", 1
             )
-        self.assertEqual(build._NextestSummary.line, "nextest: 2 passed, 1 failed")
+        self.assertEqual(
+            build._NextestSummary.lines, [("", "nextest: 2 passed, 1 failed")]
+        )
 
     def test_run_without_summary_leaves_stash_unset(self):
         with self.assertRaises(SystemExit):
             self._run_silenced("error: could not compile\n", 101)
-        self.assertIsNone(build._NextestSummary.line)
+        self.assertEqual(build._NextestSummary.lines, [])
+
+    def test_run_stashes_flaky_names(self):
+        self._run_silenced(
+            "     Summary [  11.798s] 1 test run: 1 passed (1 flaky), 25 skipped\n"
+            "   FLAKY 2/2 [   3.443s] (1/1) chronicler_engine::browser worlds::bar\n",
+            0,
+        )
+        self.assertEqual(
+            build._NextestSummary.lines,
+            [("", "nextest: 1 passed, 0 failed, 25 skipped, 1 flaky")],
+        )
+        self.assertEqual(
+            build._NextestSummary.flaky,
+            [("", "chronicler_engine::browser worlds::bar")],
+        )
 
 
 class NextestEpilogueTests(unittest.TestCase):
     """The epilogue prints the one-liner directly before the build banner."""
 
     def setUp(self):
-        build._NextestSummary.line = None
+        build._NextestSummary.lines = []
+        build._NextestSummary.flaky = []
+        build._NextestSummary.label = ""
 
     def tearDown(self):
-        build._NextestSummary.line = None
+        build._NextestSummary.lines = []
+        build._NextestSummary.flaky = []
+        build._NextestSummary.label = ""
 
     @staticmethod
     def _run_main(printed):
@@ -398,11 +482,51 @@ class NextestEpilogueTests(unittest.TestCase):
 
     def test_summary_printed_between_step_summary_and_banner(self):
         printed = []
-        build._NextestSummary.line = "nextest: 21 passed, 0 failed"
+        build._NextestSummary.lines = [
+            ("Running integration tests...", "nextest: 21 passed, 0 failed")
+        ]
         self.assertEqual(self._run_main(printed), 0)
-        idx = printed.index("nextest: 21 passed, 0 failed")
+        idx = printed.index("nextest: 21 passed, 0 failed  (Running integration tests...)")
         self.assertEqual(printed[idx + 1], "=" * 60)
         self.assertEqual(printed[idx + 2], "=== Build Complete ===")
+
+    def test_two_tiers_print_one_line_each_before_banner(self):
+        """The gate runs integration and browser separately; both report."""
+        printed = []
+        build._NextestSummary.lines = [
+            ("Running integration tests...", "nextest: 1587 passed, 0 failed"),
+            ("Running browser tests...", "nextest: 27 passed, 0 failed"),
+        ]
+        self.assertEqual(self._run_main(printed), 0)
+        block = (
+            "nextest: 1587 passed, 0 failed  (Running integration tests...)\n"
+            "nextest: 27 passed, 0 failed  (Running browser tests...)"
+        )
+        idx = printed.index(block)
+        self.assertEqual(printed[idx + 1], "=" * 60)
+        self.assertEqual(printed[idx + 2], "=== Build Complete ===")
+
+    def test_flaky_warning_names_the_retried_test(self):
+        """A flaky run exits 0, so the warning is the only visible signal."""
+        printed = []
+        build._NextestSummary.lines = [
+            ("Running browser tests...", "nextest: 26 passed, 0 failed, 1 flaky")
+        ]
+        build._NextestSummary.flaky = [
+            ("Running browser tests...", "chronicler_engine::browser worlds::bar")
+        ]
+        self.assertEqual(self._run_main(printed), 0)
+        block = printed[printed.index("nextest: 26 passed, 0 failed, 1 flaky  (Running browser tests...)") + 1]
+        self.assertIn("WARNING: 1 flaky test(s) passed only on a retry:", block)
+        self.assertIn("chronicler_engine::browser worlds::bar", block)
+
+    def test_no_flaky_warning_on_a_clean_run(self):
+        printed = []
+        build._NextestSummary.lines = [
+            ("Running browser tests...", "nextest: 26 passed, 0 failed")
+        ]
+        self.assertEqual(self._run_main(printed), 0)
+        self.assertFalse(any("flaky" in msg.lower() for msg in printed))
 
     def test_no_summary_prints_no_extra_line(self):
         printed = []

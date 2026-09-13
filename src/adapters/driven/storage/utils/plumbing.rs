@@ -29,6 +29,14 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap_or(0);
 
+    // One transaction for the whole set: each statement otherwise commits on
+    // its own, and default `synchronous=FULL` makes every commit an fsync. The
+    // single commit here is still fsynced, so durability is unchanged.
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| EngineError::Config(format!("Failed to begin migration: {e}")))?;
+    let conn = &tx;
+
     if version < 9 {
         let exec = |sql: &str| {
             conn.execute(sql, [])
@@ -660,6 +668,9 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         conn.pragma_update(None, "user_version", 24)
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
+
+    tx.commit()
+        .map_err(|e| EngineError::Config(format!("Failed to commit migrations: {e}")))?;
 
     Ok(())
 }
