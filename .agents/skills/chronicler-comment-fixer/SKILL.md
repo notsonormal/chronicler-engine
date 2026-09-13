@@ -1,6 +1,6 @@
 ---
 name: chronicler-comment-fixer
-description: Detect and report AI slop, "What" comments, missing doc anchors, and convention violations in the repo Rust and Python files.
+description: Detect and report AI slop, "What" comments, missing doc anchors, and convention violations in the repo Rust, Python, HTML and CSS files.
 ---
 
 
@@ -12,12 +12,13 @@ Before manual searching, invoke the comment finder script to identify target com
 # Mode 1: Uncommitted/new files (most common for review after coding)
 python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --uncommitted
 
-# Mode 2: All rust files (full codebase scan)
+# Mode 2: All Rust, HTML and CSS files (full codebase scan)
 python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --all
 
 # Mode 3: Specific file pattern
 python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --pattern "src/foo.rs"
 python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --pattern "src/**/*.rs"
+python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --pattern "assets/*.css"
 
 # Mode 4: Files changed in branch vs main (or custom base)
 python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --branch

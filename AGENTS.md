@@ -444,7 +444,7 @@ python build.py --cleanup
 python build.py --cleanup --target-dir target/test_police
 ```
 
-Tests are already concurrency-safe: they allocate ports dynamically from the range 3010-3050 using file-based locking (`get_available_port` in `tests/test_utils.rs`).
+Tests are already concurrency-safe: they allocate ports dynamically from the range 3010-3050 using file-based locking (`get_available_port` in `tests/test_utils/server.rs`).
 
 ## Agent Skills
 
@@ -474,9 +474,7 @@ Use standard story points (1,3,5,8,13) to analyse the complexity of tasks. Tasks
 
 Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
 
-Don't commit without explict approval, even if commiting is allowed in the permissions config.
-
-The permission system blocks `find` in bash commands; use `rg --files`, `ls`, or `grep -r` for file discovery.
+Don't commit without explict approval, even if commiting is allowed in the permissions config. Normal git commands are fine but destructive git commands should be avoided in general. 
 
 ## Doing Code Reviews
 
