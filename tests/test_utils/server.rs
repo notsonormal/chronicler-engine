@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,6 +18,100 @@ static PORT_PIDS: OnceLock<Mutex<HashMap<u16, u32>>> = OnceLock::new();
 
 fn port_pids() -> &'static Mutex<HashMap<u16, u32>> {
     PORT_PIDS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Live stdout/stderr buffers for every engine this process spawned, keyed by
+/// port. `capture_failure_state` reads it to dump engine output on browser-
+/// test failure; `Drop` deregisters so a later test in this process never
+/// sees a dead server's logs.
+static SERVER_LOG_REGISTRY: OnceLock<Mutex<HashMap<u16, ServerLogBuffers>>> = OnceLock::new();
+
+#[derive(Clone)]
+pub struct ServerLogBuffers {
+    pub stdout: Arc<Mutex<Vec<u8>>>,
+    pub stderr: Arc<Mutex<Vec<u8>>>,
+}
+
+fn server_log_registry() -> &'static Mutex<HashMap<u16, ServerLogBuffers>> {
+    SERVER_LOG_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn register_server_logs(port: u16, buffers: ServerLogBuffers) {
+    server_log_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(port, buffers);
+}
+
+fn unregister_server_logs(port: u16) {
+    server_log_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(&port);
+}
+
+/// Snapshot of every registered server's log buffers.
+pub fn registered_server_logs() -> Vec<(u16, ServerLogBuffers)> {
+    server_log_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .iter()
+        .map(|(port, buffers)| (*port, buffers.clone()))
+        .collect()
+}
+
+/// Full decoded text of a log buffer. Recovers from a poisoned lock so one
+/// panicking test cannot break a later test's failure dump.
+pub fn buffer_text(buffer: &Arc<Mutex<Vec<u8>>>) -> String {
+    let bytes = match buffer.lock() {
+        Ok(guard) => guard.clone(),
+        Err(poisoned) => poisoned.into_inner().clone(),
+    };
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
+/// Last `max_lines` lines of `text`, for failure-output tails.
+pub fn tail_lines(text: &str, max_lines: usize) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.len().saturating_sub(max_lines);
+    lines[start..].join("\n")
+}
+
+/// Tee target under `tmp/test_server_logs/` (gitignored scratch; files are
+/// never removed — delete the directory to prune); `None` disables the tee
+/// when the directory cannot be created.
+fn tee_log_path(port: u16, stream: &str) -> Option<std::path::PathBuf> {
+    let dir = std::path::PathBuf::from("tmp/test_server_logs");
+    fs::create_dir_all(&dir).ok()?;
+    Some(dir.join(format!("{port}_{stream}.log")))
+}
+
+/// Incremental drain: appends every chunk to the in-memory buffer (read by
+/// failure dumps and the startup-failure dump) and — best effort — to the
+/// tee file, so hung or timed-out tests still leave artifacts. A file write
+/// failure disables the tee only; the memory buffer keeps filling.
+fn drain_to_buffer_and_tee(
+    stream: &mut impl Read,
+    buffer: Arc<Mutex<Vec<u8>>>,
+    tee_path: Option<std::path::PathBuf>,
+) {
+    let mut tee = tee_path.and_then(|path| fs::File::create(&path).ok());
+    let mut chunk = [0u8; 4096];
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                if let Ok(mut guard) = buffer.lock() {
+                    guard.extend_from_slice(&chunk[..n]);
+                }
+                if let Some(file) = tee.as_mut() {
+                    if file.write_all(&chunk[..n]).is_err() {
+                        tee = None;
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn register_port_pid(port: u16, pid: u32) {
@@ -123,7 +217,8 @@ pub fn start_server_with_env(
 
     let mut cmd = if std::path::Path::new(&binary_path).exists() {
         let mut c = Command::new(&binary_path);
-        c.env("RUST_LOG", "chronicler_engine=debug");
+        c.env("RUST_LOG", "chronicler_engine=debug,tower_http=debug");
+        c.env("CHRONICLER_LOG_CONSOLE", "1");
         c.args([
             "--world",
             world,
@@ -135,7 +230,8 @@ pub fn start_server_with_env(
         c
     } else {
         let mut c = Command::new("cargo");
-        c.env("RUST_LOG", "chronicler_engine=debug");
+        c.env("RUST_LOG", "chronicler_engine=debug,tower_http=debug");
+        c.env("CHRONICLER_LOG_CONSOLE", "1");
         c.args([
             "run",
             "--",
@@ -202,22 +298,16 @@ pub fn start_server_with_env(
 
     if let Some(mut out) = child.stdout.take() {
         let buf = Arc::clone(&stdout_buf);
+        let tee = tee_log_path(port, "stdout");
         std::thread::spawn(move || {
-            let mut local = Vec::new();
-            let _ = out.read_to_end(&mut local);
-            if let Ok(mut g) = buf.lock() {
-                g.extend_from_slice(&local);
-            }
+            drain_to_buffer_and_tee(&mut out, buf, tee);
         });
     }
     if let Some(mut err) = child.stderr.take() {
         let buf = Arc::clone(&stderr_buf);
+        let tee = tee_log_path(port, "stderr");
         std::thread::spawn(move || {
-            let mut local = Vec::new();
-            let _ = err.read_to_end(&mut local);
-            if let Ok(mut g) = buf.lock() {
-                g.extend_from_slice(&local);
-            }
+            drain_to_buffer_and_tee(&mut err, buf, tee);
         });
     }
 
@@ -375,6 +465,7 @@ pub struct TestServer {
     port: u16,
     temp_dir: Option<std::path::PathBuf>,
     db_path: std::path::PathBuf,
+    log_buffers: ServerLogBuffers,
 }
 
 impl TestServer {
@@ -419,37 +510,30 @@ impl TestServer {
         Self::cleanup_stale_db(port, &db_path);
         let (mut child, temp_dir, _db_path, stdout_buf, stderr_buf) =
             start_server_with_env(port, world, persona, use_mock);
+        let log_buffers = ServerLogBuffers {
+            stdout: Arc::clone(&stdout_buf),
+            stderr: Arc::clone(&stderr_buf),
+        };
+        register_server_logs(port, log_buffers.clone());
         let started = wait_for_server(port, 300).await; // 300 * 100ms = 30s total — CI under load can take >10s
         if !started {
             eprintln!(
                 "🛑 Server failed to start on port {port} within 30s. Draining child output for diagnostics:"
             );
-            if let Ok(g) = stdout_buf.lock() {
-                if !g.is_empty() {
-                    eprintln!("--- child stdout ({} bytes) ---", g.len());
-                    if let Ok(s) = std::str::from_utf8(&g) {
-                        eprintln!("{s}");
-                    } else {
-                        eprintln!("{:?}", &g[..g.len().min(4096)]);
-                    }
-                }
-            }
-            if let Ok(g) = stderr_buf.lock() {
-                if !g.is_empty() {
-                    eprintln!("--- child stderr ({} bytes) ---", g.len());
-                    if let Ok(s) = std::str::from_utf8(&g) {
-                        eprintln!("{s}");
-                    } else {
-                        eprintln!("{:?}", &g[..g.len().min(4096)]);
-                    }
-                } else {
+            for (label, buffer) in [("stdout", &stdout_buf), ("stderr", &stderr_buf)] {
+                let text = buffer_text(buffer);
+                if text.is_empty() {
                     eprintln!(
-                        "--- child stderr empty (binary may not have written anything yet) ---"
+                        "--- child {label} empty (binary may not have written anything yet) ---"
                     );
+                } else {
+                    eprintln!("--- child {label} ({} bytes) ---", text.len());
+                    eprintln!("{text}");
                 }
             }
             let _ = child.kill();
             let _ = child.wait();
+            unregister_server_logs(port);
             panic!("Server failed to start on port {port}");
         }
         SERVER_MANAGED.store(true, Ordering::SeqCst);
@@ -458,6 +542,7 @@ impl TestServer {
             port,
             temp_dir,
             db_path,
+            log_buffers,
         }
     }
 
@@ -472,6 +557,7 @@ impl TestServer {
 
 impl Drop for TestServer {
     fn drop(&mut self) {
+        unregister_server_logs(self.port);
         let _ = self.child.kill();
         let _ = self.child.wait();
         // Clear PID registry so kill_existing_server on a future test does not

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from collections import defaultdict
 from pathlib import Path
 
 
@@ -47,7 +46,8 @@ def extract_module_info(filepath: Path) -> tuple[str, str] | None:
 
 def build_bullet_structure(src_dir: Path) -> str:
     """Build a bullet-point representation of the source structure."""
-    modules: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    tree: dict = {}
+    root_files: list[tuple[str, str]] = []
 
     for rs_file in src_dir.rglob("*.rs"):
         if rs_file.name.endswith("_tests.rs") or rs_file.name.endswith("_test.rs"):
@@ -60,63 +60,40 @@ def build_bullet_structure(src_dir: Path) -> str:
         if not info:
             continue
 
-        filename, summary = info
-        dir_path = "/".join(parts[:-1]) if len(parts) > 1 else "__root__"
-        modules[dir_path].append((filename, summary))
+        if len(parts) == 1:
+            root_files.append(info)
+            continue
+
+        node = tree
+        for segment in parts[:-1]:
+            node = node.setdefault(segment, {})
+        node.setdefault("__files__", []).append(info)
 
     lines: list[str] = []
     lines.append("- **src/**")
 
-    all_dirs = set(modules.keys())
-    all_dirs.discard("__root__")
-
-    top_level_dirs = set()
-    for dir_path in all_dirs:
-        top = dir_path.split("/")[0]
-        top_level_dirs.add(top)
-
-    if "__root__" in modules:
-        root_files = sorted(modules["__root__"])
-        for filename, summary in root_files:
+    if root_files:
+        for filename, summary in sorted(root_files):
             lines.append(f"  - `{filename}` — {summary}")
 
-    for top_dir in sorted(top_level_dirs):
+    for top_dir in sorted(tree.keys()):
         lines.append(f"  - **{top_dir}/**")
-
-        direct_files = sorted([f for f in modules.get(top_dir, []) if f[0] != "mod.rs"])
-        for filename, summary in direct_files:
-            lines.append(f"    - `{filename}` — {summary}")
-
-        subdirs = set()
-        for dir_path in all_dirs:
-            if dir_path.startswith(top_dir + "/"):
-                subdir = dir_path.replace(top_dir + "/", "")
-                if "/" not in subdir:
-                    subdirs.add(subdir)
-
-        for subdir in sorted(subdirs):
-            full_path = f"{top_dir}/{subdir}"
-            lines.append(f"    - **{subdir}/**")
-
-            files = sorted(modules.get(full_path, []))
-            for filename, summary in files:
-                lines.append(f"      - `{filename}` — {summary}")
-
-            nested_subdirs = set()
-            for dir_path in all_dirs:
-                if dir_path.startswith(full_path + "/"):
-                    nested = dir_path.replace(full_path + "/", "")
-                    if "/" not in nested:
-                        nested_subdirs.add(nested)
-
-            for nested in sorted(nested_subdirs):
-                nested_path = f"{full_path}/{nested}"
-                lines.append(f"      - **{nested}/**")
-                nested_files = sorted(modules.get(nested_path, []))
-                for filename, summary in nested_files:
-                    lines.append(f"        - `{filename}` — {summary}")
+        # Top-level aggregator `mod.rs` files stay hidden; deeper ones render.
+        _render_node(lines, tree[top_dir], indent=2, include_mod=False)
 
     return "\n".join(lines)
+
+
+def _render_node(lines: list[str], node: dict, indent: int, include_mod: bool) -> None:
+    """Recursively render one tree node: file bullets first, then subdirs."""
+    pad = "  " * indent
+    for name, summary in sorted(node.get("__files__", [])):
+        if not include_mod and name == "mod.rs":
+            continue
+        lines.append(f"{pad}- `{name}` — {summary}")
+    for subdir in sorted(k for k in node.keys() if k != "__files__"):
+        lines.append(f"{pad}- **{subdir}/**")
+        _render_node(lines, node[subdir], indent + 1, True)
 
 
 def _extract_docstring_summary(path: Path) -> str:

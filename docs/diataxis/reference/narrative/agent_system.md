@@ -142,7 +142,7 @@ If both attempts fail, the quantifier returns a `Low` confidence fallback: `npcs
 
 The active quantifier preset id is held on `AppSettings.active_quantifier_prompt_preset_id`. The engine reads the preset from storage at quantifier-call time and passes the assembled text through `QuantifierPromptContext.quantifier_prompt_override`; callers can override the active preset for a single call via this field. No pre-assembly caching is held on `AppSettings`.
 
-Default presets ship as `data/prompt_presets/quantifier/default.json` and are protected from edit or delete. The dashboard's Prompt Presets tab provides the create/copy/set-active surface.
+Default presets ship as `data/prompt_presets/quantifier/default.json` and are protected from edit or delete. The dashboard's Prompt Presets tab provides the create/copy/set-active controls.
 
 ## Document References
 

@@ -98,6 +98,7 @@ async fn test_debug_state_endpoint_includes_all_documented_fields() {
         "quantifier_confidence",
         "backend_name",
         "model_name",
+        "current_options",
     ];
 
     for field in &required_fields {
@@ -114,6 +115,10 @@ async fn test_debug_state_endpoint_includes_all_documented_fields() {
     assert!(
         json["dynamic_room_count"].is_number(),
         "dynamic_room_count should be a number"
+    );
+    assert!(
+        json["current_options"].is_array(),
+        "current_options should be an array (the offered option set)"
     );
 }
 

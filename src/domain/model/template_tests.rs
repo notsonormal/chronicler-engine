@@ -90,6 +90,36 @@ fn render_template_unknown_narrative_placeholder_left_as_is() {
     assert_eq!(result, "{{narrative_voice}}");
 }
 
+#[test]
+fn template_vars_new_defaults_option_count_to_three() {
+    let vars = TemplateVars::new("Julian");
+    assert_eq!(vars.option_count, "3");
+}
+
+#[test]
+fn render_template_replaces_option_count() {
+    let vars = TemplateVars::new("Julian");
+    let result = render_template(
+        "Generate *exactly* {{option_count}} actions for {{user}}.",
+        &vars,
+    );
+    assert_eq!(result, "Generate *exactly* 3 actions for Julian.");
+}
+
+#[test]
+fn render_template_option_count_survives_preset_seed_render() {
+    let content = include_str!("../../../data/prompt_presets/options/default.json");
+    let preset: PromptPreset = serde_json::from_str(content).expect("options seed should parse");
+    let instructions = preset.instructions.expect("options seed has instructions");
+
+    let rendered = render_template(&instructions, &TemplateVars::new("Julian"));
+    assert!(
+        !rendered.contains("{{option_count}}"),
+        "{{option_count}} must substitute in the options seed"
+    );
+    assert!(rendered.contains("3 brief distinct single-sentence suggestions"));
+}
+
 fn make_vars(perspective: &str, tense: &str) -> TemplateVars {
     let mut vars = TemplateVars::new("Julian");
     vars.narrative_perspective = perspective.to_string();

@@ -6,8 +6,10 @@ use crate::application::errors::ApplicationError;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::message_service::MessageService;
 use crate::adapters::driven::storage::{Storage, TestOverride};
-use crate::domain::model::settings::{AppSettings, NarratorMode};
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::settings::{AppSettings, NarratorMode, NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::utils::settings_defaults;
 use crate::test_support::TestDataBuilder;
 
 fn seeded_catalogue() -> (GameCatalogue, Arc<Storage>, String, String) {
@@ -309,4 +311,242 @@ fn test_delete_game_succeeds_silently_for_nonexistent_game() {
     catalogue
         .delete_game(99999)
         .expect("delete_game should succeed silently for nonexistent game");
+}
+
+fn seed_library(storage: &Storage) {
+    let presets = [
+        (
+            "system_default",
+            "System Default",
+            PresetType::System,
+            vec![NarratorMode::Novel],
+        ),
+        (
+            "system_if_default",
+            "System IF",
+            PresetType::System,
+            vec![NarratorMode::InteractiveFiction],
+        ),
+        (
+            "quantifier_default",
+            "Quantifier Default",
+            PresetType::Quantifier,
+            settings_defaults::default_allowed_modes(),
+        ),
+        (
+            "impersonate_default",
+            "Impersonate Default",
+            PresetType::Impersonate,
+            settings_defaults::default_allowed_modes(),
+        ),
+        (
+            "system_custom",
+            "System Custom",
+            PresetType::System,
+            settings_defaults::default_allowed_modes(),
+        ),
+    ];
+    for (id, name, preset_type, allowed_modes) in presets {
+        storage
+            .save_preset(&PromptPreset {
+                id: id.to_string(),
+                name: name.to_string(),
+                role: None,
+                instructions: None,
+                writing_style: None,
+                output_format: None,
+                allowed_modes,
+                is_default: true,
+                preset_type,
+            })
+            .expect("test setup: save_preset must succeed");
+    }
+}
+
+#[test]
+fn test_current_game_returns_the_seeded_game() {
+    let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
+
+    let current = catalogue.current_game().expect("current_game should load");
+    assert!(current.is_some(), "seeded catalogue has an active game");
+}
+
+#[test]
+fn test_set_posture_updates_perspective_and_tense() {
+    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+
+    let game = catalogue
+        .set_posture(id, NarrativePerspective::Second, NarrativeTense::Present)
+        .expect("set_posture should succeed");
+    assert_eq!(game.narrative_perspective, NarrativePerspective::Second);
+    assert_eq!(game.narrative_tense, NarrativeTense::Present);
+
+    let stored = storage.get_game(id).unwrap().expect("game persisted");
+    assert_eq!(stored.narrative_perspective, NarrativePerspective::Second);
+    assert_eq!(stored.narrative_tense, NarrativeTense::Present);
+    // Mode is untouched by the posture save.
+    assert_eq!(stored.narrator_mode, NarratorMode::Novel);
+}
+
+#[test]
+fn test_set_posture_errors_on_missing_game() {
+    let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
+
+    let result = catalogue.set_posture(9999, NarrativePerspective::Second, NarrativeTense::Past);
+    assert!(
+        matches!(result, Err(ApplicationError::Validation(ref msg)) if msg.contains("Game not found")),
+        "Expected game-not-found validation error, got {result:?}"
+    );
+}
+
+#[test]
+fn test_switch_mode_retargets_presets_and_nudges_perspective() {
+    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+
+    let game = catalogue
+        .switch_mode(id, NarratorMode::InteractiveFiction)
+        .expect("switch_mode should succeed");
+    assert_eq!(game.narrator_mode, NarratorMode::InteractiveFiction);
+    assert_eq!(game.narrative_perspective, NarrativePerspective::Second);
+    assert_eq!(game.active_system_prompt_preset_id, "system_if_default");
+
+    let stored = storage.get_game(id).unwrap().expect("game persisted");
+    assert_eq!(stored.narrator_mode, NarratorMode::InteractiveFiction);
+    assert_eq!(stored.active_system_prompt_preset_id, "system_if_default");
+}
+
+#[test]
+fn test_switch_mode_keeps_a_deliberate_perspective() {
+    let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+
+    // An IF game deliberately held in third person.
+    catalogue
+        .switch_mode(id, NarratorMode::InteractiveFiction)
+        .unwrap();
+    catalogue
+        .set_posture(id, NarrativePerspective::Third, NarrativeTense::Past)
+        .unwrap();
+
+    let game = catalogue
+        .switch_mode(id, NarratorMode::Novel)
+        .expect("switch_mode should succeed");
+    assert_eq!(game.narrator_mode, NarratorMode::Novel);
+    assert_eq!(
+        game.narrative_perspective,
+        NarrativePerspective::Third,
+        "a deliberately-set perspective is never clobbered"
+    );
+}
+
+#[test]
+fn test_switch_mode_same_mode_is_a_noop() {
+    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+    seed_library(storage.as_ref());
+
+    // Move to IF (retargets to the IF bundle), then customize the selection
+    // away from the bundle default.
+    catalogue
+        .switch_mode(id, NarratorMode::InteractiveFiction)
+        .unwrap();
+    catalogue
+        .set_preset_selection(
+            id,
+            "system_custom",
+            "quantifier_default",
+            "impersonate_default",
+        )
+        .unwrap();
+
+    let game = catalogue
+        .switch_mode(id, NarratorMode::InteractiveFiction)
+        .expect("switch_mode should succeed");
+    assert_eq!(
+        game.active_system_prompt_preset_id, "system_custom",
+        "same-mode switch must not retarget presets"
+    );
+}
+
+#[test]
+fn test_set_preset_selection_updates_ids() {
+    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+    seed_library(storage.as_ref());
+
+    // IF mode first: system_if_default is IF-only, and selecting it must be
+    // a change from the Novel bundle default.
+    catalogue
+        .switch_mode(id, NarratorMode::InteractiveFiction)
+        .unwrap();
+
+    let game = catalogue
+        .set_preset_selection(
+            id,
+            "system_if_default",
+            "quantifier_default",
+            "impersonate_default",
+        )
+        .expect("set_preset_selection should succeed");
+    assert_eq!(game.active_system_prompt_preset_id, "system_if_default");
+
+    let stored = storage.get_game(id).unwrap().expect("game persisted");
+    assert_eq!(stored.active_system_prompt_preset_id, "system_if_default");
+}
+
+#[test]
+fn test_set_preset_selection_rejects_unknown_preset() {
+    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+    seed_library(storage.as_ref());
+
+    let result =
+        catalogue.set_preset_selection(id, "no_such", "quantifier_default", "impersonate_default");
+    assert!(
+        matches!(result, Err(ApplicationError::Validation(ref msg)) if msg.contains("Preset not found")),
+        "Expected preset-not-found validation error, got {result:?}"
+    );
+}
+
+#[test]
+fn test_set_preset_selection_rejects_mode_disallowed_preset() {
+    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+    seed_library(storage.as_ref());
+
+    // system_if_default is IF-only; the game is in Novel mode.
+    let result = catalogue.set_preset_selection(
+        id,
+        "system_if_default",
+        "quantifier_default",
+        "impersonate_default",
+    );
+    assert!(
+        matches!(result, Err(ApplicationError::Validation(ref msg)) if msg.contains("not allowed")),
+        "Expected mode-allow validation error, got {result:?}"
+    );
+
+    // And the stored selection must be untouched by the refusal.
+    let stored = storage.get_game(id).unwrap().expect("game persisted");
+    assert_eq!(stored.active_system_prompt_preset_id, "system_default");
+}
+
+#[test]
+fn test_set_preset_selection_accepts_unchanged_stored_ids() {
+    let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+
+    // No library seeds: the game's default bundle ids are not stored presets.
+    // Saving the form unchanged must still succeed (no-op slots).
+    let game = catalogue
+        .set_preset_selection(
+            id,
+            "system_default",
+            "quantifier_default",
+            "impersonate_default",
+        )
+        .expect("unchanged stored ids must pass without a library");
+    assert_eq!(game.active_system_prompt_preset_id, "system_default");
 }

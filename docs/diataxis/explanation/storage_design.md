@@ -5,7 +5,7 @@ title: Storage and Bootstrap Design
 
 ## Overview
 
-The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in the application orchestrator (`ActionPipeline`, `MessageService`, `GameCatalogue`, `GameViewQuery`); and a paired `get_*` / `require_*` read-helper contract that lets the storage surface distinguish absence-as-OK from absence-as-error.
+The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in the application orchestrator (`ActionPipeline`, `MessageService`, `GameCatalogue`, `GameViewQuery`); and a paired `get_*` / `require_*` read-helper contract that lets the storage interface distinguish absence-as-OK from absence-as-error.
 
 ## The storage struct and its backend decorator
 
@@ -29,7 +29,7 @@ Settings live the same way: a singleton row in the `settings` table, seeded once
 
 ## The seeding contract
 
-Seeding is the contract that makes the bootstrap boundary safe to re-run during development. The contract has four properties, and each one is load-bearing for a different class of dev/iteration workflow.
+Seeding is the contract that makes the bootstrap boundary safe to re-run during development. The contract has four properties, and each one supports a different class of dev/iteration workflow.
 
 Idempotent. Existing rows are not duplicated. The seeder checks for the row by primary key before writing — insert-without-conflict semantics for the rows the seeder creates. A re-run over an already-seeded database is a no-op on the populated rows; the engine can be stopped, restarted, and rebooted without rebuilding the world catalogue.
 
@@ -51,15 +51,15 @@ Atomicity within a single multi-table operation comes from sequential SQLite sta
 
 ## The paired read-helper contract
 
-Some entity rows are absent-as-OK; some are absent-as-error. `Storage` exposes both shapes as paired helpers for the entities where this distinction matters, and the choice between them is the storage surface's way of telling the caller which interpretation of "missing" applies.
+Some entity rows are absent-as-OK; some are absent-as-error. `Storage` exposes both shapes as paired helpers for the entities where this distinction matters, and the choice between them is the storage interface's way of telling the caller which interpretation of "missing" applies.
 
-`get_*` returns the row wrapped in an optional — absent-as-OK. It is the right choice when the caller treats absence as a legitimate runtime state: catalogue listings, fallback paths, existence guards, validation surfaces that surface as a validation error rather than a not-found error. A listing of worlds can return zero rows; a check for whether a world exists returns yes or no, never raises.
+`get_*` returns the row wrapped in an optional — absent-as-OK. It is the right choice when the caller treats absence as a legitimate runtime state: catalogue listings, fallback paths, existence guards, validation checks that surface as a validation error rather than a not-found error. A listing of worlds can return zero rows; a check for whether a world exists returns yes or no, never raises.
 
 `require_*` returns the row directly — absent-as-error. It is the right choice when the caller cannot make progress without the row. The helper maps an absent result to a typed not-found variant; a backend-side read failure propagates unchanged. A request to load the active game cannot proceed without a game row, so the helper surfaces `GameNotFound(game_id)` rather than letting the caller interpret an empty result.
 
 The not-found variants carry the kind of id the storage interface uses for that entity. `GameNotFound` and `MessageNotFound` carry numeric ids because game and message ids are numeric throughout the storage interface. World and persona lookups use string keys, and their typed not-found variants follow the same shape with the matching key type.
 
-The shape of the entity determines whether it has a required-read helper at all. Characters come back through a single roster helper, `list_characters(world_id)`, which returns the full character set for a world — character reads in the domain are world-scoped rosters. `Persona` and `Character` are distinct domain entities with their own storage surfaces; the persona surface keeps its `get_persona` + `require_persona` pair, while character reads stay roster-shaped.
+The shape of the entity determines whether it has a required-read helper at all. Characters come back through a single roster helper, `list_characters(world_id)`, which returns the full character set for a world — character reads in the domain are world-scoped rosters. `Persona` and `Character` are distinct domain entities with their own storage interfaces; the persona interface keeps its `get_persona` + `require_persona` pair, while character reads stay roster-shaped.
 
 ## Messages-and-swipes
 
@@ -67,7 +67,7 @@ LLM narration is non-deterministic. The same player input can produce a strong p
 
 ### Per-swipe state binding
 
-A swipe is not alternate text alone. Each `Swipe` carries its own `snapshot_id` pointing at the `GameStateSnapshot` that produced it. When the player navigates to a different swipe, the engine restores the entire world state that produced that swipe's text, not just the text itself.
+A swipe is not alternate text alone. Each `Swipe` carries its own `snapshot_id` pointing at the `GameStateSnapshot` that produced it. When the player navigates to a different swipe, the engine restores the entire world state that produced that swipe's text.
 
 Narration mutates state. The quantifier runs after the narration LLM and detects NPCs and movement; it updates scene state and increments encounter counters. Two different narrations produce two different post-narration states. A model that swapped only the text would leave the world state tied to whichever swipe was generated last — a "ghost state" where the displayed text no longer matches the underlying world.
 

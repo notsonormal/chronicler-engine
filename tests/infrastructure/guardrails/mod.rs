@@ -158,6 +158,19 @@ fn guardrails_single_letter_vars() {
 }
 
 #[test]
+fn guardrails_template_raw_strings() {
+    check_src_files("template raw strings", check_template_raw_strings);
+}
+
+#[test]
+fn guardrails_form_fields_urlencoded_safe() {
+    check_src_files(
+        "form fields urlencoded safety",
+        check_form_fields_urlencoded_safe,
+    );
+}
+
+#[test]
 fn guardrails_separator_comments() {
     check_src_files("separator comment", check_separator_comments);
 }

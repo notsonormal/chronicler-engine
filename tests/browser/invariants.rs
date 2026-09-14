@@ -331,7 +331,7 @@ async fn check_edit_textarea_matches_original_height(page: Page) {
     .await
     .unwrap();
 
-    wait_for_element_exists(&page, "#edit-textarea", 10).await;
+    wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
     let textarea_height: f64 = page
         .evaluate::<(), f64>(

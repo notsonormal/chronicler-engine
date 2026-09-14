@@ -1,4 +1,5 @@
 use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::domain::model::settings::AppSettings;
 use crate::test_support::sqlite_storage;
 
 #[test]
@@ -155,4 +156,40 @@ fn test_delete_game_failure() {
 
     let result = storage.delete_game(1);
     assert!(result.is_err());
+}
+
+#[test]
+fn active_options_preset_id_prefers_current_game() {
+    let storage = Storage::new_in_memory();
+    let id = storage
+        .create_game("w", "w", "test_player", "Test Player", "Game A")
+        .unwrap();
+    storage.set_game_id(id);
+
+    let mut game = storage.require_game(id).unwrap();
+    game.active_options_prompt_preset_id = "game_specific_options".to_string();
+    storage.update_game_config(&game).unwrap();
+
+    let settings = AppSettings::default();
+    assert_eq!(
+        storage.active_options_preset_id(&settings),
+        "game_specific_options",
+        "the per-game preset id must win over the settings fallback"
+    );
+}
+
+#[test]
+fn active_options_preset_id_falls_back_to_settings_without_current_game() {
+    // game_id starts at 0 and no game row exists — get_game(0) returns None,
+    // so the accessor must serve the settings value.
+    let storage = Storage::new_in_memory();
+    let settings = AppSettings {
+        active_options_prompt_preset_id: "settings_options_fallback".to_string(),
+        ..AppSettings::default()
+    };
+
+    assert_eq!(
+        storage.active_options_preset_id(&settings),
+        "settings_options_fallback"
+    );
 }

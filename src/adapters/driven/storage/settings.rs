@@ -14,7 +14,7 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                    "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at FROM settings WHERE id = 1",
+                    "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at, active_options_prompt_preset_id FROM settings WHERE id = 1",
                 )?;
                 let result = stmt.query_row([], DbSettings::from_row);
                 match result {
@@ -43,8 +43,8 @@ impl Storage {
                     .map_err(|e| EngineError::Parse(format!("Failed to serialize mode_preset_registry: {e}")))?;
 
                 conn.execute(
-                    "INSERT OR REPLACE INTO settings (id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at)
-                     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO settings (id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at, active_options_prompt_preset_id)
+                     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     rusqlite::params![
                         &connections_json,
                         &settings.narration_connection_id,
@@ -55,6 +55,7 @@ impl Storage {
                         &mode_preset_registry_json,
                         &now,
                         &now,
+                        &settings.active_options_prompt_preset_id,
                     ],
                 )?;
                 Ok(())

@@ -131,6 +131,10 @@ pub enum EngineError {
     #[error("Configuration error: {0}")]
     Config(String),
 
+    /// Use-case guard rejected the request (e.g. no scene to act on); message is user-facing.
+    #[error("Validation error: {0}")]
+    Validation(String),
+
     /// Template substitution failed (missing var, bad type, recursion limit).
     #[error("Template error: {0}")]
     Template(String),

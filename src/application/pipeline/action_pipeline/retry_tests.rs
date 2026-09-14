@@ -10,7 +10,6 @@ use crate::application::ports::llm_provider::LlmCallResult;
 use crate::application::errors::ApplicationError;
 use crate::application::errors::ProcessActionResult;
 use crate::domain::model::map::Room;
-use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
@@ -25,6 +24,9 @@ use crate::test_support::{
 use crate::test_support::fixtures::TestGameState;
 
 use super::action_tests::wait_for_gate_idle;
+use super::options_tests::{
+    current_options, make_app, set_always_on, set_prior_options, tagged_options_provider,
+};
 
 fn make_test_state() -> GameState {
     TestGameState::in_room("start")
@@ -566,6 +568,124 @@ async fn test_retry_event_continuation_happy_path() {
     );
 }
 
+/// Event-only retry is a narration-producing turn: the offered set follows
+/// the same turn-end rewrite rule as ordinary turns. Toggle on + options
+/// agent registered — the stale set is replaced with a fresh one.
+#[test]
+fn test_retry_event_continuation_rewrites_options_when_enabled() {
+    let (app, storage) = make_app(Some(tagged_options_provider()));
+    set_always_on(&storage, true);
+
+    let _input_id = add_input_and_save(&app, &storage, "test input");
+    let _pre_main_id = save_pre_main(&app, &storage);
+
+    let mut pre_event_state = app.message_service.load_or_fresh();
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
+    set_prior_options(&app, &["Stale option"]);
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &pre_event_state,
+        );
+    let pre_event_id = storage.save_snapshot(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(pre_event_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    let mut final_state = pre_event_state;
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
+    final_state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let final_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &final_state,
+        );
+    let _ = storage.save_snapshot(&final_snapshot);
+    if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_snapshot.db_id.unwrap_or(0)));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    app.pipeline.retry_last_response();
+
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
+        "Should finish with Idle status, got {:?}",
+        state.narrative.input_buffer.status
+    );
+    let options = current_options(&app);
+    assert_eq!(
+        options.len(),
+        3,
+        "event-retry tail must install a fresh set: {options:?}"
+    );
+    assert!(options.contains(&"Search the desk".to_string()));
+}
+
+/// Same rewrite rule with the toggle off: the stale set must clear (no
+/// system failure message — a cleared set with the toggle off is normal).
+#[test]
+fn test_retry_event_continuation_clears_options_when_disabled() {
+    let (app, storage) = make_app(None);
+    set_always_on(&storage, false);
+
+    let _input_id = add_input_and_save(&app, &storage, "test input");
+    let _pre_main_id = save_pre_main(&app, &storage);
+
+    let mut pre_event_state = app.message_service.load_or_fresh();
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
+    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
+    set_prior_options(&app, &["Stale option"]);
+    let snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &pre_event_state,
+        );
+    let pre_event_id = storage.save_snapshot(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(pre_event_id));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    let mut final_state = pre_event_state;
+    final_state.add_message("Event narration".to_string(), MessageType::Narration);
+    final_state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    let final_snapshot =
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &final_state,
+        );
+    let _ = storage.save_snapshot(&final_snapshot);
+    if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_snapshot.db_id.unwrap_or(0)));
+        insert_message_with_swipe(&app, &storage, last);
+    }
+
+    app.pipeline.retry_last_response();
+
+    let state = app.message_service.load_or_fresh();
+    assert!(
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
+        "Should finish with Idle status, got {:?}",
+        state.narrative.input_buffer.status
+    );
+    assert!(
+        current_options(&app).is_empty(),
+        "a toggle-off event retry must clear the stale set"
+    );
+}
+
 #[tokio::test]
 async fn test_retry_main_narration_happy_path() {
     let (app, storage) = make_test_app_with_storage();
@@ -625,7 +745,7 @@ async fn test_retry_recovers_after_llm_failure() {
     let _input_id = add_input_and_save(&app, &storage, "look");
 
     app.pipeline
-        .execute_action_with_replay("look".to_string(), None);
+        .execute_action_with_inputs("look".to_string(), false, None);
     let after_fail = app.message_service.load_or_fresh();
     assert!(
         after_fail
@@ -910,7 +1030,8 @@ async fn test_retry_appends_swipe_to_same_message() {
         snapshot_id: Some(_pre_main_id),
         location_header: None,
         event_header: None,
-        replay: None,
+        impersonated: false,
+        steering_instruction: None,
     };
     storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
@@ -1316,18 +1437,13 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    let replay = GenerationReplay {
-        impersonate: true,
-        impersonate_direction: Some("A direction".to_string()),
-        impersonate_preset_id: Some("impersonate_default".to_string()),
-        guide: None,
-    };
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
         "room_1",
         "I look around.",
         MessageType::Input,
-        Some(replay),
+        true,
+        Some("A steering instruction".to_string()),
     )
     .expect("seed: impersonated input with stored inputs");
 
@@ -1365,7 +1481,7 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
     assert_eq!(target.active_swipe_index, 1);
     assert_eq!(target.text(), "I look around cautiously.");
     assert!(
-        target.replay().is_some_and(|r| r.impersonate),
+        target.impersonated(),
         "the new swipe inherits the stored inputs"
     );
     // The full tail (the deliberate behavior change): the quantifier ran.
@@ -1390,17 +1506,14 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    // A guide-only turn: narration with a guide replay, no Input row.
-    let replay = GenerationReplay {
-        guide: Some("make it ominous".to_string()),
-        ..Default::default()
-    };
+    // A guide-only turn: narration with a guided steering instruction, no Input row.
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
         "room_1",
         "A guided narration.",
         MessageType::Narration,
-        Some(replay),
+        false,
+        Some("make it ominous".to_string()),
     )
     .expect("seed: guided narration with stored inputs");
 
@@ -1443,8 +1556,8 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
     assert_eq!(target.active_swipe_index, 1);
     assert_eq!(target.text(), "Ominous retake.");
     assert!(
-        target.replay().is_some_and(|r| r.guide.is_some()),
-        "the new swipe inherits the guide replay"
+        target.is_guided(),
+        "the new swipe inherits the guide's steering instruction"
     );
     app.shutdown_token.cancel();
 }
@@ -1485,16 +1598,13 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
 
     // History carries an older player input, then a guided turn.
     let _ = add_input_and_save(&app, &storage, "the older player input");
-    let replay = GenerationReplay {
-        guide: Some("make it ominous".to_string()),
-        ..Default::default()
-    };
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
         "marker",
         "A guided narration.",
         MessageType::Narration,
-        Some(replay),
+        false,
+        Some("make it ominous".to_string()),
     )
     .expect("seed: guided narration with stored inputs");
 
@@ -1576,6 +1686,7 @@ async fn test_retry_flow_user_regen_mode_stays_tail_less() {
         "room_1",
         "look around",
         MessageType::Input,
+        false,
         None,
     )
     .expect("seed: plain input");

@@ -8,6 +8,9 @@ use serde_json::json;
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
+use chronicler_engine::TestDataBuilder;
+use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
+use chronicler_engine::domain::model::world::WorldCard;
 
 use crate::test_helpers::fetch_body;
 
@@ -343,6 +346,147 @@ async fn test_update_world_handler_invalid_json() {
     assert!(
         body_str.contains("Invalid map JSON") || body_str.contains("error"),
         "Expected error about invalid JSON: {body_str}"
+    );
+}
+
+/// Scenario-list JSON containing one scenario with the given id (shape
+/// mirrors `StartingScenario`).
+fn single_scenario_json(id: &str) -> String {
+    json!([{ "id": id, "name": "Intro", "description": "d", "starting_room_id": "room_1", "text": "t", "npcs": [] }])
+        .to_string()
+}
+
+fn world_update_form_with(scenarios_json: &str, extra_fields: &str) -> String {
+    let map_json = json!({
+        "overworld": { "id": "test_map", "name": "Map", "regions": [] }
+    })
+    .to_string();
+    format!(
+        "key=test&name=Updated&description=Test+World&global_rules=rule1&map_json={}&scenarios_json={}{}",
+        urlencoding::encode(&map_json),
+        urlencoding::encode(scenarios_json),
+        extra_fields
+    )
+}
+
+async fn post_world_update(
+    app: &axum::Router,
+    key: &str,
+    form_data: String,
+) -> (axum::http::StatusCode, String) {
+    let req = Request::builder()
+        .uri(format!("/worlds/{key}"))
+        .method(http::Method::POST)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(Body::from(form_data))
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    (status, String::from_utf8_lossy(&body).to_string())
+}
+
+/// Update is a read-modify-write patch: `default_scenario_id` is not a form
+/// field and must keep its stored value while the referenced scenario exists.
+#[tokio::test]
+async fn test_update_world_preserves_default_scenario_id() {
+    let world = WorldCard {
+        key: "test".to_string(),
+        name: "Test World".to_string(),
+        default_scenario_id: Some("test_intro".to_string()),
+        ..Default::default()
+    };
+    let data = TestDataBuilder::default_test().world(world).build();
+    let (app, state) = TestAppBuilder::with_data(data).build_with_state();
+
+    let form_data = world_update_form_with(&single_scenario_json("test_intro"), "");
+    let (status, body) = post_world_update(&app, "test", form_data).await;
+    assert!(
+        status.is_success(),
+        "Expected success: {status:?} body: {body}"
+    );
+
+    let (_, stored, _) = state
+        .world_catalogue
+        .get_world("test")
+        .unwrap()
+        .expect("world still present");
+    assert_eq!(
+        stored.default_scenario_id.as_deref(),
+        Some("test_intro"),
+        "default scenario pointer must survive a form edit"
+    );
+}
+
+/// Removing the referenced scenario from the scenarios list clears the
+/// default pointer instead of leaving a dangling id.
+#[tokio::test]
+async fn test_update_world_clears_default_scenario_id_when_scenario_removed() {
+    let world = WorldCard {
+        key: "test".to_string(),
+        name: "Test World".to_string(),
+        default_scenario_id: Some("test_intro".to_string()),
+        ..Default::default()
+    };
+    let data = TestDataBuilder::default_test().world(world).build();
+    let (app, state) = TestAppBuilder::with_data(data).build_with_state();
+
+    let form_data = world_update_form_with("[]", "");
+    let (status, body) = post_world_update(&app, "test", form_data).await;
+    assert!(
+        status.is_success(),
+        "Expected success: {status:?} body: {body}"
+    );
+
+    let (_, stored, _) = state
+        .world_catalogue
+        .get_world("test")
+        .unwrap()
+        .expect("world still present");
+    assert_eq!(
+        stored.default_scenario_id, None,
+        "dangling default pointer must be cleared"
+    );
+}
+
+/// Posture is merged per field: a post supplying only `narrator_mode` must
+/// not reset the unprovided perspective and tense to their domain defaults.
+#[tokio::test]
+async fn test_update_world_partial_posture_preserves_unsent_fields() {
+    let world = WorldCard {
+        key: "test".to_string(),
+        name: "Test World".to_string(),
+        narrative_perspective: NarrativePerspective::Second,
+        narrative_tense: NarrativeTense::Present,
+        ..Default::default()
+    };
+    let data = TestDataBuilder::default_test().world(world).build();
+    let (app, state) = TestAppBuilder::with_data(data).build_with_state();
+
+    let form_data = world_update_form_with("[]", "&narrator_mode=interactive_fiction");
+    let (status, body) = post_world_update(&app, "test", form_data).await;
+    assert!(
+        status.is_success(),
+        "Expected success: {status:?} body: {body}"
+    );
+
+    let (_, stored, _) = state
+        .world_catalogue
+        .get_world("test")
+        .unwrap()
+        .expect("world still present");
+    assert_eq!(stored.narrator_mode, NarratorMode::InteractiveFiction);
+    assert_eq!(
+        stored.narrative_perspective,
+        NarrativePerspective::Second,
+        "unprovided perspective must be preserved"
+    );
+    assert_eq!(
+        stored.narrative_tense,
+        NarrativeTense::Present,
+        "unprovided tense must be preserved"
     );
 }
 

@@ -7,13 +7,15 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
-use chronicler_engine::domain::model::message::{GenerationReplay, Message};
+use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use chronicler_engine::test_support::{
-    insert_message_with_swipe, make_test_pipeline_with_mock_quantifier, make_test_recorder,
+    insert_message_with_swipe, make_test_pipeline_with_backends,
+    make_test_pipeline_with_mock_quantifier, make_test_recorder, make_test_recorder_with_storage,
     seed_event_flow, TestAppBuilder, TestDataBuilder, TestMap,
 };
 
@@ -752,12 +754,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
     {
         let mut gs = state.message_service.load_or_fresh();
         let mut input = Message::new("I look around.".to_string(), MessageType::Input, None, None);
-        input.swipes[0].replay = Some(GenerationReplay {
-            impersonate: true,
-            impersonate_direction: Some("I look around.".to_string()),
-            impersonate_preset_id: Some("impersonate_default".to_string()),
-            guide: None,
-        });
+        input.set_stored_inputs(true, Some("I look around.".to_string()));
         gs.narrative.history.append(input);
         state
             .message_service
@@ -801,10 +798,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
         "I look around cautiously.",
         "active swipe is the regenerated impersonation"
     );
-    assert!(
-        input.replay().map(|r| r.impersonate).unwrap_or(false),
-        "new swipe remains an impersonation"
-    );
+    assert!(input.impersonated(), "new swipe remains an impersonation");
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 22.2
@@ -878,12 +872,7 @@ async fn test_retry_re_impersonate_preserves_record_http() {
     {
         let mut gs = state.message_service.load_or_fresh();
         let mut input = Message::new("I sneak past.".to_string(), MessageType::Input, None, None);
-        input.swipes[0].replay = Some(GenerationReplay {
-            impersonate: true,
-            impersonate_direction: Some("Sneak past the guard.".to_string()),
-            impersonate_preset_id: Some("impersonate_default".to_string()),
-            guide: None,
-        });
+        input.set_stored_inputs(true, Some("Sneak past the guard.".to_string()));
         gs.narrative.history.append(input);
         state
             .message_service
@@ -900,17 +889,105 @@ async fn test_retry_re_impersonate_preserves_record_http() {
         .into_iter()
         .find(|m| m.message_type == MessageType::Input)
         .expect("Input message exists");
-    let replay = input.replay().expect("new swipe preserves replay");
     assert!(
-        replay.impersonate,
+        input.impersonated(),
         "record still marks the turn as impersonated"
     );
     assert_eq!(
-        replay.impersonate_direction.as_deref(),
-        Some("Sneak past the guard.")
+        input.steering_instruction(),
+        Some("Sneak past the guard."),
+        "the steering instruction re-applies on the redo"
+    );
+}
+
+// The impersonate preset resolves at generation time from the game's active
+// configuration — a redo picks up the preset's current content.
+// [docs/specs/swipe_new.md] SCENARIO: 22.4
+#[tokio::test]
+async fn test_retry_re_impersonate_uses_current_preset_content_http() {
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
+    );
+    let forensics_storage = Arc::new(Storage::new_in_memory());
+    let app_storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(
+        Arc::clone(&narrator) as Arc<dyn LlmProvider>,
+        Arc::clone(&forensics_storage),
+    );
+    let pipeline = make_test_pipeline_with_backends(
+        Arc::clone(&app_storage),
+        recorder,
+        AgentRegistry::default(),
+    );
+    // .storage() hands the builder the same instance the pipeline gets rebound
+    // to — the preset update below must hit the wired storage, not an orphan.
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&app_storage))
+        .pipeline(pipeline)
+        .build_with_state();
+
+    {
+        let mut gs = state.message_service.load_or_fresh();
+        let mut input = Message::new("I look around.".to_string(), MessageType::Input, None, None);
+        input.set_stored_inputs(true, Some("I look around.".to_string()));
+        gs.narrative.history.append(input);
+        state
+            .message_service
+            .save_message_and_snapshot(&mut gs)
+            .expect("seed impersonate input");
+    }
+
+    // Update the active impersonate preset's content in place. Same id, new
+    // configuration: if the redo still pinned the old preset, the marker would
+    // never reach the prompt.
+    let marker = "MARKER-IMPERSONATE-PRESET-V2";
+    {
+        let mut preset = app_storage
+            .get_preset("impersonate_default")
+            .expect("get impersonate preset")
+            .expect("impersonate_default seeded");
+        preset.instructions = Some(format!(
+            "{}\n{}",
+            marker,
+            preset.instructions.unwrap_or_default()
+        ));
+        app_storage
+            .save_preset(&preset)
+            .expect("update impersonate preset content");
+    }
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "retry should complete");
+
+    let forensics = forensics_storage
+        .list_latest_llm_messages(10)
+        .expect("list llm forensics");
+    let narrator_call = forensics
+        .iter()
+        .find(|m| m.agent_name.contains("narrator"))
+        .expect("narrator forensics recorded");
+    let prompt = format!(
+        "{} {}",
+        narrator_call.system_prompt, narrator_call.user_prompt
+    );
+    assert!(
+        prompt.contains(marker),
+        "the redo must generate with the preset's CURRENT content; prompt was: {prompt}"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let input = messages
+        .into_iter()
+        .find(|m| m.message_type == MessageType::Input)
+        .expect("Input message exists");
+    assert!(
+        input.impersonated(),
+        "the redo's active swipe stays impersonated"
     );
     assert_eq!(
-        replay.impersonate_preset_id.as_deref(),
-        Some("impersonate_default")
+        input.steering_instruction(),
+        Some("I look around."),
+        "the steering instruction re-applies on the redo"
     );
 }

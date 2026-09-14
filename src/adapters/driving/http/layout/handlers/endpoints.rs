@@ -26,6 +26,10 @@ pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String>
     render_fragment(&state, |s| s.render_action_area(), "action_area_fragment")
 }
 
+pub async fn options_dock_fragment(State(state): State<AppState>) -> Html<String> {
+    render_fragment(&state, |s| s.render_options_dock(), "options_dock_fragment")
+}
+
 pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html<String> {
     render_fragment(
         &state,

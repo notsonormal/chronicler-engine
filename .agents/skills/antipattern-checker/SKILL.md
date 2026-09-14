@@ -73,6 +73,18 @@ Extraction treating symptom, not root cause.
 
 ---
 
+### 4. Re-implementation
+
+Code re-implements a capability that already exists in the codebase.
+
+**Signals:**
+- New public function/type/module whose job an existing symbol already does (search by name-shape and behaviour, not just text)
+- New helper that wraps an existing helper with a near-identical body
+
+**Method:** for each new symbol in scope, grep the codebase for an existing implementation. This is a bounded existence search, not scope expansion — "do not audit adjacent files" still applies to pattern-hunting.
+
+---
+
 ## Methodology
 
 Every finding **must** include:
@@ -127,6 +139,10 @@ Every finding **must** include:
 - Patterns recurring across multiple files
 - Architecture-level observations
 
+## Checked and clean
+- Each signal verified with no findings (e.g. "no re-implementation hits for the 4 new public symbols")
+- An omitted entry means the check was not run
+
 ## Positive patterns (optional)
 - X is OK because Y (prevents doomsday tone)
 ```
@@ -138,6 +154,7 @@ Every finding **must** include:
 1. **Determine scope** — ask user if not specified
 2. **List files** — describe files to be reviewed (don't grep, just list)
 3. **Read files fully** — no grep-only findings. If a file is in scope, read it completely before reporting on it.
-4. **Apply framework** — check each file against 3 categories
-5. **Report all** — no cap, no filtering. Known findings from corpus included.
-6. **Stop when scope exhausted** — do not audit adjacent files
+4. **Apply framework** — check each file against 4 categories
+5. **Reuse search** — for each new public symbol in the diff, grep the codebase for an existing implementation (category 4)
+6. **Report all** — no cap, no filtering. Known findings from corpus included.
+7. **Stop when scope exhausted** — do not audit adjacent files

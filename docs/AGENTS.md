@@ -161,7 +161,7 @@ Restating these in markdown is drift-prone duplication — the source changes, t
 What Reference docs **do** carry:
 
 - What each thing is *for* (prose, one paragraph per table/component/endpoint).
-- The load-bearing invariants the code doesn't say directly ("messages are not stored in the snapshot JSON", "one message history per game", "settings is a singleton row").
+- The invariants the code doesn't say directly ("messages are not stored in the snapshot JSON", "one message history per game", "settings is a singleton row").
 - Relationships and aggregate structure (see "Relationships diagrams" below).
 
 If a reader needs the exact column list, field type, or function signature, they open the source file — one hop. The doc's value is what the source *doesn't* say.
@@ -170,7 +170,7 @@ If a reader needs the exact column list, field type, or function signature, they
 
 Where aggregate structure isn't obvious from reading the source sequentially, a relationships diagram earns its place. Use Mermaid `flowchart`, not `erDiagram`, not C4.
 
-- **`flowchart`** — boxes for tables/components, edges for relationships. Cardinality as edge labels (`"1 → ∞, cascades"`). Non-FK invariants as dashed edges (`-.->|"optional, not FK"|`) with prose labels. This is the only diagram type flexible enough to express both FK edges and the load-bearing non-FK invariants (e.g. `message_swipes.snapshot_id → game_state_snapshots.id`, which is deliberately not a SQL FK).
+- **`flowchart`** — boxes for tables/components, edges for relationships. Cardinality as edge labels (`"1 → ∞, cascades"`). Non-FK invariants as dashed edges (`-.->|"optional, not FK"|`) with prose labels. This is the only diagram type flexible enough to express both FK edges and application-enforced non-FK invariants (e.g. `message_swipes.snapshot_id → game_state_snapshots.id`, which is deliberately not a SQL FK).
 - **Not `erDiagram`** — its strict cardinality markers (`||--o{`) handle FK edges but not non-FK invariants or independent tables cleanly, and its `{ column TYPE }` body blocks tempt re-adding column duplication.
 - **Not C4** — C4 primitives describe software components with tech stacks, not data tables. Using `Component()` for a table is a category error.
 
@@ -197,7 +197,7 @@ Explanation prose states design choices, reasons, and tradeoffs directly. Discur
 Forbidden registers:
 
 - **Narrated reader experience** — "A reader opening X is confronted with…", "A reader will reasonably ask…", "The fair question is…". State the design; do not narrate someone encountering it.
-- **Dramatic contrast framing** — "What this design is not" sections, "This is not a plugin system", "The model declines, deliberately, to…". Name alternatives where they are load-bearing context, not as strawman dramatic contrasts.
+- **Dramatic contrast framing** — "What this design is not" sections, "This is not a plugin system", "The model declines, deliberately, to…". Name alternatives where they are context the reader needs, not as strawman dramatic contrasts.
 - **Editorializing perspective** — "the perspective the design takes is…", "whether that tradeoff is worth it is outside the scope of this document", "that cost is invisible". State the tradeoff and the comparison point; let the reader evaluate.
 - **Speculative color** — "a hypothetical prose guardian tomorrow". Drop speculative examples that add narrative color without carrying fact.
 
@@ -209,7 +209,7 @@ Explanation docs in this tree explain **what is happening** — they unfold and 
 
 The single most common framing failure: an Explanation doc whose sections read as an apologia — "Why an abstraction at all", "Why two and not one", "Why trait objects". Each of those is a defense of a choice against an imagined alternative. Explanation answers "what is going on here?".
 
-The test: a section title phrased as "Why X?" or "Why X instead of Y?" is a justification title; rephrase it as what the section explains ("How X works", "What X does", "The moving parts of X") and rewrite the body to unfold the subject rather than defend it. Comparisons to alternatives still appear where load-bearing — they become "X differs from Y on..." statements inside the unfolding, not the section's reason for existing.
+The test: a section title phrased as "Why X?" or "Why X instead of Y?" is a justification title; rephrase it as what the section explains ("How X works", "What X does", "The moving parts of X") and rewrite the body to unfold the subject rather than defend it. Comparisons to alternatives still appear where they matter — they become "X differs from Y on..." statements inside the unfolding, not the section's reason for existing.
 
 #### Tutorial
 
@@ -252,4 +252,4 @@ Two forms, both banned:
 - **Tautological negative definition** — e.g. "`Message` carries no `text`, `location_header`, `event_header`, or `snapshot_id` field" when the `Swipe` bullet just said `Swipe` holds those fields. The reader learns the same fact twice and the negative is the weaker copy. State what a thing *is*; the complement's own description carries the rest. A dedicated section that exists only to restate an invariant the Overview already established fails the compass test ("What problem does this solve for the reader?") — drop the section, keep the one-line positive where the reader first encounters the thing.
 - **Defensive scope disclaiming** — e.g. "X is not an external system", "X is not in scope", "State mutation via LLM function calling is out of scope for this reference". Diagrams and Out-of-scope lists are the source of truth for what's external; if something isn't in the diagram, it isn't in scope. Don't keep the disclaimed thing alive in the reader's mind with parallel negation. Inspirations belong in the explanation doc for the thing they inspired, not in negative asides on unrelated docs.
 
-If the negative is genuinely load-bearing — a constraint the reader must know — state it as a **positive constraint**, not a disclaimer. "The LLM cannot call back into the engine" becomes "state mutation is the engine's job, run through the action pipeline after the LLM has spoken." The reader gets the same fact as an assertion about how the system behaves, not as an apology about what it doesn't do.
+If the negative is a constraint the reader must know, state it as a **positive constraint**, not a disclaimer. "The LLM cannot call back into the engine" becomes "state mutation is the engine's job, run through the action pipeline after the LLM has spoken." The reader gets the same fact as an assertion about how the system behaves, not as an apology about what it doesn't do.

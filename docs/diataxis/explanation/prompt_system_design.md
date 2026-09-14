@@ -23,7 +23,7 @@ The design pays for two render paths and a presence-marker computation. Off-scre
 
 The `<writing_style>` and `<output_format>` sections are rendered after `<ConversationHistory>` and before `<PlayerInput>` in the user message, rather than with the instruction sections in the system half.
 
-LLMs exhibit strong recency bias: content closer to the generation point carries more weight. Placing prose constraints and structural rules at the end of the context window — after all story data but immediately before the point where the model generates — buys the leverage of that recency. The same content in the system message at the top of the prompt carries less weight.
+LLMs exhibit strong recency bias: content closer to the generation point carries more weight. Placing prose constraints and structural rules at the end of the context window — after all story data but immediately before the point where the model generates — benefits from that recency. The same content in the system message at the top of the prompt carries less weight.
 
 The assembler holds the two sections as a single splice string and renders them between history and player input.
 

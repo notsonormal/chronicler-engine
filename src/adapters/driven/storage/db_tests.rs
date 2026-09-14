@@ -137,10 +137,21 @@ fn test_db_message_swipes_table_exists() {
 }
 
 #[test]
-fn test_db_message_swipes_has_replay_column() {
+fn test_db_message_swipes_flat_input_columns() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();
     let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name IN ('impersonated', 'steering_instruction')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        count, 2,
+        "message_swipes must carry the flattened input columns after v22"
+    );
+    let replay: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name='replay'",
             [],
@@ -148,8 +159,8 @@ fn test_db_message_swipes_has_replay_column() {
         )
         .unwrap();
     assert_eq!(
-        count, 1,
-        "message_swipes.replay column must exist after v15 migration"
+        replay, 0,
+        "message_swipes.replay must be dropped by the v22 migration"
     );
 }
 

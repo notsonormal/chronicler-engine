@@ -418,9 +418,10 @@ async fn test_update_missing_preset_returns_error() {
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.16
 #[tokio::test]
-async fn test_update_preset_invalid_type_returns_error() {
+async fn test_update_preset_ignores_form_preset_type() {
     let _guard = SettingsTestGuard::new();
-    let app = TestAppBuilder::default_app();
+    let app_state = TestAppBuilder::default_test().build_service();
+    let app = build_router(app_state.clone());
 
     let create_response = app
         .clone()
@@ -436,13 +437,22 @@ async fn test_update_preset_invalid_type_returns_error() {
     let response = app
         .oneshot(post_form_request(
             &format!("/prompt-presets/{preset_id}"),
-            "name=Updated&instructions=Updated.&preset_type=invalid",
+            "name=Updated&instructions=Updated.&preset_type=quantifier",
         ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Invalid preset type</span>");
+    assert!(!body.contains("error"), "update must succeed: {body}");
+    assert!(body.contains("preset-card"));
+
+    let stored = app_state
+        .prompt_preset_service
+        .get_preset(&preset_id)
+        .unwrap()
+        .expect("preset still present");
+    assert_eq!(stored.preset_type.as_str(), "system");
+    assert_eq!(stored.name, "Updated");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.17
@@ -630,6 +640,7 @@ async fn test_activate_missing_preset_returns_error() {
     assert_eq!(body, "<span class='error'>Preset not found</span>");
 }
 
+// [docs/specs/prompt_presets.md] SCENARIO: 21.26
 #[tokio::test]
 async fn test_activate_refuses_preset_not_allowed_for_mode() {
     use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};

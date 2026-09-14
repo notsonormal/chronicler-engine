@@ -3,7 +3,9 @@
 
 use crate::error::EngineError;
 use crate::domain::model::game::{Game, NewGame};
-use crate::domain::model::settings::{AppSettings, ModePresetBundle, NarratorMode};
+use crate::domain::model::settings::{
+    AppSettings, ModePresetBundle, NarrativePerspective, NarrativeTense, NarratorMode,
+};
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
 
@@ -14,7 +16,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on
                          FROM games
                          ORDER BY updated_at DESC",
                     )
@@ -64,9 +66,13 @@ impl Storage {
                     created_at: now,
                     updated_at: now,
                     narrator_mode: NarratorMode::Novel,
+                    narrative_perspective: NarrativePerspective::Third,
+                    narrative_tense: NarrativeTense::Past,
                     active_system_prompt_preset_id: "system_default".to_string(),
                     active_quantifier_prompt_preset_id: "quantifier_default".to_string(),
                     active_impersonate_prompt_preset_id: "impersonate_default".to_string(),
+                    active_options_prompt_preset_id: "options_default".to_string(),
+                    options_always_on: false,
                 });
                 Ok(id)
             }
@@ -90,11 +96,15 @@ impl Storage {
                     created_at: now,
                     updated_at: now,
                     narrator_mode: request.narrator_mode,
+                    narrative_perspective: request.narrative_perspective,
+                    narrative_tense: request.narrative_tense,
                     active_system_prompt_preset_id: request.system_prompt_preset_id.clone(),
                     active_quantifier_prompt_preset_id: request.quantifier_prompt_preset_id.clone(),
                     active_impersonate_prompt_preset_id: request
                         .impersonate_prompt_preset_id
                         .clone(),
+                    active_options_prompt_preset_id: request.options_prompt_preset_id.clone(),
+                    options_always_on: request.options_always_on,
                 });
                 Ok(id)
             }
@@ -125,7 +135,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on
                          FROM games
                          WHERE id = ?1
                          LIMIT 1",
@@ -147,6 +157,60 @@ impl Storage {
     pub fn require_game(&self, id: u64) -> Result<Game, EngineError> {
         self.get_game(id)?
             .ok_or_else(|| EngineError::GameNotFound(id))
+    }
+
+    /// Persists the posture triple and active preset ids; narrative state is untouched.
+    pub fn update_game_config(&self, game: &Game) -> Result<(), EngineError> {
+        self.with_backend_mut("update_game_config", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let now = chrono::Utc::now().to_rfc3339();
+                let affected = conn
+                    .execute(
+                        "UPDATE games SET narrator_mode=?, narrative_perspective=?, narrative_tense=?, active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, active_options_prompt_preset_id=?, options_always_on=?, updated_at=? WHERE id=?",
+                        rusqlite::params![
+                            game.narrator_mode.as_str(),
+                            game.narrative_perspective.as_str(),
+                            game.narrative_tense.as_str(),
+                            game.active_system_prompt_preset_id,
+                            game.active_quantifier_prompt_preset_id,
+                            game.active_impersonate_prompt_preset_id,
+                            game.active_options_prompt_preset_id,
+                            game.options_always_on as i64,
+                            &now,
+                            game.id as i64,
+                        ],
+                    )
+                    .map_err(|e| {
+                        EngineError::Config(format!("Failed to update game config: {e}"))
+                    })?;
+                if affected == 0 {
+                    return Err(EngineError::GameNotFound(game.id));
+                }
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                let stored = data
+                    .games
+                    .iter_mut()
+                    .find(|g| g.id == game.id)
+                    .ok_or(EngineError::GameNotFound(game.id))?;
+                stored.narrator_mode = game.narrator_mode;
+                stored.narrative_perspective = game.narrative_perspective;
+                stored.narrative_tense = game.narrative_tense;
+                stored.active_system_prompt_preset_id =
+                    game.active_system_prompt_preset_id.clone();
+                stored.active_quantifier_prompt_preset_id =
+                    game.active_quantifier_prompt_preset_id.clone();
+                stored.active_impersonate_prompt_preset_id =
+                    game.active_impersonate_prompt_preset_id.clone();
+                stored.active_options_prompt_preset_id =
+                    game.active_options_prompt_preset_id.clone();
+                stored.options_always_on = game.options_always_on;
+                stored.updated_at = chrono::Utc::now();
+                Ok(())
+            }
+        })
     }
 
     pub fn active_system_preset_id(&self, settings: &AppSettings) -> String {
@@ -171,6 +235,19 @@ impl Storage {
             |g| g.active_impersonate_prompt_preset_id.as_str(),
             |b| b.impersonate_prompt_preset_id.as_str(),
         )
+    }
+
+    /// Game-first options preset id. Options presets are mode-agnostic and
+    /// sit outside the per-mode registry, so the fallback is the settings
+    /// column rather than a mode bundle.
+    pub fn active_options_preset_id(&self, settings: &AppSettings) -> String {
+        match self.get_game(self.current_game_id()).ok().flatten() {
+            Some(game) => game.active_options_prompt_preset_id.clone(),
+            None => {
+                tracing::warn!("current game missing; falling back to settings options preset");
+                settings.active_options_prompt_preset_id.clone()
+            }
+        }
     }
 
     // Falls back to the registry's Novel bundle when the current game is absent.

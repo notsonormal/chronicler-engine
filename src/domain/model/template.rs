@@ -3,6 +3,9 @@
 
 use crate::domain::model::character::PersonaCard;
 
+/// Default number of generated options substituted for `{{option_count}}`.
+pub const DEFAULT_OPTION_COUNT: u32 = 3;
+
 /// Known template variables available for substitution.
 #[derive(Debug, Clone)]
 pub struct TemplateVars {
@@ -18,6 +21,8 @@ pub struct TemplateVars {
     pub narrative_perspective: String,
     /// `{{narrative_tense}}` — the configured narrative tense (`past` / `present`).
     pub narrative_tense: String,
+    /// `{{option_count}}` — how many options the options prompts request.
+    pub option_count: String,
 }
 
 impl TemplateVars {
@@ -29,6 +34,7 @@ impl TemplateVars {
             persona_background: String::new(),
             narrative_perspective: "third".to_string(),
             narrative_tense: "past".to_string(),
+            option_count: DEFAULT_OPTION_COUNT.to_string(),
         }
     }
 
@@ -40,6 +46,7 @@ impl TemplateVars {
             persona_background: persona.sheet.scenario.clone(),
             narrative_perspective: "third".to_string(),
             narrative_tense: "past".to_string(),
+            option_count: DEFAULT_OPTION_COUNT.to_string(),
         }
     }
 }

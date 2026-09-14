@@ -22,6 +22,10 @@ pub struct NarrativeState {
     pub last_backend_name: Option<String>,
     #[serde(default)]
     pub last_model_name: Option<String>,
+    /// The offered pickable-option set (options agent output). Current-scene
+    /// artifact — replaced wholesale, never per-message history.
+    #[serde(default)]
+    pub current_options: Vec<String>,
     // Transient — not persisted (pipeline run only).
     #[serde(skip)]
     pub retry_target: Option<Message>,
@@ -43,6 +47,7 @@ impl NarrativeState {
             pending_event: snapshot.pending_event.clone(),
             last_backend_name: snapshot.last_backend_name.clone(),
             last_model_name: snapshot.last_model_name.clone(),
+            current_options: snapshot.current_options.clone(),
             retry_target: None,
         }
     }

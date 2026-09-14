@@ -18,6 +18,7 @@ pub struct DbWorld {
     pub narrative_tense: String,
     pub created_at: String,
     pub updated_at: String,
+    pub options_always_on: bool,
 }
 
 impl DbWorld {
@@ -36,6 +37,7 @@ impl DbWorld {
             narrative_tense: row.get(10)?,
             created_at: row.get(11)?,
             updated_at: row.get(12)?,
+            options_always_on: row.get::<_, i64>(13)? != 0,
         })
     }
 
@@ -61,6 +63,7 @@ impl DbWorld {
             narrative_tense: crate::domain::model::settings::NarrativeTense::parse_or_default(
                 &self.narrative_tense,
             ),
+            options_always_on: self.options_always_on,
         })
     }
 }

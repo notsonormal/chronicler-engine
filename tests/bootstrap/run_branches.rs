@@ -6,7 +6,8 @@ use chronicler_engine::utils::cli::{
     list_available_worlds, resolve_engine_data_path, scan_worlds, Args,
 };
 
-use crate::test_utils::server::get_available_port;
+use crate::test_utils::server::{get_available_port, get_config_port, TestServer};
+use crate::test_utils::{CONFIG_PATH, TEST_PERSONA, TEST_WORLD};
 
 fn cleanup_db_for_port(port: u16) {
     // `bootstrap::run` opens `<exe_parent>/chronicler_{port}.db` plus SQLite
@@ -103,5 +104,25 @@ fn test_run_persona_not_found_errors_cleanly() {
     assert!(
         msg.contains("Persona not found: __nonexistent_persona__"),
         "expected canonical display, got: {msg}"
+    );
+}
+
+// Infrastructure health check, not a spec scenario (no tag).
+//
+// The stdout tee is the artifact every failure dump reads. This needs a real
+// spawned engine but no browser, so it belongs to this binary rather than
+// `tests/browser/`.
+#[tokio::test]
+async fn test_engine_output_teed_to_file() {
+    let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+    let _server = TestServer::new_with_mock(port, TEST_WORLD, TEST_PERSONA).await;
+
+    let tee_path = format!("tmp/test_server_logs/{port}_stdout.log");
+    let content = std::fs::read_to_string(&tee_path)
+        .unwrap_or_else(|e| panic!("engine stdout tee missing at {tee_path}: {e}"));
+    assert!(
+        content.contains("HTMX Dashboard running"),
+        "tee should contain the engine boot line, tail: {}",
+        content.lines().last().unwrap_or("")
     );
 }

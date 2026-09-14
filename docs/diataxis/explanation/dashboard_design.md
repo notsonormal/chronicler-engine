@@ -20,10 +20,10 @@ Five endpoints carry their own cadence: four poll the server and one fetches onc
 - **Story log at 2s.** The story log is the primary feedback channel — narrative text is what the player watches, and new generations should appear promptly.
 - **Status display at 5s.** The status pill ("Ready" / "Thinking..." / phase name) changes only on phase transitions, which are themselves paced by LLM round-trip time. A 5s cadence lands once per status transition.
 - **Visual sidebar at 5s.** The sidebar carries the location image and NPC portraits — image data is large compared to text. A 5s cadence matches the rate at which sidebar content can actually change within a turn; a tighter cadence would re-fetch unchanged imagery.
-- **LLM messages at 4s.** The LLM Messages tab is a forensics surface for inspecting prompts and responses. A 4s cadence sits between the story log and the sidebar; the player inspects messages deliberately rather than watching them arrive.
+- **LLM messages at 4s.** The LLM Messages tab is a forensics view for inspecting prompts and responses. A 4s cadence sits between the story log and the sidebar; the player inspects messages deliberately rather than watching them arrive.
 - **Header fetches once on load.** Game title, current game name, and connection status are stable for the duration of a session; the header fetches once and refreshes when the JS in `assets/index.html` triggers a refresh (e.g., after a swipe switch).
 
-Per-tab management panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation and stay still while inactive. They're management surfaces; once a player has loaded the list they care about, the list is stable until the player triggers a reload.
+Per-tab management panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation and stay still while inactive. They're management panels; once a player has loaded the list they care about, the list is stable until the player triggers a reload.
 
 The polling mechanism described above is what makes the polling-pause pattern (next section) possible: each request is independent, so pausing is "stop sending requests for a while".
 

@@ -174,3 +174,43 @@ fn test_mock_backend_builders_compose() {
         "with_prompt_responses should survive chaining and be returned on trigger path"
     );
 }
+
+#[test]
+fn test_mock_options_canned_response_when_unseeded() {
+    // The unseeded options branch is what browser/E2E runs exercise: the
+    // default mock must hand the options agent parseable suggestions.
+    let backend = MockBackend::default();
+    let result = backend.complete("options", "sys", "scene context", None);
+    assert!(result.is_ok());
+    let text = result.unwrap().text;
+    assert!(
+        text.contains("<suggestion>Option one from the mock.</suggestion>")
+            && text.contains("<suggestion>Option two from the mock.</suggestion>")
+            && text.contains("<suggestion>Option three from the mock.</suggestion>"),
+        "unseeded options call must return the canned suggestions, got: {text}"
+    );
+}
+
+#[test]
+fn test_mock_options_seeded_response_wins_over_canned() {
+    // Branch priority: with_prompt_responses takes precedence over the
+    // canned options response — pipeline tests seed exact options text.
+    let seeded = "<suggestion>Search the desk</suggestion>".to_string();
+    let backend = MockBackend::default().with_prompt_responses(vec![seeded.clone()]);
+    let result = backend.complete("options", "sys", "scene context", None);
+    assert!(result.is_ok());
+    assert_eq!(
+        result.unwrap().text,
+        seeded,
+        "seeded prompt responses must win over the canned options text"
+    );
+}
+
+#[test]
+fn test_mock_options_with_fail_fails() {
+    // Branch priority: the failure guard precedes the canned options
+    // response — always-on failure tests rely on options calls erroring.
+    let backend = MockBackend::default().with_fail();
+    let result = backend.complete("options", "sys", "scene context", None);
+    assert!(result.is_err(), "with_fail must fail options calls too");
+}

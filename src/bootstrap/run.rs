@@ -93,14 +93,13 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     let player = storage.require_persona(&args.persona)?;
 
     let settings = load_settings(&storage).unwrap_or_else(|_| AppSettings::default());
-    let registry = settings.mode_preset_registry.clone();
 
     let active_game_id = super::init_game::resolve_game_id(
         &db_pool,
         &world_arc,
         &args.persona,
         &player.sheet.name,
-        &registry,
+        &settings,
     )?;
     storage.set_game_id(active_game_id);
 
@@ -242,6 +241,7 @@ pub(crate) fn ensure_presets(
         PresetType::System,
         PresetType::Quantifier,
         PresetType::Impersonate,
+        PresetType::Options,
     ] {
         let dir = data_dir.join("prompt_presets").join(preset_type.as_str());
         if !dir.exists() {
@@ -307,7 +307,10 @@ fn process_preset_file(
         writing_style: seed["writing_style"].as_str().map(|s| s.to_string()),
         output_format: seed["output_format"].as_str().map(|s| s.to_string()),
         allowed_modes,
-        is_default: true,
+        is_default: seed
+            .get("is_default")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true),
         preset_type,
     };
 

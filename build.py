@@ -15,7 +15,10 @@ Two invocation modes:
 Stdout carries the agent-facing decision signal + tailable progress (banner,
 step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
 banner with log path). Full output is written to ``logs/build_*.log``; each
-log's first line is a session stamp (see ``_stamp_session_id``).
+log's first line is a session stamp (see ``_stamp_session_id``). Every
+completed run also appends one pipe-delimited summary line (timestamp,
+duration, exit code, args) to the append-only journal
+``logs/build_history.txt`` — see ``_append_history``.
 """
 
 import argparse
@@ -35,6 +38,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
 
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl; journal locking is skipped there.
+    fcntl = None
+
 # Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -45,6 +53,44 @@ class _LogState:
     """Module-level log handle for the current build run."""
 
     fh = None
+
+
+class _NextestSummary:
+    """nextest summary lines captured this run, re-printed at the epilogue.
+
+    One entry per test tier: the gate runs the integration and browser tiers as
+    separate nextest invocations. Module state (like _LogState) because run()
+    sys.exits on a checked failure before its caller could inspect the captured
+    output; main()'s finally must still print the counts at the tail.
+
+    ``label`` names the step the next captured summary belongs to; ``_timed_run``
+    sets it before dispatch. ``flaky`` holds one (label, test name) entry per
+    test that passed only on a retry — nextest exits 0 for those, so the
+    epilogue must surface them or the retry goes unnoticed.
+    """
+
+    lines: list[tuple[str, str]] = []
+    flaky: list[tuple[str, str]] = []
+    label = ""
+
+    @classmethod
+    def line_text(cls) -> str:
+        """Render every captured summary as the epilogue's one-liner block."""
+        return "\n".join(
+            f"{text}  ({label})" if label else text for label, text in cls.lines
+        )
+
+    @classmethod
+    def flaky_text(cls) -> str:
+        """Render a warning naming every test that needed a retry."""
+        lines = [
+            f"                 {name}  ({label})" if label else f"                 {name}"
+            for label, name in cls.flaky
+        ]
+        header = (
+            f"WARNING: {len(cls.flaky)} flaky test(s) passed only on a retry:"
+        )
+        return "\n".join([header, *lines])
 
 
 def _set_log_fh(fh):
@@ -143,9 +189,35 @@ def require_nextest():
         sys.exit(1)
 
 
+# The browser binary runs the Playwright tier: each test spawns a real engine
+# server plus Chromium. Splitting it from the CPU-light tiers keeps
+# `python build.py integration` to ~20s and gives each tier its own epilogue
+# verdict.
+_BROWSER_FILTER = "binary(browser)"
+_NON_BROWSER_FILTER = "not binary(browser)"
+
+
 def get_test_cmd(include_llm=False):
     """Return the test command using nextest."""
     cmd = _NEXTEST_RUN
+    if include_llm:
+        cmd += " --profile llm --run-ignored all"
+    return cmd
+
+
+def get_browser_test_cmd():
+    """Return the command running only the browser (Playwright) binary."""
+    return f"{_NEXTEST_RUN} -E '{_BROWSER_FILTER}'"
+
+
+def get_integration_test_cmd(include_llm=False):
+    """Return the command running every test binary except `browser`.
+
+    The engine, http, storage, bootstrap and llm tiers are CPU-light; excluding
+    the browser binary keeps this step to ~20s, so it works as a standalone
+    check.
+    """
+    cmd = f"{_NEXTEST_RUN} -E '{_NON_BROWSER_FILTER}'"
     if include_llm:
         cmd += " --profile llm --run-ignored all"
     return cmd
@@ -158,6 +230,73 @@ def get_test_cmd(include_llm=False):
 _NEXTEST_RESULT_RE = re.compile(
     r"^\s*(?:PASS|FAIL|SKIP)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
 )
+
+# nextest final summary line, e.g.:
+#   "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped"
+#   "     Summary [   1.497s] 119 tests run: 118 passed, 1 failed, 0 skipped"
+# Counts are matched independently of segment order so a nextest format
+# change cannot silently break the epilogue one-liner.
+_NEXTEST_SUMMARY_RE = re.compile(r"^\s*Summary \[[^\]]*\]\s+\d+ tests? run:")
+
+# nextest retry line, e.g.:
+#   "   FLAKY 2/2 [   0.056s] (1487/1588) chronicler_engine::http story_log::foo"
+# A flaky test passed only on a retry: the run exits 0, so this line is the
+# sole signal that a test is unstable.
+_NEXTEST_FLAKY_RE = re.compile(
+    r"^\s*FLAKY\s+\d+/\d+\s*\[[^\]]*\]\s*(?:\([^)]*\))?\s*(\S.*)$"
+)
+
+
+def _summary_count(line: str, label: str) -> str | None:
+    """Return the count preceding ``label`` in a Summary line, or None."""
+    m = re.search(rf"(\d+) {label}", line)
+    return m.group(1) if m else None
+
+
+def _nextest_summary_line(output: str) -> str | None:
+    """Render nextest's final Summary line as a compact epilogue one-liner.
+
+    Returns e.g. "nextest: 118 passed, 1 failed", or None when the output
+    carries no nextest summary (compile error, non-nextest command).
+    nextest omits the "failed" segment when nothing failed, but the epilogue
+    line always shows it (0 when absent) so a clean run still reads as clean.
+    A zero "skipped" segment is omitted; a nonzero one is kept so the counts
+    still add up to the total run. A nonzero "flaky" segment is kept for the
+    same reason: those tests passed, but only after a retry.
+    """
+    rendered = None
+    for line in output.splitlines():
+        if not _NEXTEST_SUMMARY_RE.match(line):
+            continue
+        passed = _summary_count(line, "passed") or "?"
+        failed = _summary_count(line, "failed") or "0"
+        skipped = _summary_count(line, "skipped")
+        flaky = _summary_count(line, "flaky")
+        rendered = f"nextest: {passed} passed, {failed} failed"
+        if skipped and skipped != "0":
+            rendered += f", {skipped} skipped"
+        if flaky and flaky != "0":
+            rendered += f", {flaky} flaky"
+    return rendered
+
+
+def _nextest_flaky_tests(output: str) -> list[str]:
+    """Return the names of tests that needed a retry, in report order."""
+    names = []
+    for line in output.splitlines():
+        m = _NEXTEST_FLAKY_RE.match(line)
+        if m:
+            names.append(m.group(1).strip())
+    return names
+
+
+def _stash_nextest_summary(output: str) -> None:
+    """Capture nextest's final summary line for the closing epilogue."""
+    line = _nextest_summary_line(output)
+    if line is not None:
+        _NextestSummary.lines.append((_NextestSummary.label, line))
+    for name in _nextest_flaky_tests(output):
+        _NextestSummary.flaky.append((_NextestSummary.label, name))
 
 
 def _nextest_duration_to_secs(token: str) -> float:
@@ -211,6 +350,11 @@ def run_with_test_timings(cmd, env=None, check=True):
         if secs == 0.0 and "SKIP" in line:
             continue
         timings.append((secs, name))
+    _stash_nextest_summary(
+        "\n".join(
+            (result.stdout or "").splitlines() + (result.stderr or "").splitlines()
+        )
+    )
 
     both_print("")
     both_print("--- Test Timing Report ---")
@@ -243,9 +387,19 @@ def run_with_test_timings(cmd, env=None, check=True):
     return result.returncode
 
 
-def get_coverage_cmd():
-    """Return the coverage test command using nextest."""
-    return "cargo llvm-cov nextest --no-report --no-fail-fast"
+def get_coverage_cmd(exclude_browser=False):
+    """Return the coverage test command using nextest.
+
+    ``exclude_browser`` mirrors the gate's browser/integration split: the
+    coverage step runs twice, once per half, so both profiling runs share the
+    single merged report that ``--no-report`` defers.
+    """
+    cmd = "cargo llvm-cov nextest --no-report --no-fail-fast"
+    if exclude_browser:
+        cmd += f" -E '{_NON_BROWSER_FILTER}'"
+    else:
+        cmd += f" -E '{_BROWSER_FILTER}'"
+    return cmd
 
 
 class StepSpec(NamedTuple):
@@ -300,6 +454,12 @@ REGISTRY: dict[str, StepSpec] = {
             help="Enforce Rust unit-test structure rules.",
         ),
         StepSpec(
+            "spec-coverage",
+            "Running spec-coverage guardrail...",
+            "python scripts/validate_feature_spec.py",
+            help="Enforce spec-scenario coverage and SCENARIO-tag rules.",
+        ),
+        StepSpec(
             "docstrings",
             "Running Python docstring guardrail...",
             "python scripts/check_python_docstrings.py",
@@ -352,9 +512,16 @@ REGISTRY: dict[str, StepSpec] = {
         StepSpec(
             "integration",
             "Running integration tests...",
-            f"{_NEXTEST_RUN} --tests",
+            get_integration_test_cmd(),
             needs_nextest=True,
-            help="Run the integration test suite (~1-2 minutes).",
+            help="Run every test binary except browser (~1 min).",
+        ),
+        StepSpec(
+            "browser",
+            "Running browser tests...",
+            get_browser_test_cmd(),
+            needs_nextest=True,
+            help="Run only the browser (Playwright) test binary (~4.5 min).",
         ),
         StepSpec(
             "nextest",
@@ -379,6 +546,7 @@ GATE_ORDER = [
     "validate-data",
     "clippy",
     "test-structure",
+    "spec-coverage",
     "docstrings",
     "py-tests",
     "http-routes-check",
@@ -772,6 +940,9 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                 if _CARGO_PROGRESS_RE.match(line):
                     continue
                 _log_write(line)
+        # Stash before the check: a checked failure sys.exits below, and the
+        # epilogue must still be able to print the pass/fail counts.
+        _stash_nextest_summary(out or "")
         if check and process.returncode != 0:
             both_print(f"FAILED with code {process.returncode}")
             sys.exit(process.returncode)
@@ -797,6 +968,9 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                 if _CARGO_PROGRESS_RE.match(line):
                     continue
                 _log_write(line)
+        _stash_nextest_summary(
+            (result.stdout or "") + "\n" + (result.stderr or "")
+        )
         if check and result.returncode != 0:
             both_print(f"FAILED with code {result.returncode}")
             sys.exit(result.returncode)
@@ -877,6 +1051,7 @@ def _timed_run(counter, record, label, cmd, check=True, env=None, timings=False)
     """Run one step, print progress, and record its timing and outcome."""
     counter.next(label)
     start = time.time()
+    _NextestSummary.label = label
     try:
         if timings:
             rc = run_with_test_timings(cmd, env=env, check=check)
@@ -897,7 +1072,7 @@ class GateStep(NamedTuple):
     itself (the note is not a counted step, matching the original behavior).
     """
 
-    kind: str  # "cmd" | "copy" | "tests" | "coverage_report" | "note"
+    kind: str  # "cmd" | "copy" | "tests" | "browser" | "coverage_report" | "note"
     label: str
     cmd: str = ""
     check: bool = True
@@ -917,31 +1092,59 @@ def _plan_gate_steps(args) -> list[GateStep]:
             continue
         if name == "TESTS":
             if args.coverage:
-                label = (
-                    "Running all tests with coverage and timings..."
+                int_label = (
+                    "Running integration tests with coverage and timings..."
                     if args.test_timings
-                    else "Running all tests with coverage..."
+                    else "Running integration tests with coverage..."
+                )
+                browser_label = (
+                    "Running browser tests with coverage and timings..."
+                    if args.test_timings
+                    else "Running browser tests with coverage..."
                 )
                 plan.append(
                     GateStep(
                         "tests",
-                        label,
-                        get_coverage_cmd(),
+                        int_label,
+                        get_coverage_cmd(exclude_browser=True),
+                        check=False,
+                        timings=args.test_timings,
+                    )
+                )
+                plan.append(
+                    GateStep(
+                        "browser",
+                        browser_label,
+                        get_coverage_cmd(exclude_browser=False),
                         check=False,
                         timings=args.test_timings,
                     )
                 )
             else:
-                label = (
-                    "Running all tests with timings..."
+                int_label = (
+                    "Running integration tests with timings..."
                     if args.test_timings
-                    else "Running all tests..."
+                    else "Running integration tests..."
+                )
+                browser_label = (
+                    "Running browser tests with timings..."
+                    if args.test_timings
+                    else "Running browser tests..."
                 )
                 plan.append(
                     GateStep(
                         "tests",
-                        label,
-                        get_test_cmd(include_llm=args.include_llm),
+                        int_label,
+                        get_integration_test_cmd(include_llm=args.include_llm),
+                        check=False,
+                        timings=args.test_timings,
+                    )
+                )
+                plan.append(
+                    GateStep(
+                        "browser",
+                        browser_label,
+                        get_browser_test_cmd(),
                         check=False,
                         timings=args.test_timings,
                     )
@@ -994,6 +1197,16 @@ def _execute_gate_plan(plan, args, cargo_env, record):
                     "    NOTE: 2 LLM tests were skipped. "
                     "Run 'python build.py --llm-only' to execute them."
                 )
+        elif step.kind == "browser":
+            _timed_run(
+                counter,
+                record,
+                step.label,
+                step.cmd,
+                check=step.check,
+                env=cargo_env,
+                timings=step.timings,
+            )
         elif step.kind == "coverage_report":
             counter.next(step.label)
             _generate_coverage_report(args, cargo_env)
@@ -1186,8 +1399,55 @@ def run_llm_only(args, record):
     both_print("=== Build Complete ===")
 
 
+_HISTORY_FILE = Path("logs/build_history.txt")
+_HISTORY_HEADER = "timestamp | duration_s | exit_code | args"
+_HISTORY_MAX_LINES = 1000
+
+
+def _append_history(path: Path, args_str: str, duration_sec: float, exit_code: int) -> None:
+    """Append one run record to the build-history journal, then trim.
+
+    One pipe-delimited line per run, columns per ``_HISTORY_HEADER``, newest
+    last so ``tail`` shows recent runs. The trim keeps the header plus the
+    newest records, rewritten in place while still holding the lock — flock
+    keeps concurrent agents (shared ``logs/``) from interleaving appends or
+    racing the rewrite. Callers treat any failure as ignorable: the journal
+    must never break a build.
+    """
+    args_str = args_str.replace("|", "/").replace("\n", " ").strip()
+    line = (
+        f"{time.strftime('%Y-%m-%dT%H:%M:%S')} | {duration_sec:.1f} | "
+        f"{exit_code} | {args_str}\n"
+    )
+    with open(path, "a+", encoding="utf-8") as fh:
+        if fcntl is not None:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            fh.seek(0)
+            lines = fh.readlines()
+            if not lines or lines[0].rstrip("\n") != _HISTORY_HEADER:
+                lines.insert(0, _HISTORY_HEADER + "\n")
+            lines.append(line)
+            if len(lines) > _HISTORY_MAX_LINES:
+                lines = lines[:1] + lines[-(_HISTORY_MAX_LINES - 1) :]
+            # "a+" writes land at EOF (O_APPEND), but truncate empties the
+            # file first, so the rewrite starts back at the top.
+            fh.seek(0)
+            fh.truncate()
+            fh.writelines(lines)
+            fh.flush()
+        finally:
+            if fcntl is not None:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 def main():
     args = parse_args()
+
+    # Journal inputs, captured before any chdir so the record reflects
+    # exactly what the caller invoked.
+    _run_start = time.time()
+    history_args = " ".join(sys.argv[1:]).strip() or "(full gate)"
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
 
@@ -1230,6 +1490,13 @@ def main():
         # close is delayed only by in-process writes, not by any I/O wait.
         _print_step_summary(record.timings, record.failures, log_path)
 
+        # The pass/fail counts, one line per test tier, right before the banner:
+        # an agent tailing stdout gets the verdict without grepping the full log.
+        if _NextestSummary.lines:
+            both_print(_NextestSummary.line_text())
+        if _NextestSummary.flaky:
+            both_print(_NextestSummary.flaky_text())
+
         both_print("=" * 60)
         both_print("=== Build Complete ===")
         both_print(f"Full build log: {log_path}")
@@ -1242,11 +1509,25 @@ def main():
             pass
         _LogState.fh = None
 
-    # check=False steps (e.g. the test suite) record failures in the record
-    # without raising SystemExit. Propagate them into the process exit code so
-    # callers that trust the exit code (agents, pre-commit, CI) see the failure.
-    if exit_code == 0 and record.failures:
-        exit_code = 1
+        # check=False steps (e.g. the test suite) record failures in the record
+        # without raising SystemExit. Propagate them into the process exit code
+        # so callers that trust the exit code (agents, pre-commit, CI) — and
+        # the history journal below — see the true outcome. Done inside the
+        # finally (not after the try) because the finally runs on every exit
+        # path, so the journal can never disagree with the process exit code.
+        if exit_code == 0 and record.failures:
+            exit_code = 1
+
+        try:
+            _append_history(
+                _HISTORY_FILE,
+                history_args,
+                time.time() - _run_start,
+                exit_code,
+            )
+        except Exception:
+            pass  # Best-effort bookkeeping; never fail a run over it.
+
     return exit_code
 
 
