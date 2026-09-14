@@ -36,6 +36,11 @@ timeout, posture-change no-fire) confirm it on the machine.
 - Assets from the flake investigation (read these first):
   - [Flake investigation evidence](./assets/flake-investigation-2026-09-13.md)
   - [Browser tier inventory](./assets/browser-tier-inventory.md)
+- Provided external research: a user-run Gemini deep-search survey,
+  [HTMX Verification Testing Patterns.txt](./assets/HTMX%20Verification%20Testing%20Patterns.txt)
+  (23K, 24 sources). Ticket 05 (Analyze the Gemini deep-search survey)
+  validates it against the repo; ticket 02 is blocked on that analysis so it
+  extends rather than redoes it.
 - Execution override: this effort **carries execution into the map** (overrides
   plan-don't-do). Tickets 01–04 still resolve in order — research the evidence,
   then grill the design — and the design's Answer graduates implementation

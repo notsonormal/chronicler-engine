@@ -51,7 +51,7 @@ The two tests must be character-for-character identical except for the storage c
 
 ## Pattern 3 — LLM provider trait
 
-**Purpose.** Test the `LlmProvider` trait implementation for a specific backend (DeepSeek, Mock, Ollama, OpenRouter). Each test asserts the backend-specific behaviour against the trait surface.
+**Purpose.** Test the `LlmProvider` trait implementation for a specific backend (DeepSeek, Mock, Ollama, OpenRouter). Each test asserts the backend-specific behaviour against the trait contract.
 
 **The standard.**
 

@@ -7,14 +7,14 @@ title: AI Steering
 
 ## Overview
 
-Two steering surfaces let the player shape what the narrator generates. Both enter through the single command input as slash commands (`/guide`, `/impersonate`) and differ in what they steer and how they survive a retry.
+Two steering commands let the player shape what the narrator generates. Both enter through the single command input as slash commands (`/guide`, `/impersonate`) and differ in what they steer and how they survive a retry.
 
-| Surface | What it steers | Persisted to history | Output message type | Retry re-applies via |
+| Command | What it steers | Persisted to history | Output message type | Retry re-applies via |
 |---|---|---|---|---|
 | Guided generation | content — what the AI says | no, transient | `Narration` | the swipe's stored steering instruction |
 | Impersonate | speaker — who says it | no, transient | `Input` | the swipe's stored steering instruction |
 
-Both surfaces are transient: their steering lives for one generation and never becomes a history entry.
+Both commands are transient: their steering lives for one generation and never becomes a history entry.
 
 ## Entry: Slash Commands
 

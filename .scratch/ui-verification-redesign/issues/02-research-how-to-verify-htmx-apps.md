@@ -2,7 +2,7 @@
 
 Type: research
 Status:
-Blocked by:
+Blocked by: 05
 
 ## Question
 
@@ -10,6 +10,15 @@ The dashboard is server-rendered HTML + HTMX partial swaps. Its tests drive a
 real browser (Playwright) and poll for visible text. This ticket asks: what do
 mature projects do to verify server-driven HTMX (or similar fragment-swap)
 UIs robustly, from first principles?
+
+Start from the resolution of "Analyze the Gemini deep-search survey": it
+validates and distills a 23K external survey already covering request-level
+contracts across four ecosystems, lifecycle-event readiness, JSDOM, htmx's
+own test harness, and config knobs. Do NOT redo what survives validation;
+this ticket fills the gaps the survey leaves after analysis — wrong/unsupported
+claims, patterns asserted but not demonstrated in practice, approaches it never
+considered — and extends each surviving pattern with concrete application cost
+for this repo.
 
 Research (external docs + examples, not the local codebase) and compare:
 

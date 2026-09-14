@@ -461,6 +461,10 @@ Five canonical role strings, used as `Status:` lines in local-markdown files (pe
 
 Read `CONTEXT.md` for details.
 
+### Codebase research
+
+When a task needs you to understand code you have not read — how a pipeline works, where a behaviour lives — dispatch the `Explore` subagent with a focused question instead of reading many files into your own context.
+
 ## Session History Search
 
 Use `session_search` when you need what was  said or done in an **older** session. Use `session_list` to browse by project/date and `session_read` to open the full conversation of a hit.
