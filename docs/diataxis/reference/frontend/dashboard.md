@@ -5,7 +5,7 @@ title: Dashboard
 
 ## Overview
 
-The dashboard is a single-page HTMX application served at `/`. The page is statically served from `assets/index.html`; every per-tab panel and every per-message update is fetched as a server-rendered HTML fragment. The Game tab is the default landing view; the other five tabs host management surfaces whose domain content lives in their own reference docs.
+The dashboard is a single-page HTMX application served at `/`. The page is statically served from `assets/index.html`; every per-tab panel and every per-message update is fetched as a server-rendered HTML fragment. The Game tab is the default landing view; the other five tabs host management panels whose domain content lives in their own reference docs.
 
 The static HTML shell defines the tab bar, the active-tab body, the polling containers, and the in-page JavaScript that drives button-state transitions, edit-mode polling pauses, and swipe controls. The Rust side serves fragment endpoints and per-action POST endpoints that the shell calls via HTMX.
 
@@ -79,7 +79,7 @@ State transitions happen on three events: form submission (immediately sets Thin
 
 **Text-check preflight.** Before the action reaches its endpoint, the form posts to the action-check endpoint, which invokes the configured text checker. If issues are found, the action area is replaced with a preview showing the original text, an editable corrected text textarea, and issue tags (orange = spell, pink = grammar). Three buttons: Send (submit corrected), Send Original (submit original), Cancel (restore action area from `data-original-html`). The submit paths converge on the action-confirm endpoint; the corrected-vs-original distinction is carried by the form payload.
 
-**Slash-command palette.** Typing `/` in the command input opens a fixed-position palette above the input listing the two slash commands (`/impersonate`, `/guide`); further typing filters the list, arrow keys move the highlight (wrapping at the ends), Enter or a click populates the input with the highlighted command plus a trailing space without submitting, and Escape, focus loss, scroll, or submit closes it. The palette element is a `<body>` child whose listeners are delegated to `document`, so it survives the action-area innerHTML swap that action submission performs — the input is recreated and the wiring re-binds to it. The interaction contract is enforced by [`../../../specs/browser.md`](../../../specs/browser.md) (scenarios 17.1–17.9).
+**Slash-command palette.** Typing `/` in the command input opens a fixed-position palette above the input listing the three slash commands (`/impersonate`, `/guide`, `/options`); further typing filters the list, arrow keys move the highlight (wrapping at the ends), Enter or a click populates the input with the highlighted command plus a trailing space without submitting, and Escape, focus loss, scroll, or submit closes it. The palette element is a `<body>` child whose listeners are delegated to `document`, so it survives the action-area innerHTML swap that action submission performs — the input is recreated and the wiring re-binds to it. The interaction contract is enforced by [`../../../specs/browser_slash_menu.md`](../../../specs/browser_slash_menu.md) (scenarios 31.1–31.9).
 
 ## Polling Cadences
 
@@ -121,7 +121,7 @@ Retrigger re-runs the trigger narration for the previous turn.
 
 ## Game Management
 
-The Games tab hosts three regions: **Active Game**, **New Game**, and **Saved Games**. Cross-world switching is allowed (a saved game from world A can be switched to while world B is active). The description below focuses on what each surface does and what the user sees.
+The Games tab hosts three regions: **Active Game**, **New Game**, and **Saved Games**. Cross-world switching is allowed (a saved game from world A can be switched to while world B is active). The description below focuses on what each region does and what the user sees.
 
 ### Active Game
 

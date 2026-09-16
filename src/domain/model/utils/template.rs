@@ -10,4 +10,5 @@ pub fn render_template(text: &str, vars: &TemplateVars) -> String {
         .replace("{{persona_background}}", &vars.persona_background)
         .replace("{{narrative_perspective}}", &vars.narrative_perspective)
         .replace("{{narrative_tense}}", &vars.narrative_tense)
+        .replace("{{option_count}}", &vars.option_count)
 }

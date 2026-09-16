@@ -202,7 +202,7 @@ And no retry is started (the gate is not claimed)
 #### Scenario 22.1: Re-impersonate retry generates a new Input swipe
 
 ```gherkin
-Given a game state whose last message is an Input with replay.impersonate == true
+Given a game state whose last message is an Input whose active swipe is an impersonation with the steering instruction "I look around."
 And a narrator backend that returns "I look around cautiously." for the impersonation prompt
 When the client sends POST /swipe/new
 And the pipeline returns to idle
@@ -216,7 +216,7 @@ And the player has not moved (the quantifier did not re-run)
 #### Scenario 22.2: User-regen retry generates a new Input swipe
 
 ```gherkin
-Given a game state whose last message is an Input with no replay record
+Given a game state whose last message is an Input whose active swipe has no stored inputs
 And a narrator backend that returns "I sprint forward." for the user-regen prompt
 When the client sends POST /swipe/new
 And the pipeline returns to idle
@@ -227,17 +227,27 @@ And message_service.load_or_fresh().narrative.input_buffer.status is Idle
 And the player has not moved (the quantifier did not re-run)
 ```
 
-#### Scenario 22.3: Re-impersonate retry preserves the steering record
+#### Scenario 22.3: Re-impersonate retry preserves the stored inputs
 
 ```gherkin
-Given a game state whose last message is an Input with replay.impersonate == true
-And replay.impersonate_direction == "Sneak past the guard."
-And replay.impersonate_preset_id == "impersonate_default"
+Given a game state whose last message is an Input whose active swipe is an impersonation
+And the active swipe's steering instruction is "Sneak past the guard."
 When the client sends POST /swipe/new
 And the pipeline returns to idle
-Then message_service.load_messages() contains an Input entry whose active swipe has replay.impersonate == true
-And replay.impersonate_direction == "Sneak past the guard."
-And replay.impersonate_preset_id == "impersonate_default"
+Then message_service.load_messages() contains an Input entry whose active swipe is an impersonation
+And the active swipe's steering instruction is "Sneak past the guard."
+```
+
+#### Scenario 22.4: Re-impersonate redo uses the impersonate preset's current content
+
+```gherkin
+Given a game whose impersonate preset's instructions changed after the original generation
+And a game state whose last message is an Input whose active swipe is an impersonation
+And a narrator backend that returns "I look around cautiously." for the impersonation prompt
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then a new swipe is appended and its stored inputs re-apply (impersonated with the steering instruction)
+And the narrator generation's recorded prompt contains the preset's current instructions
 ```
 
 ---

@@ -733,6 +733,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "syn",
  "tempfile",
  "thiserror 2.0.18",

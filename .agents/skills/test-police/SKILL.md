@@ -26,7 +26,8 @@ A review is done when, for the scope under review:
 |Category|Location|Policy|
 |---|---|---|
 |Unit|`src/**/*_tests.rs` (sibling files, see `TEST_INVENTORY.md`)|<100ms/test; smart waits only — see `WAIT_HELPERS.md`|
-|Integration|`tests/integration/`|Subdir purpose: see `TEST_INVENTORY.md`|
+|Driven-adapter|`tests/storage/`|Real SQLite seam — see `TEST_INVENTORY.md`|
+|Bootstrap smoke|`tests/bootstrap/`|`bootstrap::run()` startup branches|
 |HTTP/component|`tests/http/`|Endpoint, WebSocket, HTMX fragment tests|
 |Browser|`tests/browser/`|Playwright; smart-wait helpers — see `WAIT_HELPERS.md`|
 |LLM|`tests/llm/`|`#[ignore]`d by default — see Disabled/ignored tests; gated by `OPENROUTER_API_KEY`, not `LLM_BACKEND` (see below)|
@@ -98,6 +99,7 @@ Gate is **overall ≥80%**, not per-file. Per-file numbers are reference, not ga
 - `port_utils.rs` — covered by integration tests
 - `bootstrap/` — startup code (partially expected)
 - `bootstrap/logging.rs` — expect 0% coverage
+- `adapters/driven/llm/` HTTP-transport path (`transport/utils/client.rs`, `transport/utils/request.rs`, `transport/utils/response.rs`, `providers/openrouter.rs`, `providers/ollama.rs`) — real HTTP dispatch; `MockBackend` bypasses it, and only the `#[ignore]`d `tests/llm/` suite exercises the real endpoint
 - Test support files — helpers, not core logic
 
 # Reference pointers

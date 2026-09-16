@@ -1,10 +1,8 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! State snapshot value types (persistable representations of game state).
 //!
-//! These are domain-owned DTOs: the storage layer serializes/deserializes
-//! them to the `game_state_snapshots` table, but the type itself lives in
-//! the domain so the application layer does not need to import from
-//! `adapters::driven::storage` to reference a snapshot value.
+//! Domain-owned DTOs: the application layer imports these types from
+//! the domain, never from `adapters::driven::storage`.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -31,6 +29,8 @@ pub struct NarrativeSnapshot {
     pub last_backend_name: Option<String>,
     #[serde(default)]
     pub last_model_name: Option<String>,
+    #[serde(default)]
+    pub current_options: Vec<String>,
 }
 
 impl NarrativeSnapshot {
@@ -42,6 +42,7 @@ impl NarrativeSnapshot {
             pending_event: state.pending_event.clone(),
             last_backend_name: state.last_backend_name.clone(),
             last_model_name: state.last_model_name.clone(),
+            current_options: state.current_options.clone(),
         }
     }
 }

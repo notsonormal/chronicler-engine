@@ -35,14 +35,15 @@ fn test_db_swipe_from_row_maps_columns() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(
         "CREATE TABLE s (id INTEGER, message_id INTEGER, swipe_index INTEGER, \
-         text TEXT, snapshot_id INTEGER, location_header TEXT, event_header TEXT, replay TEXT);\
-         INSERT INTO s VALUES (5, 9, 1, 'hello', 42, 'Town', 'Battle', NULL);",
+         text TEXT, snapshot_id INTEGER, location_header TEXT, event_header TEXT, \
+         impersonated INTEGER, steering_instruction TEXT);\
+         INSERT INTO s VALUES (5, 9, 1, 'hello', 42, 'Town', 'Battle', 0, NULL);",
     )
     .unwrap();
 
     let swipe = conn
         .query_row(
-            "SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header, replay \
+            "SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, steering_instruction \
              FROM s",
             [],
             DbSwipe::from_row,
@@ -56,7 +57,8 @@ fn test_db_swipe_from_row_maps_columns() {
     assert_eq!(swipe.snapshot_id, Some(42));
     assert_eq!(swipe.location_header.as_deref(), Some("Town"));
     assert_eq!(swipe.event_header.as_deref(), Some("Battle"));
-    assert!(swipe.replay.is_none());
+    assert_eq!(swipe.impersonated, 0);
+    assert!(swipe.steering_instruction.is_none());
 }
 
 #[test]
@@ -64,14 +66,15 @@ fn test_db_swipe_from_row_null_optionals() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(
         "CREATE TABLE s (id INTEGER, message_id INTEGER, swipe_index INTEGER, \
-         text TEXT, snapshot_id INTEGER, location_header TEXT, event_header TEXT, replay TEXT);\
-         INSERT INTO s VALUES (1, 1, 0, 't', NULL, NULL, NULL, NULL);",
+         text TEXT, snapshot_id INTEGER, location_header TEXT, event_header TEXT, \
+         impersonated INTEGER, steering_instruction TEXT);\
+         INSERT INTO s VALUES (1, 1, 0, 't', NULL, NULL, NULL, 0, NULL);",
     )
     .unwrap();
 
     let swipe = conn
         .query_row(
-            "SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header, replay \
+            "SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, steering_instruction \
              FROM s",
             [],
             DbSwipe::from_row,
@@ -81,5 +84,6 @@ fn test_db_swipe_from_row_null_optionals() {
     assert_eq!(swipe.snapshot_id, None);
     assert_eq!(swipe.location_header, None);
     assert_eq!(swipe.event_header, None);
-    assert!(swipe.replay.is_none());
+    assert_eq!(swipe.impersonated, 0);
+    assert!(swipe.steering_instruction.is_none());
 }

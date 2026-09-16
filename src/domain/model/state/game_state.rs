@@ -15,7 +15,7 @@ use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::error::{EngineError, Result};
 #[cfg(feature = "diagnostics")]
 use crate::error::InternalError;
-use crate::domain::model::message::{GenerationReplay, Message, Swipe};
+use crate::domain::model::message::{Message, Swipe};
 use super::message_types::MessageType;
 use super::movement::MovementState;
 use super::narrative_state::NarrativeState;
@@ -118,7 +118,8 @@ impl GameState {
         &mut self,
         text: String,
         message_type: MessageType,
-        stored_inputs: Option<GenerationReplay>,
+        impersonated: bool,
+        steering_instruction: Option<String>,
     ) {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
@@ -128,13 +129,16 @@ impl GameState {
                 let target_is_event = target.event_header().is_some();
                 let new_is_event = event_header.is_some();
                 if target_is_event == new_is_event {
-                    let replay = target.replay().cloned();
+                    let inherited_impersonated = target.impersonated();
+                    let inherited_steering_instruction =
+                        target.steering_instruction().map(|d| d.to_string());
                     let swipe = Swipe {
                         text: text.clone(),
                         snapshot_id: None,
                         location_header: location_header.clone(),
                         event_header: event_header.clone(),
-                        replay,
+                        impersonated: inherited_impersonated,
+                        steering_instruction: inherited_steering_instruction,
                     };
                     target.swipes.push(swipe);
                     target.set_active_swipe(target.swipes.len() - 1);
@@ -144,14 +148,14 @@ impl GameState {
         }
 
         let mut message = Message::new(text, message_type, location_header, event_header);
-        if let Some(replay) = stored_inputs {
-            message.set_replay(Some(replay));
+        if impersonated || steering_instruction.is_some() {
+            message.set_stored_inputs(impersonated, steering_instruction);
         }
         self.narrative.history.append(message);
     }
 
     pub fn add_message(&mut self, text: String, message_type: MessageType) {
-        self.push_message(text, message_type, None);
+        self.push_message(text, message_type, false, None);
     }
 
     /// Add a message carrying the inputs that produced its generation — the
@@ -160,9 +164,10 @@ impl GameState {
         &mut self,
         text: String,
         message_type: MessageType,
-        stored_inputs: Option<GenerationReplay>,
+        impersonated: bool,
+        steering_instruction: Option<String>,
     ) {
-        self.push_message(text, message_type, stored_inputs);
+        self.push_message(text, message_type, impersonated, steering_instruction);
     }
 
     pub fn inject_scenario_logs(
@@ -454,7 +459,6 @@ impl GameState {
         self.assert_room_exists(map)?;
         self.assert_npc_consistency(npcs)?;
         self.assert_npc_encounter_log_consistency(npcs)?;
-        self.assert_log_invariants()?;
         Ok(())
     }
 
@@ -505,21 +509,6 @@ impl GameState {
                 return Err(EngineError::Internal(InternalError::new(format!(
                     "npc_encounter_log references unknown NPC '{npc_id}'"
                 ))));
-            }
-        }
-        Ok(())
-    }
-
-    #[cfg(feature = "diagnostics")]
-    fn assert_log_invariants(&self) -> Result<()> {
-        let ai_idx = self.narrative.history.last_ai_response_index();
-        let input_idx = self.narrative.history.last_input_index();
-
-        if let (Some(ai), Some(input)) = (ai_idx, input_idx) {
-            if ai <= input {
-                return Err(EngineError::Internal(InternalError::new(
-                    "last AI response is not after last player input",
-                )));
             }
         }
         Ok(())

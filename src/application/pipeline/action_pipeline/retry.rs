@@ -87,13 +87,11 @@ impl ActionPipeline {
 
         match target.mode {
             RetryMode::ReNarrate => {
-                // A guided turn carries its input on the swipe replay, not in
-                // an Input row — redo it with the same empty input the
-                // original generation used, not with an older turn's input.
-                let target_is_guided = target
-                    .old_target
-                    .as_ref()
-                    .is_some_and(|m| m.replay().is_some_and(|r| r.guide.is_some()));
+                // A guided turn carries its steering on the swipe's stored
+                // inputs, not in an Input row — redo it with the same empty
+                // input the original generation used, not with an older
+                // turn's input.
+                let target_is_guided = target.old_target.as_ref().is_some_and(|m| m.is_guided());
                 let input_text = if target_is_guided {
                     String::new()
                 } else {
@@ -146,7 +144,7 @@ impl ActionPipeline {
             // this arm is Input (non-event). The debug_assert pins that
             // invariant instead of a dead `else => return None` arm.
             debug_assert_eq!(old_target.message_type, MessageType::Input);
-            if old_target.replay().is_some_and(|replay| replay.impersonate) {
+            if old_target.impersonated() {
                 RetryMode::ReImpersonate
             } else {
                 RetryMode::UserRegen

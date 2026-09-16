@@ -24,4 +24,5 @@ pub struct DebugStateView {
     pub quantifier_confidence: Option<String>,
     pub backend_name: Option<String>,
     pub model_name: Option<String>,
+    pub current_options: Vec<String>,
 }

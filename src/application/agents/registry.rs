@@ -8,6 +8,7 @@ use crate::domain::model::agent::{AgentConfig, ExecutionPhase};
 use crate::domain::model::settings::AppSettings;
 use crate::application::agents::Agent;
 use crate::application::agents::quantifier::QuantifierAgent;
+use crate::application::agents::options::OptionsAgent;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::adapters::driven::storage::Storage;
 
@@ -20,6 +21,7 @@ impl AgentRegistry {
     pub fn from_configs_with_storage(
         configs: &[AgentConfig],
         quantifier_recorder: Arc<LlmCallRecorder>,
+        options_recorder: Arc<LlmCallRecorder>,
         storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
@@ -43,6 +45,12 @@ impl AgentRegistry {
                 "quantifier" => Box::new(QuantifierAgent::from_config_with_storage(
                     config,
                     Arc::clone(&quantifier_recorder),
+                    storage.clone(),
+                    Arc::clone(&settings),
+                )?),
+                "options" => Box::new(OptionsAgent::from_config_with_storage(
+                    config,
+                    Arc::clone(&options_recorder),
                     storage.clone(),
                     Arc::clone(&settings),
                 )?),

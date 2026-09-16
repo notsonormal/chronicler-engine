@@ -3,6 +3,7 @@
 
 pub mod action;
 pub mod core;
+pub mod options;
 pub mod retrigger;
 pub mod retry;
 
@@ -12,6 +13,8 @@ pub use core::ActionPipeline;
 mod action_tests;
 #[cfg(test)]
 mod core_tests;
+#[cfg(test)]
+mod options_tests;
 #[cfg(test)]
 mod retrigger_tests;
 #[cfg(test)]

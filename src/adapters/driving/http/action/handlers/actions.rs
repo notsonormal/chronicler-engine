@@ -87,7 +87,7 @@ pub async fn action_check_handler(
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
 
-    if Action::parse(&command).is_steering() {
+    if Action::parse(&command).is_engine_command() {
         return dispatch_with_status_headers(&state, command).await;
     }
 

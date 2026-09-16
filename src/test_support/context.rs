@@ -24,6 +24,10 @@ use crate::error::Result;
 use crate::test_support::TestData;
 use crate::test_support::{make_test_recorder, TestAppBuilder, TestDataBuilder};
 
+/// Matches the production system presets' macro-bearing writing style so
+/// posture macros resolve in recorded prompts without a test-side re-save.
+const FIXTURE_WRITING_STYLE: &str = "{{narrative_perspective}}-person limited perspective, focused on the player character.\n{{narrative_tense}} tense narrative prose.";
+
 pub fn seed_default_preset(storage: &Storage) {
     storage
         .save_preset(&PromptPreset {
@@ -31,7 +35,7 @@ pub fn seed_default_preset(storage: &Storage) {
             name: "Default Test System".to_string(),
             role: Some("You are a test narrator.".to_string()),
             instructions: None,
-            writing_style: None,
+            writing_style: Some(FIXTURE_WRITING_STYLE.to_string()),
             output_format: None,
             allowed_modes: vec![NarratorMode::Novel],
             is_default: true,
@@ -48,7 +52,7 @@ pub fn seed_default_preset(storage: &Storage) {
             name: "Test Interactive Fiction".to_string(),
             role: Some("You are a test interactive fiction narrator.".to_string()),
             instructions: None,
-            writing_style: None,
+            writing_style: Some(FIXTURE_WRITING_STYLE.to_string()),
             output_format: None,
             allowed_modes: vec![NarratorMode::InteractiveFiction],
             is_default: true,

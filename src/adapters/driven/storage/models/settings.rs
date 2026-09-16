@@ -18,6 +18,7 @@ pub struct DbSettings {
     pub mode_preset_registry: String, // JSON: ModePresetRegistry
     pub created_at: String,
     pub updated_at: String,
+    pub active_options_prompt_preset_id: String,
 }
 
 impl DbSettings {
@@ -33,6 +34,7 @@ impl DbSettings {
             mode_preset_registry: row.get(7)?,
             created_at: row.get(8)?,
             updated_at: row.get(9)?,
+            active_options_prompt_preset_id: row.get(10)?,
         })
     }
 
@@ -56,6 +58,7 @@ impl DbSettings {
             text_check,
             agents,
             mode_preset_registry,
+            active_options_prompt_preset_id: self.active_options_prompt_preset_id.clone(),
         })
     }
 }

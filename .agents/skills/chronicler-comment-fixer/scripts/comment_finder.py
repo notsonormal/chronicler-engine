@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Comment finder for chronicler-comment-fixer skill.
-Finds and filters comment patterns in Rust and Python files.
+Finds and filters comment patterns in Rust, Python, HTML and CSS files.
 """
 
 import argparse
@@ -33,7 +33,7 @@ class CommentMatch:
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 WORKSPACE_ROOT = SCRIPT_DIR.parent.parent.parent.parent  # repo root
-UNCOMMITTED_EXTENSIONS = {".rs", ".py"}
+UNCOMMITTED_EXTENSIONS = {".rs", ".py", ".html", ".css"}
 
 
 def get_uncommitted_files() -> list[Path]:
@@ -87,12 +87,12 @@ def get_branch_files(base_branch: Optional[str] = None) -> list[Path]:
         return []
 
 
-def get_all_rust_files() -> list[Path]:
-    """Get all .rs files in the workspace."""
-    rust_files = []
-    for ext in ["src/**/*.rs", "tests/**/*.rs"]:
-        rust_files.extend(WORKSPACE_ROOT.glob(ext))
-    return sorted(set(rust_files))
+def get_all_source_files() -> list[Path]:
+    """Get all Rust, HTML and CSS files in the workspace."""
+    source_files = []
+    for pattern in ["src/**/*.rs", "tests/**/*.rs", "assets/*.html", "assets/*.css"]:
+        source_files.extend(WORKSPACE_ROOT.glob(pattern))
+    return sorted(set(source_files))
 
 
 def get_files_by_pattern(pattern: str) -> list[Path]:
@@ -104,6 +104,87 @@ def get_files_by_pattern(pattern: str) -> list[Path]:
         return []
 
 
+def _block_comment_lines(lines: list[str]) -> list[tuple[int, str]]:
+    """Return every non-blank line inside a `/* ... */` block.
+
+    Continuation lines count as comments. A rule violation often sits on the
+    middle line of a multi-line block, so prefix matching alone would miss it.
+    """
+    found = []
+    inside = False
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if inside:
+            if stripped:
+                found.append((i, stripped))
+            if "*/" in stripped:
+                inside = False
+            continue
+        if "/*" in stripped:
+            if stripped:
+                found.append((i, stripped))
+            inside = "*/" not in stripped.split("/*", 1)[1]
+    return found
+
+
+def _html_comment_lines(lines: list[str]) -> list[tuple[int, str]]:
+    """Return HTML comments, plus JS and CSS comments inside their blocks."""
+    found = []
+    in_html_comment = False
+    region = None
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if in_html_comment:
+            if stripped:
+                found.append((i, stripped))
+            if "-->" in stripped:
+                in_html_comment = False
+            continue
+        if region == "script":
+            if stripped.startswith(("//", "/*", "*")):
+                found.append((i, stripped))
+            if "</script>" in stripped:
+                region = None
+            continue
+        if region == "style":
+            if stripped.startswith(("/*", "*")):
+                found.append((i, stripped))
+            if "</style>" in stripped:
+                region = None
+            continue
+        if "<!--" in stripped:
+            found.append((i, stripped))
+            in_html_comment = "-->" not in stripped.split("<!--", 1)[1]
+            continue
+        if "<script" in stripped:
+            region = "script"
+            continue
+        if "<style" in stripped:
+            region = "style"
+    return found
+
+
+def _comment_lines(suffix: str, lines: list[str]) -> list[tuple[int, str]]:
+    """Return `(line_number, text)` for every comment line, by file type."""
+    if suffix == ".rs":
+        return [
+            (i, stripped)
+            for i, line in enumerate(lines, 1)
+            if (stripped := line.strip()).startswith(("//", "/*", "*/"))
+        ]
+    if suffix == ".py":
+        return [
+            (i, stripped)
+            for i, line in enumerate(lines, 1)
+            if (stripped := line.strip()).startswith(("#", '"""', "'''"))
+        ]
+    if suffix == ".css":
+        return _block_comment_lines(lines)
+    if suffix == ".html":
+        return _html_comment_lines(lines)
+    return []
+
+
 def find_comments_in_file(file_path: Path) -> list[CommentMatch]:
     """Find all comment lines in a file."""
     matches = []
@@ -112,26 +193,14 @@ def find_comments_in_file(file_path: Path) -> list[CommentMatch]:
     try:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
-        for i, line in enumerate(lines, 1):
-            stripped = line.strip()
-            # Rust comments
-            if file_path.suffix == ".rs":
-                if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*/"):
-                    matches.append(CommentMatch(
-                        file_path=str(file_path.relative_to(WORKSPACE_ROOT)),
-                        line_number=i,
-                        content=stripped
-                    ))
-            # Python comments
-            elif file_path.suffix == ".py":
-                if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
-                    matches.append(CommentMatch(
-                        file_path=str(file_path.relative_to(WORKSPACE_ROOT)),
-                        line_number=i,
-                        content=stripped
-                    ))
+        for line_number, content in _comment_lines(file_path.suffix, lines):
+            matches.append(CommentMatch(
+                file_path=str(file_path.relative_to(WORKSPACE_ROOT)),
+                line_number=line_number,
+                content=content
+            ))
     except Exception as e:
-        print(f"Error reading {file_path}: {e}", file=sys.stderr)
+        print(f"Error reading {file_path}: {e}", file=_sys.stderr)
     return matches
 
 
@@ -152,7 +221,7 @@ def main():
     parser.add_argument("--files", "-f", nargs="*", help="Specific files to check")
     parser.add_argument("--pattern", "-p", help="Glob pattern to match files")
     parser.add_argument("--uncommitted", "-u", action="store_true", help="Check uncommitted files")
-    parser.add_argument("--all", "-a", action="store_true", help="Check all Rust files")
+    parser.add_argument("--all", "-a", action="store_true", help="Check all Rust, HTML and CSS files")
     parser.add_argument("--branch", "-b", nargs="?", const="main", metavar="BASE", help="Check files changed in branch vs BASE (default: main)")
     parser.add_argument("--mode", "-m", default="default", help="Output mode (for testing)")
     args = parser.parse_args()
@@ -166,8 +235,8 @@ def main():
         files = get_uncommitted_files()
         args.mode = "uncommitted"
     elif args.all:
-        files = get_all_rust_files()
-        args.mode = "all-rust"
+        files = get_all_source_files()
+        args.mode = "all-source"
     elif args.branch is not None:
         files = get_branch_files(args.branch)
         args.mode = f"branch-{args.branch or 'main'}"

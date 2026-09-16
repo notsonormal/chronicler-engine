@@ -1,11 +1,19 @@
 // mrn-context: inject a compact context block (Model, Build Log) into each
-// pi turn via before_agent_start. Three handlers: session_start resets dedup
-// state; before_agent_start collects two sources, per-source dedup, returns
-// one <pi-note> message when something changed; context re-injects the
-// build-log pointer non-persistently on every LLM call while the newest log
-// has not been persisted yet — before_agent_start only fires when a prompt
-// is submitted, so without this a build run inside the agent loop stayed
-// invisible until the next prompt.
+// pi turn. Three handlers share one per-source dedup map: session_start
+// resets it; before_agent_start collects both sources and returns one
+// persistent <pi-note> when a source's key is new at prompt time; context
+// injects the build-log pointer non-persistently when a fresh log appears
+// mid-turn — before_agent_start only fires when a prompt is submitted, so
+// without this a build run inside the agent loop stayed invisible until
+// the next prompt. Both handlers mark the key as seen on emit, so each
+// note surfaces exactly once.
+//
+// The build-log key is the log path alone. build.py creates the file and
+// writes the first lines at launch, so appends during a build change the
+// mtime but not the key; only a new build (new file) re-triggers the note.
+// The model note posts once per key: at session start (keys reset) and on
+// every model change. No periodic re-anchor — after a compaction the
+// attribution may drop out of the outgoing context until the next change.
 //
 // Build logs are session-attributed: build.py stamps each log's first line
 // with "Session-Id: <uuid>" (from PI_SESSION_ID, injected into tool
@@ -85,11 +93,9 @@ function getBuildLogNote(ctx: any): SourceResult | undefined {
   const ownSession = safeCall(() => ctx?.sessionManager?.getSessionId?.());
   if (stamp !== undefined && ownSession && stamp !== ownSession) return undefined;
 
-  const minutes = Math.floor(ageSeconds / 60);
-  const ageStr = minutes < 60 ? `${minutes}m old` : `${Math.floor(minutes / 60)}h old`;
   const prefix = cwd.endsWith(path.sep) ? cwd : cwd + path.sep;
   const emitPath = newestPath.startsWith(prefix) ? newestPath.substring(prefix.length) : newestPath;
-  return { key: `${newestPath}:${Math.floor(newestMtime)}`, line: `Build Log: ${emitPath} (${ageStr})` };
+  return { key: newestPath, line: `Build Log: ${emitPath}` };
 }
 
 const SOURCES = [
@@ -98,22 +104,18 @@ const SOURCES = [
 ] as const;
 
 const lastKeys: Record<string, string | undefined> = {};
-let turnCount = 0;
 
 export default function (pi: any): void {
   pi.on("session_start", () => {
     for (const k of Object.keys(lastKeys)) lastKeys[k] = undefined;
-    turnCount = 0;
   });
 
   pi.on("before_agent_start", (_event: unknown, ctx: any) => {
-    turnCount += 1;
-    const forceRefresh = turnCount % 10 === 0;
     const lines: string[] = [];
     for (const src of SOURCES) {
       const result = safeCall(() => src.get(ctx));
       if (result === undefined) continue;
-      if (!forceRefresh && result.key === lastKeys[src.name]) continue;
+      if (result.key === lastKeys[src.name]) continue;
       lastKeys[src.name] = result.key;
       lines.push(result.line);
     }
@@ -128,13 +130,14 @@ export default function (pi: any): void {
   });
 
   // Within-turn freshness: append the build-log pointer to the outgoing
-  // context (non-persistent) when the newest log differs from the last
-  // persisted key. Once before_agent_start persists it at the next prompt,
-  // lastKeys catches up and this handler goes quiet again.
+  // context (non-persistent) the first time a fresh log appears mid-turn.
+  // Marking lastKeys here also dedups against before_agent_start — whoever
+  // sees the path first emits it, exactly once.
   pi.on("context", (event: any, ctx: any) => {
     const result = safeCall(() => getBuildLogNote(ctx));
     if (result === undefined) return undefined;
     if (result.key === lastKeys.buildLog) return undefined;
+    lastKeys.buildLog = result.key;
     return {
       messages: [
         ...event.messages,

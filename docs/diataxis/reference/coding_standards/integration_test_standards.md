@@ -71,7 +71,7 @@ assert!(result.is_ok(), "create_game should succeed: {:?}", result.err());
 
 ## Pattern 2 — Real `TestServer` lifecycle + port allocation
 
-**Purpose.** Spawn the actual `chronicler_engine` binary as a child process on a dynamically-allocated port, drive it with Playwright or HTTP requests, tear it down on test exit. The integration tier's only true end-to-end process shape.
+**Purpose.** Spawn the actual `chronicler_engine` binary as a child process on a dynamically-allocated port, drive it with Playwright or HTTP requests, tear it down on test exit. The integration tier's only end-to-end process shape.
 
 **The standard.**
 
@@ -100,7 +100,7 @@ Where `with_test_page` (`tests/test_utils/browser.rs`) does:
 4. `goto_with_connection_check(&page, port)` → fails loud on `ERR_CONNECTION_REFUSED` rather than timing out silently.
 5. Passes `(page, port)` to the test closure.
 
-The `TestServer::Drop` impl calls `self.child.kill()` (i.e., `std::process::Child::kill`, which sends SIGKILL on Unix), then `self.child.wait()`, releases the port lock, deletes the SQLite DB file, and removes the temp settings directory. Tests do not need to do any of this manually. The `libc::kill(SIGTERM)` path lives in `terminate_pid` (`tests/test_utils/server.rs:54-66`), called by `kill_existing_server` (`:76-83`), not by `Drop` — those are separate functions invoked when launching a new server on a port that already has a stale registry entry.
+The `TestServer::Drop` impl calls `self.child.kill()` (i.e., `std::process::Child::kill`, which sends SIGKILL on Unix), then `self.child.wait()`, releases the port lock, deletes the SQLite DB file, and removes the temp settings directory. Tests do not need to do any of this manually. The `libc::kill(SIGTERM)` path lives in `terminate_pid` (`tests/test_utils/server.rs:54-66`). `kill_existing_server` (`:76-83`) calls it when launching a new server on a port that already has a stale registry entry. `Drop` uses only `Child::kill` (SIGKILL).
 
 ## Pattern 3 — Storage-direct round-trip
 
@@ -215,7 +215,7 @@ fn test_<branch>() {
 }
 ```
 
-The `cleanup_db_for_port(port)` helper is **load-bearing**: `bootstrap::run` opens `<exe_parent>/chronicler_<port>.db` plus SQLite WAL/SHM sidecars. Stale files left by previous test runs cause migrations to re-apply `ALTER TABLE` statements to an already-migrated schema, surfacing as "duplicate column name: persona_key" or transient "disk I/O error" when WAL files from concurrent runs collide.
+The `cleanup_db_for_port(port)` call is **required**: `bootstrap::run` opens `<exe_parent>/chronicler_<port>.db` plus SQLite WAL/SHM sidecars. Stale files left by previous test runs cause migrations to re-apply `ALTER TABLE` statements to an already-migrated schema, surfacing as "duplicate column name: persona_key" or transient "disk I/O error" when WAL files from concurrent runs collide.
 
 ## Pattern 7 — Arch-lint rule self-tests
 
@@ -247,7 +247,7 @@ The paired positive/negative shape is invariant across the rule-self-tests. Each
 
 ### Cross-cutting 1 — `SettingsTestGuard` for settings mutations
 
-Every HTTP test that mutates `AppSettings` (via `connections/add`, `settings`, `prompt-presets`, etc.) starts with `let _guard = SettingsTestGuard::new();`. This is load-bearing because `AppSettings` lives in a global static and parallel HTTP test runs would race. The guard is a `Mutex<()>` with poisoning-recovery (`unwrap_or_else(|e| e.into_inner())`) so a panic in one test does not deadlock subsequent ones.
+Every HTTP test that mutates `AppSettings` (via `connections/add`, `settings`, `prompt-presets`, etc.) starts with `let _guard = SettingsTestGuard::new();`. The guard is required because `AppSettings` lives in a global static and parallel HTTP test runs would race. The guard is a `Mutex<()>` with poisoning-recovery (`unwrap_or_else(|e| e.into_inner())`) so a panic in one test does not deadlock subsequent ones.
 
 The guard is the near-universal idiom for HTTP tests; assume any HTTP test that mutates settings needs it. Read-only HTTP tests (e.g., `GET /fragment/<x>` against default settings) do not need it but use it anyway as a defensive blanket convention. If a test mutates settings without it, that's a real bug.
 
@@ -287,9 +287,9 @@ This convention exists **only** for the browser binary. The LLM binary does not 
 - `tmp/screenshots/<epoch>_<sanitized_name>.png` (browser screenshot at the moment of failure).
 - `tmp/test_diagnostics/<name>.html` (the DOM dump, full HTML at the moment of failure).
 
-It is called **only** by the timed-out `wait_for_*` helpers in `tests/test_utils/wait.rs`. Tests do not intentionally produce diagnostics on success — diagnostics are a failure artefact, not a control artefact.
+It is called by every timing-out browser wait helper in `tests/test_utils/wait.rs` — all of them panic on timeout except `wait_for_status_ready_or_error` (Ready-or-Error are both legitimate terminal states it must return). Tests produce diagnostics only on failure.
 
-The convention: **never swallow `capture_failure_state`'s panic**. If a `wait_for_*` helper times out, it panics with the diagnostic already written to disk; the test runner's failure report includes the path so a developer can `cat` the HTML or `xdg-open` the PNG. Removing the panic (e.g., returning `Err` instead) would suppress the diagnostic dump and break the convention.
+The convention: **never swallow `capture_failure_state`'s panic**. The panicking helpers (`wait_for_status_ready`, `wait_for_status_generating`, `wait_until_visible`, `wait_until_hidden`, `wait_for_element_children`) write the diagnostic to disk, then panic; the test runner's failure report includes the path so a developer can `cat` the HTML or `xdg-open` the PNG. Removing the panic (e.g., returning `Err` instead) would suppress the diagnostic dump and break the convention.
 
 There is no equivalent for sync polling in the integration suite (no screenshots for sync-test failures). Sync tests use `cargo nextest`'s built-in failure reporting and the `--retries` / `--failure-output` flags.
 
@@ -310,9 +310,9 @@ This decision rule appears across `tests/http/*.rs`.
 Two patterns coexist for the same `MockBackend`; the choice matters when the test wants to attach a configuration (`with_fail`, `with_empty_response`, `with_prompt_responses`, `with_narrations`, `with_trigger_narration_fail`, `with_trigger_delay`) to a specific backend:
 
 - **Function pointer form:** `MockBackend::default` — passed directly to `.backends(MockBackend::default)`. Used when no per-backend configuration is needed. Faster, no `move` capture needed.
-- **Closure form:** `|| MockBackend::default()` (often chained: `|| MockBackend::default().with_fail()`) — wrapped in builder methods that expect `Fn() -> MockBackend + 'static`. Used when per-backend configuration is needed. The factory is invoked twice (once for narrator, once for quantifier), so one `MockBackend` instance cannot be reused — the closure must yield a fresh instance each call.
+- **Closure form:** `|| MockBackend::default()` (often chained: `|| MockBackend::default().with_fail()`) — wrapped in builder methods that expect `Fn() -> MockBackend + 'static`. Used when per-backend configuration is needed; the closure must yield a fresh instance for each call.
 
-The factory is invoked twice because `SqliteTestAppBuilder` constructs one `MockBackend` for the narrator and one for the quantifier. This is non-obvious; if you bind `MockBackend` to a `let` and pass the variable, the test will panic with a "consumed twice" error. Pass a factory.
+The builder invokes the factory twice, once for the narrator and once for the quantifier. If you bind `MockBackend` to a `let` and pass the variable, the test panics with a "consumed twice" error. Pass a factory.
 
 **Where.** Every test in `tests/http/` and `tests/infrastructure/invariant_contract.rs::test_p4_*`.
 

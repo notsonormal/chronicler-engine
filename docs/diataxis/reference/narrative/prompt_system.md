@@ -30,7 +30,7 @@ The `<writing_style>` and `<output_format>` sections are rendered into the user 
 
 ### Conditional Layers
 
-Two steering surfaces alter the prompt conditionally, without changing the base sequence.
+Two steering layers alter the prompt conditionally, without changing the base sequence.
 
 - **`<Guide>` (Layer 7)** — on a guided turn, this final layer is rendered after `<PlayerInput>`, carrying a transient steering instruction.
 - **`<PlayerCharacter>` drop** — on an impersonated turn, the `<PlayerCharacter>` layer (Layer 3) is omitted. Persona data reaches the prompt through the impersonate preset's template macros instead.
@@ -155,11 +155,11 @@ The engine also uses a quantifier prompt — a separate secondary LLM call that 
 
 The prompt system stores editable presets by role. The narrator preset controls the narrator voice. The quantifier preset drives the post-generation scene analysis, which runs as a separate secondary call. The impersonate preset controls the player-persona voice. Each role has its own active preset, selected through settings. At assembly time, the assembler reads the selected preset fresh from storage; settings hold only the active-preset references.
 
-An impersonated turn selects the impersonate preset in place of the narrator preset; the quantifier preset runs independently. Default presets ship with the engine and are protected from edit or delete. The dashboard's Prompt Presets tab provides the create, copy, and set-active surface for each role.
+An impersonated turn selects the impersonate preset in place of the narrator preset; the quantifier preset runs independently. Default presets ship with the engine and are protected from edit or delete. The dashboard's Prompt Presets tab provides the create, copy, and set-active controls for each role.
 
 ## Document References
 
 - [`../../explanation/prompt_system_design.md`](../../explanation/prompt_system_design.md) — why the prompt system is shaped this way: system/user separation and two-tier NPC cards.
 - [`./agent_system.md`](./agent_system.md) — the quantifier prompt as a separate secondary prompt, hosted by the `QuantifierAgent`.
 - [`./narration_system.md`](./narration_system.md) — LLM transport, sanitization (response side + Gemma 4 workaround), forensics, and runtime tracing.
-- [`./ai_steering.md`](./ai_steering.md) — the `<Guide>` layer and the `<PlayerCharacter>` drop as steering surfaces, and the impersonate preset replacing the system preset.
+- [`./ai_steering.md`](./ai_steering.md) — the `<Guide>` layer and the `<PlayerCharacter>` drop as steering layers, and the impersonate preset replacing the system preset.

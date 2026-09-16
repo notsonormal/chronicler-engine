@@ -148,6 +148,7 @@ impl GameViewQuery {
             quantifier_confidence: game_state.scene.quantifier_confidence.clone(),
             backend_name: game_state.narrative.last_backend_name.clone(),
             model_name: game_state.narrative.last_model_name.clone(),
+            current_options: game_state.narrative.current_options.clone(),
         })
     }
 
@@ -156,6 +157,14 @@ impl GameViewQuery {
         let entries: Vec<_> = game_state.narrative.history().to_vec();
         let has_last_trigger = game_state.narrative.last_trigger.is_some();
         Ok((entries, has_last_trigger))
+    }
+
+    /// The offered option set for the input-surface dock. The set is current
+    /// game state — it survives a page reload and clears at every turn end
+    /// (the pipeline rewrites it, never the UI).
+    pub fn get_current_options(&self) -> Result<Vec<String>, ApplicationError> {
+        let game_state = self.message_service.load_or_fresh();
+        Ok(game_state.narrative.current_options.clone())
     }
 
     pub fn get_current_game_name(&self) -> Result<String, ApplicationError> {

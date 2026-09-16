@@ -1,0 +1,28 @@
+{
+  "memoryFiles": [
+    "AGENTS.md"
+  ],
+  "budgetTokens": 10000,
+  "skillsDir": ".agents/skills",
+  "minGapEvidence": 2,
+  "maxTranscripts": 100,
+  "analysis": {
+    "agent": "pi",
+    "model": "hf:zai-org/GLM-5.3-Flas",
+    "effort": "high"
+  },
+  "synthesis": {
+    "agent": "pi",
+    "model": "hf:zai-org/GLM-5.3-Flas",
+    "effort": "high"
+  },
+  "discovery": {
+    "harnesses": [
+      "pi"
+    ],
+    "since": "30d",
+    "worktreeGlobs": [],
+    "minUserTurns": 2
+  },
+  "jobs": 2
+}

@@ -73,9 +73,10 @@ pub async fn preset_card_handler(
     let novel_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::Novel);
-    let is_active = preset.preset_type.bundle_slot(&novel_bundle) == id;
-
-    Html(preset_card_html(&preset, is_active))
+    let if_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::InteractiveFiction);
+    Html(preset_card_html(&preset, &novel_bundle, &if_bundle))
 }
 
 pub async fn view_preset_form_handler(
@@ -114,6 +115,12 @@ pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
     })
 }
 
+/// Checkbox fields encode the mode flags: a checked box posts
+/// `value="true"`, an unchecked box posts nothing (serde default false).
+///
+/// axum's `Form` (serde_urlencoded) cannot deserialize `Vec<String>` from
+/// checkbox groups — a single checked box yields one scalar value — so the
+/// flags are two independent booleans instead of a repeated field.
 #[derive(Debug, Default, serde::Deserialize)]
 pub struct PresetForm {
     pub name: String,
@@ -122,10 +129,30 @@ pub struct PresetForm {
     pub writing_style: Option<String>,
     pub output_format: Option<String>,
     pub preset_type: String,
+    #[serde(default)]
+    pub allowed_mode_novel: bool,
+    #[serde(default)]
+    pub allowed_mode_if: bool,
+}
+
+fn form_allowed_modes(novel: bool, if_mode: bool) -> Vec<NarratorMode> {
+    let mut modes = Vec::new();
+    if novel {
+        modes.push(NarratorMode::Novel);
+    }
+    if if_mode {
+        modes.push(NarratorMode::InteractiveFiction);
+    }
+    modes
 }
 
 impl PresetForm {
-    fn into_preset(self, id: String, preset_type: PresetType) -> PromptPreset {
+    fn into_preset(
+        self,
+        id: String,
+        preset_type: PresetType,
+        allowed_modes: Vec<NarratorMode>,
+    ) -> PromptPreset {
         PromptPreset {
             id,
             name: self.name,
@@ -133,8 +160,7 @@ impl PresetForm {
             instructions: self.instructions,
             writing_style: self.writing_style,
             output_format: self.output_format,
-            // Panel-created presets are selectable for every mode.
-            allowed_modes: settings_defaults::default_allowed_modes(),
+            allowed_modes,
             is_default: false,
             preset_type,
         }
@@ -152,7 +178,15 @@ pub async fn save_preset_handler(
         }
     };
 
-    let preset = form.into_preset(generate_preset_id(), preset_type);
+    // Create forms render no checkboxes; both-false means "flags not
+    // offered" → default to both modes.
+    let allowed_modes = if form.allowed_mode_novel || form.allowed_mode_if {
+        form_allowed_modes(form.allowed_mode_novel, form.allowed_mode_if)
+    } else {
+        settings_defaults::default_allowed_modes()
+    };
+
+    let preset = form.into_preset(generate_preset_id(), preset_type, allowed_modes);
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
@@ -189,34 +223,40 @@ pub async fn update_preset_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<PresetForm>,
 ) -> Html<String> {
-    let existing = require_preset!(app_state.prompt_preset_service, &id);
+    let mut preset = require_preset!(app_state.prompt_preset_service, &id);
 
-    if existing.is_default {
+    if preset.is_default {
         return Html("<span class='error'>Cannot edit default presets</span>".to_string());
     }
 
-    let preset_type = match parse_preset_type(&form.preset_type) {
-        Some(pt) => pt,
-        None => {
-            return Html("<span class='error'>Invalid preset type</span>".to_string());
-        }
+    // preset_type is fixed at creation, so the form's hidden input is
+    // ignored. Both-false = flags absent — urlencoded checkboxes cannot
+    // distinguish "unchecked all" from "field omitted", so preserve.
+    let allowed_modes = if !form.allowed_mode_novel && !form.allowed_mode_if {
+        preset.allowed_modes.clone()
+    } else {
+        form_allowed_modes(form.allowed_mode_novel, form.allowed_mode_if)
     };
 
-    let updated = form.into_preset(id, preset_type);
-    // The form carries no mode-flag field; keep the user-owned flags.
-    let mut updated = updated;
-    updated.allowed_modes = existing.allowed_modes;
+    preset.name = form.name;
+    preset.role = form.role;
+    preset.instructions = form.instructions;
+    preset.writing_style = form.writing_style;
+    preset.output_format = form.output_format;
+    preset.allowed_modes = allowed_modes;
 
-    if let Err(e) = app_state.prompt_preset_service.save_preset(&updated) {
+    if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
         return Html(format!("<span class='error'>Update failed: {e}</span>"));
     }
 
-    let settings = try_lock!(app_state.settings.write());
+    let settings = try_lock!(app_state.settings.read());
     let novel_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::Novel);
-    let is_active = preset_type.bundle_slot(&novel_bundle) == updated.id;
-    Html(preset_card_html(&updated, is_active))
+    let if_bundle = settings
+        .mode_preset_registry
+        .bundle_for(NarratorMode::InteractiveFiction);
+    Html(preset_card_html(&preset, &novel_bundle, &if_bundle))
 }
 
 pub async fn delete_preset_handler(

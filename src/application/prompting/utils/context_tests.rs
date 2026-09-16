@@ -2,6 +2,7 @@ use crate::application::prompting::assembler::PromptContext;
 use crate::application::prompting::token_budget as budget;
 use crate::application::prompting::token_budget::estimate_tokens;
 use crate::application::prompting::types::NpcContext;
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::application::prompting::utils::context::{fit_messages_to_context, trim_history_to_budget};
 
 #[test]
@@ -102,6 +103,8 @@ fn test_make_prompt_context() {
 
     let context: PromptContext = PromptContext::new(
         &world,
+        NarrativePerspective::Third,
+        NarrativeTense::Past,
         &room,
         NpcContext {
             all_npcs: &npcs,

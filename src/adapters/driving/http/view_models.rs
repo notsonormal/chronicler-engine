@@ -168,6 +168,20 @@ impl ActionAreaViewModel {
     }
 }
 
+/// View model for the options dock — the current pickable option set,
+/// rendered above the command input as part of the input surface.
+#[derive(Debug, Clone)]
+pub struct OptionsDockViewModel {
+    pub options: Vec<String>,
+    pub is_busy: bool,
+}
+
+impl OptionsDockViewModel {
+    pub fn new(options: Vec<String>, is_busy: bool) -> Self {
+        Self { options, is_busy }
+    }
+}
+
 /// View model for a single NPC portrait in the visual sidebar.
 #[derive(Debug, Clone)]
 pub struct NpcPortraitView {

@@ -5,9 +5,9 @@ title: UI Design
 
 ## Overview
 
-The dashboard's visual language is defined by a small set of CSS custom properties (design tokens) and a structured set of component specifications. Tokens are the source of truth for colors, typography, spacing, sizing, and animation timings; components declare the token-derived styling for each dashboard surface. The static stylesheet at `assets/styles.css` is the binding code that consumes both.
+The dashboard's visual language is defined by a small set of CSS custom properties (design tokens) and a structured set of component specifications. Tokens are the source of truth for colors, typography, spacing, sizing, and animation timings; components declare the token-derived styling for each dashboard region. The static stylesheet at `assets/styles.css` is the binding code that consumes both.
 
-This doc carries the token tables verbatim because the tokens ARE the reference — there is no single source in code that an LLM can grep to recover the `--color-accent-green` value. Component specs describe structure and visual state in prose; enforced interaction contracts live in `docs/specs/browser.md`, and the CSS implementation lives in `assets/styles.css`.
+This doc carries the token tables verbatim because the tokens ARE the reference — there is no single source in code that an LLM can grep to recover the `--color-accent-green` value. Component specs describe structure and visual state in prose; enforced interaction contracts live in the per-region browser specs (`docs/specs/browser_*.md`), and the CSS implementation lives in `assets/styles.css`.
 
 ## Design Tokens
 
@@ -412,6 +412,6 @@ Hover state for each class also adds a colored glow box-shadow in the matching a
 
 ## Document References
 
-- [`./dashboard.md`](./dashboard.md) — page layout, tabs, polling cadences, and the per-flow interactions whose visual surface this doc specifies.
+- [`./dashboard.md`](./dashboard.md) — page layout, tabs, polling cadences, and the per-flow interactions whose visual appearance this doc specifies.
 - [`../game_flow.md#text-check-branch`](../game_flow.md#text-check-branch) — text-check settings and the preview UI's data model.
 - [`../narrative/narration_system.md#llm-call-logging--forensics`](../narrative/narration_system.md#llm-call-logging--forensics) — LLM Messages tab content and the 50-row `llm_messages` cap.

@@ -236,9 +236,7 @@ impl MessageService {
             let last_turn_idx = messages.iter().rposition(|m| {
                 m.message_type == MessageType::Narration || m.message_type == MessageType::Input
             })?;
-            let last_is_guided = messages[last_turn_idx]
-                .replay()
-                .is_some_and(|r| r.guide.is_some());
+            let last_is_guided = messages[last_turn_idx].is_guided();
             if last_is_guided {
                 last_turn_idx
             } else {

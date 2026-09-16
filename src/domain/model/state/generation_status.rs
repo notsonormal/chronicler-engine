@@ -36,6 +36,8 @@ pub enum GenerationPhase {
     Quantifying,
     /// Event-generation LLM producing derived side effects.
     GeneratingEvent,
+    /// Options LLM producing the pickable option set.
+    Options,
 }
 
 impl GenerationPhase {
@@ -44,6 +46,7 @@ impl GenerationPhase {
             Self::Narrating => "Generating narration...",
             Self::Quantifying => "Quantifying scene...",
             Self::GeneratingEvent => "Generating event...",
+            Self::Options => "Generating options...",
         }
     }
 
@@ -52,6 +55,7 @@ impl GenerationPhase {
             Self::Narrating => "narrating",
             Self::Quantifying => "quantifying",
             Self::GeneratingEvent => "generating-event",
+            Self::Options => "options",
         }
     }
 }

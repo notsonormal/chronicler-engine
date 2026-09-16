@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use crate::application::message_service::MessageService;
 use crate::application::world_catalogue::WorldCatalogue;
-use crate::domain::model::message::GenerationReplay;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::fixtures::{TestMap, TestPersona, TestWorld};
@@ -80,10 +79,8 @@ fn test_find_retry_anchor_guided_narration_after_input_anchors_the_guided_narrat
     state.add_message_with_inputs(
         "a guided narration".to_string(),
         MessageType::Narration,
-        Some(GenerationReplay {
-            guide: Some("make it ominous".to_string()),
-            ..Default::default()
-        }),
+        false,
+        Some("make it ominous".to_string()),
     );
     let messages = state.narrative.history.as_slice().to_vec();
 
@@ -118,10 +115,8 @@ fn test_find_retry_anchor_guide_only_turn_anchors_the_guided_narration() {
     state.add_message_with_inputs(
         "a guided narration".to_string(),
         MessageType::Narration,
-        Some(GenerationReplay {
-            guide: Some("make it ominous".to_string()),
-            ..Default::default()
-        }),
+        false,
+        Some("make it ominous".to_string()),
     );
     let messages = state.narrative.history.as_slice().to_vec();
 

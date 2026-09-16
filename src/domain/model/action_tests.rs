@@ -144,4 +144,36 @@ fn test_is_steering_false_for_free_action() {
     assert!(!Action::FreeAction(String::new()).is_steering());
     assert!(!Action::FreeAction("/shrug".to_string()).is_steering());
     assert!(!Action::FreeAction("look around".to_string()).is_steering());
+    // Options is an engine command, not steering — the set regeneration must
+    // never be treated as the player steering the narrator.
+    assert!(!Action::Options.is_steering());
+}
+
+#[test]
+fn test_parse_options_command_no_argument() {
+    assert_eq!(Action::parse("/options"), Action::Options);
+    assert_eq!(Action::parse("/OPTIONS"), Action::Options);
+    assert_eq!(Action::parse("   /options   "), Action::Options);
+}
+
+#[test]
+fn test_parse_options_with_argument_falls_back_to_free_action() {
+    assert_eq!(
+        Action::parse("/options combat"),
+        Action::FreeAction("/options combat".to_string())
+    );
+}
+
+#[test]
+fn test_is_engine_command_true_for_slash_commands() {
+    assert!(Action::Guide(String::new()).is_engine_command());
+    assert!(Action::Impersonate(None).is_engine_command());
+    assert!(Action::Options.is_engine_command());
+}
+
+#[test]
+fn test_is_engine_command_false_for_free_action() {
+    assert!(!Action::FreeAction(String::new()).is_engine_command());
+    assert!(!Action::FreeAction("/shrug".to_string()).is_engine_command());
+    assert!(!Action::FreeAction("/options combat".to_string()).is_engine_command());
 }

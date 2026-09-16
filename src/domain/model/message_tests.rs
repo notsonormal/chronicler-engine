@@ -87,7 +87,8 @@ fn test_message_swipe_fields_roundtrip() {
         snapshot_id: None,
         location_header: Some("Room B".to_string()),
         event_header: Some("EventY".to_string()),
-        replay: None,
+        impersonated: false,
+        steering_instruction: None,
     });
 
     // Initially at index 0
@@ -131,7 +132,8 @@ fn test_message_set_snapshot_id_writes_active_swipe() {
         snapshot_id: None,
         location_header: None,
         event_header: None,
-        replay: None,
+        impersonated: false,
+        steering_instruction: None,
     });
     msg.set_active_swipe(1);
 
@@ -141,4 +143,54 @@ fn test_message_set_snapshot_id_writes_active_swipe() {
     assert_eq!(msg.swipes[1].snapshot_id, Some(123));
     assert_eq!(msg.swipes[0].snapshot_id, None);
     assert_eq!(msg.snapshot_id(), Some(123));
+}
+
+#[test]
+fn test_is_guided_truth_table() {
+    // The four representable swipe states: plain, guided, bare impersonate,
+    // directed impersonate. Only a plain generation with a steering instruction is guided.
+    let mut plain = Message::new("n", MessageType::Narration, None, None);
+    plain.swipes[0].impersonated = false;
+    plain.swipes[0].steering_instruction = None;
+    assert!(!plain.is_guided());
+    assert!(!plain.impersonated());
+    assert_eq!(plain.steering_instruction(), None);
+
+    let mut guided = Message::new("n", MessageType::Narration, None, None);
+    guided.swipes[0].impersonated = false;
+    guided.swipes[0].steering_instruction = Some("make it ominous".to_string());
+    assert!(guided.is_guided());
+    assert!(!guided.impersonated());
+    assert_eq!(guided.steering_instruction(), Some("make it ominous"));
+
+    let mut bare_impersonate = Message::new("i", MessageType::Input, None, None);
+    bare_impersonate.swipes[0].impersonated = true;
+    bare_impersonate.swipes[0].steering_instruction = None;
+    assert!(!bare_impersonate.is_guided());
+    assert!(bare_impersonate.impersonated());
+
+    let mut directed_impersonate = Message::new("i", MessageType::Input, None, None);
+    directed_impersonate.swipes[0].impersonated = true;
+    directed_impersonate.swipes[0].steering_instruction = Some("as the player".to_string());
+    assert!(!directed_impersonate.is_guided());
+    assert!(directed_impersonate.impersonated());
+    assert_eq!(
+        directed_impersonate.steering_instruction(),
+        Some("as the player")
+    );
+}
+
+#[test]
+fn test_set_stored_inputs_on_active_swipe() {
+    let mut msg = Message::new("n", MessageType::Narration, None, None);
+    msg.set_stored_inputs(false, Some("steer".to_string()));
+    assert!(msg.is_guided());
+
+    msg.set_stored_inputs(true, Some("as the player".to_string()));
+    assert!(msg.impersonated());
+    assert!(!msg.is_guided());
+
+    msg.set_stored_inputs(false, None);
+    assert!(!msg.impersonated());
+    assert_eq!(msg.steering_instruction(), None);
 }
