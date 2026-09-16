@@ -57,7 +57,11 @@ timeout, posture-change no-fire) confirm it on the machine.
 
 ## Decisions so far
 
-_None yet._
+<!-- the index — one line per closed ticket: enough to judge relevance, then zoom the link for the detail the ticket holds -->
+
+- [Analyze the Gemini deep-search survey on HTMX verification patterns](issues/05-analyze-htmx-deep-search.md) — the survey's patterns are worth keeping (three-tier model, polling-vs-lifecycle diagnosis, targetId-scoped readiness protocol); its repo facts are a stale snapshot and need re-verifying. The htmx#2787 newline claim is a fixed 2.0 regression that does not apply at 1.9.10, and the Stack Overflow source cited for the readiness protocol does not support it.
+- [Research how mature projects verify HTMX apps: what do the good patterns look like?](issues/02-research-how-to-verify-htmx-apps.md) — event-driven readiness on `htmx:afterSettle` is the sourced pattern (listeners attach in the settle task; confirmed in the vendored 1.9.10 source); only `hx-preserve` makes the no-fire structurally impossible; request-level is the maintainer-endorsed default tier; JSDOM tier and `networkidle` ruled out; playwright-rs 0.9.0 forces the readiness helper to be `add_init_script` + `evaluate_value` polling. Six-approach shortlist handed to the design decision, with per-option performance/reliability/maintainability assessment (speed levers: tier demotion, then de-serialization; the settle-gate buys correctness, not speed).
+- [Root-cause the hx-post change-event no-fire: what actually stops the POST?](issues/03-root-cause-the-hx-post-no-fire.md) — racy by construction, resolved from existing evidence with the experiments skipped: the `change` dispatches inside htmx's 20 ms `defaultSettleDelay` window, before the settle task attaches the `hx-trigger` listener; the zero-POST failure signature and 3-of-8 intermittency exclude the deterministic candidates. Fix is a harness-side readiness gap; the design (ticket 04) must make the race structurally impossible — reproduction experiments would only re-demonstrate a race in code the redesign replaces.
 
 ## Not yet specified
 

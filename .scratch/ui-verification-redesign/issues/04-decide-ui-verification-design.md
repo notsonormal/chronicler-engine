@@ -2,7 +2,7 @@
 
 Type: grilling
 Status:
-Blocked by: 01, 02, 03
+Blocked by: 01, 02
 
 ## Question
 
@@ -15,8 +15,9 @@ change-event no-fire" and settle, from first principles:
    genuinely require a real browser, and which should verify at request level?
    What happens to the current 26 tests (keep / move to HTTP / delete)?
 2. **Readiness.** How does a test know the UI is ready to act on — the
-   no-fire mechanism from ticket 03 must be structurally impossible in the
-   chosen design, not polled around.
+   no-fire race (resolved in ticket 03: `change` dispatches inside htmx's
+   20 ms `defaultSettleDelay` window, before trigger listeners attach) must
+   be structurally impossible in the chosen design, not polled around.
 3. **App-side vs harness-side.** Should the dashboard emit explicit readiness
    signals (htmx lifecycle hooks, a ready flag), should the harness interpret
    htmx state, or should verification skip the browser where possible so the

@@ -66,7 +66,7 @@ The dashboard is a single `index.html` shell plus a fixed set of fragment endpoi
 - Swipe, retrigger, edit, delete submissions
 - Text-check preflight orchestration
 
-The inline JavaScript block in `assets/index.html` is several hundred lines of imperative DOM manipulation, scoped to button state and polling pause. The HTMX runtime is loaded from a CDN; everything else is plain ES.
+The inline JavaScript block in `assets/index.html` is several hundred lines of imperative DOM manipulation, scoped to button state and polling pause. The HTMX runtime is vendored at `assets/htmx.min.js` and served with the app's static assets, so a dashboard load needs no external network; everything else is plain ES.
 
 The rendering pipeline is Askama with compile-time template validation; templates are checked at build time against their context structs.
 

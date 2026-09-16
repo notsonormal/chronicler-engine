@@ -1,8 +1,51 @@
 # Analyze the Gemini deep-search survey on HTMX verification patterns
 
 Type: research
-Status:
+Status: resolved
 Blocked by:
+
+## Answer
+
+Validated the survey against the repo: [gemini-survey-validation.md](../assets/gemini-survey-validation.md).
+
+**The survey's patterns are sound; its repo facts are not.** Keep the
+three-tier model, the polling-vs-lifecycle diagnosis, and the targetId-scoped
+readiness protocol. Re-verify every repo-specific fact — the survey is a stale
+snapshot of an earlier state of this repo (e.g. it names `wait.rs` helpers
+removed in the 2026-07-25 refactor), and it asserts CSRF form processing that
+this repo has never had.
+
+**Two loaded claims corrected.**
+
+- htmx#2787 (leading newline suppresses swap events) is a **2.0.0/2.0.1
+  regression, already fixed** — the reporter states 1.9.12 was unaffected. This
+  repo pins **1.9.10**, so the claim does not apply and the recommended
+  mitigation guards against a defect this htmx does not have.
+- Stack Overflow 69538244 does **not** support the readiness protocol: its
+  accepted answer concerns HTTP redirects, and the thread is a user mis-writing
+  `hx-trigger="htmx:afterSettle"`. The survey cites it as lifecycle-event
+  evidence, which it is not.
+
+**What is confirmed and needs no external research:** poll intervals and
+container set (2s/4s/5s/5s across five containers, not three), client-JS
+inventory, the 3010–3050 port range, `capture_failure_state` paths, and the
+existing `HX-Retarget`/`HX-Reswap`/`HX-Refresh` assertions. The `htmx.config`
+knob table is the survey's most reliable section — `defaultSettleDelay = 20` and
+the rest verified inside `assets/htmx.min.js`.
+
+**Bears on ticket 03 and 04.** The readiness protocol is the leading candidate
+answer for the posture no-fire: ticket 03's hypothesis is that
+`wait_until_visible` returns before htmx attaches its `change` listener, and the
+`afterSettle`-anchored wait is exactly the missing "htmx has processed this
+element" condition. `htmx.logAll()` for the repro would settle ticket 03
+directly. The JSDOM tier is the weakest option — no JS runner exists here, and
+JSDOM cannot run `getBoundingClientRect()`, which `showEditForm` depends on.
+
+**Correction for ticket 02:** the Mocha/Chai/web-test-runner/Playwright matrix
+the survey attributes to "the htmx repository" is *current master*, not the
+1.9.10 era, which ran `mocha-chrome test/index.html`.
+
+No code changes made.
 
 ## Question
 
