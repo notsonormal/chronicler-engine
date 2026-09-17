@@ -95,7 +95,9 @@ the swap→interact step (harness-side); an app-side structural change
 (`hx-preserve`/stable ids — the only by-construction fix); or demote the
 posture autosave contract to the HTTP tier (removes the browser race
 entirely). An htmx config change (`defaultSettleDelay: 0`, as htmx's own
-suite does) narrows the window but does not close it. Per ticket 04's
+suite does) narrows the window but does not close it — confirmed by ticket 06's
+experiments: with delay zeroed and no registering-swap await, 44/50 still
+failed. Per ticket 04's
 question 2, the chosen design must make the race structurally impossible,
 not time it right.
 
@@ -110,3 +112,18 @@ not time it right.
 
 No fog graduates from this answer; every remaining map item graduates from
 ticket 04's design decision. No new tickets surfaced.
+
+### Correction (2026-09-17, from ticket 06's experiments)
+
+The skipped experiments were run by the ticket-06 slice, and they refuted this
+ticket's specific mechanism. The `change` is not lost inside the
+`defaultSettleDelay` window: zeroing the delay changed nothing (44/50 with the
+delay zeroed, target-scoped gate, no registering-swap await). The operative
+race is larger — the test interacts before the swap that *registered* the
+select finishes settling, at which point htmx has not attached its listener.
+The fix that closed it was awaiting the registering swap's settle before
+interacting; with that in place the delay setting is irrelevant (50/50 with it
+zero, 50/50 stock). So: the delay window is neither necessary nor sufficient,
+and the "exact sub-flavor of the race window" loose end above is now pinned.
+The fix-class paragraph below stands unchanged — the mechanism is still a
+harness-side readiness gap — only its timing attribution was wrong.

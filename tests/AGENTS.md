@@ -45,6 +45,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `prompt_presets.rs` — Browser prompt-presets tests: allowed-modes editor roundtrip. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `slash_menu.rs` — Browser slash-command palette tests: open, filter, navigate, submit flows. Tagged against `docs/specs/browser_slash_menu.md`.
     - `story_log.rs` — Browser story-log tests: edit-in-place, polling persistence, delete. Tagged against `docs/specs/browser_story_log.md`.
+    - `tier2.rs` — Tier-2 quick-browser tests: browser-only behaviour against a stub server.
     - `worlds.rs` — Browser worlds-panel tests: world posture editor render + auto-save. Tagged against `docs/specs/browser_worlds.md`.
 - **helpers/**
     - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.
@@ -67,7 +68,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `story_log.rs` — HTTP E2E tests for the story-log delete endpoint (POST /history/delete).
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `test_helpers.rs` — Shared test helpers for HTTP tests
-    - `worlds.rs` — HTTP E2E tests for the worlds update endpoint: the posture merge contract and the options-toggle checkbox grammar.
+    - `worlds.rs` — HTTP E2E tests for the worlds update endpoint: the posture merge contract, the options-toggle checkbox grammar, and the auto-save posture endpoint.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.
@@ -110,5 +111,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.
     - `settings_guard.rs` — `SettingsTestGuard` — serializes tests that mutate global settings state via a process-wide `Mutex`.
+    - `settle_gate.rs` — Settle-gate harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
+    - `tier2_stub.rs` — Tier-2 quick-browser stub server: the real dashboard shell plus canned fragments, with no engine behind it.
     - `wait.rs` — Polling helpers: `wait_for_llm_idle`, `wait_for_status_ready`, and `wait_for_element_children` — retry-based waits used by browser and HTTP tests.
 <!-- AUTO-STRUCTURE-TESTS END -->

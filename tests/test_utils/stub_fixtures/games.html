@@ -1,0 +1,101 @@
+
+<div class="games-panel">
+    <div class="games-section">
+        <h2>Active Game</h2>
+        
+        <div class="game-item active">
+            <div class="active-game-info">
+                <span class="game-name">Test Realm_2026-09-17_1</span>
+                <span class="world-badge">Test Realm</span>
+                <span class="persona-badge">Test Player</span>
+                <span class="game-badge">Current</span>
+            </div>
+            <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
+        </div>
+        
+<div class="posture-override" id="game-posture-controls">
+    <div class="posture-row">
+        <label>Mode
+            <select name="narrator_mode" hx-post="/games/1/mode" hx-trigger="change" hx-target="#game-posture-controls" hx-swap="outerHTML">
+                <option value="novel" selected>Novel</option>
+                <option value="interactive_fiction">Interactive Fiction</option>
+            </select>
+        </label>
+        <label>Perspective
+            <select name="narrative_perspective" hx-post="/games/1/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+                <option value="second">Second person</option>
+                <option value="third" selected>Third person</option>
+            </select>
+        </label>
+        <label>Tense
+            <select name="narrative_tense" hx-post="/games/1/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+                <option value="past" selected>Past</option>
+                <option value="present">Present</option>
+            </select>
+        </label>
+    </div>
+    <div class="preset-picker-row">
+        
+        <label>System
+            <select name="system_preset_id" hx-post="/games/1/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+                <option value="system_default" selected>Default</option>
+            </select>
+        </label>
+        <label>Quantifier
+            <select name="quantifier_preset_id" hx-post="/games/1/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+                <option value="quantifier_default" selected>Default</option>
+            </select>
+        </label>
+        <label>Impersonate
+            <select name="impersonate_preset_id" hx-post="/games/1/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+                <option value="impersonate_default" selected>Default</option>
+            </select>
+        </label>
+        
+    </div>
+</div>
+
+        
+    </div>
+
+    <div class="games-section new-game-section">
+        <h2>New Game</h2>
+        
+        <form class="new-game-form" hx-post="/games" hx-swap="none">
+            <div class="form-row">
+                <select name="world_key" required>
+                    
+                    <option value="redmist_estate" title="The Redmist Estate stands in Islaport, a large coastal city on the eastern seaboard. Built in the colonial era, the estate encompasses a grand mansion, formal gardens, and several outbuildings. For generations the Redmist family wielded influence as surgeons and physicians. Bernard Redmist, the recently deceased patriarch, was renowned for his charitable work — and for the shocking will that left his fortune to an unknown grandson.">Redmist Estate</option>
+                    
+                    <option value="test" title="A small testing kingdom for UI tests">Test Realm</option>
+                    
+                </select>
+            </div>
+            <div class="form-row">
+                
+                <select name="persona_key" required>
+                    
+                    <option value="julian">Julian</option>
+                    
+                    <option value="test_player">Test Player</option>
+                    
+                </select>
+                
+            </div>
+            <div class="form-row">
+                <button type="submit" class="btn-primary"
+                    >Start New Game</button>
+            </div>
+        </form>
+        
+    </div>
+
+    <div class="games-section">
+        <h2>Saved Games</h2>
+        <div class="games-list">
+            
+            <div class="games-empty">No saved games.</div>
+            
+        </div>
+    </div>
+</div>

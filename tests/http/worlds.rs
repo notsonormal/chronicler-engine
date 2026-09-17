@@ -1,13 +1,15 @@
-//! HTTP E2E tests for the worlds update endpoint: the posture merge contract and the options-toggle checkbox grammar.
+//! HTTP E2E tests for the worlds update endpoint: the posture merge contract, the options-toggle checkbox grammar, and the auto-save posture endpoint.
 
 use std::sync::Arc;
 
-use chronicler_engine::adapters::driven::storage::Storage;
+use axum::http;
+
+use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{TestAppBuilder, TestMap};
 
-use crate::test_helpers::{post_form, world_form_body};
+use crate::test_helpers::{post_form, post_form_with_hx, response_body, world_form_body};
 
 fn posture_world() -> WorldCard {
     WorldCard {
@@ -108,6 +110,122 @@ async fn test_world_update_unknown_posture_value_falls_back_to_default_http() {
         stored.narrator_mode,
         NarratorMode::Novel,
         "an unknown value must fall back to the domain default"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.5
+#[tokio::test]
+async fn test_world_posture_autosave_returns_saved_span_http() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    let world = posture_world();
+    storage
+        .seed_world(&world, &TestMap::single_room("start"))
+        .expect("seed posture world");
+
+    let resp = post_form_with_hx(
+        &app,
+        "/worlds/posture_world/posture",
+        "narrative_tense=present",
+    )
+    .await;
+    assert!(resp.status().is_success(), "the auto-save should succeed");
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("Saved") && body.contains("posture-status"),
+        "the auto-save must return the Saved status span, got: {body:?}"
+    );
+
+    assert_eq!(
+        updated_world(&state).await.narrative_tense,
+        NarrativeTense::Present,
+        "the tense patch must be persisted"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.5
+#[tokio::test]
+async fn test_world_posture_invalid_value_returns_error_span_http() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    let world = posture_world();
+    storage
+        .seed_world(&world, &TestMap::single_room("start"))
+        .expect("seed posture world");
+
+    let resp = post_form_with_hx(
+        &app,
+        "/worlds/posture_world/posture",
+        "narrator_mode=warp_drive",
+    )
+    .await;
+    assert!(
+        resp.status().is_success(),
+        "an invalid value is a form error, not a 500"
+    );
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("error"),
+        "an invalid posture value must render an error span, got: {body:?}"
+    );
+
+    assert_eq!(
+        updated_world(&state).await.narrator_mode,
+        NarratorMode::InteractiveFiction,
+        "an invalid patch must mutate nothing"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.5
+#[tokio::test]
+async fn test_world_posture_unknown_world_returns_bad_request_http() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+
+    let resp = post_form_with_hx(
+        &app,
+        "/worlds/absent_world/posture",
+        "narrative_tense=present",
+    )
+    .await;
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::BAD_REQUEST,
+        "an unknown world key must be a 400"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.5
+#[tokio::test]
+async fn test_world_posture_storage_failure_returns_500_http() {
+    let storage = Arc::new(Storage::new_in_memory().with_failure(
+        "update_world",
+        TestOverride::internal("update_world posture failure"),
+    ));
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    let world = posture_world();
+    storage
+        .seed_world(&world, &TestMap::single_room("start"))
+        .expect("seed posture world");
+
+    let resp = post_form_with_hx(
+        &app,
+        "/worlds/posture_world/posture",
+        "narrative_tense=present",
+    )
+    .await;
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::INTERNAL_SERVER_ERROR,
+        "a storage failure must surface as a 500"
     );
 }
 

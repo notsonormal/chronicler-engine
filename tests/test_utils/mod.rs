@@ -5,12 +5,18 @@
 pub mod browser;
 pub mod server;
 pub mod settings_guard;
+pub mod settle_gate;
+pub mod tier2_stub;
 pub mod wait;
 
 #[allow(unused_imports)]
 pub use browser::*;
 #[allow(unused_imports)]
 pub use server::*;
+#[allow(unused_imports)]
+pub use settle_gate::*;
+#[allow(unused_imports)]
+pub use tier2_stub::*;
 #[allow(unused_imports)]
 pub use wait::*;
 #[allow(unused_imports)]

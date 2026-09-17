@@ -61,22 +61,26 @@ timeout, posture-change no-fire) confirm it on the machine.
 
 - [Analyze the Gemini deep-search survey on HTMX verification patterns](issues/05-analyze-htmx-deep-search.md) — the survey's patterns are worth keeping (three-tier model, polling-vs-lifecycle diagnosis, targetId-scoped readiness protocol); its repo facts are a stale snapshot and need re-verifying. The htmx#2787 newline claim is a fixed 2.0 regression that does not apply at 1.9.10, and the Stack Overflow source cited for the readiness protocol does not support it.
 - [Research how mature projects verify HTMX apps: what do the good patterns look like?](issues/02-research-how-to-verify-htmx-apps.md) — event-driven readiness on `htmx:afterSettle` is the sourced pattern (listeners attach in the settle task; confirmed in the vendored 1.9.10 source); only `hx-preserve` makes the no-fire structurally impossible; request-level is the maintainer-endorsed default tier; JSDOM tier and `networkidle` ruled out; playwright-rs 0.9.0 forces the readiness helper to be `add_init_script` + `evaluate_value` polling. Six-approach shortlist handed to the design decision, with per-option performance/reliability/maintainability assessment (speed levers: tier demotion, then de-serialization; the settle-gate buys correctness, not speed).
-- [Root-cause the hx-post change-event no-fire: what actually stops the POST?](issues/03-root-cause-the-hx-post-no-fire.md) — racy by construction, resolved from existing evidence with the experiments skipped: the `change` dispatches inside htmx's 20 ms `defaultSettleDelay` window, before the settle task attaches the `hx-trigger` listener; the zero-POST failure signature and 3-of-8 intermittency exclude the deterministic candidates. Fix is a harness-side readiness gap; the design (ticket 04) must make the race structurally impossible — reproduction experiments would only re-demonstrate a race in code the redesign replaces.
+- [Root-cause the hx-post change-event no-fire: what actually stops the POST?](issues/03-root-cause-the-hx-post-no-fire.md) — racy by construction, fix class is a harness-side readiness gap. Its specific mechanism (the `change` lost inside htmx's 20 ms `defaultSettleDelay` window) was **refuted by ticket 06's experiments** — correction appended to that ticket's Answer: the operative race is interacting before the *registering* swap settles, and the delay setting is neither necessary nor sufficient.
+- [Audit the current browser-test design: what does each test actually verify, and through which layer?](issues/01-audit-current-harness.md) — the 26 tests split 13 browser-only / 12 browser-observable app wiring / 1 HTTP-covered; the tier files by surface where ticket 07 filed by assertion shape, and two HTTP contracts (`POST /worlds/:key/posture` and the games posture fragment) are covered *only* through Chromium, so demotion adds coverage rather than trading it. Every readiness primitive is a visibility or count poll; the app exposes **no** htmx-readiness signal (`HX-Trigger`, `afterSettle` listener, `hx-preserve` are all absent), so tuning timeouts cannot fix the race. Harness verdict: core load-bearing, shape accidental; dead surface named.
+- [Decide the UI verification design: what the browser tier is for, and what the app exposes for it](issues/04-decide-ui-verification-design.md) — three tiers (D2): HTTP contracts absorb the 12 class-2 assertions + the two orphaned contracts + delete the 1 duplicate; a new quick-browser tier (stub server, real shell, canned fragments, shared browser process) absorbs ~11 of the 13 class-1 tests; tier 3 keeps the 5-rule-07/wiring tests + ~4 smoke guards, all behind a settle-gate *in the harness wrappers* (afterSettle counter, `hx-preserve` as fallback). Placement is one rule with worked examples ("could curl observe this?" / "if the server were fake?"; in doubt, file down); `networkidle` banned, dead wait surface + `retries = 1` + `/status/ready` deleted; verification is 5 green gate runs + ~50-run posture stress loop after retries go. Graduates tickets 06–12, starting with **06 — the worlds-posture vertical slice** (prototype-first, HITL go/no-go) which blocks 07–11; 12 is the acceptance gate.
+- [Prototype the vertical slice: worlds posture flow across all three tiers](issues/06-vertical-slice-prototype.md) — **go** (HITL, 2026-09-17). The slice refuted ticket 03's 20 ms mechanism (44/50 with the delay zeroed) and proved the corrected design: `detail.elt` target-scoping is required (pollers satisfy a plain counter) and every swap-triggering helper must await that swap's settle before returning (registering-swap rule, structural in helpers). Shipped with the verdict: 4 HTTP contract tests for `POST /worlds/:key/posture` (SCENARIO 25.5), the tier-2 stub + 2 ported tests (~2 s saved per test = engine boot, a constant not a ratio), 50/50 stress runs with retry masking off at stock htmx behaviour, full gate green. Attached rulings: ticket 07 gets a drift-tax exit check on its first fragment-reading ports; ticket 09 owns the registering-swap rule. Full per-run tables and the wrong-hypothesis record in the ticket's Answer.
 
 ## Not yet specified
 
-- Implementation tickets applying the chosen design — an initial worlds-panel
-  implementation as the worked example, then one per remaining surface —
-  graduate from "Decide the UI verification design"'s Answer.
-- Whether the nextest browser serialization override
-  (`threads-required = num-test-threads`, added for a 2-core box) and the
-  `retries = 1` policy survive the redesign — graduates after the design
-  decision.
-- Spec/test-tag bookkeeping for any tests that move between tiers
-  (`validate_feature_spec.py` gates on this).
-- The shared `#story-log .log-entry` precondition in `with_test_page`
-  (tests/test_utils/browser.rs:87) — whether it becomes an explicit readiness
-  contract or disappears. Depends on the design decision.
+(Fog graduated by ticket 04's resolution: implementation became tickets 06–12;
+the serialization override + `retries = 1` question is decided in ticket 12's
+acceptance gate; spec/test-tag bookkeeping is ticket 11; the shared story-log
+gate became an explicit `wait_for_story_log()` in tickets 09–10.)
+
+(Fog graduated by ticket 06's verdict, 2026-09-17: poller-noise scoping is
+**resolved required**, not fog — the gate is target-scoped by construction; the
+drift-tax question graduated as ticket 07's exit check, not as a new ticket;
+and the registering-swap rule graduated as a structural ticket-09 requirement
+rather than a convention.)
+
+- None currently.
+
 
 ## Out of scope
 

@@ -6,6 +6,8 @@ use playwright_rs::Playwright;
 use super::server::{
     buffer_text, get_config_port, registered_server_logs, tail_lines, wait_for_server, TestServer,
 };
+use super::settle_gate::install_settle_gate;
+use super::tier2_stub::{StubActionOutcome, Tier2StubServer};
 pub use super::wait::wait_for_element_children;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
@@ -20,6 +22,12 @@ pub async fn goto_with_connection_check(
     if !wait_for_server(port, 100).await {
         return Err(format!("Server failed to start on port {port}"));
     }
+
+    // Install the htmx settle counter before navigation so the
+    // `htmx:afterSettle` listener exists before `assets/index.html` runs. Every
+    // test page therefore carries the gate; `select_option_and_settle` and
+    // `click_and_settle` are the only sanctioned interaction paths.
+    install_settle_gate(page).await;
 
     let _: Option<_> = page.goto(&url, None).await.map_err(|e| {
         let err_str = e.to_string();
@@ -89,6 +97,58 @@ where
     test_fn(page, port).await;
 
     let _ = browser.close().await;
+}
+
+/// A shared Chromium process for the tier-2 quick-browser tests, so the
+/// browser launch cost is paid once per test binary rather than per test.
+/// Dropping it closes the browser.
+pub struct SharedBrowser {
+    _playwright: playwright_rs::Playwright,
+    browser: playwright_rs::Browser,
+}
+
+impl SharedBrowser {
+    /// Launch the shared browser once.
+    pub async fn launch() -> Self {
+        let (playwright, browser) = launch_chrome().await;
+        Self {
+            _playwright: playwright,
+            browser,
+        }
+    }
+
+    /// Open a fresh page on the tier-2 stub, with the settle gate installed and
+    /// the shell's initial fragments loaded. The page is the caller's to close.
+    pub async fn open_page(&self, stub: &Tier2StubServer) -> playwright_rs::Page {
+        let page = self.browser.new_page().await.unwrap();
+        let url = stub.url();
+        // install_settle_gate must precede navigation; the stub serves the same
+        // shell as the engine, so the gate applies unchanged.
+        install_settle_gate(&page).await;
+        page.goto(&url, None)
+            .await
+            .unwrap_or_else(|e| panic!("navigate to tier-2 stub at {url}: {e}"));
+        // The shell's `load`-triggered fragments settle the story log; wait for
+        // the canned entry so the test starts from the loaded state.
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+        page
+    }
+}
+
+/// Run a tier-2 quick-browser check: start a stub (default outcome: pending),
+/// drive one fresh page against it, and tear both down. This is the tier-2
+/// entry point — the sibling of `with_test_page` for tests that do not need a
+/// real server.
+pub async fn with_stub_page<F, Fut>(outcome: StubActionOutcome, test_fn: F)
+where
+    F: FnOnce(playwright_rs::Page, &Tier2StubServer) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    let stub = Tier2StubServer::start(outcome).await;
+    let browser = SharedBrowser::launch().await;
+    let page = browser.open_page(&stub).await;
+    test_fn(page.clone(), &stub).await;
+    let _ = page.close().await;
 }
 
 /// Send an action via the command form

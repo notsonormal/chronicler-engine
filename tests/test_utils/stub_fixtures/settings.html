@@ -1,0 +1,136 @@
+
+<div class="settings-panel">
+    <h2>Connections</h2>
+    
+    <div class="connection-card">
+        <div class="card-header">
+            <span class="card-title">openrouter-gpt-4o-mini</span>
+            <div class="card-badges">
+                <span class="badge">Narrator</span>
+                <span class="badge quantifier">Quantifier</span>
+            </div>
+        </div>
+        <div class="card-details">
+            OpenRouter - openai/gpt-4o-mini
+        </div>
+        <div class="card-actions">
+            <button hx-get="/fragment/connections/openrouter-gpt-4o-mini/edit" hx-target="closest .connection-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
+            <button hx-post="/connections/openrouter-gpt-4o-mini/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+            
+            
+        </div>
+    </div>
+    
+    <div class="connection-card">
+        <div class="card-header">
+            <span class="card-title">openrouter-euryale</span>
+            <div class="card-badges">
+                
+                
+            </div>
+        </div>
+        <div class="card-details">
+            OpenRouter - sao10k/l3.3-euryale-70b
+        </div>
+        <div class="card-actions">
+            <button hx-get="/fragment/connections/openrouter-euryale/edit" hx-target="closest .connection-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
+            <button hx-post="/connections/openrouter-euryale/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+            
+            <button hx-post="/connections/openrouter-euryale/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Narrator</button>
+            
+            
+            <button hx-post="/connections/openrouter-euryale/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Quantifier</button>
+            
+        </div>
+    </div>
+    
+    <div class="connection-card">
+        <div class="card-header">
+            <span class="card-title">ollama-gemma-4-26B</span>
+            <div class="card-badges">
+                
+                
+            </div>
+        </div>
+        <div class="card-details">
+            Ollama - hf.co/mradermacher/gemma-4-26B-A4B-it-abliterated-i1-GGUF:latest
+        </div>
+        <div class="card-actions">
+            <button hx-get="/fragment/connections/ollama-gemma-4-26B/edit" hx-target="closest .connection-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
+            <button hx-post="/connections/ollama-gemma-4-26B/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+            
+            <button hx-post="/connections/ollama-gemma-4-26B/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Narrator</button>
+            
+            
+            <button hx-post="/connections/ollama-gemma-4-26B/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Quantifier</button>
+            
+        </div>
+    </div>
+    
+
+    <h3>Add LlmProviderConfig</h3>
+    <form hx-post="/connections/add" hx-target=".settings-panel" hx-swap="innerHTML">
+        <div class="form-group">
+            <label for="conn_name">Name</label>
+            <input type="text" id="conn_name" name="conn_name" placeholder="My OpenRouter" />
+        </div>
+        <div class="form-group">
+            <label for="conn_provider">Provider</label>
+            <select name="conn_provider" id="conn_provider">
+                <option value="openrouter" selected>OpenRouter</option>
+<option value="deepseek">DeepSeek</option>
+<option value="ollama">Ollama</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="conn_model">Model</label>
+            <input type="text" id="conn_model" name="conn_model" placeholder="openai/gpt-4o-mini" />
+        </div>
+        <div class="form-group">
+            <label for="conn_api_key">API Key</label>
+            <input type="password" id="conn_api_key" name="conn_api_key" placeholder="(optional)" />
+        </div>
+        <div class="form-group">
+            <label for="conn_base_url">Base URL</label>
+            <input type="text" id="conn_base_url" name="conn_base_url" placeholder="(optional)" />
+        </div>
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" name="single_user_message" value="true" />
+                Single User Message (merge system + user for models that ignore system prompts)
+            </label>
+        </div>
+        <button type="submit" class="btn-primary">Add LlmProviderConfig</button>
+    </form>
+    <span id="settings-status"></span>
+
+    <h2>Text Check</h2>
+    <div class="connection-card">
+        <div class="card-header">
+            <span class="card-title">Spell &amp; Grammar Check</span>
+        </div>
+        <div class="card-details">
+            Check player input for spelling and grammar issues before sending to the LLM.
+        </div>
+        <form hx-post="/settings/text-check" hx-target="#settings-status" hx-swap="innerHTML">
+            <div class="form-group">
+                <label for="check_mode">Check Mode</label>
+                <select name="check_mode" id="check_mode">
+                    <option value="disabled" selected>Disabled</option>
+                    <option value="spell" >Spell Check Only</option>
+                    <option value="grammar" >Grammar Check Only</option>
+                    <option value="spell_grammar" >Spell + Grammar</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="enable_auto_check" value="true" checked />
+                    Check before sending to LLM
+                </label>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>

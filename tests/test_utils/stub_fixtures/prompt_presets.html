@@ -1,0 +1,193 @@
+
+<div class="prompt-presets-panel">
+    <div class="preset-section">
+        <h2>System Prompts</h2>
+        <p class="preset-section-desc">These prompts are sent as the system message to the narration LLM.</p>
+        
+        <div class="preset-card default active">
+            <div class="card-header">
+                <span class="card-title">Default</span>
+                <div class="card-badges">
+                    <span class="badge">Default</span>
+                    <span class="badge primary">Active · Novel</span>
+                    
+                </div>
+            </div>
+            <div class="card-details preset-preview">You are an interactive fiction author with your own free will, intellect, and emotional intelligence. Your goal is to run a continuous, immersive, and uninterrupted interactive fiction experience, acting as the narrator, the world, and every character within it except the protagonist, who is played by the user.
+
+You hold the agency to create and shape this fictional simulation. Judge the player&#39;s attempted actions with success or failure. Keep the outcomes challenging but fair, and consider the long-lasting consequences of their decisions. The player is not a Mary Sue and shouldn&#39;t be treated as one. Bad things may happen. At the same time, no dragging through the mud at every turn. Find a reasonable balance based on the player&#39;s efforts. No plot armor. Abandon positive bias.</div>
+            <div class="card-actions">
+                
+                
+                
+                <button hx-get="/fragment/prompt-presets/system_default/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
+                
+                <button hx-post="/prompt-presets/system_default/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
+            </div>
+        </div>
+        
+        <div class="preset-card default active">
+            <div class="card-header">
+                <span class="card-title">Interactive Fiction</span>
+                <div class="card-badges">
+                    <span class="badge">Default</span>
+                    
+                    <span class="badge primary">Active · IF</span>
+                </div>
+            </div>
+            <div class="card-details preset-preview">You are a parser-style interactive fiction narrator with your own free will, intellect, and emotional intelligence. Your goal is to run a continuous, immersive, and uninterrupted interactive fiction experience, acting as the narrator, the world, and every character within it. The player directs the protagonist through terse commands; you elaborate those directions into the protagonist&#39;s actions, speech, and the world&#39;s response.
+
+You hold the agency to create and shape this fictional simulation. Judge the player&#39;s attempted actions with success or failure. Keep the outcomes challenging but fair, and consider the long-lasting consequences of their decisions. The player is not a Mary Sue and shouldn&#39;t be treated as one. Bad things may happen. At the same time, no dragging through the mud at every turn. Find a reasonable balance based on the player&#39;s efforts. No plot armor. Abandon positive bias.</div>
+            <div class="card-actions">
+                
+                
+                
+                <button hx-get="/fragment/prompt-presets/system_if_default/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
+                
+                <button hx-post="/prompt-presets/system_if_default/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
+            </div>
+        </div>
+        
+
+        <h3>Add System Prompt Preset</h3>
+        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <input type="hidden" name="preset_type" value="system" />
+            <div class="form-group">
+                <label for="system-preset-name">Name</label>
+                <input type="text" id="system-preset-name" name="name" placeholder="My Custom System Prompt" required />
+            </div>
+            <div class="form-group">
+                <label for="system-preset-role">Role</label>
+                <textarea id="system-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="system-preset-instructions">Instructions</label>
+                <textarea id="system-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="system-preset-style">Writing Style</label>
+                <textarea id="system-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="system-preset-output">Output Format</label>
+                <textarea id="system-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Add Preset</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="preset-section">
+        <h2>Quantifier Prompts</h2>
+        <p class="preset-section-desc">These prompts guide the quantifier LLM that determines NPC presence and player movement.</p>
+        
+        <div class="preset-card default active">
+            <div class="card-header">
+                <span class="card-title">Default</span>
+                <div class="card-badges">
+                    <span class="badge">Default</span>
+                    <span class="badge primary">Active · Novel</span>
+                    <span class="badge primary">Active · IF</span>
+                </div>
+            </div>
+            <div class="card-details preset-preview">You are a scene quantifier for a text adventure game.</div>
+            <div class="card-actions">
+                
+                
+                
+                <button hx-get="/fragment/prompt-presets/quantifier_default/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
+                
+                <button hx-post="/prompt-presets/quantifier_default/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
+            </div>
+        </div>
+        
+
+        <h3>Add Quantifier Prompt Preset</h3>
+        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <input type="hidden" name="preset_type" value="quantifier" />
+            <div class="form-group">
+                <label for="quantifier-preset-name">Name</label>
+                <input type="text" id="quantifier-preset-name" name="name" placeholder="My Custom Quantifier Prompt" required />
+            </div>
+            <div class="form-group">
+                <label for="quantifier-preset-role">Role</label>
+                <textarea id="quantifier-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="quantifier-preset-instructions">Instructions</label>
+                <textarea id="quantifier-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="quantifier-preset-output">Output Format</label>
+                <textarea id="quantifier-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Add Preset</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="preset-section">
+        <h2>Impersonate Prompts</h2>
+        <p class="preset-section-desc">These prompts replace the narrator voice when the AI writes as the player's persona via /impersonate. Use the user and persona (persona_description, persona_personality, persona_background) macros to inject persona data.</p>
+        
+        <div class="preset-card default active">
+            <div class="card-header">
+                <span class="card-title">Default</span>
+                <div class="card-badges">
+                    <span class="badge">Default</span>
+                    <span class="badge primary">Active · Novel</span>
+                    <span class="badge primary">Active · IF</span>
+                </div>
+            </div>
+            <div class="card-details preset-preview">You are writing the next message as the player character, {{user}}. You are not the narrator. Write only what {{user}} says, does, thinks, and perceives in the immediate moment. Stay strictly in character — no narration of the world or other characters&#39; inner lives.
+
+{{user}} is:
+{{persona_description}}
+
+Personality:
+{{persona_personality}}
+
+Background:
+{{persona_background}}</div>
+            <div class="card-actions">
+                
+                
+                
+                <button hx-get="/fragment/prompt-presets/impersonate_default/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
+                
+                <button hx-post="/prompt-presets/impersonate_default/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
+            </div>
+        </div>
+        
+
+        <h3>Add Impersonate Prompt Preset</h3>
+        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <input type="hidden" name="preset_type" value="impersonate" />
+            <div class="form-group">
+                <label for="impersonate-preset-name">Name</label>
+                <input type="text" id="impersonate-preset-name" name="name" placeholder="My Custom Impersonate Prompt" required />
+            </div>
+            <div class="form-group">
+                <label for="impersonate-preset-role">Role</label>
+                <textarea id="impersonate-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="impersonate-preset-instructions">Instructions</label>
+                <textarea id="impersonate-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="impersonate-preset-style">Writing Style</label>
+                <textarea id="impersonate-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="impersonate-preset-output">Output Format</label>
+                <textarea id="impersonate-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Add Preset</button>
+            </div>
+        </form>
+    </div>
+</div>

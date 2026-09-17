@@ -2,8 +2,6 @@
 
 use std::time::Duration;
 
-use playwright_rs::expect;
-
 use super::*;
 
 /// Open the edit form for the seeded world "test" and wait for the posture
@@ -13,6 +11,12 @@ use super::*;
 /// (two matches before the first swap), so every wait scopes to an element
 /// unique to the loaded fragment and htmx's `querySelector`-first target
 /// resolution replaces the loader div with the form.
+///
+/// The Edit click's swap is awaited through the settle gate. That wait is
+/// load-bearing, not decoration: htmx attaches the new form's `hx-trigger`
+/// listeners at the end of the settle task, so a `change` fired on the posture
+/// select before that settle is lost — measured as 6 failures in a 50-run loop
+/// when the form's own swap was not awaited.
 async fn open_world_edit(page: &playwright_rs::Page) {
     page.locator(r#".tab[data-tab="worlds"]"#)
         .await
@@ -20,13 +24,17 @@ async fn open_world_edit(page: &playwright_rs::Page) {
         .await
         .unwrap();
     wait_for_element_children(page, "#worlds-tab .btn-cyan", 1).await;
+    let baseline = arm_settle_gate(page).await;
     page.locator("#worlds-tab .btn-cyan")
         .await
         .first()
         .click(None)
         .await
         .unwrap();
-    // The Edit click fetches the form over HTTP — allow 5s for fetch + swap.
+    // The Edit click's outerHTML swap replaces the loader div with the form;
+    // htmx reports `detail.elt` as the `.worlds-panel` element it swapped.
+    let outcome = settle_since_baseline(page, baseline, ".worlds-panel").await;
+    outcome.expect_settled("open world edit form");
     // Wait on the posture selects, not #world-posture-status: an empty
     // (zero-sized) span never becomes visible, see wait_until_visible docs.
     wait_until_visible(
@@ -63,7 +71,7 @@ async fn test_world_edit_form_renders_posture_selects() {
 
 // [docs/specs/browser_worlds.md] SCENARIO: 29.2
 #[tokio::test]
-async fn test_world_posture_change_autosaves_status() {
+async fn test_world_posture_change_autosaves_server_state() {
     with_test_page(
         CONFIG_PATH,
         TEST_WORLD,
@@ -71,20 +79,42 @@ async fn test_world_posture_change_autosaves_status() {
         |page, _port| async move {
             open_world_edit(&page).await;
 
-            page.locator(r#"#worlds-tab select[name="narrative_tense"]"#)
-                .await
-                .select_option("present", None)
-                .await
-                .unwrap();
+            // The `change` event fires inside htmx's 20 ms defaultSettleDelay
+            // window; `select_option_and_settle` reads the afterSettle baseline
+            // before the change and waits for the *posture status span* to
+            // settle, which the pollers never touch. See
+            // `.scratch/ui-verification-redesign/issues/03-root-cause-the-hx-post-no-fire.md`.
+            select_option_and_settle(
+                &page,
+                r#"#worlds-tab select[name="narrative_tense"]"#,
+                "present",
+                "#world-posture-status",
+            )
+            .await;
 
-            let status = page.locator("#world-posture-status").await;
-            if let Err(e) = expect(status)
-                .with_timeout(std::time::Duration::from_secs(5))
-                .to_contain_text("Saved")
+            // Server state changed, observed through the browser: reload and
+            // re-open the edit form so the select re-renders from the persisted
+            // world. The `Saved` fragment contract lives in the HTTP tier
+            // (`tests/http/worlds.rs`, SCENARIO 25.5); this test keeps the
+            // browser-only question — does the change event reach the server at
+            // all and does the re-render reflect it.
+            page.reload(None)
                 .await
-            {
-                panic!("world posture auto-save should report Saved: {e}");
-            }
+                .expect("reload after the posture change");
+            open_world_edit(&page).await;            let selected: String = page
+                .evaluate::<(), String>(
+                    r#"(() => {
+                        const sel = document.querySelector('#worlds-tab select[name="narrative_tense"]');
+                        return sel ? sel.value : '';
+                    })()"#,
+                    None,
+                )
+                .await
+                .unwrap_or_default();
+            assert_eq!(
+                selected, "present",
+                "the posture change must reach the server: the re-rendered form should show the persisted tense"
+            );
         },
     )
     .await;

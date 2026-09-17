@@ -1,0 +1,22 @@
+
+<div class="worlds-panel">
+    <button class="btn-primary btn-new-world" hx-get="/fragment/worlds/new" hx-target=".worlds-panel" hx-swap="outerHTML">Create New World</button>
+
+    
+    <ul class="worlds-list">
+        
+        <li class="world-item">
+            <strong>Redmist Estate</strong> - The Redmist Estate stands in Islaport, a large coastal city on the eastern seaboard. Built in the colonial era, the estate encompasses a grand mansion, formal gardens, and several outbuildings. For generations the Redmist family wielded influence as surgeons and physicians. Bernard Redmist, the recently deceased patriarch, was renowned for his charitable work — and for the shocking will that left his fortune to an unknown grandson. <em>(0 games)</em>
+            <button class="btn-cyan" hx-get="/worlds/redmist_estate/edit" hx-target=".worlds-panel" hx-swap="outerHTML">Edit</button>
+            <button hx-post="/worlds/redmist_estate/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+        </li>
+        
+        <li class="world-item">
+            <strong>Test Realm</strong> - A small testing kingdom for UI tests <em>(1 games)</em>
+            <button class="btn-cyan" hx-get="/worlds/test/edit" hx-target=".worlds-panel" hx-swap="outerHTML">Edit</button>
+            <button hx-post="/worlds/test/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+        </li>
+        
+    </ul>
+    
+</div>

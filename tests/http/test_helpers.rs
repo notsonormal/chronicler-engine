@@ -182,6 +182,35 @@ pub async fn post_form(
     app.clone().oneshot(req).await.unwrap()
 }
 
+/// POST a url-encoded body carrying the `HX-Request` header, the way htmx
+/// sends every fragment swap. Use this for endpoints whose response is a
+/// fragment rather than a full page.
+pub async fn post_form_with_hx(
+    app: &axum::Router,
+    uri: &str,
+    body: &str,
+) -> axum::response::Response<Body> {
+    let req = Request::builder()
+        .uri(uri)
+        .method(Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .header("HX-Request", "true")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    app.clone().oneshot(req).await.unwrap()
+}
+
+/// Consume a response into its body as a String.
+pub async fn response_body(resp: axum::response::Response<Body>) -> String {
+    let bytes = axum::body::to_bytes(resp.into_body(), 65536)
+        .await
+        .expect("read response body");
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
 /// An Interactive Fiction world with second-person present-tense posture.
 pub fn if_world() -> WorldCard {
     WorldCard {

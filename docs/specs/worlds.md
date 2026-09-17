@@ -2,6 +2,7 @@
 
 Endpoints:
 - `POST /worlds/:key`
+- `POST /worlds/:key/posture`
 
 ## Scenarios
 
@@ -48,4 +49,24 @@ When the client POST /worlds/{key} with the form carrying options_always_on="tru
 Then the stored world's options_always_on is true
 When the client POST /worlds/{key} again with the form omitting options_always_on
 Then the stored world's options_always_on is false
+```
+
+### World posture auto-save
+
+The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers with the `#world-posture-status` fragment. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment, so the contract is verified at request level and the browser keeps only a wiring check.
+
+#### Scenario 25.5: The posture endpoint patches and reports per outcome
+
+```gherkin
+Given a seeded world in Interactive Fiction mode with tense "past"
+When the client POST /worlds/{key}/posture with a valid tense patch
+Then the response is a 200 carrying the "Saved" status span
+And the stored world's tense is the patched value
+When the client POST /worlds/{key}/posture with an invalid narrator_mode
+Then the response is a 200 carrying an error span
+And the stored world is mutated not at all
+When the client POST /worlds/{key}/posture for an unknown key
+Then the response is a 400
+When the storage rejects the world update
+Then the response is a 500
 ```
