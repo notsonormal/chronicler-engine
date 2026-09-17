@@ -1,7 +1,7 @@
 # Tier-1 rollout: demote the class-2 assertions to HTTP contract tests
 
 Type: task
-Status:
+Status: claimed
 Blocked by: 06
 
 ## Question

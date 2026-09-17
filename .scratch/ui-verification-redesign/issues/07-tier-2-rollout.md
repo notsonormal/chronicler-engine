@@ -1,7 +1,7 @@
 # Tier-2 rollout: move the remaining class-1 tests onto the stub-server tier
 
 Type: task
-Status:
+Status: claimed
 Blocked by: 06
 
 ## Question
