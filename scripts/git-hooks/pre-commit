@@ -1,71 +1,53 @@
 #!/bin/sh
-# Git pre-commit hook: regenerate docs and structure indexes if stale.
-# Install with: python scripts/install_git_hooks.py
+# Git pre-commit hook: regenerate the docs and structure indexes, then stage
+# them into the commit being made. Install with:
+#   python scripts/install_git_hooks.py
+#
+# ENGINE_ROOT comes from git, not from $0. Git runs a linked worktree's hooks
+# from the shared .git/hooks directory, so a $0-relative path resolves to the
+# MAIN worktree while GIT_DIR/GIT_INDEX_FILE point at the linked one; the diff
+# checks below would then compare one tree's files against the other's index
+# and abort forever.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENGINE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+GENERATED_FILES="AGENTS.md tests/AGENTS.md docs/AGENTS.md docs/diataxis/reference/coding_standards/guardrails.md"
 
-# Save current directory
+ENGINE_ROOT="$(git rev-parse --show-toplevel)" || exit 1
 ORIG_DIR="$(pwd)"
 
-# Change to engine root for git operations
-cd "$ENGINE_ROOT"
+cd "$ENGINE_ROOT" || exit 1
 
-# Regenerate docs index
-python "scripts/generate_docs_index.py"
+# The generated files are partly hand-written — AGENTS.md and docs/AGENTS.md
+# carry prose beside their generated blocks. If one already has unstaged
+# changes, the generators are not its only writer, so the regenerated output
+# cannot be staged safely without sweeping that prose into the commit.
+for f in $GENERATED_FILES; do
+    if ! git diff --quiet -- "$f"; then
+        echo ""
+        echo "$f has unstaged changes, so this hook cannot safely re-stage it."
+        echo "Stage or stash your edits first, then commit again:"
+        echo "  git add $f"
+        cd "$ORIG_DIR"
+        exit 1
+    fi
+done
 
-# Regenerate guardrails doc
-python "scripts/generate_guardrails_doc.py"
-
-# Regenerate structure index
-python "scripts/generate_structure_index.py"
-
-# Regenerate tests structure index
-python "scripts/generate_tests_structure_index.py"
-
-# Check if AGENTS.md was updated
-if ! git diff --quiet -- "AGENTS.md"; then
-    echo ""
-    echo "AGENTS.md was updated by the structure index generator."
-    echo "Please stage the changes and commit again:"
-    echo "  git add AGENTS.md"
-    echo "  git commit"
+fail() {
+    echo "" >&2
+    echo "$1" >&2
     cd "$ORIG_DIR"
     exit 1
-fi
+}
 
-# Check if tests/AGENTS.md was updated
-if ! git diff --quiet -- "tests/AGENTS.md"; then
-    echo ""
-    echo "tests/AGENTS.md was updated by the tests structure index generator."
-    echo "Please stage the changes and commit again:"
-    echo "  git add tests/AGENTS.md"
-    echo "  git commit"
-    cd "$ORIG_DIR"
-    exit 1
-fi
+# A generator that fails can leave a half-written file, which must not be
+# staged — hence the explicit exit-code checks.
+python "scripts/generate_docs_index.py" || fail "docs index generation failed"
+python "scripts/generate_guardrails_doc.py" || fail "guardrails doc generation failed"
+python "scripts/generate_structure_index.py" || fail "structure index generation failed"
+python "scripts/generate_tests_structure_index.py" || fail "tests structure index generation failed"
 
-# Check if docs/diataxis/reference/coding_standards/guardrails.md was updated
-if ! git diff --quiet -- "docs/diataxis/reference/coding_standards/guardrails.md"; then
-    echo ""
-    echo "docs/diataxis/reference/coding_standards/guardrails.md was updated by the guardrails doc generator."
-    echo "Please stage the changes and commit again:"
-    echo "  git add docs/diataxis/reference/coding_standards/guardrails.md"
-    echo "  git commit"
-    cd "$ORIG_DIR"
-    exit 1
-fi
-
-# Check if docs/README.md was updated
-if ! git diff --quiet -- "docs/README.md"; then
-    echo ""
-    echo "docs/README.md was updated by the auto-index generator."
-    echo "Please stage the changes and commit again:"
-    echo "  git add docs/README.md"
-    echo "  git commit"
-    cd "$ORIG_DIR"
-    exit 1
-fi
+# Stage the regenerated indexes into the in-progress commit, so the author does
+# not have to commit twice.
+git add -- $GENERATED_FILES || fail "staging the regenerated indexes failed"
 
 cd "$ORIG_DIR"
 exit 0
