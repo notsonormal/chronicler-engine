@@ -49,6 +49,21 @@ fn empty_post_request(uri: &str) -> Request<Body> {
         .unwrap()
 }
 
+/// The id of the single preset with `name`, read from storage rather than
+/// scraped from rendered HTML — the panel is a text blob and a name match
+/// against it can hit a truncated or escaped form.
+fn preset_id_by_name(storage: &Storage, name: &str) -> String {
+    use chronicler_engine::domain::model::prompt_preset::PresetType;
+    for preset_type in [PresetType::System, PresetType::Quantifier, PresetType::Impersonate] {
+        for preset in storage.list_presets(preset_type).unwrap() {
+            if preset.name == name {
+                return preset.id;
+            }
+        }
+    }
+    panic!("no preset named {name:?} in storage");
+}
+
 fn extract_first_preset_id(body: &str) -> String {
     let delete_marker = "/delete\"";
     let delete_pos = body
@@ -776,5 +791,114 @@ async fn test_panel_gates_activation_buttons_by_allowed_modes() {
     assert!(
         !body.contains(r#"hx-post="/prompt-presets/if-only/activate?mode=novel""#),
         "IF-only preset must not render a Novel activation button"
+    );
+}
+
+// The browser copy (SCENARIO 28.1) clicked Duplicate, clicked Edit, checked
+// the Interactive Fiction box, and saved — then asserted the card offered
+// "Set Active (IF)". The click handling is the wiring residue that stays in
+// tier 3; the server-observable chain is: create a preset, fetch its edit
+// form (checking the rendered flags), then POST the update with the IF flag
+// and assert the returned card exposes the IF activation button. This
+// exercises the same three handlers in the same order, minus the clicks.
+// [docs/specs/prompt_presets.md] SCENARIO: 21.27
+#[tokio::test]
+async fn test_allowed_modes_duplicate_edit_save_chain_http() {
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let app_state = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_service();
+    let app = build_router(app_state);
+
+    // 1. Seed the source with a fixed id. The create endpoint derives ids
+    //    from the wall clock at millisecond resolution, so a create-then-
+    //    duplicate pair inside one test can collide and the copy overwrites
+    //    the source (recorded as a finding in the ticket Answer). The chain
+    //    under test is duplicate -> edit-form -> save, so the source's
+    //    provenance is irrelevant.
+    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+    use chronicler_engine::domain::model::settings::NarratorMode;
+    storage
+        .save_preset(&PromptPreset {
+            id: "chain-source".to_string(),
+            name: "Chain".to_string(),
+            instructions: Some("Chain.".to_string()),
+            allowed_modes: vec![NarratorMode::Novel, NarratorMode::InteractiveFiction],
+            is_default: false,
+            preset_type: PresetType::System,
+            ..Default::default()
+        })
+        .unwrap();
+    let preset_id = "chain-source".to_string();
+
+    // The duplicate hop the browser test used: the copy carries the source's
+    // flags and is the only non-default card with an edit form.
+    let duplicated = app
+        .clone()
+        .oneshot(empty_post_request(&format!(
+            "/prompt-presets/{preset_id}/duplicate"
+        )))
+        .await
+        .unwrap();
+    assert_eq!(duplicated.status(), StatusCode::OK);
+    let copy_id = preset_id_by_name(&storage, "Chain (Copy)");
+    assert_ne!(copy_id, preset_id, "the duplicate must be a new preset");
+
+    // 2. The Edit hop: the form must render the stored allowed-modes flags.
+    let edit_form = app
+        .clone()
+        .oneshot(get_request(&format!(
+            "/fragment/prompt-presets/{copy_id}/edit"
+        )))
+        .await
+        .unwrap();
+    assert_eq!(edit_form.status(), StatusCode::OK);
+    let form = body_string(edit_form).await;
+    assert!(
+        form.contains(r#"class="preset-card edit-form""#),
+        "the edit form must render for the copy: {form}"
+    );
+    assert!(
+        form.contains(r#"name="allowed_mode_novel" value="true" checked"#),
+        "the stored Novel flag must render checked: {form}"
+    );
+    assert!(
+        form.contains(r#"name="allowed_mode_if" value="true" checked"#),
+        "the stored IF flag must render checked: {form}"
+    );
+
+    // 3. The save hop with the IF flag checked: the returned card must offer
+    //    per-mode activation for both allowed modes.
+    let saved = app
+        .oneshot(post_form_request(
+            &format!("/prompt-presets/{copy_id}"),
+            "name=Chain+Copy&instructions=Chain.&preset_type=system\
+             &allowed_mode_novel=true&allowed_mode_if=true",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), StatusCode::OK);
+    let card = body_string(saved).await;
+    assert!(
+        card.contains("Set Active (IF)"),
+        "the saved card must offer Set Active (IF): {card}"
+    );
+    assert!(
+        card.contains("Set Active (Novel)"),
+        "the saved card must still offer Set Active (Novel): {card}"
+    );
+
+    let stored = storage
+        .get_preset(&copy_id)
+        .unwrap()
+        .expect("the updated copy must persist");
+    assert!(
+        stored.allowed_modes.contains(&NarratorMode::Novel)
+            && stored
+                .allowed_modes
+                .contains(&NarratorMode::InteractiveFiction),
+        "both flags must persist: {:?}",
+        stored.allowed_modes
     );
 }

@@ -47,3 +47,16 @@ And the client POST /swipe/new (retry with no anchor)
 Then the response is not 500 INTERNAL_SERVER_ERROR
 And within 1 s, message_service.load_or_fresh().narrative.input_buffer.status.is_generating() is false
 ```
+
+#### Scenario 8.4: Delete-last removes the rendered log entry
+
+```gherkin
+Given a fresh game state with narrative.history empty
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action with command="examine room"
+And the pipeline returns to idle
+And the client GET /fragment/story-log (at least 2 .log-entry rendered)
+And the client POST /history/delete
+Then the response status is "200 OK"
+And the client GET /fragment/story-log renders exactly one fewer .log-entry
+```

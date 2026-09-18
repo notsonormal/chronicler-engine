@@ -87,3 +87,49 @@ async fn test_mode_switch_failure_surfaces_500_error_span_http() {
         "the error span must name the storage failure: {body_str}"
     );
 }
+
+// The browser copy (SCENARIO 27.2) selected "present" in the tense dropdown
+// and asserted the swapped fragment re-rendered with that value selected.
+// The select's `hx-post="/games/{id}/posture"` with
+// `hx-include="closest .posture-row"` sends exactly this form body, and the
+// handler returns the fragments's outerHTML — so this asserts the same fact
+// from the response body rather than the live DOM.
+// [docs/specs/games.md] SCENARIO: 20.7
+#[tokio::test]
+async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let id = state.game_catalogue.current_game_id();
+
+    let resp = post_form(
+        &app,
+        &format!("/games/{id}/posture"),
+        "narrative_perspective=third&narrative_tense=present",
+    )
+    .await;
+    assert!(
+        resp.status().is_success(),
+        "the posture auto-save should succeed"
+    );
+    let body = axum::body::to_bytes(resp.into_body(), 16384).await.unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(
+        html.contains(r#"id="game-posture-controls""#),
+        "the response must be the re-rendered posture fragment: {html}"
+    );
+    assert!(
+        html.contains(r#"<option value="present" selected"#),
+        "the re-rendered tense select must show 'present' selected: {html}"
+    );
+    assert!(
+        html.contains(r#"<option value="third" selected"#),
+        "the re-rendered perspective select must keep 'third' selected: {html}"
+    );
+
+    let game = state
+        .game_catalogue
+        .current_game()
+        .expect("current_game should succeed")
+        .expect("the active game must still exist");
+    assert_eq!(game.narrative_tense.as_str(), "present");
+    assert_eq!(game.narrative_perspective.as_str(), "third");
+}

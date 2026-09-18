@@ -112,3 +112,15 @@ When the client POST /games/{game_id}/mode with narrator_mode="interactive_ficti
 Then the response status is "500 INTERNAL_SERVER_ERROR"
 And the response body is an error span naming the storage failure
 ```
+
+#### Scenario 20.7: A perspective or tense auto-save re-renders the fragment with the new value selected
+
+```gherkin
+Given #game-posture-controls is rendered for the active game
+When the client POST /games/{game_id}/posture with narrative_perspective="third" and narrative_tense="present"
+Then the response status is "200 OK"
+And the response body contains id="game-posture-controls" (the re-rendered fragment)
+And the narrative_tense select renders "present" selected
+And the narrative_perspective select renders "third" selected
+And game_catalogue.current_game() reports tense "present" and perspective "third"
+```
