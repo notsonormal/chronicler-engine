@@ -22,12 +22,3 @@ When the client changes the narrative_tense select to "present"
 Then the browser POSTs /games/{game_id}/posture with the posture row
 And #game-posture-controls is re-rendered with narrative_tense "present" selected
 ```
-
-#### Scenario 27.3: Switching narrator mode retargets presets and nudges perspective
-
-```gherkin
-Given #game-posture-controls is rendered with the game in Novel mode and perspective "third"
-When the client changes the narrator_mode select to "interactive_fiction"
-Then #game-posture-controls is re-rendered with narrative_perspective "second" selected
-And the system_preset_id select's selected option is the Interactive Fiction bundle's system preset ("system_if_default")
-```

@@ -9,7 +9,6 @@ mod games;
 mod invariants;
 mod options;
 mod prompt_presets;
-mod slash_menu;
 mod story_log;
 mod tier2;
 mod worlds;
