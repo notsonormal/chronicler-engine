@@ -28,6 +28,19 @@ And GET /fragment/options-dock renders no options strip
 
 ### Using the offered set
 
+#### Scenario 24.13: Using an offered option submits it as the player's input and narrates
+
+```gherkin
+Given a game with scene history and an options agent whose response yields set A
+When the client POST /action with command="/options"
+And the pipeline returns to idle
+And the client POST /action/check with command="Search the desk" (the form submit the Use button performs)
+And the pipeline returns to idle
+Then message_service.load_messages() contains one more Input entry than before
+And the newest Input entry's text is "Search the desk"
+And a Narration entry was added after it
+```
+
 #### Scenario 24.4: Regenerating replaces the set and adds no history entries
 
 ```gherkin

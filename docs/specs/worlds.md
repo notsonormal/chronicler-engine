@@ -70,3 +70,18 @@ Then the response is a 400
 When the storage rejects the world update
 Then the response is a 500
 ```
+
+#### Scenario 25.6: The world edit form renders the posture selects with the stored values
+
+```gherkin
+Given a seeded world with key "posture_world" in Interactive Fiction mode (Second person, Past)
+When the client GET /worlds/posture_world/edit
+Then the response status is "200 OK"
+And the body contains "Edit World" (the edit form, not the create form)
+And the narrator_mode, narrative_perspective, and narrative_tense selects are rendered
+And the narrator_mode select renders "interactive_fiction" selected
+And the narrative_perspective select renders "second" selected
+And the narrative_tense select renders "past" selected
+And the body contains the #world-posture-status target
+And the posture selects auto-save to /worlds/posture_world/posture
+```

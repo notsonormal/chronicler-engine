@@ -9,7 +9,7 @@ use chronicler_engine::domain::model::settings::{NarrativePerspective, Narrative
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{TestAppBuilder, TestMap};
 
-use crate::test_helpers::{post_form, post_form_with_hx, response_body, world_form_body};
+use crate::test_helpers::{fetch_body, post_form, post_form_with_hx, response_body, world_form_body};
 
 fn posture_world() -> WorldCard {
     WorldCard {
@@ -262,5 +262,65 @@ async fn test_world_update_options_toggle_checkbox_grammar_http() {
     assert!(
         !updated_world(&state).await.options_always_on,
         "an absent field must reset the toggle to false"
+    );
+}
+
+// The only prior coverage of the full edit-form render was the browser copy
+// (SCENARIO 29.1), which reached it by clicking the worlds tab and the Edit
+// button; the quarantine covers only the not-found path. The form is a plain
+// server render, so a GET observes the same fact without the race.
+// [docs/specs/worlds.md] SCENARIO: 25.6
+#[tokio::test]
+async fn test_world_edit_form_renders_posture_selects_http() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    let world = posture_world();
+    storage
+        .seed_world(&world, &TestMap::single_room("start"))
+        .expect("seed posture world");
+
+    let html = fetch_body(&app, "/worlds/posture_world/edit").await;
+    assert!(
+        html.contains("Edit World"),
+        "the edit form must render, not the create form: {html}"
+    );
+    assert!(
+        html.contains(r#"class="form-group posture-group""#),
+        "the posture group must render: {html}"
+    );
+
+    for name in ["narrator_mode", "narrative_perspective", "narrative_tense"] {
+        assert!(
+            html.contains(&format!(r#"<select name="{name}""#)),
+            "the {name} select must be rendered: {html}"
+        );
+    }
+
+    // The selected options prove the form rendered the world's stored
+    // posture, which is what the browser copy asserted by reading
+    // `select.value` after the swap.
+    assert!(
+        html.contains(r#"<option value="interactive_fiction" selected"#),
+        "the stored Interactive Fiction mode must render selected: {html}"
+    );
+    assert!(
+        html.contains(r#"<option value="second" selected"#),
+        "the stored Second-person perspective must render selected: {html}"
+    );
+    assert!(
+        html.contains(r#"<option value="past" selected"#),
+        "the stored Past tense must render selected: {html}"
+    );
+
+    // The auto-save target the browser test's settle gate waited on.
+    assert!(
+        html.contains(r#"id="world-posture-status""#),
+        "the posture status target must be rendered: {html}"
+    );
+    assert!(
+        html.contains(r#"hx-post="/worlds/posture_world/posture""#),
+        "the posture selects must auto-save to this world: {html}"
     );
 }

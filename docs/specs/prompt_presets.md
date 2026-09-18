@@ -318,3 +318,17 @@ When the client POST /prompt-presets/does-not-exist/activate
 Then the response is 200
 And the response body is "<span class='error'>Preset not found</span>"
 ```
+
+#### Scenario 21.27: Duplicate → edit-form flags → save toggles per-mode activation
+
+```gherkin
+Given a fresh app state with a system preset whose allowed_modes are ["novel", "interactive_fiction"]
+When the client POST /prompt-presets/{id}/duplicate (the copy carries the source's flags)
+And the client GET /fragment/prompt-presets/{copy_id}/edit
+Then the edit form renders the allowed_mode_novel and allowed_mode_if checkboxes checked
+When the client POST /prompt-presets/{copy_id} with allowed_mode_novel and allowed_mode_if both set
+Then the response is 200
+And the returned card contains a "Set Active (IF)" button
+And the returned card contains a "Set Active (Novel)" button
+And storage reports the copy's allowed_modes as ["novel", "interactive_fiction"]
+```

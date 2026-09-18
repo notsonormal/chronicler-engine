@@ -1,7 +1,7 @@
 # Tier-1 rollout: write the two orphaned HTTP contracts
 
 Type: task
-Status:
+Status: resolved
 Blocked by: 06
 
 > Naming: split out of the original ticket 08 on 2026-09-18 (the two orphaned
@@ -69,3 +69,85 @@ tags, the spec scenarios added or reused, whether the new HTTP coverage fully
 carries the browser assertions (and therefore whether the browser copies are
 now deletable by ticket 09), and `validate_feature_spec.py` output before and
 after.
+
+## Answer
+
+Two HTTP tests added, nothing deleted. Both fragments are plain server renders
+that previously had no HTTP coverage — the only assertion of either went
+through a Chromium round-trip.
+
+### HTTP tests added
+
+| File | Test | SCENARIO |
+|---|---|---|
+| `tests/http/games_fragment.rs` (new) | `test_games_fragment_renders_posture_controls_http` | games.md 20.8 |
+| `tests/http/worlds.rs` | `test_world_edit_form_renders_posture_selects_http` | worlds.md 25.6 |
+
+`tests/http/games_fragment.rs` is new and registered in `tests/http/mod.rs`;
+`tests/http/worlds.rs` gained the test alongside the existing 25.1–25.5.
+
+### What each asserts
+
+**Games fragment (20.8)** — `GET /fragment/games`. The fragment renders
+`#game-posture-controls` with the active game's *stored* posture selected
+(`novel` / `third` / `past`), all six selects present (`narrator_mode`,
+`narrative_perspective`, `narrative_tense`, `system_preset_id`,
+`quantifier_preset_id`, `impersonate_preset_id`), the auto-save routes pinned
+to the active game id (`/games/{id}/mode`, `/posture`, `/presets`), and no
+`Presets unavailable` degradation.
+
+**World edit form (25.6)** — `GET /worlds/posture_world/edit`. The edit form
+(not the create form) renders `.posture-group` with the world's stored values
+selected (`interactive_fiction` / `second` / `past`), the
+`#world-posture-status` target, and the world-scoped auto-save route.
+
+### Spec scenarios added
+
+| Spec | Scenario | Rationale |
+|---|---|---|
+| `docs/specs/games.md` | 20.8 (new) | `games.md` had only failure paths for posture (20.4) and no fragment-render scenario. |
+| `docs/specs/worlds.md` | 25.6 (new) | 25.5 covers the posture *POST* endpoint's outcomes, not the edit-form render. 25.5 was not reusable here. |
+
+### Does the new HTTP coverage fully carry the browser assertions?
+
+**Yes for both**, so the browser copies are deletable — but that deletion
+belongs to ticket 09's keeper-set pass, not here. Per-test:
+
+| Browser test | Browser assertions | Carried by the HTTP test? |
+|---|---|---|
+| 21 (`test_games_panel_renders_posture_fragment`, browser_games 27.1) | mode/perspective/tense select values; three preset selects visible | **Yes, and stronger** — the HTTP test asserts the same values *and* the auto-save routes and the no-degradation path. |
+| 24 (`test_world_edit_form_renders_posture_selects`, browser_worlds 29.1) | three posture selects visible after the Edit click | **Yes, and stronger for content** — asserts the stored values are selected. |
+
+**One caveat, stated rather than buried.** The HTTP test hits
+`/worlds/:key/edit` directly. The browser copy reached it through a click hop
+(worlds tab → Edit button → htmx swap). That click→POST-or-GET wiring is
+exactly the residue ticket 09 owns ("wiring does not demote"), so this ticket
+correctly does **not** claim it. The same applies to browser test 21's
+tab-switch hop. Deleting those browser copies is only safe once ticket 09
+supplies the wiring guard.
+
+### Validator, before and after
+
+Before (at 08b base, `2abf7b9`): `138 declared, 138 covered, 0 gap(s), 0
+orphan(s), 0 untagged, 0 surface mismatch(es), quarantine 86/86`.
+
+After: `140 declared, 140 covered, 0 gap(s), 0 orphan(s), 0 untagged, 0 surface
+mismatch(es), quarantine 86/86`.
+
+138 + 2 added = 140. The validator was not weakened.
+
+### Verification
+
+Full gate green: clippy OK, **1598 integration passed / 0 failed / 2 skipped**
+(1596 + 2 new), **19 browser passed / 0 failed**, architecture 1 passed,
+guardrails 129 passed.
+
+Both tests were mutation-checked to confirm the assertions are load-bearing,
+not accidentally matching:
+
+| Mutation | Result |
+|---|---|
+| Rename the `system_preset_id` select in the games template | games test fails |
+| Force the tense option to never mark `past` selected in the world template | world test fails |
+
+Both templates were restored immediately, and both tests pass again.

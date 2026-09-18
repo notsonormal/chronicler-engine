@@ -335,3 +335,69 @@ async fn test_options_work_in_if_mode_http() {
     );
     assert!(dock.contains("Search the desk"), "{dock}");
 }
+
+// The Use button (`useOption` in `assets/index.html`) fills the command input
+// with the option's text and calls `form.requestSubmit()`, which POSTs
+// `/action/check` — the same request this test makes. The browser test
+// (`tests/browser/options.rs` SCENARIO 26.1) asserted the rendered entry
+// counts; this asserts the persisted message store instead, which is the
+// stronger fact and the one the tier placement rule demotes to.
+// [docs/specs/options.md] SCENARIO: 24.13
+#[tokio::test]
+async fn test_using_offered_option_submits_as_input_http() {
+    let (app, state, _storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+
+    let resp = post_action(&app, "/options").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "/options should complete");
+
+    let inputs_before = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .count();
+
+    // The hop the Use button performs: submit the option text through the
+    // command form's own endpoint.
+    let resp = crate::test_helpers::post_action_check(&app, "Search the desk").await;
+    assert!(
+        resp.status().is_success(),
+        "the option submit should accept"
+    );
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the submitted option should complete"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let inputs: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .collect();
+    assert_eq!(
+        inputs.len(),
+        inputs_before + 1,
+        "using an option must persist exactly one more Input entry"
+    );
+    let newest = inputs.last().expect("the new Input entry");
+    assert_eq!(
+        newest.text(),
+        "Search the desk",
+        "the Input entry must carry the option's text"
+    );
+
+    let narrations = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .count();
+    assert!(
+        narrations > 0,
+        "the submitted option must narrate; messages were: {messages:?}"
+    );
+}

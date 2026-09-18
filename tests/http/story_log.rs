@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::TestAppBuilder;
 
-use crate::test_helpers::{post_action, post_empty, wait_idle};
+use crate::test_helpers::{fetch_body, post_action, post_empty, wait_idle};
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
 #[tokio::test]
@@ -114,5 +114,38 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
     assert!(
         wait_idle(&state, 1000).await,
         "retry after delete should not leave state generating"
+    );
+}
+
+// The browser copy (SCENARIO 30.4) clicked `.delete-btn` and counted the
+// DOM entries. `deleteMessage()` in `assets/index.html:336` does exactly
+// two things: `fetch("/history/delete", {method: "POST"})` and then re-fetch
+// `/fragment/story-log`. This test performs both hops and asserts the
+// rendered entry count drops, which is the browser copy's fact expressed
+// against the server response rather than the live DOM.
+// [docs/specs/story_log.md] SCENARIO: 8.4
+#[tokio::test]
+async fn test_delete_removes_entry_from_fragment_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+
+    let _ = post_action(&app, "examine room").await;
+    assert!(wait_idle(&state, 1000).await, "narration should persist");
+
+    let before = fetch_body(&app, "/fragment/story-log").await;
+    let before_count = before.matches("class=\"log-entry").count();
+    assert!(
+        before_count >= 2,
+        "the fragment must render at least 2 entries to delete one: {before}"
+    );
+
+    let resp = post_empty(&app, "/history/delete").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let after = fetch_body(&app, "/fragment/story-log").await;
+    let after_count = after.matches("class=\"log-entry").count();
+    assert_eq!(
+        after_count,
+        before_count - 1,
+        "deleting must drop exactly one rendered log entry"
     );
 }
