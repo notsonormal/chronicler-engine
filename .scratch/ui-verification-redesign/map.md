@@ -82,6 +82,17 @@ rather than a convention.)
 
 - None currently.
 
+(Fog graduated by ticket 07's resolution, 2026-09-18: the ticket-08 scope split
+on **axis A** — spec-surface reconciliation folded into each rollout ticket so
+each exits with a green `validate_feature_spec.py`, since the validator rejects
+a `browser_*.md` tag from `tests/http/` *and* flags an uncovered declared
+scenario, so a demotion is a spec restructuring act rather than a deletion.
+Ticket 08 keeps the demotions-with-existing-siblings (16, 18, 19, 20, 22, 23 + the
+class-3 delete 25); the newly created **08b** owns the two orphaned contracts
+(games posture-fragment render, world edit-form render) and deletes nothing.
+Ticket 11 therefore shrinks to the `STRATEGY.md` placement rule, the
+`networkidle` ban, and a final sweep.)
+
 
 ## Out of scope
 

@@ -2,7 +2,7 @@
 
 Type: task
 Status:
-Blocked by: 06, 07, 08, 09
+Blocked by: 06, 07, 08, 08b, 09
 
 ## Question
 

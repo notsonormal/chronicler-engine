@@ -2,7 +2,7 @@
 
 Type: task
 Status:
-Blocked by: 07, 08, 09
+Blocked by: 07, 08, 08b, 09
 
 ## Question
 
@@ -19,14 +19,19 @@ ratified placement rule, and the map's Not-yet-specified on
    the user ratified as stopping future tests being adjudicated one-by-one;
    write it as that — the decision of record, not an invitation to re-derive
    placement per test.
-2. **Spec/test bookkeeping.** For every test that moved tiers in tickets
-   07–09, `validate_feature_spec.py` gates the scenario↔test mapping. Update
-   test annotations so each moved test still maps to its declared scenario, and
-   each scenario still has a covering test in *some* tier. Check **before
-   editing tests**: run the validator, let it name the drift, fix the
-   annotations it names. Do not weaken the validator to make the move pass —
-   if a scenario genuinely belongs to two tiers now, the spec says so; if it
-   can't be asserted, the scenario changes (surface that in `## Answer`).
+2. **Spec/test bookkeeping sweep.** Each rollout ticket (07, 08, 08b, 09) now
+   reconciles its own scenario↔test mapping and exits with
+   `validate_feature_spec.py` at `0 gap(s), 0 orphan(s), 0 untagged,
+   0 surface mismatch(es)` — the validator rejects a `browser_*.md` tag from
+   `tests/http/` *and* flags an uncovered declared scenario, so reconciliation
+   cannot be deferred to this ticket without leaving the gate red in between.
+   This ticket's job is therefore the **sweep**, not the per-test fixes: run the
+   validator against the finished tree, fix anything the rollout tickets missed,
+   and confirm no scenario lost coverage and no orphan tag remains. Check
+   **before editing anything**: run the validator, let it name the drift. Do not
+   weaken the validator to make a move pass — if a scenario genuinely belongs to
+   two tiers now, the spec says so; if it can't be asserted, the scenario
+   changes (surface that in `## Answer`).
 
 Do this after 07–09 so the rule and the examples describe the suite as it
 actually stands, not as ticket 04 imagined it — and so a test's

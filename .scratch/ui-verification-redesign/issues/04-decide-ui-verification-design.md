@@ -107,6 +107,7 @@ Go/no-go is HITL: the full rollout proceeds only if the slice holds on the machi
 - [06 — Prototype the vertical slice: worlds posture flow across all three tiers](06-vertical-slice-prototype.md)
 - [07 — Tier-2 rollout: move the remaining class-1 tests onto the stub-server tier](07-tier-2-rollout.md)
 - [08 — Tier-1 rollout: demote the class-2 assertions to HTTP contract tests](08-tier-1-http-demotion.md)
+- [08b — Tier-1 rollout: write the two orphaned HTTP contracts](08b-tier-1-orphaned-contracts.md)
 - [09 — Tier-3 conversion: settle-gate wrappers and the keeper set](09-tier-3-conversion.md)
 - [10 — Harness deletion pass: the ratified removal list](10-harness-deletion-pass.md)
 - [11 — Record the placement rule and reconcile spec/test bookkeeping](11-strategy-doc-and-spec-bookkeeping.md)
