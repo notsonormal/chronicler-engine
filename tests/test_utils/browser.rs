@@ -12,6 +12,7 @@ pub use super::wait::wait_for_element_children;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
 use super::wait::wait_for_status_generating;
+pub use super::wait::wait_for_story_log;
 
 pub async fn goto_with_connection_check(
     page: &playwright_rs::Page,
@@ -130,7 +131,7 @@ impl SharedBrowser {
             .unwrap_or_else(|e| panic!("navigate to tier-2 stub at {url}: {e}"));
         // The shell's `load`-triggered fragments settle the story log; wait for
         // the canned entry so the test starts from the loaded state.
-        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+        wait_for_story_log(&page).await;
         page
     }
 }

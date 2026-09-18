@@ -64,6 +64,15 @@ pub async fn wait_for_element_children(page: &playwright_rs::Page, selector: &st
     panic!("wait_for_element_children('{selector}'): expected ≥ {min_count}, found {last_count}");
 }
 
+/// Wait for the story log to render at least one entry.
+///
+/// The explicit story-log readiness contract: a test that reads the log calls
+/// this, so a missing render is attributable to that test rather than to every
+/// test that passed through a shared precondition.
+pub async fn wait_for_story_log(page: &playwright_rs::Page) {
+    wait_for_element_children(page, "#story-log .log-entry", 1).await;
+}
+
 /// Poll-until-visible for a uniquely-matching selector (Playwright strict mode
 /// rejects a multi-element match — scope panel selectors by tab, e.g.
 /// `#worlds-tab select[name=..]`). An empty inline element stays invisible;

@@ -47,6 +47,7 @@ const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.
 const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
 const FIXTURE_ACTION_AREA: &str = include_str!("stub_fixtures/action_area.html");
+const FIXTURE_OPTIONS_DOCK: &str = include_str!("stub_fixtures/options_dock.html");
 
 /// What `POST /action/check` should answer with. A test names the outcome it
 /// needs; the stub runs no pipeline.
@@ -137,7 +138,10 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/fragment/visual-sidebar",
             get(|| async { Html(FIXTURE_VISUAL_SIDEBAR) }),
         )
-        .route("/fragment/options-dock", get(|| async { "" }))
+        .route(
+            "/fragment/options-dock",
+            get(|| async { Html(FIXTURE_OPTIONS_DOCK) }),
+        )
         .route(
             "/fragment/llm-messages",
             get(|| async { Html(FIXTURE_LLM_MESSAGES) }),
@@ -156,10 +160,12 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/fragment/action-area",
             get(|| async { Html(FIXTURE_ACTION_AREA) }),
         )
-        // Static assets are served from the real `assets/` directory, nested at
-        // `/assets` exactly as the engine routes them, so the shell's script and
-        // stylesheet hrefs resolve as in production.
+        // Static assets are served from the real `assets/` and `data/`
+        // directories, nested exactly as the engine routes them, so the shell's
+        // script and stylesheet hrefs and the fragment images resolve as in
+        // production.
         .nest_service("/assets", tower_http::services::ServeDir::new("assets"))
+        .nest_service("/data", tower_http::services::ServeDir::new("data"))
         .with_state(state)
 }
 
@@ -175,10 +181,18 @@ async fn action_check(
     Form(_form): Form<HashMap<String, String>>,
 ) -> Response<Body> {
     match state.action_outcome {
+        // The real `POST /action/check` acknowledgement retargets the status
+        // span rather than replacing the action area (`add_status_swap_headers`
+        // in the engine). Mirroring both the body and the retarget headers keeps
+        // the canned response shape from drifting.
         StubActionOutcome::Pending => (
             StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            r#"<div class="action-area" id="action-area"><div class="status" id="status-display"><span class="status thinking">Thinking...</span></div></div>"#,
+            [
+                ("content-type", "text/html; charset=utf-8"),
+                ("hx-retarget", "#status-display"),
+                ("hx-reswap", "innerHTML"),
+            ],
+            r#"<span class="status thinking">Thinking...</span>"#,
         )
             .into_response(),
         StubActionOutcome::Idle => (

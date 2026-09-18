@@ -4,7 +4,7 @@ use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};
 
 use futures_util::future::FutureExt;
-use playwright_rs::{Browser, Page, Viewport};
+use playwright_rs::{Page, Viewport};
 
 use super::*;
 
@@ -14,13 +14,14 @@ struct SubtestReport {
     passed: bool,
 }
 
-/// Run one invariant check on a fresh page of the shared browser.
+/// Run one invariant check on a fresh page of the shared browser against the
+/// tier-2 stub.
 ///
 /// A panic in `check` is caught so the remaining checks still run; the failure
 /// is recorded and reported at the end. The page is closed afterward.
 async fn run_subtest<Fut>(
-    browser: &Browser,
-    port: u16,
+    browser: &SharedBrowser,
+    stub: &Tier2StubServer,
     name: &'static str,
     check: impl FnOnce(Page) -> Fut,
 ) -> SubtestReport
@@ -28,11 +29,7 @@ where
     Fut: std::future::Future<Output = ()>,
 {
     let start = Instant::now();
-    let page = browser.new_page().await.unwrap();
-    goto_with_connection_check(&page, port)
-        .await
-        .expect("Failed to connect to server");
-    let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+    let page = browser.open_page(stub).await;
 
     // Clone for the check; the original closes the page afterward.
     let result = AssertUnwindSafe(check(page.clone())).catch_unwind().await;
@@ -61,70 +58,69 @@ fn print_summary(reports: &[SubtestReport]) {
 
 #[tokio::test]
 async fn test_invariants() {
-    let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-    let _server = TestServer::new_with_mock(port, TEST_WORLD, TEST_PERSONA).await;
-    let (_playwright, browser) = launch_chrome().await;
+    let stub = Tier2StubServer::start(StubActionOutcome::Pending).await;
+    let browser = SharedBrowser::launch().await;
 
     let reports = vec![
         run_subtest(
             &browser,
-            port,
+            &stub,
             "story_log_scrollable",
             check_story_log_scrollable,
         )
         .await,
         run_subtest(
             &browser,
-            port,
+            &stub,
             "no_horizontal_overflow",
             check_no_horizontal_overflow,
         )
         .await,
         run_subtest(
             &browser,
-            port,
+            &stub,
             "log_entry_text_wraps_within_bubble",
             check_log_entry_text_wraps_within_bubble,
         )
         .await,
         run_subtest(
             &browser,
-            port,
+            &stub,
             "element_positioning",
             check_element_positioning,
         )
         .await,
         run_subtest(
             &browser,
-            port,
+            &stub,
             "npc_portraits_horizontal_layout",
             check_npc_portraits_horizontal_layout,
         )
         .await,
         run_subtest(
             &browser,
-            port,
+            &stub,
             "npc_portraits_fixed_width",
             check_npc_portraits_fixed_width,
         )
         .await,
         run_subtest(
             &browser,
-            port,
+            &stub,
             "edit_textarea_matches_original_height",
             check_edit_textarea_matches_original_height,
         )
         .await,
         run_subtest(
             &browser,
-            port,
+            &stub,
             "responsive_layout_under_768px",
             check_responsive_layout_under_768px,
         )
         .await,
         run_subtest(
             &browser,
-            port,
+            &stub,
             "root_design_tokens",
             check_root_design_tokens,
         )
