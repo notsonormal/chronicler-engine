@@ -54,6 +54,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error spans instead of panics.
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
     - `games_delete.rs` — HTTP E2E tests for game deletion (POST /games/:id/delete).
+    - `games_fragment.rs` — HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.
     - `games_switch.rs` — HTTP E2E tests for game switching (POST /games/:id/switch).
     - `mod.rs` — HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, server wiring, and the per-endpoint text-check suite.
     - `narrator_mode.rs` — HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
