@@ -366,7 +366,10 @@ async fn test_using_offered_option_submits_as_input_http() {
     // The hop the Use button performs: submit the option text through the
     // command form's own endpoint.
     let resp = crate::test_helpers::post_action_check(&app, "Search the desk").await;
-    assert!(resp.status().is_success(), "the option submit should accept");
+    assert!(
+        resp.status().is_success(),
+        "the option submit should accept"
+    );
     assert!(
         wait_idle(&state, 1000).await,
         "the submitted option should complete"

@@ -54,7 +54,11 @@ fn empty_post_request(uri: &str) -> Request<Body> {
 /// against it can hit a truncated or escaped form.
 fn preset_id_by_name(storage: &Storage, name: &str) -> String {
     use chronicler_engine::domain::model::prompt_preset::PresetType;
-    for preset_type in [PresetType::System, PresetType::Quantifier, PresetType::Impersonate] {
+    for preset_type in [
+        PresetType::System,
+        PresetType::Quantifier,
+        PresetType::Impersonate,
+    ] {
         for preset in storage.list_presets(preset_type).unwrap() {
             if preset.name == name {
                 return preset.id;
