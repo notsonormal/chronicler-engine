@@ -14,7 +14,8 @@ use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::TestMap;
 
 use crate::test_helpers::{
-    app_with_narrator_and_registry, fetch_body, if_world, post_action, post_form, wait_idle,
+    app_with_narrator_and_registry, fetch_body, if_world, post_action, post_action_check,
+    post_form, wait_idle,
 };
 
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
@@ -338,10 +339,8 @@ async fn test_options_work_in_if_mode_http() {
 
 // The Use button (`useOption` in `assets/index.html`) fills the command input
 // with the option's text and calls `form.requestSubmit()`, which POSTs
-// `/action/check` — the same request this test makes. The browser test
-// (`tests/browser/options.rs` SCENARIO 26.1) asserted the rendered entry
-// counts; this asserts the persisted message store instead, which is the
-// stronger fact and the one the tier placement rule demotes to.
+// `/action/check` — the same request this test makes, so the persisted message
+// store is the observable outcome of the click.
 // [docs/specs/options.md] SCENARIO: 24.13
 #[tokio::test]
 async fn test_using_offered_option_submits_as_input_http() {
@@ -365,7 +364,7 @@ async fn test_using_offered_option_submits_as_input_http() {
 
     // The hop the Use button performs: submit the option text through the
     // command form's own endpoint.
-    let resp = crate::test_helpers::post_action_check(&app, "Search the desk").await;
+    let resp = post_action_check(&app, "Search the desk").await;
     assert!(
         resp.status().is_success(),
         "the option submit should accept"

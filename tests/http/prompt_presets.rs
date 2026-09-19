@@ -798,13 +798,11 @@ async fn test_panel_gates_activation_buttons_by_allowed_modes() {
     );
 }
 
-// The browser copy (SCENARIO 28.1) clicked Duplicate, clicked Edit, checked
-// the Interactive Fiction box, and saved — then asserted the card offered
-// "Set Active (IF)". The click handling is the wiring residue that stays in
-// tier 3; the server-observable chain is: create a preset, fetch its edit
-// form (checking the rendered flags), then POST the update with the IF flag
-// and assert the returned card exposes the IF activation button. This
-// exercises the same three handlers in the same order, minus the clicks.
+// The server-observable chain: create a preset, fetch its edit form (checking
+// the rendered allowed-modes flags), then POST the update with the Interactive
+// Fiction flag and assert the returned card exposes the IF activation button.
+// The click handling between those hops is wiring, which no server response can
+// observe.
 // [docs/specs/prompt_presets.md] SCENARIO: 21.27
 #[tokio::test]
 async fn test_allowed_modes_duplicate_edit_save_chain_http() {
@@ -818,9 +816,8 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
     // 1. Seed the source with a fixed id. The create endpoint derives ids
     //    from the wall clock at millisecond resolution, so a create-then-
     //    duplicate pair inside one test can collide and the copy overwrites
-    //    the source (recorded as a finding in the ticket Answer). The chain
-    //    under test is duplicate -> edit-form -> save, so the source's
-    //    provenance is irrelevant.
+    //    the source. The chain under test is duplicate -> edit-form -> save,
+    //    so the source's provenance is irrelevant.
     use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
     use chronicler_engine::domain::model::settings::NarratorMode;
     storage
@@ -836,8 +833,8 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
         .unwrap();
     let preset_id = "chain-source".to_string();
 
-    // The duplicate hop the browser test used: the copy carries the source's
-    // flags and is the only non-default card with an edit form.
+    // The copy carries the source's flags and is the only non-default card
+    // with an edit form.
     let duplicated = app
         .clone()
         .oneshot(empty_post_request(&format!(

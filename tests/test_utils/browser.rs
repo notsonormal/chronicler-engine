@@ -1,4 +1,4 @@
-//! Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and DOM helpers (`wait_for_element_children`, `wait_for_status_ready`).
+//! Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and DOM helpers (`wait_for_element_children`, `wait_for_story_log`, `wait_for_status_ready`).
 
 use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
@@ -8,6 +8,7 @@ use super::server::{
 };
 use super::settle_gate::install_settle_gate;
 use super::tier2_stub::{StubActionOutcome, Tier2StubServer};
+#[allow(unused_imports)]
 pub use super::wait::wait_for_element_children;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
@@ -93,7 +94,7 @@ where
         .await
         .expect("Failed to connect to server");
 
-    let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+    wait_for_story_log(&page).await;
 
     test_fn(page, port).await;
 

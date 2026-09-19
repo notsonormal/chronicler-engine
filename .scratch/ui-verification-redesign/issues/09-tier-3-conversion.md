@@ -35,14 +35,25 @@ In order:
    rationale), `test_options_dock_survives_reload` (17), test 8 from
    `slash_menu.rs` *if ticket 07 left it here*, and the wiring smoke guards
    (see 3).
+
+   **Disposition required for tests 21 and 24.** Ticket 08b added stronger HTTP
+   coverage for both (games.md 20.8 for the posture-fragment render,
+   worlds.md 25.6 for the world edit-form render), so their assertions are now
+   curl-observable — but their *click-hop wiring* (worlds tab → Edit htmx swap;
+   games tab switch) is not, and this ticket owns the swap→interact helpers
+   that would cover it. Decide each explicitly and record the call: either fold
+   its wiring into the item-3 guard for that surface, or delete it with the
+   guard as its replacement. Do not leave either undeclared.
 3. **Wiring smoke guards** — convert from ticket 08's demotions (one per
    surface, assert the server actually changed, not the fragment): posture
    change in `worlds.rs` (the ticket-03 flake home — ticket 06's slice already
    ran its ~50-run stress loop; **this ticket owns the guard's final form**,
    and ticket 12 re-runs the loop against the final suite), posture change in
-   `games.rs`, one preset-chain guard, one options-Use guard. All behind the
-   wrappers. These replace — not supplement — the browser tests ticket 08
-   deleted.
+   `games.rs`, one preset-chain guard, one options-Use guard (assert the guard
+   submits the option text *read from the rendered button*, not a hardcoded
+   seed string — otherwise the dock-render → submit linkage stays uncovered).
+   All behind the wrappers. These replace — not supplement — the browser tests
+   ticket 08 deleted.
 4. **Story-log gate becomes explicit.** The shared `#story-log .log-entry`
    precondition in `with_test_page` (`browser.rs:87`) is replaced by an
    explicit `wait_for_story_log()` called only by the tier-3 tests that need it

@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::test_support::TestAppBuilder;
 
-use crate::test_helpers::post_form;
+use crate::test_helpers::{assert_option_selected, post_form};
 
 fn failing_storage() -> Arc<Storage> {
     Arc::new(Storage::new_in_memory().with_failure(
@@ -88,12 +88,10 @@ async fn test_mode_switch_failure_surfaces_500_error_span_http() {
     );
 }
 
-// The browser copy (SCENARIO 27.2) selected "present" in the tense dropdown
-// and asserted the swapped fragment re-rendered with that value selected.
 // The select's `hx-post="/games/{id}/posture"` with
 // `hx-include="closest .posture-row"` sends exactly this form body, and the
-// handler returns the fragments's outerHTML — so this asserts the same fact
-// from the response body rather than the live DOM.
+// handler returns the fragment's outerHTML — so the re-render is asserted from
+// the response body rather than the live DOM.
 // [docs/specs/games.md] SCENARIO: 20.7
 #[tokio::test]
 async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
@@ -116,13 +114,15 @@ async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
         html.contains(r#"id="game-posture-controls""#),
         "the response must be the re-rendered posture fragment: {html}"
     );
-    assert!(
-        html.contains(r#"<option value="present" selected"#),
-        "the re-rendered tense select must show 'present' selected: {html}"
+    assert_option_selected(
+        &html,
+        "present",
+        "the re-rendered tense select must show 'present' selected",
     );
-    assert!(
-        html.contains(r#"<option value="third" selected"#),
-        "the re-rendered perspective select must keep 'third' selected: {html}"
+    assert_option_selected(
+        &html,
+        "third",
+        "the re-rendered perspective select must keep 'third' selected",
     );
 
     let game = state

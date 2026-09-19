@@ -188,9 +188,12 @@ async fn action_check(
         StubActionOutcome::Pending => (
             StatusCode::OK,
             [
-                ("content-type", "text/html; charset=utf-8"),
-                ("hx-retarget", "#status-display"),
-                ("hx-reswap", "innerHTML"),
+                (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+                (
+                    header::HeaderName::from_static("hx-retarget"),
+                    "#status-display",
+                ),
+                (header::HeaderName::from_static("hx-reswap"), "innerHTML"),
             ],
             r#"<span class="status thinking">Thinking...</span>"#,
         )

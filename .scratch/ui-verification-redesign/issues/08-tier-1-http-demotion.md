@@ -109,9 +109,16 @@ ticket 09.
   Use handler is `useOption` in `assets/index.html`, which fills
   `#command-form input[name=command]` with the button's `textContent` and calls
   `requestSubmit()` on a form whose `hx-post` is `/action/check`. The new test
-  POSTs `/action/check` with that text, so it performs the same request. It
-  asserts the persisted `Input` entry and a following `Narration`, which is
-  stronger than the browser copy's DOM counts.
+  POSTs `/action/check` and asserts the persisted `Input` entry and a following
+  `Narration`, which is stronger than the browser copy's DOM counts.
+
+  **Limitation (found in code review).** The new test submits the literal
+  string `"Search the desk"` from the canned `SET_A` seed rather than scraping
+  the text the rendered button carried. So it proves the *submission* path, not
+  the dock-render → button-text → submit linkage; the deleted browser copy did
+  read the button's own `textContent`, so that link is now uncovered. Ticket 09
+  item 3 owns the options-Use wiring guard that closes this gap; if that guard
+  does not scrape the rendered option text, the linkage stays uncovered.
 - **18** — the browser test clicked `.delete-btn`. `deleteMessage()`
   (`assets/index.html:336`) does `fetch("/history/delete", {method:"POST"})`
   then re-fetches `/fragment/story-log`. The new test performs both hops and
@@ -190,8 +197,15 @@ Browser tier went 26 → 19 (−7), matching the seven deletions exactly.
    is real and unfixed** — it affects any two preset writes in the same
    millisecond, including a double-click on Create or Duplicate. Out of scope
    here; recommend a separate ticket.
-2. **The audit's sibling pointers for tests 22 and 23 were optimistic.** For 22
-   it named `20.4`/`23.4`; neither asserts the success-path re-render. For 23 it
-   named three scenarios; none runs the chain or asserts the post-save card. I
-   added the missing coverage rather than deleting blind, as the ticket
-   instructed. Both are recorded above.
+2. **Correction (added after code review — an earlier draft of this Answer was
+   wrong).** The draft claimed "the audit's sibling pointers for tests 22 and 23
+   were optimistic". That misreads the audit. Its class-2 table
+   (`assets/harness-audit.md`) has a dedicated *"What is genuinely browser-only"*
+   column, and for 22 it names "the change hop + success-path re-render" and for
+   23 "the duplicate → check → save click chain" — exactly the residue this
+   ticket added HTTP coverage for. The audit was accurate; it flagged the gap in
+   its own third column. What is loosely worded is the audit's *sibling
+   coverage* column for 22 (it cites `20.4`, a failure path, and `23.4`, which
+   posts posture without asserting the re-render), but the same row already
+   records that as insufficient. The scenario-level detail above is unchanged;
+   only the framing was wrong.

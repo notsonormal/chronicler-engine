@@ -1,4 +1,4 @@
-//! Browser options-dock tests: Use/Edit interactions, reload persistence. Tagged against `docs/specs/browser_options.md`.
+//! Browser options-dock tests: reload persistence. Tagged against `docs/specs/browser_options.md`.
 
 use super::*;
 // [docs/specs/browser_options.md] SCENARIO: 26.2

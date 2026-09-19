@@ -9,7 +9,10 @@ use chronicler_engine::domain::model::settings::{NarrativePerspective, Narrative
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{TestAppBuilder, TestMap};
 
-use crate::test_helpers::{fetch_body, post_form, post_form_with_hx, response_body, world_form_body};
+use crate::test_helpers::{
+    assert_option_selected, fetch_body, post_form, post_form_with_hx, response_body,
+    world_form_body,
+};
 
 fn posture_world() -> WorldCard {
     WorldCard {
@@ -265,10 +268,8 @@ async fn test_world_update_options_toggle_checkbox_grammar_http() {
     );
 }
 
-// The only prior coverage of the full edit-form render was the browser copy
-// (SCENARIO 29.1), which reached it by clicking the worlds tab and the Edit
-// button; the quarantine covers only the not-found path. The form is a plain
-// server render, so a GET observes the same fact without the race.
+// The form is a plain server render, so a GET observes the rendered posture
+// selects; the quarantine covers only the not-found path.
 // [docs/specs/worlds.md] SCENARIO: 25.6
 #[tokio::test]
 async fn test_world_edit_form_renders_posture_selects_http() {
@@ -298,23 +299,20 @@ async fn test_world_edit_form_renders_posture_selects_http() {
         );
     }
 
-    // The selected options prove the form rendered the world's stored
-    // posture, which is what the browser copy asserted by reading
-    // `select.value` after the swap.
-    assert!(
-        html.contains(r#"<option value="interactive_fiction" selected"#),
-        "the stored Interactive Fiction mode must render selected: {html}"
+    // The selected options prove the form rendered the world's stored posture.
+    assert_option_selected(
+        &html,
+        "interactive_fiction",
+        "the stored Interactive Fiction mode must render selected",
     );
-    assert!(
-        html.contains(r#"<option value="second" selected"#),
-        "the stored Second-person perspective must render selected: {html}"
+    assert_option_selected(
+        &html,
+        "second",
+        "the stored Second-person perspective must render selected",
     );
-    assert!(
-        html.contains(r#"<option value="past" selected"#),
-        "the stored Past tense must render selected: {html}"
-    );
+    assert_option_selected(&html, "past", "the stored Past tense must render selected");
 
-    // The auto-save target the browser test's settle gate waited on.
+    // The auto-save target the posture select swaps into.
     assert!(
         html.contains(r#"id="world-posture-status""#),
         "the posture status target must be rendered: {html}"

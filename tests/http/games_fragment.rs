@@ -2,12 +2,10 @@
 
 use chronicler_engine::test_support::TestAppBuilder;
 
-use crate::test_helpers::fetch_body;
+use crate::test_helpers::{assert_option_selected, fetch_body};
 
-// The only prior coverage of this fragment was the browser copy (SCENARIO
-// 27.1), which reached it through a Chromium round-trip after clicking the
-// Games tab. The fragment is a plain server render, so a GET observes the
-// same fact without the race.
+// The fragment is a plain server render, so a GET observes the rendered
+// posture controls directly, without a browser round-trip.
 // [docs/specs/games.md] SCENARIO: 20.8
 #[tokio::test]
 async fn test_games_fragment_renders_posture_controls_http() {
@@ -23,17 +21,20 @@ async fn test_games_fragment_renders_posture_controls_http() {
 
     // The selected option proves the fragment rendered the game's *stored*
     // posture, not just the select shells.
-    assert!(
-        html.contains(r#"<option value="novel" selected"#),
-        "the active game's Novel mode must render selected: {html}"
+    assert_option_selected(
+        &html,
+        "novel",
+        "the active game's Novel mode must render selected",
     );
-    assert!(
-        html.contains(r#"<option value="third" selected"#),
-        "the active game's Third-person perspective must render selected: {html}"
+    assert_option_selected(
+        &html,
+        "third",
+        "the active game's Third-person perspective must render selected",
     );
-    assert!(
-        html.contains(r#"<option value="past" selected"#),
-        "the active game's Past tense must render selected: {html}"
+    assert_option_selected(
+        &html,
+        "past",
+        "the active game's Past tense must render selected",
     );
 
     // Every select carries the auto-save route for *this* game, so the

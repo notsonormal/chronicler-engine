@@ -117,12 +117,10 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
     );
 }
 
-// The browser copy (SCENARIO 30.4) clicked `.delete-btn` and counted the
-// DOM entries. `deleteMessage()` in `assets/index.html:336` does exactly
-// two things: `fetch("/history/delete", {method: "POST"})` and then re-fetch
-// `/fragment/story-log`. This test performs both hops and asserts the
-// rendered entry count drops, which is the browser copy's fact expressed
-// against the server response rather than the live DOM.
+// `deleteMessage()` in `assets/index.html:336` does exactly two things:
+// `fetch("/history/delete", {method: "POST"})` and then re-fetch
+// `/fragment/story-log`. This test performs both hops and asserts the rendered
+// entry count drops, so the delete is observed through the server response.
 // [docs/specs/story_log.md] SCENARIO: 8.4
 #[tokio::test]
 async fn test_delete_removes_entry_from_fragment_http() {

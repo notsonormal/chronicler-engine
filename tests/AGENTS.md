@@ -41,7 +41,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `games.rs` — Browser games-panel tests: posture fragment render. Tagged against `docs/specs/browser_games.md`.
     - `invariants.rs` — Rendering invariants (named exemption in STRATEGY.md): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
     - `mod.rs` — Browser test binary root (Playwright-driven): per-surface behaviour modules mirroring the `docs/specs/browser_<feature>.md` specs (`dashboard`, `games`, `options`, `worlds`) + `invariants` (CSS/layout rendering invariants, named exemption — no spec, test code is the definition).
-    - `options.rs` — Browser options-dock tests: Use/Edit interactions, reload persistence. Tagged against `docs/specs/browser_options.md`.
+    - `options.rs` — Browser options-dock tests: reload persistence. Tagged against `docs/specs/browser_options.md`.
     - `tier2.rs` — Tier-2 quick-browser tests: browser-only behaviour against a stub server.
     - `worlds.rs` — Browser worlds-panel tests: world posture editor render + auto-save. Tagged against `docs/specs/browser_worlds.md`.
 - **helpers/**
@@ -105,7 +105,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `snapshot_storage.rs` — Integration tests for game-state snapshot persistence: save/load, missing-snapshot errors, and message/swipe round-tripping against a real SQLite-backed `Storage`.
     - `world_storage.rs` — Integration tests for world persistence: create/list/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
 - **test_utils/**
-    - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and DOM helpers (`wait_for_element_children`, `wait_for_status_ready`).
+    - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and DOM helpers (`wait_for_element_children`, `wait_for_story_log`, `wait_for_status_ready`).
     - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.
     - `settings_guard.rs` — `SettingsTestGuard` — serializes tests that mutate global settings state via a process-wide `Mutex`.
