@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 # Stress the worlds posture flow without retry masking.
 #
-# Runs the tier-3 wiring test directly through the test binary (not
-# `cargo nextest run`, which applies `retries = 1`). Any lost interaction —
-# the ticket-03 legacy signature — fails the run and is counted.
+# Runs the tier-3 wiring test directly through the test binary
+# (`--exact --nocapture`) N times, keeping the loop independent of nextest's
+# retry configuration and capturing each run log. Any lost interaction — the
+# ticket-03 legacy signature — fails the run and is counted.
 #
 # Usage: scripts/stress_posture.sh [runs]
+#
+# Respects CARGO_TARGET_DIR (default `target`), matching build.py's
+# `--target-dir`. Both the binary lookup and the harness's own engine-binary
+# resolution read that variable, so under a concurrent build the script grades
+# the tree the agent actually built rather than a stale `target/debug`.
 set -u
 
 RUNS="${1:-50}"
 LOG_DIR="tmp/posture_stress"
-BIN="$(ls -t target/debug/deps/browser-* 2>/dev/null | grep -v '\.d$' | head -1)"
+TARGET_DIR="${CARGO_TARGET_DIR:-target}"
+export CARGO_TARGET_DIR="$TARGET_DIR"
+BIN="$(ls -t "$TARGET_DIR"/debug/deps/browser-* 2>/dev/null | grep -v '\.d$' | head -1)"
 
 if [ -z "$BIN" ]; then
-  echo "no browser test binary found under target/debug/deps — build first" >&2
+  echo "no browser test binary found under $TARGET_DIR/debug/deps — build first" >&2
   exit 1
 fi
 

@@ -79,14 +79,24 @@ timeout, posture-change no-fire) confirm it on the machine.
 
 - [Pin the message-edit template hooks the edit JavaScript reads](issues/14-pin-message-edit-template-hooks.md) — one unit test (`test_story_log_template_edit_path_hooks`, `src/adapters/driving/http/templates_tests.rs`) pins the real template's `data-id`, `data-raw-text`, `class="text"`, the `showEditForm(1)` onclick wiring, and the `| escape` wire form (`&#34;`). Five mutation runs, five catches — four renames plus the `| safe` escape bypass, whose diagnostic shows the broken wire form directly. Review corrections recorded: the draft's "remove `| escape`" mutation was a no-op (askama auto-escapes `ext = "html"` templates) and was replaced with the `| safe` bypass; the nesting residual (`.text` inside `.log-entry`) accepted, since a substring assert cannot pin nesting and a parser/browser check is machinery the project does not want for one assertion. Full gate green (1605 integration / 137 guardrails / 20 browser / 1 architecture); validator 141/141 unchanged; production source untouched.
 
+- [Acceptance gate: retries off, 5 green full-gate runs, stress loop, serialization override deleted](issues/12-acceptance-gate.md) — **the destination is satisfied.** `retries = 1` removed, then 10 green full-gate runs with single attempts (5 with the browser serialization override, 5 in the shipped config): every run `1605 integration / 137 guardrails / 20 browser / 1 architecture`, 0 failed, zero real `FLAKY` lines, zero legacy signatures. Two independent 50/50 posture stress loops (before and after the override deletion) with 0 lost interactions. The browser `threads-required = "num-test-threads"` override is **deleted**: 54.2s → 19.2s (**2.8×**, measured over 12 direct runs + 17 total), no spawn-contention flake reproduced on the 8-core box; full gate 66–71s → 33.7s. Validator 141/141 unchanged (config-only change). Ticket 07's "490s under nextest's serialization override" observation is retroactively explained by this override. Only file changed: `.config/nextest.toml` (−9 lines). `tmp/acceptance/` and the two loom logs are left for ticket 13's sweep.
+
+- [Branch-wide temporary-code and scratch-artifact sweep](issues/13-branch-temporary-code-sweep.md) — **the branch is clean, and the map is closed.** `scripts/measure_tiers.sh` deleted (spent; its table lives in ticket 07's Answer; the stale test list would have needed repair only to be deleted); `scripts/stress_posture.sh` kept as the standing regression instrument for the ticket-03 race and given the `CARGO_TARGET_DIR` fix — the **export** is the load-bearing half, since the harness resolves its engine binary from that variable; verified by a stock run and by a `target/nonexistent` run exiting 1. **Worktrees ruled (a) not a supported workflow** — nothing creates one, no home is documented, and the sanctioned mechanism is `--target-dir`; no `run_cleanup` step added. `tmp/` 24 MB → 23 MB: ticket 12's `acceptance/` and `posture_stress/` plus `ticket14/` deleted; `clean_tmp_dirs` removed nothing (oldest file 29.1 days, under its 30-day threshold — correct behaviour, residual left to age out). `logs/` declined (gitignored, `build_*.log` trimmed at 3 days, `build_history.txt` self-bounded at 1000 lines); one nuance recorded, not fixed: `chronicler_*.log` (114 MB) sits outside `clean_old_logs`'s `build_` prefix. Stub fixtures, `tier2_stub.rs`, and the smoke-break extension confirmed keepers; the drift-tax comparator declined against ticket 07's loud-failure bound (and ticket 14 now pins the real template side). **Plan-archival rule recorded as ticket-tied** and applied: the two ticket-tied resolved plans archived (`ticket-10`, `ticket-17`), `docs/plans/` 31 → 29, `old-docs/archived-plans/` 17 → 19; `ticket-09-tier-3-conversion-...md` turned out never to have existed. Item 9 confirmed: zero untracked files, all deliverables committed. Full gate green on the final tree (1605 integration / 137 guardrails / 20 browser / 1 architecture; validator 141/141, quarantine 85/85; `Total: 33.60s`); no `src/` or test change.
+
 ## Not yet specified
 
-(Sweep fog graduated 2026-09-19 as ticket 13: the branch's temporary
-scaffolding — one-off measurement scripts, the two spent git worktrees in
-`tmp/`, and the `docs/plans/` archival convention — is a single post-acceptance
-sweep, since ticket 12 still needs `scripts/stress_posture.sh` and the current
-`tmp/` state. Editing an instrument before it produces its final evidence
-inverts the order.)
+**The map is complete.** Every ticket is resolved, the last one (ticket 13)
+carried the final post-acceptance sweep, and the frontier is empty. Nothing
+remains in the fog: there is no open question between here and the destination,
+which ticket 12 met and ticket 13 left standing on a clean tree. Further work
+beyond this point is a fresh effort, not a resumption.
+
+(Sweep fog graduated 2026-09-19 as ticket 13 and is now closed: the branch's
+temporary scaffolding — one-off measurement scripts, the two spent git
+worktrees in `tmp/`, and the `docs/plans/` archival convention — was a single
+post-acceptance sweep, since ticket 12 still needed `scripts/stress_posture.sh`
+and the then-current `tmp/` state. Editing an instrument before it produced its
+final evidence would have inverted the order.)
 
 (Fog graduated by ticket 04's resolution: implementation became tickets 06–12;
 the serialization override + `retries = 1` question is decided in ticket 12's
