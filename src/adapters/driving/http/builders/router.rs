@@ -79,7 +79,6 @@ pub fn build_router(app_state: AppState) -> Router {
             "/fragment/character-headshots",
             get(layout::handlers::character_headshots_fragment),
         )
-        .route("/status/ready", get(layout::handlers::status_ready_handler))
         .route(
             "/status/generating",
             get(layout::handlers::generating_status_handler),

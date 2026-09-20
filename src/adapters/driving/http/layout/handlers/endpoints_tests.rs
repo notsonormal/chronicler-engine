@@ -1,7 +1,6 @@
 use crate::adapters::driving::http::layout::handlers::endpoints::{
     action_area_fragment, character_headshots_fragment, generating_status_handler, header_fragment,
-    llm_messages_fragment, reset_generating_handler, status_ready_handler, story_log_fragment,
-    visual_sidebar_fragment,
+    llm_messages_fragment, reset_generating_handler, story_log_fragment, visual_sidebar_fragment,
 };
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::test_support::TestAppBuilder;
@@ -46,12 +45,6 @@ async fn test_llm_messages_fragment() {
     let state = TestAppBuilder::default_test().build_service();
     let result = llm_messages_fragment(axum::extract::State(state)).await;
     assert!(!result.0.is_empty());
-}
-
-#[tokio::test]
-async fn test_status_ready_handler() {
-    let result = status_ready_handler().await;
-    assert!(result.0.contains("Ready"));
 }
 
 #[tokio::test]

@@ -42,10 +42,6 @@ pub async fn llm_messages_fragment(State(state): State<AppState>) -> Html<String
     render_fragment(&state, |s| s.render_llm_messages(), "llm_messages_fragment")
 }
 
-pub async fn status_ready_handler() -> Html<String> {
-    Html("<span class=\"status ready\">Ready</span>".to_string())
-}
-
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
     tracing::debug!("generating_status_handler: called");
     let game_state = state.message_service.load_expecting_valid_state();

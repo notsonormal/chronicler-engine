@@ -164,12 +164,6 @@ async fn test_action_handler_empty_command() {
 }
 
 #[tokio::test]
-async fn test_status_ready_handler() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/status/ready").await;
-    assert!(body.contains("Ready"));
-}
-
-#[tokio::test]
 async fn test_character_headshots_fragment() {
     let body = fetch_body(
         &TestAppBuilder::default_app(),

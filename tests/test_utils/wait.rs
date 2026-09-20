@@ -111,14 +111,6 @@ pub async fn wait_until_hidden(page: &playwright_rs::Page, selector: &str, timeo
     }
 }
 
-fn extract_port_from_url(url: &str) -> Option<u16> {
-    url.split("://")
-        .nth(1)
-        .and_then(|port_str| port_str.split('/').next())
-        .and_then(|port_part| port_part.split(':').nth(1))
-        .and_then(|port| port.parse::<u16>().ok())
-}
-
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     let locator = page.locator("#status-display").await;
     let start = std::time::Instant::now();
@@ -241,20 +233,4 @@ where
 
 async fn element_count(page: &playwright_rs::Page, selector: &str) -> u32 {
     page.locator(selector).await.count().await.unwrap_or(0) as u32
-}
-
-/// Generic sync condition wait (for std::thread tests)
-/// Polls the condition until it returns true or timeout expires
-pub fn wait_for_condition_sync<F>(timeout: Duration, poll_interval: Duration, condition: F) -> bool
-where
-    F: Fn() -> bool,
-{
-    let start = std::time::Instant::now();
-    while start.elapsed() < timeout {
-        if condition() {
-            return true;
-        }
-        std::thread::sleep(poll_interval);
-    }
-    false
 }

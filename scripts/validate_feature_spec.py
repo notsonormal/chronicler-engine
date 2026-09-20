@@ -81,7 +81,7 @@ TAG_EXEMPT_TESTS: dict[tuple[Path, str], str] = {}
 # Pins the requires_migration quarantine: the count may only go down.
 # Migration cleanups lower it deliberately; a new test in the folder fails
 # the gate.
-REQUIRES_MIGRATION_TEST_COUNT = 86
+REQUIRES_MIGRATION_TEST_COUNT = 85
 
 
 def parse_spec_scenarios(spec_path: Path) -> set[str]:

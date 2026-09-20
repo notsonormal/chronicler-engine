@@ -5,9 +5,7 @@ use std::time::Duration;
 use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
 
-use super::server::{
-    buffer_text, get_config_port, registered_server_logs, tail_lines, wait_for_server, TestServer,
-};
+use super::server::{buffer_text, get_config_port, registered_server_logs, tail_lines, TestServer};
 use super::settle_gate::{await_panel_ready, click_and_settle, install_settle_gate};
 use super::tier2_stub::{StubActionOutcome, Tier2StubServer};
 #[allow(unused_imports)]
@@ -24,9 +22,9 @@ pub async fn goto_with_connection_check(
 ) -> Result<(), String> {
     let url = format!("http://127.0.0.1:{port}");
 
-    if !wait_for_server(port, 100).await {
-        return Err(format!("Server failed to start on port {port}"));
-    }
+    // One readiness check per boot: `TestServer::start` already probed the
+    // server before returning (and panics on failure), so a second probe here
+    // would only duplicate it.
 
     // Install the htmx settle counter before navigation so the
     // `htmx:afterSettle` listener exists before `assets/index.html` runs. Every
