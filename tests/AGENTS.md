@@ -2,7 +2,7 @@
 
 ## Test Strategy
 
-See [`STRATEGY.md`](STRATEGY.md) for the normative tier-placement rules (unit / HTTP E2E / browser / driven-adapter) and the overlap/SCENARIO-tag conventions.
+See [`STRATEGY.md`](STRATEGY.md) for the normative placement rule (which of the three UI tiers a test belongs to) and the overlap/SCENARIO-tag conventions.
 
 ## LLM Testing
 

@@ -130,6 +130,41 @@ fn test_story_log_template_input_has_check_button() {
 }
 
 #[test]
+fn test_story_log_template_edit_path_hooks() {
+    let entries = vec![MessageEntry {
+        id: 1,
+        text: "Raw body text".to_string(),
+        message_type: MessageType::Narration,
+        timestamp: Utc::now(),
+        ..Default::default()
+    }];
+    let rendered = NarrativeLogTemplate::new(&entries, false).render().unwrap();
+    assert!(rendered.contains(r#"data-id="1""#), "entry: {rendered}");
+    assert!(
+        rendered.contains(r#"data-raw-text="Raw body text""#),
+        "entry: {rendered}"
+    );
+    assert!(
+        rendered.contains(r#"<span class="text">"#),
+        "entry: {rendered}"
+    );
+    assert!(rendered.contains(r#"showEditForm(1)"#), "entry: {rendered}");
+
+    let quoted = vec![MessageEntry {
+        id: 2,
+        text: "He said \"hi\"".to_string(),
+        message_type: MessageType::Narration,
+        timestamp: Utc::now(),
+        ..Default::default()
+    }];
+    let escaped = NarrativeLogTemplate::new(&quoted, false).render().unwrap();
+    assert!(
+        escaped.contains(r#"data-raw-text="He said &#34;hi&#34;""#),
+        "actual escaped form: {escaped}"
+    );
+}
+
+#[test]
 fn test_story_log_template_renders_event_header() {
     let entries = vec![
         MessageEntry {
