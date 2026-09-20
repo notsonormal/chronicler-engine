@@ -19,19 +19,11 @@ async fn test_form_stays_static_after_submission() {
                 .await
                 .unwrap();
 
-            page.evaluate::<(), ()>(
-                "(() => {
-                const input = document.querySelector('#command-form input');
-                if (input) input.value = 'look';
-                const form = document.querySelector('#command-form');
-                if (form) form.requestSubmit();
-            })()",
-                None,
-            )
-            .await
-            .unwrap();
+            // `#command-form` sits outside every swap target, so it is never
+            // re-registered and has no registering settle to race.
+            send_action(&page, "look").await;
 
-            let _ = wait_for_element_children(&page, "#story-log .log-entry", 2).await;
+            wait_for_element_children(&page, "#story-log .log-entry", 2).await;
 
             let form_id_after: String = page
                 .evaluate::<(), String>("document.querySelector('#command-form')?.id || ''", None)

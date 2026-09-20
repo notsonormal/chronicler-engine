@@ -294,6 +294,50 @@ pub fn check_no_std_thread_all(path: &str, content: &str) -> Vec<Violation> {
     check_no_std_thread(path, content)
 }
 
+/// Tier-3 browser tests must interact only through settle-gated helpers.
+///
+/// A raw `click`/`select_option` on an element htmx swapped in can dispatch
+/// before htmx attaches the element's `hx-trigger` listeners, and the
+/// interaction is silently lost. The scan is line-based: a locator chain wraps
+/// across lines, so a receiver-aware match is not expressible. `dispatchEvent(`
+/// and `requestSubmit(` count too, including inside `page.evaluate` strings.
+/// `tier2.rs` and `invariants.rs` drive a stub with no swap lifecycle to race,
+/// so they are exempt.
+pub fn check_browser_interactions_use_settle_gate(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    if !path.starts_with("browser/") || !content.contains("with_test_page") {
+        return violations;
+    }
+
+    const BANNED_INTERACTIONS: [&str; 4] = [
+        ".click(",
+        ".select_option(",
+        "dispatchEvent(",
+        "requestSubmit(",
+    ];
+
+    for (line_num, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*') {
+            continue;
+        }
+        if let Some(banned) = BANNED_INTERACTIONS.iter().find(|b| line.contains(**b)) {
+            violations.push(Violation::error(
+                path,
+                line_num + 1,
+                format!(
+                    "Tier-3 browser test interacts without the settle gate (`{banned}`). \
+                     Use a tests/test_utils/browser.rs helper (click_and_settle / \
+                     select_option_and_settle / an open_* helper) so the interaction \
+                     waits for its swap to settle."
+                ),
+            ));
+        }
+    }
+    violations
+}
+
 /// Enforces a maximum of 2000 non-blank lines per file.
 pub fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
@@ -316,15 +360,9 @@ pub fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
-/// Test files must have a single-line `//!` summary on the first non-blank line.
-///
-/// Accepted shapes:
-///   - `//! <summary>` on line 1 (no DOC anchor).
-///   - `//! [DOC: <path>]` on line 1 + `//! <summary>` on line 2.
-///
-/// Multi-line summary blocks and continuation lines beyond the single summary
-/// line are rejected.
-/// Enforces a single-line `//!` module summary at the start of each test file.
+/// Test files must have a single-line `//!` summary on the first non-blank line:
+/// either `//! <summary>` on line 1 (no DOC anchor), or `//! [DOC: <path>]`
+/// followed by `//! <summary>`. Continuation lines are rejected.
 pub fn check_test_module_header(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 

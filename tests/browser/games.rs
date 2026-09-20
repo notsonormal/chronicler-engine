@@ -1,61 +1,49 @@
-//! Browser games-panel tests: posture fragment render. Tagged against `docs/specs/browser_games.md`.
-
-use std::time::Duration;
+//! Browser games-panel tests: per-game posture auto-save wiring guard. Tagged against `docs/specs/browser_games.md`.
 
 use super::*;
 
+/// The browser-only question: does the `change` event on a posture select
+/// inside the swap-loaded fragment reach the server. The fragment render is
+/// covered at HTTP (`tests/http/games_fragment.rs` SCENARIO 20.8).
 // [docs/specs/browser_games.md] SCENARIO: 27.1
 #[tokio::test]
-async fn test_games_panel_renders_posture_fragment() {
+async fn test_games_posture_change_reaches_server() {
     with_test_page(
         CONFIG_PATH,
         TEST_WORLD,
         TEST_PERSONA,
         |page, _port| async move {
-            page.locator(r#".tab[data-tab="games"]"#)
-                .await
-                .click(None)
-                .await
-                .unwrap();
-            wait_until_visible(&page, "#game-posture-controls", Duration::from_millis(1000)).await;
+            open_games_tab(&page).await;
 
-            let mode = page
-                .locator(r#"#game-posture-controls select[name="narrator_mode"]"#)
+            // The posture selects auto-save to `#game-posture-controls` with
+            // `hx-swap="outerHTML"`, so the fragment is its own swap target.
+            select_option_and_settle(
+                &page,
+                r#"#game-posture-controls select[name="narrative_tense"]"#,
+                "present",
+                "#game-posture-controls",
+            )
+            .await;
+
+            // Reload so the fragment re-renders from the persisted game.
+            page.reload(None)
                 .await
-                .input_value(None)
+                .expect("reload after the posture change");
+            open_games_tab(&page).await;
+            let selected: String = page
+                .evaluate::<(), String>(
+                    r#"(() => {
+                        const sel = document.querySelector('#game-posture-controls select[name="narrative_tense"]');
+                        return sel ? sel.value : '';
+                    })()"#,
+                    None,
+                )
                 .await
                 .unwrap_or_default();
-            assert_eq!(mode, "novel", "active game starts in Novel mode");
-
-            let perspective = page
-                .locator(r#"#game-posture-controls select[name="narrative_perspective"]"#)
-                .await
-                .input_value(None)
-                .await
-                .unwrap_or_default();
-            assert_eq!(perspective, "third", "active game starts in Third person");
-
-            let tense = page
-                .locator(r#"#game-posture-controls select[name="narrative_tense"]"#)
-                .await
-                .input_value(None)
-                .await
-                .unwrap_or_default();
-            assert_eq!(tense, "past", "active game starts in Past tense");
-
-            for name in [
-                "system_preset_id",
-                "quantifier_preset_id",
-                "impersonate_preset_id",
-            ] {
-                let select = page
-                    .locator(&format!(r#"#game-posture-controls select[name="{name}"]"#))
-                    .await;
-                assert!(
-                    select.is_visible().await.unwrap_or(false),
-                    "{name} select is rendered"
-                );
-            }
+            assert_eq!(
+                selected, "present",
+                "the tense change must reach the server: the re-rendered fragment should show the persisted tense"
+            );
         },
     )
     .await;

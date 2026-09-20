@@ -71,7 +71,16 @@ timeout, posture-change no-fire) confirm it on the machine.
 
 - [Tier-1 rollout: write the two orphaned HTTP contracts](issues/08b-tier-1-orphaned-contracts.md) — the coverage *gain* half of the original ticket 08 split: 2 HTTP tests added, nothing deleted. `GET /fragment/games` (games.md 20.8, new `tests/http/games_fragment.rs`) asserts the games posture fragment renders the active game's stored values selected plus its auto-save routes; `GET /worlds/:key/edit` (worlds.md 25.6, appended to `tests/http/worlds.rs`) asserts the edit form renders the world's stored posture selected. Both fragments were previously reachable only via Chromium, so this adds coverage while removing the race. HTTP coverage fully carries both browser assertions (21 and 24), so their copies are deletable — but the click/tab-switch wiring hop is ticket 09's residue, so deletion is deferred to 09's keeper-set pass rather than claimed here. Validator 138/138 -> 140/140, not weakened; both tests mutation-checked.
 
+- [Tier-3 conversion: settle-gate wrappers and the keeper set](issues/09-tier-3-conversion.md) — tier 3 now holds **7 tests**, every interaction behind a settle-gate helper, and the gate **cannot be bypassed**: a new guardrail fails the build on any raw `.click(`/`.select_option(` in a `with_test_page` file (`tier2.rs`/`invariants.rs` exempt by scope, not names). `settle_gate.rs` gained **`await_panel_ready`**, a baseline-free wait — every panel is `hx-trigger="load"`, so its swap lands before any baseline is armed and a baseline-relative wait can never see it; this closed a latent gap in `open_world_edit`. Tests 21/24 deleted, both wiring hops folded into the games/worlds guards (HTTP twins 20.8/25.6 carry their content). Four guards added (worlds, games, preset chain, options Use), `send_action` reused rather than duplicated, story-log precondition split (no tier-3 test needs it). Six plan-mechanics corrections recorded, incl. that `/action/check` retargets to `#status-display` (not `#action-area`) and that strict-mode multi-match needs `nth`/`:has` scoping. Stress loop **50/50, 0 lost interactions** on the final guard form; full gate green (1604 integration / 135 guardrails / 20 browser); validator 141/141.
+
 ## Not yet specified
+
+(Sweep fog graduated 2026-09-19 as ticket 13: the branch's temporary
+scaffolding — one-off measurement scripts, the two spent git worktrees in
+`tmp/`, and the `docs/plans/` archival convention — is a single post-acceptance
+sweep, since ticket 12 still needs `scripts/stress_posture.sh` and the current
+`tmp/` state. Editing an instrument before it produces its final evidence
+inverts the order.)
 
 (Fog graduated by ticket 04's resolution: implementation became tickets 06–12;
 the serialization override + `retries = 1` question is decided in ticket 12's

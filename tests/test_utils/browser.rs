@@ -1,15 +1,18 @@
 //! Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and DOM helpers (`wait_for_element_children`, `wait_for_story_log`, `wait_for_status_ready`).
 
+use std::time::Duration;
+
 use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
 
 use super::server::{
     buffer_text, get_config_port, registered_server_logs, tail_lines, wait_for_server, TestServer,
 };
-use super::settle_gate::install_settle_gate;
+use super::settle_gate::{await_panel_ready, click_and_settle, install_settle_gate};
 use super::tier2_stub::{StubActionOutcome, Tier2StubServer};
 #[allow(unused_imports)]
 pub use super::wait::wait_for_element_children;
+use super::wait::wait_until_visible;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
 use super::wait::wait_for_status_generating;
@@ -94,8 +97,6 @@ where
         .await
         .expect("Failed to connect to server");
 
-    wait_for_story_log(&page).await;
-
     test_fn(page, port).await;
 
     let _ = browser.close().await;
@@ -151,6 +152,128 @@ where
     let page = browser.open_page(&stub).await;
     test_fn(page.clone(), &stub).await;
     let _ = page.close().await;
+}
+
+/// Open a tab panel and wait for that panel's own `hx-trigger="load"` swap to
+/// settle. A hidden panel's load swap lands before any test arms a baseline, so
+/// the wait goes through `await_panel_ready`, which searches the whole recorded
+/// target list.
+async fn open_tab(page: &playwright_rs::Page, tab: &str, gate_target: &str) {
+    await_panel_ready(page, gate_target)
+        .await
+        .expect_settled(tab);
+    page.locator(&format!(r#"[data-tab="{tab}"]"#))
+        .await
+        .click(None)
+        .await
+        .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
+}
+
+/// Open the Worlds tab (`.worlds-panel` load swap awaited).
+pub async fn open_worlds_tab(page: &playwright_rs::Page) {
+    open_tab(page, "worlds", ".worlds-panel").await;
+    wait_for_element_children(page, "#worlds-tab .world-item", 1).await;
+}
+
+/// Open the Games tab, then wait for the posture fragment's selects.
+pub async fn open_games_tab(page: &playwright_rs::Page) {
+    open_tab(page, "games", ".games-panel").await;
+    wait_until_visible(page, "#game-posture-controls", Duration::from_millis(5000)).await;
+}
+
+/// Open the Prompt Presets tab (`.prompt-presets-panel` load swap awaited).
+pub async fn open_prompt_presets_tab(page: &playwright_rs::Page) {
+    open_tab(page, "prompt-presets", ".prompt-presets-panel").await;
+}
+
+/// Open the edit form for the seeded world "test" and wait for the posture
+/// selects.
+///
+/// The Edit button is scoped to the "Test Realm" world item, not `.first()`:
+/// the engine seeds two worlds, so an unscoped Edit selector matches twice and
+/// strict mode rejects it, and name-scoping is order-independent.
+///
+/// The Edit click's swap is awaited through the settle gate: htmx attaches the
+/// new form's `hx-trigger` listeners at the end of that settle, so a `change`
+/// fired earlier is lost.
+pub async fn open_world_edit(page: &playwright_rs::Page) {
+    open_worlds_tab(page).await;
+    let edit_selector = r#".world-item:has(strong:text-is("Test Realm")) button:has-text('Edit')"#;
+    click_and_settle(page, edit_selector, ".worlds-panel").await;
+    // Wait on the posture selects, not #world-posture-status: an empty
+    // (zero-sized) span never becomes visible.
+    wait_until_visible(
+        page,
+        r#"#worlds-tab select[name="narrator_mode"]"#,
+        Duration::from_millis(5000),
+    )
+    .await;
+}
+
+/// Click a preset card's Edit button and wait for that card's swap. The card
+/// carries no `data-id`, so `card_selector` is the caller's stable anchor,
+/// e.g. `.preset-card:has(.card-title:text-is("My Preset"))`.
+pub async fn open_preset_editor(page: &playwright_rs::Page, card_selector: &str) {
+    let edit_selector = format!("{card_selector} button:has-text('Edit')");
+    click_and_settle(page, &edit_selector, ".preset-card").await;
+    wait_until_visible(page, ".preset-card.edit-form", Duration::from_millis(5000)).await;
+}
+
+/// Create a system preset through the engine's own HTTP API, before the
+/// browser interacts with it — seeding goes through the same `POST
+/// /prompt-presets` route the Create form uses, not a test-only endpoint.
+pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
+    let client = reqwest::Client::new();
+    let form = [
+        ("preset_type", "system"),
+        ("name", name),
+        ("instructions", instructions),
+        // Seed a single mode on purpose. With both flags absent the handler
+        // falls back to `default_allowed_modes()` (Novel + IF), which would
+        // render both activation buttons before the guard's edit — making the
+        // guard's post-save assertion vacuous.
+        ("allowed_mode_novel", "true"),
+    ];
+    let response = client
+        .post(format!("http://127.0.0.1:{port}/prompt-presets"))
+        .form(&form)
+        .send()
+        .await
+        .unwrap_or_else(|e| panic!("seed_system_preset('{name}') request failed: {e}"));
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    assert!(
+        status.is_success(),
+        "seed_system_preset('{name}') returned {status}: {body}"
+    );
+    assert!(
+        preset_card_rendered(&body, name),
+        "seed_system_preset('{name}') found no card for the new preset in the panel: {body}"
+    );
+}
+
+/// True when the returned panel HTML carries a card titled `name` with a
+/// duplicate route. Cards carry no `data-id`, so the duplicate button is the
+/// stable anchor.
+fn preset_card_rendered(body: &str, name: &str) -> bool {
+    let title_anchor = format!(r#"<span class="card-title">{name}</span>"#);
+    let Some(title_pos) = body.find(&title_anchor) else {
+        return false;
+    };
+    let card_start = body[..title_pos]
+        .rfind("<div class=\"preset-card")
+        .unwrap_or(0);
+    let card_end = body[title_pos..]
+        .find("<div class=\"preset-card")
+        .map(|offset| title_pos + offset)
+        .unwrap_or(body.len());
+    body[card_start..card_end].contains(r#"hx-post="/prompt-presets/"#)
+        && body[card_start..card_end].contains("/duplicate")
+}
+
+/// Selector addressing a preset card by its title — cards carry no `data-id`.
+pub fn preset_card_selector(name: &str) -> String {
+    format!(r#".preset-card:has(.card-title:text-is("{name}"))"#)
 }
 
 /// Send an action via the command form

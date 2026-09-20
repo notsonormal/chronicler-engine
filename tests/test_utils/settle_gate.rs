@@ -1,23 +1,12 @@
 //! Settle-gate harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
 
-// Why this exists: htmx attaches an element's `hx-trigger` listeners at the end
-// of the settle task for the swap that registered it. A test that interacts with
-// an element as soon as it is *visible* — rather than once its registering swap
-// has *settled* — can dispatch `change` before the listener exists, and the
-// interaction is silently lost: zero POSTs, no error. That is the ticket-03
-// signature (see `.scratch/ui-verification-redesign/issues/03-root-cause-the-hx-
-// post-no-fire.md`), reproduced here as 6 failures in a 50-run loop.
-//
-// Two properties make the race unreachable:
-//
-// 1. **Wait for the registering swap to settle** before interacting with the
-//    element it produced. `open_world_edit` does this for the form it loads.
-// 2. **Scope the wait to the interaction's own target.** The dashboard runs five
-//    self-polling regions (`every 2s` / `every 4s` / `every 5s`) and every poll
-//    swap settles, so a gate that waits for *any* settle satisfies itself on
-//    poller noise and lets the interaction race on. Measured: the counter
-//    advanced on a bare `DIV` poller swap while the posture POST never left the
-//    browser.
+// htmx attaches an element's `hx-trigger` listeners at the end of the settle
+// task for the swap that registered it. A test that interacts as soon as the
+// element is *visible* can dispatch `change` before the listener exists, and
+// the interaction is silently lost: zero POSTs, no error. Waiting for the
+// registering swap to settle closes that race; scoping the wait to the
+// interaction's own target stops the dashboard's self-polling regions from
+// satisfying it early.
 //
 // playwright-rs 0.9.0 has no `wait_for_function`, so readiness is polled over
 // `evaluate_value` in Rust.
@@ -38,13 +27,8 @@ pub const SETTLE_TIMEOUT: Duration = Duration::from_secs(5);
 /// Each entry records the settled element's id, tag, and classes so the Rust
 /// side can name the swap. Entries are capped; only the tail is ever read.
 ///
-/// The gate deliberately leaves htmx's `defaultSettleDelay` at its stock 20 ms.
-/// The race this gate closes is not the delay itself: htmx attaches an element's
-/// `hx-trigger` listeners at the *end* of the settle task, so what matters is
-/// that the test waits for the swap that registers the element before
-/// interacting with it. Measured on the ticket-06 slice: with the form's own
-/// settle awaited, the stock delay survives 50 consecutive runs (see the ticket
-/// record); the earlier failures came from interacting on visibility alone.
+/// The gate leaves htmx's `defaultSettleDelay` at its stock 20 ms: awaiting the
+/// registering swap is what closes the race, not the delay value.
 pub const SETTLE_GATE_INIT_SCRIPT: &str = r#"(() => {
   const gate = { count: 0, targets: [] };
   window.__chroniclerSettle = gate;
@@ -227,9 +211,9 @@ pub struct SettleOutcome {
 }
 
 impl SettleOutcome {
-    /// Panic when the named element never settled. A missing settle is the
-    /// ticket-03 lost-interaction signature — the interaction died before
-    /// htmx attached its trigger listener — not a slow machine.
+    /// Panic when the named element never settled. A missing settle means the
+    /// interaction died before htmx attached its trigger listener — not a slow
+    /// machine.
     pub fn expect_settled(&self, interaction: &str) {
         let all = self
             .all_targets
@@ -240,8 +224,9 @@ impl SettleOutcome {
         assert!(
             self.settled,
             "settle gate: '{interaction}' never settled '{}' within {SETTLE_TIMEOUT:?} — \
-             the interaction was lost before the hx-trigger listener attached (see \
-             .scratch/ui-verification-redesign/issues/03-root-cause-the-hx-post-no-fire.md). \
+             the interaction was lost before the hx-trigger listener attached; \
+             interact through a settle-gated helper (click_and_settle / \
+             select_option_and_settle / an open_* helper). \
              Settles observed instead: [{all}]",
             self.expected
         );
@@ -264,6 +249,47 @@ impl SettleOutcome {
     }
 }
 
+/// Every settle target the gate has recorded in the current document, oldest
+/// first. Baseline-free: this is the whole recorded list.
+async fn settle_targets_all(page: &Page) -> Vec<SettleTarget> {
+    read_settle_gate(page)
+        .await
+        .map(|snapshot| snapshot.targets)
+        .unwrap_or_default()
+}
+
+/// Block until the gate has recorded a settle matching `selector` in the
+/// current document, whenever that settle landed.
+///
+/// Baseline-relative waits cannot see a `hx-trigger="load"` swap: panels load
+/// at page load, before any test arms a baseline. This searches the whole
+/// recorded list instead. Call it at the start of a test — the list is capped
+/// at 64 entries (oldest dropped), so it is not a general-purpose search back
+/// through an arbitrary past.
+pub async fn await_panel_ready(page: &Page, selector: &str) -> SettleOutcome {
+    let matched = wait_for_condition_async(SETTLE_TIMEOUT, Duration::from_millis(25), || async {
+        settle_targets_all(page)
+            .await
+            .iter()
+            .any(|target| target.matches_selector(selector))
+    })
+    .await;
+    // One final read, rather than re-scanning twice: the poll above cannot hand
+    // its last snapshot back, so this read is the freshest settled state.
+    let all_targets = settle_targets_all(page).await;
+    let matching_targets: Vec<SettleTarget> = all_targets
+        .iter()
+        .filter(|target| target.matches_selector(selector))
+        .cloned()
+        .collect();
+    SettleOutcome {
+        expected: selector.to_string(),
+        settled: matched && !matching_targets.is_empty(),
+        all_targets,
+        matching_targets,
+    }
+}
+
 /// Click `selector`, then wait for the swap targeting `swap_target` to settle.
 /// Baseline read immediately before the click.
 pub async fn click_and_settle(page: &Page, selector: &str, swap_target: &str) -> SettleOutcome {
@@ -282,10 +308,10 @@ pub async fn click_and_settle(page: &Page, selector: &str, swap_target: &str) ->
 /// Select `value` in `selector`, then wait for the swap targeting
 /// `swap_target` to settle.
 ///
-/// This is the ticket-03 fix. The `change` event fires inside htmx's 20 ms
-/// `defaultSettleDelay` window, and the settle task attaches the `hx-trigger`
-/// listener. Waiting for the interaction's *own* target to settle proves the
-/// round-trip completed; waiting for any settle would be satisfied by a poller.
+/// The `change` event fires inside htmx's 20 ms `defaultSettleDelay` window,
+/// and the settle task attaches the `hx-trigger` listener. Waiting for the
+/// interaction's *own* target to settle proves the round-trip completed;
+/// waiting for any settle would be satisfied by a poller.
 pub async fn select_option_and_settle(
     page: &Page,
     selector: &str,

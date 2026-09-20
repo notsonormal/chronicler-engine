@@ -8,8 +8,6 @@ Endpoints:
 
 ### Generic world update posture contract
 
-The generic update form always carries the full world surface. When a posture field is absent from the post, the stored value survives; when present, it replaces the stored value per field.
-
 #### Scenario 25.1: A post omitting all posture fields preserves the stored posture
 
 ```gherkin

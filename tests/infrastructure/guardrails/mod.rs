@@ -311,3 +311,11 @@ fn guardrails_empty_rust_files_src() {
 fn guardrails_empty_rust_files_tests() {
     check_tests_files("empty rust file (tests)", check_empty_rust_file);
 }
+
+#[test]
+fn guardrails_browser_interactions_use_settle_gate() {
+    check_tests_files(
+        "tier-3 interactions use the settle gate",
+        check_browser_interactions_use_settle_gate,
+    );
+}

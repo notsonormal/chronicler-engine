@@ -71,16 +71,29 @@ emitted* — not "What" narration.
 
 ## Comment Density
 
-Check the comment density of the new code against the comment density of the old code. For example, 
-if a 500-line file has 20 comments, then it would be strange for it to suddenly jump to 100 comments despite
-the size of the file only increasing by 300 lines. 
+### Increasing comment density
+
+Check the comment density of the new file against the comment density of the old file. For example, 
+if a 500-line file has 20 comments, then it would be strange for it to suddenly jump to 100 comments despite the size of the file only increasing by 300 lines. 
 
 If the new comment density is much higher then you most certainly should be cutting them
 more aggressively.
 
+### Code to comment density
+
+A 20 line function doesn't need 10 line comment. 
+
+## Comments shouldn't explain obvious code
+
+If you can understand the code by just reading the file then you don't need the comments. Comments should explain things that aren't immediately obvious.
+
 ## No negative explaining
 
-Don't describe a thing by what it isn't, and don't editorialize about absences in body prose. 
+Don't describe a thing by what it isn't, and don't editorialize about absences in body prose. A comment written with a negative frame is usually not written from a holistic perspective.
+
+## Whether to trimming or remove
+
+The value of a comment has to be consisted holistically. The natural inclination when you see a 10 line comment is to trim it, however, in some cases it might be better to just remove it entirely. 
 
 ## File/Module Comments
 

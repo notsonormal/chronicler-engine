@@ -292,3 +292,64 @@ fn test_check_test_module_header_rejects_trivial_summary() {
     assert_eq!(violations.len(), 1);
     assert!(violations[0].message.contains("trivial"));
 }
+
+#[test]
+fn test_check_browser_interactions_use_settle_gate_rejects_raw_click() {
+    let content = "with_test_page(a, b, c, |page, _| async move {\n    \
+                   page.locator(\"#x\").await.click(None).await;\n});\n";
+    let violations = check_browser_interactions_use_settle_gate("browser/worlds.rs", content);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("settle gate"));
+}
+
+#[test]
+fn test_check_browser_interactions_use_settle_gate_rejects_raw_select_option() {
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   page.locator(\"#s\").await.select_option(\"v\", None).await;\n});\n";
+    let violations = check_browser_interactions_use_settle_gate("browser/options.rs", content);
+    assert_eq!(violations.len(), 1);
+}
+
+#[test]
+fn test_check_browser_interactions_use_settle_gate_rejects_dispatch_event() {
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   document.querySelector('#s').dispatchEvent(new Event('change'));\n});\n";
+    let violations = check_browser_interactions_use_settle_gate("browser/worlds.rs", content);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("dispatchEvent("));
+}
+
+#[test]
+fn test_check_browser_interactions_use_settle_gate_rejects_request_submit() {
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   document.getElementById('f').requestSubmit();\n});\n";
+    let violations = check_browser_interactions_use_settle_gate("browser/worlds.rs", content);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("requestSubmit("));
+}
+
+#[test]
+fn test_check_browser_interactions_use_settle_gate_allows_gated_helpers() {
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   click_and_settle(&page, \"#x\", \"#y\").await;\n});\n";
+    let violations = check_browser_interactions_use_settle_gate("browser/worlds.rs", content);
+    assert_eq!(violations.len(), 0);
+}
+
+#[test]
+fn test_check_browser_interactions_use_settle_gate_exempts_stub_tier() {
+    // `with_stub_page` drives a stub with no htmx swap lifecycle: raw clicks
+    // are legitimate there.
+    let content = "with_stub_page(o, |page, _| async move {\n    \
+                   page.locator(\"#x\").await.click(None).await;\n});\n";
+    let violations = check_browser_interactions_use_settle_gate("browser/tier2.rs", content);
+    assert_eq!(violations.len(), 0);
+}
+
+#[test]
+fn test_check_browser_interactions_use_settle_gate_ignores_comments() {
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   // prefer click_and_settle over .click(\n});\n";
+    let violations = check_browser_interactions_use_settle_gate("browser/worlds.rs", content);
+    assert_eq!(violations.len(), 0);
+}

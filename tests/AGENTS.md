@@ -38,12 +38,13 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `run_branches.rs` — Smoke tests covering uncovered startup branches in `bootstrap::run()`.
 - **browser/**
     - `dashboard.rs` — Browser dashboard-chrome tests: static command form, status display. Tagged against `docs/specs/browser_dashboard.md`.
-    - `games.rs` — Browser games-panel tests: posture fragment render. Tagged against `docs/specs/browser_games.md`.
+    - `games.rs` — Browser games-panel tests: per-game posture auto-save wiring guard. Tagged against `docs/specs/browser_games.md`.
     - `invariants.rs` — Rendering invariants (named exemption in STRATEGY.md): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
-    - `mod.rs` — Browser test binary root (Playwright-driven): per-surface behaviour modules mirroring the `docs/specs/browser_<feature>.md` specs (`dashboard`, `games`, `options`, `worlds`) + `invariants` (CSS/layout rendering invariants, named exemption — no spec, test code is the definition).
-    - `options.rs` — Browser options-dock tests: reload persistence. Tagged against `docs/specs/browser_options.md`.
+    - `mod.rs` — Browser test binary root (Playwright-driven): per-surface behaviour modules mirroring the `docs/specs/browser_<feature>.md` specs (`dashboard`, `games`, `options`, `prompt_presets`, `worlds`) + `invariants` (CSS/layout rendering invariants, named exemption — no spec, test code is the definition).
+    - `options.rs` — Browser options-dock tests: reload persistence and the Use-click wiring guard. Tagged against `docs/specs/browser_options.md`.
+    - `prompt_presets.rs` — Browser prompt-presets tests: the duplicate → edit → save click chain wiring guard. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `tier2.rs` — Tier-2 quick-browser tests: browser-only behaviour against a stub server.
-    - `worlds.rs` — Browser worlds-panel tests: world posture editor render + auto-save. Tagged against `docs/specs/browser_worlds.md`.
+    - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
 - **helpers/**
     - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage instances with deterministic defaults so tests can focus on the behaviour under test.

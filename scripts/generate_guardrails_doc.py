@@ -59,7 +59,7 @@ def parse_clippy_table() -> list[tuple[str, str]]:
             pending_rationale = line.removeprefix("//").strip()
             continue
 
-        m = re.match(r"clippy::([a-z_]+),?\s*$", line)
+        m = re.match(r"clippy::([a-z0-9_]+),?\s*$", line)
         if m:
             lint = m.group(1)
             if pending_rationale is None:
@@ -114,6 +114,9 @@ def parse_syn_table() -> list[tuple[str, str, str, int]]:
     Groups consecutive `///` lines into one doc block; the first non-empty doc
     line is the description. Emits exactly one row per `pub fn check_*` that
     follows a doc block. Errors if a `pub fn check_*` has no preceding doc.
+
+    The name pattern is `\\w+`, not `[a-z_]+`: a digit in a rule name (e.g.
+    `check_tier3_rule`) must not make the rule invisible to the generated doc.
     """
     rows: list[tuple[str, str, str, int]] = []
 
@@ -135,7 +138,7 @@ def parse_syn_table() -> list[tuple[str, str, str, int]]:
                 doc_block.append(text)
                 continue
 
-            m = re.match(r"pub fn (check_[a-z_]+)\(", stripped)
+            m = re.match(r"pub fn (check_\w+)\(", stripped)
             if m:
                 fn_name = m.group(1)
                 if last_doc_first is None:
