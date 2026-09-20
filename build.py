@@ -7,7 +7,7 @@ Two invocation modes:
 - Full gate (default): ``python build.py`` runs fmt, validation, clippy,
   guardrails, the full test suite, and packaging.
 - Step mode: ``python build.py <step>`` runs one registry step (e.g.
-  ``clippy``, ``fmt``, ``nextest <pattern>``) with a minimal prelude — no
+  ``clippy``, ``fmt``, ``test-pattern <pattern>``) with a minimal prelude — no
   port-3000 kill, no asset copy, no SQLite cleanup. ``--target-dir`` and
   ``--strict`` are accepted on either side of the step; all other top-level
   flags are gate-only and rejected next to a step.
@@ -524,12 +524,12 @@ REGISTRY: dict[str, StepSpec] = {
             help="Run only the browser (Playwright) test binary (~4.5 min).",
         ),
         StepSpec(
-            "nextest",
-            "Running nextest pattern...",
+            "test-pattern",
+            "Running test-pattern step...",
             _NEXTEST_RUN,
             needs_nextest=True,
             pattern_arg=True,
-            help="Run cargo nextest with a test-name pattern.",
+            help="Run the tests whose name matches a pattern, across all test binaries.",
         ),
     ]
 }

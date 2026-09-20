@@ -403,7 +403,7 @@ python build.py clippy                          # ~10s — fix warnings here
 python build.py unit                            # Run the unit tests
 python build.py architecture                    # Run the architecture tests
 python build.py guardrails                      # Run the guardrails tests
-python build.py nextest "action_pipeline::options_tests" # Run tests matching a substring of the full test path
+python build.py test-pattern "action_pipeline::options_tests" # Run tests whose name matches a substring, across all test binaries
 python build.py integration                     # Every test binary except browser (~20s)
 python build.py browser                         # Only the browser/Playwright binary (~2.5 min)
 python build.py validate-docs                   # Validate markdown docs
@@ -418,7 +418,7 @@ Almost every full-gate step is also a subcommand — see `python build.py --help
 python build.py # Full gate: fmt + clippy + guardrails + tests (~1 min)
 ```
 
-A majority of the time taken by `build.py` is the browser tests. Running the full suite just before running the `build.py` is inefficient. Either run a targeted step (`python build.py nextest <pattern>`) or skip them and run `build.py` straight away.
+A majority of the time taken by `build.py` is the browser tests. Running the full suite just before running the `build.py` is inefficient. Either run a targeted step (`python build.py test-pattern <pattern>`) or skip them and run `build.py` straight away.
 
 ## Concurrent Builds
 Multiple agents building simultaneously can conflict because:

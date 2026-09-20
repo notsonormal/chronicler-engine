@@ -39,7 +39,7 @@ class RegistryTests(unittest.TestCase):
             "guardrails",
             "unit",
             "integration",
-            "nextest",
+            "test-pattern",
         }
         self.assertTrue(expected.issubset(build.REGISTRY), set(build.REGISTRY))
 
@@ -65,8 +65,8 @@ class RegistryTests(unittest.TestCase):
             "registry guardrail steps must run after the doc steps",
         )
 
-    def test_nextest_pattern_spec_takes_pattern(self):
-        self.assertTrue(build.REGISTRY["nextest"].pattern_arg)
+    def test_test_pattern_spec_takes_pattern(self):
+        self.assertTrue(build.REGISTRY["test-pattern"].pattern_arg)
         self.assertFalse(build.REGISTRY["clippy"].pattern_arg)
 
 
@@ -84,13 +84,13 @@ class ParseArgsTests(unittest.TestCase):
             build.parse_args(["bogus"])
         self.assertEqual(ctx.exception.code, 2)
 
-    def test_nextest_pattern_required(self):
+    def test_test_pattern_required(self):
         with self.assertRaises(SystemExit) as ctx:
-            build.parse_args(["nextest"])
+            build.parse_args(["test-pattern"])
         self.assertEqual(ctx.exception.code, 2)
 
-    def test_nextest_pattern_value(self):
-        args = build.parse_args(["nextest", "behaviour::test_x"])
+    def test_test_pattern_value(self):
+        args = build.parse_args(["test-pattern", "behaviour::test_x"])
         self.assertEqual(args.pattern, "behaviour::test_x")
 
     def test_gate_flag_after_step_rejected(self):
@@ -138,7 +138,7 @@ class StepCommandTests(unittest.TestCase):
         "unit": "cargo test --lib",
         "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser)'",
         "browser": "cargo nextest run --no-fail-fast -E 'binary(browser)'",
-        "nextest": "cargo nextest run --no-fail-fast",
+        "test-pattern": "cargo nextest run --no-fail-fast",
     }
 
     def test_every_spec_command_pinned(self):
@@ -152,7 +152,7 @@ class StepCommandTests(unittest.TestCase):
         )
 
     def test_pattern_is_shell_quoted(self):
-        cmd = build._step_command(build.REGISTRY["nextest"], "my test")
+        cmd = build._step_command(build.REGISTRY["test-pattern"], "my test")
         self.assertEqual(cmd, "cargo nextest run --no-fail-fast 'my test'")
 
 

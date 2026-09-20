@@ -95,13 +95,16 @@ both clear — the boot probe (`server.rs::probe_http`) hits `GET /`, not this
 endpoint, and the browser helper `wait_for_status_ready` polls the
 `#status-display` DOM, so neither depends on the route.
 
-**One gate failure surfaced, and it is a real pin.**
+**One gate failure surfaced, and the test behind it was deleted.**
 `scripts/tests/test_extract_http_routes.py::test_rendered_doc_table_rows_sum_to_route_count`
-hardcoded 57; deleting a route legitimately lowered it. Its sibling
-`test_real_router_route_count_matches_grep` is still safe — it cross-checks
-parsed routes against `grep -c '\.route('` on the same file, so it is
-relative, not pinned. The hardcoded `57 → 56` was updated; this is the same
-`REQUIRES_MIGRATION_TEST_COUNT` ratchet pattern, applied to the route count.
+hardcoded 57 route rows; deleting a route legitimately lowered it. The count was
+first updated to 56, then the whole test was removed on review as a maintenance
+trap. Its useful assertion — parsed routes all appear as table rows — is
+already covered by `test_table_row_count_matches_routes`, which derives the
+expected count from the fixture instead of pinning it. The sibling
+`test_real_router_route_count_matches_grep` stays and is safe: it cross-checks
+parsed routes against `grep -c '\.route('` on the same file, so it is relative,
+not pinned. Python tests 125 → 124; suite green.
 
 ### 3. Duplicated server-ready probe — **folded into `TestServer`**
 

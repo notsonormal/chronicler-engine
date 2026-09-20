@@ -8,7 +8,7 @@ title: Debugging the Engine
 Run the checks in this order. Most failures resolve before step 7.
 
 1. **Read the failing test's source.** The test body tells you what was expected. The `*_tests.rs` sibling-file convention is the layout; open the file the test name implies.
-2. **Run the failing test directly.** `python build.py nextest <test_path>` (project standard — substring match across all test binaries). Read the failure message and location.
+2. **Run the failing test directly.** `python build.py test-pattern <test_path>` (project standard — substring match across all test binaries). Read the failure message and location.
 3. **Run `python build.py clippy`** (or `python build.py check` for the compile-only class). Catches the build/lint class of failure that may be the actual cause.
 4. **Run `python build.py`.** Standard full validation (fmt + clippy + tests + coverage). If green, the failure is logic, not build.
 5. **Inspect the diff.** `git diff`, `git status --short`, `git log @{u}..HEAD`. Most test failures after a code change are diff-visible.
@@ -21,7 +21,7 @@ Run the checks in this order. Most failures resolve before step 7.
 
 For integration tests that spawn the engine as a subprocess, `tests/test_utils/server.rs:126,138` **hardcodes** `chronicler_engine=debug` on the child — it does not forward a user-set `RUST_LOG`. To get `=trace` output from the child, rebuild and rerun the failing test against the manually-spawned binary with `RUST_LOG=trace cargo run -p chronicler_engine -- --world <name> --persona <name>`.
 
-Raw `RUST_LOG=info` and `RUST_LOG=trace` (no module filter) are the dominant patterns; module-filter patterns are rare. `python build.py nextest <name>` is the project standard; pass `--nocapture`-style flags by running raw `cargo nextest` only when the build.py step cannot express them.
+Raw `RUST_LOG=info` and `RUST_LOG=trace` (no module filter) are the dominant patterns; module-filter patterns are rare. `python build.py test-pattern <name>` is the project standard; pass `--nocapture`-style flags by running raw `cargo nextest` only when the build.py step cannot express them.
 
 Most debugging doesn't need tracing — the test failure message plus source reading usually suffices. Reach for `RUST_LOG=trace` only when the bug is in runtime behaviour the test output doesn't surface.
 
@@ -37,7 +37,7 @@ Most debugging doesn't need tracing — the test failure message plus source rea
 
 **Cause.** Panic in early init / DB migration / fixture setup, before the test body runs.
 
-**Fix.** Run the test in isolation: `python build.py nextest <exact_name>`. Read the panic backtrace and the last log line before the panic.
+**Fix.** Run the test in isolation: `python build.py test-pattern <exact_name>`. Read the panic backtrace and the last log line before the panic.
 
 ## Diagnose by Error Variant
 

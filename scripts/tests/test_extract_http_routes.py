@@ -307,23 +307,6 @@ class TestRealRouter(unittest.TestCase):
                 f"violations: {report.violations}",
             )
 
-    def test_rendered_doc_table_rows_sum_to_route_count(self) -> None:
-        # Every parsed route appears in the rendered doc and no `_unknown`
-        # bucket remains (no silent drops).
-        router_path = ENGINE_ROOT / er.ROUTER_REL
-        if not router_path.exists():
-            self.skipTest(f"router.rs not found: {router_path}")
-        source = router_path.read_text(encoding="utf-8")
-        routes = er.extract_routes(source)
-        grouped = er.group_routes_by_area(routes)
-        self.assertEqual(grouped["_unknown"], [])
-        rendered = er._render_document(grouped)
-
-        rows = re.findall(r"^\| (?:GET|POST) \|", rendered, flags=re.MULTILINE)
-        self.assertEqual(len(rows), len(routes))
-        self.assertEqual(len(rows), 56)
-
-
 
 class TestWriter(unittest.TestCase):
     def test_write_document_round_trip(self) -> None:

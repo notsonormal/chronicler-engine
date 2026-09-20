@@ -28,7 +28,7 @@ Provides browser automation to:
 
 ## Reproducible checks: the Playwright harness
 
-Use the repo's headless Playwright harness (`tests/browser/`) — real Chromium against a real server, driven by Rust tests. Key pieces: `send_action` / `wait_for_status_ready` / `capture_failure_state` in `tests/test_utils/` (failure dumps write a screenshot + DOM dump under `tmp/`); `HEADED=1 SLOW_MO=500 python build.py nextest <name>` runs one test interactively. Engine stdout/stderr tees to `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`). For ad-hoc verification prefer the extension (above). Write a throwaway test in `tests/browser/` (register it in `mod.rs`), run it, view the screenshots, then DELETE it only when the extension is unavailable — shipped coverage belongs to a spec ticket. The Mandatory Screenshot Verification rule below still applies: the failure dumps are screenshots; look at them.
+Use the repo's headless Playwright harness (`tests/browser/`) — real Chromium against a real server, driven by Rust tests. Key pieces: `send_action` / `wait_for_status_ready` / `capture_failure_state` in `tests/test_utils/` (failure dumps write a screenshot + DOM dump under `tmp/`); `HEADED=1 SLOW_MO=500 python build.py test-pattern <name>` runs one test interactively. Engine stdout/stderr tees to `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`). For ad-hoc verification prefer the extension (above). Write a throwaway test in `tests/browser/` (register it in `mod.rs`), run it, view the screenshots, then DELETE it only when the extension is unavailable — shipped coverage belongs to a spec ticket. The Mandatory Screenshot Verification rule below still applies: the failure dumps are screenshots; look at them.
 
 ## Usage Patterns
 

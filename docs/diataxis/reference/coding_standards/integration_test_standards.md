@@ -276,7 +276,7 @@ The Mock auto-injection is gated by the `use_mock` boolean; `with_test_page` def
 - `HEADED=1` → `options.headless = Some(false)` (run Playwright in headed mode, surfacing the browser window for interactive debugging).
 - `SLOW_MO=<ms>` → `options.slow_mo = Some(<ms>)` (introduce a pause between Playwright steps).
 
-Both default off. Run `HEADED=1 SLOW_MO=500 python build.py nextest <name>` to debug a single browser test interactively; default to headless in CI.
+Both default off. Run `HEADED=1 SLOW_MO=500 python build.py test-pattern <name>` to debug a single browser test interactively; default to headless in CI.
 
 This convention exists **only** for the browser binary. The LLM binary does not override Playwright launch — when an LLM test runs through `with_test_page` (if it did), it would inherit the same `HEADED` / `SLOW_MO` discipline. Today it uses `TestServer::new` directly, not `with_test_page`.
 
