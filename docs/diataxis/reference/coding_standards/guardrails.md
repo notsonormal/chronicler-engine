@@ -74,7 +74,7 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | no legacy test context | Rejects legacy test-context helpers in integration tests. | `tests/infrastructure/guardrails/structure.rs:197` |
 | empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:259` |
 | no std thread all | Exposes the internal no-std-thread check for use outside the standard walker. | `tests/infrastructure/guardrails/structure.rs:293` |
-| browser interactions use settle gate | Tier-3 browser tests must interact only through settle-gated helpers. | `tests/infrastructure/guardrails/structure.rs:306` |
+| browser interactions use htmx settle | Full-stack browser tests must interact only through htmx-settled helpers. | `tests/infrastructure/guardrails/structure.rs:306` |
 | file length | Enforces a maximum of 2000 non-blank lines per file. | `tests/infrastructure/guardrails/structure.rs:342` |
 | test module header | Test files must have a single-line `//!` summary on the first non-blank line: | `tests/infrastructure/guardrails/structure.rs:366` |
 | import ordering | Enforces import ordering: std/core/alloc, then external crates, then crate/super/self. | `tests/infrastructure/guardrails/style.rs:9` |

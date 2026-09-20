@@ -1,11 +1,11 @@
-//! Tier-2 quick-browser stub server: the real dashboard shell plus canned fragments, with no engine behind it.
+//! Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
 
 // Purpose: verify browser-only behaviour — DOM shape, JS wiring, rendering —
 // without spawning the engine and waiting for its ~30 s boot. Tier placement
 // (`tests/STRATEGY.md`): a test belongs here when the *server behind it* could
 // be fake without changing the behaviour under test. If a fake server changes
-// what the test observes, the test belongs in the tier-3 full-stack browser
-// tier instead.
+// what the test observes, the test belongs in the full-stack browser tier
+// (`tests/browser/<surface>.rs`) instead.
 //!
 //! What is real: `assets/index.html` (the shipped shell, `include_str!`-ed) and
 //! the static assets, served through a fallback `ServeDir` exactly as the
@@ -68,17 +68,17 @@ struct StubState {
     action_outcome: StubActionOutcome,
 }
 
-/// A running tier-2 stub server. Dropping it shuts the server down and releases
+/// A running stub server. Dropping it shuts the server down and releases
 /// the port lock.
-pub struct Tier2StubServer {
+pub struct StubServer {
     addr: SocketAddr,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-impl Tier2StubServer {
+impl StubServer {
     /// Start the stub on a free port from the shared test port range.
     pub async fn start(action_outcome: StubActionOutcome) -> Self {
-        let port = get_available_port(3010, 3050).expect("allocate a tier-2 stub port");
+        let port = get_available_port(3010, 3050).expect("allocate a stub port");
         Self::start_on_port(port, action_outcome).await
     }
 
@@ -88,7 +88,7 @@ impl Tier2StubServer {
         let app = stub_router(state);
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
-            .unwrap_or_else(|e| panic!("bind tier-2 stub on port {port}: {e}"));
+            .unwrap_or_else(|e| panic!("bind stub on port {port}: {e}"));
         let addr = listener.local_addr().expect("stub local addr");
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         tokio::spawn(async move {
@@ -115,7 +115,7 @@ impl Tier2StubServer {
     }
 }
 
-impl Drop for Tier2StubServer {
+impl Drop for StubServer {
     fn drop(&mut self) {
         if let Some(tx) = self.shutdown.take() {
             let _ = tx.send(());

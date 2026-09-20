@@ -70,7 +70,7 @@ TAG_EXEMPT_DIRS = {
 
 # Whole files exempt from the tag rule.
 TAG_EXEMPT_FILES = {
-    Path("tests/browser/invariants.rs"): (
+    Path("tests/browser/stub/invariants.rs"): (
         "named exemption in tests/STRATEGY.md — test code is the definition"
     ),
 }

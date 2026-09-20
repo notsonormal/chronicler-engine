@@ -53,8 +53,8 @@ class DiscoveryPatternTests(unittest.TestCase):
         self.assertEqual(rows, ["check_rule_2"])
 
     def test_digit_free_name_still_discovered(self) -> None:
-        rows = self._rows_for(_rule("check_browser_interactions_use_settle_gate"))
-        self.assertEqual(rows, ["check_browser_interactions_use_settle_gate"])
+        rows = self._rows_for(_rule("check_browser_interactions_use_htmx_settle"))
+        self.assertEqual(rows, ["check_browser_interactions_use_htmx_settle"])
 
     def test_multiple_rules_all_discovered(self) -> None:
         source = _rule("check_alpha_1") + _rule("check_beta") + _rule("check_gamma_2")

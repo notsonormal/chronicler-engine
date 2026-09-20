@@ -13,8 +13,8 @@ The tier is defined by **what's faked**, not by sync vs async.
 |---|---|---|---|---|
 | **Unit** | both (`MockBackend` + in-memory `Storage`) | nothing | `src/`, `*_tests.rs` | branch coverage — every branch in the code gets a test |
 | **HTTP E2E** | LLM (`MockBackend` via pipeline override) | real axum router, real or in-memory storage | `tests/http/` | spec validation — all spec scenarios validated end-to-end through the real driving adapter |
-| **Quick browser (tier 2)** | the whole engine | stub server (real shell + canned fragments) + real browser | `tests/browser/tier2.rs` | client-side behaviour — DOM, JS wiring, exercising the shipped client JS with no engine process behind it |
-| **Browser (tier 3)** | LLM | real browser, real server | `tests/browser/` | presentation and full-stack wiring — DOM, CSS, JS interaction that reaches real server state |
+| **Stub browser (tier 2)** | the whole engine | stub server (real shell + canned fragments) + real browser | `tests/browser/stub/` | client-side behaviour — DOM, JS wiring, exercising the shipped client JS with no engine process behind it |
+| **Full-stack browser (tier 3)** | LLM | real browser, real server | `tests/browser/<surface>.rs` | presentation and full-stack wiring — DOM, CSS, JS interaction that reaches real server state |
 | **Driven-adapter** | nothing | real SQLite | `tests/storage/` | the storage seam — CRUD, error handling, referential integrity, query correctness |
 
 `#[tokio::test]` with fakes is a unit test. The unit tier includes async
@@ -68,14 +68,16 @@ fully covered by another test at the same tier, delete the weaker one.
 The UI suite splits by what is **faked**, not by how fast it runs. Three tiers
 cover the UI, and one ordered rule places a test among them. **This section is
 the decision of record** — a new UI test is placed by applying the rule, not by
-re-adjudicating the question test by test.
+re-adjudicating the question test by test. The tiers are named for what they
+fake (`stub`, `full-stack`), not by ordinal; the ordinals below are the doc's
+shorthand only.
 
 ### The three UI tiers
 
 | Tier | What's faked | Location | Answers |
 |---|---|---|---|
 | **1 — HTTP contract** | nothing; a real request through the real router | `tests/http/` | what the server sends |
-| **2 — quick browser** | the engine: a stub server serves the real shell + canned fragments; one shared browser process, fresh page per test | `tests/browser/tier2.rs` | what the shipped client JS and DOM do |
+| **2 — stub browser** | the engine: a stub server serves the real shell + canned fragments; one shared browser process, fresh page per test | `tests/browser/stub/` | what the shipped client JS and DOM do |
 | **3 — full-stack browser** | nothing: real server boot, real browser | `tests/browser/<surface>.rs` | whether client wiring reaches real server state |
 
 ### The rule, in order
@@ -84,10 +86,11 @@ re-adjudicating the question test by test.
    body, a status code, a header. The swap that *delivers* it is not
    curl-observable, but the delivered content is.
 2. **If the server behind this were fake, does the behaviour change?** No →
-   tier 2. Pure client behaviour: the slash palette, edit-mode activation,
-   toast handling, DOM rendering invariants.
-3. Otherwise → **tier 3**. The test's point is the full-stack hop: a click or a
-   `change` whose effect is real server-side state, read back through a reload.
+   tier 2, `tests/browser/stub/`. Pure client behaviour: the slash palette,
+   edit-mode activation, toast handling, DOM rendering invariants.
+3. Otherwise → **tier 3**, `tests/browser/<surface>.rs`. The test's point is
+   the full-stack hop: a click or a `change` whose effect is real server-side
+   state, read back through a reload.
 
 **Tie-breaker: when in doubt, file down.** Tier 3 is the exception list, not
 the default. A test that can be expressed a tier lower belongs there.
@@ -97,16 +100,16 @@ the default. A test that can be expressed a tier lower belongs there.
 | Question asked | Answer | Tier | Real example |
 |---|---|---|---|
 | Could `curl` observe this? | yes | 1 | `tests/http/games_fragment.rs::test_games_fragment_renders_posture_controls_http` — a GET of `/fragment/games` asserts the stored posture renders selected and pins the auto-save routes, with no browser at all (games.md 20.8). |
-| Would faking the server change it? | no | 2 | `tests/browser/tier2.rs::test_slash_menu_opens_on_slash` — the palette is a document-level `input` listener on the shipped shell; the stub's only job is to serve `assets/index.html` (browser_slash_menu.md 31.1). |
-| Would faking the server change it? | no | 2 | `tests/browser/tier2.rs::test_edit_cancel_restores_original` — `showEditForm`/`cancelEdit` are client JS acting on the canned entry's structural hooks (browser_story_log.md 30.2). |
+| Would faking the server change it? | no | 2 | `tests/browser/stub/slash_menu.rs::test_slash_menu_opens_on_slash` — the palette is a document-level `input` listener on the shipped shell; the stub's only job is to serve `assets/index.html` (browser_slash_menu.md 31.1). |
+| Would faking the server change it? | no | 2 | `tests/browser/stub/story_log.rs::test_edit_cancel_restores_original` — `showEditForm`/`cancelEdit` are client JS acting on the canned entry's structural hooks (browser_story_log.md 30.2). |
 | Would faking the server change it? | yes | 3 | `tests/browser/worlds.rs::test_world_posture_change_autosaves_server_state` — the select's `change` must reach the server, and a reload must show the persisted tense (browser_worlds.md 29.2). |
 | Would faking the server change it? | yes | 3 | `tests/browser/prompt_presets.rs::test_preset_duplicate_edit_save_click_chain` — the chain's result is real stored preset state (browser_prompt_presets.md 28.1). |
 
-### Tier 2's accepted tax
+### Stub tier's accepted tax
 
 The canned fragments can drift from the real Askama templates. The failure
 mode is **loud, not silent**: the fixture must keep the structural hooks the
-client JS addresses, so a rename in the real template makes the tier-2 test
+client JS addresses, so a rename in the real template makes the stub-tier test
 fail on a missing element. Updating the fixture in the same change as the
 template it mirrors is the cost of the tier. A test whose assertion has quietly
 become the canned fragment's own content has stopped exercising behaviour and
@@ -114,11 +117,11 @@ belongs a tier higher.
 
 ### Readiness gates
 
-Tier 3 interaction goes through the settle-gate helpers
-(`tests/test_utils/settle_gate.rs`; wrappers in `tests/test_utils/browser.rs`).
+Full-stack interaction goes through the htmx-settle helpers
+(`tests/test_utils/htmx_settle.rs`; wrappers in `tests/test_utils/browser.rs`).
 A raw `.click(`/`.select_option(` in a `with_test_page` file fails the build
-(`check_browser_interactions_use_settle_gate`), so no test can opt out. Tier 2
-drives a stub with no htmx swap lifecycle and needs no gate.
+(`check_browser_interactions_use_htmx_settle`), so no test can opt out. The
+`stub/` tests drive a stub with no htmx swap lifecycle and need no gate.
 
 **`networkidle` is banned as a wait strategy at every tier.** Five dashboard
 pollers make a quiet network window unsatisfiable, so it can only ever time
@@ -135,15 +138,11 @@ cover them there.
 `docs/specs/browser_<feature>.md`; HTTP-observed scenarios stay in
 `<feature>.md` — one scenario = one observation surface = one spec file = one
 tag. Test files mirror the specs: `tests/browser/<feature>.rs` covers
-`docs/specs/browser_<feature>.md`. Dashboard-chrome scenarios no feature panel
+`docs/specs/browser_<feature>.md`, and `tests/browser/stub/<feature>.rs` covers
+that spec's stub-tier scenarios. Dashboard-chrome scenarios no feature panel
 owns live in `browser_dashboard.md` / `dashboard.rs` (static command form,
-status display, error toast).
-
-The one exception is the **tier-2 consolidation**: `tests/browser/tier2.rs` is
-one file hosting the class-1 scenarios of several specs (`browser_slash_menu`,
-`browser_story_log`, `browser_options`, `browser_dashboard`) because they share
-the stub fixture. The mirror is per-*test* there, not per-file; tags stay
-scoped to their own spec.
+status display, error toast), with the stub-tier ones in
+`tests/browser/stub/dashboard.rs`.
 
 `scripts/validate_feature_spec.py` enforces the rules in the `spec-coverage`
 gate step of `build.py`:
@@ -156,7 +155,7 @@ gate step of `build.py`:
 - Every test under `tests/http/` and `tests/browser/` carries a tag, unless
   the script declares an exemption with its reason (`TAG_EXEMPT_DIRS`,
   `TAG_EXEMPT_FILES`, `TAG_EXEMPT_TESTS`). Exempt today:
-  `tests/browser/invariants.rs` (no spec link; test code is the definition).
+  `tests/browser/stub/invariants.rs` (no spec link; test code is the definition).
   The stdout-tee health check (`test_engine_output_teed_to_file`) is not an
   exemption: it moved to `tests/bootstrap/run_branches.rs`, outside this
   validator's scan scope, because it needs a real server but no browser.

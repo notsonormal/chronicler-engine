@@ -3,10 +3,10 @@
 #![allow(dead_code)]
 
 pub mod browser;
+pub mod htmx_settle;
 pub mod server;
 pub mod settings_guard;
-pub mod settle_gate;
-pub mod tier2_stub;
+pub mod stub_server;
 pub mod wait;
 
 #[allow(unused_imports)]
@@ -14,9 +14,9 @@ pub use browser::*;
 #[allow(unused_imports)]
 pub use server::*;
 #[allow(unused_imports)]
-pub use settle_gate::*;
+pub use htmx_settle::*;
 #[allow(unused_imports)]
-pub use tier2_stub::*;
+pub use stub_server::*;
 #[allow(unused_imports)]
 pub use wait::*;
 #[allow(unused_imports)]

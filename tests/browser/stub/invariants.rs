@@ -15,13 +15,13 @@ struct SubtestReport {
 }
 
 /// Run one invariant check on a fresh page of the shared browser against the
-/// tier-2 stub.
+/// stub.
 ///
 /// A panic in `check` is caught so the remaining checks still run; the failure
 /// is recorded and reported at the end. The page is closed afterward.
 async fn run_subtest<Fut>(
     browser: &SharedBrowser,
-    stub: &Tier2StubServer,
+    stub: &StubServer,
     name: &'static str,
     check: impl FnOnce(Page) -> Fut,
 ) -> SubtestReport
@@ -58,7 +58,7 @@ fn print_summary(reports: &[SubtestReport]) {
 
 #[tokio::test]
 async fn test_invariants() {
-    let stub = Tier2StubServer::start(StubActionOutcome::Pending).await;
+    let stub = StubServer::start(StubActionOutcome::Pending).await;
     let browser = SharedBrowser::launch().await;
 
     let reports = vec![

@@ -1,4 +1,4 @@
-//! Settle-gate harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
+//! htmx settle harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
 
 // htmx attaches an element's `hx-trigger` listeners at the end of the settle
 // task for the swap that registered it. A test that interacts as soon as the
@@ -29,7 +29,7 @@ pub const SETTLE_TIMEOUT: Duration = Duration::from_secs(5);
 ///
 /// The gate leaves htmx's `defaultSettleDelay` at its stock 20 ms: awaiting the
 /// registering swap is what closes the race, not the delay value.
-pub const SETTLE_GATE_INIT_SCRIPT: &str = r#"(() => {
+pub const HTMX_SETTLE_INIT_SCRIPT: &str = r#"(() => {
   const gate = { count: 0, targets: [] };
   window.__chroniclerSettle = gate;
   document.addEventListener('htmx:afterSettle', (evt) => {
@@ -93,17 +93,17 @@ pub struct SettleSnapshot {
     pub targets: Vec<SettleTarget>,
 }
 
-/// Install the settle-gate counter on `page`. Must run before navigation —
+/// Install the htmx settle counter on `page`. Must run before navigation —
 /// `goto_with_connection_check` calls it so no test can forget.
-pub async fn install_settle_gate(page: &Page) {
-    page.add_init_script(SETTLE_GATE_INIT_SCRIPT)
+pub async fn install_htmx_settle(page: &Page) {
+    page.add_init_script(HTMX_SETTLE_INIT_SCRIPT)
         .await
-        .expect("add_init_script for the settle gate");
+        .expect("add_init_script for the htmx settle counter");
 }
 
-/// Read the current gate state. Returns `None` when the gate is absent, which
-/// means the page was loaded without `install_settle_gate`.
-pub async fn read_settle_gate(page: &Page) -> Option<SettleSnapshot> {
+/// Read the current counter state. Returns `None` when the counter is absent,
+/// which means the page was loaded without `install_htmx_settle`.
+pub async fn read_htmx_settle(page: &Page) -> Option<SettleSnapshot> {
     let raw = page
         .evaluate_value(
             "(() => { const g = window.__chroniclerSettle; \
@@ -143,22 +143,22 @@ pub async fn read_settle_gate(page: &Page) -> Option<SettleSnapshot> {
     })
 }
 
-/// Arm the gate immediately before an interaction and return the baseline
+/// Arm the counter immediately before an interaction and return the baseline
 /// count. The baseline separates the interaction's swap from swaps that had
 /// already settled.
-pub async fn arm_settle_gate(page: &Page) -> u64 {
-    read_settle_gate(page)
+pub async fn arm_htmx_settle(page: &Page) -> u64 {
+    read_htmx_settle(page)
         .await
         .expect(
-            "settle gate must be installed before arming it \
-             (page loaded without install_settle_gate)",
+            "the htmx settle counter must be installed before arming it \
+             (page loaded without install_htmx_settle)",
         )
         .count
 }
 
 /// Gate readings since `baseline`, oldest first.
 pub async fn settles_since(page: &Page, baseline: u64) -> Vec<SettleTarget> {
-    let snapshot = match read_settle_gate(page).await {
+    let snapshot = match read_htmx_settle(page).await {
         Some(s) => s,
         None => return Vec::new(),
     };
@@ -223,7 +223,7 @@ impl SettleOutcome {
             .join(", ");
         assert!(
             self.settled,
-            "settle gate: '{interaction}' never settled '{}' within {SETTLE_TIMEOUT:?} — \
+            "htmx settle: '{interaction}' never settled '{}' within {SETTLE_TIMEOUT:?} — \
              the interaction was lost before the hx-trigger listener attached; \
              interact through a settle-gated helper (click_and_settle / \
              select_option_and_settle / an open_* helper). \
@@ -252,7 +252,7 @@ impl SettleOutcome {
 /// Every settle target the gate has recorded in the current document, oldest
 /// first. Baseline-free: this is the whole recorded list.
 async fn settle_targets_all(page: &Page) -> Vec<SettleTarget> {
-    read_settle_gate(page)
+    read_htmx_settle(page)
         .await
         .map(|snapshot| snapshot.targets)
         .unwrap_or_default()
@@ -293,7 +293,7 @@ pub async fn await_panel_ready(page: &Page, selector: &str) -> SettleOutcome {
 /// Click `selector`, then wait for the swap targeting `swap_target` to settle.
 /// Baseline read immediately before the click.
 pub async fn click_and_settle(page: &Page, selector: &str, swap_target: &str) -> SettleOutcome {
-    let baseline = arm_settle_gate(page).await;
+    let baseline = arm_htmx_settle(page).await;
     page.locator(selector)
         .await
         .click(None)
@@ -318,7 +318,7 @@ pub async fn select_option_and_settle(
     value: &str,
     swap_target: &str,
 ) -> SettleOutcome {
-    let baseline = arm_settle_gate(page).await;
+    let baseline = arm_htmx_settle(page).await;
     page.locator(selector)
         .await
         .select_option(value, None)

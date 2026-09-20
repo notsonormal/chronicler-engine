@@ -5,9 +5,9 @@ use std::time::Duration;
 use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
 
+use super::htmx_settle::{await_panel_ready, click_and_settle, install_htmx_settle};
 use super::server::{buffer_text, get_config_port, registered_server_logs, tail_lines, TestServer};
-use super::settle_gate::{await_panel_ready, click_and_settle, install_settle_gate};
-use super::tier2_stub::{StubActionOutcome, Tier2StubServer};
+use super::stub_server::{StubActionOutcome, StubServer};
 #[allow(unused_imports)]
 pub use super::wait::wait_for_element_children;
 use super::wait::wait_until_visible;
@@ -28,9 +28,9 @@ pub async fn goto_with_connection_check(
 
     // Install the htmx settle counter before navigation so the
     // `htmx:afterSettle` listener exists before `assets/index.html` runs. Every
-    // test page therefore carries the gate; `select_option_and_settle` and
+    // test page therefore carries the counter; `select_option_and_settle` and
     // `click_and_settle` are the only sanctioned interaction paths.
-    install_settle_gate(page).await;
+    install_htmx_settle(page).await;
 
     let _: Option<_> = page.goto(&url, None).await.map_err(|e| {
         let err_str = e.to_string();
@@ -100,7 +100,7 @@ where
     let _ = browser.close().await;
 }
 
-/// A shared Chromium process for the tier-2 quick-browser tests, so the
+/// A shared Chromium process for the stub-browser tests, so the
 /// browser launch cost is paid once per test binary rather than per test.
 /// Dropping it closes the browser.
 pub struct SharedBrowser {
@@ -118,17 +118,17 @@ impl SharedBrowser {
         }
     }
 
-    /// Open a fresh page on the tier-2 stub, with the settle gate installed and
-    /// the shell's initial fragments loaded. The page is the caller's to close.
-    pub async fn open_page(&self, stub: &Tier2StubServer) -> playwright_rs::Page {
+    /// Open a fresh page on the stub, with the htmx settle counter installed
+    /// and the shell's initial fragments loaded. The page is the caller's to close.
+    pub async fn open_page(&self, stub: &StubServer) -> playwright_rs::Page {
         let page = self.browser.new_page().await.unwrap();
         let url = stub.url();
-        // install_settle_gate must precede navigation; the stub serves the same
-        // shell as the engine, so the gate applies unchanged.
-        install_settle_gate(&page).await;
+        // install_htmx_settle must precede navigation; the stub serves the same
+        // shell as the engine, so the counter applies unchanged.
+        install_htmx_settle(&page).await;
         page.goto(&url, None)
             .await
-            .unwrap_or_else(|e| panic!("navigate to tier-2 stub at {url}: {e}"));
+            .unwrap_or_else(|e| panic!("navigate to stub at {url}: {e}"));
         // The shell's `load`-triggered fragments settle the story log; wait for
         // the canned entry so the test starts from the loaded state.
         wait_for_story_log(&page).await;
@@ -136,16 +136,16 @@ impl SharedBrowser {
     }
 }
 
-/// Run a tier-2 quick-browser check: start a stub (default outcome: pending),
-/// drive one fresh page against it, and tear both down. This is the tier-2
+/// Run a stub-browser check: start a stub (default outcome: pending),
+/// drive one fresh page against it, and tear both down. This is the stub-browser
 /// entry point — the sibling of `with_test_page` for tests that do not need a
 /// real server.
 pub async fn with_stub_page<F, Fut>(outcome: StubActionOutcome, test_fn: F)
 where
-    F: FnOnce(playwright_rs::Page, &Tier2StubServer) -> Fut,
+    F: FnOnce(playwright_rs::Page, &StubServer) -> Fut,
     Fut: std::future::Future<Output = ()>,
 {
-    let stub = Tier2StubServer::start(outcome).await;
+    let stub = StubServer::start(outcome).await;
     let browser = SharedBrowser::launch().await;
     let page = browser.open_page(&stub).await;
     test_fn(page.clone(), &stub).await;
@@ -191,9 +191,9 @@ pub async fn open_prompt_presets_tab(page: &playwright_rs::Page) {
 /// the engine seeds two worlds, so an unscoped Edit selector matches twice and
 /// strict mode rejects it, and name-scoping is order-independent.
 ///
-/// The Edit click's swap is awaited through the settle gate: htmx attaches the
-/// new form's `hx-trigger` listeners at the end of that settle, so a `change`
-/// fired earlier is lost.
+/// The Edit click's swap is awaited through the htmx settle counter: htmx
+/// attaches the new form's `hx-trigger` listeners at the end of that settle,
+/// so a `change` fired earlier is lost.
 pub async fn open_world_edit(page: &playwright_rs::Page) {
     open_worlds_tab(page).await;
     let edit_selector = r#".world-item:has(strong:text-is("Test Realm")) button:has-text('Edit')"#;

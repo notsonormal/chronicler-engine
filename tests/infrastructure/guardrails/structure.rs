@@ -294,16 +294,16 @@ pub fn check_no_std_thread_all(path: &str, content: &str) -> Vec<Violation> {
     check_no_std_thread(path, content)
 }
 
-/// Tier-3 browser tests must interact only through settle-gated helpers.
+/// Full-stack browser tests must interact only through htmx-settled helpers.
 ///
 /// A raw `click`/`select_option` on an element htmx swapped in can dispatch
 /// before htmx attaches the element's `hx-trigger` listeners, and the
 /// interaction is silently lost. The scan is line-based: a locator chain wraps
 /// across lines, so a receiver-aware match is not expressible. `dispatchEvent(`
 /// and `requestSubmit(` count too, including inside `page.evaluate` strings.
-/// `tier2.rs` and `invariants.rs` drive a stub with no swap lifecycle to race,
-/// so they are exempt.
-pub fn check_browser_interactions_use_settle_gate(path: &str, content: &str) -> Vec<Violation> {
+/// The `stub/` tests drive a stub with no swap lifecycle to race, so they are
+/// exempt.
+pub fn check_browser_interactions_use_htmx_settle(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
     if !path.starts_with("browser/") || !content.contains("with_test_page") {
@@ -327,7 +327,7 @@ pub fn check_browser_interactions_use_settle_gate(path: &str, content: &str) -> 
                 path,
                 line_num + 1,
                 format!(
-                    "Tier-3 browser test interacts without the settle gate (`{banned}`). \
+                    "Browser test interacts without the htmx settle counter (`{banned}`). \
                      Use a tests/test_utils/browser.rs helper (click_and_settle / \
                      select_option_and_settle / an open_* helper) so the interaction \
                      waits for its swap to settle."

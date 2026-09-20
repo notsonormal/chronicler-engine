@@ -313,9 +313,9 @@ fn guardrails_empty_rust_files_tests() {
 }
 
 #[test]
-fn guardrails_browser_interactions_use_settle_gate() {
+fn guardrails_browser_interactions_use_htmx_settle() {
     check_tests_files(
-        "tier-3 interactions use the settle gate",
-        check_browser_interactions_use_settle_gate,
+        "browser interactions use the htmx settle counter",
+        check_browser_interactions_use_htmx_settle,
     );
 }
