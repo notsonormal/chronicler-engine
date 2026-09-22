@@ -66,7 +66,8 @@ async fn test_games_fragment_renders_posture_controls_http() {
     );
 
     // A preset-library load failure degrades the picker row to an error span
-    // instead of removing the posture controls; assert the healthy path here.
+    // instead of removing the posture controls (asserted in
+    // `games::templates::games_tests`); this is the healthy path.
     assert!(
         !html.contains("Presets unavailable"),
         "the preset pickers must render without a load error: {html}"

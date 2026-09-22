@@ -1,4 +1,4 @@
-//! Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and DOM helpers (`wait_for_element_children`, `wait_for_story_log`, `wait_for_status_ready`).
+//! Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.
 
 use std::time::Duration;
 
@@ -22,14 +22,6 @@ pub async fn goto_with_connection_check(
 ) -> Result<(), String> {
     let url = format!("http://127.0.0.1:{port}");
 
-    // One readiness check per boot: `TestServer::start` already probed the
-    // server before returning (and panics on failure), so a second probe here
-    // would only duplicate it.
-
-    // Install the htmx settle counter before navigation so the
-    // `htmx:afterSettle` listener exists before `assets/index.html` runs. Every
-    // test page therefore carries the counter; `select_option_and_settle` and
-    // `click_and_settle` are the only sanctioned interaction paths.
     install_htmx_settle(page).await;
 
     let _: Option<_> = page.goto(&url, None).await.map_err(|e| {
@@ -123,8 +115,6 @@ impl SharedBrowser {
     pub async fn open_page(&self, stub: &StubServer) -> playwright_rs::Page {
         let page = self.browser.new_page().await.unwrap();
         let url = stub.url();
-        // install_htmx_settle must precede navigation; the stub serves the same
-        // shell as the engine, so the counter applies unchanged.
         install_htmx_settle(&page).await;
         page.goto(&url, None)
             .await

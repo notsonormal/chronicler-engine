@@ -9,7 +9,13 @@ title: Testing
 
 ## UI Tests
 
-UI tests run via Playwright (`playwright-rs`). The browser binary is `tests/browser/`. Setup requires Node 18+ and `npx playwright install chromium`. The canonical entry-point for new browser tests is the page-fixture helper at `tests/test_utils/browser.rs`, which spawns the real engine on a file-locked test port and returns a typed page wrapper.
+UI tests run via Playwright (`playwright-rs`). The browser binary is `tests/browser/`, which holds two tiers. Setup requires Node 18+ and `npx playwright install chromium`.
+
+Most new browser tests belong to the **stub tier** (`tests/browser/stub/`), which needs no engine process. It drives a stub server that serves the real dashboard shell and canned fragments, so the browser launch is paid once per test binary and every test reads the shipped client JavaScript. `SharedBrowser` owns that process; `open_page` hands back a fresh page on it.
+
+The **full-stack tier** (`tests/browser/<surface>.rs`) boots the real engine. Its entry point is the page-fixture helper `with_test_page` at `tests/test_utils/browser.rs`, which spawns the engine on a file-locked test port and returns a typed page wrapper. Full-stack interactions go through the htmx-settle helpers, which the build enforces.
+
+`tests/STRATEGY.md` holds the placement rule that picks a tier for a new test.
 
 ```bash
 HEADED=1 python build.py test-pattern <test_name>
@@ -26,5 +32,5 @@ Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_u
 - [`./unit_test_standards.md`](./unit_test_standards.md) — canonical nine-pattern form for `*_tests.rs` unit tests, with four cross-cutting patterns (XSS regression is Cross-cutting B).
 - [`./integration_test_standards.md`](./integration_test_standards.md) — canonical seven-pattern form for tests under `tests/`, with eight cross-cutting patterns.
 - [`./guardrails.md`](./guardrails.md) — coverage-exclusion policy and the test-module-header convention guardrail.
-- [`tests/AGENTS.md`](../../../tests/AGENTS.md) — live structure index for the integration test tree and the TEST MIRROR CONVENTION.
+- `tests/AGENTS.md` — live structure index for the integration test tree and the TEST MIRROR CONVENTION.
 - [`scripts/check_test_structure.py`](../../../scripts/check_test_structure.py) — enforces `*_tests.rs` sibling-file layout (no inline `#[cfg(test)]` modules).

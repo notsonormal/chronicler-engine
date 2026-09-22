@@ -1,4 +1,4 @@
-//! HTTP wiring tests for `server_impl.rs` (real request routing lives in `tests/http/fragment.rs`).
+//! HTTP wiring tests for `server_impl.rs` (real request routing lives in the `http` test binary).
 
 use std::sync::{Arc, RwLock};
 use std::time::Duration;

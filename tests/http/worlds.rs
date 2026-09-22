@@ -26,6 +26,25 @@ fn posture_world() -> WorldCard {
     }
 }
 
+/// A default app with `posture_world` seeded and one room.
+///
+/// Every posture-contract test starts from this state, so the storage handle is
+/// dropped by the caller unless a test needs it (the storage-failure test
+/// builds its own).
+fn posture_world_app() -> (
+    axum::Router,
+    chronicler_engine::adapters::driving::http::AppState,
+) {
+    let storage = Arc::new(Storage::new_in_memory());
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    storage
+        .seed_world(&posture_world(), &TestMap::single_room("start"))
+        .expect("seed posture world");
+    (app, state)
+}
+
 async fn updated_world(state: &chronicler_engine::adapters::driving::http::AppState) -> WorldCard {
     let (_world_id, card, _map) = state
         .world_catalogue
@@ -38,14 +57,8 @@ async fn updated_world(state: &chronicler_engine::adapters::driving::http::AppSt
 // [docs/specs/worlds.md] SCENARIO: 25.1
 #[tokio::test]
 async fn test_world_update_without_posture_fields_preserves_posture_http() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
+    let (app, state) = posture_world_app();
     let world = posture_world();
-    storage
-        .seed_world(&world, &TestMap::single_room("start"))
-        .expect("seed posture world");
 
     let resp = post_form(
         &app,
@@ -64,14 +77,8 @@ async fn test_world_update_without_posture_fields_preserves_posture_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.2
 #[tokio::test]
 async fn test_world_update_partial_posture_merges_per_field_http() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
+    let (app, state) = posture_world_app();
     let world = posture_world();
-    storage
-        .seed_world(&world, &TestMap::single_room("start"))
-        .expect("seed posture world");
 
     let body = format!(
         "{}&narrative_tense=present",
@@ -89,14 +96,8 @@ async fn test_world_update_partial_posture_merges_per_field_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.3
 #[tokio::test]
 async fn test_world_update_unknown_posture_value_falls_back_to_default_http() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
+    let (app, state) = posture_world_app();
     let world = posture_world();
-    storage
-        .seed_world(&world, &TestMap::single_room("start"))
-        .expect("seed posture world");
 
     let body = format!(
         "{}&narrator_mode=warp_drive",
@@ -119,14 +120,7 @@ async fn test_world_update_unknown_posture_value_falls_back_to_default_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.5
 #[tokio::test]
 async fn test_world_posture_autosave_returns_saved_span_http() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-    let world = posture_world();
-    storage
-        .seed_world(&world, &TestMap::single_room("start"))
-        .expect("seed posture world");
+    let (app, state) = posture_world_app();
 
     let resp = post_form_with_hx(
         &app,
@@ -151,14 +145,7 @@ async fn test_world_posture_autosave_returns_saved_span_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.5
 #[tokio::test]
 async fn test_world_posture_invalid_value_returns_error_span_http() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-    let world = posture_world();
-    storage
-        .seed_world(&world, &TestMap::single_room("start"))
-        .expect("seed posture world");
+    let (app, state) = posture_world_app();
 
     let resp = post_form_with_hx(
         &app,
@@ -235,14 +222,8 @@ async fn test_world_posture_storage_failure_returns_500_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.4
 #[tokio::test]
 async fn test_world_update_options_toggle_checkbox_grammar_http() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
+    let (app, state) = posture_world_app();
     let world = posture_world();
-    storage
-        .seed_world(&world, &TestMap::single_room("start"))
-        .expect("seed posture world");
 
     let checked = format!(
         "{}&options_always_on=true",
@@ -273,14 +254,7 @@ async fn test_world_update_options_toggle_checkbox_grammar_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.6
 #[tokio::test]
 async fn test_world_edit_form_renders_posture_selects_http() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let (app, _state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-    let world = posture_world();
-    storage
-        .seed_world(&world, &TestMap::single_room("start"))
-        .expect("seed posture world");
+    let (app, _state) = posture_world_app();
 
     let html = fetch_body(&app, "/worlds/posture_world/edit").await;
     assert!(

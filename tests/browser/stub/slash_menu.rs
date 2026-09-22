@@ -1,8 +1,7 @@
 //! Stub-browser tests for the slash menu: the client-side command palette rendered from the shipped shell's `input` listener. Tagged against `docs/specs/browser_slash_menu.md`.
 
-// The slash palette is pure client-side JS: the shell ships the command list
-// and renders the menu from an `input` listener. No engine endpoint is
-// involved, so the stub server is a faithful host for the behaviour.
+// The palette is a document-level `input` listener plus `<body>` child on the
+// shipped shell, so the stub's only job is to serve `assets/index.html`.
 
 use std::time::Duration;
 

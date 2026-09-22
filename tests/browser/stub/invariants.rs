@@ -1,4 +1,4 @@
-//! Rendering invariants (named exemption in STRATEGY.md): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
+//! Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
 
 use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};

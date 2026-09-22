@@ -17,18 +17,13 @@ use playwright_rs::Page;
 
 use super::wait::wait_for_condition_async;
 
-/// Default wait for a settle after an interaction. The settle task runs 20 ms
+/// Default wait for a settle after an interaction; the settle task runs 20 ms
 /// after the swap response, well inside this budget.
 pub const SETTLE_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Counter install script. Attached with `add_init_script` before navigation so
-/// the `htmx:afterSettle` listener exists before `assets/index.html` runs.
-///
-/// Each entry records the settled element's id, tag, and classes so the Rust
-/// side can name the swap. Entries are capped; only the tail is ever read.
-///
-/// The gate leaves htmx's `defaultSettleDelay` at its stock 20 ms: awaiting the
-/// registering swap is what closes the race, not the delay value.
+/// Counter install script. Each entry records the settled element's id, tag,
+/// and classes so the Rust side can name the swap; entries are capped, and only
+/// the tail is read.
 pub const HTMX_SETTLE_INIT_SCRIPT: &str = r#"(() => {
   const gate = { count: 0, targets: [] };
   window.__chroniclerSettle = gate;
@@ -48,11 +43,8 @@ pub const HTMX_SETTLE_INIT_SCRIPT: &str = r#"(() => {
 /// `detail.elt`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleTarget {
-    /// The element's `id`, empty when it has none.
     pub id: String,
-    /// The element's uppercase tag name.
     pub tag: String,
-    /// The element's class string, as authored.
     pub classes: String,
 }
 
@@ -93,17 +85,16 @@ pub struct SettleSnapshot {
     pub targets: Vec<SettleTarget>,
 }
 
-/// Install the htmx settle counter on `page`. Must run before navigation —
-/// `goto_with_connection_check` calls it so no test can forget.
+/// Install the htmx settle counter on `page`. Must run before navigation: the
+/// `htmx:afterSettle` listener has to exist before the shell's scripts run.
 pub async fn install_htmx_settle(page: &Page) {
     page.add_init_script(HTMX_SETTLE_INIT_SCRIPT)
         .await
         .expect("add_init_script for the htmx settle counter");
 }
 
-/// Read the current counter state. Returns `None` when the counter is absent,
-/// which means the page was loaded without `install_htmx_settle`.
-pub async fn read_htmx_settle(page: &Page) -> Option<SettleSnapshot> {
+/// Read the current counter state; `None` when the counter was never installed.
+async fn read_htmx_settle(page: &Page) -> Option<SettleSnapshot> {
     let raw = page
         .evaluate_value(
             "(() => { const g = window.__chroniclerSettle; \
@@ -143,10 +134,8 @@ pub async fn read_htmx_settle(page: &Page) -> Option<SettleSnapshot> {
     })
 }
 
-/// Arm the counter immediately before an interaction and return the baseline
-/// count. The baseline separates the interaction's swap from swaps that had
-/// already settled.
-pub async fn arm_htmx_settle(page: &Page) -> u64 {
+/// Read the counter immediately before an interaction and return its baseline.
+async fn arm_htmx_settle(page: &Page) -> u64 {
     read_htmx_settle(page)
         .await
         .expect(
@@ -156,8 +145,8 @@ pub async fn arm_htmx_settle(page: &Page) -> u64 {
         .count
 }
 
-/// Gate readings since `baseline`, oldest first.
-pub async fn settles_since(page: &Page, baseline: u64) -> Vec<SettleTarget> {
+/// Settle targets recorded since `baseline`, oldest first.
+async fn settles_since(page: &Page, baseline: u64) -> Vec<SettleTarget> {
     let snapshot = match read_htmx_settle(page).await {
         Some(s) => s,
         None => return Vec::new(),
@@ -168,32 +157,20 @@ pub async fn settles_since(page: &Page, baseline: u64) -> Vec<SettleTarget> {
     targets[start..].to_vec()
 }
 
-/// Block until a settle whose `detail.elt` matches `selector` lands past
-/// `baseline`, or the timeout expires. Returns the matching targets, or `None`
-/// on timeout.
-pub async fn await_settle_target(
+/// Wait for a settle matching `selector` past `baseline`; `false` on timeout.
+async fn await_settle_target(
     page: &Page,
     baseline: u64,
     selector: &str,
     timeout: Duration,
-) -> Option<Vec<SettleTarget>> {
-    let page_ref = page;
-    let matched = wait_for_condition_async(timeout, Duration::from_millis(25), || async {
-        settles_since(page_ref, baseline)
+) -> bool {
+    wait_for_condition_async(timeout, Duration::from_millis(25), || async {
+        settles_since(page, baseline)
             .await
             .iter()
             .any(|t| t.matches_selector(selector))
     })
-    .await;
-    if !matched {
-        return None;
-    }
-    let hits: Vec<SettleTarget> = settles_since(page, baseline)
-        .await
-        .into_iter()
-        .filter(|t| t.matches_selector(selector))
-        .collect();
-    Some(hits)
+    .await
 }
 
 /// Result of a gated interaction: whether the named swap settled, every settle
@@ -249,8 +226,7 @@ impl SettleOutcome {
     }
 }
 
-/// Every settle target the gate has recorded in the current document, oldest
-/// first. Baseline-free: this is the whole recorded list.
+/// Every settle target recorded in the current document, oldest first.
 async fn settle_targets_all(page: &Page) -> Vec<SettleTarget> {
     read_htmx_settle(page)
         .await
@@ -258,14 +234,13 @@ async fn settle_targets_all(page: &Page) -> Vec<SettleTarget> {
         .unwrap_or_default()
 }
 
-/// Block until the gate has recorded a settle matching `selector` in the
-/// current document, whenever that settle landed.
+/// Wait for a settle matching `selector` recorded anywhere in the current
+/// document, not just past a baseline.
 ///
-/// Baseline-relative waits cannot see a `hx-trigger="load"` swap: panels load
-/// at page load, before any test arms a baseline. This searches the whole
-/// recorded list instead. Call it at the start of a test — the list is capped
-/// at 64 entries (oldest dropped), so it is not a general-purpose search back
-/// through an arbitrary past.
+/// A baseline-relative wait cannot see an `hx-trigger="load"` swap: panels load
+/// at page load, before any test arms a baseline. Call this at the start of a
+/// test; the recorded list is capped at 64 entries, so it is not a general
+/// search back through an arbitrary past.
 pub async fn await_panel_ready(page: &Page, selector: &str) -> SettleOutcome {
     let matched = wait_for_condition_async(SETTLE_TIMEOUT, Duration::from_millis(25), || async {
         settle_targets_all(page)
@@ -308,9 +283,7 @@ pub async fn click_and_settle(page: &Page, selector: &str, swap_target: &str) ->
 /// Select `value` in `selector`, then wait for the swap targeting
 /// `swap_target` to settle.
 ///
-/// The `change` event fires inside htmx's 20 ms `defaultSettleDelay` window,
-/// and the settle task attaches the `hx-trigger` listener. Waiting for the
-/// interaction's *own* target to settle proves the round-trip completed;
+/// Waiting for the interaction's *own* target proves the round-trip completed;
 /// waiting for any settle would be satisfied by a poller.
 pub async fn select_option_and_settle(
     page: &Page,
@@ -333,31 +306,19 @@ pub async fn select_option_and_settle(
     outcome
 }
 
-/// Block until a settle matching `swap_target` lands past `baseline`.
-///
-/// The low-level entry point for a test that drives a multi-match locator or a
-/// synthetic event and still wants a target-scoped wait. Most tests should use
-/// `click_and_settle` / `select_option_and_settle`, which arm the baseline
-/// themselves.
-pub async fn settle_since_baseline(page: &Page, baseline: u64, swap_target: &str) -> SettleOutcome {
-    finish_settle(page, baseline, swap_target).await
-}
-
+/// Read the settles past `baseline`, wait for the named target, and report the
+/// outcome.
 async fn finish_settle(page: &Page, baseline: u64, swap_target: &str) -> SettleOutcome {
-    let matching = await_settle_target(page, baseline, swap_target, SETTLE_TIMEOUT).await;
+    let polled = await_settle_target(page, baseline, swap_target, SETTLE_TIMEOUT).await;
     let all_targets = settles_since(page, baseline).await;
-    let matching_targets = matching.unwrap_or_else(|| {
-        all_targets
-            .iter()
-            .filter(|t| t.matches_selector(swap_target))
-            .cloned()
-            .collect()
-    });
+    let matching_targets: Vec<SettleTarget> = all_targets
+        .iter()
+        .filter(|t| t.matches_selector(swap_target))
+        .cloned()
+        .collect();
     SettleOutcome {
         expected: swap_target.to_string(),
-        settled: matching_targets
-            .iter()
-            .any(|t| t.matches_selector(swap_target)),
+        settled: polled || !matching_targets.is_empty(),
         all_targets,
         matching_targets,
     }

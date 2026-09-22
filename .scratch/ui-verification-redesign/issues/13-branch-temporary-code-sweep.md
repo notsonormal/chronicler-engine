@@ -366,3 +366,23 @@ above, including the one fact worth knowing: a worktree left under `tmp/` past
 the 30-day threshold would age out and end up registered-but-gutted. That is a
 consequence of placement, and the fix (if worktrees are kept) is a home outside
 `tmp/` — not a `clean_tmp_dirs` guard.
+
+**2026-09-20 — correction: item 2's keeper verdict was reversed after this
+Answer was written.** `scripts/stress_posture.sh` was **deleted** in
+`7b69574` ("Remove temp script"), not kept. The promotion recorded above did not
+hold, and the reason is worth recording because it is the stronger argument:
+
+- The settle gate's `expect_settled` waits out the full 5 s timeout and then
+  panics. A broken gate therefore surfaces as a loud, deterministic assertion
+  failure in a single ordinary gate run — not as a flake. "Does the script's
+  protection matter?" was tested rather than argued: mutating the settle gate
+  failed the ordinary suite loudly.
+- So the script's real value was the **one-time acceptance measurement** during
+  ticket 12 (two 50/50 loops), not ongoing protection. A human-run instrument
+  whose job is already done by the build it gates does not earn its keep.
+- Deleting it also removed the `CARGO_TARGET_DIR` fix's reason to exist. The
+  judgement in item 1 (do not repair an instrument only to delete it) applies to
+  item 2 as well.
+
+Correction propagated to the map's ticket-13 line. Item 2's body text above is
+left as the record of what was decided at resolve time.

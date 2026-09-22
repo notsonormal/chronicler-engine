@@ -71,7 +71,8 @@ TAG_EXEMPT_DIRS = {
 # Whole files exempt from the tag rule.
 TAG_EXEMPT_FILES = {
     Path("tests/browser/stub/invariants.rs"): (
-        "named exemption in tests/STRATEGY.md — test code is the definition"
+        "no spec link — computed-style and layout invariants have no HTTP "
+        "surface; the test code is the definition"
     ),
 }
 

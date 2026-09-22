@@ -1,9 +1,8 @@
 //! Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
 
-// `useOption` and `editOption` act on the DOM: the dock shell renders the
-// options, and `editOption` copies the option text into the command input and
-// focuses it. The stub serves the dock fragment in the real template's shape,
-// so the client wiring is exercised unchanged.
+// `editOption` copies the option text into the command input and focuses it.
+// The stub serves the dock fragment in the real template's shape, so the client
+// wiring is exercised unchanged.
 
 use super::*;
 

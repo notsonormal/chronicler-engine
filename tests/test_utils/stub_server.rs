@@ -1,25 +1,13 @@
 //! Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
 
-// Purpose: verify browser-only behaviour — DOM shape, JS wiring, rendering —
-// without spawning the engine and waiting for its ~30 s boot. Tier placement
-// (`tests/STRATEGY.md`): a test belongs here when the *server behind it* could
-// be fake without changing the behaviour under test. If a fake server changes
-// what the test observes, the test belongs in the full-stack browser tier
-// (`tests/browser/<surface>.rs`) instead.
-//!
-//! What is real: `assets/index.html` (the shipped shell, `include_str!`-ed) and
-//! the static assets, served through a fallback `ServeDir` exactly as the
-//! engine routes them.
-//!
-//! What is canned: every fragment the shell loads or polls, under
-//! `tests/test_utils/stub_fixtures/`. Those files were captured from a running
-//! engine (see the ticket-06 record). Canned fragments drift from the real
-//! Askama templates — updating a fixture in the same change as the template it
-//! mirrors is the tax this tier pays for its speed.
-//!
-//! The one dynamic endpoint is `POST /action/check`: it answers with a scripted
-//! outcome the test names up front, so a test can drive success, error, or a
-//! pending state without a real pipeline.
+// What is real: `assets/index.html` (the shipped shell, `include_str!`-ed) and
+// the static assets, served through `ServeDir` exactly as the engine routes
+// them.
+//
+// What is canned: every fragment the shell loads or polls, under
+// `tests/test_utils/stub_fixtures/`. The one dynamic endpoint is
+// `POST /action/check`, which answers with a scripted outcome the test names up
+// front.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -34,9 +22,9 @@ use axum::Router;
 
 use super::server::{get_available_port, release_port_lock};
 
-/// The shipped dashboard shell. Served verbatim so the stub exercises the real
-/// htmx wiring, not a hand-written approximation of it.
-pub const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
+/// The shipped dashboard shell, served verbatim so the stub exercises the real
+/// htmx wiring.
+const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 
 const FIXTURE_STORY_LOG: &str = include_str!("stub_fixtures/story_log.html");
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
@@ -82,8 +70,8 @@ impl StubServer {
         Self::start_on_port(port, action_outcome).await
     }
 
-    /// Start the stub on a named port — for a test that needs a stable address.
-    pub async fn start_on_port(port: u16, action_outcome: StubActionOutcome) -> Self {
+    /// Start the stub on a named port.
+    async fn start_on_port(port: u16, action_outcome: StubActionOutcome) -> Self {
         let state = Arc::new(StubState { action_outcome });
         let app = stub_router(state);
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
@@ -107,11 +95,6 @@ impl StubServer {
     /// Base URL, e.g. `http://127.0.0.1:3011`.
     pub fn url(&self) -> String {
         format!("http://{}", self.addr)
-    }
-
-    /// Port the stub listens on.
-    pub fn port(&self) -> u16 {
-        self.addr.port()
     }
 }
 

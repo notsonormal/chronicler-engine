@@ -259,7 +259,7 @@ The guard is the near-universal idiom for HTTP tests; assume any HTTP test that 
 
 The port range and lock-file path are **deliberately outside the cargo workspace** (`/tmp` rather than `target/`) so concurrent `cargo build` invocations can't see stale locks. When refactoring the helper, do not move the lock path into `target/`.
 
-**Where.** All browser tests (`with_test_page`), `tests/bootstrap/mod.rs`, and `tests/llm/flow_llm_tests.rs` use this allocator. Tests that bind `0.0.0.0:0` directly opt out of the 3010–3050 range by design.
+**Where.** All full-stack browser tests (`with_test_page`), `tests/bootstrap/mod.rs`, and `tests/llm/flow_llm_tests.rs` use this allocator. The stub tier allocates from the same range through `StubServer::start`, but binds a listener rather than spawning a process. Tests that bind `0.0.0.0:0` directly opt out of the 3010–3050 range by design.
 
 ### Cross-cutting 3 — Mock-backend auto-injection via `--settings-path`
 
@@ -267,7 +267,7 @@ The port range and lock-file path are **deliberately outside the cargo workspace
 
 The Mock auto-injection is gated by the `use_mock` boolean; `with_test_page` defaults to `true`. Tests that need real env-var configurations (e.g., `OPENROUTER_API_KEY`) call `TestServer::new(port, ...)` instead — the binary loads its default settings (which the env var populates).
 
-**Where.** All `with_test_page` browser tests, all `with_real_llm` LLM tests, and any HTTP test that uses `TestServer::from_config(...)`. Tests that use `tower::ServiceExt::oneshot` (Pattern 4) bypass this entirely because the router runs in-process and the engine binary never starts — they construct the app directly with `TestAppBuilder`.
+**Where.** All `with_test_page` browser tests, all `with_real_llm` LLM tests, and any HTTP test that uses `TestServer::from_config(...)`. Tests that use `tower::ServiceExt::oneshot` (Pattern 4) bypass this entirely because the router runs in-process and the engine binary never starts — they construct the app directly with `TestAppBuilder`. The stub tier bypasses it too: no engine process means no settings file, and the canned fragments carry the state a test needs.
 
 ### Cross-cutting 4 — `HEADED` / `SLOW_MO` env-var overrides for Playwright
 
@@ -276,7 +276,7 @@ The Mock auto-injection is gated by the `use_mock` boolean; `with_test_page` def
 - `HEADED=1` → `options.headless = Some(false)` (run Playwright in headed mode, surfacing the browser window for interactive debugging).
 - `SLOW_MO=<ms>` → `options.slow_mo = Some(<ms>)` (introduce a pause between Playwright steps).
 
-Both default off. Run `HEADED=1 SLOW_MO=500 python build.py test-pattern <name>` to debug a single browser test interactively; default to headless in CI.
+Both default off. Run `HEADED=1 SLOW_MO=500 python build.py test-pattern <name>` to debug a single full-stack browser test interactively; default to headless in CI.
 
 This convention exists **only** for the browser binary. The LLM binary does not override Playwright launch — when an LLM test runs through `with_test_page` (if it did), it would inherit the same `HEADED` / `SLOW_MO` discipline. Today it uses `TestServer::new` directly, not `with_test_page`.
 
@@ -342,7 +342,8 @@ The `--llm-only` invocation is the canonical one for the integration-tier LLM te
 - `tests/AGENTS.md` — engine-side test-infrastructure policy; test-mirror convention, structure overview, `[binary] ↔ fixture-weight` mapping.
 - `tests/test_utils/server.rs` — port allocation, `TestServer` lifecycle, `SERVER_MANAGED` PID registry.
 - `tests/test_utils/wait.rs` — smart-waiting helpers (`wait_for_llm_idle`, `wait_for_status_ready`, `wait_for_element_children`, etc.).
-- `tests/test_utils/browser.rs` — Playwright setup, `with_test_page`, `capture_failure_state`, `HEADED` / `SLOW_MO` env-var conventions.
+- `tests/test_utils/browser.rs` — Playwright setup, `with_test_page`, `SharedBrowser`, `capture_failure_state`, `HEADED` / `SLOW_MO` env-var conventions.
+- `tests/test_utils/stub_server.rs` — the stub engine behind the stub-browser tier; serves the real shell plus canned fragments.
 - `tests/test_utils/settings_guard.rs` — `SettingsTestGuard` (Cross-cutting 1).
 - `tests/helpers/sqlite_test_app_builder.rs` — `SqliteTestAppBuilder` (Pattern 1), including the `.pipeline_fn(...)` provider override.
 - `tests/helpers/fixtures.rs` — `create_test_storage`, `TestDataBuilder`, world-fixture seeders.
