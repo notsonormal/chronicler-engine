@@ -1,10 +1,6 @@
 # Test Strategy
 
-The normative tier-placement rules for the engine. Referenced from
-`tests/AGENTS.md`. Decisions settled via the wayfinder maps
-`.scratch/test-strategy-execution/` (the tiers) and
-`.scratch/ui-verification-redesign/` (the placement rule and the stub-browser
-tier); this doc is the codified output.
+The normative tier-placement rules for the engine.
 
 ## The tiers
 
