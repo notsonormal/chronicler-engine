@@ -48,6 +48,9 @@
       "git clean --force *": "deny",
       "git pull": "deny",
       "git pull *": "deny",
+      "git switch": "deny",
+      "git switch *": "deny",
+      "git symbolic-ref *": "deny",
       "git commit": "allow",
       "git commit *": "allow"       
     }
