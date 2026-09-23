@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
+//! [DOC: docs/diataxis/reference/narrative/options.md]
 //! Options agent shared helpers
 pub mod orchestration;
 pub mod parser;

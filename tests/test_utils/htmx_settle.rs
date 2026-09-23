@@ -15,8 +15,6 @@ use std::time::Duration;
 
 use playwright_rs::Page;
 
-use super::wait::wait_for_condition_async;
-
 /// Default wait for a settle after an interaction; the settle task runs 20 ms
 /// after the swap response, well inside this budget.
 pub const SETTLE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -145,49 +143,85 @@ async fn arm_htmx_settle(page: &Page) -> u64 {
         .count
 }
 
-/// Settle targets recorded since `baseline`, oldest first.
-async fn settles_since(page: &Page, baseline: u64) -> Vec<SettleTarget> {
-    let snapshot = match read_htmx_settle(page).await {
-        Some(s) => s,
-        None => return Vec::new(),
+/// Read the settle targets in `scope`, oldest first. `None` when the settle
+/// counter was never installed.
+async fn settle_targets(page: &Page, scope: &SettleScope) -> Option<Vec<SettleTarget>> {
+    let snapshot = read_htmx_settle(page).await?;
+    let targets = match scope {
+        SettleScope::WholeDocument => snapshot.targets,
+        SettleScope::Since(baseline) => {
+            let seen = snapshot.count.saturating_sub(*baseline) as usize;
+            let start = snapshot.targets.len().saturating_sub(seen);
+            snapshot.targets[start..].to_vec()
+        }
     };
-    let seen = snapshot.count.saturating_sub(baseline) as usize;
-    let targets = snapshot.targets;
-    let start = targets.len().saturating_sub(seen);
-    targets[start..].to_vec()
+    Some(targets)
 }
 
-/// Wait for a settle matching `selector` past `baseline`; `false` on timeout.
-async fn await_settle_target(
+/// Result of one scoped poll: the last read of `scope`, and whether that read
+/// (or any earlier one) matched the waited-for selector.
+struct PollResult {
+    matched: bool,
+    targets: Vec<SettleTarget>,
+}
+
+/// Poll `scope` every 25 ms for a settle matching `selector`, keeping the
+/// last scoped read so no extra final read is needed on match or timeout.
+async fn poll_settles(
     page: &Page,
-    baseline: u64,
+    scope: &SettleScope,
     selector: &str,
     timeout: Duration,
-) -> bool {
-    wait_for_condition_async(timeout, Duration::from_millis(25), || async {
-        settles_since(page, baseline)
-            .await
-            .iter()
-            .any(|t| t.matches_selector(selector))
-    })
-    .await
+) -> PollResult {
+    let deadline = std::time::Instant::now() + timeout;
+    let mut targets: Vec<SettleTarget> = Vec::new();
+    let mut matched = false;
+    loop {
+        if let Some(read) = settle_targets(page, scope).await {
+            targets = read;
+            matched = matched || targets.iter().any(|t| t.matches_selector(selector));
+        }
+        if matched || std::time::Instant::now() >= deadline {
+            return PollResult { matched, targets };
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
 }
 
 /// Result of a gated interaction: whether the named swap settled, every settle
-/// observed after the baseline, and the subset matching the named element.
+/// observed in the waited-for scope, and the subset matching the named element.
 #[derive(Debug, Clone)]
 pub struct SettleOutcome {
     /// The element the caller waited for, as a simple selector.
     pub expected: String,
-    /// True when a settle matching `expected` landed past the baseline.
+    /// True when a settle matching `expected` landed in the scope.
     pub settled: bool,
-    /// Every settle target observed after the baseline, oldest first.
+    /// Every settle target observed in the scope, oldest first.
     pub all_targets: Vec<SettleTarget>,
     /// The settle targets matching `expected`, oldest first.
     pub matching_targets: Vec<SettleTarget>,
 }
 
 impl SettleOutcome {
+    /// Assemble the outcome from one scoped poll. `matched` is kept even when
+    /// the final read's matching subset is empty: a matching target the poll
+    /// saw can fall out of the 64-entry cap window before this re-read, so
+    /// dropping `matched` would report a real settle as a timeout.
+    fn from_poll(expected: &str, result: PollResult) -> SettleOutcome {
+        let matching_targets: Vec<SettleTarget> = result
+            .targets
+            .iter()
+            .filter(|t| t.matches_selector(expected))
+            .cloned()
+            .collect();
+        SettleOutcome {
+            expected: expected.to_string(),
+            settled: result.matched || !matching_targets.is_empty(),
+            all_targets: result.targets,
+            matching_targets,
+        }
+    }
+
     /// Panic when the named element never settled. A missing settle means the
     /// interaction died before htmx attached its trigger listener — not a slow
     /// machine.
@@ -211,7 +245,7 @@ impl SettleOutcome {
 
     /// One line for the run log: which element was waited for, whether it
     /// settled, and what else settled meanwhile.
-    pub fn describe(&self, interaction: &str) -> String {
+    pub fn log_line(&self, interaction: &str) -> String {
         let all = self
             .all_targets
             .iter()
@@ -226,43 +260,25 @@ impl SettleOutcome {
     }
 }
 
-/// Every settle target recorded in the current document, oldest first.
-async fn settle_targets_all(page: &Page) -> Vec<SettleTarget> {
-    read_htmx_settle(page)
-        .await
-        .map(|snapshot| snapshot.targets)
-        .unwrap_or_default()
+/// Which recorded settles a wait considers: every settle in the current
+/// document, or only those past a baseline read.
+enum SettleScope {
+    /// Every settle target recorded in the current document. A baseline-relative
+    /// wait cannot see an `hx-trigger="load"` swap: panels load at page load,
+    /// before any test arms a baseline. A `WholeDocument` wait runs at the
+    /// start of a test; the recorded list is capped at 64 entries, so it is not
+    /// a general search back through an arbitrary past.
+    WholeDocument,
+    /// Only settles recorded after this baseline count.
+    Since(u64),
 }
 
-/// Wait for a settle matching `selector` recorded anywhere in the current
-/// document, not just past a baseline.
-///
-/// A baseline-relative wait cannot see an `hx-trigger="load"` swap: panels load
-/// at page load, before any test arms a baseline. Call this at the start of a
-/// test; the recorded list is capped at 64 entries, so it is not a general
-/// search back through an arbitrary past.
+/// Wait for a settle matching `selector` in `scope`, and report the outcome.
 pub async fn await_panel_ready(page: &Page, selector: &str) -> SettleOutcome {
-    let matched = wait_for_condition_async(SETTLE_TIMEOUT, Duration::from_millis(25), || async {
-        settle_targets_all(page)
-            .await
-            .iter()
-            .any(|target| target.matches_selector(selector))
-    })
-    .await;
-    // One final read, rather than re-scanning twice: the poll above cannot hand
-    // its last snapshot back, so this read is the freshest settled state.
-    let all_targets = settle_targets_all(page).await;
-    let matching_targets: Vec<SettleTarget> = all_targets
-        .iter()
-        .filter(|target| target.matches_selector(selector))
-        .cloned()
-        .collect();
-    SettleOutcome {
-        expected: selector.to_string(),
-        settled: matched && !matching_targets.is_empty(),
-        all_targets,
-        matching_targets,
-    }
+    SettleOutcome::from_poll(
+        selector,
+        poll_settles(page, &SettleScope::WholeDocument, selector, SETTLE_TIMEOUT).await,
+    )
 }
 
 /// Click `selector`, then wait for the swap targeting `swap_target` to settle.
@@ -275,7 +291,7 @@ pub async fn click_and_settle(page: &Page, selector: &str, swap_target: &str) ->
         .await
         .unwrap_or_else(|e| panic!("click('{selector}') failed: {e}"));
     let outcome = finish_settle(page, baseline, swap_target).await;
-    eprintln!("{}", outcome.describe(&format!("click('{selector}')")));
+    eprintln!("{}", outcome.log_line(&format!("click('{selector}')")));
     outcome.expect_settled(&format!("click('{selector}')"));
     outcome
 }
@@ -300,26 +316,23 @@ pub async fn select_option_and_settle(
     let outcome = finish_settle(page, baseline, swap_target).await;
     eprintln!(
         "{}",
-        outcome.describe(&format!("select_option('{selector}' -> '{value}')"))
+        outcome.log_line(&format!("select_option('{selector}' -> '{value}')"))
     );
     outcome.expect_settled(&format!("select_option('{selector}' -> '{value}')"));
     outcome
 }
 
-/// Read the settles past `baseline`, wait for the named target, and report the
-/// outcome.
+/// Read the settles in the baseline scope, wait for the named target, and
+/// report the outcome.
 async fn finish_settle(page: &Page, baseline: u64, swap_target: &str) -> SettleOutcome {
-    let polled = await_settle_target(page, baseline, swap_target, SETTLE_TIMEOUT).await;
-    let all_targets = settles_since(page, baseline).await;
-    let matching_targets: Vec<SettleTarget> = all_targets
-        .iter()
-        .filter(|t| t.matches_selector(swap_target))
-        .cloned()
-        .collect();
-    SettleOutcome {
-        expected: swap_target.to_string(),
-        settled: polled || !matching_targets.is_empty(),
-        all_targets,
-        matching_targets,
-    }
+    SettleOutcome::from_poll(
+        swap_target,
+        poll_settles(
+            page,
+            &SettleScope::Since(baseline),
+            swap_target,
+            SETTLE_TIMEOUT,
+        )
+        .await,
+    )
 }

@@ -11,7 +11,7 @@ title: Testing
 
 UI tests run via Playwright (`playwright-rs`). The browser binary is `tests/browser/`, which holds two tiers. Setup requires Node 18+ and `npx playwright install chromium`.
 
-Most new browser tests belong to the **stub tier** (`tests/browser/stub/`), which needs no engine process. It drives a stub server that serves the real dashboard shell and canned fragments, so the browser launch is paid once per test binary and every test reads the shipped client JavaScript. `SharedBrowser` owns that process; `open_page` hands back a fresh page on it.
+Most new browser tests belong to the **stub tier** (`tests/browser/stub/`), which needs no engine process. It drives a stub server that serves the real dashboard shell and canned fragments, so every test reads the shipped client JavaScript without spawning the engine. Each stub test launches its own Chromium via `with_stub_page` (per-test isolation is deliberate — no shared browser runtime); `SharedBrowser` shares one launch across the subtests inside `stub/invariants.rs` only.
 
 The **full-stack tier** (`tests/browser/<surface>.rs`) boots the real engine. Its entry point is the page-fixture helper `with_test_page` at `tests/test_utils/browser.rs`, which spawns the engine on a file-locked test port and returns a typed page wrapper. Full-stack interactions go through the htmx-settle helpers, which the build enforces.
 

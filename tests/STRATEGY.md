@@ -23,8 +23,7 @@ Specs (`docs/specs/`) are the behavioural authority. Every spec scenario maps
 to at least one HTTP E2E test that validates it end-to-end through the real
 driving adapter. Single-call scenarios ("POST /action with empty input → one
 continuation narration") and multi-call sequence scenarios ("POST /action →
-POST /retry → POST /retry → assert swipe=2") both live at the HTTP tier. The
-`flow/` tests are multi-call spec scenarios at HTTP E2E.
+POST /retry → POST /retry → assert swipe=2") both live at the HTTP tier.
 
 Scenarios whose Givens or Thens touch seams that only exist in-process live at
 the unit or driven-adapter tier:

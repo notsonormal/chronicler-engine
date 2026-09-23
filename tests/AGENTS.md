@@ -71,7 +71,6 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `settings.rs` — HTTP E2E tests for the settings endpoints: panel rendering and POST /settings.
     - `story_log.rs` — HTTP E2E tests for the story-log delete endpoint (POST /history/delete).
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
-    - `test_helpers.rs` — Shared test helpers for HTTP tests
     - `worlds.rs` — HTTP E2E tests for the worlds update endpoint: the posture merge contract, the options-toggle checkbox grammar, and the auto-save posture endpoint.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
@@ -84,6 +83,12 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `server_impl_wiring.rs` — HTTP wiring tests for `server_impl.rs` (real request routing lives in the `http` test binary).
       - `text_check.rs` — HTTP integration tests for the text-check endpoints: action-check dispatch (disabled vs. enabled), empty-command handling, and confirm-flow returning the full action area with check results.
       - `worlds_fragment_handlers.rs` — HTTP adapter tests for worlds_fragment handlers
+    - **support/**
+      - `app_wiring.rs` — Test-app builders for the http test binary: narrator-wired AppState + router bundles.
+      - `http_assertions.rs` — Rendered-HTML assertions shared by the http test binary.
+      - `http_fixtures.rs` — HTTP test fixtures: storage seeding and world-card builders for the endpoint tests.
+      - `http_requests.rs` — HTTP request plumbing for the http test binary: POST builders, body readers, generation-idle polling.
+      - `mod.rs` — Concept modules for the HTTP test binary's shared surface (requests, fixtures, assertions, app wiring).
 - **infrastructure/**
     - `architecture.rs` — Architecture guardrail tests using arch-lint — fail the build on any violation defined in `arch-lint.toml`; run with `cargo nextest run --test architecture`.
     - **guardrails/**
@@ -112,6 +117,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `world_storage.rs` — Integration tests for world persistence: create/list/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
 - **test_utils/**
     - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.
+    - `html.rs` — HTML slicing helpers for panel markup without element ids — locate a region by a stable anchor string.
     - `htmx_settle.rs` — htmx settle harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
     - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.

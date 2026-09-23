@@ -15,7 +15,7 @@ pub(crate) fn render_header_unlocked(game_name: String) -> Result<String> {
         .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-pub(crate) fn add_status_swap_headers(response: &mut Response<Body>) {
+pub fn add_status_swap_headers(response: &mut Response<Body>) {
     response
         .headers_mut()
         .insert("HX-Retarget", HeaderValue::from_static("#status-display"));

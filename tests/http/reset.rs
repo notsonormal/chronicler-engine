@@ -3,7 +3,7 @@
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::TestAppBuilder;
 
-use crate::test_helpers::{post_action, post_empty, wait_idle};
+use crate::support::http_requests::{post_action, post_empty, wait_idle};
 
 // [docs/specs/reset.md] SCENARIO: 7.1
 #[tokio::test]

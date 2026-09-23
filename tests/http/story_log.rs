@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::TestAppBuilder;
 
-use crate::test_helpers::{fetch_body, post_action, post_empty, wait_idle};
+use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_idle};
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
 #[tokio::test]

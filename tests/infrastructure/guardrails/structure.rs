@@ -296,23 +296,37 @@ pub fn check_no_std_thread_all(path: &str, content: &str) -> Vec<Violation> {
 
 /// Full-stack browser tests must interact only through htmx-settled helpers.
 ///
-/// A raw `click`/`select_option` on an element htmx swapped in can dispatch
-/// before htmx attaches the element's `hx-trigger` listeners, and the
-/// interaction is silently lost. The scan is line-based: a locator chain wraps
-/// across lines, so a receiver-aware match is not expressible. `dispatchEvent(`
-/// and `requestSubmit(` count too, including inside `page.evaluate` strings.
-/// The `stub/` tests drive a stub with no swap lifecycle to race, so they are
-/// exempt.
+/// A raw `click`/`select_option`/checkbox toggle on an element htmx swapped in
+/// can dispatch before htmx attaches the element's `hx-trigger` listeners, and
+/// the interaction is silently lost. The scan is line-based: a locator chain
+/// wraps across lines, so a receiver-aware match is not expressible.
+/// `dispatchEvent(` and `requestSubmit(` count too, including inside
+/// `page.evaluate` strings. The `stub/` tier is exempt by path: those tests
+/// drive a stub with no swap lifecycle to race.
+///
+/// Checkbox strings are banned because the next `input type="checkbox"` with
+/// an `hx-trigger="change"` would recreate the lost-interaction race. When the
+/// checked element carries no hx attribute — no request is possible, so no
+/// settle exists to wait for — suppress the line with a trailing
+/// `// settle-guard-exempt: <why>` comment on the flagged line. The why is
+/// mandatory: the marker is greppable, and the guardrail's tests pin its
+/// behaviour.
 pub fn check_browser_interactions_use_htmx_settle(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    if !path.starts_with("browser/") || !content.contains("with_test_page") {
+    // Exemption is by path, matching the docstring's claim: the stub tier has
+    // no swap lifecycle to race. (Keying the scan on a `with_test_page`
+    // mention instead would let a renamed builder silently escape the ban.)
+    if !path.starts_with("browser/") || path.starts_with("browser/stub/") {
         return violations;
     }
 
-    const BANNED_INTERACTIONS: [&str; 4] = [
+    const BANNED_INTERACTIONS: [&str; 7] = [
         ".click(",
         ".select_option(",
+        ".set_checked(",
+        ".check(",
+        ".uncheck(",
         "dispatchEvent(",
         "requestSubmit(",
     ];
@@ -320,6 +334,12 @@ pub fn check_browser_interactions_use_htmx_settle(path: &str, content: &str) -> 
     for (line_num, line) in content.lines().enumerate() {
         let trimmed = line.trim();
         if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*') {
+            continue;
+        }
+        // The marker must be a trailing comment on the flagged line: the scan
+        // already skips full-comment lines, so a marker on its own line would
+        // not suppress anything.
+        if line.contains("settle-guard-exempt") {
             continue;
         }
         if let Some(banned) = BANNED_INTERACTIONS.iter().find(|b| line.contains(**b)) {
@@ -330,7 +350,9 @@ pub fn check_browser_interactions_use_htmx_settle(path: &str, content: &str) -> 
                     "Browser test interacts without the htmx settle counter (`{banned}`). \
                      Use a tests/test_utils/browser.rs helper (click_and_settle / \
                      select_option_and_settle / an open_* helper) so the interaction \
-                     waits for its swap to settle."
+                     waits for its swap to settle. When the element carries no hx \
+                     attribute — no settle exists to wait for — suppress the line \
+                     with a trailing `// settle-guard-exempt: <why>` comment."
                 ),
             ));
         }

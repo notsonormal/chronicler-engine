@@ -2,7 +2,8 @@
 
 use chronicler_engine::test_support::TestAppBuilder;
 
-use crate::test_helpers::{assert_option_selected, fetch_body};
+use crate::support::http_assertions::assert_option_selected;
+use crate::support::http_requests::fetch_body;
 
 // The fragment is a plain server render, so a GET observes the rendered
 // posture controls directly, without a browser round-trip.

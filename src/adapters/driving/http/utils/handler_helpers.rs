@@ -2,6 +2,7 @@
 //! Handler-level utilities: shared template render + option string + preset helpers.
 
 use axum::response::Html;
+use uuid::Uuid;
 
 use crate::domain::model::prompt_preset::PresetType;
 
@@ -26,12 +27,17 @@ pub(crate) fn parse_preset_type(value: &str) -> Option<PresetType> {
     PresetType::try_from(value).ok()
 }
 
+/// Preset ids are storage keys: a bare wall-clock id collides when two presets
+/// are created in the same millisecond, and the loser is silently overwritten
+/// (create → duplicate is the exact flow the UI offers). The uuid-v4 suffix
+/// makes same-millisecond creations distinct (residual ~2⁻³² per pair).
 pub(crate) fn generate_preset_id() -> String {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
     format!(
-        "preset-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
+        "preset-{millis}-{}",
+        &Uuid::new_v4().simple().to_string()[..8]
     )
 }

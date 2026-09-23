@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
+//! [DOC: docs/diataxis/reference/narrative/options.md]
 //! Options orchestration — LLM call + result processing + entry point.
 
 use crate::application::llm_recorder::LlmCallRecorder;

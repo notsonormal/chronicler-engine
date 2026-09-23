@@ -77,15 +77,6 @@ pub async fn wait_for_condition_async<F, Fut>(
 where
     F: Fn() -> Fut,
     Fut: Future<Output = bool>,
-
-// Sync: poll `condition` until true or timeout (for std::thread tests).
-pub fn wait_for_condition_sync<F>(
-    timeout: Duration,
-    poll_interval: Duration,
-    condition: F,
-) -> bool
-where
-    F: Fn() -> bool,
 ```
 
 ## `tests/test_utils/server.rs`

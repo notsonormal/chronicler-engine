@@ -18,8 +18,8 @@ mod reset;
 mod retrigger;
 mod settings;
 mod story_log;
+mod support;
 mod swipe_new;
-mod test_helpers;
 mod worlds;
 
 mod requires_migration;

@@ -14,10 +14,8 @@ use chronicler_engine::test_support::{
     make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder, TestDataBuilder,
 };
 
-use crate::test_helpers::{
-    app_with_narrator, app_with_narrator_and_settings, post_action, post_action_check, post_empty,
-    wait_idle,
-};
+use crate::support::app_wiring::{app_with_narrator, app_with_narrator_and_settings};
+use crate::support::http_requests::{post_action, post_action_check, post_empty, wait_idle};
 
 // [docs/specs/actions.md] SCENARIO: 1.1
 #[tokio::test]

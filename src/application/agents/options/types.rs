@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
+//! [DOC: docs/diataxis/reference/narrative/options.md]
 //! Options agent type definitions
 
 use crate::domain::model::character::NpcCard;

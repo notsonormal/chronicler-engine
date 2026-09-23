@@ -25,6 +25,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 ENGINE_ROOT = Path(__file__).parent.parent
 SPECS_DIR = ENGINE_ROOT / "docs" / "specs"
@@ -76,9 +77,6 @@ TAG_EXEMPT_FILES = {
     ),
 }
 
-# Individual tests exempt by (file, fn name).
-TAG_EXEMPT_TESTS: dict[tuple[Path, str], str] = {}
-
 # Pins the requires_migration quarantine: the count may only go down.
 # Migration cleanups lower it deliberately; a new test in the folder fails
 # the gate.
@@ -101,14 +99,21 @@ def parse_spec_scenarios(spec_path: Path) -> set[str]:
     return scenarios
 
 
-def parse_test_annotations(
-    test_path: Path,
-) -> list[tuple[int, int, str, str]]:
-    """Find `// [spec] SCENARIO: X.Y` comments paired with a following
-    `#[test]` attribute. Returns list of (comment_line_number,
-    attribute_line_number, spec_path, scenario_id) for every comment that
-    is followed (within COMMENT_LOOKAHEAD lines) by a `#[test]`
-    attribute."""
+class TestFileScan(NamedTuple):
+    """One read of a Rust test file: SCENARIO annotations plus every test
+    attribute with its fn name. All three tag-rule consumers (coverage,
+    untagged, surface) derive their facts from this scan, so each file is
+    read exactly once."""
+
+    # (comment line, attribute line, spec path, scenario id), 1-based lines.
+    annotations: list[tuple[int, int, str, str]]
+    # (1-based attribute line, fn name) for every test attribute.
+    attributes: list[tuple[int, str]]
+
+
+def scan_test_file(test_path: Path) -> TestFileScan:
+    """Read `test_path` once and return its SCENARIO annotations and test
+    attributes. Exits 2 when the file cannot be read."""
     try:
         text = test_path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -117,18 +122,20 @@ def parse_test_annotations(
 
     lines = text.splitlines()
     annotations: list[tuple[int, int, str, str]] = []
+    attributes: list[tuple[int, str]] = []
 
     for i, line in enumerate(lines):
         m = SCENARIO_COMMENT_RE.match(line)
-        if not m:
-            continue
-        spec_path, scenario_id = m.group(1), m.group(2)
-        for j in range(i + 1, min(i + 1 + COMMENT_LOOKAHEAD, len(lines))):
-            if TEST_ATTR_RE.match(lines[j]):
-                annotations.append((i + 1, j + 1, spec_path, scenario_id))
-                break
+        if m:
+            spec_path, scenario_id = m.group(1), m.group(2)
+            for j in range(i + 1, min(i + 1 + COMMENT_LOOKAHEAD, len(lines))):
+                if TEST_ATTR_RE.match(lines[j]):
+                    annotations.append((i + 1, j + 1, spec_path, scenario_id))
+                    break
+        if TEST_ATTR_RE.match(line):
+            attributes.append((i + 1, find_test_fn_name(lines, i)))
 
-    return annotations
+    return TestFileScan(annotations, attributes)
 
 
 FN_NAME_RE = re.compile(r"^\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)")
@@ -153,48 +160,37 @@ def is_tag_exempt(rel: Path) -> bool:
 
 
 def find_untagged_tests(
-    test_files: list[Path],
+    scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str]]:
     """Return (path, attr_line, fn name) for every test attribute in a
-    non-exempt file that carries no SCENARIO tag and is not individually
-    exempt."""
+    non-exempt file that carries no SCENARIO tag. Pure over the prepared
+    `(path, engine-relative path, scan)` triples — no I/O."""
     violations: list[tuple[Path, int, str]] = []
-    for path in test_files:
-        rel = path.relative_to(ENGINE_ROOT)
+    for path, rel, scan in scans:
         if is_tag_exempt(rel):
             continue
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError as exc:
-            print(f"Error reading test {path}: {exc}", file=sys.stderr)
-            sys.exit(2)
-        tagged = {attr for _, attr, _, _ in parse_test_annotations(path)}
-        for i, line in enumerate(lines):
-            if not TEST_ATTR_RE.match(line):
+        tagged = {attr for _, attr, _, _ in scan.annotations}
+        for attr_line, fn_name in scan.attributes:
+            if attr_line in tagged:
                 continue
-            if (i + 1) in tagged:
-                continue
-            fn_name = find_test_fn_name(lines, i)
-            if (rel, fn_name) in TAG_EXEMPT_TESTS:
-                continue
-            violations.append((path, i + 1, fn_name))
+            violations.append((path, attr_line, fn_name))
     return violations
 
 
 def find_surface_violations(
-    test_files: list[Path],
+    scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str, str]]:
     """Return (path, line, spec_path, reason) for every SCENARIO tag whose
     observation surface does not match its test directory: `browser_*.md`
     specs must be tagged only from `tests/browser/`, and non-`browser_*`
     specs never from `tests/browser/` (contract: tests/STRATEGY.md
-    "SCENARIO tags", per-surface rule)."""
+    "SCENARIO tags", per-surface rule). Pure over the prepared
+    `(path, engine-relative path, scan)` triples — no I/O."""
     violations: list[tuple[Path, int, str, str]] = []
     browser_dir = Path("tests/browser")
-    for path in test_files:
-        rel = path.relative_to(ENGINE_ROOT)
+    for path, rel, scan in scans:
         in_browser = rel.is_relative_to(browser_dir)
-        for _cmt, _attr, spec_path, _sid in parse_test_annotations(path):
+        for _cmt, _attr, spec_path, _sid in scan.annotations:
             is_browser_spec = Path(spec_path).name.startswith("browser_")
             if is_browser_spec and not in_browser:
                 violations.append(
@@ -263,21 +259,27 @@ def main() -> int:
     test_files = sorted(
         f for test_dir in TEST_DIRS for f in test_dir.rglob("*.rs")
     )
-    for test in test_files:
-        for _cmt, _attr, spec_path, scenario_id in parse_test_annotations(test):
+    # One read per file: coverage, untagged, and surface all consume the same
+    # prepared scans.
+    scans = [
+        (path, path.relative_to(ENGINE_ROOT), scan_test_file(path))
+        for path in test_files
+    ]
+    for _path, _rel, scan in scans:
+        for _cmt, _attr, spec_path, scenario_id in scan.annotations:
             pair = (spec_path, scenario_id)
             if pair in declared:
-                covered.setdefault(pair, []).append((test, _cmt))
+                covered.setdefault(pair, []).append((_path, _cmt))
             else:
-                orphans.append((test, _cmt, spec_path, scenario_id))
+                orphans.append((_path, _cmt, spec_path, scenario_id))
 
     gaps = sorted(declared - set(covered.keys()))
     declared_count = len(declared)
     covered_count = len(covered)
     gap_count = len(gaps)
     orphan_count = len(orphans)
-    untagged = find_untagged_tests(test_files)
-    surface = find_surface_violations(test_files)
+    untagged = find_untagged_tests(scans)
+    surface = find_surface_violations(scans)
     quarantine = count_quarantine_tests()
     ratchet_exceeded = quarantine > REQUIRES_MIGRATION_TEST_COUNT
 

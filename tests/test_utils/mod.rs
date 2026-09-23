@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 pub mod browser;
+pub mod html;
 pub mod htmx_settle;
 pub mod server;
 pub mod settings_guard;
@@ -11,6 +12,8 @@ pub mod wait;
 
 #[allow(unused_imports)]
 pub use browser::*;
+#[allow(unused_imports)]
+pub use html::*;
 #[allow(unused_imports)]
 pub use server::*;
 #[allow(unused_imports)]

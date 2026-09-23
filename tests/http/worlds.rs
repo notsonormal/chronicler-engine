@@ -9,10 +9,9 @@ use chronicler_engine::domain::model::settings::{NarrativePerspective, Narrative
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{TestAppBuilder, TestMap};
 
-use crate::test_helpers::{
-    assert_option_selected, fetch_body, post_form, post_form_with_hx, response_body,
-    world_form_body,
-};
+use crate::support::http_fixtures::world_form_body;
+use crate::support::http_requests::{fetch_body, post_form, post_form_with_hx, response_body};
+use crate::support::http_assertions::assert_option_selected;
 
 fn posture_world() -> WorldCard {
     WorldCard {

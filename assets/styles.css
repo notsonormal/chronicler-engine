@@ -566,9 +566,9 @@ body {
 }
 
 /* Options dock — vertical stack of pickable options docked above the input
-   area (ticket 04 V4: options are part of the input surface, not the last
-   message). The container (#options-dock) self-polls and renders nothing
-   while the option set is empty. */
+   area. Options are part of the input surface, not the last message. The
+   container (#options-dock) self-polls and renders nothing while the option
+   set is empty. */
 .options-strip {
     display: flex;
     flex-direction: column;

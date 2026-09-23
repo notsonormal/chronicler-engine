@@ -6,6 +6,7 @@ use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
 
 use super::htmx_settle::{await_panel_ready, click_and_settle, install_htmx_settle};
+use super::html::preset_card_html_slice;
 use super::server::{buffer_text, get_config_port, registered_server_logs, tail_lines, TestServer};
 use super::stub_server::{StubActionOutcome, StubServer};
 #[allow(unused_imports)]
@@ -245,18 +246,9 @@ pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
 /// stable anchor.
 fn preset_card_rendered(body: &str, name: &str) -> bool {
     let title_anchor = format!(r#"<span class="card-title">{name}</span>"#);
-    let Some(title_pos) = body.find(&title_anchor) else {
-        return false;
-    };
-    let card_start = body[..title_pos]
-        .rfind("<div class=\"preset-card")
-        .unwrap_or(0);
-    let card_end = body[title_pos..]
-        .find("<div class=\"preset-card")
-        .map(|offset| title_pos + offset)
-        .unwrap_or(body.len());
-    body[card_start..card_end].contains(r#"hx-post="/prompt-presets/"#)
-        && body[card_start..card_end].contains("/duplicate")
+    preset_card_html_slice(body, &title_anchor).is_some_and(|card| {
+        card.contains(r#"hx-post="/prompt-presets/"#) && card.contains("/duplicate")
+    })
 }
 
 /// Selector addressing a preset card by its title — cards carry no `data-id`.

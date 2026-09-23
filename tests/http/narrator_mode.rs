@@ -11,7 +11,9 @@ use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::TestMap;
 
-use crate::test_helpers::{app_with_narrator_and_registry, if_world, post_action, post_form, wait_idle};
+use crate::support::app_wiring::app_with_narrator_and_registry;
+use crate::support::http_fixtures::if_world;
+use crate::support::http_requests::{post_action, post_form, wait_idle};
 
 /// App whose narrator recorder persists every assembled prompt into the
 /// shared storage, so tests can assert on what the narrator received.

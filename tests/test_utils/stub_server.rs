@@ -5,7 +5,9 @@
 // them.
 //
 // What is canned: every fragment the shell loads or polls, under
-// `tests/test_utils/stub_fixtures/`. The one dynamic endpoint is
+// `tests/test_utils/stub_fixtures/` — except the options dock, which is
+// rendered through the engine's own `OptionsDockTemplate` (a pure vm → HTML
+// render, so the drift tax there is avoidable). The one dynamic endpoint is
 // `POST /action/check`, which answers with a scripted outcome the test names up
 // front.
 
@@ -20,7 +22,10 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 
-use super::server::{get_available_port, release_port_lock};
+use chronicler_engine::adapters::driving::http::builders::headers::add_status_swap_headers;
+
+use super::server::{get_config_port, release_port_lock};
+use super::CONFIG_PATH;
 
 /// The shipped dashboard shell, served verbatim so the stub exercises the real
 /// htmx wiring.
@@ -35,7 +40,31 @@ const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.
 const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
 const FIXTURE_ACTION_AREA: &str = include_str!("stub_fixtures/action_area.html");
-const FIXTURE_OPTIONS_DOCK: &str = include_str!("stub_fixtures/options_dock.html");
+
+/// Canned options the rendered dock offers — the three texts the old fixture
+/// carried, which the stub-tier tests interact with.
+const CANNED_OPTIONS: [&str; 3] = [
+    "Ask the bartender about the Test Realm",
+    "Examine the merchant's pack",
+    "Step outside into the night air",
+];
+
+/// Render the options dock through the engine's own template — the dock is a
+/// pure `vm → HTML` render needing no `AppState`, so serving a hand-copy
+/// fixture would be drift we pay for nothing. Askama escapes the texts.
+fn options_dock_html() -> String {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::OptionsDockTemplate;
+    use chronicler_engine::adapters::driving::http::view_models::OptionsDockViewModel;
+
+    let vm = OptionsDockViewModel::new(
+        CANNED_OPTIONS.iter().map(|o| o.to_string()).collect(),
+        false,
+    );
+    OptionsDockTemplate::new(vm)
+        .render()
+        .expect("render options dock")
+}
 
 /// What `POST /action/check` should answer with. A test names the outcome it
 /// needs; the stub runs no pipeline.
@@ -64,9 +93,11 @@ pub struct StubServer {
 }
 
 impl StubServer {
-    /// Start the stub on a free port from the shared test port range.
+    /// Start the stub on a free port from the shared test port range, resolved
+    /// through `tests/test_config.json` so the stub cannot silently collide
+    /// with real engine servers if the range moves.
     pub async fn start(action_outcome: StubActionOutcome) -> Self {
-        let port = get_available_port(3010, 3050).expect("allocate a stub port");
+        let port = get_config_port(CONFIG_PATH).expect("allocate a stub port");
         Self::start_on_port(port, action_outcome).await
     }
 
@@ -123,7 +154,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route(
             "/fragment/options-dock",
-            get(|| async { Html(FIXTURE_OPTIONS_DOCK) }),
+            get(|| async { Html(options_dock_html()) }),
         )
         .route(
             "/fragment/llm-messages",
@@ -165,22 +196,19 @@ async fn action_check(
 ) -> Response<Body> {
     match state.action_outcome {
         // The real `POST /action/check` acknowledgement retargets the status
-        // span rather than replacing the action area (`add_status_swap_headers`
-        // in the engine). Mirroring both the body and the retarget headers keeps
-        // the canned response shape from drifting.
-        StubActionOutcome::Pending => (
-            StatusCode::OK,
-            [
-                (header::CONTENT_TYPE, "text/html; charset=utf-8"),
-                (
-                    header::HeaderName::from_static("hx-retarget"),
-                    "#status-display",
-                ),
-                (header::HeaderName::from_static("hx-reswap"), "innerHTML"),
-            ],
-            r#"<span class="status thinking">Thinking...</span>"#,
-        )
-            .into_response(),
+        // span rather than replacing the action area: consume the engine's
+        // `add_status_swap_headers` builder so the canned shape cannot drift
+        // from it.
+        StubActionOutcome::Pending => {
+            let mut response = (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                r#"<span class="status thinking">Thinking...</span>"#,
+            )
+                .into_response();
+            add_status_swap_headers(&mut response);
+            response
+        }
         StubActionOutcome::Idle => (
             StatusCode::OK,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],

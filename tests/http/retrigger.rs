@@ -16,7 +16,7 @@ use chronicler_engine::test_support::{
     TestStoredTriggerContext,
 };
 
-use crate::test_helpers::{post_empty, wait_idle};
+use crate::support::http_requests::{post_empty, wait_idle};
 
 // [docs/specs/retrigger.md] SCENARIO: 13.1
 #[tokio::test]

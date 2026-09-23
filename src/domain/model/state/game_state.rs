@@ -450,6 +450,12 @@ impl GameState {
         results
     }
 
+    /// Cross-checks derived state against the map and NPC registry.
+    ///
+    /// Deliberately not checked here: the "last Narration after last player
+    /// Input" ordering on `MessageHistory`. It is not a global invariant —
+    /// `POST /history/delete` legitimately pops a Narration, so a state whose
+    /// last entry is an Input is a valid rest state, not corruption.
     #[cfg(feature = "diagnostics")]
     pub fn assert_state_consistency(
         &self,

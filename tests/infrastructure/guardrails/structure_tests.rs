@@ -303,6 +303,63 @@ fn test_check_browser_interactions_use_htmx_settle_rejects_raw_click() {
 }
 
 #[test]
+fn test_check_browser_interactions_use_htmx_settle_scans_by_path_not_marker() {
+    // The exemption is by path: a tier-3 file that never mentions
+    // `with_test_page` (e.g. under a renamed entry-point builder) is still
+    // scanned, so the ban cannot silently escape.
+    let content = "custom_entry(|page, _| async move {\n    \
+                   page.locator(\"#x\").await.click(None).await;\n});\n";
+    let violations = check_browser_interactions_use_htmx_settle("browser/worlds.rs", content);
+    assert_eq!(violations.len(), 1);
+}
+
+#[test]
+fn test_check_browser_interactions_use_htmx_settle_rejects_raw_set_checked() {
+    // A checkbox with `hx-trigger="change"` would recreate the
+    // lost-interaction race, so checkbox toggles are banned like clicks.
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   page.locator(\"#c\").await.set_checked(true, None).await;\n});\n";
+    let violations =
+        check_browser_interactions_use_htmx_settle("browser/prompt_presets.rs", content);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("set_checked("));
+    assert!(violations[0].message.contains("settle-guard-exempt"));
+}
+
+#[test]
+fn test_check_browser_interactions_use_htmx_settle_allows_trailing_marker() {
+    // The marker is a trailing comment on the flagged line, with the why
+    // inline: the checked element carries no hx attribute, so no settle
+    // exists to wait for.
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   page.locator(\"#c\").await.set_checked(true, None).await // settle-guard-exempt: input carries no hx-trigger; form posts via the gated Save click.\n});\n";
+    let violations =
+        check_browser_interactions_use_htmx_settle("browser/prompt_presets.rs", content);
+    assert_eq!(violations.len(), 0);
+}
+
+#[test]
+fn test_check_browser_interactions_use_htmx_settle_marker_does_not_leak_to_next_line() {
+    // A marker suppresses only its own line: a marker-only comment cannot
+    // whitewash a banned interaction that follows it.
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   // settle-guard-exempt: (unrelated note)\n    \
+                   page.locator(\"#x\").await.click(None).await;\n});\n";
+    let violations = check_browser_interactions_use_htmx_settle("browser/worlds.rs", content);
+    assert_eq!(violations.len(), 1);
+}
+
+#[test]
+fn test_check_browser_interactions_use_htmx_settle_check_substring_needs_the_dot() {
+    // `.check(` bans the playwright check call, not every name ending in
+    // `_check(`: the dot is part of the match.
+    let content = "with_test_page(x, y, z, |page, _| async move {\n    \
+                   post_action_check(&app, \"/options\").await;\n});\n";
+    let violations = check_browser_interactions_use_htmx_settle("browser/worlds.rs", content);
+    assert_eq!(violations.len(), 0);
+}
+
+#[test]
 fn test_check_browser_interactions_use_htmx_settle_rejects_raw_select_option() {
     let content = "with_test_page(x, y, z, |page, _| async move {\n    \
                    page.locator(\"#s\").await.select_option(\"v\", None).await;\n});\n";
@@ -339,8 +396,9 @@ fn test_check_browser_interactions_use_htmx_settle_allows_gated_helpers() {
 #[test]
 fn test_check_browser_interactions_use_htmx_settle_exempts_stub_tier() {
     // `with_stub_page` drives a stub with no htmx swap lifecycle: raw clicks
-    // are legitimate there.
-    let content = "with_stub_page(o, |page, _| async move {\n    \
+    // are legitimate there. The exemption is by path, not by the absence of a
+    // `with_test_page` mention — the content here carries both.
+    let content = "with_test_page(a, b, c, |page, _| async move {\n    \
                    page.locator(\"#x\").await.click(None).await;\n});\n";
     let violations =
         check_browser_interactions_use_htmx_settle("browser/stub/dashboard.rs", content);

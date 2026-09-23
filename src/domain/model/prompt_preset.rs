@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/narrative/narrator_mode.md]
 //! Prompt preset configurations
 
 use serde::{Deserialize, Serialize};

@@ -8,7 +8,7 @@ use tower::util::ServiceExt;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::TestPersona;
 
-use super::test_helpers::seeded_storage_with_initial_game;
+use crate::support::http_fixtures::seeded_storage_with_initial_game;
 
 // [docs/specs/games.md] SCENARIO: 18.1
 #[tokio::test]

@@ -12,6 +12,8 @@ use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::prompt_preset_service::PromptPresetService;
 use chronicler_engine::TestAppBuilder;
 
+use crate::test_utils::preset_card_html_slice;
+
 use crate::SettingsTestGuard;
 
 async fn body_string(response: axum::response::Response<Body>) -> String {
@@ -86,19 +88,9 @@ fn extract_first_preset_id(body: &str) -> String {
 /// slice is located via the always-rendered duplicate URL and bounded by the
 /// next card (or the end of the body).
 fn preset_card_slice<'a>(body: &'a str, preset_id: &str) -> &'a str {
-    let anchor = body
-        .find(&format!(
-            r#"hx-post="/prompt-presets/{preset_id}/duplicate""#
-        ))
-        .unwrap_or_else(|| panic!("preset card for {preset_id} missing: no duplicate button"));
-    let start = body[..anchor]
-        .rfind("<div class=\"preset-card")
-        .expect("preset-card div opens before the duplicate button");
-    let end = body[anchor..]
-        .find("<div class=\"preset-card")
-        .map(|offset| anchor + offset)
-        .unwrap_or(body.len());
-    &body[start..end]
+    let anchor = format!(r#"hx-post="/prompt-presets/{preset_id}/duplicate""#);
+    preset_card_html_slice(body, &anchor)
+        .unwrap_or_else(|| panic!("preset card for {preset_id} missing: no duplicate button"))
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.1
@@ -813,11 +805,9 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
         .build_service();
     let app = build_router(app_state);
 
-    // 1. Seed the source with a fixed id. The create endpoint derives ids
-    //    from the wall clock at millisecond resolution, so a create-then-
-    //    duplicate pair inside one test can collide and the copy overwrites
-    //    the source. The chain under test is duplicate -> edit-form -> save,
-    //    so the source's provenance is irrelevant.
+    // 1. Seed the source with a fixed id. The chain under test is
+    //    duplicate -> edit-form -> save, so the source's provenance is
+    //    irrelevant.
     use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
     use chronicler_engine::domain::model::settings::NarratorMode;
     storage

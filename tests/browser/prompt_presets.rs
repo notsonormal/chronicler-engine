@@ -12,11 +12,6 @@ use super::*;
 /// Seeding goes through the engine's own HTTP API (`seed_system_preset`): the
 /// layout seeds no non-default preset, and a default card renders View instead
 /// of Edit with no `Set Active` buttons at all.
-///
-/// **Do not stress-loop this test.** The preset id generator is
-/// millisecond-based, so a create and a duplicate in the same millisecond
-/// collide. One seeded create and one Duplicate click makes that window small
-/// but not zero.
 // [docs/specs/browser_prompt_presets.md] SCENARIO: 28.1
 #[tokio::test]
 async fn test_preset_duplicate_edit_save_click_chain() {
@@ -72,7 +67,7 @@ async fn test_preset_duplicate_edit_save_click_chain() {
             let edit_form = ".preset-card.edit-form";
             page.locator(&format!(r#"{edit_form} input[name="allowed_mode_if"]"#))
                 .await
-                .set_checked(true, None)
+                .set_checked(true, None) // settle-guard-exempt: the mode checkboxes carry no hx attribute — the form posts only via the settle-gated Save click.
                 .await
                 .expect("tick the IF mode flag");
 

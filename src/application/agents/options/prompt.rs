@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
+//! [DOC: docs/diataxis/reference/narrative/options.md]
 //! Options prompt construction
 
 use crate::domain::model::template::TemplateVars;

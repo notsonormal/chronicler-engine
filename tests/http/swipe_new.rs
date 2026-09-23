@@ -19,7 +19,8 @@ use chronicler_engine::test_support::{
     seed_event_flow, TestAppBuilder, TestDataBuilder, TestMap,
 };
 
-use crate::test_helpers::{app_with_narrator, post_action, post_empty, wait_idle};
+use crate::support::app_wiring::app_with_narrator;
+use crate::support::http_requests::{post_action, post_empty, wait_idle};
 
 // [docs/specs/swipe_new.md] SCENARIO: 9.1
 #[tokio::test]

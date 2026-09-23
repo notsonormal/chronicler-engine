@@ -12,7 +12,7 @@ use chronicler_engine::TestDataBuilder;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
 
-use crate::test_helpers::fetch_body;
+use crate::support::http_requests::fetch_body;
 
 fn make_world_form_data(key: &str, name: &str, map_json: &str, scenarios_json: &str) -> String {
     format!(

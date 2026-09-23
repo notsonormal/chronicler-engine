@@ -68,6 +68,14 @@ _Avoid_: hint, nudge
 Forcing the next narration to be written as the player's persona. Uses the impersonate preset (replacing the system preset), drops the `<PlayerCharacter>` layer, and saves the output as an `Input` message — the same type as a typed player line, since impersonate is the player speaking. No auto-narration follows; the impersonated line can be redone as an alternate Swipe.
 _Avoid_: roleplay as, pose as, pretend (use Impersonate)
 
+**Narrator Mode**:
+Which of two narration stances a Game plays — Novel or Interactive Fiction. Set on the World and inherited at game creation; switchable per game. Switching retargets the system preset and re-renders the perspective and tense controls.
+_Avoid_: style, tone, personality, narrator persona
+
+**Options**:
+Pre-written player inputs the engine offers after a non-impersonate narration turn or on demand (`/options`). Using one submits its text as the player's input — an Input message, the same as a typed line.
+_Avoid_: suggestions, quick actions, auto-inputs
+
 ## Deprecated Terms
 
 **Turn**:
