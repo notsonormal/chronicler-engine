@@ -31,6 +31,21 @@ The script outputs file paths, line numbers, and comment text in the format:
 
 Read `CODING_STANDARDS.md`, section `## Code comments` — repo-level comment rules that the detection tables below extend.
 
+# Remove the reason, not just the comment
+
+A comment written to justify leaving the real problem unsolved shows the shape the code should have. Deleting the comment is half the fix. The reshape flag carries the other half.
+
+`CODING_STANDARDS.md` holds the instance-level rule: if the code isn't clear, rename the symbols rather than comment. This section is the pass-level version. While judging each finding, ask what made the comment necessary. A workaround defended in prose, an unclear name explained in prose, a missing type described in prose: each one is a shape change the code wants. Log it as a reshape flag naming the minimal change that removes the reason, and offer it as the next action.
+
+Three carve-outs remain, all guardrail-enforced: DOC anchors, module summaries, and semantic enum-variant docs. Every other comment earns its place by naming a reason the code cannot carry itself.
+
+```rust
+// has to clone the whole roster because callers mutate the result; fine for now
+pub fn roster(&self) -> Vec<Npc> { self.npcs.clone() }
+```
+
+Report: DELETE the comment. Reshape flag (OFFERED): `roster.rs:Session::roster - return &[Npc] and fix the two mutating callers`.
+
 # Detection Targets
 
 ## AI Slop Patterns (Rust)
@@ -44,6 +59,7 @@ Read `CODING_STANDARDS.md`, section `## Code comments` — repo-level comment ru
 | Narration comments | `// This does X`, `// Then we do Y` | DELETE |
 | Separator comments | `// === Section ===` | DELETE |
 | Enum variant narration prose | `/// This variant represents...` | DELETE (rephrase as semantic, see below) |
+| Justification comment defending a workaround or unclear code | `// has to clone the roster because callers mutate it; fine for now` | DELETE + reshape flag |
 
 ## Enum Variant Docs
 
@@ -131,7 +147,12 @@ Severity levels:
   FILE:LINES - Severity - Description
   Old: (snippet)
   New: (snippet)
+
+# RESHAPE FLAGS: (OFFERED, FAIL reports only)
+  FILE:SYMBOL - minimal shape change that removes the comment's reason
 ```
+
+Reshape flags are proposals. An approved flag leaves this skill and runs as normal gated production work.
 
 # Stay Focused On Fixing Comments
 
