@@ -27,7 +27,9 @@ During code reviews, avoid vague architectural critiques and focus on actionable
 
 ## Testing
 
-Read `tests/AGENTS.md` and `tests/STRATEGY.md` when writing or reviewing tests.
+Read `tests/AGENTS.md` and `tests/STRATEGY.md` when writing or reviewing tests; test-writing patterns live in `docs/diataxis/reference/coding_standards/unit_test_standards.md` and `integration_test_standards.md`.
+
+Tautological tests are considered harmful.
 
 ## Documentation
 

@@ -122,6 +122,7 @@ class StepCommandTests(unittest.TestCase):
     # Every registry command pinned verbatim: a typo in any spec's cmd fails
     # the suite instead of silently changing what a subcommand runs.
     EXPECTED_COMMANDS = {
+        "install-hooks": "python scripts/install_git_hooks.py",
         "fmt": "cargo fmt",
         "validate-data": "python scripts/validate_data.py",
         "check": "cargo check --all-targets --all-features",
@@ -182,10 +183,12 @@ class GatePlanTests(unittest.TestCase):
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_full_gate_has_fmt_first_and_16_steps(self):
+    def test_full_gate_installs_hooks_first_and_has_17_steps(self):
         plan = build._plan_gate_steps(self.gate_args())
-        self.assertEqual(plan[0].label, "Formatting...")
-        self.assertEqual(len(plan), 16)
+        self.assertEqual(plan[0].kind, "hooks")
+        self.assertEqual(plan[0].label, "Installing git hooks...")
+        self.assertEqual(plan[1].label, "Formatting...")
+        self.assertEqual(len(plan), 17)
 
     def test_gate_splits_browser_from_integration(self):
         """The gate runs the browser binary as its own step, not merged in."""
@@ -207,7 +210,8 @@ class GatePlanTests(unittest.TestCase):
         plan = build._plan_gate_steps(self.gate_args(no_fmt=True))
         labels = [step.label for step in plan]
         self.assertNotIn("Formatting...", labels)
-        self.assertEqual(len(plan), 15)
+        self.assertIn("Installing git hooks...", labels)
+        self.assertEqual(len(plan), 16)
 
     def test_coverage_mode_swaps_test_and_report_steps(self):
         plan = build._plan_gate_steps(self.gate_args(coverage=True))

@@ -8,6 +8,10 @@ description: Review code for architectural consistency with codebase patterns (n
 - **Consistency over Optimization**: Match existing patterns, not "clever" code
 - **Intra-Language Harmony**: Python follows Python patterns, Rust follows Rust patterns
 
+# Setup
+
+Always read `CODING_STANDARDS.md` before reviewing; it is the standard of record, then the patterns in the diff's own neighborhood.
+
 # Output Format
 
 ```

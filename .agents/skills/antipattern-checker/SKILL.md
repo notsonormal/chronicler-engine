@@ -15,6 +15,10 @@ Detects **semantic** abstraction anti-patterns that static tools (clippy, arch-l
 
 If user doesn't specify scope, ask. Default to uncommitted if available, else branch diff.
 
+## Standards
+
+Always read `CODING_STANDARDS.md` before reviewing.
+
 ---
 
 ## What to Detect

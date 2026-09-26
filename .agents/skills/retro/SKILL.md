@@ -21,8 +21,9 @@ The user has asked for a **retrospective**. You are suggesting improvements to t
 - **Tool economy**: did the agent make expensive tool calls that could be streamlined? Is there any custom tooling (CLI's, MCP's) that is particularly token-inefficient? _Use when_ the agent made an expensive tool call.
 - **No-ops**: look for instructions in steering files that don't modify the agent's behavior. _Use when_ the steering files are large and unwieldy.
 - **Information access**: look for opportunities to increase the agent's access to information. Teeing dev server logs, readonly access to third-party services. _Use when_ a crucial piece of information was not available to the agent.
+- **Skill health**: did the right skills fire? A skill the user had to invoke by name has a failing trigger: its description is its only advertisement, so the fix is usually a description rewrite, not new body text. A skill whose instructions proved wrong, stale, or missing the case the session hit needs an edit: one-line fixes directly, section-sized rewrites per the style guide from step 1. _Use when_ the session invoked skills, or a skill should have fired but didn't.
 
-4. Present these candidates to the user, in order of severity.
+4. Present these candidates to the user, in order of severity. File candidates the user wants to defer as issues in the repo's issue tracker instead of dropping them.
 
 ## Reference
 
