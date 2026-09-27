@@ -1,6 +1,6 @@
 //! Settings HTTP handler tests.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use axum::Form;
 use axum::extract::Path;
 
@@ -17,17 +17,15 @@ use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 
 fn make_test_app_state() -> AppState {
-    let storage = Arc::new(Storage::new_in_memory());
-    let settings = Arc::new(RwLock::new(AppSettings::default()));
-    let wired = build_app_graph_for_tests(Arc::clone(&settings), Arc::clone(&storage), None)
-        .expect("build_app_graph_for_tests should succeed");
-    AppState::from_wired(wired)
+    make_app_state_with_settings(AppSettings::default())
 }
 
 fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
-    let settings = Arc::new(RwLock::new(settings));
-    let wired = build_app_graph_for_tests(Arc::clone(&settings), Arc::clone(&storage), None)
+    storage
+        .save_settings(&settings)
+        .expect("save_settings should succeed");
+    let wired = build_app_graph_for_tests(Arc::clone(&storage), None)
         .expect("build_app_graph_for_tests should succeed");
     AppState::from_wired(wired)
 }
@@ -45,18 +43,26 @@ async fn test_settings_panel_returns_html() {
 #[tokio::test]
 async fn test_save_settings_handler_updates_ids() {
     let app_state = make_test_app_state();
+    let ids: Vec<String> = app_state
+        .settings()
+        .expect("settings read should succeed")
+        .connections
+        .iter()
+        .take(2)
+        .map(|c| c.id.clone())
+        .collect();
     let form = SettingsForm {
-        narration_connection_id: "conn-1".into(),
-        quantifier_connection_id: "conn-2".into(),
+        narration_connection_id: ids[0].clone(),
+        quantifier_connection_id: ids[1].clone(),
     };
 
     let response = save_settings_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
     assert!(response.0.contains("Settings saved!"));
 
-    let settings = app_state.settings.read().unwrap();
-    assert_eq!(settings.narration_connection_id, "conn-1");
-    assert_eq!(settings.quantifier_connection_id, "conn-2");
+    let settings = app_state.settings().expect("settings read should succeed");
+    assert_eq!(settings.narration_connection_id, ids[0]);
+    assert_eq!(settings.quantifier_connection_id, ids[1]);
 }
 
 #[tokio::test]
@@ -72,7 +78,7 @@ async fn test_save_text_check_handler_spell_mode() {
 
     assert!(response.0.contains("Text check settings saved!"));
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Spell);
     assert!(settings.text_check.enable_auto_check);
 }
@@ -90,7 +96,7 @@ async fn test_save_text_check_handler_grammar_mode() {
 
     assert!(response.0.contains("Text check settings saved!"));
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Grammar);
     assert!(!settings.text_check.enable_auto_check);
 }
@@ -106,7 +112,7 @@ async fn test_save_text_check_handler_spell_grammar_mode() {
     let _response =
         save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::SpellGrammar);
     assert!(settings.text_check.enable_auto_check);
 }
@@ -122,7 +128,7 @@ async fn test_save_text_check_handler_unknown_mode_defaults_to_disabled() {
     let _response =
         save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Disabled);
 }
 
@@ -143,7 +149,7 @@ async fn test_add_connection_handler_adds_connection() {
 
     assert!(response.0.contains("<div class=\"settings-panel\">"));
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     let new_conn = settings.connections.last().unwrap();
     assert_eq!(new_conn.name, "Test LlmProviderConfig");
     assert_eq!(new_conn.provider, LlmBackendType::OpenRouter);
@@ -167,7 +173,7 @@ async fn test_add_connection_handler_empty_base_url_is_none() {
     let _response =
         add_connection_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     let new_conn = settings.connections.last().unwrap();
     assert_eq!(new_conn.base_url, None);
 }
@@ -187,7 +193,7 @@ async fn test_add_connection_handler_non_empty_base_url_is_some() {
     let _response =
         add_connection_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     let new_conn = settings.connections.last().unwrap();
     assert_eq!(new_conn.base_url, Some("http://localhost:11434".into()));
 }
@@ -353,7 +359,7 @@ async fn test_delete_connection_handler_removes_connection() {
 
     assert!(response.0.is_empty());
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.connections.len(), 1);
     assert_eq!(settings.connections[0].id, "conn-2");
 }
@@ -393,7 +399,7 @@ async fn test_delete_connection_handler_redirects_narrator() {
     )
     .await;
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.narration_connection_id, "conn-2");
 }
 
@@ -455,7 +461,7 @@ async fn test_set_narrator_handler_updates_id() {
 
     assert!(response.0.contains("<div class=\"settings-panel\">"));
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.narration_connection_id, "conn-1");
 }
 
@@ -494,7 +500,7 @@ async fn test_set_quantifier_handler_updates_id() {
 
     assert!(response.0.contains("<div class=\"settings-panel\">"));
 
-    let settings = app_state.settings.read().unwrap();
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.quantifier_connection_id, "conn-1");
 }
 

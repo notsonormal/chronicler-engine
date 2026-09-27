@@ -1,13 +1,12 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Options agent implementation.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::error::EngineError;
 use crate::domain::model::agent::{
     AgentConfig, AgentContext, AgentResult, BackendSelector, ExecutionPhase,
 };
-use crate::domain::model::settings::AppSettings;
 
 use crate::application::agents::Agent;
 use crate::application::agents::options::utils::orchestration::generate_options;
@@ -20,7 +19,6 @@ pub struct OptionsAgent {
     name: String,
     recorder: Arc<LlmCallRecorder>,
     storage: Option<Arc<Storage>>,
-    settings: Arc<RwLock<AppSettings>>,
 }
 
 impl std::fmt::Debug for OptionsAgent {
@@ -36,13 +34,11 @@ impl OptionsAgent {
         _config: &AgentConfig,
         recorder: Arc<LlmCallRecorder>,
         storage: Option<Arc<Storage>>,
-        settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
         Ok(Self {
             name: "options".to_string(),
             recorder,
             storage,
-            settings: Arc::clone(&settings),
         })
     }
 
@@ -53,7 +49,6 @@ impl OptionsAgent {
             name,
             recorder: Arc::new(LlmCallRecorder::new(provider, make_noop_save_fn())),
             storage: None,
-            settings: Arc::new(RwLock::new(AppSettings::default())),
         }
     }
 }
@@ -73,8 +68,8 @@ impl Agent for OptionsAgent {
 
     fn execute(&self, ctx: &AgentContext) -> Result<AgentResult, EngineError> {
         let options_prompt_override = {
-            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
             self.storage.as_ref().and_then(|s| {
+                let settings = s.get_settings().ok()?;
                 let preset_id = s.active_options_preset_id(&settings);
                 s.get_preset(&preset_id)
                     .ok()

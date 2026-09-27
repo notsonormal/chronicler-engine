@@ -25,7 +25,7 @@ The boundary is enforced by a two-phase bootstrap. Phase 1 runs once at boot: JS
 
 The seed manifests are an intermediate type that exists only to parse JSON files. They are converted to runtime card types via the `WorldManifest` → `WorldCard` conversion, which strips the file-pointer fields (`map_file`, `characters_dir`) on the way in. The runtime card has no notion of where the seed JSON lived — the database row is its only home, and the manifest-to-card conversion is the seam where the filesystem coupling is dropped.
 
-Settings live the same way: a singleton row in the `settings` table, seeded once from `data/settings.json`, then read from the database for the lifetime of the process. The bootstrap fact that belongs here is that the settings row is a database artifact from the moment seeding completes, and the runtime reads the row, never the file.
+Settings live the same way: a singleton row in the `settings` table, seeded once from `data/settings.json`, then read from the database on every use. The bootstrap fact that belongs here is that the settings row is a database artifact from the moment seeding completes, and the runtime reads the row, never the file. Seeding the settings row is the one fail-loud exception to the corrupt-file tolerance below: a malformed `data/settings.json` stops the boot instead of starting the engine with a half-read configuration.
 
 ## The seeding contract
 

@@ -8,9 +8,12 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::domain::model::llm_backend::LlmBackendType;
+use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
 use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
+use crate::support::app_wiring::app_with_production_graph;
 
 async fn body_string(response: axum::response::Response<Body>) -> String {
     let body = axum::body::to_bytes(response.into_body(), 16384)
@@ -29,6 +32,27 @@ fn post_form_request(uri: &str, body: &str) -> Request<Body> {
         )
         .body(Body::from(body.to_string()))
         .unwrap()
+}
+
+async fn get_body(app: &axum::Router, uri: &str) -> String {
+    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    body_string(response).await
+}
+
+fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
+    LlmProviderConfig {
+        id: id.into(),
+        name: id.into(),
+        provider: LlmBackendType::Mock,
+        model: model.into(),
+        api_key: None,
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    }
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.1
@@ -116,9 +140,9 @@ async fn test_post_settings_switches_both_connections() {
 
 // [docs/specs/settings.md] SCENARIO: 20.5
 #[tokio::test]
-async fn test_post_settings_accepts_unknown_connection_id() {
+async fn test_post_settings_rejects_unknown_connection_id() {
     let _guard = SettingsTestGuard::new();
-    let app = TestAppBuilder::default_app();
+    let (app, app_state) = TestAppBuilder::default_test().build_with_state();
 
     let req = post_form_request(
         "/settings",
@@ -128,7 +152,11 @@ async fn test_post_settings_accepts_unknown_connection_id() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
-    assert_eq!(body, "Settings saved!");
+    assert!(body.contains("error-message"));
+    assert!(body.contains("is not in the connections list"));
+
+    let stored = app_state.settings().expect("settings read should succeed");
+    assert_eq!(stored.narration_connection_id, "openrouter-gpt-4o-mini");
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.6
@@ -148,7 +176,7 @@ async fn test_post_settings_missing_field_returns_422() {
 async fn test_post_settings_reports_save_failure() {
     let _guard = SettingsTestGuard::new();
     let storage = Arc::new(Storage::new_in_memory().with_failure(
-        "save_settings",
+        "update_settings",
         TestOverride::internal("settings save failure"),
     ));
     let app = TestAppBuilder::default_test().storage(storage).build();
@@ -161,5 +189,42 @@ async fn test_post_settings_reports_save_failure() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
-    assert!(body.contains(r#"<span class='error'>Save failed:"#));
+    assert!(body.contains("error-message"));
+    assert!(body.contains("settings save failure"));
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.8
+#[tokio::test]
+async fn test_narrator_switch_takes_effect_without_a_restart() {
+    let _guard = SettingsTestGuard::new();
+
+    let settings = AppSettings {
+        connections: vec![
+            mock_connection("mock-a", "mock-model-a"),
+            mock_connection("mock-b", "mock-model-b"),
+        ],
+        narration_connection_id: "mock-a".into(),
+        quantifier_connection_id: "mock-a".into(),
+        ..AppSettings::default()
+    };
+    let (app, _state, _storage) = app_with_production_graph(settings);
+
+    let body = get_body(&app, "/debug/backend").await;
+    assert!(
+        body.contains("mock-model-a"),
+        "the seeded narrator should serve the first resolution: {body}"
+    );
+
+    let response = app
+        .clone()
+        .oneshot(post_form_request("/connections/mock-b/set-narrator", ""))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = get_body(&app, "/debug/backend").await;
+    assert!(
+        body.contains("mock-model-b"),
+        "the switch should take effect on the next resolution: {body}"
+    );
 }

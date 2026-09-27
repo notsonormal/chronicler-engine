@@ -22,7 +22,6 @@ pub mod worlds;
 
 pub use app_state::AppState;
 pub use bootstrap::{run_server_with_config, ServerConfig};
-pub use utils::{read_lock_or_recover, write_lock_or_recover};
 
 #[cfg(test)]
 mod error_tests;

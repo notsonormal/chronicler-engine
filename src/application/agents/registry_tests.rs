@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::application::agents::Agent;
@@ -7,7 +7,6 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::domain::model::agent::{
     AgentConfig, AgentContext, AgentResult, BackendSelector, ExecutionPhase,
 };
-use crate::domain::model::settings::AppSettings;
 use crate::error::Result;
 use crate::test_support::make_test_recorder;
 
@@ -70,26 +69,16 @@ fn test_registry_from_configs_rejects_unknown_type() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PostGeneration,
     }];
-    let result = AgentRegistry::from_configs_with_storage(
-        &configs,
-        mock_recorder(),
-        mock_recorder(),
-        None,
-        Arc::new(RwLock::new(AppSettings::default())),
-    );
+    let result =
+        AgentRegistry::from_configs_with_storage(&configs, mock_recorder(), mock_recorder(), None);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_registry_from_configs_empty_uses_defaults() {
-    let registry = AgentRegistry::from_configs_with_storage(
-        &[],
-        mock_recorder(),
-        mock_recorder(),
-        None,
-        Arc::new(RwLock::new(AppSettings::default())),
-    )
-    .unwrap();
+    let registry =
+        AgentRegistry::from_configs_with_storage(&[], mock_recorder(), mock_recorder(), None)
+            .unwrap();
     // Defaults must register both the quantifier and the options agent.
     let post: Vec<_> = registry
         .agents_for_phase(ExecutionPhase::PostGeneration)
@@ -155,13 +144,8 @@ fn test_registry_from_configs_disabled_skipped() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PostGeneration,
     }];
-    let registry = AgentRegistry::from_configs_with_storage(
-        &configs,
-        mock_recorder(),
-        mock_recorder(),
-        None,
-        Arc::new(RwLock::new(AppSettings::default())),
-    )
-    .unwrap();
+    let registry =
+        AgentRegistry::from_configs_with_storage(&configs, mock_recorder(), mock_recorder(), None)
+            .unwrap();
     assert!(registry.is_empty());
 }

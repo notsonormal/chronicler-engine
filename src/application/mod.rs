@@ -43,9 +43,6 @@ mod persona_catalogue_tests;
 mod prompt_preset_service_tests;
 
 #[cfg(test)]
-mod settings_service_tests;
-
-#[cfg(test)]
 mod text_check_service_tests;
 
 #[cfg(test)]

@@ -44,15 +44,6 @@ fn mode_active_ids(
     )
 }
 
-macro_rules! try_lock {
-    ($lock:expr) => {
-        $lock.unwrap_or_else(|p| {
-            tracing::warn!("Poisoned settings lock recovered in handler");
-            p.into_inner()
-        })
-    };
-}
-
 macro_rules! require_preset {
     ($storage:expr, $id:expr) => {
         match $storage.get_preset($id) {
@@ -69,7 +60,10 @@ pub async fn preset_card_handler(
 ) -> Html<String> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
-    let settings = try_lock!(app_state.settings.read());
+    let settings = match app_state.settings() {
+        Ok(s) => s,
+        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+    };
     let novel_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::Novel);
@@ -102,7 +96,10 @@ pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
         .list_presets(PresetType::Impersonate)
         .unwrap_or_default();
 
-    let settings = try_lock!(app_state.settings.read());
+    let settings = match app_state.settings() {
+        Ok(s) => s,
+        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+    };
     let (active_system, active_quantifier, active_impersonate) = mode_active_ids(&settings);
 
     render_template(PromptPresetsTemplate {
@@ -205,7 +202,10 @@ pub async fn edit_preset_form_handler(
         return Html("<span class='error'>Cannot edit default presets</span>".to_string());
     }
 
-    let settings = try_lock!(app_state.settings.read());
+    let settings = match app_state.settings() {
+        Ok(s) => s,
+        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+    };
     let novel_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::Novel);
@@ -249,7 +249,10 @@ pub async fn update_preset_handler(
         return Html(format!("<span class='error'>Update failed: {e}</span>"));
     }
 
-    let settings = try_lock!(app_state.settings.read());
+    let settings = match app_state.settings() {
+        Ok(s) => s,
+        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+    };
     let novel_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::Novel);
@@ -272,7 +275,10 @@ pub async fn delete_preset_handler(
     // Refuse presets referenced as any mode's default — deleting one would
     // leave that mode's bundle pointing at a missing preset.
     {
-        let settings = try_lock!(app_state.settings.read());
+        let settings = match app_state.settings() {
+            Ok(s) => s,
+            Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+        };
         if settings.mode_preset_registry.references(&id) {
             return Html(
                 "<span class='error'>Preset is a mode default; change the default before deleting</span>"
@@ -324,10 +330,8 @@ pub async fn activate_preset_handler(
     // the flags check still refuses a disallowed preset into the Novel slot.
     let mode = NarratorMode::parse_or_default(query.mode.as_deref().unwrap_or("novel"));
 
-    let mut settings = try_lock!(app_state.settings.write());
-
-    // Refuse before any save or in-memory commit so a rejected activation
-    // leaves settings untouched.
+    // Refuse before any write so a rejected activation leaves settings
+    // untouched.
     if !preset.allows(mode) {
         return Html(format!(
             "<span class='error'>Preset not allowed for {} mode</span>",
@@ -335,16 +339,17 @@ pub async fn activate_preset_handler(
         ));
     }
 
-    let mut candidate = settings.clone();
-    let mut bundle = candidate.mode_preset_registry.bundle_for(mode);
-    preset.preset_type.set_bundle_slot(&mut bundle, id);
-    candidate.mode_preset_registry.set_bundle(bundle);
+    let outcome = app_state.settings_service.update_settings(|settings| {
+        let mut bundle = settings.mode_preset_registry.bundle_for(mode);
+        preset.preset_type.set_bundle_slot(&mut bundle, id);
+        settings.mode_preset_registry.set_bundle(bundle);
+        Ok(settings.clone())
+    });
 
-    if let Err(e) = app_state.settings_service.save_settings(&candidate) {
-        return Html(format!("<span class='error'>Save failed: {e}</span>"));
-    }
-
-    *settings = candidate;
+    let settings = match outcome {
+        Ok(s) => s,
+        Err(e) => return Html(format!("<span class='error'>Save failed: {e}</span>")),
+    };
 
     let system_presets = app_state
         .prompt_preset_service

@@ -52,7 +52,6 @@ fn test_run_persona_not_found_after_world_fallback() {
         persona: "__nonexistent_persona__".to_string(),
         list_worlds: false,
         port,
-        settings_path: None,
     };
     let result = run(args);
     assert!(
@@ -88,7 +87,6 @@ fn test_run_persona_not_found_errors_cleanly() {
         persona: "__nonexistent_persona__".to_string(),
         list_worlds: false,
         port,
-        settings_path: None,
     };
     let result = run(args);
     assert!(result.is_err(), "bogus persona must error; got Ok");

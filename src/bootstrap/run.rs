@@ -2,18 +2,17 @@
 //! Main entry point and runtime execution
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::utils::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driving::http::ServerConfig;
-use crate::bootstrap::load::seed_game_data;
+use crate::bootstrap::load::{seed_game_data, seed_settings};
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
 use crate::utils::settings::load_settings;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
-use crate::domain::model::settings::AppSettings;
 use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
@@ -44,7 +43,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         port: args.port,
         bind_attempts: None,
     };
-    let state = prepare_state(&args, &data)?;
+    let state = prepare_state(&data)?;
     start_server(state, config)?;
     Ok(())
 }
@@ -66,6 +65,10 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     if let Err(e) = seed_game_data(&storage, &data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
+
+    // Fatal on a malformed seed file. Runs before `load_settings`, which reads
+    // the row this writes.
+    seed_settings(&storage, &data_dir)?;
 
     let world_with_map = match storage.get_world(&args.world)? {
         Some(w) => w,
@@ -92,7 +95,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
 
     let player = storage.require_persona(&args.persona)?;
 
-    let settings = load_settings(&storage).unwrap_or_else(|_| AppSettings::default());
+    let settings = load_settings(&storage);
 
     let active_game_id = super::init_game::resolve_game_id(
         &db_pool,
@@ -113,7 +116,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     })
 }
 
-fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<StateResources> {
+fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime")))?;
 
@@ -132,33 +135,10 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
     let all_npcs: Vec<NpcCard> = data.npcs_map.values().cloned().collect();
     let room_id = state.movement.current_room_id.clone();
 
-    let settings = if let Some(path) = &args.settings_path {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            EngineError::Config(format!(
-                "Failed to read settings file {}: {e}",
-                path.display()
-            ))
-        })?;
-        let imported: AppSettings = serde_json::from_str(&content).map_err(|e| {
-            EngineError::Config(format!(
-                "Failed to parse settings file {}: {e}",
-                path.display()
-            ))
-        })?;
-        data.storage
-            .save_settings(&imported)
-            .map_err(|e| EngineError::Config(format!("Failed to save imported settings: {e}")))?;
-        tracing::info!("Imported settings from {}", path.display());
-        imported
-    } else {
-        load_settings(&data.storage).unwrap_or_else(|_| AppSettings::default())
-    };
-    let settings = Arc::new(RwLock::new(settings));
-    let wired = build_app_graph(settings, Arc::clone(&data.storage))?;
+    let wired = build_app_graph(Arc::clone(&data.storage))?;
 
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,
-        &wired.settings,
         Arc::clone(&wired.message_service),
         Arc::new(wired.pipeline.clone()),
         &data.storage,
@@ -169,7 +149,7 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
             nearby_npcs,
             all_npcs,
         },
-    );
+    )?;
 
     Ok(StateResources { runtime, wired })
 }

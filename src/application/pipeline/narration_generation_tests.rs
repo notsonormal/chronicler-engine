@@ -178,9 +178,9 @@ fn test_run_missing_preset_sets_error_status() {
     let active_preset_id = {
         let settings = app
             .pipeline
-            .settings
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+            .storage
+            .get_settings()
+            .expect("settings read should succeed");
         app.pipeline.storage.active_system_preset_id(&settings)
     };
     storage

@@ -72,8 +72,31 @@
         "value": "quantifier"
       },
       "phase": "post_generation"
+    },
+    {
+      "name": "options",
+      "agent_type": "options",
+      "enabled": true,
+      "backend": {
+        "type": "use_named",
+        "value": "options"
+      },
+      "phase": "options_generation"
     }
   ],
-  "active_system_prompt_preset_id": "system_default",
-  "active_quantifier_prompt_preset_id": "quantifier_default"
+  "mode_preset_registry": [
+    {
+      "mode": "novel",
+      "system_prompt_preset_id": "system_default",
+      "quantifier_prompt_preset_id": "quantifier_default",
+      "impersonate_prompt_preset_id": "impersonate_default"
+    },
+    {
+      "mode": "interactive_fiction",
+      "system_prompt_preset_id": "system_if_default",
+      "quantifier_prompt_preset_id": "quantifier_default",
+      "impersonate_prompt_preset_id": "impersonate_default"
+    }
+  ],
+  "active_options_prompt_preset_id": "options_default"
 }

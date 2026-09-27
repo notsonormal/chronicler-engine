@@ -91,7 +91,13 @@ pub async fn action_check_handler(
         return dispatch_with_status_headers(&state, command).await;
     }
 
-    let settings = state.settings();
+    let settings = match state.settings() {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("Failed to read settings for text check: {e}");
+            return dispatch_with_status_headers(&state, command).await;
+        }
+    };
 
     if settings.text_check.mode == TextCheckMode::Disabled || !settings.text_check.enable_auto_check
     {

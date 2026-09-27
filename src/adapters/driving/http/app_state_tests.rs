@@ -9,7 +9,6 @@ use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::AppState;
 use crate::application::ports::text_checker::{CheckResult, TextChecker};
 use crate::application::text_check_service::TextCheckService;
-use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::settings::{AppSettings, TextCheckMode};
 use crate::error::EngineError;
@@ -71,78 +70,57 @@ impl TextChecker for NoopTextChecker {
     }
 }
 
-fn build_app_state(settings: Arc<std::sync::RwLock<AppSettings>>) -> AppState {
-    let wired = build_app_graph_for_tests(
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        Arc::new(Storage::new_in_memory()),
-        None,
-    )
-    .expect("build_app_graph_for_tests should succeed");
-
-    AppState {
-        settings_service: wired.settings_service.clone(),
-        prompt_preset_service: wired.prompt_preset_service.clone(),
-        message_service: wired.message_service,
-        world_catalogue: wired.world_catalogue,
-        persona_catalogue: wired.persona_catalogue,
-        text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
-        settings,
-        shutdown_token: wired.shutdown_token.clone(),
-        pipeline: Arc::new(wired.pipeline),
-        generation_gate: wired.generation_gate.clone(),
-        game_catalogue: wired.game_catalogue.clone(),
-        game_view_query: wired.game_view_query.clone(),
-    }
+fn build_app_state() -> AppState {
+    let mut app_state = TestAppBuilder::default_test().build_service();
+    app_state.text_check_service = Arc::new(TextCheckService::new(Arc::new(NoopTextChecker)));
+    app_state
 }
 
 #[test]
-fn test_settings_recover_from_poisoned_rwlock() {
-    let settings = Arc::new(std::sync::RwLock::new(AppSettings {
-        narration_connection_id: "poison-test".to_string(),
-        ..AppSettings::default()
-    }));
+fn test_settings_reads_stored_row() {
+    let app_state = build_app_state();
 
-    let settings_clone = Arc::clone(&settings);
-    let _ = std::thread::spawn(move || {
-        let _guard = settings_clone.write().unwrap();
-        panic!("intentional panic to poison lock");
-    })
-    .join();
-
-    let app_state = build_app_state(settings);
+    app_state
+        .settings_service
+        .update_settings(|settings| {
+            settings.narration_connection_id = "poison-test".to_string();
+            Ok(())
+        })
+        .expect("update_settings should succeed");
 
     let recovered = app_state.settings();
     assert_eq!(
-        recovered.narration_connection_id, "poison-test",
-        "settings() should recover actual settings from poisoned RwLock"
+        recovered
+            .expect("settings should read")
+            .narration_connection_id,
+        "poison-test",
+        "settings() should read the stored settings row"
     );
+}
+
+#[test]
+fn test_settings_survive_a_rebuilt_app_state() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let (app_state, _storage) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .settings(AppSettings {
+            narration_connection_id: "stored-narrator".to_string(),
+            ..AppSettings::default()
+        })
+        .build_service_with_storage();
+
+    let settings = app_state
+        .settings_service
+        .get_settings()
+        .expect("get_settings should succeed");
+    assert_eq!(settings.narration_connection_id, "stored-narrator");
 }
 
 #[test]
 fn test_current_shutdown_token_returns_configured_token() {
     let token = CancellationToken::new();
-
-    let wired = build_app_graph_for_tests(
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        Arc::new(Storage::new_in_memory()),
-        None,
-    )
-    .expect("build_app_graph_for_tests should succeed");
-
-    let app_state = AppState {
-        settings_service: wired.settings_service.clone(),
-        prompt_preset_service: wired.prompt_preset_service.clone(),
-        message_service: wired.message_service,
-        world_catalogue: wired.world_catalogue,
-        persona_catalogue: wired.persona_catalogue,
-        text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
-        settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        shutdown_token: token.clone(),
-        pipeline: Arc::new(wired.pipeline),
-        generation_gate: wired.generation_gate.clone(),
-        game_catalogue: wired.game_catalogue.clone(),
-        game_view_query: wired.game_view_query.clone(),
-    };
+    let mut app_state = build_app_state();
+    app_state.shutdown_token = token.clone();
 
     let recovered = app_state.current_shutdown_token();
     assert!(

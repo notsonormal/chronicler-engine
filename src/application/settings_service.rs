@@ -17,7 +17,14 @@ impl SettingsService {
         Self { storage }
     }
 
-    pub fn save_settings(&self, settings: &AppSettings) -> Result<()> {
-        self.storage.save_settings(settings)
+    pub fn get_settings(&self) -> Result<AppSettings> {
+        self.storage.get_settings()
+    }
+
+    pub fn update_settings<T, F>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(&mut AppSettings) -> Result<T>,
+    {
+        self.storage.update_settings(f)
     }
 }

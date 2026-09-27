@@ -30,8 +30,9 @@ The dependency invariant for seed rows is:
 - **Worlds and maps precede characters.** Character rows depend on the world being present.
 - **Personas are world-independent.** Their seed pass does not depend on a world row.
 - **Prompt presets are independent.** Their seed pass does not depend on world, map, character, or persona rows.
+- **Settings are independent.** Their seed pass inserts the singleton row when it is absent. A malformed `data/settings.json` halts bootstrap — the one fail-loud exception to skip-and-continue.
 
-Seeding completes before the HTTP server starts; a malformed seed file is skipped without halting bootstrap.
+Seeding completes before the HTTP server starts. A malformed world, persona, or preset file is skipped without halting bootstrap.
 
 ## Game-State Initialization
 
@@ -43,7 +44,7 @@ The HTTP server does not start until bootstrap has completed, including seeding 
 
 ## Settings
 
-Settings are loaded once during bootstrap and reload on restart.
+Bootstrap seeds the settings row from `data/settings.json` when the database has no row. From then on the engine reads settings from the database.
 
 ## Schema Files
 

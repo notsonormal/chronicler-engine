@@ -184,27 +184,17 @@ pub fn kill_existing_server(port: u16) {
     }
 }
 
-/// Start the server with optional mock LLM backend.
-/// When use_mock is true, writes a temporary settings file with Mock
-/// connections and passes it via `--settings-path` CLI flag.
-/// Returns the spawned child process, temp dir (if mock settings were written),
-/// the path to the SQLite database file the server will create, and the
-/// stdout/stderr drain buffers (so the caller can dump them on startup timeout).
 type ChildOutputBuffer = Arc<Mutex<Vec<u8>>>;
 type StartServerResult = (
     Child,
-    Option<std::path::PathBuf>,
     std::path::PathBuf,
     ChildOutputBuffer,
     ChildOutputBuffer,
 );
 
-pub fn start_server_with_env(
-    port: u16,
-    world: &str,
-    persona: &str,
-    use_mock: bool,
-) -> StartServerResult {
+/// Mock LLM connections are injected over HTTP after startup by
+/// `inject_mock_connections`; this function only spawns.
+pub fn start_server_with_env(port: u16, world: &str, persona: &str) -> StartServerResult {
     // Prefer pre-built binary to avoid per-test compilation overhead.
     // Fall back to cargo run for fresh clones or after cargo clean.
     // Respect CARGO_TARGET_DIR for concurrent builds with custom target directories.
@@ -245,48 +235,6 @@ pub fn start_server_with_env(
         c
     };
 
-    let tmp_dir = if use_mock {
-        let tmp = std::env::temp_dir().join(format!(
-            "chronicler_test_settings_{}_{}",
-            std::process::id(),
-            port
-        ));
-        let _ = std::fs::create_dir_all(&tmp);
-        let settings_path = tmp.join("settings.json");
-        let mock_settings = serde_json::json!({
-            "connections": [
-                {
-                    "id": "openrouter-gpt-4o-mini",
-                    "name": "openrouter-gpt-4o-mini",
-                    "provider": "Mock",
-                    "model": "mock-model",
-                    "api_key": null,
-                    "base_url": null
-                },
-                {
-                    "id": "openrouter-euryale",
-                    "name": "openrouter-euryale",
-                    "provider": "Mock",
-                    "model": "mock-model",
-                    "api_key": null,
-                    "base_url": null
-                }
-            ],
-            "narration_connection_id": "openrouter-gpt-4o-mini",
-            "quantifier_connection_id": "openrouter-gpt-4o-mini"
-        });
-        std::fs::write(
-            &settings_path,
-            serde_json::to_string_pretty(&mock_settings).unwrap(),
-        )
-        .expect("Failed to write mock settings");
-        cmd.arg("--settings-path")
-            .arg(settings_path.to_str().unwrap());
-        Some(tmp)
-    } else {
-        None
-    };
-
     cmd.current_dir(".")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
@@ -315,7 +263,77 @@ pub fn start_server_with_env(
         .join("debug")
         .join(format!("chronicler_{port}.db"));
 
-    (child, tmp_dir, db_path, stdout_buf, stderr_buf)
+    (child, db_path, stdout_buf, stderr_buf)
+}
+
+/// Point the engine at a Mock LLM connection over HTTP, as both narrator and
+/// quantifier: no generation path then reaches a real provider.
+///
+/// Injection goes through the real settings endpoints rather than the SQLite
+/// file — the engine holds that file for its lifetime and `DbPool::new` replays
+/// migrations on open, so a second process writing it would collide. Run after
+/// `wait_for_server`.
+pub async fn inject_mock_connections(port: u16) {
+    let client = reqwest::Client::new();
+    let base = format!("http://127.0.0.1:{port}");
+
+    let resp = client
+        .post(format!("{base}/connections/add"))
+        .form(&[
+            ("conn_name", "test-mock"),
+            ("conn_provider", "mock"),
+            ("conn_model", "mock-model"),
+            ("conn_api_key", ""),
+            ("conn_base_url", ""),
+            ("single_user_message", "false"),
+        ])
+        .send()
+        .await
+        .expect("add mock connection should reach the engine");
+    assert!(
+        resp.status().is_success(),
+        "adding the mock connection returned {}",
+        resp.status()
+    );
+    let body = resp.text().await.expect("add mock connection body");
+    let id = extract_connection_id(&body).unwrap_or_else(|| {
+        panic!("could not find the new connection id in the rendered settings panel")
+    });
+
+    for action in ["set-narrator", "set-quantifier"] {
+        let resp = client
+            .post(format!("{base}/connections/{id}/{action}"))
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("{action} for {id}: {e}"));
+        assert!(
+            resp.status().is_success(),
+            "{action} for {id} returned {}",
+            resp.status()
+        );
+        let body = resp.text().await.expect("set role body");
+        assert!(
+            !body.contains("class='error'"),
+            "{action} reported an error: {body}"
+        );
+    }
+}
+
+/// The id of the connection just added — `add_connection_handler` generates
+/// `conn-<millis>` ids, while seeded connections carry author-chosen ids, so
+/// scan every `hx-post` rather than taking the first.
+fn extract_connection_id(html: &str) -> Option<String> {
+    let marker = "hx-post=\"/connections/";
+    let mut rest = html;
+    while let Some(start) = rest.find(marker) {
+        rest = &rest[start + marker.len()..];
+        let end = rest.find(['"', '/'])?;
+        let id = &rest[..end];
+        if id.starts_with("conn-") {
+            return Some(id.to_string());
+        }
+    }
+    None
 }
 
 pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
@@ -463,7 +481,6 @@ pub fn get_config_port(config_path: &str) -> Result<u16, String> {
 pub struct TestServer {
     child: Child,
     port: u16,
-    temp_dir: Option<std::path::PathBuf>,
     db_path: std::path::PathBuf,
     log_buffers: ServerLogBuffers,
 }
@@ -508,8 +525,8 @@ impl TestServer {
             .join(format!("chronicler_{port}.db"));
         // Remove stale database BEFORE starting server so we don't inherit old state.
         Self::cleanup_stale_db(port, &db_path);
-        let (mut child, temp_dir, _db_path, stdout_buf, stderr_buf) =
-            start_server_with_env(port, world, persona, use_mock);
+        let (mut child, _db_path, stdout_buf, stderr_buf) =
+            start_server_with_env(port, world, persona);
         let log_buffers = ServerLogBuffers {
             stdout: Arc::clone(&stdout_buf),
             stderr: Arc::clone(&stderr_buf),
@@ -537,10 +554,14 @@ impl TestServer {
             panic!("Server failed to start on port {port}");
         }
         SERVER_MANAGED.store(true, Ordering::SeqCst);
+
+        if use_mock {
+            inject_mock_connections(port).await;
+        }
+
         TestServer {
             child,
             port,
-            temp_dir,
             db_path,
             log_buffers,
         }
@@ -565,9 +586,6 @@ impl Drop for TestServer {
         let _ = take_port_pid(self.port);
         SERVER_MANAGED.store(false, Ordering::SeqCst);
         release_port_lock(self.port);
-        if let Some(tmp) = &self.temp_dir {
-            let _ = std::fs::remove_dir_all(tmp);
-        }
         // Delete the SQLite database so the next test on this port starts clean.
         if self.db_path.exists() {
             let _ = std::fs::remove_file(&self.db_path);

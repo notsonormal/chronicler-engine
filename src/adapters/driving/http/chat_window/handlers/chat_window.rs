@@ -86,7 +86,13 @@ pub async fn check_text_handler(
         return bad_request("<span class=\"status error\">Enter text to check</span>");
     }
 
-    let settings = state.settings();
+    let settings = match state.settings() {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("Failed to read settings for text check: {e}");
+            return bad_request("<span class=\"status error\">Settings unavailable</span>");
+        }
+    };
 
     if settings.text_check.mode == TextCheckMode::Disabled {
         return ok("<span class=\"status ready\">Text check is disabled</span>");

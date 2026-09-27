@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/startup.md]
 //! Composition root for application orchestrators
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
@@ -10,64 +10,72 @@ use crate::adapters::driven::llm::providers::{
 };
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::text_check::HarperTextChecker;
-use crate::application::pipeline::ActionPipeline;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::llm_message::SaveLlmMessageFn;
-use crate::domain::model::llm_message::LlmMessage;
-use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::llm_recorder::{LlmCallRecorder, ProviderResolver};
+use crate::application::message_service::MessageService;
 use crate::application::persona_catalogue::PersonaCatalogue;
+use crate::application::pipeline::ActionPipeline;
+use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::settings_service::SettingsService;
-use crate::application::message_service::MessageService;
-use crate::application::world_catalogue::WorldCatalogue;
-use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::text_check_service::TextCheckService;
+use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::error::Result;
 
-fn recorder_for(config: &LlmProviderConfig, storage: Arc<Storage>) -> Result<Arc<LlmCallRecorder>> {
-    tracing::info!(
-        "Creating LLM recorder: provider={:?}, model={}",
-        config.provider,
-        config.model
-    );
-
-    let provider: Arc<dyn LlmProvider> = match config.provider {
-        LlmBackendType::Mock => Arc::new(MockBackend::new()),
+fn provider_from_config(config: &LlmProviderConfig) -> Arc<dyn LlmProvider> {
+    match config.provider {
+        LlmBackendType::Mock => Arc::new(MockBackend::new().with_model(config.model.as_str())),
         LlmBackendType::DeepSeek => Arc::new(DeepSeekBackend::from_config(config)),
         LlmBackendType::OpenRouter => Arc::new(OpenRouterBackend::from_config(config)),
         LlmBackendType::Ollama => Arc::new(OllamaBackend::from_config(config)),
-    };
+    }
+}
+
+/// A `pick` failure (a dangling connection id) surfaces as a call error.
+fn recorder_with_storage(
+    storage: Arc<Storage>,
+    role: &'static str,
+    pick: fn(&AppSettings) -> Result<LlmProviderConfig>,
+) -> Arc<LlmCallRecorder> {
+    let resolver_storage = Arc::clone(&storage);
+    let resolve: ProviderResolver = Arc::new(move || {
+        let settings = resolver_storage.get_settings()?;
+        let config = pick(&settings)?;
+        tracing::info!(
+            "Resolved LLM provider for {role}: provider={:?}, model={}",
+            config.provider,
+            config.model
+        );
+        Ok(provider_from_config(&config))
+    });
 
     let save_fn: SaveLlmMessageFn =
         Arc::new(move |message: &LlmMessage| storage.save_llm_message(message));
 
-    Ok(Arc::new(LlmCallRecorder::new(provider, save_fn)))
+    Arc::new(LlmCallRecorder::with_resolver(resolve, save_fn))
 }
 
 /// Named-backend seam: a connection whose id is "options" routes options
-/// generation to it (Roadway's cheap-model pattern); absent, `fallback`
-/// serves.
-fn options_recorder_for(
-    settings: &AppSettings,
-    storage: &Arc<Storage>,
-    fallback: &Arc<LlmCallRecorder>,
-) -> Result<Arc<LlmCallRecorder>> {
-    match settings.find_connection("options") {
-        Some(config) => recorder_for(config, Arc::clone(storage)),
-        None => Ok(Arc::clone(fallback)),
-    }
+/// generation to it (Roadway's cheap-model pattern); absent, the narration
+/// connection serves.
+fn options_recorder(storage: Arc<Storage>) -> Arc<LlmCallRecorder> {
+    recorder_with_storage(storage, "options", |s| match s.find_connection("options") {
+        Some(c) => Ok(c.clone()),
+        None => s.narration_connection(),
+    })
 }
 
 pub struct WiredApp {
     pub settings_service: SettingsService,
     pub prompt_preset_service: PromptPresetService,
     pub storage: Arc<Storage>,
-    pub settings: Arc<RwLock<AppSettings>>,
     pub message_service: Arc<MessageService>,
     pub generation_gate: GenerationGate,
     pub game_catalogue: GameCatalogue,
@@ -81,7 +89,6 @@ pub struct WiredApp {
 
 fn build_wired_app(
     storage: Arc<Storage>,
-    settings: Arc<RwLock<AppSettings>>,
     recorder: Arc<LlmCallRecorder>,
     agent_registry: AgentRegistry,
     text_check_service: Arc<TextCheckService>,
@@ -94,23 +101,14 @@ fn build_wired_app(
     let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
     let persona_catalogue = PersonaCatalogue::new(Arc::clone(&storage));
     let generation_gate = GenerationGate::new();
-    let game_catalogue = GameCatalogue::new(
-        Arc::clone(&storage),
-        Arc::clone(&message_service),
-        Arc::clone(&settings),
-    );
-    let game_view_query = GameViewQuery::new(
-        Arc::clone(&storage),
-        Arc::clone(&message_service),
-        Arc::clone(&settings),
-    );
+    let game_catalogue = GameCatalogue::new(Arc::clone(&storage), Arc::clone(&message_service));
+    let game_view_query = GameViewQuery::new(Arc::clone(&storage), Arc::clone(&message_service));
     let pipeline = ActionPipeline::with_storage(
         shutdown_token.clone(),
         recorder,
         agent_registry,
         Arc::clone(&message_service),
         Arc::clone(&storage),
-        Arc::clone(&settings),
     );
 
     // Boot heal: a crash/restart may have left the current game persisted as Generating.
@@ -126,7 +124,6 @@ fn build_wired_app(
         settings_service,
         prompt_preset_service,
         storage,
-        settings,
         message_service,
         generation_gate,
         game_catalogue,
@@ -139,87 +136,72 @@ fn build_wired_app(
     })
 }
 
-pub fn build_app_graph(
-    settings: Arc<RwLock<AppSettings>>,
-    storage: Arc<Storage>,
-) -> Result<WiredApp> {
-    let (recorder, agent_registry, text_check_service) = {
-        let guard = settings.read().unwrap_or_else(|e| e.into_inner());
-        let narration_recorder = recorder_for(&guard.narration_connection(), Arc::clone(&storage))?;
-        let quantifier_recorder =
-            recorder_for(&guard.quantifier_connection(), Arc::clone(&storage))?;
-        let options_recorder = options_recorder_for(&guard, &storage, &narration_recorder)?;
-        let registry = AgentRegistry::from_configs_with_storage(
-            &guard.agents,
-            Arc::clone(&quantifier_recorder),
-            options_recorder,
-            Some(Arc::clone(&storage)),
-            Arc::clone(&settings),
-        )
-        .unwrap_or_default();
-        drop(quantifier_recorder);
-        let checker = Arc::new(HarperTextChecker::new(&guard.text_check.ignored_words));
-        let text_check_service = Arc::new(TextCheckService::new(checker));
-        (narration_recorder, registry, text_check_service)
-    };
+pub fn build_app_graph(storage: Arc<Storage>) -> Result<WiredApp> {
+    let settings = storage.get_settings()?;
+    // Fail fast on a dangling reference at boot: the resolvers would otherwise
+    // defer the error to the first generation.
+    settings.narration_connection()?;
+    settings.quantifier_connection()?;
 
-    build_wired_app(
-        storage,
-        settings,
-        recorder,
-        agent_registry,
-        text_check_service,
+    let narration_recorder = recorder_with_storage(
+        Arc::clone(&storage),
+        "narrator",
+        AppSettings::narration_connection,
+    );
+    let quantifier_recorder = recorder_with_storage(
+        Arc::clone(&storage),
+        "quantifier",
+        AppSettings::quantifier_connection,
+    );
+    let options_recorder = options_recorder(Arc::clone(&storage));
+    let registry = AgentRegistry::from_configs_with_storage(
+        &settings.agents,
+        Arc::clone(&quantifier_recorder),
+        options_recorder,
+        Some(Arc::clone(&storage)),
     )
+    .unwrap_or_default();
+    let checker = Arc::new(HarperTextChecker::new());
+    let text_check_service = Arc::new(TextCheckService::new(checker));
+
+    build_wired_app(storage, narration_recorder, registry, text_check_service)
 }
 
 #[cfg(feature = "testing")]
 pub fn build_app_graph_for_tests(
-    settings: Arc<RwLock<AppSettings>>,
     storage: Arc<Storage>,
     pipeline_override: Option<ActionPipeline>,
 ) -> Result<WiredApp> {
-    let (recorder, agent_registry, text_check_service) = {
-        let guard = settings.read().unwrap_or_else(|e| e.into_inner());
-        let checker = Arc::new(HarperTextChecker::new(&guard.text_check.ignored_words));
-        let text_check_service = Arc::new(TextCheckService::new(checker));
+    let settings = storage.get_settings()?;
+    let checker = Arc::new(HarperTextChecker::new());
+    let text_check_service = Arc::new(TextCheckService::new(checker));
 
-        let mock_provider: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
-        let recorder = crate::test_support::make_test_recorder_with_storage(
-            Arc::clone(&mock_provider),
-            Arc::clone(&storage),
-        );
-        // Build placeholder collaborators; a pipeline override replaces them below.
-        let registry = if pipeline_override.is_some() {
-            AgentRegistry::default()
-        } else {
-            let options_recorder = options_recorder_for(&guard, &storage, &recorder)?;
-            AgentRegistry::from_configs_with_storage(
-                &guard.agents,
-                Arc::clone(&recorder),
-                options_recorder,
-                Some(Arc::clone(&storage)),
-                Arc::clone(&settings),
-            )
-            .unwrap_or_default()
-        };
-        drop(mock_provider);
-        (recorder, registry, text_check_service)
+    let mock_provider: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
+    let recorder = crate::test_support::make_test_recorder_with_storage(
+        Arc::clone(&mock_provider),
+        Arc::clone(&storage),
+    );
+    // Build placeholder collaborators; a pipeline override replaces them below.
+    let registry = if pipeline_override.is_some() {
+        AgentRegistry::default()
+    } else {
+        let options_recorder = options_recorder(Arc::clone(&storage));
+        AgentRegistry::from_configs_with_storage(
+            &settings.agents,
+            Arc::clone(&recorder),
+            options_recorder,
+            Some(Arc::clone(&storage)),
+        )
+        .unwrap_or_default()
     };
 
-    let mut wired = build_wired_app(
-        storage,
-        settings,
-        recorder,
-        agent_registry,
-        text_check_service,
-    )?;
+    let mut wired = build_wired_app(storage, recorder, registry, text_check_service)?;
 
     if let Some(pipeline) = pipeline_override {
-        // Override backends must use this graph's persistence and live settings.
+        // Override backends must use this graph's persistence.
         wired.pipeline = pipeline.rebind_for_test(
             Arc::clone(&wired.message_service),
             Arc::clone(&wired.storage),
-            Arc::clone(&wired.settings),
             wired.shutdown_token.clone(),
         );
     }

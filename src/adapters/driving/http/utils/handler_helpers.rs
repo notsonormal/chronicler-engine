@@ -6,11 +6,12 @@ use uuid::Uuid;
 
 use crate::domain::model::prompt_preset::PresetType;
 
-/// Render an `askama::Template` to `Html<String>`, falling back to an error span on failure.
 pub(crate) fn render_template<T: askama::Template>(template: T) -> Html<String> {
     match template.render() {
         Ok(html) => Html(html),
-        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
+        Err(e) => Html(crate::adapters::driving::http::utils::error::render_error(
+            &format!("Template error: {e}"),
+        )),
     }
 }
 

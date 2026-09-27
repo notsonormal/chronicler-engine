@@ -87,9 +87,8 @@ pub(crate) fn quantify_room_with_llm_call(
     let (system_prompt, user_prompt) = builder.build();
 
     tracing::info!(
-        "[Quantifier] Calling backend: {} model: {} for room: {}",
-        recorder.provider().name(),
-        recorder.provider().model(),
+        "[Quantifier] Calling provider: {} for room: {}",
+        recorder.provider_label(),
         context.room.name
     );
 

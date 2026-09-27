@@ -119,7 +119,10 @@ fn provider_accessor_returns_injected_provider() {
     let original: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
     let recorder = LlmCallRecorder::new(original.clone(), make_noop_save_fn());
 
-    assert!(Arc::ptr_eq(&original, recorder.provider()));
+    assert!(Arc::ptr_eq(
+        &original,
+        &recorder.provider().expect("fixed recorder resolves")
+    ));
 }
 
 #[test]
@@ -138,4 +141,43 @@ fn recorder_with_configurable_mock_backend() {
             .len(),
         1
     );
+}
+
+#[test]
+fn resolver_is_consulted_on_every_call() {
+    // Production recorders resolve per call so a dashboard connection edit takes
+    // effect without a restart; assert the resolver runs again rather than caching.
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&calls);
+    let resolve: crate::application::llm_recorder::ProviderResolver = Arc::new(move || {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Ok(Arc::new(MockBackend::new()) as Arc<dyn LlmProvider>)
+    });
+    let recorder = LlmCallRecorder::with_resolver(resolve, make_noop_save_fn());
+
+    recorder.complete("narrator", "s", "u", None).unwrap();
+    recorder.complete("narrator", "s", "u", None).unwrap();
+
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        2,
+        "the resolver must run once per complete(), not once at construction"
+    );
+}
+
+#[test]
+fn resolver_error_fails_the_call_instead_of_falling_back() {
+    let resolve: crate::application::llm_recorder::ProviderResolver = Arc::new(|| {
+        Err(EngineError::Config(
+            "narration_connection_id 'gone' is not in the connections list".into(),
+        ))
+    });
+    let recorder = LlmCallRecorder::with_resolver(resolve, make_noop_save_fn());
+
+    let err = recorder
+        .complete("narrator", "s", "u", None)
+        .expect_err("an unresolvable provider must error, never serve a fallback");
+    assert!(err.to_string().contains("gone"));
 }

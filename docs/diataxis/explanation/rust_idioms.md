@@ -17,11 +17,11 @@ Synchronous services (`ActionPipeline` and its collaborators) run inside `tokio:
 
 The offload buys separation between the Axum event loop, which stays responsive, and the LLM network call, which can take seconds. The synchronous service code is unchanged; the handler hands the blocking call to a Tokio blocking pool, returns immediately, and the caller awaits the response on the future the pool returns. Latency from one slow LLM call does not back up unrelated handlers; the synchronous service code runs unchanged inside the blocking pool.
 
-## Settings sharing through `Arc<RwLock<AppSettings>>`
+## Settings resolution at the read site
 
-`AppSettings` is loaded once at bootstrap (`bootstrap/run.rs`), wrapped in `Arc<RwLock<AppSettings>>`, and passed through the construction chain to every component that needs to read it. No business logic layer reloads from disk. Connection changes — model swap, endpoint change — require a server restart; only `max_context_tokens` is read dynamically on each LLM call, with the read taken at the call site.
+`AppSettings` lives as a singleton row in the database. Components that need settings call `Storage::get_settings` at the point of use and pass the value down the call; nothing holds a long-lived settings handle. A settings-mutating handler goes through `Storage::update_settings`, which performs the read, the mutation, and the write under one storage acquisition, so two overlapping edits cannot clobber each other.
 
-The shape serves a read-mostly workload. Many components hold the settings handle and read concurrently; the `RwLock` permits parallel reads and serialises the rare writes (settings-mutating handlers). Components that need to apply a settings change acquire the write lock, mutate, release; components that just need current values acquire the read lock briefly and copy what they need. Each settings read allocates the read-guard once; the read sits beside the LLM call that uses the value.
+The shape serves a read-mostly workload. Each read is a short storage call; writes are the rare dashboard requests. Because the read sits beside the code that uses the value, a connection edit takes effect on the next LLM call — the in-flight call finishes on the provider it already resolved, and the following call picks up the new one.
 
 ## Lock-poison recovery
 
@@ -37,7 +37,7 @@ The boundary reading keeps phase functions pure: phases operate on `GameState`, 
 
 ## Document References
 
-- `../reference/architecture_system.md` — tier map (the canonical home for the `Arc<RwLock<AppSettings>>` shape) + invariant identifiers.
+- `../reference/architecture_system.md` — tier map (the canonical home for the settings resolution shape) + invariant identifiers.
 - `../reference/guardrails.md` — INV-NNN *identifiers* (the guarantee for each lives in the invariant contract tests, not the docs).
 - `../reference/llm_processing.md` — LLM transport + the per-call site that reads `max_context_tokens` from settings.
 - `../reference/action_pipeline.md` — pipeline cancellation shape (the in-phase α-check that lives inside the pipeline rather than at the boundary).

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
@@ -52,9 +52,6 @@ fn test_from_config_creates_agent() {
         &config,
         crate::test_support::make_test_recorder(Arc::new(MockBackend::default())),
         None,
-        Arc::new(std::sync::RwLock::new(
-            crate::domain::model::settings::AppSettings::default(),
-        )),
     );
     assert!(agent.is_ok());
 }
@@ -196,6 +193,9 @@ fn test_execute_resolves_active_options_preset_and_records_prompts() {
         active_options_prompt_preset_id: "options_test_preset".to_string(),
         ..AppSettings::default()
     };
+    storage
+        .save_settings(&settings)
+        .expect("save_settings should succeed");
     let config = AgentConfig {
         name: "options".to_string(),
         agent_type: "options".to_string(),
@@ -211,7 +211,6 @@ fn test_execute_resolves_active_options_preset_and_records_prompts() {
         &config,
         make_test_recorder_with_storage(provider, Arc::clone(&storage)),
         Some(Arc::clone(&storage)),
-        Arc::new(RwLock::new(settings)),
     )
     .expect("agent construction should succeed");
 

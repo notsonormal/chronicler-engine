@@ -65,7 +65,6 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
 - **helpers/**
     - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage instances with deterministic defaults so tests can focus on the behaviour under test.
-    - `sqlite_test_app_builder.rs` — Integration-only SQLite-backed application builder for integration tests.
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).

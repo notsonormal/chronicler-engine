@@ -140,9 +140,9 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
         let settings = self
             .run
             .pipeline
-            .settings
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+            .storage
+            .get_settings()
+            .map_err(|e| format!("Failed to read settings: {e}"))?;
         let (preset_id, kind) = match self.inputs.impersonate.as_ref() {
             Some(_) => (
                 self.run

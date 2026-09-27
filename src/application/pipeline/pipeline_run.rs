@@ -301,11 +301,7 @@ impl<'a> PipelineRun<'a> {
         let history = state.narrative.history();
 
         let preset_id = {
-            let settings = self
-                .pipeline
-                .settings
-                .read()
-                .unwrap_or_else(|e| e.into_inner());
+            let settings = self.pipeline.storage.get_settings().ok()?;
             self.pipeline.storage.active_system_preset_id(&settings)
         };
         let (preset, response_length) = self
@@ -383,12 +379,13 @@ impl<'a> PipelineRun<'a> {
         preset_id: &str,
         kind: PresetKind,
     ) -> Result<(PromptPreset, String), String> {
-        let settings = self
+        let response_length = self
             .pipeline
-            .settings
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
-        let response_length = settings.response_length.clone();
+            .storage
+            .get_settings()
+            .map_err(|e| format!("Failed to read settings: {e}"))?
+            .response_length
+            .clone();
         match self.pipeline.storage.get_preset(preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {

@@ -8,6 +8,18 @@ fn test_mock_backend_name() {
 }
 
 #[test]
+fn test_mock_backend_defaults_to_the_bare_model_name() {
+    assert_eq!(MockBackend::default().model(), "mock");
+}
+
+#[test]
+fn test_mock_backend_reports_the_model_it_was_given() {
+    let backend = MockBackend::default().with_model("conn-model");
+    assert_eq!(backend.model(), "conn-model");
+    assert_eq!(backend.name(), "Mock");
+}
+
+#[test]
 fn test_mock_complete() {
     let backend = MockBackend::default();
     let result = backend.complete("test", "system prompt", "user action", None);

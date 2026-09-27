@@ -1,7 +1,11 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! LLM backend provider types
 
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
+
+use crate::error::EngineError;
 
 /// [TRIVIAL_ENUM]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,25 +17,18 @@ pub enum LlmBackendType {
     Ollama,
 }
 
-impl From<&str> for LlmBackendType {
-    fn from(s: &str) -> Self {
-        match s {
-            "openrouter" => LlmBackendType::OpenRouter,
-            "deepseek" => LlmBackendType::DeepSeek,
-            "mock" => LlmBackendType::Mock,
-            "ollama" => LlmBackendType::Ollama,
-            _ => {
-                tracing::warn!("Unknown LLM backend '{s}', defaulting to Mock");
-                LlmBackendType::Mock
-            }
-        }
-    }
-}
+impl FromStr for LlmBackendType {
+    type Err = EngineError;
 
-impl LlmBackendType {
-    pub fn from_env() -> Self {
-        std::env::var("LLM_BACKEND")
-            .as_deref()
-            .map_or(LlmBackendType::OpenRouter, Self::from)
+    /// An unrecognised name is an error; a silent `Mock` fallback would serve
+    /// canned text.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "openrouter" => Ok(LlmBackendType::OpenRouter),
+            "deepseek" => Ok(LlmBackendType::DeepSeek),
+            "mock" => Ok(LlmBackendType::Mock),
+            "ollama" => Ok(LlmBackendType::Ollama),
+            _ => Err(EngineError::Config(format!("Unknown LLM backend '{s}'"))),
+        }
     }
 }

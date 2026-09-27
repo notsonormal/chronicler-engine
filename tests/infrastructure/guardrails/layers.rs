@@ -418,7 +418,7 @@ mod tests {
     fn test_check_http_storage_leak_allows_application_service() {
         let violations = check_http_storage_leak(
             "adapters/driving/http/settings.rs",
-            "app.settings_service.save_settings(&settings).unwrap();\n",
+            "app.settings_service.update_settings(|_| Ok(())).unwrap();\n",
         );
         assert_eq!(violations.len(), 0);
     }

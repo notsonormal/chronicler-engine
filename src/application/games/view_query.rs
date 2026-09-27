@@ -1,13 +1,12 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! GameViewQuery — read-side queries that don't mutate game state.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::application::message_service::MessageService;
-use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::error::EngineError;
@@ -18,19 +17,13 @@ pub use crate::application::debug::DebugStateView;
 pub struct GameViewQuery {
     storage: Arc<Storage>,
     message_service: Arc<MessageService>,
-    settings: Arc<RwLock<AppSettings>>,
 }
 
 impl GameViewQuery {
-    pub fn new(
-        storage: Arc<Storage>,
-        message_service: Arc<MessageService>,
-        settings: Arc<RwLock<AppSettings>>,
-    ) -> Self {
+    pub fn new(storage: Arc<Storage>, message_service: Arc<MessageService>) -> Self {
         Self {
             storage,
             message_service,
-            settings,
         }
     }
 
@@ -195,12 +188,11 @@ impl GameViewQuery {
     }
 
     pub fn active_quantifier_prompt(&self) -> String {
-        // Scope the read guard to the resolution step; the preset lookup and
-        // assembly below must not hold the settings lock.
-        let preset_id = {
-            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
-            self.storage.active_quantifier_preset_id(&settings)
-        };
+        let preset_id = self
+            .storage
+            .get_settings()
+            .map(|s| self.storage.active_quantifier_preset_id(&s))
+            .unwrap_or_default();
         match self.storage.get_preset(&preset_id) {
             Ok(Some(preset)) => preset.assemble_text(&[], None, None),
             Ok(None) => {

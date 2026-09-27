@@ -90,16 +90,82 @@
       },
       "required": ["mode"]
     },
-    "active_system_prompt_preset_id": {
-      "type": "string",
-      "default": "system_default",
-      "description": "ID of the active system prompt preset."
+    "agents": {
+      "type": "array",
+      "description": "Agent configurations. A non-empty list registers exactly the agents it names; an empty list falls back to the built-in defaults.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Registry key for this agent."
+          },
+          "agent_type": {
+            "type": "string",
+            "description": "Agent implementation to construct."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the agent is dispatched."
+          },
+          "backend": {
+            "type": "object",
+            "description": "Which LLM connection serves this agent.",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["use_main", "use_named"],
+                "description": "use_main reuses the narration recorder; use_named looks up a named recorder."
+              },
+              "value": {
+                "type": "string",
+                "description": "Recorder name, required when type is use_named."
+              }
+            },
+            "required": ["type"]
+          },
+          "phase": {
+            "type": "string",
+            "enum": ["pre_generation", "post_generation", "options_generation"],
+            "description": "Pipeline position where the agent runs."
+          }
+        },
+        "required": ["name", "agent_type", "enabled", "phase"]
+      }
     },
-    "active_quantifier_prompt_preset_id": {
+    "mode_preset_registry": {
+      "type": "array",
+      "description": "Per-narrator-mode default preset bundles. The list may be partial; a missing mode falls back to constructed defaults.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["novel", "interactive_fiction"],
+            "description": "Narrator mode this bundle applies to."
+          },
+          "system_prompt_preset_id": {
+            "type": "string",
+            "description": "System prompt preset for this mode."
+          },
+          "quantifier_prompt_preset_id": {
+            "type": "string",
+            "description": "Quantifier prompt preset for this mode."
+          },
+          "impersonate_prompt_preset_id": {
+            "type": "string",
+            "description": "Impersonation prompt preset for this mode."
+          }
+        },
+        "required": ["mode"]
+      }
+    },
+    "active_options_prompt_preset_id": {
       "type": "string",
-      "default": "quantifier_default",
-      "description": "ID of the active quantifier prompt preset."
+      "default": "options_default",
+      "description": "ID of the active options prompt preset."
     }
   },
+  "additionalProperties": false,
   "required": ["connections", "narration_connection_id", "quantifier_connection_id"]
 }

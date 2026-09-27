@@ -1,11 +1,10 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Runtime agent lookup and lifecycle
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::error::EngineError;
 use crate::domain::model::agent::{AgentConfig, ExecutionPhase};
-use crate::domain::model::settings::AppSettings;
 use crate::application::agents::Agent;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::options::OptionsAgent;
@@ -23,7 +22,6 @@ impl AgentRegistry {
         quantifier_recorder: Arc<LlmCallRecorder>,
         options_recorder: Arc<LlmCallRecorder>,
         storage: Option<Arc<Storage>>,
-        settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
         let mut registry = Self::default();
 
@@ -46,13 +44,11 @@ impl AgentRegistry {
                     config,
                     Arc::clone(&quantifier_recorder),
                     storage.clone(),
-                    Arc::clone(&settings),
                 )?),
                 "options" => Box::new(OptionsAgent::from_config_with_storage(
                     config,
                     Arc::clone(&options_recorder),
                     storage.clone(),
-                    Arc::clone(&settings),
                 )?),
                 other => {
                     return Err(EngineError::Config(format!("Unknown agent type: {other}")));

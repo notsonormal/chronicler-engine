@@ -141,7 +141,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `error.rs` — Error rendering helpers for HTTP fragments.
           - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
           - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
-          - `locks.rs` — Shared poison-recovering lock helpers for the HTTP layer.
           - `mod.rs` — HTTP utility modules.
           - `port_utils.rs` — Port management helpers used by `bind_with_retry`.
           - `response.rs` — HTTP response helpers

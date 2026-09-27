@@ -56,11 +56,7 @@ fn options_with_llm_call(
 ) -> Result<Vec<String>, EngineError> {
     let (system_prompt, user_prompt) = OptionsPromptBuilder::new(context.clone()).build();
 
-    tracing::info!(
-        "[Options] Calling backend: {} model: {}",
-        recorder.provider().name(),
-        recorder.provider().model()
-    );
+    tracing::info!("[Options] Calling provider: {}", recorder.provider_label());
 
     let mut last_error = None;
     for attempt in 1..=MAX_OPTIONS_ATTEMPTS {

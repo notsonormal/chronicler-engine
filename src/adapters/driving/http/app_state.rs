@@ -28,8 +28,6 @@ use crate::bootstrap::wiring::WiredApp;
 use crate::domain::model::settings::AppSettings;
 use crate::error::{EngineError, Result};
 
-use super::utils::read_lock_or_recover;
-
 #[derive(Clone)]
 pub struct AppState {
     pub settings_service: SettingsService,
@@ -38,7 +36,6 @@ pub struct AppState {
     pub world_catalogue: WorldCatalogue,
     pub persona_catalogue: PersonaCatalogue,
     pub text_check_service: Arc<TextCheckService>,
-    pub settings: Arc<std::sync::RwLock<AppSettings>>,
     pub shutdown_token: CancellationToken,
     pub pipeline: Arc<ActionPipeline>,
     pub generation_gate: GenerationGate,
@@ -55,7 +52,6 @@ impl AppState {
             world_catalogue: wired.world_catalogue,
             persona_catalogue: wired.persona_catalogue,
             text_check_service: wired.text_check_service,
-            settings: wired.settings,
             shutdown_token: wired.shutdown_token,
             pipeline: Arc::new(wired.pipeline),
             generation_gate: wired.generation_gate,
@@ -68,8 +64,8 @@ impl AppState {
         self.shutdown_token.clone()
     }
 
-    pub fn settings(&self) -> AppSettings {
-        read_lock_or_recover(&self.settings, "settings")
+    pub fn settings(&self) -> Result<AppSettings> {
+        self.settings_service.get_settings()
     }
 
     pub fn text_check_service(&self) -> &TextCheckService {
