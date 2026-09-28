@@ -19,6 +19,22 @@ log's first line is a session stamp (see ``_stamp_session_id``). Every
 completed run also appends one pipe-delimited summary line (timestamp,
 duration, exit code, args) to the append-only journal
 ``logs/build_history.txt`` — see ``_append_history``.
+
+Concurrent builds:
+
+Multiple agents building simultaneously conflict on two fronts: ``cargo fmt``
+rewrites source files in place, and ``target/`` is shared, causing cargo lock
+contention. Secondary agents must pass an isolated target dir and skip fmt::
+
+    python build.py --target-dir target/agent2 --no-fmt
+
+``--cleanup`` removes lingering build processes and artifacts for a target
+dir. Tests are already concurrency-safe: they allocate ports dynamically from
+3010-3050 using file-based locking (``tests/test_utils/server.rs``).
+
+A full gate takes about 2-3 minutes warm, 4-5 cold owing to the integration
+suite. Wrap invocations in a timeout of at least 600s, or 1200s with
+``--coverage``.
 """
 
 import argparse
@@ -387,6 +403,12 @@ REGISTRY: dict[str, StepSpec] = {
     spec.name: spec
     for spec in [
         StepSpec(
+            "install-hooks",
+            "Installing git hooks...",
+            "python scripts/install_git_hooks.py",
+            help="Install or update git hooks; differing hooks are backed up first.",
+        ),
+        StepSpec(
             "fmt",
             "Formatting...",
             "cargo fmt",
@@ -497,14 +519,16 @@ REGISTRY: dict[str, StepSpec] = {
     ]
 }
 
-# Full-gate step order. "COPY" expands to the deployment-asset copy step,
-# "TESTS" to the composite test step (coverage/timings variants), and
-# "REPORT" to the coverage report (or the skip note when coverage is off).
+# Full-gate step order. "HOOKS" expands to the git-hook install step, "COPY"
+# to the deployment-asset copy step, "TESTS" to the composite test step
+# (coverage/timings variants), and "REPORT" to the coverage report (or the
+# skip note when coverage is off).
 #
 # The order is load-bearing: the architecture/guardrail binaries run before
 # the ~2-minute full suite and fail the build immediately (check=True) —
 # otherwise a guardrail failure only surfaces after the full suite has run.
 GATE_ORDER = [
+    "HOOKS",
     "fmt",
     "validate-data",
     "clippy",
@@ -1035,7 +1059,7 @@ class GateStep(NamedTuple):
     itself (the note is not a counted step, matching the original behavior).
     """
 
-    kind: str  # "cmd" | "copy" | "tests" | "coverage_report" | "note"
+    kind: str  # "cmd" | "copy" | "tests" | "coverage_report" | "note" | "hooks"
     label: str
     cmd: str = ""
     check: bool = True
@@ -1050,6 +1074,9 @@ def _plan_gate_steps(args) -> list[GateStep]:
     """
     plan: list[GateStep] = []
     for name in GATE_ORDER:
+        if name == "HOOKS":
+            plan.append(GateStep("hooks", "Installing git hooks..."))
+            continue
         if name == "COPY":
             plan.append(GateStep("copy", "Copying data and assets for deployment..."))
             continue
@@ -1141,6 +1168,16 @@ def _execute_gate_plan(plan, args, cargo_env, record):
         elif step.kind == "coverage_report":
             counter.next(step.label)
             _generate_coverage_report(args, cargo_env)
+        elif step.kind == "hooks":
+            # Best-effort environment setup: a hook problem must not block a
+            # build, so a failure warns without recording a step failure.
+            counter.next(step.label)
+            rc = run(REGISTRY["install-hooks"].cmd, check=False, env=cargo_env)
+            if rc != 0:
+                both_print(
+                    "    Warning: git hook installation failed; "
+                    "the build continues without it."
+                )
         elif step.kind == "note":
             counter.next(step.label)
         else:  # pragma: no cover - guarded by construction

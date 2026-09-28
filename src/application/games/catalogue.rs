@@ -1,12 +1,12 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! GameCatalogue — game-lifecycle storage orchestration.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
 use crate::application::message_service::MessageService;
 use crate::domain::model::game::Game;
-use crate::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense, NarratorMode};
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::generate_game_name;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driven::storage::Storage;
@@ -15,19 +15,13 @@ use crate::adapters::driven::storage::Storage;
 pub struct GameCatalogue {
     storage: Arc<Storage>,
     message_service: Arc<MessageService>,
-    settings: Arc<RwLock<AppSettings>>,
 }
 
 impl GameCatalogue {
-    pub fn new(
-        storage: Arc<Storage>,
-        message_service: Arc<MessageService>,
-        settings: Arc<RwLock<AppSettings>>,
-    ) -> Self {
+    pub fn new(storage: Arc<Storage>, message_service: Arc<MessageService>) -> Self {
         Self {
             storage,
             message_service,
-            settings,
         }
     }
 
@@ -46,7 +40,7 @@ impl GameCatalogue {
         let name = generate_game_name(&world_name, &existing_names);
 
         let (bundle, options_preset_id) = {
-            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            let settings = self.storage.get_settings()?;
             (
                 settings
                     .mode_preset_registry
@@ -145,7 +139,7 @@ impl GameCatalogue {
         }
 
         let bundle = {
-            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            let settings = self.storage.get_settings()?;
             settings.mode_preset_registry.bundle_for(mode)
         };
         game.narrator_mode = mode;
@@ -246,7 +240,7 @@ impl GameCatalogue {
 
         let new_name = generate_game_name(&world_name, &existing_names);
         let (bundle, options_preset_id) = {
-            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            let settings = self.storage.get_settings()?;
             (
                 settings
                     .mode_preset_registry

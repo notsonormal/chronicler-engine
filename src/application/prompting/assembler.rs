@@ -1,13 +1,14 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
+use crate::adapters::driven::storage::Storage;
 use crate::error::EngineError;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense};
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::template::render_template;
@@ -50,7 +51,7 @@ pub struct PromptContext<'a> {
 pub struct PromptAssembler {
     max_context_tokens: u32,
     max_tokens: Option<u32>,
-    settings: Option<Arc<RwLock<AppSettings>>>,
+    storage: Option<Arc<Storage>>,
 }
 
 impl PromptAssembler {
@@ -58,7 +59,7 @@ impl PromptAssembler {
         Self {
             max_context_tokens,
             max_tokens: None,
-            settings: None,
+            storage: None,
         }
     }
 
@@ -67,8 +68,10 @@ impl PromptAssembler {
         self
     }
 
-    pub fn with_settings(mut self, settings: Arc<RwLock<AppSettings>>) -> Self {
-        self.settings = Some(settings);
+    /// Read the token budget from storage rather than a boot-time snapshot, so
+    /// a connection edit takes effect on the next assemble.
+    pub fn with_storage(mut self, storage: Arc<Storage>) -> Self {
+        self.storage = Some(storage);
         self
     }
 }
@@ -106,7 +109,7 @@ impl PromptAssembler {
             impersonate: context.impersonate,
         };
 
-        let (max_context_tokens, requested_max_tokens) = self.resolve_budget();
+        let (max_context_tokens, requested_max_tokens) = self.resolve_budget()?;
         let (system, user, actual_max_tokens) =
             renderer.render_and_fit(max_context_tokens, requested_max_tokens)?;
 
@@ -117,13 +120,12 @@ impl PromptAssembler {
         })
     }
 
-    fn resolve_budget(&self) -> (u32, Option<u32>) {
-        let Some(settings) = &self.settings else {
-            return (self.max_context_tokens, self.max_tokens);
+    fn resolve_budget(&self) -> Result<(u32, Option<u32>), EngineError> {
+        let Some(storage) = &self.storage else {
+            return Ok((self.max_context_tokens, self.max_tokens));
         };
-        let guard = settings.read().unwrap_or_else(|e| e.into_inner());
-        let conn = guard.narration_connection();
-        (conn.resolve_max_context_tokens(), conn.max_tokens)
+        let conn = storage.get_settings()?.narration_connection()?;
+        Ok((conn.resolve_max_context_tokens(), conn.max_tokens))
     }
 
     /// Sole owner of narrative-voice application. Callers never stamp.

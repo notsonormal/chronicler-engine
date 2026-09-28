@@ -1,7 +1,7 @@
 //! Test application builder for HTTP and integration tests.
 #![allow(clippy::expect_used)]
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use axum::Router;
 
@@ -187,15 +187,12 @@ impl TestAppBuilder {
             }
         }
 
-        let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
+        // Persist the builder's settings so storage is the single read source.
+        let _ = storage.save_settings(&self.settings);
         let pipeline_override = self.pipeline.take();
 
-        let wired = build_app_graph_for_tests(
-            Arc::clone(&settings_arc),
-            Arc::clone(&storage),
-            pipeline_override,
-        )
-        .expect("build_app_graph_for_tests should succeed");
+        let wired = build_app_graph_for_tests(Arc::clone(&storage), pipeline_override)
+            .expect("build_app_graph_for_tests should succeed");
 
         if self.is_generating {
             let mut state = wired.message_service.load_or_fresh();

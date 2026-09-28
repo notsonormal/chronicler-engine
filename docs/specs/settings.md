@@ -4,6 +4,8 @@ Endpoints:
  - `GET /fragment/settings`
  - `POST /settings`
  - `POST /settings/text-check`
+ - `POST /connections/:id/set-narrator`
+ - `GET /debug/backend`
 
 ## Scenarios
 
@@ -61,19 +63,18 @@ Then the response is 200
 And the response body is "Settings saved!"
 ```
 
-### POST /settings — current behaviour
+### POST /settings — error paths
 
-#### Scenario 20.5: POST /settings accepts a connection id that is not in the connections list
+#### Scenario 20.5: POST /settings rejects a connection id that is not in the connections list
 
 ```gherkin
 Given a fresh app state
 When the client POST /settings with narration_connection_id set to a string that is not any connection's id
 And quantifier_connection_id set to the current quantifier connection
-Then the response is 200 (the handler does not validate the id)
-And the response body is "Settings saved!"
+Then the response is 200
+And the response body contains "<span class='error'>Save failed:" (a dangling id is a configuration fault, not a HTTP error status)
+And the saved narration connection id is unchanged
 ```
-
-### POST /settings — error paths
 
 #### Scenario 20.6: POST /settings with a missing required field returns 422
 
@@ -90,4 +91,16 @@ Given an app state whose settings storage fails on save
 When the client POST /settings with valid narration_connection_id and quantifier_connection_id fields
 Then the response is 200
 And the response body contains "<span class='error'>Save failed:" (the error is surfaced in the fragment, not as a HTTP error status)
+```
+
+### Backend resolution
+
+#### Scenario 20.8: Switching the narrator takes effect on the next request
+
+```gherkin
+Given an app state whose narrator connection is the mock connection with model mock-model-a
+And a second mock connection with model mock-model-b
+When the client POST /connections/mock-b/set-narrator
+Then the response is 200
+And a following GET /debug/backend reports mock-model-b (settings resolve per request, so the switch needs no restart)
 ```

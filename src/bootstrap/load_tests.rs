@@ -149,3 +149,137 @@ fn test_seed_game_data_no_personas_dir_ok() {
         "No personas seeded when dir is absent"
     );
 }
+#[test]
+fn test_seed_settings_writes_the_file_into_an_empty_row() {
+    use crate::bootstrap::load::seed_settings;
+    use crate::domain::model::settings::AppSettings;
+
+    let storage = Storage::new_in_memory();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let settings = AppSettings {
+        response_length: "seeded from file".into(),
+        ..AppSettings::default()
+    };
+    std::fs::write(
+        temp_data.path().join("settings.json"),
+        serde_json::to_string(&settings).unwrap(),
+    )
+    .unwrap();
+
+    seed_settings(&storage, temp_data.path()).expect("seed should succeed");
+
+    let loaded = storage.get_settings().expect("get settings");
+    assert_eq!(loaded.response_length, "seeded from file");
+}
+
+#[test]
+fn test_seed_settings_is_a_noop_without_a_file() {
+    use crate::bootstrap::load::seed_settings;
+
+    let storage = Storage::new_in_memory();
+    let temp_data = tempfile::TempDir::new().unwrap();
+
+    let result = seed_settings(&storage, temp_data.path());
+    assert!(result.is_ok(), "a missing seed file is not an error");
+}
+
+#[test]
+fn test_seed_settings_malformed_file_fails() {
+    use crate::bootstrap::load::seed_settings;
+
+    let storage = Storage::new_in_memory();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    std::fs::write(temp_data.path().join("settings.json"), "{ not json").unwrap();
+
+    let result = seed_settings(&storage, temp_data.path());
+    assert!(
+        result.is_err(),
+        "a malformed seed file must fail rather than silently serve defaults"
+    );
+}
+
+#[test]
+fn test_seed_settings_dangling_narration_id_fails() {
+    use crate::bootstrap::load::seed_settings;
+    use crate::domain::model::settings::AppSettings;
+
+    let storage = Storage::new_in_memory();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let settings = AppSettings {
+        narration_connection_id: "not-a-connection".into(),
+        ..AppSettings::default()
+    };
+    std::fs::write(
+        temp_data.path().join("settings.json"),
+        serde_json::to_string(&settings).unwrap(),
+    )
+    .unwrap();
+
+    let err = seed_settings(&storage, temp_data.path())
+        .expect_err("a dangling reference must be rejected before the write");
+    assert!(
+        err.to_string().contains("not-a-connection"),
+        "error should name the missing id, got: {err}"
+    );
+}
+
+#[test]
+fn test_seed_settings_does_not_overwrite_an_edited_row() {
+    use crate::bootstrap::load::seed_settings;
+    use crate::domain::model::settings::AppSettings;
+
+    let storage = Storage::new_in_memory();
+    let temp_data = tempfile::TempDir::new().unwrap();
+
+    let edited = AppSettings {
+        response_length: "edited in the dashboard".into(),
+        ..Default::default()
+    };
+    storage
+        .save_settings(&edited)
+        .expect("save edited settings");
+
+    let from_file = AppSettings {
+        response_length: "from data/settings.json".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        temp_data.path().join("settings.json"),
+        serde_json::to_string(&from_file).unwrap(),
+    )
+    .unwrap();
+
+    seed_settings(&storage, temp_data.path()).expect("seed should succeed");
+
+    let loaded = storage.get_settings().expect("get settings");
+    assert_eq!(
+        loaded.response_length, "edited in the dashboard",
+        "the seed must not clobber an edited row"
+    );
+}
+
+#[test]
+fn test_shipped_settings_file_seeds_the_settings_row() {
+    use crate::bootstrap::load::seed_settings;
+
+    let data_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+    let storage = crate::test_support::sqlite_storage().expect("sqlite storage");
+
+    seed_settings(&storage, &data_dir).expect("seeding the shipped file must succeed");
+
+    let stored = storage.get_settings().expect("get settings");
+    assert_eq!(
+        stored.narration_connection_id, "deepseek-v4-flash",
+        "a fresh database must serve the narrator the shipped file names"
+    );
+    stored
+        .narration_connection()
+        .expect("the seeded narrator connection id must resolve");
+    stored
+        .quantifier_connection()
+        .expect("the seeded quantifier connection id must resolve");
+    assert!(
+        stored.agents.iter().any(|a| a.name == "options"),
+        "the shipped settings must register the options agent, or the feature is silently off"
+    );
+}

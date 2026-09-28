@@ -42,6 +42,38 @@ pub(crate) fn seed_game_data(
     Ok(())
 }
 
+/// Seed the singleton settings row from `data/settings.json`.
+///
+/// A malformed file fails the boot; a missing file leaves the built-in
+/// defaults in place.
+pub(crate) fn seed_settings(
+    storage: &Storage,
+    data_dir: &std::path::Path,
+) -> crate::error::Result<()> {
+    use crate::domain::model::settings::AppSettings;
+
+    let settings_file = data_dir.join("settings.json");
+    if !settings_file.exists() {
+        tracing::info!(
+            "Settings seed file not found: {} — using built-in defaults",
+            settings_file.display()
+        );
+        return Ok(());
+    }
+
+    let settings: AppSettings = read_json_file(&settings_file)?;
+
+    // Reject a dangling connection reference before writing anything: a file
+    // that names a narrator the connections list does not contain would
+    // otherwise seed successfully and fail later, mid-generation.
+    settings.narration_connection()?;
+    settings.quantifier_connection()?;
+
+    storage.seed_settings(&settings)?;
+    tracing::info!("Settings seeded from {}", settings_file.display());
+    Ok(())
+}
+
 fn seed_worlds(
     storage: &Storage,
     data_dir: &std::path::Path,

@@ -1,15 +1,25 @@
+use crate::adapters::driven::storage::db::DbPool;
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::domain::model::{
     agent::{AgentConfig, BackendSelector, ExecutionPhase},
     settings::{AppSettings, LlmProviderConfig, NarratorMode, TextCheckMode, TextCheckSettings},
 };
-use crate::adapters::driven::storage::{Storage, TestOverride};
-use crate::adapters::driven::storage::db::DbPool;
+use crate::error::EngineError;
+use crate::test_support::sqlite_storage;
 
 #[test]
 fn test_get_settings_defaults_when_empty() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
+    let storage = Storage::new_in_memory();
+    let settings = storage
+        .get_settings()
+        .expect("should get settings from empty DB");
 
+    assert_eq!(settings, AppSettings::default());
+}
+
+#[test]
+fn test_get_settings_defaults_when_empty_sqlite() {
+    let storage = sqlite_storage().unwrap();
     let settings = storage
         .get_settings()
         .expect("should get settings from empty DB");
@@ -19,9 +29,7 @@ fn test_get_settings_defaults_when_empty() {
 
 #[test]
 fn test_seed_settings_idempotent() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
-
+    let storage = Storage::new_in_memory();
     let custom = AppSettings {
         response_length: "custom".into(),
         ..Default::default()
@@ -39,10 +47,236 @@ fn test_seed_settings_idempotent() {
 }
 
 #[test]
-fn test_save_then_get_settings_roundtrip() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
+fn test_seed_settings_idempotent_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let custom = AppSettings {
+        response_length: "custom".into(),
+        ..Default::default()
+    };
 
+    storage
+        .seed_settings(&custom)
+        .expect("first seed should succeed");
+    storage
+        .seed_settings(&custom)
+        .expect("second seed should succeed (idempotent)");
+
+    let loaded = storage.get_settings().expect("should get settings");
+    assert_eq!(loaded.response_length, "custom");
+}
+
+#[test]
+fn test_seed_settings_does_not_overwrite_an_existing_row() {
+    let storage = Storage::new_in_memory();
+    let edited = AppSettings {
+        response_length: "edited in the dashboard".into(),
+        ..Default::default()
+    };
+    storage
+        .save_settings(&edited)
+        .expect("save edited settings");
+
+    let from_file = AppSettings {
+        response_length: "from data/settings.json".into(),
+        ..Default::default()
+    };
+    storage
+        .seed_settings(&from_file)
+        .expect("seed over an existing row should succeed and do nothing");
+
+    let loaded = storage.get_settings().expect("should get settings");
+    assert_eq!(
+        loaded.response_length, "edited in the dashboard",
+        "seed must not clobber a row the user has already edited"
+    );
+}
+
+#[test]
+fn test_seed_settings_does_not_overwrite_an_existing_row_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let edited = AppSettings {
+        response_length: "edited in the dashboard".into(),
+        ..Default::default()
+    };
+    storage
+        .save_settings(&edited)
+        .expect("save edited settings");
+
+    let from_file = AppSettings {
+        response_length: "from data/settings.json".into(),
+        ..Default::default()
+    };
+    storage
+        .seed_settings(&from_file)
+        .expect("seed over an existing row should succeed and do nothing");
+
+    let loaded = storage.get_settings().expect("should get settings");
+    assert_eq!(
+        loaded.response_length, "edited in the dashboard",
+        "seed must not clobber a row the user has already edited"
+    );
+}
+
+#[test]
+fn test_update_settings_applies_the_closure_and_persists() {
+    let storage = Storage::new_in_memory();
+    storage
+        .save_settings(&AppSettings::default())
+        .expect("seed defaults");
+
+    let returned = storage
+        .update_settings(|s| {
+            s.response_length = "updated".into();
+            Ok(s.connections.len())
+        })
+        .expect("update should succeed");
+
+    assert_eq!(
+        returned,
+        AppSettings::default().connections.len(),
+        "update_settings should return the closure's value"
+    );
+    let loaded = storage.get_settings().expect("should get settings");
+    assert_eq!(loaded.response_length, "updated");
+}
+
+#[test]
+fn test_update_settings_applies_the_closure_and_persists_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    storage
+        .save_settings(&AppSettings::default())
+        .expect("seed defaults");
+
+    let returned = storage
+        .update_settings(|s| {
+            s.response_length = "updated".into();
+            Ok(s.connections.len())
+        })
+        .expect("update should succeed");
+
+    assert_eq!(
+        returned,
+        AppSettings::default().connections.len(),
+        "update_settings should return the closure's value"
+    );
+    let loaded = storage.get_settings().expect("should get settings");
+    assert_eq!(loaded.response_length, "updated");
+}
+
+#[test]
+fn test_update_settings_error_aborts_the_write() {
+    let storage = Storage::new_in_memory();
+    let original = AppSettings {
+        response_length: "original".into(),
+        ..Default::default()
+    };
+    storage.save_settings(&original).expect("seed original");
+
+    let result: Result<(), _> = storage.update_settings(|s| {
+        s.response_length = "should not persist".into();
+        Err(EngineError::Config("nope".into()))
+    });
+
+    assert!(result.is_err(), "the closure error should propagate");
+    let loaded = storage.get_settings().expect("should get settings");
+    assert_eq!(
+        loaded.response_length, "original",
+        "a rejected update must leave the row untouched"
+    );
+}
+
+#[test]
+fn test_update_settings_error_aborts_the_write_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let original = AppSettings {
+        response_length: "original".into(),
+        ..Default::default()
+    };
+    storage.save_settings(&original).expect("seed original");
+
+    let result: Result<(), _> = storage.update_settings(|s| {
+        s.response_length = "should not persist".into();
+        Err(EngineError::Config("nope".into()))
+    });
+
+    assert!(result.is_err(), "the closure error should propagate");
+    let loaded = storage.get_settings().expect("should get settings");
+    assert_eq!(
+        loaded.response_length, "original",
+        "a rejected update must leave the row untouched"
+    );
+}
+
+#[test]
+fn test_save_then_get_settings_roundtrip() {
+    let storage = Storage::new_in_memory();
+    let mut custom = AppSettings {
+        connections: vec![LlmProviderConfig::new(
+            "test",
+            "Test",
+            crate::domain::model::llm_backend::LlmBackendType::OpenRouter,
+        )],
+        narration_connection_id: "test".into(),
+        quantifier_connection_id: "test".into(),
+        response_length: "concise".into(),
+        text_check: TextCheckSettings {
+            mode: TextCheckMode::Spell,
+            enable_auto_check: true,
+            ignored_words: vec!["foobar".into()],
+        },
+        agents: vec![AgentConfig {
+            name: "TestAgent".into(),
+            agent_type: "PreGeneration".into(),
+            enabled: true,
+            backend: BackendSelector::UseMain,
+            phase: ExecutionPhase::PreGeneration,
+        }],
+        ..Default::default()
+    };
+    let mut novel = custom.mode_preset_registry.bundle_for(NarratorMode::Novel);
+    novel.system_prompt_preset_id = "preset-sys".into();
+    novel.quantifier_prompt_preset_id = "preset-quant".into();
+    novel.impersonate_prompt_preset_id = "preset-imp".into();
+    custom.mode_preset_registry.set_bundle(novel);
+
+    storage.save_settings(&custom).expect("should save");
+    let loaded = storage.get_settings().expect("should get");
+
+    assert_eq!(loaded.connections.len(), 1);
+    assert_eq!(loaded.connections[0].id, "test");
+    assert_eq!(loaded.narration_connection_id, "test");
+    assert_eq!(loaded.quantifier_connection_id, "test");
+    assert_eq!(loaded.response_length, "concise");
+    assert_eq!(loaded.text_check.mode, TextCheckMode::Spell);
+    assert_eq!(loaded.text_check.ignored_words, vec!["foobar"]);
+    assert_eq!(loaded.agents.len(), 1);
+    assert_eq!(loaded.agents[0].name, "TestAgent");
+    assert_eq!(
+        loaded
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .system_prompt_preset_id,
+        "preset-sys"
+    );
+    assert_eq!(
+        loaded
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .quantifier_prompt_preset_id,
+        "preset-quant"
+    );
+    assert_eq!(
+        loaded
+            .mode_preset_registry
+            .bundle_for(NarratorMode::Novel)
+            .impersonate_prompt_preset_id,
+        "preset-imp"
+    );
+}
+
+#[test]
+fn test_save_then_get_settings_roundtrip_sqlite() {
+    let storage = sqlite_storage().unwrap();
     let mut custom = AppSettings {
         connections: vec![LlmProviderConfig::new(
             "test",
@@ -109,9 +343,7 @@ fn test_save_then_get_settings_roundtrip() {
 
 #[test]
 fn test_save_settings_updates_existing() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
-
+    let storage = Storage::new_in_memory();
     let defaults = AppSettings::default();
     storage
         .save_settings(&defaults)
@@ -130,10 +362,28 @@ fn test_save_settings_updates_existing() {
 }
 
 #[test]
-fn test_get_settings_deserializes_connections_json() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
+fn test_save_settings_updates_existing_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let defaults = AppSettings::default();
+    storage
+        .save_settings(&defaults)
+        .expect("should save defaults");
 
+    let modified = AppSettings {
+        response_length: "updated".into(),
+        ..Default::default()
+    };
+    storage
+        .save_settings(&modified)
+        .expect("should save modified");
+
+    let loaded = storage.get_settings().expect("should get");
+    assert_eq!(loaded.response_length, "updated");
+}
+
+#[test]
+fn test_save_then_get_settings_preserves_connection_fields() {
+    let storage = Storage::new_in_memory();
     let conn = LlmProviderConfig {
         id: "conn-1".into(),
         name: "Conn 1".into(),
@@ -147,7 +397,7 @@ fn test_get_settings_deserializes_connections_json() {
     };
 
     let settings = AppSettings {
-        connections: vec![conn.clone()],
+        connections: vec![conn],
         ..Default::default()
     };
 
@@ -171,10 +421,47 @@ fn test_get_settings_deserializes_connections_json() {
 }
 
 #[test]
-fn test_get_settings_deserializes_text_check_json() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
+fn test_save_then_get_settings_preserves_connection_fields_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let conn = LlmProviderConfig {
+        id: "conn-1".into(),
+        name: "Conn 1".into(),
+        provider: crate::domain::model::llm_backend::LlmBackendType::Ollama,
+        model: "llama3".into(),
+        api_key: Some("secret-key".into()),
+        base_url: Some("http://custom:11434".into()),
+        single_user_message: true,
+        max_tokens: Some(2048),
+        max_context_tokens: Some(8192),
+    };
 
+    let settings = AppSettings {
+        connections: vec![conn],
+        ..Default::default()
+    };
+
+    storage.save_settings(&settings).expect("should save");
+    let loaded = storage.get_settings().expect("should get");
+
+    assert_eq!(loaded.connections.len(), 1);
+    let loaded_conn = &loaded.connections[0];
+    assert_eq!(loaded_conn.id, "conn-1");
+    assert_eq!(loaded_conn.name, "Conn 1");
+    assert_eq!(
+        loaded_conn.provider,
+        crate::domain::model::llm_backend::LlmBackendType::Ollama
+    );
+    assert_eq!(loaded_conn.model, "llama3");
+    assert_eq!(loaded_conn.api_key, Some("secret-key".into()));
+    assert_eq!(loaded_conn.base_url, Some("http://custom:11434".into()));
+    assert!(loaded_conn.single_user_message);
+    assert_eq!(loaded_conn.max_tokens, Some(2048));
+    assert_eq!(loaded_conn.max_context_tokens, Some(8192));
+}
+
+#[test]
+fn test_save_then_get_settings_preserves_text_check() {
+    let storage = Storage::new_in_memory();
     let text_check = TextCheckSettings {
         mode: TextCheckMode::Grammar,
         enable_auto_check: false,
@@ -182,7 +469,7 @@ fn test_get_settings_deserializes_text_check_json() {
     };
 
     let settings = AppSettings {
-        text_check: text_check.clone(),
+        text_check,
         ..Default::default()
     };
 
@@ -195,10 +482,30 @@ fn test_get_settings_deserializes_text_check_json() {
 }
 
 #[test]
-fn test_get_settings_deserializes_agents_json() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
+fn test_save_then_get_settings_preserves_text_check_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let text_check = TextCheckSettings {
+        mode: TextCheckMode::Grammar,
+        enable_auto_check: false,
+        ignored_words: vec!["word1".into(), "word2".into()],
+    };
 
+    let settings = AppSettings {
+        text_check,
+        ..Default::default()
+    };
+
+    storage.save_settings(&settings).expect("should save");
+    let loaded = storage.get_settings().expect("should get");
+
+    assert_eq!(loaded.text_check.mode, TextCheckMode::Grammar);
+    assert!(!loaded.text_check.enable_auto_check);
+    assert_eq!(loaded.text_check.ignored_words, vec!["word1", "word2"]);
+}
+
+#[test]
+fn test_save_then_get_settings_preserves_agents() {
+    let storage = Storage::new_in_memory();
     let agent = AgentConfig {
         name: "MyAgent".into(),
         agent_type: "Custom".into(),
@@ -208,7 +515,38 @@ fn test_get_settings_deserializes_agents_json() {
     };
 
     let settings = AppSettings {
-        agents: vec![agent.clone()],
+        agents: vec![agent],
+        ..Default::default()
+    };
+
+    storage.save_settings(&settings).expect("should save");
+    let loaded = storage.get_settings().expect("should get");
+
+    assert_eq!(loaded.agents.len(), 1);
+    let loaded_agent = &loaded.agents[0];
+    assert_eq!(loaded_agent.name, "MyAgent");
+    assert_eq!(loaded_agent.agent_type, "Custom");
+    assert!(!loaded_agent.enabled);
+    assert_eq!(
+        loaded_agent.backend,
+        BackendSelector::UseNamed("special-conn".into())
+    );
+    assert_eq!(loaded_agent.phase, ExecutionPhase::PostGeneration);
+}
+
+#[test]
+fn test_save_then_get_settings_preserves_agents_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let agent = AgentConfig {
+        name: "MyAgent".into(),
+        agent_type: "Custom".into(),
+        enabled: false,
+        backend: BackendSelector::UseNamed("special-conn".into()),
+        phase: ExecutionPhase::PostGeneration,
+    };
+
+    let settings = AppSettings {
+        agents: vec![agent],
         ..Default::default()
     };
 
@@ -229,8 +567,7 @@ fn test_get_settings_deserializes_agents_json() {
 
 #[test]
 fn test_get_settings_failure() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1)
+    let storage = Storage::new_in_memory()
         .with_failure("get_settings", TestOverride::internal("test failure"));
 
     let result = storage.get_settings();
@@ -242,8 +579,7 @@ fn test_get_settings_failure() {
 
 #[test]
 fn test_save_settings_failure() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1)
+    let storage = Storage::new_in_memory()
         .with_failure("save_settings", TestOverride::internal("test failure"));
 
     let settings = AppSettings::default();
@@ -256,8 +592,7 @@ fn test_save_settings_failure() {
 
 #[test]
 fn test_settings_table_singleton_constraint() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
+    let storage = sqlite_storage().unwrap();
 
     let settings1 = AppSettings {
         response_length: "first".into(),
@@ -317,7 +652,6 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
 
     run_migrations(&conn).unwrap();
 
-    // Registry reshaped to the mode-tagged list; user values preserved.
     let registry_json: String = conn
         .query_row(
             "SELECT mode_preset_registry FROM settings WHERE id = 1",
@@ -335,7 +669,6 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let if_bundle = registry.bundle_for(NarratorMode::InteractiveFiction);
     assert_eq!(if_bundle.system_prompt_preset_id, "system_if_default");
 
-    // Flags: column born all-allowed, system_default tightened to novel-only.
     let allowed: String = conn
         .query_row(
             "SELECT allowed_modes FROM prompt_presets WHERE id = 'system_default'",
@@ -353,8 +686,6 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
 
 #[test]
 fn test_corrupt_mode_preset_registry_in_db_errors_as_parse() {
-    use crate::error::EngineError;
-
     let pool = DbPool::new(":memory:").unwrap();
     let storage = Storage::new_sqlite(pool.clone(), 1);
     storage

@@ -212,3 +212,51 @@ fn app_settings_deserializes_old_json_without_registry() {
         "system_default"
     );
 }
+
+#[test]
+fn narration_connection_resolves_a_listed_id() {
+    let settings = AppSettings::default();
+    let conn = settings
+        .narration_connection()
+        .expect("default settings list their own narrator id");
+    assert_eq!(conn.id, settings.narration_connection_id);
+}
+
+#[test]
+fn narration_connection_errors_on_a_dangling_id() {
+    let settings = AppSettings {
+        narration_connection_id: "does-not-exist".into(),
+        ..AppSettings::default()
+    };
+
+    let err = settings
+        .narration_connection()
+        .expect_err("a dangling id is a configuration fault");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("does-not-exist"),
+        "error should name the missing id, got: {msg}"
+    );
+}
+
+#[test]
+fn quantifier_connection_resolves_a_listed_id() {
+    let settings = AppSettings::default();
+    let conn = settings
+        .quantifier_connection()
+        .expect("default settings list their own quantifier id");
+    assert_eq!(conn.id, settings.quantifier_connection_id);
+}
+
+#[test]
+fn quantifier_connection_errors_on_a_dangling_id() {
+    let settings = AppSettings {
+        quantifier_connection_id: "also-missing".into(),
+        ..AppSettings::default()
+    };
+
+    let err = settings
+        .quantifier_connection()
+        .expect_err("a dangling id is a configuration fault");
+    assert!(err.to_string().contains("also-missing"));
+}

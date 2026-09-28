@@ -27,6 +27,10 @@ pub struct InMemoryData {
     pub personas: Vec<PersonaCardWithKey>,
     pub characters: Vec<CharacterSeed>,
     pub settings: AppSettings,
+    /// Whether `settings` holds a value written by anyone yet. `false` means
+    /// the field is the constructed default standing in for an absent row, so
+    /// `seed_settings` may still write.
+    pub settings_seeded: bool,
 }
 
 pub struct InMemoryWorld {
@@ -46,7 +50,6 @@ pub struct CharacterSeed {
 }
 
 impl InMemoryData {
-    // Throwaway backend for `mem::replace` borrow-checker workaround.
     pub(crate) fn empty() -> Self {
         Self {
             snapshots: HashMap::new(),
@@ -62,6 +65,7 @@ impl InMemoryData {
             personas: Vec::new(),
             characters: Vec::new(),
             settings: AppSettings::default(),
+            settings_seeded: false,
         }
     }
 

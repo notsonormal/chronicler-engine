@@ -1,21 +1,16 @@
 //! HTTP wiring tests for `server_impl.rs` (real request routing lives in the `http` test binary).
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::ServerConfig;
 use chronicler_engine::adapters::driving::http::bootstrap::run_server_with_config;
 use chronicler_engine::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
-use chronicler_engine::domain::model::settings::AppSettings;
 
 fn build_test_wired_app() -> WiredApp {
-    build_app_graph_for_tests(
-        Arc::new(RwLock::new(AppSettings::default())),
-        Arc::new(Storage::new_in_memory()),
-        None,
-    )
-    .expect("build_app_graph_for_tests should succeed")
+    build_app_graph_for_tests(Arc::new(Storage::new_in_memory()), None)
+        .expect("build_app_graph_for_tests should succeed")
 }
 
 #[tokio::test]

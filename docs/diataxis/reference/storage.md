@@ -30,7 +30,7 @@ The bootstrap boundary and dependency order live in this document's seeding sect
 
 ## Settings Persistence
 
-Settings occupy a singleton row in the `settings` table. Bootstrap loads the engine's settings once; reload happens only on process restart.
+Settings occupy a singleton row in the `settings` table — the engine's only settings read source. Bootstrap seeds the row once from `data/settings.json` when it is absent; every later read resolves from the database, so a settings edit takes effect on the next request without a restart.
 
 ## Read Contract: get_* and require_*
 

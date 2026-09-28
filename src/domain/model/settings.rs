@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::domain::model::agent::AgentConfig;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::utils::settings_defaults;
+use crate::error::EngineError;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum TextCheckMode {
@@ -371,15 +372,23 @@ impl AppSettings {
         self.find_connection(&self.quantifier_connection_id)
     }
 
-    pub fn narration_connection(&self) -> LlmProviderConfig {
-        self.get_narration_connection()
-            .cloned()
-            .unwrap_or_else(|| LlmProviderConfig::new("default", "Default", LlmBackendType::Mock))
+    /// The narration connection, or an error naming the missing id.
+    pub fn narration_connection(&self) -> crate::error::Result<LlmProviderConfig> {
+        self.get_narration_connection().cloned().ok_or_else(|| {
+            EngineError::Config(format!(
+                "narration_connection_id '{}' is not in the connections list",
+                self.narration_connection_id
+            ))
+        })
     }
 
-    pub fn quantifier_connection(&self) -> LlmProviderConfig {
-        self.get_quantifier_connection()
-            .cloned()
-            .unwrap_or_else(|| LlmProviderConfig::new("default", "Default", LlmBackendType::Mock))
+    /// The quantifier connection, or an error naming the missing id.
+    pub fn quantifier_connection(&self) -> crate::error::Result<LlmProviderConfig> {
+        self.get_quantifier_connection().cloned().ok_or_else(|| {
+            EngineError::Config(format!(
+                "quantifier_connection_id '{}' is not in the connections list",
+                self.quantifier_connection_id
+            ))
+        })
     }
 }

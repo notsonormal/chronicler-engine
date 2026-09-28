@@ -10,6 +10,10 @@ Use this skill for an unusually strict review focused on implementation quality,
 
 Above all, this skill should push the reviewer to be **ambitious** about code structure. Do not merely identify local cleanup opportunities. Actively search for "code judo" moves: restructurings that preserve behavior while making the implementation dramatically simpler, smaller, more direct, and more elegant.
 
+## Read the standards first
+
+Always read `CODING_STANDARDS.md` before reviewing.
+
 ## Do not build or run tests
 
 Ensure that the application is working is part of the implementation, assume the build is working. If is the build happening to be failing, that is not the responsibility of this skill and would be a distraction.

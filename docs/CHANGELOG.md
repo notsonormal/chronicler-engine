@@ -2,6 +2,23 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-09-27
+
+### Changed
+
+- **Settings resolve from the database per call**. The `Arc<RwLock<AppSettings>>` boot-time cache is gone: every consumer reads the singleton settings row through storage at the point of use, so connection and preset edits take effect on the next request without a restart. Settings-mutating handlers go through `Storage::update_settings`, which performs read-modify-write under one storage acquisition.
+- **LLM providers resolve per call**. `LlmCallRecorder` holds a provider resolver instead of a frozen provider; a dangling `narration_connection_id` / `quantifier_connection_id` now errors the call (and fails the boot-time wiring check) instead of silently substituting a Mock backend.
+- **`data/settings.json` seeds the settings row** at boot when the row is absent (INSERT OR IGNORE semantics; user-edited settings survive restarts). A malformed seed file halts bootstrap — the one fail-loud seed.
+- **`--settings-path` CLI flag removed**; the test harness injects mock connections over HTTP after the server starts.
+- **Invalid connection ids and unknown provider strings now error** on save (`POST /settings`, connection add/edit forms) instead of being accepted or mapped to Mock.
+- **`data/settings.json` refreshed**: adds the options agent, `mode_preset_registry`, and `active_options_prompt_preset_id`; drops the two dead preset-id keys; `data/schemas/settings.schema.json` catches up with `additionalProperties: false`.
+- **Settings and preset errors render one shape**. The settings handlers now use the shared `render_error` helper, so error text is HTML-escaped and identical across the layer.
+
+### Fixed
+
+- **Stale-provider bug**: editing the narrator/quantifier connection in the dashboard previously did not affect the live LLM path until process restart; per-call resolution removes the freeze.
+- **Ignored words now apply without a restart**. The Harper checker caches its dictionary against the word list it was built from, so an edit to the ignored words takes effect on the next text check.
+
 ## 2026-09-06
 
 ### Changed

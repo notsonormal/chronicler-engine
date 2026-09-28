@@ -5,8 +5,11 @@ use std::sync::Arc;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
+use chronicler_engine::bootstrap::wiring::build_app_graph;
+use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::test_support::{
     make_test_pipeline_with_backends, make_test_recorder_with_storage, TestAppBuilder,
@@ -46,4 +49,23 @@ pub fn app_with_narrator_and_settings(
     let (app, state, _storage) =
         app_with_narrator_and_registry(narrator, AgentRegistry::default(), settings);
     (app, state)
+}
+
+/// Build an app on the **production** graph. Every seeded connection must be
+/// Mock — the graph builds whatever provider settings name.
+pub fn app_with_production_graph(settings: AppSettings) -> (axum::Router, AppState, Arc<Storage>) {
+    assert!(
+        settings
+            .connections
+            .iter()
+            .all(|c| c.provider == LlmBackendType::Mock),
+        "app_with_production_graph requires Mock connections: the production graph \
+         builds the provider the settings name"
+    );
+
+    let storage = Arc::new(Storage::new_in_memory());
+    storage.save_settings(&settings).expect("seed settings");
+    let wired = build_app_graph(Arc::clone(&storage)).expect("production graph should build");
+    let state = AppState::from_wired(wired);
+    (build_router(state.clone()), state, storage)
 }

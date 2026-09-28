@@ -1,13 +1,13 @@
 //! Prompt preset HTTP handler tests.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::NarratorMode;
 use crate::adapters::driving::http::prompt_presets::handlers::{
     ActivateQuery, PresetForm, activate_preset_handler, delete_preset_handler,
-    duplicate_preset_handler, edit_preset_form_handler, panel_handler, preset_card_handler,
-    save_preset_handler, update_preset_handler, view_preset_form_handler,
+    duplicate_preset_handler, edit_preset_form_handler, preset_card_handler, save_preset_handler,
+    update_preset_handler, view_preset_form_handler,
 };
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::TestPromptPreset;
@@ -24,14 +24,8 @@ fn make_test_app_state_with_storage(
 ) -> crate::adapters::driving::http::AppState {
     let _ = storage.save_preset(&preset);
 
-    let wired = crate::bootstrap::wiring::build_app_graph_for_tests(
-        Arc::new(RwLock::new(
-            crate::domain::model::settings::AppSettings::default(),
-        )),
-        Arc::clone(&storage),
-        None,
-    )
-    .expect("build_app_graph_for_tests should succeed");
+    let wired = crate::bootstrap::wiring::build_app_graph_for_tests(Arc::clone(&storage), None)
+        .expect("build_app_graph_for_tests should succeed");
     crate::adapters::driving::http::AppState::from_wired(wired)
 }
 
@@ -251,7 +245,7 @@ async fn test_activate_preset_does_not_update_memory_when_save_fails() {
         },
         |h| {
             h.set(
-                "save_settings",
+                "update_settings",
                 TestOverride::config("injected save failure"),
             )
         },
@@ -266,9 +260,8 @@ async fn test_activate_preset_does_not_update_memory_when_save_fails() {
     assert!(response.0.contains("Save failed"));
 
     let active_id = app_state
-        .settings
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
+        .settings()
+        .expect("settings read should succeed")
         .mode_preset_registry
         .bundle_for(NarratorMode::Novel)
         .system_prompt_preset_id
@@ -292,26 +285,6 @@ async fn test_activate_nonexistent_preset_returns_error() {
     assert!(response.0.contains("Preset not found"));
 }
 
-#[tokio::test]
-async fn test_panel_handler_with_poisoned_settings_lock() {
-    let app_state =
-        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
-
-    let settings_clone = Arc::clone(&app_state.settings);
-    let handle = tokio::task::spawn_blocking(move || {
-        let _guard = settings_clone.write().unwrap();
-        panic!("intentional panic to poison lock");
-    });
-    let _ = handle.await;
-
-    let response = panel_handler(axum::extract::State(app_state)).await;
-    assert!(
-        response.0.contains("System Prompts"),
-        "Panel should render even with poisoned lock: {}",
-        response.0
-    );
-}
-
 fn make_test_app_state_with_failing_storage(
     preset: PromptPreset,
     fail_after_setup: impl FnOnce(&crate::adapters::driven::storage::TestFailureHandle),
@@ -320,14 +293,8 @@ fn make_test_app_state_with_failing_storage(
     let _ = storage.save_preset(&preset);
     fail_after_setup(&handle);
 
-    let wired = crate::bootstrap::wiring::build_app_graph_for_tests(
-        Arc::new(RwLock::new(
-            crate::domain::model::settings::AppSettings::default(),
-        )),
-        Arc::new(storage),
-        None,
-    )
-    .expect("build_app_graph_for_tests should succeed");
+    let wired = crate::bootstrap::wiring::build_app_graph_for_tests(Arc::new(storage), None)
+        .expect("build_app_graph_for_tests should succeed");
     crate::adapters::driving::http::AppState::from_wired(wired)
 }
 
@@ -461,7 +428,7 @@ async fn test_activate_writes_novel_slot_for_allowed_preset() {
         response.0
     );
 
-    let settings = app_state.settings.read().unwrap_or_else(|e| e.into_inner());
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(
         settings
             .mode_preset_registry
@@ -493,7 +460,7 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
     .await;
     assert!(response.0.contains("not allowed"));
 
-    let settings = app_state.settings.read().unwrap_or_else(|e| e.into_inner());
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(
         settings
             .mode_preset_registry
@@ -523,7 +490,7 @@ async fn test_activate_with_mode_param_writes_that_modes_slot() {
         response.0
     );
 
-    let settings = app_state.settings.read().unwrap_or_else(|e| e.into_inner());
+    let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(
         settings
             .mode_preset_registry
@@ -630,12 +597,17 @@ async fn test_delete_refuses_preset_referenced_as_any_mode_default() {
 
     // Reference the custom preset as the IF bundle's system default.
     {
-        let mut settings = app_state.settings.write().unwrap();
-        let mut bundle = settings
-            .mode_preset_registry
-            .bundle_for(NarratorMode::InteractiveFiction);
-        bundle.system_prompt_preset_id = "custom-ref".to_string();
-        settings.mode_preset_registry.set_bundle(bundle);
+        app_state
+            .settings_service
+            .update_settings(|settings| {
+                let mut bundle = settings
+                    .mode_preset_registry
+                    .bundle_for(NarratorMode::InteractiveFiction);
+                bundle.system_prompt_preset_id = "custom-ref".to_string();
+                settings.mode_preset_registry.set_bundle(bundle);
+                Ok(())
+            })
+            .expect("update_settings should succeed");
     }
 
     let response = delete_preset_handler(

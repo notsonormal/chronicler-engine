@@ -34,7 +34,7 @@ pub async fn debug_backend_handler(State(state): State<AppState>) -> Json<DebugB
     // arch-lint: debug-direct — intentional exemption, see the hexagonal architecture docs.
     let (name, model) = state.pipeline.backend_info();
     Json(DebugBackendResponse {
-        backend_name: name.to_string(),
-        model_name: model.to_string(),
+        backend_name: name,
+        model_name: model,
     })
 }

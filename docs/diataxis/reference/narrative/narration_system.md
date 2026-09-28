@@ -7,9 +7,7 @@ title: Narration System
 
 LLM connections are stored as a list on the `settings` singleton row. Each connection carries an identity (id + name, surfaced in the dashboard), a `LlmBackendType` discriminator (`openrouter` / `deepseek` / `ollama` / `mock`), a model identifier, an `api_key` with provider-specific env-var fallback (OpenRouter and DeepSeek fall back to `OPENROUTER_API_KEY` when no stored key is set), a `base_url` endpoint, a single-user-message toggle, and per-connection token caps (`max_tokens` for the response, `max_context_tokens` for the context window). The full set of fields and their per-provider defaults lives in `src/domain/model/settings.rs`; this reference does not restate them.
 
-Two named connection ids are read from settings: `narration_connection_id` (main narrative call) and `quantifier_connection_id` (post-narration scene analysis). They may resolve to the same connection record or to different ones; the wiring builds a dedicated `LlmCallRecorder` for each.
-
-Settings are loaded once at startup and held as `Arc<RwLock<AppSettings>>`. No business logic reloads settings from disk.
+Two named connection ids are read from settings: `narration_connection_id` (main narrative call) and `quantifier_connection_id` (post-narration scene analysis). They may resolve to the same connection record or to different ones; the wiring builds a dedicated `LlmCallRecorder` for each. The recorder resolves its connection from the settings row at call time, so a connection switch takes effect on the next LLM call without a restart.
 
 ## Backend Selection
 

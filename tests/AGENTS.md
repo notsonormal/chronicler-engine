@@ -4,6 +4,18 @@
 
 See [`STRATEGY.md`](STRATEGY.md) for the normative placement rule (which of the three UI tiers a test belongs to) and the overlap/SCENARIO-tag conventions.
 
+## Failure handling
+
+When tests fail, you MUST:
+
+1. **Show the actual test output** — quote the failure message verbatim.
+2. **Read the test code** — understand what the test is actually checking before explaining why it failed.
+3. **Verify your assumptions** — if you claim "this test skips when X is missing", verify X is actually missing and the skip logic exists.
+4. **Never rationalize failures away** — a test failure is a real signal that requires investigation, not dismissal.
+5. **Investigate pre-existing and flaky failures too** — a failure that looks unrelated is often related; even when it isn't, failing tests need fixing regardless.
+
+If you're unsure why a test failed, say so and investigate — don't invent explanations.
+
 ## LLM Testing
 
 `python build.py` runs the fast suite only. LLM tests are `#[ignore]`d by default.
@@ -53,7 +65,6 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
 - **helpers/**
     - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage instances with deterministic defaults so tests can focus on the behaviour under test.
-    - `sqlite_test_app_builder.rs` — Integration-only SQLite-backed application builder for integration tests.
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).

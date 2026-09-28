@@ -2,7 +2,7 @@
 //! Shared action-pipeline state, constructors, and orchestration helpers.
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
@@ -30,7 +30,6 @@ use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::message_service::MessageService;
 use crate::application::ports::llm_provider::LlmProvider;
-use crate::domain::model::settings::AppSettings;
 use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::error::EngineError;
 
@@ -41,8 +40,6 @@ pub struct ActionPipeline {
     pub(crate) agent_registry: Arc<AgentRegistry>,
     pub(crate) message_service: Arc<MessageService>,
     pub(crate) storage: Arc<Storage>,
-
-    pub(crate) settings: Arc<RwLock<AppSettings>>,
     pub(crate) shutdown_token: CancellationToken,
 }
 
@@ -53,20 +50,14 @@ impl ActionPipeline {
         agent_registry: AgentRegistry,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
-        settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
-        tracing::info!(
-            "ActionPipeline: backend={}, model={}",
-            recorder.provider().name(),
-            recorder.provider().model()
-        );
+        tracing::info!("ActionPipeline: provider={}", recorder.provider_label());
         Self::with_backends(
             shutdown_token,
             recorder,
             agent_registry,
             message_service,
             storage,
-            settings,
         )
     }
 
@@ -76,17 +67,15 @@ impl ActionPipeline {
         agent_registry: AgentRegistry,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
-        settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         Self {
             prompt_assembler: Arc::new(
-                PromptAssembler::new(MAX_CONTEXT_TOKENS).with_settings(settings.clone()),
+                PromptAssembler::new(MAX_CONTEXT_TOKENS).with_storage(Arc::clone(&storage)),
             ),
             recorder,
             agent_registry: Arc::new(agent_registry),
             message_service,
             storage,
-            settings,
             shutdown_token,
         }
     }
@@ -97,25 +86,17 @@ impl ActionPipeline {
         quantifier_provider: Arc<dyn LlmProvider>,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
-        settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
         let registry = AgentRegistry::with_agent(Box::new(agent));
-        Self::with_backends(
-            shutdown_token,
-            recorder,
-            registry,
-            message_service,
-            storage,
-            settings,
-        )
+        Self::with_backends(shutdown_token, recorder, registry, message_service, storage)
     }
 
-    pub fn backend_info(&self) -> (&str, &str) {
-        (
-            self.recorder.provider().name(),
-            self.recorder.provider().model(),
-        )
+    pub fn backend_info(&self) -> (String, String) {
+        match self.recorder.provider() {
+            Ok(p) => (p.name().to_string(), p.model().to_string()),
+            Err(e) => (format!("<unresolved: {e}>"), "<unresolved>".to_string()),
+        }
     }
 
     pub fn recorder(&self) -> &Arc<LlmCallRecorder> {
@@ -130,12 +111,10 @@ impl ActionPipeline {
         mut self,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
-        settings: Arc<RwLock<AppSettings>>,
         shutdown_token: CancellationToken,
     ) -> Self {
         self.message_service = message_service;
         self.storage = storage;
-        self.settings = settings;
         self.shutdown_token = shutdown_token;
         self
     }

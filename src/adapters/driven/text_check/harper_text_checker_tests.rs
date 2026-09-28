@@ -7,7 +7,7 @@ use crate::application::ports::text_checker::TextChecker;
 
 #[test]
 fn detects_misspelling() {
-    let checker = HarperTextChecker::new(&[]);
+    let checker = HarperTextChecker::new();
     let result = checker
         .check("go to the casle", TextCheckMode::Spell, &[])
         .unwrap();
@@ -19,7 +19,7 @@ fn detects_misspelling() {
 
 #[test]
 fn no_issues_on_clean_text() {
-    let checker = HarperTextChecker::new(&[]);
+    let checker = HarperTextChecker::new();
     let result = checker
         .check("go to the castle", TextCheckMode::SpellGrammar, &[])
         .unwrap();
@@ -28,7 +28,7 @@ fn no_issues_on_clean_text() {
 
 #[test]
 fn disabled_returns_none() {
-    let checker = HarperTextChecker::new(&[]);
+    let checker = HarperTextChecker::new();
     let result = checker
         .check("go to the casle", TextCheckMode::Disabled, &[])
         .unwrap();
@@ -37,16 +37,44 @@ fn disabled_returns_none() {
 
 #[test]
 fn ignored_words_are_respected() {
-    let checker = HarperTextChecker::new(&["casle".to_string()]);
+    let checker = HarperTextChecker::new();
     let result = checker
-        .check("go to the casle", TextCheckMode::Spell, &[])
+        .check(
+            "go to the casle",
+            TextCheckMode::Spell,
+            &["casle".to_string()],
+        )
         .unwrap();
     assert!(result.is_none());
 }
 
 #[test]
+fn ignored_words_take_effect_without_rebuilding_the_checker() {
+    let checker = HarperTextChecker::new();
+
+    let flagged = checker
+        .check("go to the casle", TextCheckMode::Spell, &[])
+        .unwrap();
+    assert!(flagged.is_some());
+
+    let ignored = checker
+        .check(
+            "go to the casle",
+            TextCheckMode::Spell,
+            &["casle".to_string()],
+        )
+        .unwrap();
+    assert!(ignored.is_none());
+
+    let flagged_again = checker
+        .check("go to the casle", TextCheckMode::Spell, &[])
+        .unwrap();
+    assert!(flagged_again.is_some());
+}
+
+#[test]
 fn detects_multiple_misspellings() {
-    let checker = HarperTextChecker::new(&[]);
+    let checker = HarperTextChecker::new();
     let result = checker
         .check("Yiu igore her and move inside", TextCheckMode::Spell, &[])
         .unwrap();
@@ -67,7 +95,7 @@ fn detects_multiple_misspellings() {
 
 #[test]
 fn detects_two_unambiguous_misspellings() {
-    let checker = HarperTextChecker::new(&[]);
+    let checker = HarperTextChecker::new();
     let result = checker
         .check("go to the casle and teh towre", TextCheckMode::Spell, &[])
         .unwrap();
@@ -88,7 +116,7 @@ fn detects_two_unambiguous_misspellings() {
 
 #[test]
 fn spellgrammar_finds_spelling_and_grammar_issues() {
-    let checker = HarperTextChecker::new(&[]);
+    let checker = HarperTextChecker::new();
     let result = checker
         .check("He dont go to the casle", TextCheckMode::SpellGrammar, &[])
         .unwrap();

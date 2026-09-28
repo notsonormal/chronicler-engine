@@ -2,7 +2,6 @@
 #![allow(clippy::expect_used)]
 
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use tokio_util::sync::CancellationToken;
 
@@ -16,7 +15,7 @@ use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::{AppSettings, NarratorMode};
+use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::utils::settings_defaults;
@@ -92,14 +91,12 @@ pub fn make_test_pipeline_with_backends(
 ) -> ActionPipeline {
     seed_default_preset(&storage);
     let message_service = build_test_message_service(Arc::clone(&storage));
-    let settings = Arc::new(RwLock::new(AppSettings::default()));
     ActionPipeline::with_backends(
         CancellationToken::new(),
         recorder,
         agent_registry,
         message_service,
-        Arc::clone(&storage),
-        settings,
+        storage,
     )
 }
 
@@ -110,33 +107,18 @@ pub fn make_test_pipeline_with_mock_quantifier(
 ) -> ActionPipeline {
     seed_default_preset(&storage);
     let message_service = build_test_message_service(Arc::clone(&storage));
-    let settings = Arc::new(RwLock::new(AppSettings::default()));
     ActionPipeline::with_mock_quantifier(
         CancellationToken::new(),
         recorder,
         quantifier_provider,
         message_service,
-        Arc::clone(&storage),
-        settings,
+        storage,
     )
 }
 
 /// Build a full `WiredApp` for the supplied pipeline.
 pub fn build_test_wired_app(storage: Arc<Storage>, pipeline: ActionPipeline) -> Result<WiredApp> {
-    build_app_graph_for_tests(
-        Arc::new(RwLock::new(AppSettings::default())),
-        storage,
-        Some(pipeline),
-    )
-}
-
-/// Build a full `WiredApp` with custom settings.
-pub fn build_test_wired_app_with_settings(
-    storage: Arc<Storage>,
-    settings: Arc<RwLock<AppSettings>>,
-    pipeline: ActionPipeline,
-) -> Result<WiredApp> {
-    build_app_graph_for_tests(settings, storage, Some(pipeline))
+    build_app_graph_for_tests(storage, Some(pipeline))
 }
 
 pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
@@ -182,8 +164,7 @@ pub fn make_test_pipeline_app_with_storage() -> (AppState, Arc<Storage>) {
 
 fn build_test_app(storage: Arc<Storage>) -> Result<WiredApp> {
     seed_default_preset(&storage);
-    let settings = Arc::new(RwLock::new(AppSettings::default()));
-    build_app_graph_for_tests(settings, storage, None)
+    build_app_graph_for_tests(storage, None)
 }
 
 pub fn make_test_app(state: GameState) -> Result<WiredApp> {

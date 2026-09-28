@@ -1,9 +1,11 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use crate::adapters::driven::storage::Storage;
 
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense};
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::world::WorldCard;
 use crate::application::prompting::assembler::{PromptAssembler, PromptContext};
@@ -367,14 +369,16 @@ fn test_budget_read_from_settings_per_call() {
     let player = create_test_player();
     let preset = create_test_preset();
 
-    let settings = Arc::new(RwLock::new(AppSettings::default()));
-    {
-        let mut guard = settings.write().unwrap();
-        guard.connections[0].max_context_tokens = Some(1024);
-    }
+    let storage = Arc::new(Storage::new_in_memory());
+    storage
+        .update_settings(|settings| {
+            settings.connections[0].max_context_tokens = Some(1024);
+            Ok(())
+        })
+        .expect("update_settings should succeed");
 
     let assembler =
-        PromptAssembler::new(budget::MAX_CONTEXT_TOKENS).with_settings(settings.clone());
+        PromptAssembler::new(budget::MAX_CONTEXT_TOKENS).with_storage(Arc::clone(&storage));
 
     let long_history: Vec<MessageEntry> = (0..100)
         .map(|i| MessageEntry {
@@ -405,10 +409,12 @@ fn test_budget_read_from_settings_per_call() {
         .expect("small budget assemble should succeed");
     let small_count = small.user_prompt.matches("Narrator:").count();
 
-    {
-        let mut guard = settings.write().unwrap();
-        guard.connections[0].max_context_tokens = Some(16384);
-    }
+    storage
+        .update_settings(|settings| {
+            settings.connections[0].max_context_tokens = Some(16384);
+            Ok(())
+        })
+        .expect("update_settings should succeed");
 
     let large = assembler
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
@@ -427,20 +433,24 @@ fn test_budget_read_from_settings_per_call() {
     // Per-call `max_tokens`: flip the response cap and observe the assembled
     // prompt's `max_tokens` change. Use a large context window so `max_tokens`
     // is the binding constraint (not the available-context floor).
-    {
-        let mut guard = settings.write().unwrap();
-        guard.connections[0].max_context_tokens = Some(32768);
-        guard.connections[0].max_tokens = Some(50);
-    }
+    storage
+        .update_settings(|settings| {
+            settings.connections[0].max_context_tokens = Some(32768);
+            settings.connections[0].max_tokens = Some(50);
+            Ok(())
+        })
+        .expect("update_settings should succeed");
     let small_max = assembler
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
         .expect("small max_tokens assemble should succeed");
     let small_budget = small_max.max_tokens;
 
-    {
-        let mut guard = settings.write().unwrap();
-        guard.connections[0].max_tokens = Some(500);
-    }
+    storage
+        .update_settings(|settings| {
+            settings.connections[0].max_tokens = Some(500);
+            Ok(())
+        })
+        .expect("update_settings should succeed");
     let large_max = assembler
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
         .expect("large max_tokens assemble should succeed");
@@ -729,7 +739,7 @@ fn test_assemble_injects_narrative_voice_from_resolved_posture() {
     context.template_vars.narrative_tense = "past".to_string();
 
     let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS)
-        .with_settings(Arc::new(RwLock::new(AppSettings::default())));
+        .with_storage(Arc::new(Storage::new_in_memory()));
     let result = assembler
         .assemble(&context, &preset, &world.global_rules, None)
         .expect("assemble should succeed");

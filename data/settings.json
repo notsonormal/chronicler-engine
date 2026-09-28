@@ -58,7 +58,7 @@
   "quantifier_connection_id": "ollama-gemma-4-e2b",
   "response_length": "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.",
   "text_check": {
-    "mode": "SpellGrammar",
+    "mode": "Disabled",
     "enable_auto_check": true,
     "ignored_words": []
   },
@@ -72,8 +72,31 @@
         "value": "quantifier"
       },
       "phase": "post_generation"
+    },
+    {
+      "name": "options",
+      "agent_type": "options",
+      "enabled": true,
+      "backend": {
+        "type": "use_named",
+        "value": "options"
+      },
+      "phase": "options_generation"
     }
   ],
-  "active_system_prompt_preset_id": "system_default",
-  "active_quantifier_prompt_preset_id": "quantifier_default"
+  "mode_preset_registry": [
+    {
+      "mode": "novel",
+      "system_prompt_preset_id": "system_default",
+      "quantifier_prompt_preset_id": "quantifier_default",
+      "impersonate_prompt_preset_id": "impersonate_default"
+    },
+    {
+      "mode": "interactive_fiction",
+      "system_prompt_preset_id": "system_if_default",
+      "quantifier_prompt_preset_id": "quantifier_default",
+      "impersonate_prompt_preset_id": "impersonate_default"
+    }
+  ],
+  "active_options_prompt_preset_id": "options_default"
 }

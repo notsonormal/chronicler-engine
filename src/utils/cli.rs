@@ -29,9 +29,6 @@ pub struct Args {
 
     #[arg(long, default_value = "3000")]
     pub port: u16,
-
-    #[arg(long)]
-    pub settings_path: Option<std::path::PathBuf>,
 }
 
 pub fn parse_args() -> Args {

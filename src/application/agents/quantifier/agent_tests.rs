@@ -22,9 +22,6 @@ fn test_from_config_creates_agent() {
         &config,
         crate::test_support::make_test_recorder(Arc::new(MockBackend::default())),
         None,
-        Arc::new(std::sync::RwLock::new(
-            crate::domain::model::settings::AppSettings::default(),
-        )),
     );
     assert!(agent.is_ok());
 }

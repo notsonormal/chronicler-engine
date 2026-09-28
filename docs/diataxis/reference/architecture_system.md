@@ -31,7 +31,7 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 ## Settings
 
-Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via `Arc<RwLock<AppSettings>>` held on `AppState.settings`. Construction-chain recipients take a reference at wiring time; no business-logic layer reloads from disk. `max_context_tokens` is read dynamically per call (per-call budget).
+The settings row is the read source for the whole engine. Every consumer resolves settings from storage at the point of use, so a connection or preset change takes effect on the next request without a restart. Bootstrap seeds the row once from `data/settings.json` when the database has no row yet; after that the file is never consulted. A connection reference that names no stored connection fails the operation that needs it instead of falling back to another backend.
 
 ## AppState collaborators
 
@@ -47,7 +47,6 @@ Loaded once at startup in `src/utils/settings.rs::load_settings` and shared via 
 - `settings_service: SettingsService` — settings persistence.
 - `prompt_preset_service: PromptPresetService` — prompt-preset CRUD.
 - `text_check_service: Arc<TextCheckService>` — player-command spelling/grammar check.
-- `settings: Arc<RwLock<AppSettings>>` — runtime settings.
 - `shutdown_token: CancellationToken` — request shutdown signal.
 
 ## Deployment Contract

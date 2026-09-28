@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! Harper text check adapter implementing TextChecker port
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use harper_core::linting::{LintGroup, Linter};
 use harper_core::spell::{FstDictionary, MutableDictionary};
@@ -14,34 +14,37 @@ use crate::error::EngineError;
 use crate::domain::model::settings::TextCheckMode;
 use crate::application::ports::text_checker::{CheckIssue, CheckResult, TextChecker};
 
+/// The merged dictionary is cached against the word list it was built from, so an
+/// edit to the ignored words takes effect on the next check.
+#[derive(Default)]
 pub struct HarperTextChecker {
-    ignored_words: Vec<String>,
-    dictionary: std::sync::OnceLock<Arc<MergedDictionary>>,
+    dictionary: Mutex<Option<(Vec<String>, Arc<MergedDictionary>)>>,
 }
 
 impl HarperTextChecker {
-    pub fn new(ignored_words: &[String]) -> Self {
-        Self {
-            ignored_words: ignored_words.to_vec(),
-            dictionary: std::sync::OnceLock::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    fn merged(&self) -> Arc<MergedDictionary> {
-        self.dictionary
-            .get_or_init(|| {
-                let mut merged = MergedDictionary::new();
-                merged.add_dictionary(FstDictionary::curated());
-                if !self.ignored_words.is_empty() {
-                    let mut user_dict = MutableDictionary::new();
-                    for word in &self.ignored_words {
-                        user_dict.append_word_str(word, harper_core::WordMetadata::default());
-                    }
-                    merged.add_dictionary(Arc::new(user_dict));
-                }
-                Arc::new(merged)
-            })
-            .clone()
+    fn merged(&self, ignored_words: &[String]) -> Arc<MergedDictionary> {
+        let mut cache = self.dictionary.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((cached_words, dictionary)) = cache.as_ref() {
+            if cached_words.as_slice() == ignored_words {
+                return Arc::clone(dictionary);
+            }
+        }
+        let mut merged = MergedDictionary::new();
+        merged.add_dictionary(FstDictionary::curated());
+        if !ignored_words.is_empty() {
+            let mut user_dict = MutableDictionary::new();
+            for word in ignored_words {
+                user_dict.append_word_str(word, harper_core::WordMetadata::default());
+            }
+            merged.add_dictionary(Arc::new(user_dict));
+        }
+        let dictionary = Arc::new(merged);
+        *cache = Some((ignored_words.to_vec(), Arc::clone(&dictionary)));
+        dictionary
     }
 }
 
@@ -50,13 +53,13 @@ impl TextChecker for HarperTextChecker {
         &self,
         text: &str,
         mode: TextCheckMode,
-        _ignored_words: &[String],
+        ignored_words: &[String],
     ) -> Result<Option<CheckResult>, EngineError> {
         if mode == TextCheckMode::Disabled {
             return Ok(None);
         }
 
-        let dictionary = self.merged();
+        let dictionary = self.merged(ignored_words);
         let document = Document::new_plain_english(text, dictionary.as_ref());
         let mut linter = LintGroup::new_curated(dictionary);
         linter.config.set_rule_enabled("AvoidCurses", false);

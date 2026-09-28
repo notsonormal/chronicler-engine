@@ -2,7 +2,7 @@
 //! Game state initialization and arrival narration spawning
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::domain::model::character::{NpcCard, PersonaCard};
@@ -15,11 +15,6 @@ use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
 use super::run::{find_latest_game_for_world, list_game_names_for_world};
-
-fn with_settings<T>(settings: &Arc<RwLock<AppSettings>>, f: impl FnOnce(&AppSettings) -> T) -> T {
-    let guard = settings.read().unwrap_or_else(|e| e.into_inner());
-    f(&guard)
-}
 
 pub(crate) fn resolve_game_id(
     db_pool: &crate::adapters::driven::storage::db::DbPool,
@@ -126,13 +121,12 @@ pub struct ArrivalSpawnRequest {
 
 pub fn spawn_arrival_task_if_needed(
     runtime: &tokio::runtime::Runtime,
-    settings: &Arc<RwLock<AppSettings>>,
     message_service: Arc<crate::application::message_service::MessageService>,
     pipeline: Arc<crate::application::pipeline::ActionPipeline>,
     storage: &Arc<crate::adapters::driven::storage::Storage>,
     _db_pool: &crate::adapters::driven::storage::db::DbPool,
     request: ArrivalSpawnRequest,
-) {
+) -> crate::error::Result<()> {
     let ArrivalSpawnRequest {
         world,
         room_id,
@@ -143,21 +137,21 @@ pub fn spawn_arrival_task_if_needed(
     let has_scenario = world.default_scenario().is_some_and(|s| !s.text.is_empty());
 
     if has_scenario {
-        return;
+        return Ok(());
     }
 
-    let (arrival_preset, response_length, max_context_tokens, max_tokens) =
-        with_settings(settings, |guard| {
-            let preset_id = storage.active_system_preset_id(guard);
-            let preset = storage.get_preset(&preset_id).ok().flatten();
-            let conn = guard.narration_connection();
-            (
-                preset,
-                guard.response_length.clone(),
-                conn.resolve_max_context_tokens(),
-                conn.max_tokens,
-            )
-        });
+    let settings = storage.get_settings()?;
+    let (arrival_preset, response_length, max_context_tokens, max_tokens) = {
+        let preset_id = storage.active_system_preset_id(&settings);
+        let preset = storage.get_preset(&preset_id).ok().flatten();
+        let conn = settings.narration_connection()?;
+        (
+            preset,
+            settings.response_length.clone(),
+            conn.resolve_max_context_tokens(),
+            conn.max_tokens,
+        )
+    };
 
     let recorder = Arc::clone(pipeline.recorder());
 
@@ -177,4 +171,6 @@ pub fn spawn_arrival_task_if_needed(
     runtime.spawn_blocking(move || {
         let _ = task_ctx.run();
     });
+
+    Ok(())
 }

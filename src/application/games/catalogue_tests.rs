@@ -1,13 +1,13 @@
 //! Unit tests for GameCatalogue.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::message_service::MessageService;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::{AppSettings, NarratorMode, NarrativePerspective, NarrativeTense};
+use crate::domain::model::settings::{NarratorMode, NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::utils::settings_defaults;
 use crate::test_support::TestDataBuilder;
@@ -17,11 +17,10 @@ fn seeded_catalogue() -> (GameCatalogue, Arc<Storage>, String, String) {
     let storage = Arc::new(Storage::new_in_memory());
     data.seed_into(&storage);
     let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
-    let settings = Arc::new(RwLock::new(AppSettings::default()));
     let world_key = data.world_key();
     let persona_key = data.persona.key.clone();
     (
-        GameCatalogue::new(Arc::clone(&storage), message_service, settings),
+        GameCatalogue::new(Arc::clone(&storage), message_service),
         storage,
         world_key,
         persona_key,
@@ -68,10 +67,9 @@ fn test_create_game_inherits_world_posture_and_mode_matched_bundle() {
     let storage = Arc::new(Storage::new_in_memory());
     data.seed_into(&storage);
     let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
-    let settings = Arc::new(RwLock::new(AppSettings::default()));
     let world_key = data.world_key();
     let persona_key = data.persona.key.clone();
-    let catalogue = GameCatalogue::new(Arc::clone(&storage), message_service, settings);
+    let catalogue = GameCatalogue::new(Arc::clone(&storage), message_service);
 
     let id = catalogue
         .create_game(&world_key, &persona_key)
@@ -161,11 +159,7 @@ fn test_create_game_restores_current_game_on_persist_failure() {
     );
     let storage = Arc::new(storage);
     let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
-    let catalogue = GameCatalogue::new(
-        Arc::clone(&storage),
-        message_service,
-        Arc::new(RwLock::new(AppSettings::default())),
-    );
+    let catalogue = GameCatalogue::new(Arc::clone(&storage), message_service);
     let original_current = storage.current_game_id();
 
     let result = catalogue.create_game(&data.world_key(), &data.persona.key);

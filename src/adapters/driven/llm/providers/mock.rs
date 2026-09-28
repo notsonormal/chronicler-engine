@@ -19,6 +19,8 @@ pub struct MockBackend {
     pub(crate) per_call_narrations: Vec<String>,
     pub(crate) per_call_prompt_responses: Vec<String>,
     pub(crate) call_index: AtomicUsize,
+    /// The model this mock stands in for. `None` reports the bare `"mock"`.
+    pub(crate) model: Option<String>,
     /// Set when `complete` narration starts. Test-sync primitive — read with `.load(Ordering::SeqCst)`, do not mutate externally.
     pub narration_started: AtomicBool,
     /// Set when `complete` trigger narration starts. Test-sync primitive — read with `.load(Ordering::SeqCst)`, do not mutate externally.
@@ -28,6 +30,13 @@ pub struct MockBackend {
 impl MockBackend {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Keeps the connection this mock stands in for visible in logs, forensics,
+    /// and the debug endpoint.
+    pub fn with_model(mut self, model: &str) -> Self {
+        self.model = Some(model.to_string());
+        self
     }
 
     pub fn with_fail(mut self) -> Self {
@@ -110,7 +119,7 @@ impl MockBackend {
 
 impl LlmProvider for MockBackend {
     fn model(&self) -> &str {
-        "mock"
+        self.model.as_deref().unwrap_or("mock")
     }
 
     fn name(&self) -> &str {

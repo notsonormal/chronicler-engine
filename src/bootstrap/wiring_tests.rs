@@ -1,21 +1,27 @@
 //! Unit tests for LLM provider composition through the public wiring API.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 
-fn settings_with(connection: LlmProviderConfig) -> Arc<RwLock<AppSettings>> {
+fn settings_with(connection: LlmProviderConfig) -> AppSettings {
     let mut settings = AppSettings::default();
     settings.connections = vec![connection];
     settings.narration_connection_id = settings.connections[0].id.clone();
-    Arc::new(RwLock::new(settings))
+    // The default quantifier id is absent from this list, and resolution errors
+    // on a dangling reference rather than falling back to Mock.
+    settings.quantifier_connection_id = settings.connections[0].id.clone();
+    settings
 }
 
 fn wired_app(connection: LlmProviderConfig, storage: Arc<Storage>) -> WiredApp {
-    build_app_graph(settings_with(connection), storage).expect("build_app_graph should succeed")
+    storage
+        .save_settings(&settings_with(connection))
+        .expect("save_settings should succeed");
+    build_app_graph(storage).expect("build_app_graph should succeed")
 }
 
 fn mock_connection() -> LlmProviderConfig {
@@ -39,8 +45,12 @@ fn mock_backend_path_returns_recorder_with_mock_provider() {
     let wired = wired_app(mock_connection(), storage);
     let recorder = wired.pipeline.recorder();
 
-    assert_eq!(recorder.provider().name(), "Mock");
-    assert_eq!(recorder.provider().model(), "mock");
+    assert_eq!(recorder.provider().expect("resolves").name(), "Mock");
+    assert_eq!(
+        recorder.provider().expect("resolves").model(),
+        "mock-model",
+        "a mock connection reports the model it was configured with"
+    );
 }
 
 #[test]
@@ -87,7 +97,7 @@ fn deepseek_path_returns_recorder() {
     let wired = wired_app(connection, storage);
     let recorder = wired.pipeline.recorder();
 
-    assert_eq!(recorder.provider().name(), "DeepSeek");
+    assert_eq!(recorder.provider().expect("resolves").name(), "DeepSeek");
 }
 
 #[test]
@@ -108,7 +118,7 @@ fn openrouter_path_returns_recorder() {
     let wired = wired_app(connection, storage);
     let recorder = wired.pipeline.recorder();
 
-    assert_eq!(recorder.provider().name(), "OpenRouter");
+    assert_eq!(recorder.provider().expect("resolves").name(), "OpenRouter");
 }
 
 #[test]
@@ -129,7 +139,7 @@ fn ollama_path_returns_recorder() {
     let wired = wired_app(connection, storage);
     let recorder = wired.pipeline.recorder();
 
-    assert_eq!(recorder.provider().name(), "Ollama");
+    assert_eq!(recorder.provider().expect("resolves").name(), "Ollama");
 }
 
 #[test]
@@ -153,5 +163,13 @@ fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
 
     let wired = wired_app(connection, storage);
 
-    assert_eq!(wired.pipeline.recorder().provider().name(), "DeepSeek");
+    assert_eq!(
+        wired
+            .pipeline
+            .recorder()
+            .provider()
+            .expect("resolves")
+            .name(),
+        "DeepSeek"
+    );
 }

@@ -205,7 +205,13 @@ async fn test_action_check_handler_empty_command() {
 #[tokio::test]
 async fn test_action_check_handler_disabled_mode() {
     let state = TestAppBuilder::default_test().build_service();
-    state.settings.write().unwrap().text_check.mode = TextCheckMode::Disabled;
+    state
+        .settings_service
+        .update_settings(|settings| {
+            settings.text_check.mode = TextCheckMode::Disabled;
+            Ok(())
+        })
+        .unwrap();
     let form = ActionForm {
         command: "test".to_string(),
     };
@@ -217,7 +223,13 @@ async fn test_action_check_handler_disabled_mode() {
 #[tokio::test]
 async fn test_action_check_handler_auto_check_disabled() {
     let state = TestAppBuilder::default_test().build_service();
-    state.settings.write().unwrap().text_check.enable_auto_check = false;
+    state
+        .settings_service
+        .update_settings(|settings| {
+            settings.text_check.enable_auto_check = false;
+            Ok(())
+        })
+        .unwrap();
     let form = ActionForm {
         command: "test".to_string(),
     };

@@ -3,50 +3,6 @@ use askama::Template;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::adapters::driving::http::settings::templates::SettingsTemplate;
-use crate::adapters::driving::http::utils::handler_helpers::opt_string;
-
-#[test]
-fn test_deepseek_returns_deepseek() {
-    assert_eq!(LlmBackendType::from("deepseek"), LlmBackendType::DeepSeek);
-}
-
-#[test]
-fn test_mock_returns_mock() {
-    assert_eq!(LlmBackendType::from("mock"), LlmBackendType::Mock);
-}
-
-#[test]
-fn test_openrouter_returns_openrouter() {
-    assert_eq!(
-        LlmBackendType::from("openrouter"),
-        LlmBackendType::OpenRouter
-    );
-}
-
-#[test]
-fn test_unknown_returns_mock_default() {
-    assert_eq!(
-        LlmBackendType::from("unknown_backend"),
-        LlmBackendType::Mock
-    );
-    assert_eq!(LlmBackendType::from(""), LlmBackendType::Mock);
-}
-
-#[test]
-fn test_ollama_returns_ollama() {
-    assert_eq!(LlmBackendType::from("ollama"), LlmBackendType::Ollama);
-}
-
-#[test]
-fn test_opt_string_empty_returns_none() {
-    assert_eq!(opt_string(""), None);
-}
-
-#[test]
-fn test_opt_string_non_empty_returns_some() {
-    assert_eq!(opt_string("sk-test123"), Some("sk-test123".to_string()));
-    assert_eq!(opt_string("   "), Some("   ".to_string()));
-}
 
 #[test]
 fn test_settings_template_renders_connections() {

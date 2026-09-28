@@ -95,12 +95,12 @@ async fn test_<scenario>() {
 Where `with_test_page` (`tests/test_utils/browser.rs`) does:
 
 1. `get_config_port(CONFIG_PATH)` → port from 3010–3050 with file-lock under `/tmp/chronicler_test_ports/port_<N>.lock`.
-2. `TestServer::new_with_mock(port, world, persona)` → spawns the real `chronicler_engine` binary via `start_server_with_env(port, world, persona, /* use_mock= */ true)` (which writes a temp Mock-connections JSON and passes `--settings-path` to the binary). The mock form is the right default; use `TestServer::new(port, …)` (no `with_mock`) only when the test needs real env-var configurations.
+2. `TestServer::new_with_mock(port, world, persona)` → spawns the real `chronicler_engine` binary via `start_server_with_env(port, world, persona)`, waits for it to answer HTTP, then POSTs a Mock connection to `/connections/add` and points both the narrator and quantifier roles at it. The mock form is the right default; use `TestServer::new(port, …)` (no `with_mock`) only when the test needs real env-var configurations.
 3. `launch_chrome()` → honours `HEADED=1` (sets `headless = Some(false)`) and `SLOW_MO=<ms>` env vars so the same test runs headless in CI and visibly in local dev.
 4. `goto_with_connection_check(&page, port)` → fails loud on `ERR_CONNECTION_REFUSED` rather than timing out silently.
 5. Passes `(page, port)` to the test closure.
 
-The `TestServer::Drop` impl calls `self.child.kill()` (i.e., `std::process::Child::kill`, which sends SIGKILL on Unix), then `self.child.wait()`, releases the port lock, deletes the SQLite DB file, and removes the temp settings directory. Tests do not need to do any of this manually. The `libc::kill(SIGTERM)` path lives in `terminate_pid` (`tests/test_utils/server.rs:54-66`). `kill_existing_server` (`:76-83`) calls it when launching a new server on a port that already has a stale registry entry. `Drop` uses only `Child::kill` (SIGKILL).
+The `TestServer::Drop` impl calls `self.child.kill()` (i.e., `std::process::Child::kill`, which sends SIGKILL on Unix), then `self.child.wait()`, releases the port lock, and deletes the SQLite DB file. Tests do not need to do any of this manually. The `libc::kill(SIGTERM)` path lives in `terminate_pid` in `tests/test_utils/server.rs`. `kill_existing_server` calls it when launching a new server on a port that already has a stale registry entry. `Drop` uses only `Child::kill` (SIGKILL).
 
 ## Pattern 3 — Storage-direct round-trip
 
@@ -208,7 +208,6 @@ fn test_<branch>() {
         persona: "__nonexistent_persona__".to_string(),
         list_worlds: false,
         port,
-        settings_path: None,
     };
     let result = run(args);
     assert!(matches!(result, Err(EngineError::PersonaNotFound(key)) if key == "..."));
@@ -261,11 +260,13 @@ The port range and lock-file path are **deliberately outside the cargo workspace
 
 **Where.** All full-stack browser tests (`with_test_page`), `tests/bootstrap/mod.rs`, and `tests/llm/flow_llm_tests.rs` use this allocator. The stub tier allocates from the same range through `StubServer::start`, but binds a listener rather than spawning a process. Tests that bind `0.0.0.0:0` directly opt out of the 3010–3050 range by design.
 
-### Cross-cutting 3 — Mock-backend auto-injection via `--settings-path`
+### Cross-cutting 3 — Mock-backend auto-injection over HTTP
 
-`TestServer::start(port, world, persona, use_mock)` writes a temp JSON file at `/tmp/chronicler_test_settings_<pid>_<port>/settings.json` with two Mock connections (`openrouter-gpt-4o-mini`, `openrouter-euryale`) when `use_mock = true`, then passes `--settings-path` to the engine binary. The `Drop` impl removes the directory. This is what `TestServer::new_with_mock` defaults to and what `with_test_page` uses for browser tests.
+`TestServer::start(port, world, persona, use_mock)` spawns the binary and waits for it to answer. When `use_mock = true` it then calls `inject_mock_connections(port)`, which POSTs a Mock connection to `/connections/add` and points both the narrator and quantifier roles at the returned id. This is what `TestServer::new_with_mock` defaults to and what `with_test_page` uses for browser tests.
 
-The Mock auto-injection is gated by the `use_mock` boolean; `with_test_page` defaults to `true`. Tests that need real env-var configurations (e.g., `OPENROUTER_API_KEY`) call `TestServer::new(port, ...)` instead — the binary loads its default settings (which the env var populates).
+Injection goes through the real HTTP endpoints rather than writing the SQLite file, because the engine holds that file for its lifetime and `DbPool::new` replays migrations on open — a second process writing it would collide. The connections seeded from `data/settings.json` stay in the list; nothing reads them once both roles point at the Mock.
+
+The Mock auto-injection is gated by the `use_mock` boolean; `with_test_page` defaults to `true`. Tests that need real env-var configurations (e.g., `OPENROUTER_API_KEY`) call `TestServer::new(port, ...)` instead — the binary seeds its settings from `data/settings.json`, and the env var populates the API key at call time.
 
 **Where.** All `with_test_page` browser tests, all `with_real_llm` LLM tests, and any HTTP test that uses `TestServer::from_config(...)`. Tests that use `tower::ServiceExt::oneshot` (Pattern 4) bypass this entirely because the router runs in-process and the engine binary never starts — they construct the app directly with `TestAppBuilder`. The stub tier bypasses it too: no engine process means no settings file, and the canned fragments carry the state a test needs.
 
