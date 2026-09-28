@@ -37,7 +37,7 @@ Fix the HIGH (1) and MED (2-6) findings from the four-review consolidation, all 
   - Grep tests for `preset-\d`-format assumptions before finalizing.
 - [ ] #### Task 1.2: Record the assert_log_invariants removal (1 SP)
   - Comment on `assert_state_consistency` (`game_state.rs:453`): the last-Narration-after-last-Input ordering was removed because it is not a global invariant — `/history/delete` legitimately pops a Narration. No ticket references in code (standards rule).
-  - One-sentence note in the owning effort's ticket file (`.scratch/narrator-modes-and-options/`, ticket 20).
+  - One-sentence note in the owning effort's ticket file (`.scratch/_closed/narrator-modes-and-options/`, ticket 20).
 
 ### Phase 2: build.py
 

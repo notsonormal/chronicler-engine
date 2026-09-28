@@ -71,5 +71,5 @@ Presets carry per-preset `allowed_modes` flags gating **selection surfaces only*
 
 ### Bookkeeping
 
-- **Implementation = [ticket 14](issues/14-implement-preset-mode-flags-registry-and-if-seed.md)**: model flags, registry reshape, v20 migration, seeder, seed files (incl. the IF seed — absorbing 08's file half), handler semantics, tests, build-green. Migration v20 belongs to 14; **ticket 09 updated to v21**.
+- **Implementation = [ticket 14](14-implement-preset-mode-flags-registry-and-if-seed.md)**: model flags, registry reshape, v20 migration, seeder, seed files (incl. the IF seed — absorbing 08's file half), handler semantics, tests, build-green. Migration v20 belongs to 14; **ticket 09 updated to v21**.
 - **08 closed as superseded** (pointer → 14). **07** scope 2 restated (per-mode activation UI, editor checkboxes, picker filtering). **12** registry phrasing updated. **06/09/10/11/12** blockers re-pointed 13 → 14.

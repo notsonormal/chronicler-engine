@@ -54,7 +54,7 @@ shapes, not code. Writing the accepted refactors is the next effort
   not candidate order. All seven tickets are resolved (06, then 01–05, then
   07). **Map complete (2026-08-30): the destination is met — every
   candidate is decided and the handoff shape is settled. The next effort is
-  pre-merge execution.** Its spec: [docs/plans/guided-generations-pre-merge-execution.md](../../docs/plans/guided-generations-pre-merge-execution.md).
+  pre-merge execution.** Its spec: [old-docs/archived-plans/guided-generations-pre-merge-execution.md](../../../old-docs/archived-plans/guided-generations-pre-merge-execution.md).
 - No ADRs exist in `docs/adr/`. If a candidate is rejected with a
   load-bearing reason that future reviews should not re-suggest, offer an ADR
   during that ticket's grilling.
