@@ -21,14 +21,18 @@ Provides browser automation to:
 ## Prerequisites
 
 - Chronicler Engine project at the repo root
-- Browser automation via the `@narumitw/pi-chrome-devtools` pi extension: `chrome_devtools_navigate`, `chrome_devtools_evaluate`, `chrome_devtools_screenshot`, `chrome_devtools_list_pages`, `chrome_devtools_select_page`. Verified working under WSL. It attaches to CDP on `127.0.0.1:9222` or launches its own Chromium; `/chrome-devtools status` shows which. This is the path for ad-hoc interactive checks — no throwaway test needed. If the tools are missing from the toolset, the user runs `/chrome-devtools enable` or `/reload`.
+- Browser automation via the `@narumitw/pi-chrome-devtools` pi extension: `chrome_devtools_navigate`, `chrome_devtools_evaluate`, `chrome_devtools_screenshot`, `chrome_devtools_list_pages`, `chrome_devtools_select_page`. It attaches to CDP on `127.0.0.1:9222`. This is the path for ad-hoc interactive checks — no throwaway test needed.
+- Chrome must already be running. `~/.bashrc` starts it via `/home/node/.pi/start-browser.sh`. If a tool reports an unreachable endpoint, run that script and retry — the extension's own auto-launch does not work in this container. See [ENVIRONMENT.md](ENVIRONMENT.md) for the browser machinery, its constraints, and coexistence with the Playwright tier.
+- If the `chrome_devtools_*` tools are missing from the toolset entirely, the user runs `/chrome-devtools enable` or `/reload`.
 - The repo's Playwright harness (`tests/browser/`): the path for reproducible checks and shipped coverage (spec tickets).
 
 **No tool equivalent exists for:** console-message capture (use the engine log tee, see Step 3) and accessibility-tree snapshots (use a DOM-dump `chrome_devtools_evaluate` expression instead).
 
 ## Reproducible checks: the Playwright harness
 
-Use the repo's headless Playwright harness (`tests/browser/`) — real Chromium against a real server, driven by Rust tests. Key pieces: `send_action` / `wait_for_status_ready` / `capture_failure_state` in `tests/test_utils/` (failure dumps write a screenshot + DOM dump under `tmp/`); `HEADED=1 SLOW_MO=500 python build.py test-pattern <name>` runs one test interactively. Engine stdout/stderr tees to `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`). For ad-hoc verification prefer the extension (above). Write a throwaway test in `tests/browser/` (register it in `mod.rs`), run it, view the screenshots, then DELETE it only when the extension is unavailable — shipped coverage belongs to a spec ticket. The Mandatory Screenshot Verification rule below still applies: the failure dumps are screenshots; look at them.
+For a broad visual sweep, the `visual-tester` subagent drives `scripts/cdp.mjs` across tabs and viewports and returns a P0–P3 report. It is good at finding layout problems you did not think to look for, but it is not a substitute for looking at the screenshots yourself (see Mandatory Screenshot Verification).
+
+Use the repo's headless Playwright harness (`tests/browser/`) — real Chromium against a real server, driven by Rust tests. Key pieces: `send_action` / `wait_for_status_ready` / `capture_failure_state` in `tests/test_utils/` (failure dumps write a screenshot + DOM dump under `tmp/`); `SLOW_MO=500 python build.py test-pattern <name>` slows one test down for watching. `HEADED=1` cannot work here — there is no display, so headed Chrome exits at startup ([ENVIRONMENT.md](ENVIRONMENT.md)). Engine stdout/stderr tees to `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`). For ad-hoc verification prefer the extension (above). Write a throwaway test in `tests/browser/` (register it in `mod.rs`), run it, view the screenshots, then DELETE it only when the extension is unavailable — shipped coverage belongs to a spec ticket. The Mandatory Screenshot Verification rule below still applies: the failure dumps are screenshots; look at them.
 
 ## Usage Patterns
 
@@ -195,6 +199,7 @@ chrome_devtools_screenshot(savePath="tmp/post-plan-ui.png", fullPage=true)
 | Command form missing | Check `/fragment/action-area` |
 | Status not updating | Check `/status/generating` and `/status/ready` |
 | `chrome_devtools_*` tools missing | User runs `/chrome-devtools enable` or `/reload` |
+| Browser unreachable / endpoint error | Run `/home/node/.pi/start-browser.sh`, then retry ([ENVIRONMENT.md](ENVIRONMENT.md)) |
 
 ---
 
@@ -232,4 +237,4 @@ Selector vocabulary for DOM work comes from `docs/specs/browser_*.md`, enforced 
 - `chrome_devtools_screenshot` returns the image inline and saves it to disk; pass `savePath` (relative to the repo root works, e.g. `tmp/<name>.png`), otherwise it writes a temp file. Either way: look at it.
 - Waiting for dynamic content: poll inside `chrome_devtools_evaluate` (Step 2 snippet)
 - The `#connection-status` element is rendered server-side in the header fragment and shows "Connected" by default; it is not a live WebSocket state indicator
-- Zero-dependency fallback when the extension is absent: `tmp/cdp_probe.mjs` pattern (Node built-in WebSocket against CDP on 9222), or the Playwright harness above
+- Zero-dependency fallback when the extension is absent: `scripts/cdp.mjs`, the vendored `chrome-cdp` CLI (`list`, `shot`, `snap`, `html`, `eval`, `nav`, `click`, `type`, `evalraw`). It needs no npm install — Node 22+ only. The Playwright harness above remains the other fallback
