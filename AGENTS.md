@@ -414,7 +414,7 @@ Read `CONTEXT.md` for details.
 
 ### Codebase research
 
-When a task needs you to understand code you have not read — how a pipeline works, where a behaviour lives — dispatch the `Explore` subagent with a focused question instead of reading many files into your own context.
+When a task needs you to understand code you have not read — how a pipeline works, where a behaviour lives — dispatch the `scout` subagent with a focused question instead of reading many files into your own context.
 
 ## Permissions System
 
