@@ -27,7 +27,23 @@ missing, so you normally only need to run it by hand after killing Chrome.
 
 It is idempotent: it replaces any previous instance on the same profile, waits for
 CDP to answer, then writes the port file. Overridable with `CDP_PORT`,
-`CDP_PROFILE`, `CDP_CHROME`, and `CDP_LOG`.
+`CDP_PROFILE`, `CDP_CHROME`, `CDP_WINDOW`, and `CDP_LOG`.
+
+### Default viewport
+
+Chrome's headless default viewport is **780x437** — a size that matches no real
+target, and which silently became the size of most screenshots until it was fixed.
+The launcher asks for a desktop viewport instead:
+
+```
+--window-size=1280,943  ->  viewport 1280x800
+```
+
+headless=new reserves 143px of window chrome, so the window must be 943px tall to
+yield an 800px viewport. That offset is a fixed constant, not a ratio. Since the UI
+is desktop-first, 1280x800 is the correct default: ad-hoc shots land on the primary
+target rather than an arbitrary one. A responsive sweep overrides it per shot via
+`Emulation.setDeviceMetricsOverride`.
 
 ## Why Chrome cannot start itself
 
@@ -141,6 +157,13 @@ Both halves are in place:
 
 It produced a full screenshot sweep across every tab and three viewports
 (desktop 1280, tablet 768, mobile 375), so the chain works end to end.
+
+Note how it weighs those breakpoints: its bundled instructions treat all three as
+peers, which does not match this app, where desktop is the primary target and mobile
+is secondary. Say **desktop first** in the task when delegating a sweep. Do not fork
+the bundled agent into a project override just to reorder breakpoints — a project
+definition of the same name replaces the bundled one entirely, with no merging, so
+it would mean owning all ~235 lines of it.
 
 ## If the browser stops responding
 
