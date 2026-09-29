@@ -40,3 +40,22 @@ And 2.5 seconds later dispatches a synthetic htmx:beforeSwap error event with a 
 Then #error-notification is still visible 6 seconds after the first event
 And #error-notification displays "Second failure"
 ```
+
+#### Scenario 16.9: Send button still locks and unlocks after an action-area swap
+
+```gherkin
+Given #action-area was swapped through the shipped save/restore path, so the form and status display are fresh nodes
+When the client submits the command form
+Then #submit-btn is disabled with a "Stop" label while the status shows the pending state
+When the status poll reports idle and the status display returns to Ready
+Then #submit-btn is enabled again with a "Send" label
+```
+
+#### Scenario 16.10: Status errors still reach the observer after an action-area swap
+
+```gherkin
+Given #action-area was swapped through the shipped save/restore path, so the status display is a fresh node
+When an error span of the shape /status/generating returns is swapped into the live #status-display
+Then #error-notification becomes visible and displays the error text
+And after the status returns to Ready, the same error span swapped in again re-shows the notification (the lastStatusError dedupe was reset by the swap-aware observer)
+```

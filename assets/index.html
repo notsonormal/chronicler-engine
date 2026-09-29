@@ -126,10 +126,14 @@
     <script>
       console.log("[HTMX] Initializing...");
 
-      // Button state management
-      const submitBtn = document.getElementById("submit-btn");
-
+      // Button state management. #action-area's children (form, status
+      // display) are replaced by htmx swaps and the text-check preview, so a
+      // Send-button handle captured at page load points at a detached node
+      // after the first swap. Resolve it by id on every call, the way
+      // commandInput() resolves the command input.
       function setButtonState(isThinking) {
+        const submitBtn = document.getElementById("submit-btn");
+        if (!submitBtn) return;
         if (isThinking) {
           submitBtn.innerHTML = '<span class="btn-icon">&#9632;</span> Stop';
           submitBtn.disabled = true;
@@ -179,7 +183,9 @@
         // If text is empty or unexpected, do nothing
       }
 
-      const statusDisplay = document.getElementById("status-display");
+      // #status-display is re-created on every #action-area swap, so no handle
+      // to it may outlive a swap. The error notification is a direct body
+      // child that no swap ever replaces.
       const errorNotification = document.getElementById("error-notification");
 
       let errorHideTimer = null;
@@ -623,6 +629,15 @@
             mutation.type === "childList" ||
             mutation.type === "characterData"
           ) {
+            // The status display node is re-created by every #action-area
+            // swap, so the observer watches the document body — a node no
+            // swap replaces — and resolves the live display per event.
+            // Mutations elsewhere (story-log and options-dock polls) never
+            // fall inside it, so the pollers cannot churn the Send button.
+            const statusDisplay = document.getElementById("status-display");
+            if (!statusDisplay || !statusDisplay.contains(mutation.target)) {
+              return;
+            }
             // Check if the inner status span has the 'thinking' class
             const isThinking =
               statusDisplay.querySelector(".status.thinking") !== null;
@@ -653,13 +668,20 @@
       });
 
       document.addEventListener("DOMContentLoaded", function () {
-        statusObserver.observe(statusDisplay, {
+        // Observe the body, not #status-display itself: the display node is
+        // replaced on every #action-area swap, and an observation started on
+        // it would keep watching the detached node.
+        statusObserver.observe(document.body, {
           childList: true,
           characterData: true,
           subtree: true,
         });
 
-        if (statusDisplay.textContent.includes("Thinking")) {
+        const initialStatusDisplay = document.getElementById("status-display");
+        if (
+          initialStatusDisplay &&
+          initialStatusDisplay.textContent.includes("Thinking")
+        ) {
           setButtonState(true);
         }
 
