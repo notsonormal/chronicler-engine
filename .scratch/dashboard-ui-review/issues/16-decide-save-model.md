@@ -18,6 +18,7 @@ Which save model should the panels share?
 
 - Finding 4.4. Screenshot 15.
 - Posture auto-save is specified: `docs/specs/games.md` 20.8 and `docs/specs/browser_worlds.md` 29.2. A different model means changing those specs, not only the code.
+- A failed "Update World" with an invalid scenarios JSON shows the error toast, but the green "Saved" status from an earlier posture auto-save stays under the form, reading like confirmation (finding 05.F8, prior screenshot 42). The save model decision should say what that status means and when it clears.
 
 ## Done when
 
