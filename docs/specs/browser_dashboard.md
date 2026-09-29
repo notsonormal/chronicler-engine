@@ -30,3 +30,13 @@ When the client dispatches a synthetic htmx:beforeSwap event with isError=true a
 Then #error-notification gains the .visible class
 And #error-notification displays the response body with HTML tags stripped ("Internal server error")
 ```
+
+#### Scenario 16.8: A newer error is not hidden by an older error's timer
+
+```gherkin
+Given the dashboard is loaded and #error-notification is hidden
+When the client dispatches a synthetic htmx:beforeSwap error event with a serverResponse of "<p>First failure</p>"
+And 2.5 seconds later dispatches a synthetic htmx:beforeSwap error event with a serverResponse of "<p>Second failure</p>"
+Then #error-notification is still visible 6 seconds after the first event
+And #error-notification displays "Second failure"
+```

@@ -38,7 +38,9 @@ fn provider_from_config(config: &LlmProviderConfig) -> Arc<dyn LlmProvider> {
     }
 }
 
-/// A `pick` failure (a dangling connection id) surfaces as a call error.
+/// Resolves the provider per call, so a dashboard change takes effect without a
+/// restart. A `pick` failure (a dangling connection id) or a missing API key
+/// surfaces as a call error.
 fn recorder_with_storage(
     storage: Arc<Storage>,
     role: &'static str,
@@ -48,10 +50,16 @@ fn recorder_with_storage(
     let resolve: ProviderResolver = Arc::new(move || {
         let settings = resolver_storage.get_settings()?;
         let config = pick(&settings)?;
+        config.check_api_key_available()?;
         tracing::info!(
-            "Resolved LLM provider for {role}: provider={:?}, model={}",
+            "Resolved LLM provider for {role}: provider={:?}, model={}, api_key={}",
             config.provider,
-            config.model
+            config.model,
+            if config.resolve_api_key().is_some() {
+                "present"
+            } else {
+                "absent"
+            }
         );
         Ok(provider_from_config(&config))
     });

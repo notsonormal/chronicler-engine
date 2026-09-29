@@ -182,12 +182,19 @@
       const statusDisplay = document.getElementById("status-display");
       const errorNotification = document.getElementById("error-notification");
 
+      let errorHideTimer = null;
+
       function showError(message) {
         if (errorNotification) {
           errorNotification.textContent = message;
           errorNotification.classList.add("visible");
-          setTimeout(() => {
+          // Clear the previous hide timer first. Leaving it running lets an
+          // older error's timer hide a newer one, which made the banner slide
+          // up and down on a loop while errors kept arriving.
+          if (errorHideTimer !== null) clearTimeout(errorHideTimer);
+          errorHideTimer = setTimeout(() => {
             errorNotification.classList.remove("visible");
+            errorHideTimer = null;
           }, 5000);
         }
       }
@@ -605,6 +612,11 @@
       window.addEventListener("scroll", closeSlashMenu, true);
       window.addEventListener("resize", closeSlashMenu);
 
+      // The status poll re-renders the persisted error on every cycle. Track
+      // the text already shown so the toast fires once per distinct error
+      // instead of restarting its slide animation on each poll.
+      let lastStatusError = null;
+
       const statusObserver = new MutationObserver(function (mutations) {
         mutations.forEach(function (mutation) {
           if (
@@ -622,7 +634,12 @@
             // Show error notification for error states
             const statusText = statusDisplay.textContent;
             if (statusText.includes("Error")) {
-              showError(statusText);
+              if (statusText !== lastStatusError) {
+                lastStatusError = statusText;
+                showError(statusText);
+              }
+            } else {
+              lastStatusError = null;
             }
           }
         });

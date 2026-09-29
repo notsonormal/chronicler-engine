@@ -10,7 +10,7 @@ use crate::application::pipeline::ActionPipeline;
 #[test]
 fn test_server_config_default() {
     let config = ServerConfig::default();
-    assert_eq!(config.host, IpAddr::V4(Ipv4Addr::LOCALHOST));
+    assert_eq!(config.host, IpAddr::V4(Ipv4Addr::UNSPECIFIED));
     assert_eq!(config.port, 3_000);
     assert_eq!(config.bind_attempts, None);
 }

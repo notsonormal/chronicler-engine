@@ -255,16 +255,41 @@ impl LlmProviderConfig {
         }
     }
 
+    /// The key this connection authenticates with: its own, else its provider's
+    /// environment fallback. A blank value on either side counts as absent, so a
+    /// stray empty string cannot shadow the fallback.
     pub fn resolve_api_key(&self) -> Option<String> {
-        if let Some(key) = &self.api_key {
-            return Some(key.clone());
+        let non_blank = |key: String| (!key.trim().is_empty()).then_some(key);
+        self.api_key.clone().and_then(non_blank).or_else(|| {
+            self.provider
+                .api_key_env_var()
+                .and_then(|name| std::env::var(name).ok())
+                .and_then(non_blank)
+        })
+    }
+
+    pub fn check_api_key_available(&self) -> Result<(), EngineError> {
+        // Delete this guard once the DeepSeek backend lands: its stub currently
+        // reports a more truthful not-implemented error than a missing key would.
+        if self.provider == LlmBackendType::DeepSeek {
+            return Ok(());
         }
-        match self.provider {
-            LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => {
-                std::env::var("OPENROUTER_API_KEY").ok()
-            }
-            LlmBackendType::Ollama | LlmBackendType::Mock => None,
+        let Some(env_var) = self.provider.api_key_env_var() else {
+            return Ok(());
+        };
+        if self.resolve_api_key().is_some() {
+            return Ok(());
         }
+        let label = if self.name.trim().is_empty() {
+            &self.id
+        } else {
+            &self.name
+        };
+        Err(EngineError::Config(format!(
+            "{:?} connection '{label}' has no API key: set one on the connection \
+             in Settings, or export {env_var}",
+            self.provider,
+        )))
     }
 
     pub fn resolve_base_url(&self) -> String {

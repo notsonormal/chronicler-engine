@@ -6,6 +6,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::test_support::env_guard::ApiKeyEnvGuard;
 
 fn settings_with(connection: LlmProviderConfig) -> AppSettings {
     let mut settings = AppSettings::default();
@@ -171,5 +172,45 @@ fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
             .expect("resolves")
             .name(),
         "DeepSeek"
+    );
+}
+
+#[test]
+fn openrouter_connection_without_key_reports_missing_api_key() {
+    // Regression guard: a keyless OpenRouter connection must fail locally with a
+    // message naming the connection, rather than reaching the provider and
+    // surfacing its opaque 401 "Missing Authentication header".
+    let _guard = ApiKeyEnvGuard::new();
+    unsafe {
+        std::env::remove_var("OPENROUTER_API_KEY");
+    }
+    let connection = LlmProviderConfig {
+        id: "test-openrouter-keyless".to_string(),
+        name: "Keyless OpenRouter".to_string(),
+        provider: LlmBackendType::OpenRouter,
+        model: "openrouter-model".to_string(),
+        api_key: None,
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    };
+    let storage = Arc::new(Storage::new_in_memory());
+
+    let wired = wired_app(connection, storage);
+    // `dyn LlmProvider` is not `Debug`, so `expect_err` is unavailable here.
+    let error = match wired.pipeline.recorder().provider() {
+        Ok(_) => panic!("a keyless OpenRouter connection must not resolve"),
+        Err(e) => e,
+    };
+
+    let message = error.to_string();
+    assert!(
+        message.contains("Keyless OpenRouter"),
+        "the error must name the connection, got: {message}"
+    );
+    assert!(
+        message.contains("OPENROUTER_API_KEY"),
+        "the error must name the environment fallback, got: {message}"
     );
 }

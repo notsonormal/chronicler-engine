@@ -1,6 +1,7 @@
 //! Test fixtures + closure factories for the LLM recorder save seam.
 
 pub mod context;
+pub mod env_guard;
 pub mod fixtures;
 pub mod quantifier;
 pub mod test_app_builder;
