@@ -1,5 +1,6 @@
 //! HTTP module unit tests.
 
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 
 use crate::domain::model::settings::AppSettings;
@@ -9,6 +10,7 @@ use crate::application::pipeline::ActionPipeline;
 #[test]
 fn test_server_config_default() {
     let config = ServerConfig::default();
+    assert_eq!(config.host, IpAddr::V4(Ipv4Addr::LOCALHOST));
     assert_eq!(config.port, 3_000);
     assert_eq!(config.bind_attempts, None);
 }
@@ -16,6 +18,7 @@ fn test_server_config_default() {
 #[test]
 fn test_server_config_custom_port() {
     let config = ServerConfig {
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 80_80,
         bind_attempts: Some(3),
     };
@@ -33,6 +36,7 @@ fn test_server_config_default_is_consistent() {
 #[test]
 fn test_server_config_clone() {
     let config = ServerConfig {
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 5000,
         bind_attempts: Some(2),
     };
@@ -44,6 +48,7 @@ fn test_server_config_clone() {
 #[test]
 fn test_server_config_debug() {
     let config = ServerConfig {
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 3000,
         bind_attempts: None,
     };
@@ -54,6 +59,7 @@ fn test_server_config_debug() {
 #[test]
 fn test_server_config_min_port() {
     let config = ServerConfig {
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 1,
         bind_attempts: Some(1),
     };
@@ -63,6 +69,7 @@ fn test_server_config_min_port() {
 #[test]
 fn test_server_config_max_port() {
     let config = ServerConfig {
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 65535,
         bind_attempts: None,
     };

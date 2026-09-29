@@ -40,6 +40,8 @@ The loader calls `default_scenario()` for the active world and reads that scenar
 
 ## Server Startup
 
+The HTTP server binds the address from `--host` (default `127.0.0.1`) on the port from `--port` (default `3000`). The defaults accept connections from the local machine only. Pass `--host 0.0.0.0` to accept connections on every network interface, for example to reach the dashboard from another machine through a forwarded port.
+
 The HTTP server does not start until bootstrap has completed, including seeding and initial game-state initialization.
 
 ## Settings

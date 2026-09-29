@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Server implementation
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use tokio::task::JoinHandle;
 use tracing;
 
@@ -14,6 +14,7 @@ use crate::bootstrap::wiring::WiredApp;
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
+    pub host: IpAddr,
     pub port: u16,
     pub bind_attempts: Option<u32>,
 }
@@ -22,6 +23,7 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         ServerConfig {
+            host: IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
             port: 3000,
             bind_attempts: None,
         }
@@ -37,7 +39,7 @@ pub async fn run_server_with_config(
 
     let app = build_router(app_state);
 
-    let bind_addr = format!("127.0.0.1:{}", config.port);
+    let bind_addr = SocketAddr::new(config.host, config.port).to_string();
     let listener = bind_with_retry(&bind_addr, config.bind_attempts)
         .await
         .map_err(|e| {

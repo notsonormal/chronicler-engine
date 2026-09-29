@@ -40,6 +40,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     let data = prepare_data(&args)?;
     let config = ServerConfig {
+        host: args.host,
         port: args.port,
         bind_attempts: None,
     };

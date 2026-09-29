@@ -1,5 +1,7 @@
 //! Smoke tests covering uncovered startup branches in `bootstrap::run()`.
 
+use std::net::{IpAddr, Ipv4Addr};
+
 use chronicler_engine::bootstrap::run;
 use chronicler_engine::error::EngineError;
 use chronicler_engine::utils::cli::{
@@ -52,6 +54,7 @@ fn test_run_persona_not_found_after_world_fallback() {
         persona: "__nonexistent_persona__".to_string(),
         list_worlds: false,
         port,
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
     };
     let result = run(args);
     assert!(
@@ -87,6 +90,7 @@ fn test_run_persona_not_found_errors_cleanly() {
         persona: "__nonexistent_persona__".to_string(),
         list_worlds: false,
         port,
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
     };
     let result = run(args);
     assert!(result.is_err(), "bogus persona must error; got Ok");

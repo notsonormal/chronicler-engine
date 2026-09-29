@@ -1,5 +1,6 @@
 //! HTTP wiring tests for `server_impl.rs` (real request routing lives in the `http` test binary).
 
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,6 +17,7 @@ fn build_test_wired_app() -> WiredApp {
 #[tokio::test]
 async fn run_server_binds_and_accepts_connections() {
     let config = ServerConfig {
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 0,
         bind_attempts: Some(1),
     };
@@ -41,6 +43,7 @@ async fn run_server_propagates_bind_error_for_occupied_port() {
     let port = listener.local_addr().expect("local_addr").port();
 
     let config = ServerConfig {
+        host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port,
         bind_attempts: Some(1),
     };

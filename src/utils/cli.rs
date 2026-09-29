@@ -5,6 +5,7 @@
 
 use std::{
     fs,
+    net::IpAddr,
     path::{Path, PathBuf},
 };
 
@@ -29,6 +30,9 @@ pub struct Args {
 
     #[arg(long, default_value = "3000")]
     pub port: u16,
+
+    #[arg(long, default_value = "127.0.0.1")]
+    pub host: IpAddr,
 }
 
 pub fn parse_args() -> Args {
