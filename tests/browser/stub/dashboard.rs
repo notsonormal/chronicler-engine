@@ -102,16 +102,21 @@ async fn read_submit_button(page: &playwright_rs::Page) -> (bool, String) {
 }
 
 /// Write `html` into the live #status-display, the way htmx swaps the
-/// /status/generating poll response into it.
+/// /status/generating poll response into it. The HTML is bound as an
+/// evaluate argument, not spliced into the script source, so callers may
+/// pass markup containing quotes.
 async fn inject_status_html(page: &playwright_rs::Page, html: &str) {
-    let script = format!(
-        r#"(() => {{
+    let html_owned = html.to_string();
+    page.evaluate::<String, ()>(
+        r#"(html) => {
             const display = document.getElementById('status-display');
             if (!display) throw new Error('no live #status-display');
-            display.innerHTML = '{html}';
-        }})()"#
-    );
-    page.evaluate::<(), ()>(&script, None).await.unwrap();
+            display.innerHTML = html;
+        }"#,
+        Some(&html_owned),
+    )
+    .await
+    .unwrap();
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.7
