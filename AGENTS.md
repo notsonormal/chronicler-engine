@@ -276,6 +276,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `xml.rs` — XML string formatting utilities.
   - **test_support/**
     - `context.rs` — Builds `WiredApp` instances for integration tests.
+    - `env_guard.rs` — `ApiKeyEnvGuard` — serializes tests that mutate API-key environment variables.
     - `fixtures.rs` — Test fixtures shared between unit and integration tests.
     - `quantifier.rs` — Quantifier test utilities
     - `test_app_builder.rs` — Test application builder for HTTP and integration tests.

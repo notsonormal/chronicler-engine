@@ -1,6 +1,7 @@
 use crate::adapters::driven::storage::TestOverride;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::test_support::env_guard::ApiKeyEnvGuard;
 use crate::test_support::sqlite_storage;
 use crate::utils::settings::load_settings;
 
@@ -67,6 +68,7 @@ fn test_save_settings_roundtrip() {
 
 #[test]
 fn test_connection_resolve_api_key() {
+    let _guard = ApiKeyEnvGuard::new();
     let conn = LlmProviderConfig {
         id: "test".into(),
         name: "Test".into(),
@@ -92,6 +94,92 @@ fn test_connection_resolve_api_key() {
         std::env::remove_var("OPENROUTER_API_KEY");
     }
     assert_eq!(conn_no_key.resolve_api_key(), None);
+}
+
+#[test]
+fn test_resolve_api_key_blank_counts_as_absent() {
+    let _guard = ApiKeyEnvGuard::new();
+    let base = LlmProviderConfig {
+        id: "blank".into(),
+        name: "Blank".into(),
+        provider: LlmBackendType::OpenRouter,
+        model: "model".into(),
+        api_key: Some(String::new()),
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    };
+    unsafe {
+        std::env::set_var("OPENROUTER_API_KEY", "env-key");
+    }
+    for blank in ["", "   ", "\t"] {
+        let conn = LlmProviderConfig {
+            api_key: Some(blank.to_string()),
+            ..base.clone()
+        };
+        assert_eq!(
+            conn.resolve_api_key(),
+            Some("env-key".into()),
+            "blank stored key {blank:?} must not shadow the environment fallback"
+        );
+    }
+    let conn = LlmProviderConfig {
+        api_key: None,
+        ..base.clone()
+    };
+    unsafe {
+        std::env::set_var("OPENROUTER_API_KEY", "   ");
+    }
+    assert_eq!(
+        conn.resolve_api_key(),
+        None,
+        "a blank environment value is not a key"
+    );
+    unsafe {
+        std::env::remove_var("OPENROUTER_API_KEY");
+    }
+    assert_eq!(conn.resolve_api_key(), None);
+}
+
+#[test]
+fn test_check_api_key_available() {
+    let _guard = ApiKeyEnvGuard::new();
+    unsafe {
+        std::env::remove_var("OPENROUTER_API_KEY");
+    }
+    let keyless = LlmProviderConfig::new("or-1", "Narrator", LlmBackendType::OpenRouter);
+
+    let error = keyless
+        .check_api_key_available()
+        .expect_err("a keyless OpenRouter connection cannot call");
+    let message = error.to_string();
+    assert!(
+        message.contains("Narrator"),
+        "the error must name the connection, got: {message}"
+    );
+    assert!(
+        message.contains("OPENROUTER_API_KEY"),
+        "the error must name the environment fallback, got: {message}"
+    );
+
+    let keyed = LlmProviderConfig {
+        api_key: Some("sk-or-test".into()),
+        ..keyless.clone()
+    };
+    assert!(keyed.check_api_key_available().is_ok());
+
+    for provider in [
+        LlmBackendType::Ollama,
+        LlmBackendType::Mock,
+        LlmBackendType::DeepSeek,
+    ] {
+        let conn = LlmProviderConfig::new("keyless", "Keyless", provider);
+        assert!(
+            conn.check_api_key_available().is_ok(),
+            "{provider:?} needs no API key"
+        );
+    }
 }
 
 #[test]

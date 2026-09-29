@@ -32,3 +32,12 @@ impl FromStr for LlmBackendType {
         }
     }
 }
+
+impl LlmBackendType {
+    pub fn api_key_env_var(self) -> Option<&'static str> {
+        match self {
+            Self::OpenRouter | Self::DeepSeek => Some("OPENROUTER_API_KEY"),
+            Self::Ollama | Self::Mock => None,
+        }
+    }
+}
