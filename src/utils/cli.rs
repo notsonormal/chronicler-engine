@@ -31,7 +31,7 @@ pub struct Args {
     #[arg(long, default_value = "3000")]
     pub port: u16,
 
-    #[arg(long, default_value = "127.0.0.1")]
+    #[arg(long, default_value = "0.0.0.0")]
     pub host: IpAddr,
 }
 

@@ -23,7 +23,7 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         ServerConfig {
-            host: IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            host: IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
             port: 3000,
             bind_attempts: None,
         }
