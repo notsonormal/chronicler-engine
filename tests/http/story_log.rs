@@ -147,3 +147,32 @@ async fn test_delete_removes_entry_from_fragment_http() {
         "deleting must drop exactly one rendered log entry"
     );
 }
+
+// The story-log fragment is delivered by innerHTML into the shell's own
+// `#story-log` (the `hx-swap="innerHTML"` poll in `assets/index.html`). If the
+// fragment declared its own `<div class="story-log" id="story-log">` wrapper,
+// every swap would nest a second `#story-log` inside the first — duplicate ids
+// and a bordered box inside a bordered box (UI review finding 2.3). The
+// fragment must ship bare entries only; the shell owns the container.
+// [docs/specs/story_log.md] SCENARIO: 8.5
+#[tokio::test]
+async fn test_story_log_fragment_declares_no_log_container() {
+    let app = TestAppBuilder::default_test()
+        .log("You look around.", MessageType::Narration)
+        .build();
+
+    let body = fetch_body(&app, "/fragment/story-log").await;
+
+    assert!(
+        body.contains(r#"class="log-entry"#),
+        "fragment must still render the entries: {body}"
+    );
+    assert!(
+        !body.contains(r#"id="story-log""#),
+        "fragment must not declare a second #story-log: {body}"
+    );
+    assert!(
+        !body.contains(r#"class="story-log""#),
+        "fragment must not wrap entries in a .story-log container: {body}"
+    );
+}

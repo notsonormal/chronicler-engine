@@ -60,3 +60,13 @@ And the client POST /history/delete
 Then the response status is "200 OK"
 And the client GET /fragment/story-log renders exactly one fewer .log-entry
 ```
+
+#### Scenario 8.5: Story-log fragment declares no log container
+
+```gherkin
+Given a game state with at least one message entry
+When the client GET /fragment/story-log
+Then the response body contains .log-entry markup
+And the response body contains no id="story-log" declaration
+And the response body contains no class="story-log" declaration
+```

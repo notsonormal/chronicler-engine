@@ -3,6 +3,7 @@ use crate::adapters::driving::http::layout::handlers::endpoints::{
     llm_messages_fragment, reset_generating_handler, story_log_fragment, visual_sidebar_fragment,
 };
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
@@ -14,7 +15,9 @@ async fn test_header_fragment() {
 
 #[tokio::test]
 async fn test_story_log_fragment() {
-    let state = TestAppBuilder::default_test().build_service();
+    let state = TestAppBuilder::default_test()
+        .log("You look around.", MessageType::Narration)
+        .build_service();
     let result = story_log_fragment(axum::extract::State(state)).await;
     assert!(!result.0.is_empty());
 }
