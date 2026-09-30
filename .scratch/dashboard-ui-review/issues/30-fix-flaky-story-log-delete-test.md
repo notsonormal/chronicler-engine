@@ -1,7 +1,7 @@
 # Stop the story-log delete test flaking under parallel load
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -23,3 +23,19 @@ Blocked by: —
 - A fix lands, placed by `tests/STRATEGY.md` (HTTP E2E or unit per the mechanism).
 - The test passes repeatedly under contention — e.g. two concurrent full gates on this host, or a targeted loop with `-j 4` nextest plus a CPU-load generator.
 - `python build.py` is green. Commit after user approval.
+
+## Answer
+
+**The race.** `wait_idle` (`tests/http/support/http_requests.rs`) treated idle as the persisted `GenerationStatus` alone. The pipeline persists `Idle` in `PipelineRun::phase_finalize` (`src/application/pipeline/pipeline_run.rs` ~433-456) before the spawned task returns. The per-game generation slot is freed only when the task's `GenerationGuard` drops (`claim_and_spawn` in `src/application/pipeline/action_pipeline/core.rs`; `src/application/generation/guard.rs`). In that window the status reads Idle but `GenerationGate::try_claim` still sees the slot as busy. The test's next `post_action` or `/swipe/new` gets `ConcurrentGeneration` ("Still thinking..."), and its Input is never saved. That gives `should have N Input entries: got 1` while every `wait_idle` returned true. Cancellation (`handle_cancellation`) and phase errors (`finalize_phase_error`) persist a non-generating status before the guard drops too, so they share the window. [mechanism known: verified in code by the reviewer]
+
+**Evidence.** Three tests failed with this signature under full-gate load: `test_delete_mid_sequence_http`, `test_delete_last_between_actions_http`, `test_sequential_execute_retry_execute_http`. The implementer's probe (temporary, removed) ran 2000 action cycles at load average ~15 and hit the window once, with a real `post_action` answered "Still thinking". After the fix: 2000 cycles, 0 hits. 40 loops each of two of the flaky tests under contention: 80/80 pass. [reported by the implementer, not re-run by the coordinator]
+
+**Fix (test code, tier 1 HTTP helper).** `wait_idle` also requires `!state.generation_gate.is_busy(game_id)`. All 87 `wait_idle` call sites in `tests/http/` go through this helper, so the fix covers every one. No production change.
+
+**Gate:** `nextest: 1634 passed, 0 failed, 2 skipped`, browser 23 passed (worktree log `build_20260930_195007.log`). The coordinator then trimmed the doc comment only.
+
+**Code review** (`/code-review`, verdict ISSUES → fixed): the comment said "See ticket 30", which `CODING_STANDARDS.md` forbids; removed and the comment trimmed to the ordering constraint. Judgement calls left open:
+- `game_id` is captured once before polling. That is correct for every current caller, since none switch games during a wait.
+- Reading `generation_gate` deepens the internal-observation question [Decide what a tier-1 test may observe](31-decide-tier-1-observations.md) is weighing. `wait_idle` is a sync helper, not an assertion, and already read internal status.
+- The same window exists in production. The UI does not prevent it: `/status/generating` reads the same lagging status. It lasts microseconds against a 5s poll, so no ticket. If it ever matters, the engine could release the slot together with persisting `Idle`.
+
