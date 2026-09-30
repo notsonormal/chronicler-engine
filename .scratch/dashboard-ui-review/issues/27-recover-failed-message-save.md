@@ -1,7 +1,7 @@
 # Recover from a failed message save instead of freezing the story log
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -20,3 +20,23 @@ Blocked by: —
 - A failed retry/new swipe: the status leaves "Thinking..." and the Send button is re-enabled.
 - A test covers the failed-save recovery; tier by `tests/STRATEGY.md`.
 - `python build.py` is green. Commit after user approval.
+
+## Answer
+
+**Recovery only, in `assets/index.html`.** Failures show through the existing `#error-notification` toast (`showError`). Where failures display long-term is [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md).
+
+- `submitEdit()` checks `response.ok` and keeps `currentEditId`/`originalText` until the outcome is known. On a non-ok response or network error it shows the toast and calls a new `revertEdit()`, which puts back the pre-edit text and clears edit state. `resumePolling()` runs in `.finally`, so `#story-log` never stays on `hx-trigger="none"`. `cancelEdit()` now uses `revertEdit()` too, with no behaviour change.
+- `submitNewSwipe()` and `submitRetrigger()` share `submitGenerationRequest(url, failureMessage)`. On failure it shows the toast and calls `resetStatusToReady()`, which puts back the Ready span and re-enables Send. `submitRetrigger` had the same stuck-status bug; the reviewer judged the one-line extension justified, not scope creep.
+
+**Tests (tier 2, stub browser, `tests/browser/stub/story_log.rs`, driving shipped clicks).**
+- `test_failed_save_restores_entry_and_resumes_polling`, scenario 30.4 (`docs/specs/browser_story_log.md`): edit, save (stub 500), toast visible, textarea gone, original text back, `hx-trigger` back to `load, every 2s`.
+- `test_failed_retry_clears_pending_status_and_re_enables_send`, scenario 30.5: retry (stub 500), toast visible, status Ready, `#submit-btn` enabled.
+- Both fail on the pre-fix shell at the toast wait [reported by the implementer]. The stub server answers 500 on `POST /history/:id`, `/swipe/new` and `/retrigger`.
+
+**Gate:** worktree on `9c446198`: `nextest: 1639 passed, 0 failed, 2 skipped`, browser 26 passed (`build_20260930_201452.log`). The coordinator then changed two comments only.
+
+**Code review** (`/code-review`, verdict ISSUES → fixed): a comment in `stub_server.rs` named the ticket, which `CODING_STANDARDS.md` forbids; removed, and the file header now lists the 500 routes. Left open:
+- **Partial on "returns to its pre-edit actions".** `revertEdit()` puts back only `.text`. The ✓/✗ buttons stay and do nothing, and Edit/Delete/Swipe return only when the resumed poll re-renders (≤2s). Handed to [Fix edit mode: size, focus, keys and locked controls](11-fix-edit-mode.md), which owns the entry's controls in edit mode.
+- Other judgement calls went to [Follow up on small issues found during review](36-follow-up-small-review-issues.md).
+- `resetStatusToReady()` does not meaningfully race the status poll: after a non-2xx no generation started, and the ≤5s poll corrects any stale state. [reviewer]
+

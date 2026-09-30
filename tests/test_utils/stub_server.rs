@@ -9,7 +9,8 @@
 // rendered through the engine's own `OptionsDockTemplate` (a pure vm → HTML
 // render, so the drift tax there is avoidable). Three dynamic endpoints answer
 // scripted outcomes a test names up front: `POST /action/check`, `POST
-// /action/confirm`, and `POST /check-text`.
+// /action/confirm`, and `POST /check-text`. `POST /history/:id`, `POST
+// /swipe/new` and `POST /retrigger` always answer 500.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -166,6 +167,23 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/action/check", post(action_check))
         .route("/action/confirm", post(action_confirm))
         .route("/check-text", post(check_text))
+        // Client-side failure recovery: the save, retry, and
+        // retrigger paths are raw `fetch`, so their failure handling is
+        // stub-tier behaviour with no htmx swap. These routes always answer
+        // 500; no stub-tier test drives a successful save/retry through the
+        // client JS.
+        .route(
+            "/history/:id",
+            post(|| async { client_failure("Stub save failure") }),
+        )
+        .route(
+            "/swipe/new",
+            post(|| async { client_failure("Stub retry failure") }),
+        )
+        .route(
+            "/retrigger",
+            post(|| async { client_failure("Stub retrigger failure") }),
+        )
         .route("/status/generating", get(|| async { "idle" }))
         .route("/fragment/header", get(|| async { Html(FIXTURE_HEADER) }))
         .route(
@@ -272,6 +290,17 @@ async fn check_text() -> Response<Body> {
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
         r#"<span class="status ready">Text check is disabled</span>"#,
+    )
+        .into_response()
+}
+
+/// A canned 500 for a raw-fetch route whose only stub-tier use is the client
+/// failure-recovery path.
+fn client_failure(message: &str) -> Response<Body> {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        format!("<p>{message}</p>"),
     )
         .into_response()
 }

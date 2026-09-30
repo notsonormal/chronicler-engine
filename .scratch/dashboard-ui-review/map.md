@@ -47,6 +47,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 33 [Make the test standards docs match the code](issues/33-fix-test-standards-drift.md): resolved — ~30 phantom names and false claims fixed across the three test standards docs; `integration_test_standards.md` pruned 352→250 lines to pointers plus the rationale the code cannot state; guardrail message names `TestAppBuilder`.
 
+27 [Recover from a failed message save instead of freezing the story log](issues/27-recover-failed-message-save.md): resolved — failed save/swipe/retrigger show the toast, revert the entry or status, and always resume polling; tier 2 scenarios 30.4/30.5; restoring entry actions on revert handed to 11.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.

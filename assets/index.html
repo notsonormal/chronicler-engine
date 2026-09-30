@@ -271,7 +271,9 @@
         }
       }
 
-      function cancelEdit() {
+      // Restore the in-edit entry to its pre-edit text. The caller decides
+      // whether and when to resume polling.
+      function revertEdit() {
         if (currentEditId === null) return;
         const entry = document.querySelector(`[data-id="${currentEditId}"]`);
         if (entry) {
@@ -280,6 +282,11 @@
         }
         currentEditId = null;
         originalText = null;
+      }
+
+      function cancelEdit() {
+        if (currentEditId === null) return;
+        revertEdit();
         resumePolling();
         htmx.trigger("#story-log", "htmx:refresh");
       }
@@ -289,34 +296,70 @@
         const newText = document.getElementById("edit-textarea").value;
         const formData = new URLSearchParams();
         formData.append("text", newText);
+        // currentEditId/originalText stay set until the outcome is known, so
+        // a failure can restore the entry instead of stranding it in edit mode.
         fetch(`/history/${currentEditId}`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: formData,
-        }).then(() => {
-          resumePolling();
-          htmx.trigger("#story-log", "htmx:refresh");
-        });
-        currentEditId = null;
-        originalText = null;
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`save failed with status ${response.status}`);
+            }
+            // Success: drop edit state and let the refreshed log re-render.
+            currentEditId = null;
+            originalText = null;
+            htmx.trigger("#story-log", "htmx:refresh");
+          })
+          .catch((err) => {
+            console.error("Failed to save message:", err);
+            showError("Failed to save message");
+            revertEdit();
+          })
+          .finally(() => {
+            // Both outcomes must unpause the log, or it freezes on a failure.
+            resumePolling();
+          });
+      }
+
+      // Raw-fetch failures have no htmx swap to restore the status display;
+      // without this it stays on "Thinking..." with a disabled Stop button.
+      function resetStatusToReady() {
+        const statusDisplay = document.getElementById("status-display");
+        if (statusDisplay) {
+          statusDisplay.innerHTML = '<span class="status ready">Ready</span>';
+        }
+        setButtonState(false);
+      }
+
+      // Retry/retrigger run through raw fetch, so a failed request reports its
+      // own error and resets the status the htmx swaps would otherwise restore.
+      function submitGenerationRequest(url, failureMessage) {
+        updateToThinking();
+        fetch(url, { method: "POST" })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`${failureMessage} (status ${response.status})`);
+            }
+            return response.text();
+          })
+          .then(() => {
+            htmx.trigger("#story-log", "htmx:refresh");
+          })
+          .catch((err) => {
+            console.error(`${failureMessage}:`, err);
+            showError(failureMessage);
+            resetStatusToReady();
+          });
       }
 
       function submitNewSwipe() {
-        updateToThinking();
-        fetch("/swipe/new", { method: "POST" })
-          .then((response) => response.text())
-          .then(() => {
-            htmx.trigger("#story-log", "htmx:refresh");
-          });
+        submitGenerationRequest("/swipe/new", "Failed to generate a new swipe");
       }
 
       function submitRetrigger() {
-        updateToThinking();
-        fetch("/retrigger", { method: "POST" })
-          .then((response) => response.text())
-          .then(() => {
-            htmx.trigger("#story-log", "htmx:refresh");
-          });
+        submitGenerationRequest("/retrigger", "Failed to retrigger the event");
       }
 
       function switchSwipe(messageId, index) {

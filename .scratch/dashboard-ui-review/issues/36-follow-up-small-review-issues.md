@@ -28,6 +28,13 @@ From [Make the test standards docs match the code](33-fix-test-standards-drift.m
 - `PipelineHelpers` in `tests/helpers/application_ext.rs` is declared by no test binary and carries `#![allow(dead_code)]`. Delete it or wire it in.
 - `docs/plans/t9-00-follow-up-3-apply-now-review-fixes-revised.md` mentions the removed `SqliteTestAppBuilder`. Likely a stale plan: archive or leave, don't rewrite history.
 
+From [Recover from a failed message save instead of freezing the story log](27-recover-failed-message-save.md):
+- The `/retrigger` 500 route in `tests/test_utils/stub_server.rs` is undriven: no stub fixture renders a retrigger button. Add the button and a 30.5-style case, or drop the route.
+- `resetStatusToReady()` in `assets/index.html` hardcodes the Ready span that `onStatusPoll` and `updateToThinking` also write. One `setStatus(label, cls)` helper.
+- `error_toast_text` in `tests/browser/stub/story_log.rs` duplicates `read_error_toast` in `tests/browser/stub/dashboard.rs`. Share one helper.
+- Scenarios 30.4/30.5 (`docs/specs/browser_story_log.md`) use element ids in Givens and Thens, against the map's "CONTEXT.md terms until ticket 31" note; they match 30.1–30.3. Reword the section in CONTEXT.md terms, or leave it for the tier-1 migration.
+- Scenario 30.5 observes dashboard chrome (status display, toast) but lives in `browser_story_log.md`; `tests/STRATEGY.md` places chrome scenarios in `browser_dashboard.md`. Arguable, since the retry control belongs to the story log.
+
 ## Done when
 
 - Each item is fixed or dropped with a one-line reason in `## Answer`.
