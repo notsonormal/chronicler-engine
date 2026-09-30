@@ -399,6 +399,11 @@ Secondary agents must not share the primary's target dir or run fmt: use
 `python build.py --target-dir target/<name> --no-fmt`. The full protocol lives
 in the `build.py` module docstring.
 
+Cold worktree builds compile the whole dependency tree into a fresh target dir;
+`scripts/sccache-wrapper.sh` (wired as `rustc-wrapper` in `.cargo/config.toml`)
+routes that through sccache, so the second build onward reuses the artifacts.
+Check it with `sccache --show-stats`.
+
 ## Agent Skills
 
 ### Issue tracker

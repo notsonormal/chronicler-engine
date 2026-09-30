@@ -194,7 +194,6 @@ fn test_story_log_template_renders_event_header() {
     assert!(rendered.contains("edit-btn"));
     assert!(rendered.contains("delete-btn"));
     assert!(!rendered.contains("check-btn"));
-    // Retry button removed — swipe right arrow handles new swipe generation
     assert!(!rendered.contains("retry-btn"));
 }
 

@@ -1,9 +1,7 @@
 //! Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status error observer) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
 
-// The error toast is a body-level `htmx:beforeSwap` listener with an
-// `isError` guard; it reads the response body, strips tags, and shows the
-// toast. No engine endpoint produces this event in the test — the test
-// dispatches it directly — so the stub server cannot change the behaviour.
+// No engine endpoint produces `htmx:beforeSwap` with `isError`; the test
+// dispatches the event itself, so the stub server cannot change the behaviour.
 
 use std::time::Duration;
 
@@ -43,11 +41,9 @@ async fn read_error_toast(page: &playwright_rs::Page) -> (bool, String) {
     .unwrap()
 }
 
-/// Swap #action-area the way the text-check preview flow does, through the
-/// shipped client JS: `saveActionArea()` snapshots the markup, a raw
-/// `innerHTML` write replaces it, and `restoreActionArea()` puts the snapshot
-/// back. Every node the page-load handles pointed at (form, status display,
-/// Send button) is detached; the ids live on in fresh nodes.
+/// Swap #action-area through the shipped client JS. Every node the page-load
+/// handles pointed at (form, status display, Send button) is detached; the
+/// ids live on in fresh nodes.
 async fn swap_action_area_via_restore(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
@@ -123,10 +119,8 @@ async fn inject_status_html(page: &playwright_rs::Page, html: &str) {
 #[tokio::test]
 async fn test_error_toast_on_action_failure() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // serverResponse carries HTML tags so the assertion exercises the
-        // handler's tag-stripping path (`response.replace(/<[^>]*>/g, "")`) and
-        // proves the toast text is *derived from* the response body, not just
-        // non-empty.
+        // `dispatch_error_toast` wraps the message in a tag, so the assertion
+        // matching the bare text proves the handler's tag-stripping path ran.
         dispatch_error_toast(&page, "Internal server error").await;
 
         let (visible, text) = read_error_toast(&page).await;
@@ -146,12 +140,8 @@ async fn test_error_toast_on_action_failure() {
 #[tokio::test]
 async fn test_newer_error_keeps_toast_visible() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // Two errors inside the 5s hide window. The bug was that the first
-        // error's hide timer was never cleared, so it hid the toast while the
-        // second error's toast was still on screen — the banner slid up and
-        // down on a loop. Six seconds after the first event the first timer
-        // has fired (5s) but the second (7.5s) has not: a correct toast is
-        // still visible.
+        // Second error at 2.5s, checked at 6s: the first toast's timer (5s)
+        // has fired but the second's (7.5s) has not, so the toast stays up.
         dispatch_error_toast(&page, "First failure").await;
         tokio::time::sleep(Duration::from_millis(2500)).await;
         dispatch_error_toast(&page, "Second failure").await;
@@ -177,8 +167,8 @@ async fn test_send_locks_and_unlocks_after_action_area_swap() {
         swap_action_area_via_restore(&page).await;
         assert_status_display_restored(&page).await;
 
-        // Submit through the shipped form. The fresh form's htmx flow acks
-        // with the pending status swap, which is when the lock must appear.
+        // The form's htmx ack swaps in the pending status; that is when the
+        // lock must appear.
         send_action(&page, "wait").await;
 
         let (disabled, label) = read_submit_button(&page).await;

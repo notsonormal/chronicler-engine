@@ -1,0 +1,21 @@
+== raw state field reads in tests/http (excl quarantine)
+45
+tests/http/actions.rs:13
+tests/http/retrigger.rs:9
+tests/http/swipe_new.rs:17
+tests/http/games_create.rs:1
+tests/http/requires_migration/fragment.rs:4
+tests/http/support/http_requests.rs:1
+== samples
+tests/http/actions.rs:50:            .input_buffer
+tests/http/actions.rs:88:            .input_buffer
+tests/http/actions.rs:164:            .input_buffer
+tests/http/actions.rs:217:            .input_buffer
+tests/http/actions.rs:289:            .input_buffer
+tests/http/actions.rs:323:            .input_buffer
+tests/http/actions.rs:407:    match &final_state.narrative.input_buffer.status {
+tests/http/actions.rs:437:    match &final_state.narrative.input_buffer.status {
+tests/http/actions.rs:446:            .input_buffer
+tests/http/actions.rs:465:    match &final_state.narrative.input_buffer.status {
+tests/http/actions.rs:540:    match &final_state.narrative.input_buffer.status {
+tests/http/actions.rs:582:        !final_state.narrative.input_buffer.status.is_generating(),

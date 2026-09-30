@@ -146,6 +146,12 @@ for pid in $(pgrep -x chrome); do kill "$pid"; done
 Note the process comm name is `chrome`, not `google-chrome`, so `pgrep -x
 google-chrome` matches nothing.
 
+## Vision models and image caps
+
+Providers cap the images one request may carry (`glm-5.3-flash` rejects at 31:
+`Too many images in request`). For long reviews: spawn with a fallback model, lean
+on DOM dumps for structure, and split sweeps so no session nears the cap.
+
 ## `visual-tester` prerequisites
 
 Both halves are in place:
@@ -160,7 +166,8 @@ It produced a full screenshot sweep across every tab and three viewports
 
 Note how it weighs those breakpoints: its bundled instructions treat all three as
 peers, which does not match this app, where desktop is the primary target and mobile
-is secondary. Say **desktop first** in the task when delegating a sweep. Do not fork
+is secondary. Say **desktop first** in the task when delegating a sweep, and name the
+scale — the agent's P0–P3 differs from the dashboard review's P1–P3. Do not fork
 the bundled agent into a project override just to reorder breakpoints — a project
 definition of the same name replaces the bundled one entirely, with no merging, so
 it would mean owning all ~235 lines of it.

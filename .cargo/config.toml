@@ -1,6 +1,12 @@
 # Cargo build configuration for Chronicler Engine
 # Optimized release builds
 
+# sccache lets worktree builds reuse compiled dependencies (AGENTS.md,
+# "Concurrent Builds"). The wrapper falls back to plain rustc when sccache is
+# not installed, so this config stays portable.
+[build]
+rustc-wrapper = "scripts/sccache-wrapper.sh"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

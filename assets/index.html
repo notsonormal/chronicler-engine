@@ -43,7 +43,8 @@
         ></div>
       </div>
 
-      <!-- Static shell: form stays in DOM, never replaced -->
+      <!-- Static shell: the command form survives a submit (the response
+           retargets to #status-display); the text-check flow replaces it. -->
       <!-- Options dock: sibling bar above the action area (V4 shape); its
            inner content self-polls and is empty until options exist. -->
       <div
@@ -126,11 +127,9 @@
     <script>
       console.log("[HTMX] Initializing...");
 
-      // Button state management. #action-area's children (form, status
-      // display) are replaced by htmx swaps and the text-check preview, so a
-      // Send-button handle captured at page load points at a detached node
-      // after the first swap. Resolve it by id on every call, the way
-      // commandInput() resolves the command input.
+      // The text-check flow (preview and confirm) replaces #action-area, which
+      // detaches the old Send button; a command submit retargets to
+      // #status-display and leaves it in place. Resolve by id on every call.
       function setButtonState(isThinking) {
         const submitBtn = document.getElementById("submit-btn");
         if (!submitBtn) return;
@@ -143,7 +142,6 @@
         }
       }
 
-      // Called immediately when form is submitted (before server responds)
       function updateToThinking() {
         setButtonState(true);
         const statusDisplay = document.getElementById("status-display");
@@ -153,12 +151,12 @@
         }
       }
 
-      // The server returns status and MutationObserver will re-enable it
+      // Locks on submit; the status poll unlocks.
       function updateButtonState() {
-        setButtonState(true); // Immediately disable button on submit
+        setButtonState(true);
       }
 
-      // The endpoint returns phase names or "idle" (plain text)
+      // /status/generating returns a bare phase name or "idle" as plain text.
       function onStatusPoll(el) {
         const text = el.textContent.trim();
         if (text === "idle") {
@@ -180,12 +178,9 @@
             '<span class="status thinking">' + phaseMap[text] + "</span>";
           setButtonState(true);
         }
-        // If text is empty or unexpected, do nothing
       }
 
-      // #status-display is re-created on every #action-area swap, so no handle
-      // to it may outlive a swap. The error notification is a direct body
-      // child that no swap ever replaces.
+      // Body-level, so the #action-area swaps never replace it.
       const errorNotification = document.getElementById("error-notification");
 
       let errorHideTimer = null;
@@ -194,9 +189,7 @@
         if (errorNotification) {
           errorNotification.textContent = message;
           errorNotification.classList.add("visible");
-          // Clear the previous hide timer first. Leaving it running lets an
-          // older error's timer hide a newer one, which made the banner slide
-          // up and down on a loop while errors kept arriving.
+          // A stale hide timer would hide a newer error's toast.
           if (errorHideTimer !== null) clearTimeout(errorHideTimer);
           errorHideTimer = setTimeout(() => {
             errorNotification.classList.remove("visible");
@@ -205,7 +198,7 @@
         }
       }
 
-      // Global HTMX error handler - shows notification for errors, allows swap to proceed
+      // htmx:beforeSwap can cancel the swap; show the toast and let it proceed.
       document.body.addEventListener("htmx:beforeSwap", function (evt) {
         if (evt.detail.isError) {
           const response = evt.detail.serverResponse || "";
@@ -214,7 +207,6 @@
         }
       });
 
-      // Edit functions - inline editing with polling pause
       let currentEditId = null;
       let originalText = null;
       let originalTrigger = null;
@@ -248,10 +240,9 @@
         if (entry) {
           const textSpan = entry.querySelector(".text");
 
-          // Measure original rendered height BEFORE replacing content
           const originalHeight = textSpan.getBoundingClientRect().height;
 
-          // Get raw text from data attribute (before markdown conversion)
+          // data-raw-text holds the pre-markdown source; .text is rendered.
           const rawText = entry.getAttribute("data-raw-text") || "";
           originalText = textSpan.innerHTML;
 
@@ -336,7 +327,6 @@
           })
           .then((html) => {
             document.getElementById("story-log").innerHTML = html;
-            // Refresh visual sidebar and header to reflect restored state
             htmx.trigger("#visual-sidebar", "htmx:refresh");
             htmx.trigger("#header", "htmx:refresh");
           })
@@ -365,7 +355,6 @@
           });
       }
 
-      // Text check helpers
       function saveActionArea() {
         const actionArea = document.getElementById("action-area");
         const input = actionArea.querySelector('input[name="command"]');
@@ -387,9 +376,8 @@
         }
       }
 
-      // Options dock: an option IS a pre-written player input.
-      // Use submits its text through the normal /action/check path; Edit
-      // copies it into the input for modification (e.g. prepend /guide).
+      // An option is a pre-written player input: Use submits it through
+      // /action/check, Edit copies it into the input for editing.
       function useOption(btn) {
         const input = commandInput();
         if (!input || input.disabled) return;
@@ -592,13 +580,12 @@
           if (input) selectSlash(item.dataset.cmd, input);
           return;
         }
-        // Click outside the menu and the input closes the menu.
         if (slashMenu && !slashMenu.contains(target) && target !== commandInput()) {
           closeSlashMenu();
         }
       });
 
-      // Close the menu when the input loses focus (focusout bubbles).
+      // focusout bubbles, so one document listener covers input blur.
       document.addEventListener("focusout", function (e) {
         if (!slashMenu) return;
         if (e.target === commandInput()) {
@@ -618,9 +605,8 @@
       window.addEventListener("scroll", closeSlashMenu, true);
       window.addEventListener("resize", closeSlashMenu);
 
-      // The status poll re-renders the persisted error on every cycle. Track
-      // the text already shown so the toast fires once per distinct error
-      // instead of restarting its slide animation on each poll.
+      // The status poll re-renders the same error each cycle; dedupe on the
+      // text so the toast fires once per distinct error.
       let lastStatusError = null;
 
       const statusObserver = new MutationObserver(function (mutations) {
@@ -629,16 +615,13 @@
             mutation.type === "childList" ||
             mutation.type === "characterData"
           ) {
-            // The status display node is re-created by every #action-area
-            // swap, so the observer watches the document body — a node no
-            // swap replaces — and resolves the live display per event.
-            // Mutations elsewhere (story-log and options-dock polls) never
-            // fall inside it, so the pollers cannot churn the Send button.
+            // Only mutations inside the live status display count; the
+            // story-log and options-dock pollers mutate elsewhere and must
+            // not churn the Send button.
             const statusDisplay = document.getElementById("status-display");
             if (!statusDisplay || !statusDisplay.contains(mutation.target)) {
               return;
             }
-            // Check if the inner status span has the 'thinking' class
             const isThinking =
               statusDisplay.querySelector(".status.thinking") !== null;
             if (isThinking) {
@@ -646,7 +629,6 @@
             } else {
               setButtonState(false);
             }
-            // Show error notification for error states
             const statusText = statusDisplay.textContent;
             if (statusText.includes("Error")) {
               if (statusText !== lastStatusError) {
@@ -668,9 +650,8 @@
       });
 
       document.addEventListener("DOMContentLoaded", function () {
-        // Observe the body, not #status-display itself: the display node is
-        // replaced on every #action-area swap, and an observation started on
-        // it would keep watching the detached node.
+        // Observe the body: the text-check flow replaces #action-area, so an
+        // observation on #status-display would watch the detached node.
         statusObserver.observe(document.body, {
           childList: true,
           characterData: true,
@@ -685,7 +666,6 @@
           setButtonState(true);
         }
 
-        // Tab switching
         document.querySelectorAll(".tab").forEach((btn) => {
           btn.addEventListener("click", () => {
             document
@@ -708,7 +688,7 @@
           });
         });
 
-        // LLM message expand/collapse - persists across HTMX polls
+        // Expansion state lives in JS: htmx polls re-render the panel.
         const expandedLlmMessages = new Set();
         let llmOriginalTrigger = null;
 

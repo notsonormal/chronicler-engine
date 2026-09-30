@@ -86,6 +86,8 @@ cargo run -- --world <world> --port <port>
 # Skip if already running: curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:<port>/
 ```
 
+Check the port first: a dead session can leave an engine bound there.
+
 ### Step 2: Navigate
 
 ```javascript
@@ -236,5 +238,7 @@ Selector vocabulary for DOM work comes from `docs/specs/browser_*.md`, enforced 
 - No expected values hardcoded - caller provides assertions
 - `chrome_devtools_screenshot` returns the image inline and saves it to disk; pass `savePath` (relative to the repo root works, e.g. `tmp/<name>.png`), otherwise it writes a temp file. Either way: look at it.
 - Waiting for dynamic content: poll inside `chrome_devtools_evaluate` (Step 2 snippet)
+- Long reviews: write findings to the ticket as they are established — a dead session
+  then costs the screenshots, not the analysis
 - The `#connection-status` element is rendered server-side in the header fragment and shows "Connected" by default; it is not a live WebSocket state indicator
 - Zero-dependency fallback when the extension is absent: `scripts/cdp.mjs`, the vendored `chrome-cdp` CLI (`list`, `shot`, `snap`, `html`, `eval`, `nav`, `click`, `type`, `evalraw`). It needs no npm install — Node 22+ only. The Playwright harness above remains the other fallback
