@@ -211,7 +211,8 @@ pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation>
             violations.push(Violation::error(
                 path,
                 line_num + 1,
-                "Integration tests must use SqliteTestAppBuilder for consistent SQLite testing; make_test_app_with_* helpers deleted.".to_string(),
+                "Integration tests must not call make_test_context(; use TestAppBuilder instead."
+                    .to_string(),
             ));
         }
     }

@@ -29,7 +29,7 @@ Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_u
 
 ## Document References
 
-- [`./unit_test_standards.md`](./unit_test_standards.md) — canonical nine-pattern form for `*_tests.rs` unit tests, with four cross-cutting patterns (XSS regression is Cross-cutting B).
+- [`./unit_test_standards.md`](./unit_test_standards.md) — canonical eight-pattern form for `*_tests.rs` unit tests, with four cross-cutting patterns (XSS regression is Cross-cutting B).
 - [`./integration_test_standards.md`](./integration_test_standards.md) — canonical seven-pattern form for tests under `tests/`, with eight cross-cutting patterns.
 - [`./guardrails.md`](./guardrails.md) — coverage-exclusion policy and the test-module-header convention guardrail.
 - `tests/AGENTS.md` — live structure index for the integration test tree and the TEST MIRROR CONVENTION.

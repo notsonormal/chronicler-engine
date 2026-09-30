@@ -96,7 +96,7 @@ fn test_check_no_legacy_test_context_catches_legacy() {
         "let ctx = make_test_context(&storage);\n",
     );
     assert_eq!(violations.len(), 1);
-    assert!(violations[0].message.contains("SqliteTestAppBuilder"));
+    assert!(violations[0].message.contains("TestAppBuilder"));
 }
 
 #[test]

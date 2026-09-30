@@ -72,11 +72,11 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | doc standards | Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files. | `tests/infrastructure/guardrails/structure.rs:59` |
 | mod purity | Enforces mod.rs purity: only module declarations, imports, and module docs are allowed. | `tests/infrastructure/guardrails/structure.rs:158` |
 | no legacy test context | Rejects legacy test-context helpers in integration tests. | `tests/infrastructure/guardrails/structure.rs:197` |
-| empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:259` |
-| no std thread all | Exposes the internal no-std-thread check for use outside the standard walker. | `tests/infrastructure/guardrails/structure.rs:293` |
-| browser interactions use htmx settle | Full-stack browser tests must interact only through htmx-settled helpers. | `tests/infrastructure/guardrails/structure.rs:314` |
-| file length | Enforces a maximum of 2000 non-blank lines per file. | `tests/infrastructure/guardrails/structure.rs:364` |
-| test module header | Test files must have a single-line `//!` summary on the first non-blank line: | `tests/infrastructure/guardrails/structure.rs:388` |
+| empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:260` |
+| no std thread all | Exposes the internal no-std-thread check for use outside the standard walker. | `tests/infrastructure/guardrails/structure.rs:294` |
+| browser interactions use htmx settle | Full-stack browser tests must interact only through htmx-settled helpers. | `tests/infrastructure/guardrails/structure.rs:315` |
+| file length | Enforces a maximum of 2000 non-blank lines per file. | `tests/infrastructure/guardrails/structure.rs:365` |
+| test module header | Test files must have a single-line `//!` summary on the first non-blank line: | `tests/infrastructure/guardrails/structure.rs:389` |
 | import ordering | Enforces import ordering: std/core/alloc, then external crates, then crate/super/self. | `tests/infrastructure/guardrails/style.rs:9` |
 | long comment runs | Warns when five or more countable comment lines appear consecutively. | `tests/infrastructure/guardrails/style.rs:124` |
 | template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:165` |
