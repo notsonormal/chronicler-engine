@@ -26,12 +26,21 @@ And the body contains an "System Prompts" heading
 And the body contains an "Quantifier Prompts" heading
 And the body contains one preset-card per seeded system preset (with name and "Default" badge)
 And the body contains one preset-card per seeded quantifier preset (with name and "Default" badge)
-And the body contains an "Add System Prompt Preset" heading
-And the body contains an "Add Quantifier Prompt Preset" heading
+And the body contains an "Add System Prompt Preset" toggle
+And the body contains an "Add Quantifier Prompt Preset" toggle
 And the system add-form contains inputs named name, role, instructions, writing_style, output_format
 And the system add-form contains a hidden input named preset_type with value "system"
 And the quantifier add-form contains inputs named name, role, instructions, output_format
 And the quantifier add-form contains a hidden input named preset_type with value "quantifier"
+```
+
+#### Scenario 21.28: Each Add form is a closed disclosure
+
+```gherkin
+Given a fresh app state
+When the client GET /fragment/prompt-presets
+Then the response is 200
+And each category's Add form is collapsed until the user opens it
 ```
 
 ### GET /fragment/prompt-presets/{id} — single card

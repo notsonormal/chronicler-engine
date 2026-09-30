@@ -15,6 +15,8 @@ Failed adds replace the entire panel with a bare error fragment: an invalid prov
 - The same bodies are also returned for storage failures (`Save failed: ..`, `Load failed: ..`), so this is not only reachable through tampered form values.
 - The choice of where the error should appear is [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md). This ticket is the implementation side for adds; do not invent a parallel error surface.
 
+- Added from [Collapse the Prompt Presets add forms](17-collapse-preset-add-forms.md): a failed preset **edit** (`update_preset_handler`) replaces the card with a bare error span and loses in-progress edits. Same class of failure as the add case.
+
 ## Done when
 
 - A failed add (connection or preset) leaves the panel and its other controls intact, and the error is visible near the form.

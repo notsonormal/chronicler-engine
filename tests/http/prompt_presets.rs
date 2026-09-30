@@ -109,8 +109,9 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
     assert!(body.contains("<h2>System Prompts</h2>"));
     assert!(body.contains("<h2>Quantifier Prompts</h2>"));
-    assert!(body.contains("<h3>Add System Prompt Preset</h3>"));
-    assert!(body.contains("<h3>Add Quantifier Prompt Preset</h3>"));
+    assert!(body.contains("preset-add-toggle"));
+    assert!(body.contains("Add System Prompt Preset"));
+    assert!(body.contains("Add Quantifier Prompt Preset"));
     // Default test fixture seeds one default system preset; the spec assumes a
     // default quantifier preset is also present, but the fixture does not seed one.
     assert!(body.contains("preset-card"));
@@ -122,6 +123,33 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     assert!(body.contains(r#"name="instructions""#));
     assert!(body.contains(r#"name="writing_style""#));
     assert!(body.contains(r#"name="output_format""#));
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.28
+#[tokio::test]
+async fn test_prompt_presets_add_forms_collapsed_by_default() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let response = app
+        .oneshot(get_request("/fragment/prompt-presets"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+
+    assert_eq!(
+        body.matches(r#"<details class="preset-add">"#).count(),
+        3,
+        "each category's add form must be a closed disclosure"
+    );
+    assert!(
+        !body.contains(r#"<details class="preset-add" open>"#),
+        "the add forms must be closed by default"
+    );
+    assert!(body.contains("Add System Prompt Preset"));
+    assert!(body.contains("Add Quantifier Prompt Preset"));
+    assert!(body.contains("Add Impersonate Prompt Preset"));
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.2

@@ -51,6 +51,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 35 [Keep the world id stable when SQLite re-seeds a world](issues/35-sqlite-reseed-keeps-world-id.md): resolved — SQLite re-seed now upserts in place (`ON CONFLICT(key) DO UPDATE`), keeping the world id, map and characters; `create_world` refusal now enforced by the `worlds.key UNIQUE` constraint.
 
+17 [Collapse the Prompt Presets add forms](issues/17-collapse-preset-add-forms.md): resolved — each Add form is a closed `<details>` disclosure (no JS); tier 1 scenario 21.28; failed-add error display left to 25.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.

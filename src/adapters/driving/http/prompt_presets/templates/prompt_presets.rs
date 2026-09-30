@@ -41,33 +41,35 @@ use crate::domain::model::prompt_preset::PromptPreset;
         </div>
         {% endfor %}
 
-        <h3>Add System Prompt Preset</h3>
-        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
-            <input type="hidden" name="preset_type" value="system" />
-            <div class="form-group">
-                <label for="system-preset-name">Name</label>
-                <input type="text" id="system-preset-name" name="name" placeholder="My Custom System Prompt" required />
-            </div>
-            <div class="form-group">
-                <label for="system-preset-role">Role</label>
-                <textarea id="system-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
-            </div>
-            <div class="form-group">
-                <label for="system-preset-instructions">Instructions</label>
-                <textarea id="system-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
-            </div>
-            <div class="form-group">
-                <label for="system-preset-style">Writing Style</label>
-                <textarea id="system-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
-            </div>
-            <div class="form-group">
-                <label for="system-preset-output">Output Format</label>
-                <textarea id="system-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">Add Preset</button>
-            </div>
-        </form>
+        <details class="preset-add">
+            <summary class="btn-cyan preset-add-toggle">Add System Prompt Preset</summary>
+            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+                <input type="hidden" name="preset_type" value="system" />
+                <div class="form-group">
+                    <label for="system-preset-name">Name</label>
+                    <input type="text" id="system-preset-name" name="name" placeholder="My Custom System Prompt" required />
+                </div>
+                <div class="form-group">
+                    <label for="system-preset-role">Role</label>
+                    <textarea id="system-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="system-preset-instructions">Instructions</label>
+                    <textarea id="system-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="system-preset-style">Writing Style</label>
+                    <textarea id="system-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="system-preset-output">Output Format</label>
+                    <textarea id="system-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Add Preset</button>
+                </div>
+            </form>
+        </details>
     </div>
 
     <div class="preset-section">
@@ -102,29 +104,31 @@ use crate::domain::model::prompt_preset::PromptPreset;
         </div>
         {% endfor %}
 
-        <h3>Add Quantifier Prompt Preset</h3>
-        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
-            <input type="hidden" name="preset_type" value="quantifier" />
-            <div class="form-group">
-                <label for="quantifier-preset-name">Name</label>
-                <input type="text" id="quantifier-preset-name" name="name" placeholder="My Custom Quantifier Prompt" required />
-            </div>
-            <div class="form-group">
-                <label for="quantifier-preset-role">Role</label>
-                <textarea id="quantifier-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
-            </div>
-            <div class="form-group">
-                <label for="quantifier-preset-instructions">Instructions</label>
-                <textarea id="quantifier-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
-            </div>
-            <div class="form-group">
-                <label for="quantifier-preset-output">Output Format</label>
-                <textarea id="quantifier-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">Add Preset</button>
-            </div>
-        </form>
+        <details class="preset-add">
+            <summary class="btn-cyan preset-add-toggle">Add Quantifier Prompt Preset</summary>
+            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+                <input type="hidden" name="preset_type" value="quantifier" />
+                <div class="form-group">
+                    <label for="quantifier-preset-name">Name</label>
+                    <input type="text" id="quantifier-preset-name" name="name" placeholder="My Custom Quantifier Prompt" required />
+                </div>
+                <div class="form-group">
+                    <label for="quantifier-preset-role">Role</label>
+                    <textarea id="quantifier-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="quantifier-preset-instructions">Instructions</label>
+                    <textarea id="quantifier-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="quantifier-preset-output">Output Format</label>
+                    <textarea id="quantifier-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Add Preset</button>
+                </div>
+            </form>
+        </details>
     </div>
 
     <div class="preset-section">
@@ -159,33 +163,35 @@ use crate::domain::model::prompt_preset::PromptPreset;
         </div>
         {% endfor %}
 
-        <h3>Add Impersonate Prompt Preset</h3>
-        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
-            <input type="hidden" name="preset_type" value="impersonate" />
-            <div class="form-group">
-                <label for="impersonate-preset-name">Name</label>
-                <input type="text" id="impersonate-preset-name" name="name" placeholder="My Custom Impersonate Prompt" required />
-            </div>
-            <div class="form-group">
-                <label for="impersonate-preset-role">Role</label>
-                <textarea id="impersonate-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
-            </div>
-            <div class="form-group">
-                <label for="impersonate-preset-instructions">Instructions</label>
-                <textarea id="impersonate-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
-            </div>
-            <div class="form-group">
-                <label for="impersonate-preset-style">Writing Style</label>
-                <textarea id="impersonate-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
-            </div>
-            <div class="form-group">
-                <label for="impersonate-preset-output">Output Format</label>
-                <textarea id="impersonate-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">Add Preset</button>
-            </div>
-        </form>
+        <details class="preset-add">
+            <summary class="btn-cyan preset-add-toggle">Add Impersonate Prompt Preset</summary>
+            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+                <input type="hidden" name="preset_type" value="impersonate" />
+                <div class="form-group">
+                    <label for="impersonate-preset-name">Name</label>
+                    <input type="text" id="impersonate-preset-name" name="name" placeholder="My Custom Impersonate Prompt" required />
+                </div>
+                <div class="form-group">
+                    <label for="impersonate-preset-role">Role</label>
+                    <textarea id="impersonate-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="impersonate-preset-instructions">Instructions</label>
+                    <textarea id="impersonate-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="impersonate-preset-style">Writing Style</label>
+                    <textarea id="impersonate-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="impersonate-preset-output">Output Format</label>
+                    <textarea id="impersonate-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Add Preset</button>
+                </div>
+            </form>
+        </details>
     </div>
 </div>
 "##,
