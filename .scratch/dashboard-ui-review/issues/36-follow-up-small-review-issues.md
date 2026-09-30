@@ -16,7 +16,7 @@ Code reviews and implementers on this map keep finding small issues that don't b
 ## Items
 
 From [Stop world creation from silently overwriting an existing key](29-world-key-silent-overwrite.md):
-- SQLite `create_world` refuses with a pre-check before `INSERT OR REPLACE`. It is atomic within one process only. Consider letting the `worlds.key UNIQUE` constraint (`src/adapters/driven/storage/utils/plumbing.rs` ~150) refuse, mapped to `WorldAlreadyExists`. May fold into [Keep the world id stable when SQLite re-seeds a world](35-sqlite-reseed-keeps-world-id.md) if that changes the same insert.
+- **Done in [Keep the world id stable when SQLite re-seeds a world](35-sqlite-reseed-keeps-world-id.md).** ~~SQLite `create_world` refuses with a pre-check before `INSERT OR REPLACE`. It is atomic within one process only. Consider letting the `worlds.key UNIQUE` constraint (`src/adapters/driven/storage/utils/plumbing.rs` ~150) refuse, mapped to `WorldAlreadyExists`. May fold into [Keep the world id stable when SQLite re-seeds a world](35-sqlite-reseed-keeps-world-id.md) if that changes the same insert.~~
 - Scenario 25.7 (`docs/specs/worlds.md`) asserts only name and key are unchanged after a refused create. Also assert description and map. Its When omits the endpoint, unlike 25.1–25.5.
 - `tests/http/worlds.rs` file header does not mention create.
 - `tests/storage/world_storage.rs`: the new InMemory/SQLite test pairs vary literals (`duplicate`/`dup_map` vs `sql_dup`/`sql_map`), against `unit_test_standards.md` Pattern 2. The file already deviates the same way.
@@ -34,6 +34,12 @@ From [Recover from a failed message save instead of freezing the story log](27-r
 - `error_toast_text` in `tests/browser/stub/story_log.rs` duplicates `read_error_toast` in `tests/browser/stub/dashboard.rs`. Share one helper.
 - Scenarios 30.4/30.5 (`docs/specs/browser_story_log.md`) use element ids in Givens and Thens, against the map's "CONTEXT.md terms until ticket 31" note; they match 30.1–30.3. Reword the section in CONTEXT.md terms, or leave it for the tier-1 migration.
 - Scenario 30.5 observes dashboard chrome (status display, toast) but lives in `browser_story_log.md`; `tests/STRATEGY.md` places chrome scenarios in `browser_dashboard.md`. Arguable, since the retry control belongs to the story log.
+
+From [Keep the world id stable when SQLite re-seeds a world](35-sqlite-reseed-keeps-world-id.md):
+- The worlds column list now appears three times in `src/adapters/driven/storage/worlds.rs` (the INSERT, the `ON CONFLICT … DO UPDATE SET`, and `update_world`'s SET). One shared column list.
+- `seed_world`'s world-row and map-row writes are two autocommit statements; a failed map write leaves a refreshed world with a stale map. Wrap both in `conn.unchecked_transaction()` as `utils/plumbing.rs` does. Not a regression.
+- `tests/storage/world_storage.rs` header ("create/list/delete") does not mention re-seed.
+- InMemory world id allocation is `last().world_id + 1`, so deleting the newest world can reuse its id. [implementer, pre-existing]
 
 ## Done when
 

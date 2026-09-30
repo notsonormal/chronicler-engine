@@ -117,11 +117,12 @@ impl Storage {
     }
 
     /// Upsert a world by key. Used by bootstrap seeding of `data/worlds/*`,
-    /// where replacing an existing world's data is intended. Both backends
-    /// replace the stored card and map for an existing key.
+    /// where replacing an existing world's data is intended. The world row is
+    /// updated in place, so its id and dependent characters survive; both
+    /// backends replace the stored card and map for an existing key.
     pub fn seed_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
         self.with_backend_mut("seed_world", |backend| {
-            Self::upsert_world(backend, world_card, map)
+            Self::write_world(backend, world_card, map, WorldWriteMode::Upsert)
         })
     }
 
@@ -130,75 +131,25 @@ impl Storage {
     /// uses `seed_world` for its replace-on-key upsert instead.
     pub fn create_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
         self.with_backend_mut("create_world", |backend| {
-            if Self::world_key_exists(backend, &world_card.key)? {
-                return Err(EngineError::WorldAlreadyExists(world_card.key.clone()));
-            }
-            Self::upsert_world(backend, world_card, map)
+            Self::write_world(backend, world_card, map, WorldWriteMode::Insert)
         })
     }
 
-    /// Whether a world with `key` already exists in the backend.
-    fn world_key_exists(backend: &Backend, key: &str) -> Result<bool, EngineError> {
-        match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                let count: i64 =
-                    conn.query_row("SELECT COUNT(*) FROM worlds WHERE key = ?", [key], |row| {
-                        row.get(0)
-                    })?;
-                Ok(count > 0)
-            }
-            Backend::InMemory(data) => Ok(data.worlds.iter().any(|w| w.world_card.key == key)),
-        }
-    }
-
-    /// Insert a world and its map, replacing the data of any world that already
-    /// holds `world_card.key`. This is the bootstrap upsert shape; the
-    /// user-facing create path guards against duplicates before calling it.
-    fn upsert_world(
+    /// Write a world and its map, keeping the world row id (and so its
+    /// characters) when the key already exists and `mode` allows the update.
+    fn write_world(
         backend: &mut Backend,
         world_card: &WorldCard,
         map: &MapDef,
+        mode: WorldWriteMode,
     ) -> Result<i64, EngineError> {
         match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
 
-                conn.execute(
-                    "INSERT OR REPLACE INTO worlds (
-                        key, name, description, global_rules,
-                        scenarios, default_scenario_id, default_room_image,
-                        narrator_mode, narrative_perspective, narrative_tense,
-                        options_always_on,
-                        created_at, updated_at
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
-                    rusqlite::params![
-                        world_card.key,
-                        world_card.name,
-                        world_card.description,
-                        serde_json::to_string(&world_card.global_rules)?,
-                        serde_json::to_string(&world_card.scenarios)?,
-                        world_card.default_scenario_id.clone().unwrap_or_default(),
-                        world_card.default_room_image.clone().unwrap_or_default(),
-                        world_card.narrator_mode.as_str(),
-                        world_card.narrative_perspective.as_str(),
-                        world_card.narrative_tense.as_str(),
-                        world_card.options_always_on as i64,
-                        &now,
-                    ],
-                )
-                .map_err(EngineError::Database)?;
-
-                let world_id = conn.last_insert_rowid();
-
-                conn.execute(
-                    "INSERT OR REPLACE INTO maps (world_id, map_data, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?3)",
-                    rusqlite::params![world_id, serde_json::to_string(map)?, &now],
-                )
-                .map_err(EngineError::Database)?;
-
+                let world_id = Self::write_world_row(&conn, world_card, &now, mode)?;
+                Self::write_map_row(&conn, world_id, map, &now)?;
                 Ok(world_id)
             }
             Backend::InMemory(data) => {
@@ -207,6 +158,9 @@ impl Storage {
                     .iter_mut()
                     .find(|w| w.world_card.key == world_card.key)
                 {
+                    if mode == WorldWriteMode::Insert {
+                        return Err(EngineError::WorldAlreadyExists(world_card.key.clone()));
+                    }
                     existing.world_card = world_card.clone();
                     existing.map = map.clone();
                     return Ok(existing.world_id);
@@ -221,6 +175,109 @@ impl Storage {
                 Ok(new_id)
             }
         }
+    }
+
+    /// Insert the `worlds` row, or update it in place on a key conflict when
+    /// `mode` allows. Returns the surviving row id. In `Insert` mode the
+    /// `worlds.key UNIQUE` constraint is the authority for the refusal.
+    fn write_world_row(
+        conn: &rusqlite::Connection,
+        world_card: &WorldCard,
+        now: &str,
+        mode: WorldWriteMode,
+    ) -> Result<i64, EngineError> {
+        const INSERT: &str = "INSERT INTO worlds (
+                key, name, description, global_rules,
+                scenarios, default_scenario_id, default_room_image,
+                narrator_mode, narrative_perspective, narrative_tense,
+                options_always_on,
+                created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)";
+        const ON_CONFLICT: &str = " ON CONFLICT(key) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description,
+                global_rules = excluded.global_rules,
+                scenarios = excluded.scenarios,
+                default_scenario_id = excluded.default_scenario_id,
+                default_room_image = excluded.default_room_image,
+                narrator_mode = excluded.narrator_mode,
+                narrative_perspective = excluded.narrative_perspective,
+                narrative_tense = excluded.narrative_tense,
+                options_always_on = excluded.options_always_on,
+                updated_at = excluded.updated_at";
+
+        let sql = match mode {
+            WorldWriteMode::Insert => INSERT.to_string(),
+            WorldWriteMode::Upsert => format!("{INSERT}{ON_CONFLICT}"),
+        };
+
+        conn.execute(
+            &sql,
+            rusqlite::params![
+                world_card.key,
+                world_card.name,
+                world_card.description,
+                serde_json::to_string(&world_card.global_rules)?,
+                serde_json::to_string(&world_card.scenarios)?,
+                world_card.default_scenario_id.clone().unwrap_or_default(),
+                world_card.default_room_image.clone().unwrap_or_default(),
+                world_card.narrator_mode.as_str(),
+                world_card.narrative_perspective.as_str(),
+                world_card.narrative_tense.as_str(),
+                world_card.options_always_on as i64,
+                now,
+            ],
+        )
+        .map_err(|e| match mode {
+            WorldWriteMode::Insert if Self::is_unique_violation(&e) => {
+                EngineError::WorldAlreadyExists(world_card.key.clone())
+            }
+            _ => EngineError::Database(e),
+        })?;
+
+        match mode {
+            WorldWriteMode::Insert => Ok(conn.last_insert_rowid()),
+            WorldWriteMode::Upsert => conn
+                .query_row(
+                    "SELECT id FROM worlds WHERE key = ?",
+                    [&world_card.key],
+                    |row| row.get(0),
+                )
+                .map_err(EngineError::Database),
+        }
+    }
+
+    /// Whether `error` is SQLite refusing a duplicate `worlds.key`.
+    fn is_unique_violation(error: &rusqlite::Error) -> bool {
+        matches!(
+            error,
+            rusqlite::Error::SqliteFailure(err, _)
+                if err.code == rusqlite::ErrorCode::ConstraintViolation
+                    && err.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+        )
+    }
+
+    /// Write the `maps` row for `world_id`, updating it in place when present
+    /// so a re-seed never leaves a second map behind.
+    fn write_map_row(
+        conn: &rusqlite::Connection,
+        world_id: i64,
+        map: &MapDef,
+        now: &str,
+    ) -> Result<(), EngineError> {
+        let map_data = serde_json::to_string(map)?;
+        let updated = conn.execute(
+            "UPDATE maps SET map_data = ?1, updated_at = ?2 WHERE world_id = ?3",
+            rusqlite::params![map_data, now, world_id],
+        )?;
+        if updated == 0 {
+            conn.execute(
+                "INSERT INTO maps (world_id, map_data, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?3)",
+                rusqlite::params![world_id, map_data, now],
+            )?;
+        }
+        Ok(())
     }
 
     pub fn update_world(
@@ -331,4 +388,14 @@ impl Storage {
             }
         })
     }
+}
+
+/// Whether a write to the `worlds` table updates an existing key in place or
+/// refuses it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorldWriteMode {
+    /// Refuse a key that already exists (user-facing create).
+    Insert,
+    /// Replace an existing key's data in place (bootstrap seed).
+    Upsert,
 }

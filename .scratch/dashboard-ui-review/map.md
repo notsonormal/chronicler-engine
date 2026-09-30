@@ -49,6 +49,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 27 [Recover from a failed message save instead of freezing the story log](issues/27-recover-failed-message-save.md): resolved — failed save/swipe/retrigger show the toast, revert the entry or status, and always resume polling; tier 2 scenarios 30.4/30.5; restoring entry actions on revert handed to 11.
 
+35 [Keep the world id stable when SQLite re-seeds a world](issues/35-sqlite-reseed-keeps-world-id.md): resolved — SQLite re-seed now upserts in place (`ON CONFLICT(key) DO UPDATE`), keeping the world id, map and characters; `create_world` refusal now enforced by the `worlds.key UNIQUE` constraint.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.

@@ -1,6 +1,7 @@
 //! Integration tests for world persistence: create/list/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
 
 use chronicler_engine::domain::model::map::{MapDef, Overworld};
+use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::domain::model::scenario::StartingScenario;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::storage::Storage;
@@ -28,6 +29,22 @@ fn make_test_map(id: &str, name: &str) -> MapDef {
             name: name.to_string(),
             regions: vec![],
         },
+    }
+}
+
+fn make_test_npc(id: &str, name: &str) -> NpcCard {
+    NpcCard {
+        id: id.to_string(),
+        sheet: CharacterSheet {
+            name: name.to_string(),
+            description: "Test NPC".to_string(),
+            personality: "Curious".to_string(),
+            scenario: "In a test world".to_string(),
+            ..Default::default()
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![],
     }
 }
 
@@ -317,6 +334,44 @@ fn test_seed_world_replaces_existing_key_in_memory() {
 }
 
 #[test]
+fn test_seed_world_keeps_id_and_dependents() {
+    let storage = Storage::new_in_memory();
+
+    storage
+        .seed_world(
+            &make_test_world("reseed_id", "First"),
+            &make_test_map("map_v1", "Map V1"),
+        )
+        .unwrap();
+    let original_id = storage.get_world("reseed_id").unwrap().unwrap().world_id;
+    storage
+        .seed_character(original_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .unwrap();
+
+    storage
+        .seed_world(
+            &make_test_world("reseed_id", "Second"),
+            &make_test_map("map_v2", "Map V2"),
+        )
+        .unwrap();
+
+    let stored = storage.get_world("reseed_id").unwrap().unwrap();
+    assert_eq!(
+        stored.world_id, original_id,
+        "re-seeding must keep the world id"
+    );
+    assert_eq!(stored.world_card.name, "Second");
+    assert_eq!(stored.map.overworld.id, "map_v2");
+    let characters = storage.list_characters(original_id).unwrap();
+    assert_eq!(
+        characters.len(),
+        1,
+        "re-seeding must keep the world's characters"
+    );
+    assert_eq!(characters[0].id, "elena_voss");
+}
+
+#[test]
 fn test_delete_world_no_games() {
     let storage = Storage::new_in_memory();
 
@@ -448,6 +503,44 @@ fn test_sqlite_seed_world_replaces_existing_key() {
         stored.map.overworld.id, "second_map",
         "re-seeding must replace the existing map"
     );
+}
+
+#[test]
+fn test_sqlite_seed_world_keeps_id_and_dependents() {
+    let storage = create_test_storage(1);
+
+    storage
+        .seed_world(
+            &make_test_world("reseed_id", "First"),
+            &make_test_map("map_v1", "Map V1"),
+        )
+        .unwrap();
+    let original_id = storage.get_world("reseed_id").unwrap().unwrap().world_id;
+    storage
+        .seed_character(original_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .unwrap();
+
+    storage
+        .seed_world(
+            &make_test_world("reseed_id", "Second"),
+            &make_test_map("map_v2", "Map V2"),
+        )
+        .unwrap();
+
+    let stored = storage.get_world("reseed_id").unwrap().unwrap();
+    assert_eq!(
+        stored.world_id, original_id,
+        "re-seeding must keep the world id"
+    );
+    assert_eq!(stored.world_card.name, "Second");
+    assert_eq!(stored.map.overworld.id, "map_v2");
+    let characters = storage.list_characters(original_id).unwrap();
+    assert_eq!(
+        characters.len(),
+        1,
+        "re-seeding must keep the world's characters"
+    );
+    assert_eq!(characters[0].id, "elena_voss");
 }
 
 #[test]
