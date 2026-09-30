@@ -26,6 +26,7 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 - **Reference docs:** `docs/diataxis/reference/frontend/ui_design.md` (design tokens), `docs/diataxis/reference/frontend/dashboard.md`, `docs/diataxis/explanation/dashboard_design.md`.
 - **User data:** review tickets run against the user's real `data/` and settings. Use throwaway games, worlds, and presets, and restore any changed setting before the session ends.
 - **Final re-review:** every ticket added to this map must also be added to the `Blocked by:` line of [Final re-review of the dashboard](issues/24-final-re-review.md).
+- **Small review follow-ups:** issues from code reviews or implementers that don't block a merge go under `## Items` in [Follow up on small issues found during review](issues/36-follow-up-small-review-issues.md), with their source ticket. Bigger ones get their own ticket.
 - Other agents may work in the repo at the same time. Do not touch unrelated changes.
 
 ## Decisions so far
