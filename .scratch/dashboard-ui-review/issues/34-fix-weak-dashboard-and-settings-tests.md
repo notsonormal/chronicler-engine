@@ -18,6 +18,7 @@ Findings from the test-design review, in [test_design.md](../assets/test-audit/t
 - **20.2 / 20.3 / 20.4**, `tests/http/settings.rs:92-139` (D1, W). All three assert only `body == "Settings saved!"`. Add a read-back that proves each switch took effect. A follow-up GET works under every option in [Decide what a tier-1 test may observe](31-decide-tier-1-observations.md). A stored read may depend on that answer, so prefer the GET.
 - Out of this ticket: 16.9 / 16.10 (M1, B2) set up their swap through internal JS. [Keep the command form when a text-check result shows](03-keep-command-form-on-text-check.md) removes the failure they guard, so they are handled there.
 - Other workers may hold uncommitted edits in `tests/browser/dashboard.rs` and `tests/browser/stub/dashboard.rs`. Check `git status` before editing.
+- Added from [Keep the command form when a text-check result shows](03-keep-command-form-on-text-check.md): 16.9/16.10 now drive the shipped submit → preview → confirm path (M1 fixed), but B2 is still open. 16.10's `inject_status_html` (`tests/browser/stub/dashboard.rs`) hand-writes the status span the `/status/generating` poll should swap in; the stub hardcodes `idle`. Serve the error and Ready spans from a stub status outcome and let the real poller swap them, or downgrade 16.10's wording.
 
 ## Done when
 

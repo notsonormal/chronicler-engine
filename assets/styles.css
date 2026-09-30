@@ -1126,14 +1126,30 @@ body {
     border-color: rgba(128, 128, 128, 0.25);
 }
 
-/* Allow action area to expand when showing text-check preview */
-.action-area:has(.text-check-preview) {
+/* The text-check result gets its own element so it never replaces the command
+   form. An empty result must not add a flex gap. */
+#text-check-result:empty {
+    display: none;
+}
+
+/* Allow the action area to expand for a text-check preview (auto-check path,
+   which replaces the action area) or a non-empty result element (check path). */
+.action-area:has(.text-check-preview),
+.action-area:has(#text-check-result:not(:empty)) {
+    flex-wrap: wrap;
     height: auto;
     min-height: var(--action-area-height);
     align-items: flex-start;
     justify-content: center;
     padding-top: var(--spacing-md);
     padding-bottom: var(--spacing-md);
+}
+
+/* Any non-empty result (preview or a plain status span) takes its own row so it
+   does not squeeze the command form. */
+#text-check-result:not(:empty) {
+    flex: 1 1 100%;
+    min-width: 0;
 }
 
 /* Preview editable textarea */

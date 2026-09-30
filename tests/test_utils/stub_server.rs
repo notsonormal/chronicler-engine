@@ -7,9 +7,9 @@
 // What is canned: every fragment the shell loads or polls, under
 // `tests/test_utils/stub_fixtures/` — except the options dock, which is
 // rendered through the engine's own `OptionsDockTemplate` (a pure vm → HTML
-// render, so the drift tax there is avoidable). The one dynamic endpoint is
-// `POST /action/check`, which answers with a scripted outcome the test names up
-// front.
+// render, so the drift tax there is avoidable). Three dynamic endpoints answer
+// scripted outcomes a test names up front: `POST /action/check`, `POST
+// /action/confirm`, and `POST /check-text`.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -64,6 +64,28 @@ fn options_dock_html() -> String {
     OptionsDockTemplate::new(vm)
         .render()
         .expect("render options dock")
+}
+
+/// The command the stub treats as a text check with issues. The real
+/// `POST /action/check` runs the text check before dispatch and returns the
+/// preview for a misspelling; the stub keys on this one token so a test can
+/// drive the preview → confirm swap without a real text-check engine.
+const TEXT_CHECK_TRIGGER: &str = "casle";
+
+/// Render the text-check preview through the engine's own template — a pure
+/// `vm → HTML` render, so the canned preview cannot drift from the shipped
+/// `TextCheckPreviewTemplate`.
+fn text_check_preview_html() -> String {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::TextCheckPreviewTemplate;
+
+    TextCheckPreviewTemplate {
+        original: "look at the casle".to_string(),
+        corrected: "look at the castle".to_string(),
+        issues: vec![],
+    }
+    .render()
+    .expect("render text check preview")
 }
 
 /// What `POST /action/check` should answer with. A test names the outcome it
@@ -142,6 +164,8 @@ fn stub_router(state: Arc<StubState>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/action/check", post(action_check))
+        .route("/action/confirm", post(action_confirm))
+        .route("/check-text", post(check_text))
         .route("/status/generating", get(|| async { "idle" }))
         .route("/fragment/header", get(|| async { Html(FIXTURE_HEADER) }))
         .route(
@@ -192,8 +216,19 @@ async fn index() -> impl IntoResponse {
 
 async fn action_check(
     State(state): State<Arc<StubState>>,
-    Form(_form): Form<HashMap<String, String>>,
+    Form(form): Form<HashMap<String, String>>,
 ) -> Response<Body> {
+    // The real handler runs the text check before dispatch; the stub keys on a
+    // canned misspelling so a test can drive the preview → confirm swap.
+    let command = form.get("command").map(String::as_str).unwrap_or_default();
+    if command.contains(TEXT_CHECK_TRIGGER) {
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            text_check_preview_html(),
+        )
+            .into_response();
+    }
     match state.action_outcome {
         // The real `POST /action/check` acknowledgement retargets the status
         // span rather than replacing the action area: consume the engine's
@@ -222,4 +257,21 @@ async fn action_check(
         )
             .into_response(),
     }
+}
+
+/// The real `POST /action/confirm` swaps a fresh `#action-area` back in
+/// (`hx-swap="outerHTML"`); the stub serves the canned action area.
+async fn action_confirm() -> Html<&'static str> {
+    Html(FIXTURE_ACTION_AREA)
+}
+
+/// The real `POST /check-text` renders its result into the shell's
+/// `#text-check-result` element; the stub serves the disabled-mode body.
+async fn check_text() -> Response<Body> {
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        r#"<span class="status ready">Text check is disabled</span>"#,
+    )
+        .into_response()
 }

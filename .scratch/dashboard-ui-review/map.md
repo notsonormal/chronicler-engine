@@ -40,6 +40,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 29 [Stop world creation from silently overwriting an existing key](issues/29-world-key-silent-overwrite.md): resolved — user create refuses an existing key (`Storage::create_world` → `WorldAlreadyExists` → 400 toast); bootstrap `seed_world` still replaces, InMemory now matches; tier 1 scenario 25.7 + storage pair tests; graduated [35](issues/35-sqlite-reseed-keeps-world-id.md).
 
+03 [Keep the command form when a text-check result shows](issues/03-keep-command-form-on-text-check.md): resolved — ✓ results render into their own `#text-check-result`, never replacing the command form; tier 2 scenario 16.11; 16.9/16.10 rewritten to drive submit → preview → confirm.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.

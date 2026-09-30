@@ -44,8 +44,9 @@ And #error-notification displays "Second failure"
 #### Scenario 16.9: Send button still locks and unlocks after an action-area swap
 
 ```gherkin
-Given #action-area was swapped through the shipped save/restore path, so the form and status display are fresh nodes
-When the client submits the command form
+Given the client submitted a command the text-check preview intercepted, so #action-area was replaced by the preview
+When the client confirms the preview, so a fresh #action-area (form and status display) is swapped in
+And the client submits the command form
 Then #submit-btn is disabled with a "Stop" label while the status shows the pending state
 When the status poll reports idle and the status display returns to Ready
 Then #submit-btn is enabled again with a "Send" label
@@ -54,8 +55,18 @@ Then #submit-btn is enabled again with a "Send" label
 #### Scenario 16.10: Status errors still reach the observer after an action-area swap
 
 ```gherkin
-Given #action-area was swapped through the shipped save/restore path, so the status display is a fresh node
-When an error span of the shape /status/generating returns is swapped into the live #status-display
+Given the client submitted a command the text-check preview intercepted, so #action-area was replaced by the preview
+When the client confirms the preview, so a fresh #status-display is swapped in
+And an error span of the shape /status/generating returns is swapped into the live #status-display
 Then #error-notification becomes visible and displays the error text
-And after the status returns to Ready, the same error span swapped in again re-shows the notification (the lastStatusError dedupe was reset by the swap-aware observer)
+And after the status returns to Ready, the same error span swapped in again re-shows the notification (the lastStatusError dedupe was reset)
+```
+
+#### Scenario 16.11: Text-check result does not replace the command form
+
+```gherkin
+Given the dashboard is loaded with the command form and status display
+When the client triggers a text check on a log entry
+Then the text-check result renders in its own element
+And #command-form and #status-display are the same nodes as before
 ```

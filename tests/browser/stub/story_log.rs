@@ -39,14 +39,18 @@ async fn test_edit_mode_activates_on_click() {
 async fn test_edit_cancel_restores_original() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
         let original_text = page
-            .locator(".log-entry .text")
+            .locator(".log-entry.narration .text")
             .await
             .inner_text()
             .await
             .unwrap_or_default();
         assert!(!original_text.is_empty(), "Should have original text");
 
-        page.locator(".edit-btn").await.click(None).await.unwrap();
+        page.locator(".log-entry.narration .edit-btn")
+            .await
+            .click(None)
+            .await
+            .unwrap();
         wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
         let modified = "Modified text for testing";
@@ -60,7 +64,7 @@ async fn test_edit_cancel_restores_original() {
         wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
         let restored = page
-            .locator(".log-entry .text")
+            .locator(".log-entry.narration .text")
             .await
             .inner_text()
             .await

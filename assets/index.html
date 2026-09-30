@@ -44,7 +44,8 @@
       </div>
 
       <!-- Static shell: the command form survives a submit (the response
-           retargets to #status-display); the text-check flow replaces it. -->
+           retargets to #status-display); a text-check result renders in its
+           own #text-check-result element instead of replacing the action area. -->
       <!-- Options dock: sibling bar above the action area (V4 shape); its
            inner content self-polls and is empty until options exist. -->
       <div
@@ -83,6 +84,7 @@
         >
           <span class="status ready">Ready</span>
         </div>
+        <div id="text-check-result" class="text-check-result"></div>
       </div>
     </div>
     <div class="tab-content" id="settings-tab">
@@ -418,15 +420,17 @@
         })
           .then((response) => response.text())
           .then((html) => {
-            const actionArea = document.getElementById("action-area");
-            if (actionArea) {
-              saveActionArea();
-              actionArea.innerHTML = html;
+            // The result has its own element: replacing #action-area would
+            // take the command form and status display with it.
+            const result = document.getElementById("text-check-result");
+            if (result) {
+              result.innerHTML = html;
+              htmx.process(result);
             }
           })
           .catch((err) => {
             console.error("Text check failed:", err);
-            restoreActionArea();
+            clearTextCheckResult();
           });
       }
 
@@ -434,18 +438,28 @@
         checkText(htmlUnescape(rawText));
       }
 
-      function restoreActionArea() {
-        const actionArea = document.getElementById("action-area");
-        if (actionArea && actionArea.dataset.originalHtml) {
-          actionArea.innerHTML = actionArea.dataset.originalHtml;
-          if (actionArea.dataset.originalValue) {
-            const input = actionArea.querySelector('input[name="command"]');
-            if (input) {
-              input.value = actionArea.dataset.originalValue;
-            }
-          }
-          htmx.process(actionArea);
+      function clearTextCheckResult() {
+        const result = document.getElementById("text-check-result");
+        if (result) {
+          result.innerHTML = "";
         }
+      }
+
+      function restoreActionArea() {
+        clearTextCheckResult();
+        const actionArea = document.getElementById("action-area");
+        if (!actionArea || !actionArea.dataset.originalHtml) return;
+        // Only restore when the preview actually replaced the command form; a
+        // text-check result beside a live form just needs dismissing.
+        if (document.getElementById("command-form")) return;
+        actionArea.innerHTML = actionArea.dataset.originalHtml;
+        if (actionArea.dataset.originalValue) {
+          const input = actionArea.querySelector('input[name="command"]');
+          if (input) {
+            input.value = actionArea.dataset.originalValue;
+          }
+        }
+        htmx.process(actionArea);
       }
 
       const SLASH_COMMANDS = [

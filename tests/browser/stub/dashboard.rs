@@ -41,45 +41,54 @@ async fn read_error_toast(page: &playwright_rs::Page) -> (bool, String) {
     .unwrap()
 }
 
-/// Swap #action-area through the shipped client JS. Every node the page-load
-/// handles pointed at (form, status display, Send button) is detached; the
-/// ids live on in fresh nodes.
-async fn swap_action_area_via_restore(page: &playwright_rs::Page) {
+/// Drive the shipped text-check swap: submit a command the auto-check
+/// intercepts, so the preview replaces #action-area, then confirm the preview,
+/// so `/action/confirm` swaps a fresh #action-area in. Every node the page-load
+/// handles pointed at (form, status display, Send button) is detached; the ids
+/// live on in fresh nodes.
+async fn swap_action_area_via_text_check_confirm(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
-            saveActionArea();
-            // Mark the live status display AFTER the snapshot so the restored
-            // markup carries no marker and the test can tell the restored
-            // node from the original one.
-            const display = document.getElementById('status-display');
-            if (display) display.dataset.stale = 'true';
-            const area = document.getElementById('action-area');
-            area.innerHTML =
-                '<div class="text-check-preview"><p>preview</p></div>';
-            restoreActionArea();
+            window.__statusBeforeSwap = document.getElementById('status-display');
+            const input = document.querySelector('#command-form input[name="command"]');
+            input.value = 'look at the casle';
+            document.querySelector('#command-form button[type="submit"]').click();
         })()"#,
         None,
     )
     .await
     .unwrap();
+
+    wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
+
+    page.locator(".text-check-preview button:has-text('Send Original')")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    // The confirm response replaces #action-area through htmx (outerHTML), so a
+    // fresh #status-display arrives.
+    wait_until_visible(page, "#status-display", Duration::from_secs(5)).await;
 }
 
-/// Assert the restore actually produced fresh nodes: the live status display
-/// must not carry the stale marker the swap left on the original one.
+/// Assert the confirm swap produced a fresh #status-display node (not the one
+/// the page-load handles pointed at).
 async fn assert_status_display_restored(page: &playwright_rs::Page) {
-    let restored = page
+    let fresh = page
         .evaluate::<(), bool>(
             r#"(() => {
-                const display = document.getElementById('status-display');
-                return !!display && display.dataset.stale !== 'true';
+                const before = window.__statusBeforeSwap;
+                const now = document.getElementById('status-display');
+                return !!now && now !== before;
             })()"#,
             None,
         )
         .await
         .unwrap();
     assert!(
-        restored,
-        "the action-area swap did not produce a fresh #status-display"
+        fresh,
+        "the confirm swap did not produce a fresh #status-display"
     );
 }
 
@@ -164,7 +173,7 @@ async fn test_newer_error_keeps_toast_visible() {
 #[tokio::test]
 async fn test_send_locks_and_unlocks_after_action_area_swap() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        swap_action_area_via_restore(&page).await;
+        swap_action_area_via_text_check_confirm(&page).await;
         assert_status_display_restored(&page).await;
 
         // The form's htmx ack swaps in the pending status; that is when the
@@ -201,7 +210,7 @@ async fn test_send_locks_and_unlocks_after_action_area_swap() {
 #[tokio::test]
 async fn test_status_error_reaches_observer_after_action_area_swap() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        swap_action_area_via_restore(&page).await;
+        swap_action_area_via_text_check_confirm(&page).await;
         assert_status_display_restored(&page).await;
 
         // The engine's /status/generating poll returns exactly this span when
@@ -250,6 +259,75 @@ async fn test_status_error_reaches_observer_after_action_area_swap() {
         assert_eq!(
             text, "Error: narration failed",
             "#error-notification should show the status error again, got {text:?}"
+        );
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.11
+#[tokio::test]
+async fn test_text_check_result_keeps_command_form() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        // Stash the live nodes; the result must not replace them.
+        page.evaluate::<(), ()>(
+            r#"(() => {
+                window.__formBefore = document.getElementById('command-form');
+                window.__statusBefore = document.getElementById('status-display');
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let clicked = page
+            .evaluate::<(), bool>(
+                r#"(() => {
+                    const btn = document.querySelector('.check-btn');
+                    if (btn) { btn.click(); return true; }
+                    return false;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(clicked, "Should find and click a log-entry check button");
+
+        // The result renders in its own element beside the form. Waiting on
+        // the element being non-empty asserts the shipped contract without
+        // asserting the stub's canned body.
+        wait_until_visible(
+            &page,
+            "#text-check-result:not(:empty)",
+            Duration::from_secs(5),
+        )
+        .await;
+
+        // Node identity, not the id string: a fresh #command-form would carry
+        // the same id and pass a string check while the form was replaced.
+        let (form_same, status_same, result_text) = page
+            .evaluate::<(), (bool, bool, String)>(
+                r#"(() => {
+                    const form = document.getElementById('command-form');
+                    const status = document.getElementById('status-display');
+                    const result = document.getElementById('text-check-result');
+                    return [
+                        !!form && form === window.__formBefore,
+                        !!status && status === window.__statusBefore,
+                        result ? result.textContent.trim() : '',
+                    ];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(form_same, "the text-check result replaced #command-form");
+        assert!(
+            status_same,
+            "the text-check result replaced #status-display"
+        );
+        assert!(
+            !result_text.is_empty(),
+            "#text-check-result should be non-empty, got {result_text:?}"
         );
     })
     .await;
