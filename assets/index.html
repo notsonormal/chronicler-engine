@@ -211,6 +211,8 @@
 
       let currentEditId = null;
       let originalText = null;
+      let originalActions = null;
+      let originalSwipeControls = null;
       let originalTrigger = null;
 
       function pausePolling() {
@@ -233,7 +235,11 @@
 
       function autoResizeTextarea(textarea) {
         textarea.style.height = "auto";
-        textarea.style.height = textarea.scrollHeight + "px";
+        // `box-sizing: border-box` makes `height` include the border, so add
+        // it back or the content overflows by the border width and the
+        // textarea grows its own scrollbar even when it is big enough.
+        const border = textarea.offsetHeight - textarea.clientHeight;
+        textarea.style.height = textarea.scrollHeight + border + "px";
       }
 
       function showEditForm(id) {
@@ -241,8 +247,6 @@
         const entry = document.querySelector(`[data-id="${id}"]`);
         if (entry) {
           const textSpan = entry.querySelector(".text");
-
-          const originalHeight = textSpan.getBoundingClientRect().height;
 
           // data-raw-text holds the pre-markdown source; .text is rendered.
           const rawText = entry.getAttribute("data-raw-text") || "";
@@ -254,34 +258,65 @@
           textarea.className = "edit-textarea";
           textarea.textContent = rawText;
           textSpan.appendChild(textarea);
-          // .edit-textarea has 4px padding top+bottom + 1px border top+bottom = 10px extra
-          const textareaExtra = 10;
-          textarea.style.height = originalHeight + textareaExtra + "px";
+          autoResizeTextarea(textarea);
 
           textarea.addEventListener("input", function () {
             autoResizeTextarea(this);
           });
+          textarea.addEventListener("keydown", function (evt) {
+            if (evt.key === "Escape") {
+              evt.preventDefault();
+              cancelEdit();
+            } else if (evt.key === "Enter" && (evt.ctrlKey || evt.metaKey)) {
+              evt.preventDefault();
+              submitEdit();
+            }
+          });
 
+          // Lock the entry while editing: the action cluster becomes
+          // save/cancel, and the swipe controls stay put but stop responding.
           const actionsContainer = entry.querySelector(".message-actions");
           if (actionsContainer) {
+            originalActions = actionsContainer.innerHTML;
             actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save">✓</button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel">✗</button>`;
+          }
+          const swipeControls = entry.querySelector(".swipe-controls");
+          if (swipeControls) {
+            originalSwipeControls = swipeControls.innerHTML;
+            swipeControls.querySelectorAll(".action-btn").forEach((btn) => {
+              btn.disabled = true;
+            });
           }
 
           pausePolling();
+          textarea.focus();
         }
       }
 
-      // Restore the in-edit entry to its pre-edit text. The caller decides
-      // whether and when to resume polling.
+      function clearEditState() {
+        currentEditId = null;
+        originalText = null;
+        originalActions = null;
+        originalSwipeControls = null;
+      }
+
+      // The caller decides whether and when to resume polling.
       function revertEdit() {
         if (currentEditId === null) return;
         const entry = document.querySelector(`[data-id="${currentEditId}"]`);
         if (entry) {
           const textSpan = entry.querySelector(".text");
           textSpan.innerHTML = originalText;
+          const actionsContainer = entry.querySelector(".message-actions");
+          if (actionsContainer && originalActions !== null) {
+            actionsContainer.innerHTML = originalActions;
+          }
+          const swipeControls = entry.querySelector(".swipe-controls");
+          if (swipeControls && originalSwipeControls !== null) {
+            swipeControls.innerHTML = originalSwipeControls;
+          }
         }
-        currentEditId = null;
-        originalText = null;
+        clearEditState();
       }
 
       function cancelEdit() {
@@ -308,8 +343,7 @@
               throw new Error(`save failed with status ${response.status}`);
             }
             // Success: drop edit state and let the refreshed log re-render.
-            currentEditId = null;
-            originalText = null;
+            clearEditState();
             htmx.trigger("#story-log", "htmx:refresh");
           })
           .catch((err) => {

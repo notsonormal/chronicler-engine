@@ -36,6 +36,17 @@ async fn error_toast_text(page: &playwright_rs::Page) -> String {
     .unwrap()
 }
 
+/// Open edit mode on the narration entry (the fixture's first, swipe-bearing
+/// entry) and wait for the textarea.
+async fn enter_narration_edit(page: &playwright_rs::Page) {
+    page.locator(".log-entry.narration .edit-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_visible(page, "#edit-textarea", Duration::from_millis(500)).await;
+}
+
 // [docs/specs/browser_story_log.md] SCENARIO: 30.1
 #[tokio::test]
 async fn test_edit_mode_activates_on_click() {
@@ -196,6 +207,23 @@ async fn test_failed_save_restores_entry_and_resumes_polling() {
             "the entry should return to its pre-edit text after a failed save"
         );
 
+        let controls_restored = page
+            .evaluate::<(), bool>(
+                r#"(() => {
+                    const entry = document.querySelector('.log-entry.narration');
+                    if (!entry) return false;
+                    return !!entry.querySelector('.edit-btn') &&
+                        !!entry.querySelector('.swipe-controls .swipe-btn:not([disabled])');
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            controls_restored,
+            "the entry's pre-edit action controls, including an enabled Retry, should be available again after a failed save"
+        );
+
         let trigger = story_log_trigger(&page).await;
         assert_ne!(
             trigger, "none",
@@ -249,6 +277,222 @@ async fn test_failed_retry_clears_pending_status_and_re_enables_send() {
             "a failed retry should reset the status to Ready, got {status:?}"
         );
         assert!(!disabled, "a failed retry should re-enable the Send button");
+    })
+    .await;
+}
+
+// The textarea auto-grows with its content and takes focus on activation.
+// The growth is capped: content below the cap shows no inner scrollbar, and
+// content past it scrolls inside the textarea.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.6
+#[tokio::test]
+async fn test_edit_textarea_fits_content_and_takes_focus() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        enter_narration_edit(&page).await;
+
+        let focused: bool = page
+            .evaluate::<(), bool>(
+                r#"(() => document.activeElement === document.querySelector('#edit-textarea'))()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(focused, "the edit textarea should take focus");
+
+        let textarea = page.locator("#edit-textarea").await;
+
+        // Content below the 50vh cap fits, so the textarea does not scroll.
+        textarea.fill("A short edit.", None).await.unwrap();
+        let (short_client, short_scroll, viewport): (f64, f64, f64) = page
+            .evaluate::<(), (f64, f64, f64)>(
+                r#"(() => {
+                    const textarea = document.querySelector('#edit-textarea');
+                    return [textarea.clientHeight, textarea.scrollHeight, window.innerHeight];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            short_scroll <= short_client + 1.0,
+            "content below the cap should not scroll inside the textarea \
+             (client height {short_client}, scroll height {short_scroll})"
+        );
+
+        // Content past the cap stops at 50vh and scrolls inside the textarea.
+        let long_text = "A line of text for the cap check.\n".repeat(120);
+        textarea.fill(&long_text, None).await.unwrap();
+        let (long_client, long_scroll): (f64, f64) = page
+            .evaluate::<(), (f64, f64)>(
+                r#"(() => {
+                    const textarea = document.querySelector('#edit-textarea');
+                    return [textarea.clientHeight, textarea.scrollHeight];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            long_client <= viewport * 0.5 + 1.0,
+            "the textarea should stop at the 50vh cap \
+             (client height {long_client}, viewport {viewport})"
+        );
+        assert!(
+            long_scroll > long_client,
+            "content past the cap should scroll inside the textarea \
+             (client height {long_client}, scroll height {long_scroll})"
+        );
+    })
+    .await;
+}
+
+// Escape is the keyboard twin of the ✗ button: it must abandon the edit and
+// restore the original text.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.7
+#[tokio::test]
+async fn test_escape_cancels_edit() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        let original_text = page
+            .locator(".log-entry.narration .text")
+            .await
+            .inner_text()
+            .await
+            .unwrap_or_default();
+        assert!(!original_text.is_empty(), "Should have original text");
+
+        enter_narration_edit(&page).await;
+        let textarea = page.locator("#edit-textarea").await;
+        textarea
+            .fill("Modified text that Escape abandons", None)
+            .await
+            .unwrap();
+        textarea.press("Escape", None).await.unwrap();
+
+        wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
+
+        let restored = page
+            .locator(".log-entry.narration .text")
+            .await
+            .inner_text()
+            .await
+            .unwrap_or_default();
+        assert_eq!(
+            restored, original_text,
+            "Escape should restore the original text"
+        );
+    })
+    .await;
+}
+
+// Ctrl+Enter and Cmd+Enter are the keyboard save shortcuts. The stub answers
+// the save with a 500, so a recorded request proves the shortcut reached the
+// shipped `submitEdit`; the surrounding failure recovery is covered by 30.4.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.8
+#[tokio::test]
+async fn test_keyboard_save_shortcuts_submit_edit() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        // Record the save URLs without changing the stub's canned failure.
+        page.evaluate::<(), ()>(
+            r#"(() => {
+                window.__saveRequests = [];
+                const original = window.fetch;
+                window.fetch = function (input, init) {
+                    window.__saveRequests.push(String(input));
+                    return original.call(this, input, init);
+                };
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        for (modifier, text) in [
+            ("Control+Enter", "Ctrl+Enter text"),
+            ("Meta+Enter", "Cmd+Enter text"),
+        ] {
+            enter_narration_edit(&page).await;
+            let textarea = page.locator("#edit-textarea").await;
+            textarea.fill(text, None).await.unwrap();
+            textarea.press(modifier, None).await.unwrap();
+
+            // The failed save reverts and raises the toast; waiting for the
+            // textarea to go is the observable end of the attempt.
+            wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
+        }
+
+        let requests: Vec<String> = page
+            .evaluate::<(), Vec<String>>("(() => window.__saveRequests)()", None)
+            .await
+            .unwrap();
+        assert_eq!(
+            requests.len(),
+            2,
+            "Ctrl+Enter and Cmd+Enter should each send one save request, got {requests:?}"
+        );
+        assert!(
+            requests.iter().all(|url| url.ends_with("/history/1")),
+            "save requests should target the edited entry, got {requests:?}"
+        );
+    })
+    .await;
+}
+
+// While editing, the swipe controls must stop responding and the action
+// cluster becomes save/cancel. Cancel must put the pre-edit controls back
+// immediately, not wait for the resumed poll.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.9
+#[tokio::test]
+async fn test_edit_locks_entry_controls_and_cancel_restores_them() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        enter_narration_edit(&page).await;
+
+        let (swipe_disabled, edit_replaced): (bool, bool) = page
+            .evaluate::<(), (bool, bool)>(
+                r#"(() => {
+                    const entry = document.querySelector('.log-entry.narration');
+                    const buttons = entry.querySelectorAll('.swipe-controls .action-btn');
+                    return [
+                        buttons.length > 0 && Array.from(buttons).every((b) => b.disabled),
+                        !entry.querySelector('.edit-btn'),
+                    ];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            swipe_disabled,
+            "the entry's swipe controls should be disabled while editing"
+        );
+        assert!(
+            edit_replaced,
+            "the edit control should be replaced while editing"
+        );
+
+        // Cancel and read the entry in the same tick: the resumed poll is
+        // async, so this observes `revertEdit`'s synchronous restoration.
+        let (edit_back, retry_enabled): (bool, bool) = page
+            .evaluate::<(), (bool, bool)>(
+                r#"(() => {
+                    document.querySelector('.log-entry.narration .cancel-btn').click();
+                    const entry = document.querySelector('.log-entry.narration');
+                    const retry = entry.querySelector('.swipe-controls .swipe-btn:not([disabled])');
+                    return [!!entry.querySelector('.edit-btn'), !!retry];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            edit_back,
+            "cancel should restore the entry's edit control immediately"
+        );
+        assert!(
+            retry_enabled,
+            "cancel should re-enable the entry's Retry swipe control"
+        );
+
+        wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
     })
     .await;
 }

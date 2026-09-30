@@ -952,6 +952,10 @@ body {
     display: block;
     line-height: 1.5;
     margin: 0;
+    /* Auto-grow (see autoResizeTextarea); cap very long entries so the edit
+       box cannot outgrow the viewport, then scroll inside it. */
+    max-height: 50vh;
+    overflow-y: auto;
 }
 
 /* Save/Cancel Buttons */

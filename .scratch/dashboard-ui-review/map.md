@@ -53,6 +53,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 17 [Collapse the Prompt Presets add forms](issues/17-collapse-preset-add-forms.md): resolved — each Add form is a closed `<details>` disclosure (no JS); tier 1 scenario 21.28; failed-add error display left to 25.
 
+11 [Fix edit mode: size, focus, keys and locked controls](issues/11-fix-edit-mode.md): resolved — auto-growing textarea capped at 50vh, autofocus, Escape/Cmd+Enter, entry controls locked while editing and restored by every revert; tier 2 scenarios 30.6–30.9.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.

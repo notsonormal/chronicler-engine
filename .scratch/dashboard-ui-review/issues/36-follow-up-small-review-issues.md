@@ -41,6 +41,19 @@ From [Keep the world id stable when SQLite re-seeds a world](35-sqlite-reseed-ke
 - `tests/storage/world_storage.rs` header ("create/list/delete") does not mention re-seed.
 - InMemory world id allocation is `last().world_id + 1`, so deleting the newest world can reuse its id. [implementer, pre-existing]
 
+From [Fix edit mode: size, focus, keys and locked controls](11-fix-edit-mode.md):
+- Clicking Edit on a different entry while one is being edited re-runs `showEditForm` without reverting: `pausePolling` overwrites `originalTrigger` with `"none"`, so the resumed poll freezes and the first entry stays in edit mode. [implementer, pre-existing]
+- Four lockstep edit-mode globals (`currentEditId`, `originalText`, and the two HTML snapshots) could be one `editState` bundle.
+- `tests/browser/stub/story_log.rs` copies the `.text` innerText capture three times; the `window.fetch` patch in 30.8 records every fetch (route interception would be cleaner).
+- `check_edit_textarea_matches_original_height` is only valid below the 50vh cap.
+
+From [Show Character names in the visual sidebar](22-show-npc-names.md):
+- `display:flex; flex-direction:column` on `.image-container.npc-portrait` is redundant; `min-height:80px` does the work.
+- The label duplicates `alt`, so a screen reader announces the name twice (`aria-hidden="true"` on the label, or empty alt).
+- The escaping test pins Askama's numeric entity form (`&#38;`); assert only that no raw markup survives.
+- Scenario 32.1's "one portrait per Character in the Room" is unasserted (the test seeds one NPC).
+- Long names truncate at 80px with the full name in a `title` tooltip. A wrap/two-line decision belongs to ticket 19.
+
 ## Done when
 
 - Each item is fixed or dropped with a one-line reason in `## Answer`.

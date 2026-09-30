@@ -325,6 +325,8 @@ Replaces the entry's text span when the user clicks Edit.
 - `display: block`
 - Line-height: 1.5 (matches `.log-entry .text`)
 - `margin: 0`
+- Auto-grows to fit its content, capped at `max-height: 50vh` with `overflow-y: auto`
+- Takes focus when it appears; Escape cancels, Ctrl/Cmd+Enter saves
 
 ### Save / Cancel Buttons (Edit Mode)
 
