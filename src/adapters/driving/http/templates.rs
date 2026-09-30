@@ -43,7 +43,7 @@ impl NarrativeLogTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"<div id="visual-sidebar" class="location-header-bar">{% if vm.room_has_image %}<div class="image-container location-image"><img src="{{ vm.room_src }}" alt="{{ vm.room_alt }}" /></div>{% else %}<div class="image-container no-image"><div class="placeholder">No Location Image</div></div>{% endif %}</div><div class="npc-portrait-divider"></div><div class="npc-portraits">{% for npc in vm.npcs %}<div class="image-container npc-portrait"><img src="{{ npc.image_path }}" alt="{{ npc.name }}" /></div>{% endfor %}</div>"##,
+    source = r##"<div id="visual-sidebar" class="location-header-bar">{% if vm.room_has_image %}<div class="image-container location-image"><img src="{{ vm.room_src }}" alt="{{ vm.room_alt }}" /></div>{% else %}<div class="image-container no-image"><div class="placeholder">No Location Image</div></div>{% endif %}</div><div class="npc-portrait-divider"></div><div class="npc-portraits">{% for npc in vm.npcs %}<div class="image-container npc-portrait"><img src="{{ npc.image_path }}" alt="{{ npc.name }}" /><div class="image-label" title="{{ npc.name }}">{{ npc.name }}</div></div>{% endfor %}</div>"##,
     ext = "html"
 )]
 pub struct VisualSidebarTemplate {

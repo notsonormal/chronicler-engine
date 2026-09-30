@@ -55,6 +55,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 11 [Fix edit mode: size, focus, keys and locked controls](issues/11-fix-edit-mode.md): resolved — auto-growing textarea capped at 50vh, autofocus, Escape/Cmd+Enter, entry controls locked while editing and restored by every revert; tier 2 scenarios 30.6–30.9.
 
+22 [Show Character names in the visual sidebar](issues/22-show-npc-names.md): resolved — each portrait shows its Character name in the reinstated `.image-label` (escaped, ellipsised); tier 1 scenarios 32.1/32.2 in a new `visual_sidebar.md` spec.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.

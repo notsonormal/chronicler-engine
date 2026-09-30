@@ -20,6 +20,7 @@ mod settings;
 mod story_log;
 mod support;
 mod swipe_new;
+mod visual_sidebar;
 mod worlds;
 
 mod requires_migration;

@@ -368,11 +368,13 @@ body {
 
 .image-container.npc-portrait {
     width: 80px;
-    height: 80px;
+    min-height: 80px;
     overflow: hidden;
     position: relative;
     box-sizing: border-box;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .image-container.npc-portrait img {
@@ -380,6 +382,14 @@ body {
     height: 80px;
     object-fit: cover;
     box-sizing: border-box;
+}
+
+.image-container.npc-portrait .image-label {
+    box-sizing: border-box;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .image-container .image-label {

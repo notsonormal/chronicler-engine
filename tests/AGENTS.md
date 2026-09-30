@@ -82,6 +82,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `settings.rs` — HTTP E2E tests for the settings endpoints: panel rendering and POST /settings.
     - `story_log.rs` — HTTP E2E tests for the story-log delete endpoint (POST /history/delete).
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
+    - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.
     - `worlds.rs` — HTTP E2E tests for the worlds update endpoint: the posture merge contract, the options-toggle checkbox grammar, and the auto-save posture endpoint.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
