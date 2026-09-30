@@ -116,8 +116,51 @@ impl Storage {
         })
     }
 
+    /// Upsert a world by key. Used by bootstrap seeding of `data/worlds/*`,
+    /// where replacing an existing world's data is intended. Both backends
+    /// replace the stored card and map for an existing key.
     pub fn seed_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
-        self.with_backend_mut("seed_world", |backend| match backend {
+        self.with_backend_mut("seed_world", |backend| {
+            Self::upsert_world(backend, world_card, map)
+        })
+    }
+
+    /// Create a world, refusing a key that already exists. The user-facing
+    /// create path must never replace an authored world; bootstrap seeding
+    /// uses `seed_world` for its replace-on-key upsert instead.
+    pub fn create_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
+        self.with_backend_mut("create_world", |backend| {
+            if Self::world_key_exists(backend, &world_card.key)? {
+                return Err(EngineError::WorldAlreadyExists(world_card.key.clone()));
+            }
+            Self::upsert_world(backend, world_card, map)
+        })
+    }
+
+    /// Whether a world with `key` already exists in the backend.
+    fn world_key_exists(backend: &Backend, key: &str) -> Result<bool, EngineError> {
+        match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM worlds WHERE key = ?", [key], |row| {
+                        row.get(0)
+                    })?;
+                Ok(count > 0)
+            }
+            Backend::InMemory(data) => Ok(data.worlds.iter().any(|w| w.world_card.key == key)),
+        }
+    }
+
+    /// Insert a world and its map, replacing the data of any world that already
+    /// holds `world_card.key`. This is the bootstrap upsert shape; the
+    /// user-facing create path guards against duplicates before calling it.
+    fn upsert_world(
+        backend: &mut Backend,
+        world_card: &WorldCard,
+        map: &MapDef,
+    ) -> Result<i64, EngineError> {
+        match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
@@ -159,27 +202,25 @@ impl Storage {
                 Ok(world_id)
             }
             Backend::InMemory(data) => {
-                let world_id = data
+                if let Some(existing) = data
                     .worlds
-                    .iter()
+                    .iter_mut()
                     .find(|w| w.world_card.key == world_card.key)
-                    .map(|w| w.world_id)
-                    .unwrap_or_else(|| {
-                        let new_id = data.worlds.last().map(|w| w.world_id).unwrap_or(0) + 1;
-                        data.worlds.push(InMemoryWorld {
-                            world_id: new_id,
-                            world_card: world_card.clone(),
-                            map: map.clone(),
-                        });
-                        new_id
-                    });
-                Ok(world_id)
-            }
-        })
-    }
+                {
+                    existing.world_card = world_card.clone();
+                    existing.map = map.clone();
+                    return Ok(existing.world_id);
+                }
 
-    pub fn create_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
-        self.seed_world(world_card, map) // Reuse idempotent seeding
+                let new_id = data.worlds.last().map(|w| w.world_id).unwrap_or(0) + 1;
+                data.worlds.push(InMemoryWorld {
+                    world_id: new_id,
+                    world_card: world_card.clone(),
+                    map: map.clone(),
+                });
+                Ok(new_id)
+            }
+        }
     }
 
     pub fn update_world(

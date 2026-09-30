@@ -123,6 +123,10 @@ pub enum EngineError {
     #[error("World not found: {0}")]
     WorldNotFound(String),
 
+    /// A world with this key already exists; the user-facing create path refuses to replace it.
+    #[error("A world with key '{0}' already exists")]
+    WorldAlreadyExists(String),
+
     /// World cannot be deleted because games still reference it; `game_count` is the blocker count.
     #[error("Cannot delete world with {game_count} games")]
     WorldHasGames { game_count: usize },

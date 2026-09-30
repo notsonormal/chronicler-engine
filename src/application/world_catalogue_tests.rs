@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::application::errors::ApplicationError;
 use crate::application::world_catalogue::WorldCatalogue;
 use crate::test_support::fixtures::{TestMap, TestWorld};
 
@@ -33,6 +34,22 @@ fn test_create_and_get_world_roundtrip() {
     assert_eq!(got_id, id);
     assert_eq!(got_card.key, "test");
     assert_eq!(got_map.overworld.regions.len(), 1);
+}
+
+#[test]
+fn test_create_world_duplicate_key_is_refused() {
+    let catalogue = make_catalogue();
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("room_1");
+    catalogue.create_world(world, map).unwrap();
+
+    let duplicate = TestWorld::minimal();
+    let result = catalogue.create_world(duplicate, TestMap::single_room("room_1"));
+
+    assert!(
+        matches!(&result, Err(ApplicationError::Validation(msg)) if msg.contains("already exists")),
+        "a duplicate key must surface as a validation refusal, got: {result:?}"
+    );
 }
 
 #[test]

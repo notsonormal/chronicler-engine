@@ -4,6 +4,7 @@ use chronicler_engine::domain::model::map::{MapDef, Overworld};
 use chronicler_engine::domain::model::scenario::StartingScenario;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::error::EngineError;
 
 use crate::fixtures::create_test_storage;
 
@@ -265,20 +266,54 @@ fn test_world_with_empty_optionals() {
 }
 
 #[test]
-fn test_create_world_duplicate_key_idempotent() {
+fn test_create_world_duplicate_key_refused() {
     let storage = Storage::new_in_memory();
 
     let world_card = make_test_world("duplicate", "First");
     let map = make_test_map("dup_map", "Duplicate Map");
-    let id1 = storage.create_world(&world_card, &map).unwrap();
+    storage.create_world(&world_card, &map).unwrap();
 
     let world_card2 = make_test_world("duplicate", "Second");
-    let id2 = storage.create_world(&world_card2, &map).unwrap();
+    let result = storage.create_world(&world_card2, &map);
 
-    assert_eq!(id1, id2, "Duplicate key should be idempotent");
+    assert!(
+        matches!(&result, Err(EngineError::WorldAlreadyExists(key)) if key == "duplicate"),
+        "a duplicate key must be refused, got: {result:?}"
+    );
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1, "Should only have one world");
+    assert_eq!(
+        worlds[0].name, "First",
+        "the existing world must not be overwritten"
+    );
+}
+
+#[test]
+fn test_seed_world_replaces_existing_key_in_memory() {
+    let storage = Storage::new_in_memory();
+
+    let first = make_test_world("reseed", "First");
+    storage
+        .seed_world(&first, &make_test_map("first_map", "First Map"))
+        .unwrap();
+
+    let second = make_test_world("reseed", "Second");
+    storage
+        .seed_world(&second, &make_test_map("second_map", "Second Map"))
+        .unwrap();
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(worlds.len(), 1, "re-seeding must keep one world");
+    assert_eq!(
+        worlds[0].name, "Second",
+        "re-seeding must replace the existing card"
+    );
+    let stored = storage.get_world("reseed").unwrap().unwrap();
+    assert_eq!(
+        stored.map.overworld.id, "second_map",
+        "re-seeding must replace the existing map"
+    );
 }
 
 #[test]
@@ -362,6 +397,57 @@ fn test_sqlite_seed_world_idempotent() {
         "Seeding same key twice should keep one world"
     );
     assert_eq!(worlds[0].key, "sql_idem");
+}
+
+#[test]
+fn test_sqlite_create_world_duplicate_key_refused() {
+    let storage = create_test_storage(1);
+
+    let world_card = make_test_world("sql_dup", "First");
+    let map = make_test_map("sql_map", "SQL Map");
+    storage.create_world(&world_card, &map).unwrap();
+
+    let world_card2 = make_test_world("sql_dup", "Second");
+    let result = storage.create_world(&world_card2, &map);
+
+    assert!(
+        matches!(&result, Err(EngineError::WorldAlreadyExists(key)) if key == "sql_dup"),
+        "a duplicate key must be refused, got: {result:?}"
+    );
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(worlds.len(), 1, "Should only have one world");
+    assert_eq!(
+        worlds[0].name, "First",
+        "the existing world must not be overwritten"
+    );
+}
+
+#[test]
+fn test_sqlite_seed_world_replaces_existing_key() {
+    let storage = create_test_storage(1);
+
+    let first = make_test_world("sql_reseed", "First");
+    storage
+        .seed_world(&first, &make_test_map("first_map", "First Map"))
+        .unwrap();
+
+    let second = make_test_world("sql_reseed", "Second");
+    storage
+        .seed_world(&second, &make_test_map("second_map", "Second Map"))
+        .unwrap();
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(worlds.len(), 1, "re-seeding must keep one world");
+    assert_eq!(
+        worlds[0].name, "Second",
+        "re-seeding must replace the existing card"
+    );
+    let stored = storage.get_world("sql_reseed").unwrap().unwrap();
+    assert_eq!(
+        stored.map.overworld.id, "second_map",
+        "re-seeding must replace the existing map"
+    );
 }
 
 #[test]

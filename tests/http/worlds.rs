@@ -295,3 +295,39 @@ async fn test_world_edit_form_renders_posture_selects_http() {
         "the posture selects must auto-save to this world: {html}"
     );
 }
+
+// [docs/specs/worlds.md] SCENARIO: 25.7
+#[tokio::test]
+async fn test_world_create_existing_key_is_refused_http() {
+    let (app, state) = posture_world_app();
+
+    let second = WorldCard {
+        key: "posture_world".to_string(),
+        name: "Second World".to_string(),
+        ..Default::default()
+    };
+    let resp = post_form(
+        &app,
+        "/worlds",
+        &world_form_body(&second, &TestMap::single_room("start")),
+    )
+    .await;
+
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::BAD_REQUEST,
+        "a duplicate-key create must be refused"
+    );
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("posture_world") && body.contains("already exists"),
+        "the refusal must name the key and say it exists: {body:?}"
+    );
+
+    let stored = updated_world(&state).await;
+    assert_eq!(
+        stored.name, "Posture World",
+        "the existing world must not be overwritten"
+    );
+    assert_eq!(stored.key, "posture_world");
+}

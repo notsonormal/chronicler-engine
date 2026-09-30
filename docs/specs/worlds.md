@@ -1,6 +1,7 @@
 # Feature Spec: Worlds
 
 Endpoints:
+- `POST /worlds`
 - `POST /worlds/:key`
 - `POST /worlds/:key/posture`
 
@@ -82,4 +83,16 @@ And the narrative_perspective select renders "second" selected
 And the narrative_tense select renders "past" selected
 And the body contains the #world-posture-status target
 And the posture selects auto-save to /worlds/posture_world/posture
+```
+
+### World creation refuses an existing identifier
+
+#### Scenario 25.7: Creating a World whose identifier already exists is refused
+
+```gherkin
+Given a seeded world with identifier "posture_world"
+When the client creates a second World whose identifier is "posture_world"
+Then the response is a 400
+And the body names the identifier and says it already exists
+And the stored World is unchanged
 ```
