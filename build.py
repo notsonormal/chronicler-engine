@@ -33,8 +33,9 @@ dir. Tests are already concurrency-safe: they allocate ports dynamically from
 3010-3050 using file-based locking (``tests/test_utils/server.rs``).
 
 A full gate takes about 2-3 minutes warm, 4-5 cold owing to the integration
-suite. Wrap invocations in a timeout of at least 600s, or 1200s with
-``--coverage``.
+suite. Wrap invocations in a timeout of at least 1200. In cases of high load 
+(multiple builds running with subagents) or when run with `--coverage` 
+it can take longer than usual.
 """
 
 import argparse
