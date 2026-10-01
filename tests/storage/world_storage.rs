@@ -1,4 +1,4 @@
-//! Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
+//! Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 
 use chronicler_engine::domain::model::map::{MapDef, Overworld};
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
@@ -433,6 +433,28 @@ fn test_delete_world_nonexistent_idempotent() {
 }
 
 #[test]
+fn test_delete_world_drops_its_characters() {
+    let storage = Storage::new_in_memory();
+
+    let world_id = storage
+        .create_world(
+            &make_test_world("char_world", "Character World"),
+            &make_test_map("char_map", "Character Map"),
+        )
+        .unwrap();
+    storage
+        .seed_character(world_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .unwrap();
+
+    storage.delete_world("char_world").unwrap();
+
+    assert!(
+        storage.list_characters(world_id).unwrap().is_empty(),
+        "deleting a world must drop its characters, as SQLite's cascade does"
+    );
+}
+
+#[test]
 fn test_sqlite_list_worlds() {
     let storage = create_test_storage(1);
 
@@ -641,4 +663,26 @@ fn test_sqlite_delete_world_blocked_by_games() {
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1, "World should still exist");
+}
+
+#[test]
+fn test_sqlite_delete_world_drops_its_characters() {
+    let storage = create_test_storage(1);
+
+    let world_id = storage
+        .create_world(
+            &make_test_world("char_world", "Character World"),
+            &make_test_map("char_map", "Character Map"),
+        )
+        .unwrap();
+    storage
+        .seed_character(world_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .unwrap();
+
+    storage.delete_world("char_world").unwrap();
+
+    assert!(
+        storage.list_characters(world_id).unwrap().is_empty(),
+        "deleting a world must drop its characters, as SQLite's cascade does"
+    );
 }

@@ -1,7 +1,7 @@
 # Follow up on small issues found during review, round 2
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -43,3 +43,19 @@ From [Fix the weak dashboard and settings tests](34-fix-weak-dashboard-and-setti
 
 - Each item is fixed, dropped with a reason, or promoted to a ticket.
 - `python build.py` is green.
+
+## Answer
+
+Every item was checked against the code first.
+
+**Copy sweep (20):** scenario 20.8 split, saved-games assertions moved into a new 20.9 with its own test; the badge assertion checks the visible text; the stale comment fixed. The "Interactive Fiction" literal now lives in one `NarratorMode::display_label()`, with one shared select-options builder for the games and worlds templates and template helpers for the preset badges. *Dropped:* "No other saved games." with no active game, because it is unreachable in production (a game is always loaded or created at startup and the active game can't be deleted).
+**Duplicate names (28):** one `name_is_available` (new `src/application/utils/name_uniqueness.rs`) serves both services. *Deferred:* the preset check-then-write across two lock acquisitions (storage has no single-lock check-and-write) and service-only preset uniqueness (needs a storage constraint or migration) — one candidate ticket: storage-level preset name uniqueness.
+**Round 1 leftovers (36):** `setStatus` parameter is now `statusClass`; the escaping test asserts the escaped form again; 32.1 counts portrait containers; InMemory `delete_world` drops the world's characters, with an InMemory/SQLite test pair. *Deferred:* driving `submitRetrigger()` in a browser test needs a new scenario, a stub route and a button in the fixture — candidate ticket.
+**Test stubs (34):** shared `card_html_slice`, shared `fill_command_input`, `StubStatus` gained a `Phase` and lost its redundant `Arc`, 16.8 polls visibility across its window, 16.10 sets the error before the confirm swap, the stub's Error arm adds the status-swap headers, 16.6 prose fixed. **Flake:** the 16.9 acknowledgement race was a late `load` poll on the fresh `#status-display` reading the stub's constant "idle" and unlocking Send before the test looked; the stub now serves a phase while sending, then idle.
+
+**Gate:** worktree on `26c8ad94`, nothing merged since: `nextest: 1665 passed, 0 failed, 2 skipped`, browser 30 passed (`build_20261001_213503.log`). After the review rename on main: browser 30 passed (`build_20261001_220049.log`).
+
+**Code review** (`/code-review`, ISSUES): the one must-fix was the snake_case `status_class` in a camelCase script, renamed to `statusClass`. Reviewer disagreed with a scout that called the `>Current<` assertion tautological (it matches the historical badge text exactly).
+
+**Not fixed (judgement):** the doc comment on the shared select helper lists its consumers; `connection_name_available` is now a one-line wrapper; `card_html_slice` uses `unwrap_or(0)` where it should return `None`; a dead `Ben &#` disjunct in the escaping test; 20.9's Then says "no status badge" while the test pins the text `Current`; the InMemory `delete_world` test seeds one world, so clearing all characters would pass; 16.9 now pre-sets the phase status, so its lock reads no longer observe the acknowledgement as the spec words it.
+

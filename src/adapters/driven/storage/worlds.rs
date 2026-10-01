@@ -398,6 +398,13 @@ impl Storage {
                 if game_count > 0 {
                     return Err(EngineError::WorldHasGames { game_count });
                 }
+                // SQLite reaches the characters through the `world_id` foreign
+                // key's cascade; InMemory has no cascade, so drop them here.
+                if let Some(world) = data.worlds.iter().find(|w| w.world_card.key == key) {
+                    let world_id = world.world_id;
+                    data.characters
+                        .retain(|character| character.world_id != world_id);
+                }
                 data.worlds.retain(|w| w.world_card.key != key);
                 Ok(())
             }

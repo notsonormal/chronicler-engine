@@ -1,7 +1,31 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! Textarea field HTML builders.
+//! Form field HTML builders.
 
 use crate::adapters::driving::http::utils::response::html_escape;
+use crate::domain::model::settings::NarratorMode;
+
+/// The `<option>` pair for a narrator-mode select, marking `selected_mode`.
+/// Shared by the world form and the game posture controls so the two
+/// selectors cannot drift.
+pub(crate) fn narrator_mode_select_options_html(selected_mode: &str) -> String {
+    [NarratorMode::Novel, NarratorMode::InteractiveFiction]
+        .into_iter()
+        .map(|mode| {
+            let selected = if mode.as_str() == selected_mode {
+                " selected"
+            } else {
+                ""
+            };
+            format!(
+                r#"<option value="{}"{}>{}</option>"#,
+                mode.as_str(),
+                selected,
+                mode.display_label()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 pub(crate) fn textarea_field(
     id: &str,

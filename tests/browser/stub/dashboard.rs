@@ -16,15 +16,13 @@ use super::*;
 /// Send locked until the next idle poll, and a second error must land inside
 /// the first toast's 5s timer.
 async fn submit_command(page: &playwright_rs::Page, command: &str) {
-    let command = command.to_string();
-    page.evaluate::<String, ()>(
-        r#"(command) => {
+    fill_command_input(page, command).await;
+    page.evaluate::<(), ()>(
+        r#"() => {
             const form = document.getElementById('command-form');
-            const input = form.querySelector('input[name="command"]');
-            input.value = command;
             form.requestSubmit();
         }"#,
-        Some(&command),
+        None,
     )
     .await
     .unwrap();
@@ -42,12 +40,11 @@ async fn wait_for_toast_text(page: &playwright_rs::Page, text: &str) {
     assert!(shown, "toast never displayed {expected:?}");
 }
 
-/// Drive the shipped text-check swap: submit a command the auto-check
-/// intercepts, so the preview replaces #action-area, then confirm the preview,
-/// so `/action/confirm` swaps a fresh #action-area in. Every node the page-load
-/// handles pointed at (form, status display, Send button) is detached; the ids
-/// live on in fresh nodes.
-async fn swap_action_area_via_text_check_confirm(page: &playwright_rs::Page) {
+/// Submit a command the auto-check intercepts and wait for the preview that
+/// replaces #action-area. Every node the page-load handles pointed at (form,
+/// status display, Send button) is now detached; the ids live on in fresh
+/// nodes after the confirm.
+async fn submit_intercepted_command(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
             window.__statusBeforeSwap = document.getElementById('status-display');
@@ -61,7 +58,11 @@ async fn swap_action_area_via_text_check_confirm(page: &playwright_rs::Page) {
     .unwrap();
 
     wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
+}
 
+/// Confirm the intercepted preview, so `/action/confirm` swaps a fresh
+/// #action-area (and #status-display) in.
+async fn confirm_text_check_preview(page: &playwright_rs::Page) {
     page.locator(".text-check-preview button:has-text('Send Original')")
         .await
         .click(None)
@@ -71,6 +72,12 @@ async fn swap_action_area_via_text_check_confirm(page: &playwright_rs::Page) {
     // The confirm response replaces #action-area through htmx (outerHTML), so a
     // fresh #status-display arrives.
     wait_until_visible(page, "#status-display", Duration::from_secs(5)).await;
+}
+
+/// Drive the shipped text-check swap end to end.
+async fn swap_action_area_via_text_check_confirm(page: &playwright_rs::Page) {
+    submit_intercepted_command(page).await;
+    confirm_text_check_preview(page).await;
 }
 
 /// Assert the confirm swap produced a fresh #status-display node (not the one
@@ -134,24 +141,29 @@ async fn test_error_toast_on_action_failure() {
 #[tokio::test]
 async fn test_newer_error_keeps_toast_visible() {
     with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
-        // Second error at 2.5s, checked at 6s: the first toast's timer (5s)
-        // has fired but the second's (7.5s) has not, so the toast stays up.
         submit_command(&page, "First failure").await;
         wait_for_toast_text(&page, "Error: Failed to process action: First failure").await;
         tokio::time::sleep(Duration::from_millis(2500)).await;
         submit_command(&page, "Second failure").await;
         wait_for_toast_text(&page, "Error: Failed to process action: Second failure").await;
-        tokio::time::sleep(Duration::from_millis(3500)).await;
 
-        let (visible, text) = read_error_toast(&page).await;
-        assert!(
-            visible,
-            "toast should stay visible until the second error's own timer fires, got text {text:?}"
-        );
-        assert_eq!(
-            text, "Error: Failed to process action: Second failure",
-            "#error-notification should show the most recent server error, got {text:?}"
-        );
+        // Poll across the window in which the first toast's 5s timer fires but
+        // the second's 7.5s timer does not. A single read 3.5s after the second
+        // toast appeared is load-sensitive: a slow submit shifts the read past
+        // the second timer and the toast has already hidden.
+        let window_end = std::time::Instant::now() + Duration::from_millis(3500);
+        while std::time::Instant::now() < window_end {
+            let (visible, text) = read_error_toast(&page).await;
+            assert!(
+                visible,
+                "toast should stay visible until the second error's own timer fires, got text {text:?}"
+            );
+            assert_eq!(
+                text, "Error: Failed to process action: Second failure",
+                "#error-notification should show the most recent server error, got {text:?}"
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     })
     .await;
 }
@@ -159,36 +171,46 @@ async fn test_newer_error_keeps_toast_visible() {
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.9
 #[tokio::test]
 async fn test_send_locks_and_unlocks_after_action_area_swap() {
-    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        swap_action_area_via_text_check_confirm(&page).await;
-        assert_status_display_restored(&page).await;
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let status = stub.status_handle();
+        async move {
+            swap_action_area_via_text_check_confirm(&page).await;
+            assert_status_display_restored(&page).await;
 
-        // The form's htmx ack swaps in the pending status; that is when the
-        // lock must appear.
-        send_action(&page, "wait").await;
+            // The fresh #status-display's `load` poll can land after the ack.
+            // Were it to serve "idle", onStatusPoll would reset Ready and
+            // unlock Send before the assertion reads it. Serve a phase instead,
+            // so no poll in the window can unlock the button.
+            status.set(StubStatus::Phase("narrating".to_string()));
 
-        let (disabled, label) = read_submit_button(&page).await;
-        assert!(
-            disabled,
-            "Send should lock during generation after an action-area swap (label {label:?})"
-        );
-        assert!(
-            label.contains("Stop"),
-            "locked button should read Stop after the swap, got {label:?}"
-        );
+            // The form's htmx ack swaps in the pending status; that is when the
+            // lock must appear.
+            send_action(&page, "wait").await;
 
-        // The stub poll answers "idle", so the fresh status display returns
-        // to Ready within one 5s poll cycle — and the button must follow.
-        wait_for_status_ready(&page).await;
-        let (disabled, label) = read_submit_button(&page).await;
-        assert!(
-            !disabled,
-            "Send should unlock once the status returns to Ready after the swap"
-        );
-        assert!(
-            label.contains("Send"),
-            "unlocked button should read Send after the swap, got {label:?}"
-        );
+            let (disabled, label) = read_submit_button(&page).await;
+            assert!(
+                disabled,
+                "Send should lock during generation after an action-area swap (label {label:?})"
+            );
+            assert!(
+                label.contains("Stop"),
+                "locked button should read Stop after the swap, got {label:?}"
+            );
+
+            // Return the stub to idle, so the next 5s poll clears the status and
+            // the button must follow it back to Send.
+            status.set(StubStatus::Idle);
+            wait_for_status_ready(&page).await;
+            let (disabled, label) = read_submit_button(&page).await;
+            assert!(
+                !disabled,
+                "Send should unlock once the status returns to Ready after the swap"
+            );
+            assert!(
+                label.contains("Send"),
+                "unlocked button should read Send after the swap, got {label:?}"
+            );
+        }
     })
     .await;
 }
@@ -199,14 +221,20 @@ async fn test_status_error_reaches_observer_after_action_area_swap() {
     with_stub_page(StubActionOutcome::Pending, |page, stub| {
         let status = stub.status_handle();
         async move {
-            swap_action_area_via_text_check_confirm(&page).await;
+            submit_intercepted_command(&page).await;
+
+            // Set the error before the confirm swap, so the fresh
+            // #status-display's `load` poll serves it instead of the test
+            // waiting a full 5s poll cycle.
+            status.set(StubStatus::Error("narration failed".to_string()));
+
+            confirm_text_check_preview(&page).await;
             assert_status_display_restored(&page).await;
 
             // The stub's /status/generating answers the error span a failed
             // generation renders; the fresh #status-display's own poll swaps it in
             // and the body-level observer toasts it — the toast's beforeSwap
             // listener is not involved.
-            status.set(StubStatus::Error("narration failed".to_string()));
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(8),

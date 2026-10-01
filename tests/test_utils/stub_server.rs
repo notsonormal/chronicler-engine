@@ -112,14 +112,15 @@ pub enum StubStatus {
     /// The engine is idle; the poll answers "idle".
     #[default]
     Idle,
+    /// The engine is generating; the poll answers the phase name.
+    Phase(String),
     /// A failed generation; the poll answers the error span.
     Error(String),
 }
 
-#[derive(Clone)]
 struct StubState {
     action_outcome: StubActionOutcome,
-    status: Arc<std::sync::Mutex<StubStatus>>,
+    status: std::sync::Mutex<StubStatus>,
 }
 
 /// A running stub server. Dropping it shuts the server down and releases
@@ -143,7 +144,7 @@ impl StubServer {
     async fn start_on_port(port: u16, action_outcome: StubActionOutcome) -> Self {
         let state = Arc::new(StubState {
             action_outcome,
-            status: Arc::new(std::sync::Mutex::new(StubStatus::default())),
+            status: std::sync::Mutex::new(StubStatus::default()),
         });
         let app = stub_router(Arc::clone(&state));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
@@ -298,12 +299,16 @@ async fn action_check(
             add_status_swap_headers(&mut response);
             response
         }
-        StubActionOutcome::Error => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            render_error(&format!("Failed to process action: {command}")),
-        )
-            .into_response(),
+        StubActionOutcome::Error => {
+            let mut response = (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                render_error(&format!("Failed to process action: {command}")),
+            )
+                .into_response();
+            add_status_swap_headers(&mut response);
+            response
+        }
     }
 }
 
@@ -317,6 +322,7 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
         .clone();
     let body = match status {
         StubStatus::Idle => "idle".to_string(),
+        StubStatus::Phase(phase) => phase,
         StubStatus::Error(message) => {
             format!(r#"<span class="status error">Error: {message}</span>"#)
         }

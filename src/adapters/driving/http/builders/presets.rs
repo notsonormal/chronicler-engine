@@ -4,7 +4,7 @@
 use crate::adapters::driving::http::builders::forms::{textarea_field, textarea_field_readonly};
 use crate::adapters::driving::http::utils::response::html_escape;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::ModePresetBundle;
+use crate::domain::model::settings::{ModePresetBundle, NarratorMode};
 
 pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
     let id = html_escape(&preset.id);
@@ -87,6 +87,9 @@ pub(crate) fn preset_edit_form_html(
         ""
     };
 
+    let novel_label = NarratorMode::Novel.display_label();
+    let interactive_fiction_label = NarratorMode::InteractiveFiction.display_label();
+
     format!(
         r#"<div class="preset-card edit-form">
     <div class="card-header">
@@ -104,8 +107,8 @@ pub(crate) fn preset_edit_form_html(
         {output_format_field}
         <div class="form-group">
             <label>Allowed Modes</label>
-            <label class="checkbox-label"><input type="checkbox" name="allowed_mode_novel" value="true"{novel_checked} /> Novel</label>
-            <label class="checkbox-label"><input type="checkbox" name="allowed_mode_if" value="true"{if_checked} /> Interactive Fiction</label>
+            <label class="checkbox-label"><input type="checkbox" name="allowed_mode_novel" value="true"{novel_checked} /> {novel_label}</label>
+            <label class="checkbox-label"><input type="checkbox" name="allowed_mode_if" value="true"{if_checked} /> {interactive_fiction_label}</label>
         </div>
         <div class="form-actions">
             <button type="submit" class="btn-primary">Save</button>
@@ -130,27 +133,33 @@ pub(crate) fn preset_card_html(
     let is_novel_active = preset.id == novel_active_id;
     let is_if_active = preset.id == if_active_id;
     let is_active = is_novel_active || is_if_active;
+    let novel_label = NarratorMode::Novel.display_label();
+    let interactive_fiction_label = NarratorMode::InteractiveFiction.display_label();
 
     let mut badges = String::new();
     if preset.is_default {
         badges.push_str(r#"<span class="badge">Default</span>"#);
     }
     if is_novel_active {
-        badges.push_str(r#"<span class="badge primary">Active · Novel</span>"#);
+        badges.push_str(&format!(
+            r#"<span class="badge primary">Active · {novel_label}</span>"#
+        ));
     }
     if is_if_active {
-        badges.push_str(r#"<span class="badge primary">Active · Interactive Fiction</span>"#);
+        badges.push_str(&format!(
+            r#"<span class="badge primary">Active · {interactive_fiction_label}</span>"#
+        ));
     }
 
     let mut actions = String::new();
     if preset.allows_novel() && !is_novel_active {
         actions.push_str(&format!(
-            r#"<button hx-post="/prompt-presets/{id}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Novel)</button>"#
+            r#"<button hx-post="/prompt-presets/{id}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({novel_label})</button>"#
         ));
     }
     if preset.allows_interactive_fiction() && !is_if_active {
         actions.push_str(&format!(
-            r#"<button hx-post="/prompt-presets/{id}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Interactive Fiction)</button>"#
+            r#"<button hx-post="/prompt-presets/{id}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({interactive_fiction_label})</button>"#
         ));
     }
     if preset.is_default {

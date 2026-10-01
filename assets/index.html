@@ -145,11 +145,11 @@
       }
 
       // One writer for the status span: its label and class always travel together.
-      function setStatus(label, cls) {
+      function setStatus(label, statusClass) {
         const statusDisplay = document.getElementById("status-display");
         if (statusDisplay) {
           statusDisplay.innerHTML =
-            '<span class="status ' + cls + '">' + label + "</span>";
+            '<span class="status ' + statusClass + '">' + label + "</span>";
         }
       }
 

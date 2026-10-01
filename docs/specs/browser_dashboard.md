@@ -17,7 +17,7 @@ Then the same #command-form element is still in the document (form is a static s
 
 ```gherkin
 Given the page is loaded and idle
-When the client sends an action (send_action("wait"))
+When the client submits the command "wait"
 Then #status-display text is not "Ready" within 500ms
 And #status-display text contains one of "Thinking", "Narrating", "Generating", or "Quantifying"
 ```

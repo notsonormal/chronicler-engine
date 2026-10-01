@@ -125,7 +125,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `mod.rs` — Driven-adapter storage seam tests: repositories exercised against a real SQLite-backed `Storage`.
     - `preset_storage.rs` — Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset
     - `snapshot_storage.rs` — Integration tests for game-state snapshot persistence: save/load, missing-snapshot errors, and message/swipe round-tripping against a real SQLite-backed `Storage`.
-    - `world_storage.rs` — Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
+    - `world_storage.rs` — Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 - **test_utils/**
     - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.
     - `html.rs` — HTML slicing helpers for panel markup without element ids — locate a region by a stable anchor string.

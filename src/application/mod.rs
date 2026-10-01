@@ -19,6 +19,7 @@ pub mod prompt_preset_service;
 pub mod prompting;
 pub mod settings_service;
 pub mod text_check_service;
+pub mod utils;
 pub mod world_catalogue;
 
 pub use debug::DebugStateView;

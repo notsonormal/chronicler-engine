@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
+use crate::application::utils::name_is_available;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::error::{EngineError, Result};
 
@@ -76,11 +77,14 @@ impl SettingsService {
         name: &str,
         except_id: Option<&str>,
     ) -> bool {
-        let normalized = name.trim().to_lowercase();
-        settings.connections.iter().all(|connection| {
-            except_id == Some(connection.id.as_str())
-                || connection.name.trim().to_lowercase() != normalized
-        })
+        name_is_available(
+            settings
+                .connections
+                .iter()
+                .map(|connection| (connection.id.as_str(), connection.name.as_str())),
+            name,
+            except_id,
+        )
     }
 
     fn ensure_connection_name_available(

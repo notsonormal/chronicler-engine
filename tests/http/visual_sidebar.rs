@@ -18,9 +18,10 @@ async fn test_visual_sidebar_shows_character_name_label_http() {
     let body = fetch_body(&app, "/fragment/visual-sidebar").await;
 
     assert_eq!(
-        body.matches(r#"class="image-label""#).count(),
+        body.matches(r#"class="image-container npc-portrait"#)
+            .count(),
         2,
-        "the Room's two Characters must render two portrait labels: {body}"
+        "the Room's two Characters must render two portraits: {body}"
     );
     assert!(
         body.contains(r#"title="Test NPC""#) && body.contains(">Test NPC</div>"),
@@ -52,6 +53,10 @@ async fn test_visual_sidebar_escapes_character_name_label_http() {
     assert!(
         !body.contains("Ben & Jerry"),
         "the ampersand in the Character's name must be escaped: {body}"
+    );
+    assert!(
+        body.contains("Ben &#") || body.contains("Ben &amp;"),
+        "the Character's name must still render in its escaped form: {body}"
     );
     assert!(
         body.contains("Jerry"),

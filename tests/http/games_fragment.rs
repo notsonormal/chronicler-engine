@@ -68,20 +68,29 @@ async fn test_games_fragment_renders_posture_controls_http() {
 
     // A preset-library load failure degrades the picker row to an error span
     // instead of removing the posture controls (asserted in
-    // `games::templates::games_tests`); this is the healthy path.
+    // `games::handlers::games_tests`); this is the healthy path.
     assert!(
         !html.contains("Presets unavailable"),
         "the preset pickers must render without a load error: {html}"
     );
+}
 
-    // The active game is the only game, so the Saved Games list is empty but
-    // the wording must not claim there are no saved games at all.
+// The Saved Games list holds only non-active games, and the active game's card
+// already sits under the "Active Game" heading, so it must not repeat that
+// status as a badge.
+// [docs/specs/games.md] SCENARIO: 20.9
+#[tokio::test]
+async fn test_games_fragment_lists_only_other_saved_games_http() {
+    let (app, _state) = TestAppBuilder::default_test().build_with_state();
+
+    let html = fetch_body(&app, "/fragment/games").await;
+
     assert!(
         html.contains("No other saved games."),
         "the empty Saved Games list must say there are no *other* saved games: {html}"
     );
     assert!(
-        !html.contains("game-badge"),
+        !html.contains(">Current<"),
         "the active game card must not repeat the section heading with a badge: {html}"
     );
 }

@@ -14,6 +14,7 @@ use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::app_with_production_graph;
+use crate::test_utils::card_html_slice;
 
 async fn body_string(response: axum::response::Response<Body>) -> String {
     let body = axum::body::to_bytes(response.into_body(), 16384)
@@ -73,17 +74,8 @@ fn added_connection_id(panel: &str) -> String {
 /// connection's own edit link and the slice ends at the next card.
 fn connection_card<'a>(panel: &'a str, id: &str) -> &'a str {
     let anchor = format!(r#"hx-get="/fragment/connections/{id}/edit"#);
-    let anchor_pos = panel
-        .find(&anchor)
-        .unwrap_or_else(|| panic!("no connection card for '{id}' in panel: {panel}"));
-    let start = panel[..anchor_pos]
-        .rfind(r#"<div class="connection-card">"#)
-        .expect("connection card opening tag before its edit link");
-    let end = panel[anchor_pos..]
-        .find(r#"<div class="connection-card">"#)
-        .map(|offset| anchor_pos + offset)
-        .unwrap_or(panel.len());
-    &panel[start..end]
+    card_html_slice(panel, "connection-card", &anchor)
+        .unwrap_or_else(|| panic!("no connection card for '{id}' in panel: {panel}"))
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.1

@@ -88,7 +88,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `server.rs` — Server implementation
         - **builders/**
           - `connections.rs` — LLM-connection card + edit-form HTML builders.
-          - `forms.rs` — Textarea field HTML builders.
+          - `forms.rs` — Form field HTML builders.
           - `headers.rs` — Header fragment + status-swap header builders.
           - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
           - `presets.rs` — Prompt-preset card + form HTML builders.
@@ -230,6 +230,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **utils/**
         - `context.rs` — Prompt context fitting — message budget enforcement.
         - `mod.rs` — Narrative prompt utility modules.
+    - **utils/**
+      - `mod.rs` — Application-layer utility helpers.
+      - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings and prompt-preset services.
   - **bootstrap/**
     - `init_game.rs` — Game state initialization and arrival narration spawning
     - `load.rs` — Game data seeding and initialization routines

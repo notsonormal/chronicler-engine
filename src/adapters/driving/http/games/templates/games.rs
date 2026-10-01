@@ -2,6 +2,7 @@
 //! Games templates
 
 use askama::Template;
+use crate::adapters::driving::http::builders::forms::narrator_mode_select_options_html;
 use crate::domain::model::game::Game;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::NarratorMode;
@@ -126,8 +127,7 @@ pub struct PresetOptionView {
     <div class="posture-row">
         <label>Mode
             <select name="narrator_mode" hx-post="/games/{{ game_id }}/mode" hx-trigger="change" hx-target="#game-posture-controls" hx-swap="outerHTML">
-                <option value="novel"{% if mode == "novel" %} selected{% endif %}>Novel</option>
-                <option value="interactive_fiction"{% if mode == "interactive_fiction" %} selected{% endif %}>Interactive Fiction</option>
+                {{ mode_options|safe }}
             </select>
         </label>
         <label>Perspective
@@ -171,7 +171,7 @@ pub struct PresetOptionView {
 )]
 pub struct GamePostureTemplate {
     pub game_id: u64,
-    pub mode: String,
+    pub mode_options: String,
     pub perspective: String,
     pub tense: String,
     pub system_options: Vec<PresetOptionView>,
@@ -191,7 +191,7 @@ impl GamePostureTemplate {
     ) -> Self {
         Self {
             game_id: game.id,
-            mode: game.narrator_mode.as_str().to_string(),
+            mode_options: narrator_mode_select_options_html(game.narrator_mode.as_str()),
             perspective: game.narrative_perspective.as_str().to_string(),
             tense: game.narrative_tense.as_str().to_string(),
             system_options: PresetOptionView::options(

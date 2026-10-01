@@ -256,24 +256,39 @@ pub fn preset_card_selector(name: &str) -> String {
     format!(r#".preset-card:has(.card-title:text-is("{name}"))"#)
 }
 
+/// Put `command` into the shipped command input. Shared by the helpers that
+/// submit it, so both address the same field.
+pub async fn fill_command_input(page: &playwright_rs::Page, command: &str) {
+    let command = command.to_string();
+    let _: Result<(), _> = page
+        .evaluate::<String, ()>(
+            r#"
+            (command) => {
+                const input = document.querySelector('#command-form input[name="command"]');
+                if (input) {
+                    input.value = command;
+                }
+            }
+            "#,
+            Some(&command),
+        )
+        .await;
+}
+
 /// Send an action via the command form
 pub async fn send_action(page: &playwright_rs::Page, text: &str) {
-    let text_owned = text.to_string();
+    fill_command_input(page, text).await;
     let _: Result<(), _> = page
-        .evaluate(
+        .evaluate::<(), ()>(
             r#"
-            (text) => {
-                const input = document.querySelector('#command-form input[name="command"]');
+            () => {
                 const btn = document.querySelector('#command-form button[type="submit"]');
-                if (input) {
-                    input.value = text;
-                }
                 if (btn) {
                     btn.click();
                 }
             }
             "#,
-            Some(&text_owned),
+            None,
         )
         .await;
 
