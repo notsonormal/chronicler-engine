@@ -7,10 +7,11 @@
 // What is canned: every fragment the shell loads or polls, under
 // `tests/test_utils/stub_fixtures/` — except the options dock, which is
 // rendered through the engine's own `OptionsDockTemplate` (a pure vm → HTML
-// render, so the drift tax there is avoidable). Three dynamic endpoints answer
+// render, so the drift tax there is avoidable). The dynamic endpoints answer
 // scripted outcomes a test names up front: `POST /action/check`, `POST
-// /action/confirm`, and `POST /check-text`. `POST /history/:id` and `POST
-// /swipe/new` always answer 500.
+// /action/confirm`, `POST /check-text`, and `GET /status/generating` (whose
+// `StubStatus` a live test may change between polls). `POST /history/:id` and
+// `POST /swipe/new` always answer 500.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -24,6 +25,7 @@ use axum::routing::{get, post};
 use axum::Router;
 
 use chronicler_engine::adapters::driving::http::builders::headers::add_status_swap_headers;
+use chronicler_engine::adapters::driving::http::utils::error::render_error;
 
 use super::server::{get_config_port, release_port_lock};
 use super::CONFIG_PATH;
@@ -97,15 +99,27 @@ pub enum StubActionOutcome {
     /// pending generation.
     #[default]
     Pending,
-    /// A 500 error, as a failing engine action would produce.
+    /// A 500, as a failing engine action would produce. The body is the
+    /// engine's own error render naming the command, so the toast text is the
+    /// server's response rather than the input echoed back.
     Error,
-    /// The plain idle action area, no work started.
+}
+
+/// What the stub's `GET /status/generating` answers. The real endpoint returns
+/// "idle", a phase name, or the error span a failed generation produces.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum StubStatus {
+    /// The engine is idle; the poll answers "idle".
+    #[default]
     Idle,
+    /// A failed generation; the poll answers the error span.
+    Error(String),
 }
 
 #[derive(Clone)]
 struct StubState {
     action_outcome: StubActionOutcome,
+    status: Arc<std::sync::Mutex<StubStatus>>,
 }
 
 /// A running stub server. Dropping it shuts the server down and releases
@@ -113,6 +127,7 @@ struct StubState {
 pub struct StubServer {
     addr: SocketAddr,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    state: Arc<StubState>,
 }
 
 impl StubServer {
@@ -126,8 +141,11 @@ impl StubServer {
 
     /// Start the stub on a named port.
     async fn start_on_port(port: u16, action_outcome: StubActionOutcome) -> Self {
-        let state = Arc::new(StubState { action_outcome });
-        let app = stub_router(state);
+        let state = Arc::new(StubState {
+            action_outcome,
+            status: Arc::new(std::sync::Mutex::new(StubStatus::default())),
+        });
+        let app = stub_router(Arc::clone(&state));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
             .unwrap_or_else(|e| panic!("bind stub on port {port}: {e}"));
@@ -143,12 +161,35 @@ impl StubServer {
         Self {
             addr,
             shutdown: Some(tx),
+            state,
         }
     }
 
     /// Base URL, e.g. `http://127.0.0.1:3011`.
     pub fn url(&self) -> String {
         format!("http://{}", self.addr)
+    }
+
+    /// A cloneable handle to the scripted status, so a test closure can change
+    /// what `/status/generating` answers without borrowing the server.
+    pub fn status_handle(&self) -> StubStatusHandle {
+        StubStatusHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+}
+
+/// A cloneable handle to the stub's scripted status.
+#[derive(Clone)]
+pub struct StubStatusHandle {
+    state: Arc<StubState>,
+}
+
+impl StubStatusHandle {
+    /// Set what the next `GET /status/generating` poll answers. The status
+    /// display polls every 5s, so the change lands on a later poll cycle.
+    pub fn set(&self, status: StubStatus) {
+        *self.state.status.lock().expect("stub status lock poisoned") = status;
     }
 }
 
@@ -179,7 +220,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/swipe/new",
             post(|| async { client_failure("Stub retry failure") }),
         )
-        .route("/status/generating", get(|| async { "idle" }))
+        .route("/status/generating", get(status_generating))
         .route("/fragment/header", get(|| async { Html(FIXTURE_HEADER) }))
         .route(
             "/fragment/story-log",
@@ -257,19 +298,35 @@ async fn action_check(
             add_status_swap_headers(&mut response);
             response
         }
-        StubActionOutcome::Idle => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            FIXTURE_ACTION_AREA,
-        )
-            .into_response(),
         StubActionOutcome::Error => (
             StatusCode::INTERNAL_SERVER_ERROR,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            "<p>Stub action failure</p>",
+            render_error(&format!("Failed to process action: {command}")),
         )
             .into_response(),
     }
+}
+
+/// The real `/status/generating` poll answer: idle text, a phase name, or the
+/// error span a failed generation renders.
+async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body> {
+    let status = state
+        .status
+        .lock()
+        .expect("stub status lock poisoned")
+        .clone();
+    let body = match status {
+        StubStatus::Idle => "idle".to_string(),
+        StubStatus::Error(message) => {
+            format!(r#"<span class="status error">Error: {message}</span>"#)
+        }
+    };
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        body,
+    )
+        .into_response()
 }
 
 /// The real `POST /action/confirm` swaps a fresh `#action-area` back in

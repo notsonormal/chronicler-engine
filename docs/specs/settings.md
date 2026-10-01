@@ -44,6 +44,7 @@ When the client POST /settings with narration_connection_id set to a different e
 And quantifier_connection_id set to the current quantifier connection
 Then the response is 200
 And the response body is "Settings saved!"
+And a following GET /fragment/settings marks the switched narrator connection as Narrator
 ```
 
 #### Scenario 20.3: POST /settings switches the quantifier connection
@@ -54,6 +55,7 @@ When the client POST /settings with quantifier_connection_id set to a different 
 And narration_connection_id set to the current narrator connection
 Then the response is 200
 And the response body is "Settings saved!"
+And a following GET /fragment/settings marks the switched quantifier connection as Quantifier
 ```
 
 #### Scenario 20.4: POST /settings switches both connections
@@ -63,6 +65,7 @@ Given a fresh app state where the narrator and quantifier connections are both t
 When the client POST /settings with narration_connection_id and quantifier_connection_id each set to a different existing connection
 Then the response is 200
 And the response body is "Settings saved!"
+And a following GET /fragment/settings marks the switched narrator connection as Narrator and the switched quantifier connection as Quantifier
 ```
 
 ### POST /settings — error paths

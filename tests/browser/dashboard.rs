@@ -14,10 +14,14 @@ async fn test_form_stays_static_after_submission() {
         TEST_WORLD,
         TEST_PERSONA,
         |page, _port| async move {
-            let form_id_before: String = page
-                .evaluate::<(), String>("document.querySelector('#command-form')?.id || ''", None)
-                .await
-                .unwrap();
+            // Stash the node, not its id: a replaced form carries the same id,
+            // so an id-string comparison cannot see the regression.
+            page.evaluate::<(), ()>(
+                "(() => { window.__formBefore = document.querySelector('#command-form'); })()",
+                None,
+            )
+            .await
+            .unwrap();
 
             // A command submit retargets to #status-display, so the form is
             // never re-registered and has no registering settle to race.
@@ -25,14 +29,21 @@ async fn test_form_stays_static_after_submission() {
 
             wait_for_element_children(&page, "#story-log .log-entry", 2).await;
 
-            let form_id_after: String = page
-                .evaluate::<(), String>("document.querySelector('#command-form')?.id || ''", None)
+            let form_same = page
+                .evaluate::<(), bool>(
+                    r#"(() => {
+                        const form = document.querySelector('#command-form');
+                        return !!form && form === window.__formBefore;
+                    })()"#,
+                    None,
+                )
                 .await
                 .unwrap();
 
-            assert_eq!(
-                form_id_before, form_id_after,
-                "Form should stay in DOM (static shell)"
+            assert!(
+                form_same,
+                "#command-form was replaced by the submission \
+                 (a fresh form would carry the same id)"
             );
         },
     )

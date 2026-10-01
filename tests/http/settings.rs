@@ -68,6 +68,24 @@ fn added_connection_id(panel: &str) -> String {
     panel[start..end].to_string()
 }
 
+/// The `<div class="connection-card">…</div>` slice for connection `id` in the
+/// rendered settings panel. Cards carry no data-id, so the anchor is the
+/// connection's own edit link and the slice ends at the next card.
+fn connection_card<'a>(panel: &'a str, id: &str) -> &'a str {
+    let anchor = format!(r#"hx-get="/fragment/connections/{id}/edit"#);
+    let anchor_pos = panel
+        .find(&anchor)
+        .unwrap_or_else(|| panic!("no connection card for '{id}' in panel: {panel}"));
+    let start = panel[..anchor_pos]
+        .rfind(r#"<div class="connection-card">"#)
+        .expect("connection card opening tag before its edit link");
+    let end = panel[anchor_pos..]
+        .find(r#"<div class="connection-card">"#)
+        .map(|offset| anchor_pos + offset)
+        .unwrap_or(panel.len());
+    &panel[start..end]
+}
+
 // [docs/specs/settings.md] SCENARIO: 20.1
 #[tokio::test]
 async fn test_settings_panel_renders_full_surface() {
@@ -110,11 +128,23 @@ async fn test_post_settings_switches_narrator() {
         "/settings",
         "narration_connection_id=openrouter-euryale&quantifier_connection_id=openrouter-gpt-4o-mini",
     );
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
     assert_eq!(body, "Settings saved!");
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert!(
+        connection_card(&panel, "openrouter-euryale")
+            .contains(r#"<span class="badge">Narrator</span>"#),
+        "the switched narrator should render its badge: {panel}"
+    );
+    assert!(
+        !connection_card(&panel, "openrouter-gpt-4o-mini")
+            .contains(r#"<span class="badge">Narrator</span>"#),
+        "the previous narrator should no longer render the Narrator badge: {panel}"
+    );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.3
@@ -127,11 +157,23 @@ async fn test_post_settings_switches_quantifier() {
         "/settings",
         "narration_connection_id=openrouter-gpt-4o-mini&quantifier_connection_id=ollama-gemma-4-26B",
     );
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
     assert_eq!(body, "Settings saved!");
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert!(
+        !connection_card(&panel, "openrouter-gpt-4o-mini")
+            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
+        "the previous quantifier should no longer render the Quantifier badge: {panel}"
+    );
+    assert!(
+        connection_card(&panel, "ollama-gemma-4-26B")
+            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
+        "the switched quantifier should render its badge: {panel}"
+    );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.4
@@ -144,11 +186,23 @@ async fn test_post_settings_switches_both_connections() {
         "/settings",
         "narration_connection_id=openrouter-euryale&quantifier_connection_id=ollama-gemma-4-26B",
     );
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
     assert_eq!(body, "Settings saved!");
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert!(
+        connection_card(&panel, "openrouter-euryale")
+            .contains(r#"<span class="badge">Narrator</span>"#),
+        "the switched narrator should render its badge: {panel}"
+    );
+    assert!(
+        connection_card(&panel, "ollama-gemma-4-26B")
+            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
+        "the switched quantifier should render its badge: {panel}"
+    );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.5

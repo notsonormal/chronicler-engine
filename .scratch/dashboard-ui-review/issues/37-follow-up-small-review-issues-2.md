@@ -29,6 +29,16 @@ From [Follow up on small issues found during review](36-follow-up-small-review-i
 - InMemory `delete_world` leaves the world's `characters` rows behind (SQLite cascades them).
 - Nothing drives `submitRetrigger()`'s URL in a browser test.
 
+From [Fix the weak dashboard and settings tests](34-fix-weak-dashboard-and-settings-tests.md):
+- `connection_card` in `tests/http/settings.rs` duplicates `preset_card_html_slice`; generalise the helper to take a card class.
+- `submit_command` (`tests/browser/stub/dashboard.rs`) duplicates the fill script in `send_action`; share the JS only.
+- `StubStatus`'s doc promises an idle/phase/error triple but serves two; the `Arc<Mutex<_>>` inside `Arc<StubState>` is redundant.
+- 16.8's 1.5s timer margin and its single read at 3.5s are load-sensitive: poll visibility across the window.
+- 16.10 waits up to ~10s of real polling; set `StubStatus::Error` before the confirm swap so the fresh node's first poll serves it.
+- The stub's Error arm omits `add_status_swap_headers`, which the real failing `/action/check` adds.
+- Spec 16.6 prose names the `send_action("wait")` helper.
+- A 16.9 acknowledgement race failed one gate run and passed on re-run; with the earlier stub-browser timing flake, check whether the stub browser tests share a timing assumption.
+
 ## Done when
 
 - Each item is fixed, dropped with a reason, or promoted to a ticket.

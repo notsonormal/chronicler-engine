@@ -1,30 +1,45 @@
 //! Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status error observer) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
 
-// No engine endpoint produces `htmx:beforeSwap` with `isError`; the test
-// dispatches the event itself, so the stub server cannot change the behaviour.
+// The engine's failing action route answers 500, so htmx fires
+// `htmx:beforeSwap` with `isError` on its own. The stub's Error outcome serves
+// that 500, and its `/status/generating` serves the spans the status poll
+// swaps; no test dispatches either event by hand.
 
 use std::time::Duration;
 
 use super::*;
 
-/// Dispatch the synthetic `htmx:beforeSwap` error the toast listens for.
-/// The message is wrapped in a tag so the handler's tag-stripping path runs.
-async fn dispatch_error_toast(page: &playwright_rs::Page, message: &str) {
-    let script = format!(
-        r#"(() => {{
-            const evt = new CustomEvent('htmx:beforeSwap', {{
-                bubbles: true,
-                cancelable: true,
-                detail: {{
-                    isError: true,
-                    serverResponse: '<p>{message}</p>',
-                    target: document.getElementById('action-area'),
-                }},
-            }});
-            document.body.dispatchEvent(evt);
-        }})()"#
-    );
-    page.evaluate::<(), ()>(&script, None).await.unwrap();
+/// Submit `command` through the shipped command form. Unlike `send_action`,
+/// this does not wait for the status span: a 500 is not swapped, so the status
+/// stays Ready and the error toast is the observable outcome. The form is
+/// submitted directly rather than by clicking Send: the failure path leaves
+/// Send locked until the next idle poll, and a second error must land inside
+/// the first toast's 5s timer.
+async fn submit_command(page: &playwright_rs::Page, command: &str) {
+    let command = command.to_string();
+    page.evaluate::<String, ()>(
+        r#"(command) => {
+            const form = document.getElementById('command-form');
+            const input = form.querySelector('input[name="command"]');
+            input.value = command;
+            form.requestSubmit();
+        }"#,
+        Some(&command),
+    )
+    .await
+    .unwrap();
+}
+
+/// Wait until the toast displays `text`, so a timer measurement starts from the
+/// toast actually being up.
+async fn wait_for_toast_text(page: &playwright_rs::Page, text: &str) {
+    let expected = text.to_string();
+    let shown = wait_for_condition_async(Duration::from_secs(3), Duration::from_millis(50), || {
+        let expected = expected.clone();
+        async move { read_error_toast(page).await.1 == expected }
+    })
+    .await;
+    assert!(shown, "toast never displayed {expected:?}");
 }
 
 /// Drive the shipped text-check swap: submit a command the auto-check
@@ -92,40 +107,24 @@ async fn read_submit_button(page: &playwright_rs::Page) -> (bool, String) {
     .unwrap()
 }
 
-/// Write `html` into the live #status-display, the way htmx swaps the
-/// /status/generating poll response into it. The HTML is bound as an
-/// evaluate argument, not spliced into the script source, so callers may
-/// pass markup containing quotes.
-async fn inject_status_html(page: &playwright_rs::Page, html: &str) {
-    let html_owned = html.to_string();
-    page.evaluate::<String, ()>(
-        r#"(html) => {
-            const display = document.getElementById('status-display');
-            if (!display) throw new Error('no live #status-display');
-            display.innerHTML = html;
-        }"#,
-        Some(&html_owned),
-    )
-    .await
-    .unwrap();
-}
-
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.7
 #[tokio::test]
 async fn test_error_toast_on_action_failure() {
-    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // `dispatch_error_toast` wraps the message in a tag, so the assertion
-        // matching the bare text proves the handler's tag-stripping path ran.
-        dispatch_error_toast(&page, "Internal server error").await;
+    with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
+        // The server's 500 body is the engine's error render, so the toast text
+        // is distinguishably the server's, not the submitted command echoed.
+        submit_command(&page, "Internal server error").await;
+        let expected = "Error: Failed to process action: Internal server error";
+        wait_for_toast_text(&page, expected).await;
 
         let (visible, text) = read_error_toast(&page).await;
         assert!(
             visible,
-            "#error-notification should gain .visible class on a 500 htmx:beforeSwap event"
+            "#error-notification should gain the .visible class on a 500 response"
         );
         assert_eq!(
-            text, "Internal server error",
-            "#error-notification should display the response body with tags stripped, got {text:?}"
+            text, expected,
+            "#error-notification should display the server's response with tags stripped, got {text:?}"
         );
     })
     .await;
@@ -134,12 +133,14 @@ async fn test_error_toast_on_action_failure() {
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.8
 #[tokio::test]
 async fn test_newer_error_keeps_toast_visible() {
-    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+    with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
         // Second error at 2.5s, checked at 6s: the first toast's timer (5s)
         // has fired but the second's (7.5s) has not, so the toast stays up.
-        dispatch_error_toast(&page, "First failure").await;
+        submit_command(&page, "First failure").await;
+        wait_for_toast_text(&page, "Error: Failed to process action: First failure").await;
         tokio::time::sleep(Duration::from_millis(2500)).await;
-        dispatch_error_toast(&page, "Second failure").await;
+        submit_command(&page, "Second failure").await;
+        wait_for_toast_text(&page, "Error: Failed to process action: Second failure").await;
         tokio::time::sleep(Duration::from_millis(3500)).await;
 
         let (visible, text) = read_error_toast(&page).await;
@@ -148,8 +149,8 @@ async fn test_newer_error_keeps_toast_visible() {
             "toast should stay visible until the second error's own timer fires, got text {text:?}"
         );
         assert_eq!(
-            text, "Second failure",
-            "#error-notification should show the most recent error, got {text:?}"
+            text, "Error: Failed to process action: Second failure",
+            "#error-notification should show the most recent server error, got {text:?}"
         );
     })
     .await;
@@ -195,57 +196,66 @@ async fn test_send_locks_and_unlocks_after_action_area_swap() {
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.10
 #[tokio::test]
 async fn test_status_error_reaches_observer_after_action_area_swap() {
-    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        swap_action_area_via_text_check_confirm(&page).await;
-        assert_status_display_restored(&page).await;
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let status = stub.status_handle();
+        async move {
+            swap_action_area_via_text_check_confirm(&page).await;
+            assert_status_display_restored(&page).await;
 
-        // The engine's /status/generating poll returns exactly this span when
-        // a generation failed; htmx swaps it into #status-display. The raw
-        // innerHTML write here is the same childList mutation that swap
-        // produces, so a live observer must toast it — the toast's own
-        // beforeSwap listener is not involved.
-        inject_status_html(
-            &page,
-            r#"<span class="status error">Error: narration failed</span>"#,
-        )
-        .await;
-        let (visible, text) = read_error_toast(&page).await;
-        assert!(
-            visible,
-            "status error should reach the observer after an action-area swap, got {text:?}"
-        );
-        assert_eq!(
-            text, "Error: narration failed",
-            "#error-notification should show the status error, got {text:?}"
-        );
+            // The stub's /status/generating answers the error span a failed
+            // generation renders; the fresh #status-display's own poll swaps it in
+            // and the body-level observer toasts it — the toast's beforeSwap
+            // listener is not involved.
+            status.set(StubStatus::Error("narration failed".to_string()));
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(8),
+                    Duration::from_millis(100),
+                    || async { read_error_toast(&page).await.0 },
+                )
+                .await,
+                "status error should reach the observer after an action-area swap"
+            );
+            let (_, text) = read_error_toast(&page).await;
+            assert_eq!(
+                text, "Error: narration failed",
+                "#error-notification should show the status error, got {text:?}"
+            );
 
-        // Let the first toast's 5s hide timer run out so visibility alone
-        // proves the second show call.
-        tokio::time::sleep(Duration::from_millis(5500)).await;
-        let (visible, text) = read_error_toast(&page).await;
-        assert!(
-            !visible,
-            "toast should have hidden before the dedupe check, got {text:?}"
-        );
+            // A Ready poll clears lastStatusError; wait for it, then for the first
+            // toast's 5s hide timer to run out, so visibility alone proves the
+            // second show call.
+            status.set(StubStatus::Idle);
+            wait_for_status_ready(&page).await;
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(12),
+                    Duration::from_millis(100),
+                    || async { !read_error_toast(&page).await.0 },
+                )
+                .await,
+                "toast should have hidden before the dedupe check"
+            );
 
-        // A Ready status clears lastStatusError, so the SAME error must toast
-        // again. If the observer survived the swap but its dedupe state
-        // leaked across it, the repeat stays hidden.
-        inject_status_html(&page, r#"<span class="status ready">Ready</span>"#).await;
-        inject_status_html(
-            &page,
-            r#"<span class="status error">Error: narration failed</span>"#,
-        )
-        .await;
-        let (visible, text) = read_error_toast(&page).await;
-        assert!(
-            visible,
-            "the same error should toast again after a Ready status reset the dedupe, got {text:?}"
-        );
-        assert_eq!(
-            text, "Error: narration failed",
-            "#error-notification should show the status error again, got {text:?}"
-        );
+            // The Ready status reset the dedupe, so the SAME error must toast
+            // again. If the observer survived the swap but its dedupe state leaked
+            // across it, the repeat stays hidden.
+            status.set(StubStatus::Error("narration failed".to_string()));
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(8),
+                    Duration::from_millis(100),
+                    || async { read_error_toast(&page).await.0 },
+                )
+                .await,
+                "the same error should toast again after a Ready status reset the dedupe"
+            );
+            let (_, text) = read_error_toast(&page).await;
+            assert_eq!(
+                text, "Error: narration failed",
+                "#error-notification should show the status error again, got {text:?}"
+            );
+        }
     })
     .await;
 }

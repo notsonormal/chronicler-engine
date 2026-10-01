@@ -1,7 +1,7 @@
 # Fix the weak dashboard and settings tests
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -25,3 +25,23 @@ Findings from the test-design review, in [test_design.md](../assets/test-audit/t
 - Each listed test fails when its named regression is injected by hand (a replaced form, a missing toast, an unswitched connection). Record the check under `## Answer`.
 - `StubActionOutcome::Idle` is gone or matches a real response shape.
 - `python build.py` is green. The user reviews the diff. Commit after approval.
+
+## Answer
+
+Each test below was proven able to fail: the behaviour it guards was broken in the worktree, the test failed, and the break was reverted.
+
+- **16.5** (tier 3, `test_form_stays_static_after_submission`): asserts the same `#command-form` DOM node, not its id string. Proof: swapping in a clone with the same id made it fail ("was replaced").
+- **16.7 / 16.8** (tier 2 stub): the synthetic `htmx:beforeSwap` helper is gone. The stub serves a real 500 from `/action/check` through the engine's `render_error`, and the test submits the shipped form and reads the toast. The body is server text, so a toast built from the input value fails. Proofs: the stub answering 200 gave "toast never displayed"; removing `clearTimeout(errorHideTimer)` left the toast up at 6s; toasting the input value failed 16.7. The test submits with a local `submit_command` helper, not `send_action`, because `send_action` waits for the "Thinking" status, which a 500 never produces.
+- **`StubActionOutcome::Idle`** deleted. It returned a shape the real route never returns, and nothing used it.
+- **20.2 / 20.3 / 20.4** (tier 1): each follows the save with `GET /fragment/settings` and asserts the Narrator/Quantifier badge moved (the previous holder loses it). Per ticket 31 being open, the read-back is the shipped GET, not storage. Proof: removing the two role assignments in `save_settings_handler` failed all three while the body still said "Settings saved!".
+- **B2 / 16.10** (tier 2 stub): `inject_status_html` is gone. The stub serves `/status/generating` (idle text or the real error span, per server through a `StubStatus` handle) and the test waits for the shipped 5s poll. Proofs: an always-idle stub failed the first assertion; removing the observer's `lastStatusError = null` failed the dedupe-reset assertion.
+- 16.9 is unchanged (ticket 03 already moved it to the shipped path).
+
+Specs 16.5, 16.7, 16.8, 16.10 and 20.2–20.4 reworded to observable behaviour.
+
+**Gate:** worktree on `9b46f1a5`, main unchanged since: `nextest: 1661 passed, 0 failed, 2 skipped`, browser 30 passed (`build_20261001_205821.log`). The first run hit a 16.9 acknowledgement race that passed on re-run.
+
+**Code review** (`/code-review`, ISSUES → fixed): the stub's 500 echoed the submitted command so a toast built from the input would still pass; the "unchanged keeps its badge" assertions held without the switch; 16.5's Gherkin still said "id unchanged".
+
+**Not fixed (judgement, now in ticket 37):** `connection_card` duplicates `preset_card_html_slice`; `submit_command` duplicates `send_action`'s fill script; the `StubStatus` doc over-promises; a redundant inner `Arc<Mutex>`; 16.8's 1.5s timer margin and a single read at 3.5s are load-sensitive; set the error before the confirm swap to save up to 5s in 16.10; the stub's Error arm omits the status-swap headers the real route adds; 16.6 prose names the `send_action("wait")` helper.
+

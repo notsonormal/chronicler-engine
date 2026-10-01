@@ -63,6 +63,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 36 [Follow up on small issues found during review](issues/36-follow-up-small-review-issues.md): resolved — 21 of 28 items fixed or closed, 7 dropped with reasons; leftovers now in [round 2](issues/37-follow-up-small-review-issues-2.md), and the edit-another-entry freeze is [its own ticket](issues/38-edit-another-entry-freezes-poll.md).
 
+34 [Fix the weak dashboard and settings tests](issues/34-fix-weak-dashboard-and-settings-tests.md): resolved — 16.5, 16.7/16.8, 16.10 (B2) and 20.2–20.4 now fail on the regression they name, each proven by a temporary break; `StubActionOutcome::Idle` deleted.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.
