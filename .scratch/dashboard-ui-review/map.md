@@ -26,7 +26,7 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 - **Reference docs:** `docs/diataxis/reference/frontend/ui_design.md` (design tokens), `docs/diataxis/reference/frontend/dashboard.md`, `docs/diataxis/explanation/dashboard_design.md`.
 - **User data:** review tickets run against the user's real `data/` and settings. Use throwaway games, worlds, and presets, and restore any changed setting before the session ends.
 - **Final re-review:** every ticket added to this map must also be added to the `Blocked by:` line of [Final re-review of the dashboard](issues/24-final-re-review.md).
-- **Small review follow-ups:** issues from code reviews or implementers that don't block a merge go under `## Items` in [Follow up on small issues found during review](issues/36-follow-up-small-review-issues.md), with their source ticket. Bigger ones get their own ticket.
+- **Small review follow-ups:** issues from code reviews or implementers that don't block a merge go under `## Items` in [Follow up on small issues found during review, round 2](issues/37-follow-up-small-review-issues-2.md), with their source ticket. Bigger ones get their own ticket.
 - Other agents may work in the repo at the same time. Do not touch unrelated changes.
 
 ## Decisions so far
@@ -60,6 +60,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 20 [Copy sweep](issues/20-copy-sweep.md): resolved — type names, plurals, jargon and unlabelled selects fixed per findings 5.1, 5.2, 5.4, 5.5; tier 1 scenario 25.8 plus extended 20.8.
 
 28 [Decide whether duplicate connection and preset names are allowed](issues/28-decide-duplicate-names.md): resolved — rejected on add (trimmed, case-insensitive; connections global, presets per category), edits keep their own name, Duplicate picks a free "(Copy N)"; tier 1 scenarios 20.9–20.11, 21.29–21.34.
+
+36 [Follow up on small issues found during review](issues/36-follow-up-small-review-issues.md): resolved — 21 of 28 items fixed or closed, 7 dropped with reasons; leftovers now in [round 2](issues/37-follow-up-small-review-issues-2.md), and the edit-another-entry freeze is [its own ticket](issues/38-edit-another-entry-freezes-poll.md).
 
 ## Not yet specified
 

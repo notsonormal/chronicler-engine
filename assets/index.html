@@ -144,13 +144,18 @@
         }
       }
 
-      function updateToThinking() {
-        setButtonState(true);
+      // One writer for the status span: its label and class always travel together.
+      function setStatus(label, cls) {
         const statusDisplay = document.getElementById("status-display");
         if (statusDisplay) {
           statusDisplay.innerHTML =
-            '<span class="status thinking">Thinking...</span>';
+            '<span class="status ' + cls + '">' + label + "</span>";
         }
+      }
+
+      function updateToThinking() {
+        setButtonState(true);
+        setStatus("Thinking...", "thinking");
       }
 
       // Locks on submit; the status poll unlocks.
@@ -162,7 +167,7 @@
       function onStatusPoll(el) {
         const text = el.textContent.trim();
         if (text === "idle") {
-          el.innerHTML = '<span class="status ready">Ready</span>';
+          setStatus("Ready", "ready");
           setButtonState(false);
         } else if (
           text === "narrating" ||
@@ -176,8 +181,7 @@
             "generating-event": "Generating event...",
             options: "Generating options...",
           };
-          el.innerHTML =
-            '<span class="status thinking">' + phaseMap[text] + "</span>";
+          setStatus(phaseMap[text], "thinking");
           setButtonState(true);
         }
       }
@@ -209,10 +213,9 @@
         }
       });
 
-      let currentEditId = null;
-      let originalText = null;
-      let originalActions = null;
-      let originalSwipeControls = null;
+      // One bundle for the edit in progress: the entry id and the pre-edit HTML
+      // each revert restores. Null means no edit is active.
+      let editState = null;
       let originalTrigger = null;
 
       function pausePolling() {
@@ -243,14 +246,14 @@
       }
 
       function showEditForm(id) {
-        currentEditId = id;
+        editState = { id: id, text: null, actions: null, swipeControls: null };
         const entry = document.querySelector(`[data-id="${id}"]`);
         if (entry) {
           const textSpan = entry.querySelector(".text");
 
           // data-raw-text holds the pre-markdown source; .text is rendered.
           const rawText = entry.getAttribute("data-raw-text") || "";
-          originalText = textSpan.innerHTML;
+          editState.text = textSpan.innerHTML;
 
           textSpan.innerHTML = "";
           const textarea = document.createElement("textarea");
@@ -277,12 +280,12 @@
           // save/cancel, and the swipe controls stay put but stop responding.
           const actionsContainer = entry.querySelector(".message-actions");
           if (actionsContainer) {
-            originalActions = actionsContainer.innerHTML;
+            editState.actions = actionsContainer.innerHTML;
             actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save">✓</button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel">✗</button>`;
           }
           const swipeControls = entry.querySelector(".swipe-controls");
           if (swipeControls) {
-            originalSwipeControls = swipeControls.innerHTML;
+            editState.swipeControls = swipeControls.innerHTML;
             swipeControls.querySelectorAll(".action-btn").forEach((btn) => {
               btn.disabled = true;
             });
@@ -294,46 +297,43 @@
       }
 
       function clearEditState() {
-        currentEditId = null;
-        originalText = null;
-        originalActions = null;
-        originalSwipeControls = null;
+        editState = null;
       }
 
       // The caller decides whether and when to resume polling.
       function revertEdit() {
-        if (currentEditId === null) return;
-        const entry = document.querySelector(`[data-id="${currentEditId}"]`);
+        if (editState === null) return;
+        const entry = document.querySelector(`[data-id="${editState.id}"]`);
         if (entry) {
           const textSpan = entry.querySelector(".text");
-          textSpan.innerHTML = originalText;
+          textSpan.innerHTML = editState.text;
           const actionsContainer = entry.querySelector(".message-actions");
-          if (actionsContainer && originalActions !== null) {
-            actionsContainer.innerHTML = originalActions;
+          if (actionsContainer && editState.actions !== null) {
+            actionsContainer.innerHTML = editState.actions;
           }
           const swipeControls = entry.querySelector(".swipe-controls");
-          if (swipeControls && originalSwipeControls !== null) {
-            swipeControls.innerHTML = originalSwipeControls;
+          if (swipeControls && editState.swipeControls !== null) {
+            swipeControls.innerHTML = editState.swipeControls;
           }
         }
         clearEditState();
       }
 
       function cancelEdit() {
-        if (currentEditId === null) return;
+        if (editState === null) return;
         revertEdit();
         resumePolling();
         htmx.trigger("#story-log", "htmx:refresh");
       }
 
       function submitEdit() {
-        if (currentEditId === null) return;
+        if (editState === null) return;
         const newText = document.getElementById("edit-textarea").value;
         const formData = new URLSearchParams();
         formData.append("text", newText);
-        // currentEditId/originalText stay set until the outcome is known, so
-        // a failure can restore the entry instead of stranding it in edit mode.
-        fetch(`/history/${currentEditId}`, {
+        // editState stays set until the outcome is known, so a failure can
+        // restore the entry instead of stranding it in edit mode.
+        fetch(`/history/${editState.id}`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: formData,
@@ -360,10 +360,7 @@
       // Raw-fetch failures have no htmx swap to restore the status display;
       // without this it stays on "Thinking..." with a disabled Stop button.
       function resetStatusToReady() {
-        const statusDisplay = document.getElementById("status-display");
-        if (statusDisplay) {
-          statusDisplay.innerHTML = '<span class="status ready">Ready</span>';
-        }
+        setStatus("Ready", "ready");
         setButtonState(false);
       }
 

@@ -193,32 +193,6 @@ pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation
     violations
 }
 
-/// Rejects legacy test-context helpers in integration tests.
-pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation> {
-    let mut violations = Vec::new();
-
-    if !path.starts_with("integration/") {
-        return violations;
-    }
-
-    for (line_num, line) in content.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("//") || trimmed.starts_with("/*") {
-            continue;
-        }
-
-        if line.contains("make_test_context(") && !line.contains("make_test_context_with_sqlite(") {
-            violations.push(Violation::error(
-                path,
-                line_num + 1,
-                "Integration tests must not call make_test_context(; use TestAppBuilder instead."
-                    .to_string(),
-            ));
-        }
-    }
-    violations
-}
-
 fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 

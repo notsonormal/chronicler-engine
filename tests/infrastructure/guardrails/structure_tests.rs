@@ -90,43 +90,6 @@ fn test_check_mod_purity_skips_server_mod() {
 }
 
 #[test]
-fn test_check_no_legacy_test_context_catches_legacy() {
-    let violations = check_no_legacy_test_context(
-        "integration/world_smoke.rs",
-        "let ctx = make_test_context(&storage);\n",
-    );
-    assert_eq!(violations.len(), 1);
-    assert!(violations[0].message.contains("TestAppBuilder"));
-}
-
-#[test]
-fn test_check_no_legacy_test_context_allows_sqlite_variant() {
-    let violations = check_no_legacy_test_context(
-        "integration/world_smoke.rs",
-        "let ctx = make_test_context_with_sqlite(&storage);\n",
-    );
-    assert_eq!(violations.len(), 0);
-}
-
-#[test]
-fn test_check_no_legacy_test_context_skips_non_integration() {
-    let violations = check_no_legacy_test_context(
-        "src/something.rs",
-        "let ctx = make_test_context(&storage);\n",
-    );
-    assert_eq!(violations.len(), 0);
-}
-
-#[test]
-fn test_check_no_legacy_test_context_skips_comments() {
-    let violations = check_no_legacy_test_context(
-        "integration/world_smoke.rs",
-        "// let ctx = make_test_context(&storage);\n",
-    );
-    assert_eq!(violations.len(), 0);
-}
-
-#[test]
 fn test_check_empty_rust_file_catches_only_comments() {
     let violations = check_empty_rust_file("src/empty.rs", "// nothing here\n// or here\n");
     assert_eq!(violations.len(), 1);

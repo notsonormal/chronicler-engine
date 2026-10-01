@@ -27,20 +27,6 @@ async fn dispatch_error_toast(page: &playwright_rs::Page, message: &str) {
     page.evaluate::<(), ()>(&script, None).await.unwrap();
 }
 
-/// Read the toast's `.visible` state and displayed text.
-async fn read_error_toast(page: &playwright_rs::Page) -> (bool, String) {
-    page.evaluate::<(), (bool, String)>(
-        r#"(() => {
-            const el = document.getElementById('error-notification');
-            if (!el) return [false, ''];
-            return [el.classList.contains('visible'), el.textContent || ''];
-        })()"#,
-        None,
-    )
-    .await
-    .unwrap()
-}
-
 /// Drive the shipped text-check swap: submit a command the auto-check
 /// intercepts, so the preview replaces #action-area, then confirm the preview,
 /// so `/action/confirm` swaps a fresh #action-area in. Every node the page-load

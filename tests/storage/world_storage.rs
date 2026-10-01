@@ -1,4 +1,4 @@
-//! Integration tests for world persistence: create/list/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
+//! Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
 
 use chronicler_engine::domain::model::map::{MapDef, Overworld};
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
@@ -307,6 +307,37 @@ fn test_create_world_duplicate_key_refused() {
 }
 
 #[test]
+fn test_create_world_after_delete_does_not_reuse_id() {
+    let storage = Storage::new_in_memory();
+
+    storage
+        .create_world(
+            &make_test_world("first", "First"),
+            &make_test_map("first_map", "First Map"),
+        )
+        .unwrap();
+    let second_id = storage
+        .create_world(
+            &make_test_world("second", "Second"),
+            &make_test_map("second_map", "Second Map"),
+        )
+        .unwrap();
+    storage.delete_world("second").unwrap();
+
+    let third_id = storage
+        .create_world(
+            &make_test_world("third", "Third"),
+            &make_test_map("third_map", "Third Map"),
+        )
+        .unwrap();
+
+    assert!(
+        third_id > second_id,
+        "a new world must not reuse a deleted world's id (second={second_id}, third={third_id})"
+    );
+}
+
+#[test]
 fn test_seed_world_replaces_existing_key_in_memory() {
     let storage = Storage::new_in_memory();
 
@@ -458,15 +489,15 @@ fn test_sqlite_seed_world_idempotent() {
 fn test_sqlite_create_world_duplicate_key_refused() {
     let storage = create_test_storage(1);
 
-    let world_card = make_test_world("sql_dup", "First");
-    let map = make_test_map("sql_map", "SQL Map");
+    let world_card = make_test_world("duplicate", "First");
+    let map = make_test_map("dup_map", "Duplicate Map");
     storage.create_world(&world_card, &map).unwrap();
 
-    let world_card2 = make_test_world("sql_dup", "Second");
+    let world_card2 = make_test_world("duplicate", "Second");
     let result = storage.create_world(&world_card2, &map);
 
     assert!(
-        matches!(&result, Err(EngineError::WorldAlreadyExists(key)) if key == "sql_dup"),
+        matches!(&result, Err(EngineError::WorldAlreadyExists(key)) if key == "duplicate"),
         "a duplicate key must be refused, got: {result:?}"
     );
 
@@ -479,15 +510,46 @@ fn test_sqlite_create_world_duplicate_key_refused() {
 }
 
 #[test]
+fn test_sqlite_create_world_after_delete_does_not_reuse_id() {
+    let storage = create_test_storage(1);
+
+    storage
+        .create_world(
+            &make_test_world("first", "First"),
+            &make_test_map("first_map", "First Map"),
+        )
+        .unwrap();
+    let second_id = storage
+        .create_world(
+            &make_test_world("second", "Second"),
+            &make_test_map("second_map", "Second Map"),
+        )
+        .unwrap();
+    storage.delete_world("second").unwrap();
+
+    let third_id = storage
+        .create_world(
+            &make_test_world("third", "Third"),
+            &make_test_map("third_map", "Third Map"),
+        )
+        .unwrap();
+
+    assert!(
+        third_id > second_id,
+        "a new world must not reuse a deleted world's id (second={second_id}, third={third_id})"
+    );
+}
+
+#[test]
 fn test_sqlite_seed_world_replaces_existing_key() {
     let storage = create_test_storage(1);
 
-    let first = make_test_world("sql_reseed", "First");
+    let first = make_test_world("reseed", "First");
     storage
         .seed_world(&first, &make_test_map("first_map", "First Map"))
         .unwrap();
 
-    let second = make_test_world("sql_reseed", "Second");
+    let second = make_test_world("reseed", "Second");
     storage
         .seed_world(&second, &make_test_map("second_map", "Second Map"))
         .unwrap();
@@ -498,7 +560,7 @@ fn test_sqlite_seed_world_replaces_existing_key() {
         worlds[0].name, "Second",
         "re-seeding must replace the existing card"
     );
-    let stored = storage.get_world("sql_reseed").unwrap().unwrap();
+    let stored = storage.get_world("reseed").unwrap().unwrap();
     assert_eq!(
         stored.map.overworld.id, "second_map",
         "re-seeding must replace the existing map"

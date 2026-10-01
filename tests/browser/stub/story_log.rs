@@ -23,17 +23,13 @@ async fn story_log_trigger(page: &playwright_rs::Page) -> String {
     .unwrap()
 }
 
-/// The text the error toast currently shows.
-async fn error_toast_text(page: &playwright_rs::Page) -> String {
-    page.evaluate::<(), String>(
-        r#"(() => {
-            const el = document.getElementById('error-notification');
-            return el ? (el.textContent || '') : '';
-        })()"#,
-        None,
-    )
-    .await
-    .unwrap()
+/// The narration entry's current visible text, the value a revert restores.
+async fn narration_text(page: &playwright_rs::Page) -> String {
+    page.locator(".log-entry.narration .text")
+        .await
+        .inner_text()
+        .await
+        .unwrap_or_default()
 }
 
 /// Open edit mode on the narration entry (the fixture's first, swipe-bearing
@@ -76,12 +72,7 @@ async fn test_edit_mode_activates_on_click() {
 #[tokio::test]
 async fn test_edit_cancel_restores_original() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        let original_text = page
-            .locator(".log-entry.narration .text")
-            .await
-            .inner_text()
-            .await
-            .unwrap_or_default();
+        let original_text = narration_text(&page).await;
         assert!(!original_text.is_empty(), "Should have original text");
 
         page.locator(".log-entry.narration .edit-btn")
@@ -155,12 +146,7 @@ async fn test_polling_pauses_during_edit() {
 #[tokio::test]
 async fn test_failed_save_restores_entry_and_resumes_polling() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        let original_text = page
-            .locator(".log-entry.narration .text")
-            .await
-            .inner_text()
-            .await
-            .unwrap_or_default();
+        let original_text = narration_text(&page).await;
         assert!(!original_text.is_empty(), "Should have original text");
 
         page.locator(".log-entry.narration .edit-btn")
@@ -190,7 +176,7 @@ async fn test_failed_save_restores_entry_and_resumes_polling() {
 
         wait_until_visible(&page, "#error-notification.visible", Duration::from_secs(5)).await;
         assert!(
-            !error_toast_text(&page).await.is_empty(),
+            !read_error_toast(&page).await.1.is_empty(),
             "the failed save should show an error message"
         );
 
@@ -352,12 +338,7 @@ async fn test_edit_textarea_fits_content_and_takes_focus() {
 #[tokio::test]
 async fn test_escape_cancels_edit() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        let original_text = page
-            .locator(".log-entry.narration .text")
-            .await
-            .inner_text()
-            .await
-            .unwrap_or_default();
+        let original_text = narration_text(&page).await;
         assert!(!original_text.is_empty(), "Should have original text");
 
         enter_narration_edit(&page).await;

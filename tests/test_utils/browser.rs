@@ -312,6 +312,20 @@ pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
         .len()
 }
 
+/// The error toast's `.visible` state and displayed text.
+pub async fn read_error_toast(page: &playwright_rs::Page) -> (bool, String) {
+    page.evaluate::<(), (bool, String)>(
+        r#"(() => {
+            const el = document.getElementById('error-notification');
+            if (!el) return [false, ''];
+            return [el.classList.contains('visible'), el.textContent || ''];
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap()
+}
+
 /// Capture failure diagnostics before panicking: screenshot to
 /// `tmp/screenshots/`, DOM dump + per-server engine logs to
 /// `tmp/test_diagnostics/`, and log tails printed into the failure output.

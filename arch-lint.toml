@@ -63,7 +63,7 @@ paths = ["src/adapters/driven/text_check/**"]
 name = "narrative"
 paths = [
   "src/application/agents/**",
-  "src/application/narrative_prompt/**",
+  "src/application/prompting/**",
 ]
 
 [[scopes]]

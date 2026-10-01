@@ -148,8 +148,12 @@ impl Storage {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
 
-                let world_id = Self::write_world_row(&conn, world_card, &now, mode)?;
-                Self::write_map_row(&conn, world_id, map, &now)?;
+                // World and map are one write: a failed map write must not
+                // leave a re-seeded world behind a stale map.
+                let tx = conn.unchecked_transaction()?;
+                let world_id = Self::write_world_row(&tx, world_card, &now, mode)?;
+                Self::write_map_row(&tx, world_id, map, &now)?;
+                tx.commit()?;
                 Ok(world_id)
             }
             Backend::InMemory(data) => {
@@ -166,7 +170,8 @@ impl Storage {
                     return Ok(existing.world_id);
                 }
 
-                let new_id = data.worlds.last().map(|w| w.world_id).unwrap_or(0) + 1;
+                let new_id = data.next_world_id;
+                data.next_world_id += 1;
                 data.worlds.push(InMemoryWorld {
                     world_id: new_id,
                     world_card: world_card.clone(),
@@ -186,29 +191,30 @@ impl Storage {
         now: &str,
         mode: WorldWriteMode,
     ) -> Result<i64, EngineError> {
-        const INSERT: &str = "INSERT INTO worlds (
-                key, name, description, global_rules,
-                scenarios, default_scenario_id, default_room_image,
-                narrator_mode, narrative_perspective, narrative_tense,
-                options_always_on,
-                created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)";
-        const ON_CONFLICT: &str = " ON CONFLICT(key) DO UPDATE SET
-                name = excluded.name,
-                description = excluded.description,
-                global_rules = excluded.global_rules,
-                scenarios = excluded.scenarios,
-                default_scenario_id = excluded.default_scenario_id,
-                default_room_image = excluded.default_room_image,
-                narrator_mode = excluded.narrator_mode,
-                narrative_perspective = excluded.narrative_perspective,
-                narrative_tense = excluded.narrative_tense,
-                options_always_on = excluded.options_always_on,
-                updated_at = excluded.updated_at";
+        // `params!` below binds the shared columns first, then `now`.
+        let columns = WORLD_COLUMNS.join(", ");
+        let placeholders = (1..=WORLD_COLUMNS.len())
+            .map(|position| format!("?{position}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let timestamp = format!("?{}", WORLD_COLUMNS.len() + 1);
+        let insert = format!(
+            "INSERT INTO worlds ({columns}, created_at, updated_at) \
+             VALUES ({placeholders}, {timestamp}, {timestamp})"
+        );
+        let upsert_assignments = WORLD_COLUMNS
+            .iter()
+            .filter(|column| **column != "key")
+            .map(|column| format!("{column} = excluded.{column}"))
+            .collect::<Vec<_>>()
+            .join(", ");
 
         let sql = match mode {
-            WorldWriteMode::Insert => INSERT.to_string(),
-            WorldWriteMode::Upsert => format!("{INSERT}{ON_CONFLICT}"),
+            WorldWriteMode::Insert => insert,
+            WorldWriteMode::Upsert => format!(
+                "{insert} ON CONFLICT(key) DO UPDATE SET \
+                 {upsert_assignments}, updated_at = excluded.updated_at"
+            ),
         };
 
         conn.execute(
@@ -290,10 +296,18 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
+                // `params!` below binds the shared columns first, then `now`, `id`.
+                let assignments = WORLD_COLUMNS
+                    .iter()
+                    .map(|column| format!("{column}=?"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 conn.execute(
-                    "UPDATE worlds SET key=?, name=?, description=?, global_rules=?, scenarios=?, default_scenario_id=?, default_room_image=?, narrator_mode=?, narrative_perspective=?, narrative_tense=?, options_always_on=?, updated_at=? WHERE id=?",
+                    &format!("UPDATE worlds SET {assignments}, updated_at=? WHERE id=?"),
                     rusqlite::params![
-                        world_card.key, world_card.name, world_card.description,
+                        world_card.key,
+                        world_card.name,
+                        world_card.description,
                         serde_json::to_string(&world_card.global_rules)?,
                         serde_json::to_string(&world_card.scenarios)?,
                         world_card.default_scenario_id.clone().unwrap_or_default(),
@@ -302,7 +316,8 @@ impl Storage {
                         world_card.narrative_perspective.as_str(),
                         world_card.narrative_tense.as_str(),
                         world_card.options_always_on as i64,
-                        &now, &id
+                        &now,
+                        &id
                     ],
                 )?;
                 conn.execute(
@@ -389,6 +404,23 @@ impl Storage {
         })
     }
 }
+
+/// The `worlds` columns every write binds, in `params!` order. The insert
+/// column list, the upsert set and `update_world`'s set all derive from it, so
+/// a new column is listed here once.
+const WORLD_COLUMNS: &[&str] = &[
+    "key",
+    "name",
+    "description",
+    "global_rules",
+    "scenarios",
+    "default_scenario_id",
+    "default_room_image",
+    "narrator_mode",
+    "narrative_perspective",
+    "narrative_tense",
+    "options_always_on",
+];
 
 /// Whether a write to the `worlds` table updates an existing key in place or
 /// refuses it.

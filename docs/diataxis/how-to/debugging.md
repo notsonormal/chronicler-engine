@@ -75,7 +75,7 @@ Variants with non-trivial First Checks. For variants not listed here, the varian
 
 ### `EngineError::ContextOverflow { requested, max }`
 
-**First Check.** The token-budget calculation in `src/application/narrative_prompt/`.
+**First Check.** The token-budget calculation in `src/application/prompting/`.
 
 **Common Causes.** History too long. System prompt too large. Combined context exceeds `max_context_tokens`.
 

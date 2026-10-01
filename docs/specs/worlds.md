@@ -90,11 +90,11 @@ And the posture selects auto-save to /worlds/posture_world/posture
 #### Scenario 25.7: Creating a World whose identifier already exists is refused
 
 ```gherkin
-Given a seeded world with identifier "posture_world"
-When the client creates a second World whose identifier is "posture_world"
+Given a seeded world with identifier "posture_world", a description and a room map
+When the client POST /worlds with a second World whose identifier is "posture_world"
 Then the response is a 400
 And the body names the identifier and says it already exists
-And the stored World is unchanged
+And the stored World keeps its name, description, and map
 ```
 
 ### World list

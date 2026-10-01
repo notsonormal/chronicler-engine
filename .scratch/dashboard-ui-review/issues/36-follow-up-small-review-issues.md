@@ -1,7 +1,7 @@
 # Follow up on small issues found during review
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -59,3 +59,19 @@ From [Show Character names in the visual sidebar](22-show-npc-names.md):
 - Each item is fixed or dropped with a one-line reason in `## Answer`.
 - Tests follow the map's Notes. Pure comment and docs fixes need no test.
 - `python build.py` is green. Commit after review.
+
+## Answer
+
+Every item was checked against the code first. Done unless noted.
+
+**Ticket 29:** 25.7's When names `POST /worlds` and its Then covers description and map (test strengthened); test-file header fixed; the 29 storage pairs use identical literals. The SQLite pre-check item was already closed by 35.
+**Ticket 33:** deleted the dead `check_no_legacy_test_context` guardrail and the unused `tests/helpers/application_ext.rs`; `arch-lint.toml` and `debugging.md` now say `prompting/`. *Dropped:* the stale `docs/plans/t9-00-…` doc, because it still has a pending action item and is history, not an orphan.
+**Ticket 27:** one `setStatus(label, cls)` in `index.html`; one shared `read_error_toast`. *Dropped:* the `/retrigger` 500 stub route is removed rather than driven, since its failure path is the shared `submitGenerationRequest` that 30.5 already covers; the "ids vs CONTEXT.md terms" wording waits for ticket 31, and the 30.5 placement waits for ticket 32.
+**Ticket 35:** one `WORLD_COLUMNS` list drives the three SQL statements; `seed_world` writes world and map in one transaction (so `create_world` is transactional too); InMemory world ids come from a monotonic counter, with a test pair; header fixed.
+**Ticket 11:** one `editState` bundle replaces four globals; one `narration_text` test helper; the height assertion holds above the 50vh cap. *Dropped:* editing a second entry while one is open (needs a design, now ticket 38) and route interception for the fetch patch (needs playwright-rs plumbing).
+**Ticket 22:** label is `aria-hidden`; the escaping test asserts no raw markup; 32.1 seeds two NPCs. *Dropped:* the redundant flex declarations (visual-sidebar CSS belongs to ticket 19) and name truncation (ticket 19).
+
+**Gate:** worktree on `6db6e4d9`: `nextest: 1641 passed`, browser 30 (`build_20261001_193300.log`). Then on main with 20 and 28 applied: `nextest: 1661 passed, 0 failed, 2 skipped`, browser 30 passed (`build_20261001_195556.log`).
+
+**Code review** (`/code-review`, no hard findings; the only must-fix was this answer). Left as judgement calls, now in ticket 37: `cls` is an abbreviation in `setStatus`; the escaping assertion no longer pins the escaped form; 32.1 counts labels, not portraits.
+
