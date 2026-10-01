@@ -250,6 +250,7 @@ vectors.db
 !.pi/plan-mode.json
 context.md
 mutants.out/*
+.pi-herdsman/
 
 # Turbo-agent proxy (tools/turbo-agent) regenerable state
 tools/turbo-agent/.venv/
