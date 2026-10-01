@@ -67,6 +67,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 37 [Follow up on small issues found during review, round 2](issues/37-follow-up-small-review-issues-2.md): resolved — 17 of 20 items fixed, the 16.9 acknowledgement flake explained and fixed, 3 deferred or dropped with reasons; judgement leftovers listed in its answer.
 
+Candidates raised while closing the AFK tickets, now tickets: [Stop editing a second entry from freezing the story-log poll](issues/38-edit-another-entry-freezes-poll.md) (grilling), [Enforce preset name uniqueness in storage](issues/39-storage-level-preset-name-uniqueness.md), [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md).
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.

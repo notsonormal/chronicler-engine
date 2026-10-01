@@ -1,6 +1,6 @@
 # Stop editing a second entry from freezing the story-log poll
 
-Type: task (AFK)
+Type: grilling
 Status: open
 Blocked by: —
 
