@@ -341,3 +341,65 @@ And the returned card contains a "Set Active (Interactive Fiction)" button
 And the returned card contains a "Set Active (Novel)" button
 And storage reports the copy's allowed_modes as ["novel", "interactive_fiction"]
 ```
+
+### Duplicate names
+
+#### Scenario 21.29: Creating a preset whose name already exists in its category is refused
+
+```gherkin
+Given a fresh app state with a System preset named "Alpha"
+When the client POST /prompt-presets with name "Alpha" and preset_type "system"
+Then the response is a 400
+And the body names "Alpha" and says a system preset with that name already exists
+```
+
+#### Scenario 21.30: Creating a preset differing only in case and surrounding space is refused
+
+```gherkin
+Given a fresh app state with a System preset named "Alpha"
+When the client POST /prompt-presets with name "  alpha  " and preset_type "system"
+Then the response is a 400
+And the body says a system preset with that name already exists
+```
+
+#### Scenario 21.31: The same name in a different category is allowed
+
+```gherkin
+Given a fresh app state with a System preset named "Alpha"
+When the client POST /prompt-presets with name "Alpha" and preset_type "quantifier"
+Then the response is 200
+And the body contains a Quantifier preset named "Alpha"
+```
+
+#### Scenario 21.32: Editing a preset keeps its own name
+
+```gherkin
+Given a fresh app state with a System preset named "Alpha"
+When the client POST /prompt-presets/{id} for that preset with the same name "Alpha" and changed instructions
+Then the response is 200
+And the body contains a preset card named "Alpha" and no error
+```
+
+#### Scenario 21.33: Duplicating the same preset twice yields two distinct copies
+
+```gherkin
+Given a fresh app state with a System preset named "Original"
+When the client POST /prompt-presets/{id}/duplicate for that preset
+Then the response is 200
+And the body contains the copy name "Original (Copy)"
+When the client POST /prompt-presets/{id}/duplicate for the same preset again
+Then the response is 200
+And the body contains the copy name "Original (Copy 2)"
+And the body still contains the first copy name "Original (Copy)"
+```
+
+#### Scenario 21.34: Renaming a preset onto a same-category sibling's name is refused
+
+```gherkin
+Given a fresh app state with a System preset named "Alpha"
+And a System preset named "Beta"
+When the client POST /prompt-presets/{beta_id} with name "Alpha"
+Then the response is a 400
+And the body names "Alpha" and says a system preset with that name already exists
+And the preset named "Beta" is unchanged
+```

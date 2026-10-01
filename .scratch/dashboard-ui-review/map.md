@@ -59,6 +59,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 20 [Copy sweep](issues/20-copy-sweep.md): resolved — type names, plurals, jargon and unlabelled selects fixed per findings 5.1, 5.2, 5.4, 5.5; tier 1 scenario 25.8 plus extended 20.8.
 
+28 [Decide whether duplicate connection and preset names are allowed](issues/28-decide-duplicate-names.md): resolved — rejected on add (trimmed, case-insensitive; connections global, presets per category), edits keep their own name, Duplicate picks a free "(Copy N)"; tier 1 scenarios 20.9–20.11, 21.29–21.34.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.

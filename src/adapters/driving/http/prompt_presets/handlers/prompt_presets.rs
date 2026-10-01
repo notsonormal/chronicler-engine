@@ -1,8 +1,10 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Prompt preset handlers
 
-use axum::{Form, extract::State, response::Html};
+use axum::body::Body;
+use axum::{Form, extract::State, response::Html, response::IntoResponse, response::Response};
 
+use crate::application::errors::ApplicationError;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::utils::settings_defaults;
@@ -10,9 +12,11 @@ use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{
     preset_card_html, preset_edit_form_html, preset_view_form_html,
 };
+use crate::adapters::driving::http::utils::error::render_error;
 use crate::adapters::driving::http::utils::handler_helpers::{
     generate_preset_id, parse_preset_type, render_template,
 };
+use crate::adapters::driving::http::utils::response::bad_request;
 
 use crate::adapters::driving::http::prompt_presets::templates::prompt_presets::{
     ModeActiveIds, PromptPresetsTemplate,
@@ -48,8 +52,14 @@ macro_rules! require_preset {
     ($storage:expr, $id:expr) => {
         match $storage.get_preset($id) {
             Ok(Some(p)) => p,
-            Ok(None) => return Html("<span class='error'>Preset not found</span>".to_string()),
-            Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+            Ok(None) => {
+                return Html("<span class='error'>Preset not found</span>".to_string())
+                    .into_response();
+            }
+            Err(e) => {
+                return Html(format!("<span class='error'>Load failed: {e}</span>"))
+                    .into_response();
+            }
         }
     };
 }
@@ -57,12 +67,14 @@ macro_rules! require_preset {
 pub async fn preset_card_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+        Err(e) => {
+            return Html(format!("<span class='error'>Load failed: {e}</span>")).into_response();
+        }
     };
     let novel_bundle = settings
         .mode_preset_registry
@@ -70,16 +82,16 @@ pub async fn preset_card_handler(
     let if_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::InteractiveFiction);
-    Html(preset_card_html(&preset, &novel_bundle, &if_bundle))
+    Html(preset_card_html(&preset, &novel_bundle, &if_bundle)).into_response()
 }
 
 pub async fn view_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
-    Html(preset_view_form_html(&preset))
+    Html(preset_view_form_html(&preset)).into_response()
 }
 
 pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
@@ -143,6 +155,16 @@ fn form_allowed_modes(novel: bool, if_mode: bool) -> Vec<NarratorMode> {
     modes
 }
 
+/// A refusal reaches the user as a 400, which the shell shows as a toast and
+/// leaves the panel in place. Other errors keep the existing in-fragment
+/// error rendering.
+fn preset_save_error_response(error: ApplicationError, prefix: &str) -> Response<Body> {
+    match error {
+        ApplicationError::Validation(message) => bad_request(render_error(&message)),
+        other => Html(format!("<span class='error'>{prefix}: {other}</span>")).into_response(),
+    }
+}
+
 impl PresetForm {
     fn into_preset(
         self,
@@ -167,11 +189,12 @@ impl PresetForm {
 pub async fn save_preset_handler(
     State(app_state): State<AppState>,
     Form(form): Form<PresetForm>,
-) -> Html<String> {
+) -> Response<Body> {
     let preset_type = match parse_preset_type(&form.preset_type) {
         Some(pt) => pt,
         None => {
-            return Html("<span class='error'>Invalid preset type</span>".to_string());
+            return Html("<span class='error'>Invalid preset type</span>".to_string())
+                .into_response();
         }
     };
 
@@ -186,25 +209,28 @@ pub async fn save_preset_handler(
     let preset = form.into_preset(generate_preset_id(), preset_type, allowed_modes);
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
-        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+        return preset_save_error_response(e, "Save failed");
     }
 
-    panel_handler(State(app_state)).await
+    panel_handler(State(app_state)).await.into_response()
 }
 
 pub async fn edit_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     if preset.is_default {
-        return Html("<span class='error'>Cannot edit default presets</span>".to_string());
+        return Html("<span class='error'>Cannot edit default presets</span>".to_string())
+            .into_response();
     }
 
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+        Err(e) => {
+            return Html(format!("<span class='error'>Load failed: {e}</span>")).into_response();
+        }
     };
     let novel_bundle = settings
         .mode_preset_registry
@@ -216,17 +242,19 @@ pub async fn edit_preset_form_handler(
         preset.preset_type.as_str(),
         is_active,
     ))
+    .into_response()
 }
 
 pub async fn update_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<PresetForm>,
-) -> Html<String> {
+) -> Response<Body> {
     let mut preset = require_preset!(app_state.prompt_preset_service, &id);
 
     if preset.is_default {
-        return Html("<span class='error'>Cannot edit default presets</span>".to_string());
+        return Html("<span class='error'>Cannot edit default presets</span>".to_string())
+            .into_response();
     }
 
     // preset_type is fixed at creation, so the form's hidden input is
@@ -246,12 +274,14 @@ pub async fn update_preset_handler(
     preset.allowed_modes = allowed_modes;
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
-        return Html(format!("<span class='error'>Update failed: {e}</span>"));
+        return preset_save_error_response(e, "Update failed");
     }
 
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+        Err(e) => {
+            return Html(format!("<span class='error'>Load failed: {e}</span>")).into_response();
+        }
     };
     let novel_bundle = settings
         .mode_preset_registry
@@ -259,17 +289,18 @@ pub async fn update_preset_handler(
     let if_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::InteractiveFiction);
-    Html(preset_card_html(&preset, &novel_bundle, &if_bundle))
+    Html(preset_card_html(&preset, &novel_bundle, &if_bundle)).into_response()
 }
 
 pub async fn delete_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     if preset.is_default {
-        return Html("<span class='error'>Cannot delete default presets</span>".to_string());
+        return Html("<span class='error'>Cannot delete default presets</span>".to_string())
+            .into_response();
     }
 
     // Refuse presets referenced as any mode's default — deleting one would
@@ -277,39 +308,46 @@ pub async fn delete_preset_handler(
     {
         let settings = match app_state.settings() {
             Ok(s) => s,
-            Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+            Err(e) => {
+                return Html(format!("<span class='error'>Load failed: {e}</span>"))
+                    .into_response();
+            }
         };
         if settings.mode_preset_registry.references(&id) {
             return Html(
                 "<span class='error'>Preset is a mode default; change the default before deleting</span>"
                     .to_string(),
-            );
+            )
+            .into_response();
         }
     }
 
     if let Err(e) = app_state.prompt_preset_service.delete_preset(&id) {
-        return Html(format!("<span class='error'>Delete failed: {e}</span>"));
+        return Html(format!("<span class='error'>Delete failed: {e}</span>")).into_response();
     }
 
-    Html(String::new())
+    Html(String::new()).into_response()
 }
 
 pub async fn duplicate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     let mut copy = preset.clone();
     copy.id = generate_preset_id();
-    copy.name = format!("{} (Copy)", copy.name);
+    copy.name = match app_state.prompt_preset_service.next_copy_name(&preset) {
+        Ok(name) => name,
+        Err(e) => return preset_save_error_response(e, "Duplicate failed"),
+    };
     copy.is_default = false;
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&copy) {
-        return Html(format!("<span class='error'>Duplicate failed: {e}</span>"));
+        return preset_save_error_response(e, "Duplicate failed");
     }
 
-    panel_handler(State(app_state)).await
+    panel_handler(State(app_state)).await.into_response()
 }
 
 /// Query for the activate endpoint. The panel's single activate button sends
@@ -323,7 +361,7 @@ pub async fn activate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
     axum::extract::Query(query): axum::extract::Query<ActivateQuery>,
-) -> Html<String> {
+) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     // Absent or invalid mode falls back to Novel (the single panel button);
@@ -336,7 +374,8 @@ pub async fn activate_preset_handler(
         return Html(format!(
             "<span class='error'>Preset not allowed for {} mode</span>",
             mode.as_str()
-        ));
+        ))
+        .into_response();
     }
 
     let outcome = app_state.settings_service.update_settings(|settings| {
@@ -348,7 +387,9 @@ pub async fn activate_preset_handler(
 
     let settings = match outcome {
         Ok(s) => s,
-        Err(e) => return Html(format!("<span class='error'>Save failed: {e}</span>")),
+        Err(e) => {
+            return Html(format!("<span class='error'>Save failed: {e}</span>")).into_response();
+        }
     };
 
     let system_presets = app_state
@@ -373,4 +414,5 @@ pub async fn activate_preset_handler(
         active_quantifier,
         active_impersonate,
     })
+    .into_response()
 }

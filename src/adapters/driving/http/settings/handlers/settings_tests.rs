@@ -30,6 +30,13 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     AppState::from_wired(wired)
 }
 
+async fn body_text(response: axum::response::Response<axum::body::Body>) -> String {
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("handler response body");
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
 #[tokio::test]
 async fn test_settings_panel_returns_html() {
     let app_state = make_test_app_state();
@@ -146,8 +153,9 @@ async fn test_add_connection_handler_adds_connection() {
 
     let response =
         add_connection_handler(axum::extract::State(app_state.clone()), Form(form)).await;
+    let body = body_text(response).await;
 
-    assert!(response.0.contains("<div class=\"settings-panel\">"));
+    assert!(body.contains("<div class=\"settings-panel\">"));
 
     let settings = app_state.settings().expect("settings read should succeed");
     let new_conn = settings.connections.last().unwrap();
@@ -296,9 +304,10 @@ async fn test_edit_connection_handler_updates_connection() {
         Form(form),
     )
     .await;
+    let body = body_text(response).await;
 
-    assert!(response.0.contains("New Name"));
-    assert!(response.0.contains("connection-card"));
+    assert!(body.contains("New Name"));
+    assert!(body.contains("connection-card"));
 }
 
 #[tokio::test]
@@ -319,8 +328,9 @@ async fn test_edit_connection_handler_not_found() {
         Form(form),
     )
     .await;
+    let body = body_text(response).await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert!(body.contains("Connection not found"));
 }
 
 #[tokio::test]

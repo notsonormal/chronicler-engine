@@ -4,6 +4,8 @@ Endpoints:
  - `GET /fragment/settings`
  - `POST /settings`
  - `POST /settings/text-check`
+ - `POST /connections/add`
+ - `POST /connections/{id}/edit`
  - `POST /connections/:id/set-narrator`
  - `GET /debug/backend`
 
@@ -103,4 +105,36 @@ And a second mock connection with model mock-model-b
 When the client POST /connections/mock-b/set-narrator
 Then the response is 200
 And a following GET /debug/backend reports mock-model-b (settings resolve per request, so the switch needs no restart)
+```
+
+### POST /connections/add — create
+
+#### Scenario 20.9: Adding a Connection whose name already exists is refused
+
+```gherkin
+Given a fresh app state with a Connection named "Duplicate Probe"
+When the client adds a second Connection named "Duplicate Probe"
+Then the response is a 400
+And the body names "Duplicate Probe" and says a connection with that name already exists
+And the Connection list still holds exactly one Connection named "Duplicate Probe"
+```
+
+#### Scenario 20.10: Adding a Connection differing only in case and surrounding space is refused
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha"
+When the client adds a Connection named "  alpha  "
+Then the response is a 400
+And the body says a connection with that name already exists
+```
+
+### POST /connections/{id}/edit — update
+
+#### Scenario 20.11: Editing a Connection keeps its own name
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha"
+When the client edits that Connection with the same name "Alpha" and a changed model
+Then the response is 200
+And the body contains a Connection card named "Alpha" and the changed model
 ```

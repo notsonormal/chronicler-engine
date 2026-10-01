@@ -29,6 +29,13 @@ fn make_test_app_state_with_storage(
     crate::adapters::driving::http::AppState::from_wired(wired)
 }
 
+async fn body_text(response: axum::response::Response<axum::body::Body>) -> String {
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("handler response body");
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
 #[tokio::test]
 async fn test_preset_card_handler_returns_card() {
     let preset = PromptPreset {
@@ -44,13 +51,10 @@ async fn test_preset_card_handler_returns_card() {
         axum::extract::Path("card-test".to_string()),
     )
     .await;
-    assert!(response.0.contains("Card Test"));
-    assert!(response.0.contains("Set Active (Novel)</button>"));
-    assert!(
-        response
-            .0
-            .contains("Set Active (Interactive Fiction)</button>")
-    );
+    let body = body_text(response).await;
+    assert!(body.contains("Card Test"));
+    assert!(body.contains("Set Active (Novel)</button>"));
+    assert!(body.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[tokio::test]
@@ -62,7 +66,8 @@ async fn test_preset_card_handler_not_found() {
         axum::extract::Path("missing".to_string()),
     )
     .await;
-    assert!(response.0.contains("Preset not found"));
+    let body = body_text(response).await;
+    assert!(body.contains("Preset not found"));
 }
 
 #[tokio::test]
@@ -75,9 +80,10 @@ async fn test_view_preset_form_handler_default_preset() {
         axum::extract::Path("default".to_string()),
     )
     .await;
-    assert!(response.0.contains("View Default"));
-    assert!(response.0.contains("System prompt."));
-    assert!(response.0.contains("disabled"));
+    let body = body_text(response).await;
+    assert!(body.contains("View Default"));
+    assert!(body.contains("System prompt."));
+    assert!(body.contains("disabled"));
 }
 
 #[tokio::test]
@@ -89,7 +95,8 @@ async fn test_view_preset_form_handler_not_found() {
         axum::extract::Path("missing".to_string()),
     )
     .await;
-    assert!(response.0.contains("Preset not found"));
+    let body = body_text(response).await;
+    assert!(body.contains("Preset not found"));
 }
 
 #[tokio::test]
@@ -107,8 +114,9 @@ async fn test_duplicate_preset_handler() {
         axum::extract::Path("orig".to_string()),
     )
     .await;
-    assert!(response.0.contains("Original (Copy)"));
-    assert!(response.0.contains("System Prompts"));
+    let body = body_text(response).await;
+    assert!(body.contains("Original (Copy)"));
+    assert!(body.contains("System Prompts"));
 }
 
 #[tokio::test]
@@ -120,7 +128,8 @@ async fn test_duplicate_preset_handler_not_found() {
         axum::extract::Path("missing".to_string()),
     )
     .await;
-    assert!(response.0.contains("Preset not found"));
+    let body = body_text(response).await;
+    assert!(body.contains("Preset not found"));
 }
 
 #[tokio::test]
@@ -140,7 +149,8 @@ async fn test_duplicate_preset_storage_error_returns_error() {
         axum::extract::Path("orig".to_string()),
     )
     .await;
-    assert!(response.0.contains("Duplicate failed"));
+    let body = body_text(response).await;
+    assert!(body.contains("Duplicate failed"));
 }
 
 #[tokio::test]
@@ -153,7 +163,8 @@ async fn test_edit_default_preset_returns_error() {
         axum::extract::Path("default".to_string()),
     )
     .await;
-    assert!(response.0.contains("Cannot edit default presets"));
+    let body = body_text(response).await;
+    assert!(body.contains("Cannot edit default presets"));
 }
 
 #[tokio::test]
@@ -172,7 +183,8 @@ async fn test_update_default_preset_returns_error() {
         }),
     )
     .await;
-    assert!(response.0.contains("Cannot edit default presets"));
+    let body = body_text(response).await;
+    assert!(body.contains("Cannot edit default presets"));
 }
 
 #[tokio::test]
@@ -185,7 +197,8 @@ async fn test_delete_default_preset_returns_error() {
         axum::extract::Path("default".to_string()),
     )
     .await;
-    assert!(response.0.contains("Cannot delete default presets"));
+    let body = body_text(response).await;
+    assert!(body.contains("Cannot delete default presets"));
 }
 
 #[tokio::test]
@@ -202,7 +215,8 @@ async fn test_save_preset_invalid_type_returns_error() {
         }),
     )
     .await;
-    assert!(response.0.contains("Invalid preset type"));
+    let body = body_text(response).await;
+    assert!(body.contains("Invalid preset type"));
 }
 
 /// A preset's type is fixed at creation: update takes it from the stored row
@@ -222,11 +236,8 @@ async fn test_update_preset_ignores_form_preset_type() {
         }),
     )
     .await;
-    assert!(
-        !response.0.contains("error"),
-        "update must succeed: {}",
-        response.0
-    );
+    let body = body_text(response).await;
+    assert!(!body.contains("error"), "update must succeed: {body}");
 
     let stored = app_state
         .prompt_preset_service
@@ -261,7 +272,8 @@ async fn test_activate_preset_does_not_update_memory_when_save_fails() {
         axum::extract::Query(ActivateQuery::default()),
     )
     .await;
-    assert!(response.0.contains("Save failed"));
+    let body = body_text(response).await;
+    assert!(body.contains("Save failed"));
 
     let active_id = app_state
         .settings()
@@ -286,7 +298,8 @@ async fn test_activate_nonexistent_preset_returns_error() {
         axum::extract::Query(ActivateQuery::default()),
     )
     .await;
-    assert!(response.0.contains("Preset not found"));
+    let body = body_text(response).await;
+    assert!(body.contains("Preset not found"));
 }
 
 fn make_test_app_state_with_failing_storage(
@@ -318,7 +331,8 @@ async fn test_save_preset_storage_error_returns_error() {
         }),
     )
     .await;
-    assert!(response.0.contains("Save failed"));
+    let body = body_text(response).await;
+    assert!(body.contains("Save failed"));
 }
 
 #[tokio::test]
@@ -337,7 +351,8 @@ async fn test_edit_preset_storage_error_returns_error() {
         axum::extract::Path("custom".to_string()),
     )
     .await;
-    assert!(response.0.contains("Load failed"));
+    let body = body_text(response).await;
+    assert!(body.contains("Load failed"));
 }
 
 #[tokio::test]
@@ -363,7 +378,8 @@ async fn test_update_preset_storage_error_returns_error() {
         }),
     )
     .await;
-    assert!(response.0.contains("Update failed"));
+    let body = body_text(response).await;
+    assert!(body.contains("Update failed"));
 }
 
 #[tokio::test]
@@ -382,7 +398,8 @@ async fn test_delete_preset_get_storage_error_returns_error() {
         axum::extract::Path("custom".to_string()),
     )
     .await;
-    assert!(response.0.contains("Load failed"));
+    let body = body_text(response).await;
+    assert!(body.contains("Load failed"));
 }
 
 #[tokio::test]
@@ -406,7 +423,8 @@ async fn test_delete_preset_delete_storage_error_returns_error() {
         axum::extract::Path("custom".to_string()),
     )
     .await;
-    assert!(response.0.contains("Delete failed"));
+    let body = body_text(response).await;
+    assert!(body.contains("Delete failed"));
 }
 
 fn preset_with_modes(id: &str, modes: Vec<NarratorMode>) -> PromptPreset {
@@ -426,11 +444,8 @@ async fn test_activate_writes_novel_slot_for_allowed_preset() {
         axum::extract::Query(ActivateQuery::default()),
     )
     .await;
-    assert!(
-        !response.0.contains("error"),
-        "activation should succeed: {}",
-        response.0
-    );
+    let body = body_text(response).await;
+    assert!(!body.contains("error"), "activation should succeed: {body}");
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(
@@ -462,7 +477,8 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
         axum::extract::Query(ActivateQuery::default()),
     )
     .await;
-    assert!(response.0.contains("not allowed"));
+    let body = body_text(response).await;
+    assert!(body.contains("not allowed"));
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(
@@ -488,11 +504,8 @@ async fn test_activate_with_mode_param_writes_that_modes_slot() {
         }),
     )
     .await;
-    assert!(
-        !response.0.contains("error"),
-        "activation should succeed: {}",
-        response.0
-    );
+    let body = body_text(response).await;
+    assert!(!body.contains("error"), "activation should succeed: {body}");
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(
@@ -524,11 +537,8 @@ async fn test_card_badges_active_quantifier_default_for_novel() {
         axum::extract::Query(ActivateQuery::default()),
     )
     .await;
-    assert!(
-        !response.0.contains("error"),
-        "activation should succeed: {}",
-        response.0
-    );
+    let body = body_text(response).await;
+    assert!(!body.contains("error"), "activation should succeed: {body}");
 
     // Refetch the card through the fragment endpoint: the Novel bundle's
     // quantifier slot holds this preset, so the card must badge it and
@@ -538,15 +548,14 @@ async fn test_card_badges_active_quantifier_default_for_novel() {
         axum::extract::Path("q-active".to_string()),
     )
     .await;
+    let card_body = body_text(card).await;
     assert!(
-        card.0.contains(r#"badge primary">Active · Novel</span>"#),
-        "active quantifier default must badge Active · Novel: {}",
-        card.0
+        card_body.contains(r#"badge primary">Active · Novel</span>"#),
+        "active quantifier default must badge Active · Novel: {card_body}"
     );
     assert!(
-        !card.0.contains("Set Active (Novel)</button>"),
-        "active quantifier default must not offer Set Active (Novel): {}",
-        card.0
+        !card_body.contains("Set Active (Novel)</button>"),
+        "active quantifier default must not offer Set Active (Novel): {card_body}"
     );
 }
 
@@ -564,32 +573,26 @@ async fn test_card_badges_active_impersonate_default_for_if() {
         }),
     )
     .await;
-    assert!(
-        !response.0.contains("error"),
-        "activation should succeed: {}",
-        response.0
-    );
+    let body = body_text(response).await;
+    assert!(!body.contains("error"), "activation should succeed: {body}");
 
     let card = preset_card_handler(
         axum::extract::State(app_state),
         axum::extract::Path("imp-active".to_string()),
     )
     .await;
+    let card_body = body_text(card).await;
     assert!(
-        card.0
-            .contains(r#"badge primary">Active · Interactive Fiction</span>"#),
-        "active impersonate default must badge Active · Interactive Fiction: {}",
-        card.0
+        card_body.contains(r#"badge primary">Active · Interactive Fiction</span>"#),
+        "active impersonate default must badge Active · Interactive Fiction: {card_body}"
     );
     assert!(
-        !card.0.contains(r#"badge primary">Active · Novel</span>"#),
-        "IF-only activation must not badge Novel: {}",
-        card.0
+        !card_body.contains(r#"badge primary">Active · Novel</span>"#),
+        "IF-only activation must not badge Novel: {card_body}"
     );
     assert!(
-        !card.0.contains("Set Active (Interactive Fiction)</button>"),
-        "active impersonate default must not offer Set Active (Interactive Fiction): {}",
-        card.0
+        !card_body.contains("Set Active (Interactive Fiction)</button>"),
+        "active impersonate default must not offer Set Active (Interactive Fiction): {card_body}"
     );
 }
 
@@ -620,7 +623,8 @@ async fn test_delete_refuses_preset_referenced_as_any_mode_default() {
         axum::extract::Path("custom-ref".to_string()),
     )
     .await;
-    assert!(response.0.contains("mode default"));
+    let body = body_text(response).await;
+    assert!(body.contains("mode default"));
     assert!(
         app_state
             .prompt_preset_service
@@ -649,11 +653,8 @@ async fn test_update_preset_sets_allowed_modes_from_form() {
         }),
     )
     .await;
-    assert!(
-        !response.0.contains("error"),
-        "update should succeed: {}",
-        response.0
-    );
+    let body = body_text(response).await;
+    assert!(!body.contains("error"), "update should succeed: {body}");
 
     let stored = app_state
         .prompt_preset_service
@@ -679,11 +680,8 @@ async fn test_update_preset_preserves_flags_when_form_omits_them() {
         }),
     )
     .await;
-    assert!(
-        !response.0.contains("error"),
-        "update should succeed: {}",
-        response.0
-    );
+    let body = body_text(response).await;
+    assert!(!body.contains("error"), "update should succeed: {body}");
 
     let stored = app_state
         .prompt_preset_service
@@ -709,11 +707,8 @@ async fn test_save_preset_defaults_to_both_modes_when_form_omits_flags() {
         }),
     )
     .await;
-    assert!(
-        !response.0.contains("error"),
-        "create should succeed: {}",
-        response.0
-    );
+    let body = body_text(response).await;
+    assert!(!body.contains("error"), "create should succeed: {body}");
 
     let created = app_state
         .prompt_preset_service

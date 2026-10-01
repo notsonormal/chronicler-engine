@@ -55,6 +55,19 @@ fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
     }
 }
 
+/// The id of the connection just added through the Settings panel. Added ids
+/// start with `conn-`; the seeded fixture connections carry author-chosen ids.
+fn added_connection_id(panel: &str) -> String {
+    let prefix = "hx-get=\"/fragment/connections/";
+    let marker = format!("{prefix}conn-");
+    let start = panel.find(&marker).expect("added connection edit link") + prefix.len();
+    let end = start
+        + panel[start..]
+            .find('/')
+            .expect("connection edit link must close");
+    panel[start..end].to_string()
+}
+
 // [docs/specs/settings.md] SCENARIO: 20.1
 #[tokio::test]
 async fn test_settings_panel_renders_full_surface() {
@@ -227,4 +240,109 @@ async fn test_narrator_switch_takes_effect_without_a_restart() {
         body.contains("mock-model-b"),
         "the switch should take effect on the next resolution: {body}"
     );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.9
+#[tokio::test]
+async fn test_connection_add_duplicate_name_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let first = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Duplicate+Probe&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Duplicate+Probe&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        second.status(),
+        StatusCode::BAD_REQUEST,
+        "a duplicate connection name must be refused"
+    );
+    let body = body_string(second).await;
+    assert!(body.contains("Duplicate Probe"), "body: {body}");
+    assert!(body.contains("already exists"), "body: {body}");
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert_eq!(
+        panel.matches("Duplicate Probe").count(),
+        1,
+        "the refused connection must not be stored"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.10
+#[tokio::test]
+async fn test_connection_add_case_and_space_variant_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let first = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Alpha&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=++alpha++&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        second.status(),
+        StatusCode::BAD_REQUEST,
+        "a case-and-space variant must be refused"
+    );
+    let body = body_string(second).await;
+    assert!(body.contains("already exists"), "body: {body}");
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.11
+#[tokio::test]
+async fn test_connection_edit_keeps_its_own_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let added = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(added.status(), StatusCode::OK);
+    let panel = body_string(added).await;
+    let id = added_connection_id(&panel);
+
+    let response = app
+        .oneshot(post_form_request(
+            &format!("/connections/{id}/edit"),
+            "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model-2&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+    assert!(body.contains("Alpha"), "body: {body}");
+    assert!(body.contains("alpha-model-2"), "body: {body}");
 }

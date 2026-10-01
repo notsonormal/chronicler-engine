@@ -921,3 +921,222 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
         stored.allowed_modes
     );
 }
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.29
+#[tokio::test]
+async fn test_create_preset_duplicate_name_in_category_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let first = app
+        .clone()
+        .oneshot(post_form_request(
+            "/prompt-presets",
+            "name=Alpha&instructions=First.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = app
+        .oneshot(post_form_request(
+            "/prompt-presets",
+            "name=Alpha&instructions=Second.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        second.status(),
+        StatusCode::BAD_REQUEST,
+        "a duplicate preset name in the same category must be refused"
+    );
+    let body = body_string(second).await;
+    assert!(body.contains("Alpha"), "body: {body}");
+    assert!(body.contains("already exists"), "body: {body}");
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.30
+#[tokio::test]
+async fn test_create_preset_case_and_space_variant_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let first = app
+        .clone()
+        .oneshot(post_form_request(
+            "/prompt-presets",
+            "name=Alpha&instructions=First.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = app
+        .oneshot(post_form_request(
+            "/prompt-presets",
+            "name=++alpha++&instructions=Second.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        second.status(),
+        StatusCode::BAD_REQUEST,
+        "a case-and-space variant must be refused"
+    );
+    let body = body_string(second).await;
+    assert!(body.contains("already exists"), "body: {body}");
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.31
+#[tokio::test]
+async fn test_create_preset_same_name_in_another_category_is_allowed() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let first = app
+        .clone()
+        .oneshot(post_form_request(
+            "/prompt-presets",
+            "name=Alpha&instructions=First.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = app
+        .oneshot(post_form_request(
+            "/prompt-presets",
+            "name=Alpha&instructions=Second.&preset_type=quantifier",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::OK);
+    let body = body_string(second).await;
+    assert!(body.contains("Alpha"), "body: {body}");
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.32
+#[tokio::test]
+async fn test_update_preset_keeps_its_own_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let created = app
+        .clone()
+        .oneshot(post_form_request(
+            "/prompt-presets",
+            "name=Alpha&instructions=First.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    let panel = body_string(created).await;
+    let preset_id = extract_first_preset_id(&panel);
+
+    let response = app
+        .oneshot(post_form_request(
+            &format!("/prompt-presets/{preset_id}"),
+            "name=Alpha&instructions=Changed.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_string(response).await;
+    assert!(body.contains("Alpha"), "body: {body}");
+    assert!(
+        !body.contains("error"),
+        "keeping the own name must succeed: {body}"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.33
+#[tokio::test]
+async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let created = app
+        .clone()
+        .oneshot(post_form_request(
+            "/prompt-presets",
+            "name=Original&instructions=Original.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    let panel = body_string(created).await;
+    let source_id = extract_first_preset_id(&panel);
+
+    let first = app
+        .clone()
+        .oneshot(empty_post_request(&format!(
+            "/prompt-presets/{source_id}/duplicate"
+        )))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_panel = body_string(first).await;
+    assert!(
+        first_panel.contains("Original (Copy)"),
+        "first copy: {first_panel}"
+    );
+
+    let second = app
+        .oneshot(empty_post_request(&format!(
+            "/prompt-presets/{source_id}/duplicate"
+        )))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::OK);
+    let second_panel = body_string(second).await;
+    assert!(
+        second_panel.contains("Original (Copy 2)"),
+        "second copy must get the next free number: {second_panel}"
+    );
+    assert!(
+        second_panel.contains("Original (Copy)"),
+        "the first copy must remain: {second_panel}"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.34
+#[tokio::test]
+async fn test_update_preset_onto_sibling_name_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let app_state = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_service();
+    let app = build_router(app_state);
+
+    for name in ["Alpha", "Beta"] {
+        let response = app
+            .clone()
+            .oneshot(post_form_request(
+                "/prompt-presets",
+                &format!("name={name}&instructions=First.&preset_type=system"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    let beta_id = preset_id_by_name(&storage, "Beta");
+    let response = app
+        .oneshot(post_form_request(
+            &format!("/prompt-presets/{beta_id}"),
+            "name=Alpha&instructions=Changed.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "renaming onto a sibling's name must be refused"
+    );
+    let body = body_string(response).await;
+    assert!(body.contains("Alpha"), "body: {body}");
+    assert!(body.contains("already exists"), "body: {body}");
+
+    let stored = storage.get_preset(&beta_id).unwrap().unwrap();
+    assert_eq!(stored.name, "Beta");
+    assert_eq!(stored.instructions.as_deref(), Some("First."));
+}
