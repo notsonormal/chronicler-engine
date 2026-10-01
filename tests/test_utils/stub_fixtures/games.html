@@ -8,7 +8,6 @@
                 <span class="game-name">Test Realm_2026-09-17_1</span>
                 <span class="world-badge">Test Realm</span>
                 <span class="persona-badge">Test Player</span>
-                <span class="game-badge">Current</span>
             </div>
             <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
         </div>
@@ -63,7 +62,8 @@
         
         <form class="new-game-form" hx-post="/games" hx-swap="none">
             <div class="form-row">
-                <select name="world_key" required>
+                <label for="new-game-world">World</label>
+                <select id="new-game-world" name="world_key" required>
                     
                     <option value="redmist_estate" title="The Redmist Estate stands in Islaport, a large coastal city on the eastern seaboard. Built in the colonial era, the estate encompasses a grand mansion, formal gardens, and several outbuildings. For generations the Redmist family wielded influence as surgeons and physicians. Bernard Redmist, the recently deceased patriarch, was renowned for his charitable work — and for the shocking will that left his fortune to an unknown grandson.">Redmist Estate</option>
                     
@@ -73,7 +73,8 @@
             </div>
             <div class="form-row">
                 
-                <select name="persona_key" required>
+                <label for="new-game-persona">Persona</label>
+                <select id="new-game-persona" name="persona_key" required>
                     
                     <option value="julian">Julian</option>
                     
@@ -94,7 +95,7 @@
         <h2>Saved Games</h2>
         <div class="games-list">
             
-            <div class="games-empty">No saved games.</div>
+            <div class="games-empty">No other saved games.</div>
             
         </div>
     </div>

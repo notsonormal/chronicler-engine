@@ -758,8 +758,8 @@ async fn test_activate_if_only_preset_via_if_mode_populates_if_bundle() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_string(response).await;
     assert!(
-        body.contains("Active · IF"),
-        "IF activation must badge the preset Active · IF"
+        body.contains("Active · Interactive Fiction"),
+        "IF activation must badge the preset Active · Interactive Fiction"
     );
 
     let settings = storage.get_settings().unwrap();
@@ -900,8 +900,8 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
     assert_eq!(saved.status(), StatusCode::OK);
     let card = body_string(saved).await;
     assert!(
-        card.contains("Set Active (IF)"),
-        "the saved card must offer Set Active (IF): {card}"
+        card.contains("Set Active (Interactive Fiction)"),
+        "the saved card must offer Set Active (Interactive Fiction): {card}"
     );
     assert!(
         card.contains("Set Active (Novel)"),

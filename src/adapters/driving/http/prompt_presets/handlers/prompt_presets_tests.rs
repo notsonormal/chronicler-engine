@@ -46,7 +46,11 @@ async fn test_preset_card_handler_returns_card() {
     .await;
     assert!(response.0.contains("Card Test"));
     assert!(response.0.contains("Set Active (Novel)</button>"));
-    assert!(response.0.contains("Set Active (IF)</button>"));
+    assert!(
+        response
+            .0
+            .contains("Set Active (Interactive Fiction)</button>")
+    );
 }
 
 #[tokio::test]
@@ -572,8 +576,9 @@ async fn test_card_badges_active_impersonate_default_for_if() {
     )
     .await;
     assert!(
-        card.0.contains(r#"badge primary">Active · IF</span>"#),
-        "active impersonate default must badge Active · IF: {}",
+        card.0
+            .contains(r#"badge primary">Active · Interactive Fiction</span>"#),
+        "active impersonate default must badge Active · Interactive Fiction: {}",
         card.0
     );
     assert!(
@@ -582,8 +587,8 @@ async fn test_card_badges_active_impersonate_default_for_if() {
         card.0
     );
     assert!(
-        !card.0.contains("Set Active (IF)</button>"),
-        "active impersonate default must not offer Set Active (IF): {}",
+        !card.0.contains("Set Active (Interactive Fiction)</button>"),
+        "active impersonate default must not offer Set Active (Interactive Fiction): {}",
         card.0
     );
 }

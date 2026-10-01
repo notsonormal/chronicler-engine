@@ -137,4 +137,6 @@ And the narrative_perspective select renders "third" selected
 And the narrative_tense select renders "past" selected
 And the system_preset_id, quantifier_preset_id, and impersonate_preset_id selects are rendered
 And the selects auto-save to /games/{active_game_id}/mode, /posture, and /presets
+And the Saved Games section says there are no other saved games (the active game is the only game)
+And the active game card carries no status badge repeating the section heading
 ```

@@ -32,7 +32,6 @@ pub struct PersonaRowView {
                 <span class="game-name">{{ game.name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
                 <span class="persona-badge">{{ game.persona_name }}</span>
-                <span class="game-badge">Current</span>
             </div>
             <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
         </div>
@@ -49,7 +48,8 @@ pub struct PersonaRowView {
         {% else %}
         <form class="new-game-form" hx-post="/games" hx-swap="none">
             <div class="form-row">
-                <select name="world_key" required>
+                <label for="new-game-world">World</label>
+                <select id="new-game-world" name="world_key" required>
                     {% for world in worlds %}
                     <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
                     {% endfor %}
@@ -59,7 +59,8 @@ pub struct PersonaRowView {
                 {% if personas.is_empty() %}
                 <div class="games-empty">No personas available. Create a persona first.</div>
                 {% else %}
-                <select name="persona_key" required>
+                <label for="new-game-persona">Persona</label>
+                <select id="new-game-persona" name="persona_key" required>
                     {% for p in personas %}
                     <option value="{{ p.key }}">{{ p.name }}</option>
                     {% endfor %}
@@ -78,7 +79,7 @@ pub struct PersonaRowView {
         <h2>Saved Games</h2>
         <div class="games-list">
             {% if saved_games.is_empty() %}
-            <div class="games-empty">No saved games.</div>
+            <div class="games-empty">No other saved games.</div>
             {% else %}
             {% for game in saved_games %}
             <div class="game-item" data-id="{{ game.id }}">

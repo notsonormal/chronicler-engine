@@ -20,7 +20,7 @@ Then the response is 200
 And the response body contains "<div class=\"settings-panel\">"
 And the body contains a "Connections" heading
 And the body contains one connection-card per connection (name, provider, model)
-And the body contains an "Add LlmProviderConfig" heading
+And the body contains an "Add Connection" heading
 And the body contains a conn_name input
 And the body contains a conn_provider select (with OpenRouter, DeepSeek, Ollama options)
 And the body contains a conn_model input

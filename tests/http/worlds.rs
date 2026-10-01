@@ -296,6 +296,38 @@ async fn test_world_edit_form_renders_posture_selects_http() {
     );
 }
 
+// The world list is a plain server render; a GET observes the pluralised
+// game count directly, with no browser round-trip.
+// [docs/specs/worlds.md] SCENARIO: 25.8
+#[tokio::test]
+async fn test_worlds_fragment_pluralises_game_count_http() {
+    // `default_test` seeds one World with exactly one game in it.
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+
+    let html = fetch_body(&app, "/fragment/worlds").await;
+
+    assert!(
+        html.contains("(1 game)"),
+        "a World with one game must show a singular count: {html}"
+    );
+    assert!(
+        !html.contains("(1 games)"),
+        "the count must not pluralise a single game: {html}"
+    );
+
+    // A second game in the same World switches the count to the plural arm.
+    state
+        .game_catalogue
+        .create_game("test", "test_player")
+        .expect("create a second game");
+
+    let html = fetch_body(&app, "/fragment/worlds").await;
+    assert!(
+        html.contains("(2 games)"),
+        "a World with two games must use the plural count: {html}"
+    );
+}
+
 // [docs/specs/worlds.md] SCENARIO: 25.7
 #[tokio::test]
 async fn test_world_create_existing_key_is_refused_http() {

@@ -36,7 +36,7 @@ use crate::adapters::driving::http::utils::template_helpers::provider_options_ht
     </div>
     {% endfor %}
 
-    <h3>Add LlmProviderConfig</h3>
+    <h3>Add Connection</h3>
     <form hx-post="/connections/add" hx-target=".settings-panel" hx-swap="innerHTML">
         <div class="form-group">
             <label for="conn_name">Name</label>
@@ -66,7 +66,7 @@ use crate::adapters::driving::http::utils::template_helpers::provider_options_ht
                 Single User Message (merge system + user for models that ignore system prompts)
             </label>
         </div>
-        <button type="submit" class="btn-primary">Add LlmProviderConfig</button>
+        <button type="submit" class="btn-primary">Add Connection</button>
     </form>
     <span id="settings-status"></span>
 

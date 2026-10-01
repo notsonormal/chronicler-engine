@@ -66,7 +66,7 @@ fn test_preset_card_html_active_preset() {
     );
     assert!(html.contains(r#"badge primary">Active · Novel</span>"#));
     assert!(!html.contains("Set Active (Novel)</button>"));
-    assert!(html.contains("Set Active (IF)</button>"));
+    assert!(html.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[test]
@@ -82,10 +82,10 @@ fn test_preset_card_html_active_in_if_mode_only() {
         &bundle_with_system_slot(""),
         &bundle_with_system_slot("active-if"),
     );
-    assert!(html.contains(r#"badge primary">Active · IF</span>"#));
+    assert!(html.contains(r#"badge primary">Active · Interactive Fiction</span>"#));
     assert!(!html.contains(r#"badge primary">Active · Novel</span>"#));
     assert!(html.contains("Set Active (Novel)</button>"));
-    assert!(!html.contains("Set Active (IF)</button>"));
+    assert!(!html.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_preset_card_html_disallowed_mode_has_no_activate_button() {
         &bundle_with_system_slot(""),
     );
     assert!(html.contains("Set Active (Novel)</button>"));
-    assert!(!html.contains("Set Active (IF)</button>"));
+    assert!(!html.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[test]
@@ -161,9 +161,9 @@ fn test_preset_card_html_inactive_preset() {
         &bundle_with_system_slot(""),
     );
     assert!(!html.contains("Active · Novel</span>"));
-    assert!(!html.contains("Active · IF</span>"));
+    assert!(!html.contains("Active · Interactive Fiction</span>"));
     assert!(html.contains("Set Active (Novel)</button>"));
-    assert!(html.contains("Set Active (IF)</button>"));
+    assert!(html.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[test]

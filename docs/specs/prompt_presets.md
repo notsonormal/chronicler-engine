@@ -54,7 +54,7 @@ Then the response is 200
 And the response body contains "<div class=\"preset-card"
 And the body contains the preset name "My System"
 And the body contains a "Set Active (Novel)" button (the preset is not active for the Novel bundle)
-And the body contains a "Set Active (IF)" button (the preset is not active for the Interactive Fiction bundle)
+And the body contains a "Set Active (Interactive Fiction)" button (the preset is not active for the Interactive Fiction bundle)
 And the body contains an "Edit" button
 And the body contains a "Delete" button
 And the body contains a "Duplicate" button
@@ -305,7 +305,7 @@ preset already leads.
 Given a fresh app state with a seeded system preset whose allowed_modes is ["interactive_fiction"]
 When the client POST /prompt-presets/{id}/activate?mode=interactive_fiction
 Then the response is 200
-And the response body contains an "Active · IF" badge in that preset's card-badges
+And the response body contains an "Active · Interactive Fiction" badge in that preset's card-badges
 And the Interactive Fiction bundle's system slot holds that preset's id
 And activating the same preset without the mode parameter returns "<span class='error'>Preset not allowed for novel mode</span>"
 ```
@@ -315,7 +315,7 @@ And activating the same preset without the mode parameter returns "<span class='
 ```gherkin
 Given a fresh app state with a seeded system preset whose allowed_modes is ["interactive_fiction"]
 When the client GET /fragment/prompt-presets
-Then that preset's card contains a "Set Active (IF)" button
+Then that preset's card contains a "Set Active (Interactive Fiction)" button
 And that preset's card does not contain a "Set Active (Novel)" button
 ```
 
@@ -337,7 +337,7 @@ And the client GET /fragment/prompt-presets/{copy_id}/edit
 Then the edit form renders the allowed_mode_novel and allowed_mode_if checkboxes checked
 When the client POST /prompt-presets/{copy_id} with allowed_mode_novel and allowed_mode_if both set
 Then the response is 200
-And the returned card contains a "Set Active (IF)" button
+And the returned card contains a "Set Active (Interactive Fiction)" button
 And the returned card contains a "Set Active (Novel)" button
 And storage reports the copy's allowed_modes as ["novel", "interactive_fiction"]
 ```

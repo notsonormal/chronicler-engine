@@ -96,3 +96,17 @@ Then the response is a 400
 And the body names the identifier and says it already exists
 And the stored World is unchanged
 ```
+
+### World list
+
+#### Scenario 25.8: The world list pluralises the game count
+
+```gherkin
+Given a seeded World with exactly one game
+When the client GET /fragment/worlds
+Then the response status is "200 OK"
+And the World's card shows "1 game" and not "1 games"
+When a second game is created in that World
+And the client GET /fragment/worlds
+Then the World's card shows "2 games"
+```

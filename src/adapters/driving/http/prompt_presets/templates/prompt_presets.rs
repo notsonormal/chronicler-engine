@@ -19,7 +19,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                 <div class="card-badges">
                     {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
                     {% if preset.id == active_system.novel %}<span class="badge primary">Active · Novel</span>{% endif %}
-                    {% if preset.id == active_system.interactive_fiction %}<span class="badge primary">Active · IF</span>{% endif %}
+                    {% if preset.id == active_system.interactive_fiction %}<span class="badge primary">Active · Interactive Fiction</span>{% endif %}
                 </div>
             </div>
             <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
@@ -28,7 +28,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                 <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Novel)</button>
                 {% endif %}
                 {% if preset.allows_interactive_fiction() && preset.id != active_system.interactive_fiction %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (IF)</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Interactive Fiction)</button>
                 {% endif %}
                 {% if preset.is_default %}
                 <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
@@ -82,7 +82,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                 <div class="card-badges">
                     {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
                     {% if preset.id == active_quantifier.novel %}<span class="badge primary">Active · Novel</span>{% endif %}
-                    {% if preset.id == active_quantifier.interactive_fiction %}<span class="badge primary">Active · IF</span>{% endif %}
+                    {% if preset.id == active_quantifier.interactive_fiction %}<span class="badge primary">Active · Interactive Fiction</span>{% endif %}
                 </div>
             </div>
             <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
@@ -91,7 +91,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                 <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Novel)</button>
                 {% endif %}
                 {% if preset.allows_interactive_fiction() && preset.id != active_quantifier.interactive_fiction %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (IF)</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Interactive Fiction)</button>
                 {% endif %}
                 {% if preset.is_default %}
                 <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
@@ -141,7 +141,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                 <div class="card-badges">
                     {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
                     {% if preset.id == active_impersonate.novel %}<span class="badge primary">Active · Novel</span>{% endif %}
-                    {% if preset.id == active_impersonate.interactive_fiction %}<span class="badge primary">Active · IF</span>{% endif %}
+                    {% if preset.id == active_impersonate.interactive_fiction %}<span class="badge primary">Active · Interactive Fiction</span>{% endif %}
                 </div>
             </div>
             <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
@@ -150,7 +150,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                 <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Novel)</button>
                 {% endif %}
                 {% if preset.allows_interactive_fiction() && preset.id != active_impersonate.interactive_fiction %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (IF)</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Interactive Fiction)</button>
                 {% endif %}
                 {% if preset.is_default %}
                 <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>

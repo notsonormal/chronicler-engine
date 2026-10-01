@@ -125,15 +125,15 @@ The Games tab hosts three regions: **Active Game**, **New Game**, and **Saved Ga
 
 ### Active Game
 
-Shows the current game name, a world badge (the world the game belongs to), a persona badge (the persona bound to the game), a "Current" badge, and a reset button (↻). Reset carries an HTMX confirm dialog ("Reset the current game? All progress will be lost."); on confirmation, the current game is deleted and a new game is created with a freshly auto-generated name (see "Name generation" below). When no game is active, the row shows the placeholder "No active game".
+Shows the current game name, a world badge (the world the game belongs to), a persona badge (the persona bound to the game), and a reset button (↻). Reset carries an HTMX confirm dialog ("Reset the current game? All progress will be lost."); on confirmation, the current game is deleted and a new game is created with a freshly auto-generated name (see "Name generation" below). When no game is active, the row shows the placeholder "No active game".
 
 ### New Game
 
-A world selector (populated from worlds in storage) and a persona selector (populated from persona cards). The "Start New Game" button is disabled when the persona list is empty. On submit, the form posts the selected world key and persona key to the create-game endpoint. When no worlds are available, the section shows the empty-state message "No worlds available. Create a world first."
+A labelled World selector and Persona selector, populated from worlds and persona cards in storage. The "Start New Game" button is disabled when the persona list is empty. On submit, the form posts the selected world key and persona key to the create-game endpoint. When no worlds are available, the section shows the empty-state message "No worlds available. Create a world first."
 
 ### Saved Games
 
-A list of every game in storage (across all worlds), each with its game name, world badge, persona badge, and Switch/Delete affordances. Delete carries a confirm dialog ("Delete this game? This cannot be undone."); the dialog text is per-template, not engine-enforced.
+A list of the games other than the active one (across all worlds), each with its game name, world badge, persona badge, and Switch/Delete affordances. Delete carries a confirm dialog ("Delete this game? This cannot be undone."); the dialog text is per-template, not engine-enforced.
 
 ### Name Generation
 

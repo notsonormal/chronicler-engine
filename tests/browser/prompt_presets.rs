@@ -53,7 +53,7 @@ async fn test_preset_duplicate_edit_save_click_chain() {
                 .unwrap_or_default();
             assert!(
                 copy_html_before.contains("Set Active (Novel)")
-                    && !copy_html_before.contains("Set Active (IF)"),
+                    && !copy_html_before.contains("Set Active (Interactive Fiction)"),
                 "the duplicated copy must start with only the Novel mode enabled, got: {copy_html_before}"
             );
 
@@ -93,7 +93,7 @@ async fn test_preset_duplicate_edit_save_click_chain() {
                 .unwrap_or_default();
             assert!(
                 saved_card_html.contains("Set Active (Novel)")
-                    && saved_card_html.contains("Set Active (IF)"),
+                    && saved_card_html.contains("Set Active (Interactive Fiction)"),
                 "the saved copy must offer both activation buttons after a reload \
                  (both mode flags persisted), got: {saved_card_html}"
             );

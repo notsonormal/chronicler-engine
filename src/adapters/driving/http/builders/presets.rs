@@ -139,7 +139,7 @@ pub(crate) fn preset_card_html(
         badges.push_str(r#"<span class="badge primary">Active · Novel</span>"#);
     }
     if is_if_active {
-        badges.push_str(r#"<span class="badge primary">Active · IF</span>"#);
+        badges.push_str(r#"<span class="badge primary">Active · Interactive Fiction</span>"#);
     }
 
     let mut actions = String::new();
@@ -150,7 +150,7 @@ pub(crate) fn preset_card_html(
     }
     if preset.allows_interactive_fiction() && !is_if_active {
         actions.push_str(&format!(
-            r#"<button hx-post="/prompt-presets/{id}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (IF)</button>"#
+            r#"<button hx-post="/prompt-presets/{id}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active (Interactive Fiction)</button>"#
         ));
     }
     if preset.is_default {

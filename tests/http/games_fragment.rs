@@ -73,4 +73,15 @@ async fn test_games_fragment_renders_posture_controls_http() {
         !html.contains("Presets unavailable"),
         "the preset pickers must render without a load error: {html}"
     );
+
+    // The active game is the only game, so the Saved Games list is empty but
+    // the wording must not claim there are no saved games at all.
+    assert!(
+        html.contains("No other saved games."),
+        "the empty Saved Games list must say there are no *other* saved games: {html}"
+    );
+    assert!(
+        !html.contains("game-badge"),
+        "the active game card must not repeat the section heading with a badge: {html}"
+    );
 }

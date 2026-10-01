@@ -136,7 +136,7 @@ pub async fn connection_card_fragment(
 
     let conn = match settings.find_connection(&id) {
         Some(c) => c.clone(),
-        None => return Html(render_error("LlmProviderConfig not found")),
+        None => return Html(render_error("Connection not found")),
     };
 
     Html(connection_card_html(
@@ -157,7 +157,7 @@ pub async fn edit_connection_form(
 
     let conn = match settings.find_connection(&id) {
         Some(c) => c.clone(),
-        None => return Html(render_error("LlmProviderConfig not found")),
+        None => return Html(render_error("Connection not found")),
     };
 
     Html(connection_edit_form_html(&conn))
@@ -180,9 +180,7 @@ pub async fn edit_connection_handler(
         let conn = match settings.find_connection_mut(&id) {
             Some(c) => c,
             None => {
-                return Err(EngineError::Config(
-                    "LlmProviderConfig not found".to_string(),
-                ));
+                return Err(EngineError::Config("Connection not found".to_string()));
             }
         };
 
@@ -211,9 +209,7 @@ pub async fn delete_connection_handler(
 ) -> Html<String> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         let Some(idx) = settings.connections.iter().position(|c| c.id == id) else {
-            return Err(EngineError::Config(
-                "LlmProviderConfig not found".to_string(),
-            ));
+            return Err(EngineError::Config("Connection not found".to_string()));
         };
 
         if settings.connections.len() <= 1 {
@@ -245,9 +241,7 @@ pub async fn set_narrator_handler(
 ) -> Html<String> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         if settings.find_connection(&id).is_none() {
-            return Err(EngineError::Config(
-                "LlmProviderConfig not found".to_string(),
-            ));
+            return Err(EngineError::Config("Connection not found".to_string()));
         }
         settings.narration_connection_id = id.clone();
         Ok(settings.clone())
@@ -265,9 +259,7 @@ pub async fn set_quantifier_handler(
 ) -> Html<String> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         if settings.find_connection(&id).is_none() {
-            return Err(EngineError::Config(
-                "LlmProviderConfig not found".to_string(),
-            ));
+            return Err(EngineError::Config("Connection not found".to_string()));
         }
         settings.quantifier_connection_id = id.clone();
         Ok(settings.clone())

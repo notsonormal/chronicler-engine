@@ -71,7 +71,7 @@ async fn test_settings_panel_renders_full_surface() {
     assert!(body.contains(r#"<div class="settings-panel">"#));
     assert!(body.contains("<h2>Connections</h2>"));
     assert!(body.contains("connection-card"));
-    assert!(body.contains("<h3>Add LlmProviderConfig</h3>"));
+    assert!(body.contains("<h3>Add Connection</h3>"));
     assert!(body.contains(r#"id="conn_name""#));
     assert!(body.contains(r#"name="conn_provider""#));
     assert!(body.contains("OpenRouter"));

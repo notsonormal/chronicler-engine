@@ -57,6 +57,8 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 22 [Show Character names in the visual sidebar](issues/22-show-npc-names.md): resolved — each portrait shows its Character name in the reinstated `.image-label` (escaped, ellipsised); tier 1 scenarios 32.1/32.2 in a new `visual_sidebar.md` spec.
 
+20 [Copy sweep](issues/20-copy-sweep.md): resolved — type names, plurals, jargon and unlabelled selects fixed per findings 5.1, 5.2, 5.4, 5.5; tier 1 scenario 25.8 plus extended 20.8.
+
 ## Not yet specified
 
 - **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.
