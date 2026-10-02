@@ -14,7 +14,7 @@ toolchains are available, and both drive the **same** Chrome over CDP on
 | Toolchain | Surface | Role here |
 |---|---|---|
 | `@narumitw/pi-chrome-devtools` | `chrome_devtools_*` tools | Primary path for ad-hoc interactive checks |
-| `chrome-cdp` | `scripts/cdp.mjs` invoked through `bash` | Used by the `visual-tester` subagent; zero-dependency fallback |
+| `chrome-cdp` | `scripts/cdp.mjs` invoked through `bash` | Drives subagent screenshot sweeps; zero-dependency fallback |
 
 ## Start the browser
 
@@ -99,7 +99,7 @@ would have to propagate into every spawned subagent process.
 | `/tmp/chrome-launch.log` | Chrome stdout/stderr; dbus errors here are noise |
 
 The launcher and its config are machine-scoped, not repo files. `scripts/cdp.mjs`
-is vendored into the repo because `visual-tester` checks for it at a
+is vendored into the repo because a screenshot-sweep subagent checks for it at a
 project-relative path (`test -x scripts/cdp.mjs`) and no packaged skill places it
 there.
 
@@ -152,7 +152,7 @@ Providers cap the images one request may carry (`glm-5.3-flash` rejects at 31:
 `Too many images in request`). For long reviews: spawn with a fallback model, lean
 on DOM dumps for structure, and split sweeps so no session nears the cap.
 
-## `visual-tester` prerequisites
+## Screenshot-sweep prerequisites
 
 Both halves are in place:
 
