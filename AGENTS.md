@@ -289,6 +289,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `settings.rs` — Application settings and configuration
 - `build.py` — Full build, validate, and test for Chronicler Engine.
 - **scripts/**
+  - `build_slot.py` — Machine-wide build slot: one cargo compile or test step at a time across all checkouts.
   - `check_python_docstrings.py` — Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings.
   - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.
   - `coverage_summary.py` — Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON.
@@ -304,6 +305,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `install_git_hooks.py` — Install git hooks from scripts/git-hooks/ to .git/hooks/.
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
   - `refine_character_json.py` — Split character card descriptions into structured personality/scenario/description fields.
+  - `target_seed.py` — Seed a cold cargo target dir with dependency artifacts from a warm sibling checkout.
   - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
   - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
   - `validate_docs.py` — Validate markdown docs + DOC anchors under docs/.
@@ -359,9 +361,9 @@ Pi wraps commands with rtk and condenses long output — not just git/diff: pipe
 
 Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
 
-`build.py` writes logs to both standard output and to the `logs/` folder. The standard build should take about 2-3 minute normally. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
+`build.py` writes logs to both standard output and to the `logs/` folder. The standard build takes about 4 minutes once the target dir is warm.
 
-Use the Pi bash tool with a timeout of 600 seconds when calling `build.py`, or 1200 seconds if you are running with `--coverage`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
+Use the Pi bash tool with a timeout of 1200 seconds when calling `build.py`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
 
 ```bash
 tail -n 10 "$(ls -t logs/build_*.log | head -1)"
@@ -391,16 +393,16 @@ Almost every full-gate step is also a subcommand — see `python build.py --help
 #### Final Validation (run once before considering done)
 
 ```bash
-python build.py # Full gate: fmt + clippy + guardrails + tests (~1 min)
+python build.py # Full gate: fmt + clippy + guardrails + tests (~4 min)
 ```
 
 A majority of the time taken by `build.py` is the browser tests. Running the full suite just before running the `build.py` is inefficient. Either run a targeted step (`python build.py test-pattern <pattern>`) or skip them and run `build.py` straight away.
 
 ## Concurrent Builds
 
-Secondary agents must not share the primary's target dir or run fmt: use
-`python build.py --target-dir target/<name> --no-fmt`. The full protocol lives
-in the `build.py` module docstring.
+Use one target dir per checkout and never switch (a new dir starts cold); in a worktree pass
+nothing. Only agents sharing a single checkout need
+`python build.py --target-dir target/<name> --no-fmt`. Details are in the `build.py` docstring.
 
 Cold worktree builds compile the whole dependency tree into a fresh target dir;
 `scripts/sccache-wrapper.sh` (wired as `rustc-wrapper` in `.cargo/config.toml`)

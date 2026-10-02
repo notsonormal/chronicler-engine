@@ -22,9 +22,12 @@ duration, exit code, args) to the append-only journal
 
 Concurrent builds:
 
-Multiple agents building simultaneously conflict on two fronts: ``cargo fmt``
-rewrites source files in place, and ``target/`` is shared, causing cargo lock
-contention. Secondary agents must pass an isolated target dir and skip fmt::
+Cargo compile and test steps queue on a machine-wide lock (``scripts/build_slot.py``), so builds
+from different checkouts run one at a time. A cold target dir is seeded from a warm sibling
+(``scripts/target_seed.py``) and cargo links with the toolchain's lld (``scripts/lld-linker.sh``).
+Each script's docstring lists its ``CHRONICLER_*`` switches. Use one target dir per checkout and do
+not switch. Agents sharing a single checkout must also keep ``cargo fmt`` from rewriting sources
+under each other::
 
     python build.py --target-dir target/agent2 --no-fmt
 
@@ -32,13 +35,12 @@ contention. Secondary agents must pass an isolated target dir and skip fmt::
 dir. Tests are already concurrency-safe: they allocate ports dynamically from
 3010-3050 using file-based locking (``tests/test_utils/server.rs``).
 
-A full gate takes about 2-3 minutes warm, 4-5 cold owing to the integration
-suite. Wrap invocations in a timeout of at least 1200. In cases of high load 
-(multiple full builds running with subagents) or when run with `--coverage` 
-it can take longer than usual.
+A full gate takes about 4 minutes on a warm target dir and about 15 on a cold unseeded one, plus
+any wait for the build lock. Use a tool timeout of at least 1200 seconds. ``--coverage`` takes longer.
 """
 
 import argparse
+import contextlib
 import io
 import json
 import os
@@ -54,6 +56,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
+import build_slot  # noqa: E402
+import target_seed  # noqa: E402
 
 try:
     import fcntl
@@ -129,6 +135,7 @@ def both_print(msg: str = "") -> None:
     closing banner). Newlines embedded in ``msg`` are preserved.
     """
     print(msg)
+    sys.stdout.flush()  # a build run detached with its output redirected stays pollable
     if _LogState.fh is not None:
         _LogState.fh.write(msg + "\n")
         _LogState.fh.flush()
@@ -696,9 +703,40 @@ def _target_paths(args) -> tuple[Path, Path]:
     return cargo_target_dir, cargo_target_dir / build_profile
 
 
+def _lld_linker_env(host=None, cache_dir=None) -> dict:
+    """Point cargo at the lld wrapper, installed at one path shared by every checkout.
+
+    ``CHRONICLER_NO_LLD=1`` or an already-set linker variable opts out.
+    """
+    if os.environ.get("CHRONICLER_NO_LLD") or not sys.platform.startswith("linux"):
+        return {}
+    if host is None:
+        out = subprocess.run(["rustc", "-vV"], capture_output=True, text=True).stdout
+        match = re.search(r"^host: (\S+)$", out, re.M)
+        if not match:
+            return {}
+        host = match.group(1)
+    var = "CARGO_TARGET_" + re.sub(r"[^A-Z0-9]", "_", host.upper()) + "_LINKER"
+    if os.environ.get(var):
+        return {}
+    cache = cache_dir or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    source = Path(__file__).resolve().parent / "scripts" / "lld-linker.sh"
+    installed = Path(cache) / "chronicler-engine" / "lld-linker.sh"
+    try:
+        installed.parent.mkdir(parents=True, exist_ok=True)
+        if not installed.exists() or installed.read_bytes() != source.read_bytes():
+            staging = installed.with_name(f"lld-linker.sh.{os.getpid()}")
+            shutil.copyfile(source, staging)
+            staging.chmod(0o755)
+            os.replace(staging, installed)
+    except OSError:
+        return {}
+    return {var: str(installed)}
+
+
 def _cargo_env_for(args) -> dict:
     """Cargo environment shared by gate and step runs."""
-    env = {"NEXTEST_STATUS_LEVEL": "fail"}
+    env = {"NEXTEST_STATUS_LEVEL": "fail", **_lld_linker_env()}
     if getattr(args, "target_dir", None):
         env["CARGO_TARGET_DIR"] = str(Path(args.target_dir).resolve())
     return env
@@ -1035,21 +1073,69 @@ def _record_step(record, label, start, *, failed):
         record.failures.append(label)
 
 
-def _timed_run(counter, record, label, cmd, check=True, env=None, timings=False):
-    """Run one step, print progress, and record its timing and outcome."""
-    counter.next(label)
-    start = time.time()
-    _NextestSummary.label = label
+_target_args = None  # the running mode's args, so heavy steps know which target dir to seed
+_seeded = False
+
+
+def _set_target_args(args):
+    global _target_args
+    _target_args = args
+
+
+def _seed_cold_target():
+    """Seed a cold target dir once per run, inside the slot so the source is idle."""
+    global _seeded
+    if _target_args is None or _seeded:
+        return
+    _seeded = True
+    cargo_target_dir, profile_dir = _target_paths(_target_args)
     try:
-        if timings:
-            rc = run_with_test_timings(cmd, env=env, check=check)
+        target_seed.seed_if_cold(Path.cwd(), cargo_target_dir.resolve(), profile_dir.name, both_print)
+    except Exception as err:  # seeding is an optimisation and must never fail the build
+        both_print(f"Target seeding skipped: {err}")
+
+
+def _stamp_target():
+    if _target_args is None:
+        return
+    _, profile_dir = _target_paths(_target_args)
+    try:
+        target_seed.stamp(profile_dir.resolve(), target_seed.build_signature(Path.cwd()))
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+@contextlib.contextmanager
+def _cargo_slot(cmd, label):
+    """Queue heavy cargo commands behind other builds; seed a cold target dir, stamp it afterwards."""
+    heavy = build_slot.is_heavy(cmd)
+    with build_slot.maybe_hold(cmd, label, both_print):
+        if heavy:
+            _seed_cold_target()
+        yield
+        if heavy:
+            _stamp_target()
+
+
+def _timed_run(counter, record, label, cmd, check=True, env=None, timings=False):
+    """Run one step, print progress, and record its timing and outcome.
+
+    The recorded time starts after any wait for the build slot.
+    """
+    counter.next(label)
+    _NextestSummary.label = label
+    with _cargo_slot(cmd, label):
+        start = time.time()
+        try:
+            if timings:
+                rc = run_with_test_timings(cmd, env=env, check=check)
+            else:
+                rc = run(cmd, check=check, env=env)
+        except SystemExit:
+            _record_step(record, label, start, failed=True)
+            raise
         else:
-            rc = run(cmd, check=check, env=env)
-    except SystemExit:
-        _record_step(record, label, start, failed=True)
-        raise
-    else:
-        _record_step(record, label, start, failed=rc != 0)
+            _record_step(record, label, start, failed=rc != 0)
 
 
 class GateStep(NamedTuple):
@@ -1269,6 +1355,7 @@ def run_gate(args, record):
     require_nextest()
 
     cargo_env = _gate_prelude(args)
+    _set_target_args(args)
     if args.no_fmt:
         both_print("Skipping formatting (--no-fmt set).")
     plan = _plan_gate_steps(args)
@@ -1289,6 +1376,7 @@ def run_step(args, record):
 
     _apply_strict(args)
     cargo_env = _cargo_env_for(args)
+    _set_target_args(args)
     cargo_target_dir, _ = _target_paths(args)
     _warn_if_target_locked(
         cargo_target_dir,
@@ -1348,21 +1436,22 @@ def run_llm_only(args, record):
 
     counter = StepCounter(3)
     counter.next("Building...")
-    run(
-        f"cargo build {'--release' if args.release else ''}".strip(),
-        env=cargo_env,
-    )
+    _set_target_args(args)
+    build_cmd = f"cargo build {'--release' if args.release else ''}".strip()
+    with _cargo_slot(build_cmd, "Building..."):
+        run(build_cmd, env=cargo_env)
 
     counter.next("Running LLM tests only...")
     both_print("=" * 60)
     both_print("NOTE: LLM tests contact the real OpenRouter API.")
     both_print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
-    both_print("      Do not interrupt. Set your tool timeout to >= 600s.")
+    both_print("      Do not interrupt. Set your tool timeout to >= 1200s.")
     both_print("=" * 60)
     # get_test_cmd always returns nextest; the --test llm filter selects the
     # LLM binary inside the llm profile run.
     llm_cmd = get_test_cmd(include_llm=True) + " --test llm"
-    run(llm_cmd, check=True, env=cargo_env)
+    with _cargo_slot(llm_cmd, "Running LLM tests only..."):
+        run(llm_cmd, check=True, env=cargo_env)
 
     counter.next("Done")
     both_print("=== Build Complete ===")

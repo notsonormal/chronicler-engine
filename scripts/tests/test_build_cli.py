@@ -158,6 +158,11 @@ class StepCommandTests(unittest.TestCase):
 
 
 class CargoEnvTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ, {"CHRONICLER_NO_LLD": "1"})  # keep ~/.cache untouched
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_target_dir_sets_env_var(self):
         env = build._cargo_env_for(SimpleNamespace(target_dir="target/agent2"))
         self.assertIn("CARGO_TARGET_DIR", env)
@@ -491,6 +496,54 @@ class MainStampTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         first_line = memlog.getvalue().splitlines()[0]
         self.assertEqual(first_line, "Session-Id: 0123abcd-0000-1111-2222-333344445555")
+
+
+class LldLinkerEnvTests(unittest.TestCase):
+    """The linker wrapper is installed at one fixed path, whichever checkout runs the build."""
+
+    HOST = "x86_64-unknown-linux-gnu"
+    VAR = "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER"
+
+    def setUp(self):
+        import tempfile
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cache = Path(tmp.name)
+        patcher = mock.patch.dict(os.environ, {}, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("CHRONICLER_NO_LLD", None)
+        os.environ.pop(self.VAR, None)
+
+    def test_installs_the_wrapper_and_names_the_per_triple_variable(self):
+        env = build._lld_linker_env(self.HOST, self.cache)
+        path = Path(env[self.VAR])
+        self.assertEqual(path, self.cache / "chronicler-engine" / "lld-linker.sh")
+        self.assertTrue(os.access(path, os.X_OK))
+        self.assertEqual(path.read_bytes(), (REPO_ROOT / "scripts" / "lld-linker.sh").read_bytes())
+
+    def test_the_path_does_not_depend_on_the_checkout(self):
+        first = build._lld_linker_env(self.HOST, self.cache)
+        other = self.cache / "other-checkout"
+        (other / "scripts").mkdir(parents=True)
+        (other / "scripts" / "lld-linker.sh").write_text("#!/bin/sh\nexec cc \"$@\"\n")
+        with mock.patch.object(build, "__file__", str(other / "build.py")):
+            second = build._lld_linker_env(self.HOST, self.cache)
+        self.assertEqual(first, second)
+        self.assertIn("exec cc", Path(second[self.VAR]).read_text())  # the newer wrapper replaced it
+
+    def test_an_existing_linker_setting_wins(self):
+        os.environ[self.VAR] = "/opt/my-linker"
+        self.assertEqual(build._lld_linker_env(self.HOST, self.cache), {})
+
+    def test_opt_out(self):
+        os.environ["CHRONICLER_NO_LLD"] = "1"
+        self.assertEqual(build._lld_linker_env(self.HOST, self.cache), {})
+
+    def test_other_platforms_get_nothing(self):
+        with mock.patch.object(build.sys, "platform", "win32"):
+            self.assertEqual(build._lld_linker_env(self.HOST, self.cache), {})
 
 
 if __name__ == "__main__":
