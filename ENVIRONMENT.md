@@ -61,4 +61,4 @@ Each script's docstring has its details. These are the reasons and measurements 
 | Toolchain bump, or an edit to `.cargo/config.toml`, `scripts/lld-linker.sh`, `rust-toolchain.toml`, or `RUSTFLAGS` | New build signature, so every seed misses once. |
 | `Cargo.toml` profile or dependency change | Seeds still copy. Cargo rebuilds the affected units. |
 | Switching `--target-dir` mid-task | The new dir is cold. |
-| A raw `cargo build` or IDE build in a `build.py` target dir | Raw cargo uses GNU ld, so it and `build.py` rebuild each other's units. Inferred, not measured. |
+| A raw `cargo build`/`cargo run` or IDE build in a `build.py` target dir | `build.py` exports `CARGO_TARGET_<host>_LINKER`, and cargo hashes the linker value into every unit fingerprint. A raw build sets no such variable, so it recompiles the tree, and the next `build.py` run recompiles it back. Measured 2026-10-03: raw `cargo run` recompiled 243 crates in 2m11s; the immediate second raw build was a no-op in 0.85s. |

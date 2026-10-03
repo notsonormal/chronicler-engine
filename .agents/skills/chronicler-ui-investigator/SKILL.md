@@ -1,244 +1,91 @@
 ---
 name: chronicler-ui-investigator
-description: "Investigation workflow for Chronicler Engine UI - used for testing, debugging, and post-plan verification. Triggers on: /chronicler-ui, /ui-investigate, investigate chronicler ui, test chronicler ui, debug ui"
-argument-hint: "<action> [port] [world]"
+description: "Chronicler UI investigation — drive the running dashboard through Chrome DevTools and capture shot, DOM and endpoint evidence for ad-hoc checks, gameplay debugging, and post-plan review. Triggers on: /chronicler-ui-investigator, chronicler ui, dashboard review, ui screenshot"
+argument-hint: "[port] [world]"
 ---
 
 # Chronicler UI Investigator
 
-Investigation workflow for Chronicler Engine UI - used for testing, debugging, and post-plan verification.
-
-## Overview
-
-Provides browser automation to:
-1. Launch Chronicler server (or connect to running instance)
-2. Navigate to UI
-3. Capture state (DOM state via evaluate, screenshots, HTTP endpoint checks; console errors via engine logs)
-4. Return findings for caller to interpret
-
-**Does NOT include specific expectations** - caller provides what to look for.
+Drive the running Chronicler dashboard and capture evidence for an expectation the caller supplies. This skill captures; the caller judges. Defaults: port 3000, world `redmist_estate`.
 
 ## Prerequisites
 
-- Chronicler Engine project at the repo root
-- Browser automation via the `@narumitw/pi-chrome-devtools` pi extension: `chrome_devtools_navigate`, `chrome_devtools_evaluate`, `chrome_devtools_screenshot`, `chrome_devtools_list_pages`, `chrome_devtools_select_page`. It attaches to CDP on `127.0.0.1:9222`. This is the path for ad-hoc interactive checks — no throwaway test needed.
-- Chrome must already be running. `~/.bashrc` starts it via `/home/node/.pi/start-browser.sh`. If a tool reports an unreachable endpoint, run that script and retry — the extension's own auto-launch does not work in this container. See [ENVIRONMENT.md](ENVIRONMENT.md) for the browser machinery, its constraints, and coexistence with the Playwright tier.
-- If the `chrome_devtools_*` tools are missing from the toolset entirely, the user runs `/chrome-devtools enable` or `/reload`.
-- The repo's Playwright harness (`tests/browser/`): the path for reproducible checks and shipped coverage (spec tickets).
+- Browser tools: `chrome_devtools_navigate`, `chrome_devtools_evaluate`, `chrome_devtools_screenshot`, `chrome_devtools_list_pages`, `chrome_devtools_select_page`, plus the `chrome_devtools_load` loader. If a capability is missing, call the loader with a task query (`/chrome-devtools enable` activates everything too); if the loader itself is missing, `/reload`.
+- Chrome must already be running. `~/.bashrc` starts it via `/home/node/.pi/start-browser.sh`; run that script and retry when a tool reports an unreachable endpoint, or when a CDP call times out (e.g. `Page.enable` on a wedged page).
+- No browser tools at all: drive `node scripts/cdp.mjs` (`list`, `shot`, `snap`, `html`, `eval`, `nav`, `click`, `type`) from `bash`, or use the Playwright harness below.
+- [ENVIRONMENT.md](ENVIRONMENT.md) has the rest of the machinery: the extension, viewports, delegated sweeps, and what breaks in this container.
 
-**No tool equivalent exists for:** console-message capture (use the engine log tee, see Step 3) and accessibility-tree snapshots (use a DOM-dump `chrome_devtools_evaluate` expression instead).
+## Workflow
 
-## Reproducible checks: the Playwright harness
+### 1. Serve
 
-For a broad visual sweep, a screenshot-sweep subagent drives `scripts/cdp.mjs` across tabs and viewports and returns a P0–P3 report. Say **desktop first** in the task you give it: this UI is desktop-first, while the agent's own breakpoint table treats desktop, tablet and mobile as peers. It is good at finding layout problems you did not think to look for, but it is not a substitute for looking at the screenshots yourself (see Mandatory Screenshot Verification).
-
-Use the repo's headless Playwright harness (`tests/browser/`) — real Chromium against a real server, driven by Rust tests. Key pieces: `send_action` / `wait_for_status_ready` / `capture_failure_state` in `tests/test_utils/` (failure dumps write a screenshot + DOM dump under `tmp/`); `SLOW_MO=500 python build.py test-pattern <name>` slows one test down for watching. `HEADED=1` cannot work here — there is no display, so headed Chrome exits at startup ([ENVIRONMENT.md](ENVIRONMENT.md)). Engine stdout/stderr tees to `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`). For ad-hoc verification prefer the extension (above). Write a throwaway test in `tests/browser/` (register it in `mod.rs`), run it, view the screenshots, then DELETE it only when the extension is unavailable — shipped coverage belongs to a spec ticket. The Mandatory Screenshot Verification rule below still applies: the failure dumps are screenshots; look at them.
-
-## Usage Patterns
-
-### For Testing
-```
-/chronicler-ui test [port]
-```
-- Starts fresh server
-- Captures baseline UI state
-- Returns DOM state + screenshot for verification
-
-### For Debugging
-```
-/chronicler-ui debug <port> <world>
-```
-- Connects to running server
-- Focus on engine-log errors and DOM state
-- Useful when issue is already reproduced
-
-### For Post-Plan Verification
-```
-/chronicler-ui verify [port]
-```
-- After plan implementation
-- Captures full state for comparison
-- Returns complete DOM dump + screenshot
-
----
-
-## Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `port` | 3000 | Server port |
-| `world` | redmist_estate | World to load |
-| `action` | test | test, debug, or verify |
-
----
-
-## Workflow Commands
-
-### Step 1: Ensure Server Running
-
-**Option A: Start new server**
 ```bash
-cargo run -- --world <world> --port <port>
+cargo run -- --world redmist_estate --port 3000
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/   # 200 → reuse this server
 ```
 
-**Option B: Use existing**
-```bash
-# Skip if already running: curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:<port>/
-```
+Done when `/` returns 200. A dead session can leave the port bound — check before starting a second engine. Raw `cargo run` in the shared `build.py` target dir recompiles the dependency tree (~2 min); the repo's `ENVIRONMENT.md` has the measurement.
 
-Check the port first: a dead session can leave an engine bound there.
-
-### Step 2: Navigate
+### 2. Drive
 
 ```javascript
 chrome_devtools_navigate(url="http://127.0.0.1:3000")
 ```
 
-The navigation call returns after page load. To wait for dynamic content (htmx swaps, generation status), poll inside `chrome_devtools_evaluate` — the tool awaits the returned promise:
+`chrome_devtools_evaluate` awaits the promise it is given, so poll inside it for dynamic content:
 
 ```javascript
 chrome_devtools_evaluate(expression="(async () => { for (let i = 0; i < 40; i++) { if (document.querySelector('#story-log .log-entry')) return 'ready'; await new Promise(r => setTimeout(r, 250)); } return 'timeout'; })()")
 ```
 
-Waiting for a generation to finish: poll `#status-display` until it reads "Ready". During generation it shows one of "Thinking", "Narrating", "Generating", "Quantifying" (spec scenario 16.6).
+For a turn in flight, poll `#status-display` until it reads "Ready" — during generation it reads "Thinking", "Narrating", "Generating" or "Quantifying" (spec 16.6). `/status/generating` returns a bare phase name or `idle`, and `onStatusPoll` maps `idle` to "Ready" in the DOM, so poll the element, not the endpoint.
 
-### Step 3: Capture State
+Done when the surface under test is on screen.
+
+### 3. Capture
 
 ```javascript
-// DOM structure (replaces accessibility-tree snapshots)
+// DOM structure — replaces accessibility-tree snapshots
 chrome_devtools_evaluate(expression="(() => ({ title: document.title, sections: [...document.querySelectorAll('[id]')].map(e => e.id).slice(0, 30), storyLogEntries: document.querySelectorAll('#story-log .log-entry').length, actionArea: !!document.querySelector('#action-area'), connectionStatus: document.querySelector('#connection-status')?.textContent }))()")
 
-// HTTP endpoints respond — fetch from the page context; keeps the dashboard loaded
-chrome_devtools_evaluate(expression="(async () => { const paths = ['/fragment/action-area', '/fragment/character-headshots', '/status/ready', '/status/generating']; const out = {}; for (const p of paths) { out[p] = (await fetch(p)).status; } return out; })()")
+// Fragments and status respond from page context, leaving the dashboard loaded
+chrome_devtools_evaluate(expression="(async () => { const paths = ['/fragment/action-area', '/fragment/character-headshots', '/status/generating']; const out = {}; for (const p of paths) { out[p] = (await fetch(p)).status; } return out; })()")
 
-// Screenshot (for visual analysis) — returns inline AND saves to disk
+// Shot — returns the image inline and writes it to savePath (a temp file if omitted)
 chrome_devtools_screenshot(savePath="tmp/chronicler-ui.png")
 ```
 
-Console errors have no tool equivalent. For test-spawned servers read the engine log tee; for a server you launched by hand, read its terminal output:
+For a post-plan pass, fetch the full dashboard set instead — `header`, `story-log`, `visual-sidebar`, `options-dock`, `action-area`, `character-headshots`, `settings`, `prompt-presets`, `games`, `worlds`, `llm-messages` — plus `/status/generating`, and confirm each is 200.
 
-```bash
-grep -iE "error|panic" tmp/test_server_logs/3000_*.log | tail -20
-```
+`#connection-status` renders server-side and always reads "Connected"; it is not a live socket indicator.
 
----
+**Done only when you have looked at a shot.** A green test, a DOM dump, a clean engine log and a delegated agent's report are each narrower evidence, and none of them stands in for a shot of the rendered page that you have personally compared against expectations. Write findings to the ticket as they are established, so a dead session costs the shots rather than the analysis. Console messages have no tool equivalent: read the engine log tee, `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`), or the terminal for a hand-started server.
 
-## Return Format
+## Reproducible checks: the Playwright harness
 
-The skill returns raw data - caller interprets:
+When the browser tools are unavailable, or the check should ship as coverage: real Chromium against a real server, driven by Rust tests in `tests/browser/`. Reuse `send_action` / `wait_for_status_ready` / `capture_failure_state` from `tests/test_utils/` — failure dumps write a shot and a DOM dump under `tmp/`. `SLOW_MO=500 python build.py test-pattern <name>` slows a run down for watching; `HEADED=1` cannot work here (no display). Register a throwaway test in `tests/browser/mod.rs` and delete it afterwards; shipped coverage belongs to a spec ticket.
 
-| Data | Use Case |
-|------|----------|
-| `chrome_devtools_evaluate` (DOM dump) | Verify elements present, layout structure |
-| `chrome_devtools_screenshot` | Visual regression, color checking (returns inline) |
-| `chrome_devtools_evaluate` (fetch loop) | Fragment + status endpoints respond 200 |
-| Engine log tee grep | Detect JS errors, panics, 404s |
+## Delegated sweeps
 
----
+For a broad sweep, delegate to a `generalist` managed agent with the exact `node scripts/cdp.mjs` commands in the task — viewports, method and the review's P1–P3 scale live in ENVIRONMENT.md's *Delegated screenshot sweeps*. Its report does not discharge the look-at-the-shot rule.
 
-## Mandatory Screenshot Verification
+## Driving gameplay
 
-**Every UI investigation MUST end with a screenshot.** This is non-negotiable.
+Everything below is **POST**: a GET returns 405, a bodyless POST 415, so send a JSON body with the right content type.
 
-After making any changes and before claiming verification:
-1. Navigate to the page
-2. Take a screenshot: `chrome_devtools_screenshot(savePath="tmp/<name>.png")`
-3. **Look at the screenshot** — visually confirm the layout is correct
-4. Report what you see and whether it matches expectations
+- `/action` submit a player command · `/action/check` text check before submitting · `/action/confirm` confirm a corrected command
+- `/check-text` standalone text check · `/swipe/new` new swipe · `/message/:id/swipe/:index` switch swipe
+- `/retrigger` retrigger the last event · `/history/:id` edit a history entry · `/history/delete` delete the last one
 
-**Do NOT claim "verified" based on:**
-- DOM dump alone (doesn't show visual layout)
-- Engine logs alone (no errors ≠ correct rendering)
-- Subagent reports alone (you must see it yourself)
-- Test passes alone (CSS bugs don't fail tests)
+A fetch proves an endpoint responds, not that the UI updates — drive the real DOM from `chrome_devtools_evaluate` for click Send, switch swipe and retrigger, and for the slash flows (`/impersonate`, `/guide`, `/options`) that submit through `#slash-menu` (spec `browser_slash_menu.md`). Full route list: `docs/diataxis/reference/frontend/http_routes.md`, generated from `router.rs`.
 
-**Only claim verified when you have:**
-- A screenshot showing the actual rendered page
-- Personally confirmed the visual result matches expectations
+Selector vocabulary: `docs/specs/browser_*.md`, enforced in `tests/browser/` (`dashboard.rs`, `games.rs`, `options.rs`, `prompt_presets.rs`, `worlds.rs`, plus `stub/`). Tabs switch through `.tab[data-tab="<name>"]`; the `#<name>-tab` id is the hidden content panel, so clicking the id does nothing. Common handles: `.log-entry`, `.edit-btn` / `#edit-textarea` / `.cancel-btn` (edit mode), `.delete-btn`, `#command-form input[name="command"]`, `#status-display`, `#error-notification.visible`, `#slash-menu` / `.slash-suggestion`, `#world-posture-status`.
 
----
+## Troubleshooting
 
-## Customization Guide
-
-### Testing - Check element presence
-```javascript
-chrome_devtools_navigate(url="http://127.0.0.1:3000")
-chrome_devtools_evaluate(expression="(() => ({ sections: [...document.querySelectorAll('[id]')].map(e => e.id) }))()")
-// Caller verifies specific elements exist
-```
-
-### Debugging - Find what's broken
-```bash
-grep -iE "error|panic" tmp/test_server_logs/3000_*.log | tail -20
-```
-```javascript
-chrome_devtools_evaluate(expression="(() => ({ title: document.title, storyLogEntries: document.querySelectorAll('#story-log .log-entry').length, actionArea: !!document.querySelector('#action-area') }))()")
-
-// Check interactive endpoints respond
-chrome_devtools_evaluate(expression="(async () => { const out = {}; for (const p of ['/fragment/action-area', '/status/ready']) { out[p] = (await fetch(p)).status; } return out; })()")
-```
-
-### Post-Plan - Full capture
-```javascript
-// Verify all dashboard fragments and status endpoints load (all verified 200)
-chrome_devtools_evaluate(expression="(async () => { const paths = ['/fragment/header', '/fragment/story-log', '/fragment/visual-sidebar', '/fragment/options-dock', '/fragment/action-area', '/fragment/character-headshots', '/fragment/settings', '/fragment/prompt-presets', '/fragment/games', '/fragment/worlds', '/fragment/llm-messages', '/status/ready', '/status/generating']; const out = {}; for (const p of paths) { out[p] = (await fetch(p)).status; } return out; })()")
-
-chrome_devtools_navigate(url="http://127.0.0.1:3000")
-chrome_devtools_evaluate(expression="(() => ({ sections: [...document.querySelectorAll('[id]')].map(e => e.id), storyLogEntries: document.querySelectorAll('#story-log .log-entry').length }))()")
-chrome_devtools_screenshot(savePath="tmp/post-plan-ui.png", fullPage=true)
-```
-
----
-
-## Error Handling
-
-| Issue | Check |
-|-------|-------|
-| Server won't start | `cargo run` manually to see errors |
-| Page not loading | Verify server started, check port |
-| Elements missing | Check world loaded correctly |
-| Console errors | Grep the engine log tee (Step 3) |
-| Command form missing | Check `/fragment/action-area` |
-| Status not updating | Check `/status/generating` and `/status/ready` |
-| `chrome_devtools_*` tools missing | User runs `/chrome-devtools enable` or `/reload` |
-| Browser unreachable / endpoint error | Run `/home/node/.pi/start-browser.sh`, then retry ([ENVIRONMENT.md](ENVIRONMENT.md)) |
-
----
-
-## Interactive endpoints not covered by default
-
-All **POST**. A GET returns 405 and a bodyless POST returns 415 — send a JSON body with the right content type. Route list: `docs/diataxis/reference/frontend/http_routes.md` (generated from `router.rs`). These are used during gameplay and should be tested separately when validating interactivity:
-
-- `/action` — submit a player command
-- `/action/check` — text-check before submitting
-- `/action/confirm` — confirm a corrected command
-- `/check-text` — standalone text check
-- `/swipe/new` — retry/generate a new swipe
-- `/message/:id/swipe/:index` — switch to a different swipe
-- `/retrigger` — retrigger the last event
-- `/history/:id` — edit a history entry
-- `/history/delete` — delete the last history entry
-
-For gameplay flows (click Send, switch swipe, retrigger), drive the real DOM from `chrome_devtools_evaluate` or fall back to the Rust harness — a fetch only proves the endpoint responds, not that the UI updates.
-
-Selector vocabulary for DOM work comes from `docs/specs/browser_*.md`, enforced by the per-surface `tests/browser/<feature>.rs` files: `.log-entry`, `.edit-btn` / `#edit-textarea` / `.cancel-btn` (edit mode), `.delete-btn`, `#command-form input[name="command"]`, `#status-display`, `#error-notification.visible`, `#slash-menu` / `.slash-suggestion`, `#world-posture-status`. Slash commands (`/impersonate`, `/guide`, `/options`) are client-side flows through `#slash-menu` (spec `browser_slash_menu.md` 31.1–31.9) that submit via `/action`.
-
----
-
-## Integration Points
-
-- **In tests**: Capture baseline, compare post-change
-- **In debugging**: Get state when issue occurs
-- **In verification**: After plan implementation completes
-
----
-
-## Notes
-
-- No expected values hardcoded - caller provides assertions
-- `chrome_devtools_screenshot` returns the image inline and saves it to disk; pass `savePath` (relative to the repo root works, e.g. `tmp/<name>.png`), otherwise it writes a temp file. Either way: look at it.
-- Waiting for dynamic content: poll inside `chrome_devtools_evaluate` (Step 2 snippet)
-- Long reviews: write findings to the ticket as they are established — a dead session
-  then costs the screenshots, not the analysis
-- The `#connection-status` element is rendered server-side in the header fragment and shows "Connected" by default; it is not a live WebSocket state indicator
-- Zero-dependency fallback when the extension is absent: `scripts/cdp.mjs`, the vendored `chrome-cdp` CLI (`list`, `shot`, `snap`, `html`, `eval`, `nav`, `click`, `type`, `evalraw`). It needs no npm install — Node 22+ only. The Playwright harness above remains the other fallback
+| Symptom | Check |
+|---|---|
+| Status display frozen | `/status/generating`; `#status-display` swaps on its own 5s poll |
+| Capability tool missing | `chrome_devtools_load`; loader missing → `/reload` |
+| Endpoint unreachable, or a CDP call times out | `/home/node/.pi/start-browser.sh`, then retry |
+| Engine won't start | Port already bound by a dead session; run `cargo run` in the foreground for the error |
