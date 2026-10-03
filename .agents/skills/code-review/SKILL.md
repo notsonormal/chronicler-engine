@@ -22,8 +22,6 @@ Ensure that the application is working is part of the implementation, assume the
 
 Whatever the user said is the fixed point — a commit SHA, branch name, tag, `main`, `HEAD~5`, etc. If they didn't specify one, ask for it.
 
-Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
-
 Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
 
 ### 2. Identify the spec source
@@ -61,17 +59,19 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 ### 4. Spawn both sub-agents in parallel
 
+Build the bundle both sub-agents read: `python scripts/prepare_review_bundle.py --ref <fixed-point>`. It prints the run directory; pass that path to each sub-agent, with the file names its generated `README.md` lists. The `reviewer` definition has no shell, so the bundle is the only diff they can read.
+
 Send a single message with two `Agent` tool calls. Use the `reviewer` agent for both.
 
 **Standards sub-agent prompt** — include:
 
-- The full diff command and commit list.
+- The bundle directory path and its file names (the bundle's `README.md` lists them).
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
 - The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
 
 **Spec sub-agent prompt** — include:
 
-- The diff command and commit list.
+- The bundle directory path and its patch files (the bundle's `README.md` lists them).
 - The path or fetched contents of the spec.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 

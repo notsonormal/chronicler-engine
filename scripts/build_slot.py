@@ -3,10 +3,15 @@
 Overlapping builds overrun the container's memory cap. The ``flock`` is released by the kernel when
 the holder dies. It fails open: a lock error, or ``CHRONICLER_BUILD_SLOT_WAIT`` seconds (default
 1800, per step), runs the step anyway. ``CHRONICLER_BUILD_SLOT=0`` disables it.
+
+``python scripts/build_slot.py --status`` reports whether the slot is free without taking it:
+exit 0 free, 1 held, 2 error. The verdict comes from the flock alone; the sibling ``.holder`` JSON
+is informational only.
 """
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import json
 import os
@@ -19,6 +24,8 @@ try:
     import fcntl
 except ImportError:  # Windows has no fcntl; the slot is a no-op there.
     fcntl = None
+
+from target_seed import probe_shared_lock  # noqa: E402  (scripts/ is on sys.path)
 
 HELD_ENV = "CHRONICLER_BUILD_SLOT_HELD"
 DISABLE_ENV = "CHRONICLER_BUILD_SLOT"
@@ -51,9 +58,18 @@ def _holder_path(lock: Path) -> Path:
     return lock.with_suffix(".holder")
 
 
-def _read_holder(lock: Path) -> str:
+def _read_holder_info(lock: Path) -> dict | None:
+    """The sibling ``.holder`` JSON, or None when it is missing, unreadable or not a mapping."""
     try:
         info = json.loads(_holder_path(lock).read_text())
+    except Exception:
+        return None
+    return info if isinstance(info, dict) else None
+
+
+def _describe_holder(lock: Path) -> str:
+    try:
+        info = _read_holder_info(lock)
         age = int(time.time() - info["since"])
         return f"{info['label']!r} in {info['cwd']} (pid {info['pid']}, running {age}s)"
     except Exception:
@@ -64,6 +80,65 @@ def _write_holder(lock: Path, label: str) -> None:
     info = {"pid": os.getpid(), "cwd": os.getcwd(), "label": label, "since": time.time()}
     with contextlib.suppress(OSError):
         _holder_path(lock).write_text(json.dumps(info))
+
+
+def _pid_is_alive(pid: object) -> bool:
+    """Informational liveness note for the recorded holder; pid reuse is acceptable here."""
+    try:
+        pid = int(pid)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def slot_status(echo: Callable[[str], None] = print) -> int:
+    """Report whether the build slot is free without taking it; the process exit code.
+
+    The verdict comes from ``probe_shared_lock`` alone: a returned handle means no exclusive
+    holder, ``None`` means a live holder (the kernel drops the lock when the holder dies). The
+    ``.holder`` JSON never changes the verdict; it only informs the wording.
+    """
+    lock = lock_path()
+    handle = probe_shared_lock(lock)
+    if handle is None:
+        holder = _describe_holder(lock)
+        info = _read_holder_info(lock)
+        if holder and info is not None and not _pid_is_alive(info.get("pid")):
+            echo("Build slot: held (flock held by an unrecorded process).")
+            echo(f"  recorded holder is stale: {holder}")
+        elif holder:
+            echo(f"Build slot: held by {holder}.")
+        else:
+            echo("Build slot: held.")
+        return 1
+    with contextlib.suppress(Exception):
+        handle.close()
+    holder = _describe_holder(lock)
+    echo("Build slot: free.")
+    if holder:
+        echo(f"  leftover .holder is stale: {holder}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point: ``--status`` prints the verdict and returns the exit code."""
+    parser = argparse.ArgumentParser(description="Machine-wide build slot (one heavy step at a time).")
+    parser.add_argument("--status", action="store_true", help="Report free/held without taking the slot.")
+    args = parser.parse_args(argv)
+    if not args.status:
+        parser.print_help()
+        return 2
+    try:
+        return slot_status()
+    except Exception as exc:  # A crash must not read as "held" (exit 1).
+        print(f"Build slot status error: {exc}")
+        return 2
 
 
 def _wait_limit() -> float:
@@ -99,7 +174,7 @@ def _acquire(fd: int, lock: Path, echo: Callable[[str], None]) -> bool:
             echo(f"WARNING: waited {int(waited)}s for the build slot; running without it.")
             return False
         if waited >= next_status:
-            holder = _read_holder(lock)
+            holder = _describe_holder(lock)
             suffix = f" Held by {holder}." if holder else ""
             echo(f"Waiting for the build slot (another build is running; waited {int(waited)}s).{suffix}")
             next_status = waited + STATUS_EVERY_SECS
@@ -139,3 +214,7 @@ def maybe_hold(cmd: str, label: str, echo: Callable[[str], None] = print):
     if is_heavy(cmd):
         return hold(label, echo)
     return contextlib.nullcontext(False)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

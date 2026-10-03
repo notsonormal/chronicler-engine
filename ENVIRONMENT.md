@@ -17,7 +17,9 @@ run builds. Numbers are single runs from 2026-10-02 on a shared host, so treat g
 Each script's docstring has its details. These are the reasons and measurements the code can't show.
 
 - **Build slot** (`scripts/build_slot.py`): one heavy cargo step runs at a time, because overlapping
-  builds exceed the memory limit.
+  builds exceed the memory limit. Check the slot with `python scripts/build_slot.py --status`; a
+  build that gave up waiting (`CHRONICLER_BUILD_SLOT_WAIT`) or runs with the slot disabled holds no
+  flock, so `--status` reports free while it compiles.
 - **Target seeding** (`scripts/target_seed.py`): a cold target dir copies dependency artifacts from
   a worktree with the same build signature. A seeded new-worktree gate took 344 s, against 728 s
   unseeded.

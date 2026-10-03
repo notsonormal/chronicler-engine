@@ -1,6 +1,6 @@
 ---
 name: commit-and-push
-description: Generate commit message, run pre-commit hooks, stage changes, commit, and push. Handles docs index regeneration automatically. Use for any commit or push — keeps each commit scoped to the current task's changes and asks before including unrelated or untracked files.
+description: Generate commit message, run pre-commit hooks, stage changes, commit, and push. Use for any commit or push — keeps each commit scoped to the current task's changes and asks before including unrelated or untracked files.
 argument-hint: "[commit message hints...]"
 action-required: EXECUTES — runs actual git commands (stage, commit, push) when invoked
 ---
@@ -23,32 +23,38 @@ action-required: EXECUTES — runs actual git commands (stage, commit, push) whe
 
 ## Pre-commit Hook Behavior
 
-The chronicler_engine project has a pre-commit hook that:
-1. Runs `generate_docs_index.py` to update `docs/README.md`
-2. **Aborts the commit** if README.md was modified
-3. Requires you to stage the updated README.md and commit again
+The chronicler_engine project has a pre-commit hook that regenerates four generated files and stages them into the commit being made:
 
-**This is by design** — the hook ensures the docs index is always current, but means you may need two commits when docs change.
+- `AGENTS.md`
+- `tests/AGENTS.md`
+- `docs/AGENTS.md`
+- `docs/diataxis/reference/coding_standards/guardrails.md`
+
+The hook stages them itself, precisely so you do not have to commit twice — this is by design.
+
+The hook aborts, naming the file, only when one of those four already had unstaged changes before it ran. The generated files carry hand-written prose beside their generated blocks, so the hook cannot re-stage the file without sweeping that prose into the commit. Stage or stash the file, then commit again — Git reuses the previous commit message automatically:
+
+```bash
+git add <file>
+git commit
+```
 
 ---
 
 ## Execution Workflow
 
-### Step 1: Run Pre-commit Hooks Manually (Optional but Recommended)
+### Step 1: Run the Generators Manually (Optional)
 
-Run the docs index generator BEFORE committing to catch changes early:
+The hook runs the four generators for you and stages the result. Running them first is optional — it surfaces a generator failure before you have staged everything:
 
 ```bash
-cd chronicler_engine
 python scripts/generate_docs_index.py
+python scripts/generate_guardrails_doc.py
+python scripts/generate_structure_index.py
+python scripts/generate_tests_structure_index.py
 ```
 
-If this updates `docs/README.md`, stage it now:
-```bash
-git add docs/README.md
-```
-
-**Why do this first?** Running the hook manually before staging means the README.md change is included in your single commit, avoiding the two-commit dance.
+Do not stage their output by hand — the hook regenerates and stages it anyway.
 
 ### Step 2: Check Git Status
 
@@ -121,16 +127,7 @@ git commit -m "type(scope): subject"
 git commit -F /path/to/message.txt
 ```
 
-**If pre-commit hook blocks:**
-
-The hook updated README.md. Just stage and commit again:
-
-```bash
-git add docs/README.md
-git commit
-```
-
-Git will reuse the previous commit message automatically.
+**If the hook aborts:** it found unstaged changes in one of the generated files. See **Pre-commit Hook Behavior** above for the fix.
 
 ### Step 6: Push
 
@@ -152,14 +149,13 @@ Just a normal merge — nothing fancy needed.
 ## Complete Example Session
 
 ```bash
-# 1. Run docs index generator first (catches changes early)
-cd chronicler_engine
+# 1. Optionally run the four generators first (catches changes early)
 python scripts/generate_docs_index.py
 # Output: "Generated index with 47 entries"
 
 # 2. Check status
 git status
-# Shows modified files + updated README.md
+# Shows modified files, untracked files, and any staged generated indexes
 
 # 3. Stage everything
 git add -A
@@ -174,18 +170,6 @@ git commit -m "refactor(action_processing): Extract composable pure functions"
 # 6. Push
 git push
 ```
-
----
-
-## Two-Commit Flow (When Pre-commit Hook Fires)
-
-**Why it happens:**
-1. Your code changes trigger the pre-commit hook
-2. Hook runs `generate_docs_index.py` and updates README.md
-3. Commit aborts because working tree is now dirty
-4. You stage README.md and run `git commit` again
-
-The second commit reuses the same message automatically — this is expected and fine.
 
 ---
 
@@ -217,7 +201,7 @@ Git LFS may be required for files >100MB. Check project guidelines.
 Before pushing:
 - [ ] All intended files staged
 - [ ] Commit message follows conventional format
-- [ ] Pre-commit hooks satisfied (or README.md staged for second commit)
+- [ ] Pre-commit hook ran clean (the four generated files are staged by the hook)
 - [ ] `git status` shows clean working tree (or only expected untracked files)
 
 After pushing:
@@ -230,7 +214,7 @@ After pushing:
 
 | Mistake | Result | Fix |
 |---------|--------|-----|
-| Skipping pre-commit hook run | Two commits required | Run `generate_docs_index.py` first or just commit again after hook updates README |
+| Committing with unstaged edits to a generated file | Hook aborts the commit | Stage the file, then commit again — see Pre-commit Hook Behavior |
 | Committing without reviewing diff | Accidental debug code, TODOs | Always `git diff --staged` first |
 | Using `git push --force` on shared branches | May overwrite others' work | Use force only on personal branches |
 | Ignoring merge conflicts | Push fails, remote unchanged | Resolve conflicts, complete merge commit |

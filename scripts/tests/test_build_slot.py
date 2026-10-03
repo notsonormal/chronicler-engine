@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import os
 import signal
 import subprocess
@@ -138,6 +141,106 @@ class SlotTests(unittest.TestCase):
         self.assertFalse(self.lock.exists())
         with build_slot.maybe_hold("cargo check", "check", self.messages.append) as got:
             self.assertTrue(got)
+
+
+@unittest.skipIf(build_slot.fcntl is None, "the slot needs fcntl")
+class StatusTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.lock = Path(self.tmp.name) / "slot.lock"
+        patcher = mock.patch.dict(os.environ, {build_slot.LOCK_ENV: str(self.lock)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.out: list[str] = []
+
+    def _hold_exclusively(self):
+        """Take a real exclusive flock, as a live build does, and release it at cleanup."""
+        fd = os.open(self.lock, os.O_RDWR | os.O_CREAT, 0o666)
+        self.addCleanup(os.close, fd)
+        build_slot.fcntl.flock(fd, build_slot.fcntl.LOCK_EX | build_slot.fcntl.LOCK_NB)
+
+    def _write_holder(self, pid: int, label: str = "holder-label") -> None:
+        build_slot._holder_path(self.lock).write_text(
+            json.dumps({"pid": pid, "cwd": "/tmp/checkout", "label": label, "since": time.time()})
+        )
+
+    def _dead_pid(self) -> int:
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        return proc.pid
+
+    def test_free_slot_reports_free_without_creating_the_lock(self):
+        self.assertEqual(build_slot.slot_status(self.out.append), 0)
+        self.assertEqual(self.out, ["Build slot: free."])
+        self.assertFalse(self.lock.exists())
+
+    def test_held_flock_names_the_live_holder(self):
+        self._hold_exclusively()
+        self._write_holder(os.getpid(), "live-holder")
+        self.assertEqual(build_slot.slot_status(self.out.append), 1)
+        joined = "\n".join(self.out)
+        self.assertIn("Build slot: held by", joined)
+        self.assertIn("live-holder", joined)
+        self.assertIn(f"pid {os.getpid()}", joined)
+
+    def test_free_with_leftover_holder_of_a_dead_pid_is_stale_not_held(self):
+        self._write_holder(self._dead_pid(), "ghost")
+        self.assertEqual(build_slot.slot_status(self.out.append), 0)
+        joined = "\n".join(self.out)
+        self.assertIn("Build slot: free.", joined)
+        self.assertIn("stale", joined)
+        self.assertIn("ghost", joined)
+
+    def test_dead_recorded_pid_never_flips_a_held_verdict(self):
+        self._hold_exclusively()
+        self._write_holder(self._dead_pid(), "ghost")
+        self.assertEqual(build_slot.slot_status(self.out.append), 1)
+        self.assertIn("flock held by an unrecorded process", "\n".join(self.out))
+
+    def test_missing_holder_still_reports_held(self):
+        self._hold_exclusively()
+        self.assertEqual(build_slot.slot_status(self.out.append), 1)
+        self.assertEqual(self.out, ["Build slot: held."])
+
+    def test_unreadable_holder_is_ignored(self):
+        build_slot._holder_path(self.lock).write_text("{not json")
+        self.assertEqual(build_slot.slot_status(self.out.append), 0)
+        self.assertEqual(self.out, ["Build slot: free."])
+
+    def test_unexpected_status_failure_exits_two(self):
+        stream = io.StringIO()
+        with mock.patch.object(build_slot, "probe_shared_lock", side_effect=RuntimeError("boom")):
+            with contextlib.redirect_stdout(stream):
+                code = build_slot.main(["--status"])
+        self.assertEqual(code, 2)
+        self.assertIn("Build slot status error", stream.getvalue())
+
+    def test_missing_status_flag_exits_two(self):
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            self.assertEqual(build_slot.main([]), 2)
+
+    def test_cli_status_exit_codes(self):
+        script = str(SCRIPTS / "build_slot.py")
+        free = subprocess.run(
+            [sys.executable, script, "--status"],
+            capture_output=True,
+            text=True,
+            env=os.environ.copy(),
+        )
+        self.assertEqual(free.returncode, 0)
+        self.assertIn("Build slot: free.", free.stdout)
+
+        self._hold_exclusively()
+        held = subprocess.run(
+            [sys.executable, script, "--status"],
+            capture_output=True,
+            text=True,
+            env=os.environ.copy(),
+        )
+        self.assertEqual(held.returncode, 1)
+        self.assertIn("Build slot: held", held.stdout)
 
 
 if __name__ == "__main__":
