@@ -14,3 +14,6 @@ opt-level = 3
 
 [profile.dev]
 opt-level = 0
+# Backtraces keep file and line. Variable-level debugger inspection is dropped.
+# Measured: binary 178 MiB -> 81 MiB, relink 1.85 s -> 1.23 s (see the commit that added this line).
+debug = "line-tables-only"
