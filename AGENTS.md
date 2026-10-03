@@ -84,7 +84,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `mod.rs` — Action route handlers.
         - **bootstrap/**
           - `mod.rs` — HTTP bootstrap — server bring-up
-          - `port.rs` — Port management utilities
           - `server.rs` — Server implementation
         - **builders/**
           - `connections.rs` — LLM-connection card + edit-form HTML builders.
@@ -142,7 +141,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
           - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
           - `mod.rs` — HTTP utility modules.
-          - `port_utils.rs` — Port management helpers used by `bind_with_retry`.
           - `response.rs` — HTTP response helpers
           - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`
           - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
@@ -380,7 +378,7 @@ python build.py test-pattern "action_pipeline::options_tests" # Run tests whose 
 python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s)
 python build.py browser                         # Only the browser/Playwright binary (~1 min)
 python build.py validate-docs                   # Validate markdown docs
-cargo run -- --world redmist_estate --port 3000 # Run the server (raw cargo; not a gate action)
+python build.py run                             # Run the dev server (see ENVIRONMENT.md)
 ```
 
 Almost every full-gate step is also a subcommand — see `python build.py --help`. Only the packaging, test-suite, and coverage-report phases stay gate-internal. `--target-dir` works on either side of the subcommand; all other top-level flags are full-gate only.

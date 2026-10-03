@@ -12,7 +12,6 @@ fn test_server_config_default() {
     let config = ServerConfig::default();
     assert_eq!(config.host, IpAddr::V4(Ipv4Addr::UNSPECIFIED));
     assert_eq!(config.port, 3_000);
-    assert_eq!(config.bind_attempts, None);
 }
 
 #[test]
@@ -20,10 +19,8 @@ fn test_server_config_custom_port() {
     let config = ServerConfig {
         host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 80_80,
-        bind_attempts: Some(3),
     };
     assert_eq!(config.port, 80_80);
-    assert_eq!(config.bind_attempts, Some(3));
 }
 
 #[test]
@@ -38,11 +35,9 @@ fn test_server_config_clone() {
     let config = ServerConfig {
         host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 5000,
-        bind_attempts: Some(2),
     };
     let cloned = config.clone();
     assert_eq!(config.port, cloned.port);
-    assert_eq!(config.bind_attempts, cloned.bind_attempts);
 }
 
 #[test]
@@ -50,7 +45,6 @@ fn test_server_config_debug() {
     let config = ServerConfig {
         host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 3000,
-        bind_attempts: None,
     };
     let debug_str = format!("{config:?}");
     assert!(debug_str.contains("3000"));
@@ -61,7 +55,6 @@ fn test_server_config_min_port() {
     let config = ServerConfig {
         host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 1,
-        bind_attempts: Some(1),
     };
     assert_eq!(config.port, 1);
 }
@@ -71,7 +64,6 @@ fn test_server_config_max_port() {
     let config = ServerConfig {
         host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 65535,
-        bind_attempts: None,
     };
     assert_eq!(config.port, 65535);
 }

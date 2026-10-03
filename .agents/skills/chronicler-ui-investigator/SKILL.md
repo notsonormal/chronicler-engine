@@ -20,11 +20,11 @@ Drive the running Chronicler dashboard and capture evidence for an expectation t
 ### 1. Serve
 
 ```bash
-cargo run -- --world redmist_estate --port 3000
+python build.py run -- --world redmist_estate --port 3000
 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/   # 200 → reuse this server
 ```
 
-Done when `/` returns 200. A dead session can leave the port bound — check before starting a second engine. Raw `cargo run` in the shared `build.py` target dir recompiles the dependency tree (~2 min); the repo's `ENVIRONMENT.md` has the measurement.
+Done when `/` returns 200. A dead session can leave the port bound — check before starting a second engine. For how `python build.py run` works, see the repo-root [ENVIRONMENT.md](../../../ENVIRONMENT.md).
 
 ### 2. Drive
 
@@ -88,4 +88,5 @@ Selector vocabulary: `docs/specs/browser_*.md`, enforced in `tests/browser/` (`d
 | Status display frozen | `/status/generating`; `#status-display` swaps on its own 5s poll |
 | Capability tool missing | `chrome_devtools_load`; loader missing → `/reload` |
 | Endpoint unreachable, or a CDP call times out | `/home/node/.pi/start-browser.sh`, then retry |
-| Engine won't start | Port already bound by a dead session; run `cargo run` in the foreground for the error |
+| Engine won't start | Port already bound. Stop that process or pass `-- --port <other>` |
+| World JSON edits do not appear | The server reads `target/debug/data`, the copy the last full gate wrote. Run `python build.py` to refresh it. |

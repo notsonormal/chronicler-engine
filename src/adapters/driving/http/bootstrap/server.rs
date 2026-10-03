@@ -2,6 +2,7 @@
 //! Server implementation
 
 use std::net::{IpAddr, SocketAddr};
+use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tracing;
 
@@ -9,14 +10,12 @@ use crate::error::{EngineError, Result};
 
 use crate::adapters::driving::http::app_state::AppState;
 use crate::adapters::driving::http::builders::router::build_router;
-use super::port::bind_with_retry;
 use crate::bootstrap::wiring::WiredApp;
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub host: IpAddr,
     pub port: u16,
-    pub bind_attempts: Option<u32>,
 }
 
 #[cfg(test)]
@@ -25,7 +24,6 @@ impl Default for ServerConfig {
         ServerConfig {
             host: IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
             port: 3000,
-            bind_attempts: None,
         }
     }
 }
@@ -40,11 +38,9 @@ pub async fn run_server_with_config(
     let app = build_router(app_state);
 
     let bind_addr = SocketAddr::new(config.host, config.port).to_string();
-    let listener = bind_with_retry(&bind_addr, config.bind_attempts)
-        .await
-        .map_err(|e| {
-            EngineError::Config(format!("Failed to bind to port {}: {}", config.port, e))
-        })?;
+    let listener = TcpListener::bind(&bind_addr).await.map_err(|e| {
+        EngineError::Config(format!("Failed to bind to port {}: {}", config.port, e))
+    })?;
 
     let addr = listener
         .local_addr()

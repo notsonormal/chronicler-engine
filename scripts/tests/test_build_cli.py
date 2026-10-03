@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import socket
 import sys
 import tempfile
 import unittest
@@ -47,6 +48,7 @@ class RegistryTests(unittest.TestCase):
             "unit",
             "integration",
             "test-pattern",
+            "run",
         }
         self.assertTrue(expected.issubset(build.REGISTRY), set(build.REGISTRY))
 
@@ -75,6 +77,11 @@ class RegistryTests(unittest.TestCase):
     def test_test_pattern_spec_takes_pattern(self):
         self.assertTrue(build.REGISTRY["test-pattern"].pattern_arg)
         self.assertFalse(build.REGISTRY["clippy"].pattern_arg)
+
+    def test_run_is_not_a_gate_step(self):
+        """`run` has its own dispatcher and must not join the full gate."""
+        self.assertIn("run", build.REGISTRY)
+        self.assertNotIn("run", build.GATE_ORDER)
 
 
 class ParseArgsTests(unittest.TestCase):
@@ -149,6 +156,260 @@ class ParseArgsTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
 
 
+class RunPassthroughTests(unittest.TestCase):
+    """`python build.py run [-- <server flags>]` forwards the server's own flags."""
+
+    def test_strip_drops_exactly_one_double_dash(self):
+        self.assertEqual(
+            build._strip_passthrough(["--", "--port", "9"]), ["--port", "9"]
+        )
+        self.assertEqual(build._strip_passthrough(["--", "--", "x"]), ["--", "x"])
+        self.assertEqual(build._strip_passthrough(["--port", "9"]), ["--port", "9"])
+        self.assertEqual(build._strip_passthrough([]), [])
+
+    def test_parse_args_keeps_the_passthrough(self):
+        args = build.parse_args(["run", "--", "--world", "x", "--port", "9"])
+        self.assertEqual(args.command, "run")
+        self.assertEqual(args.server_flags, ["--", "--world", "x", "--port", "9"])
+
+    def test_no_passthrough_is_empty(self):
+        self.assertEqual(build.parse_args(["run"]).server_flags, [])
+
+    def test_target_dir_before_run(self):
+        args = build.parse_args(["--target-dir", "t/a", "run", "--", "--port", "9"])
+        self.assertEqual(args.target_dir, "t/a")
+        self.assertEqual(build._strip_passthrough(args.server_flags), ["--port", "9"])
+
+    def test_target_dir_after_run(self):
+        args = build.parse_args(["run", "--target-dir", "t/a", "--", "--port", "9"])
+        self.assertEqual(args.target_dir, "t/a")
+        self.assertEqual(build._strip_passthrough(args.server_flags), ["--port", "9"])
+
+    def test_release_before_run_rejected(self):
+        with self.assertRaises(SystemExit) as ctx:
+            build.parse_args(["--release", "run"])
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_run_without_separator_rejects_server_flag(self):
+        with self.assertRaises(SystemExit):
+            build.parse_args(["run", "--world", "x"])
+
+
+class BindTargetTests(unittest.TestCase):
+    """The pre-build port check mirrors the server's clap defaults."""
+
+    def test_defaults_match_server_cli(self):
+        self.assertEqual(build._parse_bind_target([]), (3000, "0.0.0.0"))
+
+    def test_space_form(self):
+        self.assertEqual(build._parse_bind_target(["--port", "3099"]), (3099, "0.0.0.0"))
+        self.assertEqual(
+            build._parse_bind_target(["--host", "127.0.0.1"]), (3000, "127.0.0.1")
+        )
+
+    def test_equals_form(self):
+        self.assertEqual(build._parse_bind_target(["--port=3099"]), (3099, "0.0.0.0"))
+        self.assertEqual(
+            build._parse_bind_target(["--host=127.0.0.1"]), (3000, "127.0.0.1")
+        )
+
+    def test_later_flag_wins(self):
+        self.assertEqual(
+            build._parse_bind_target(["--port", "1", "--port=2"]), (2, "0.0.0.0")
+        )
+
+    def test_skip_flags_disable_the_check(self):
+        for flag in ("--list-worlds", "--help", "-h", "--version", "-V"):
+            with self.subTest(flag=flag):
+                self.assertIsNone(build._parse_bind_target([flag]))
+
+    def test_unusable_values_skip_the_check(self):
+        self.assertIsNone(build._parse_bind_target(["--port", "abc"]))
+        self.assertIsNone(build._parse_bind_target(["--port"]))
+        self.assertIsNone(build._parse_bind_target(["--host"]))
+
+    def test_out_of_range_port_skips_the_check(self):
+        # The probe would raise OverflowError rather than report a conflict.
+        for value in ("70000", "-1", "65536"):
+            with self.subTest(value=value):
+                self.assertIsNone(build._parse_bind_target(["--port", value]))
+
+
+class PortProbeTests(unittest.TestCase):
+    """The bind probe matches tokio's SO_REUSEADDR semantics."""
+
+    @staticmethod
+    def _free_port():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            return probe.getsockname()[1]
+
+    def test_free_port_reads_as_free(self):
+        self.assertFalse(build._port_in_use("127.0.0.1", self._free_port()))
+
+    def test_bound_port_reads_as_in_use(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as held:
+            held.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            held.bind(("127.0.0.1", 0))
+            held.listen(1)
+            self.assertTrue(build._port_in_use("127.0.0.1", held.getsockname()[1]))
+
+    def test_busy_port_stops_with_port_is_in_use(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as held:
+            held.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            held.bind(("127.0.0.1", 0))
+            held.listen(1)
+            port = held.getsockname()[1]
+            with mock.patch.object(build, "both_print") as printer:
+                with self.assertRaises(SystemExit) as ctx:
+                    build._require_free_port((port, "127.0.0.1"))
+        self.assertEqual(ctx.exception.code, 1)
+        messages = " ".join(str(call.args[0]) for call in printer.call_args_list)
+        self.assertIn(f"port {port} is in use", messages)
+
+    def test_none_target_is_a_noop(self):
+        build._require_free_port(None)
+
+
+class RunServerTests(unittest.TestCase):
+    """run_server builds under the slot and returns the argv; it never execs."""
+
+    def setUp(self):
+        patcher = mock.patch.dict(
+            os.environ, {"CHRONICLER_NO_LLD": "1"}
+        )  # keep ~/.cache untouched
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def _args(flags, target_dir=None):
+        return SimpleNamespace(
+            command="run", server_flags=flags, target_dir=target_dir, release=False
+        )
+
+    def test_returns_binary_and_stripped_flags(self):
+        args = self._args(["--", "--world", "x", "--port", "3099"])
+        with mock.patch.object(build, "check_rust_version"), mock.patch.object(
+            build, "_require_free_port"
+        ), mock.patch.object(build, "_warn_if_target_locked"), mock.patch.object(
+            build, "_timed_run"
+        ) as timed:
+            argv = build.run_server(args, build.StepRecord())
+        self.assertEqual(
+            argv,
+            ["target/debug/chronicler_engine", "--world", "x", "--port", "3099"],
+        )
+        self.assertEqual(timed.call_args.args[3], "cargo build --bin chronicler_engine")
+
+    def test_target_dir_after_run_points_at_that_binary(self):
+        args = self._args(["--port", "3099"], target_dir="target/agent2")
+        with mock.patch.object(build, "check_rust_version"), mock.patch.object(
+            build, "_require_free_port"
+        ), mock.patch.object(build, "_warn_if_target_locked"), mock.patch.object(
+            build, "_timed_run"
+        ):
+            argv = build.run_server(args, build.StepRecord())
+        self.assertEqual(argv[0], "target/agent2/debug/chronicler_engine")
+
+    def test_busy_port_fails_before_building(self):
+        args = self._args(["--", "--port", "3099"])
+        with mock.patch.object(build, "check_rust_version"), mock.patch.object(
+            build, "_require_free_port", side_effect=SystemExit(1)
+        ), mock.patch.object(build, "_timed_run") as timed:
+            with self.assertRaises(SystemExit):
+                build.run_server(args, build.StepRecord())
+        timed.assert_not_called()
+
+
+class ExecPendingTests(unittest.TestCase):
+    """The __main__ exec replaces the process only after a clean build."""
+
+    def tearDown(self):
+        build._pending_exec = None
+
+    def test_execs_when_pending_and_clean(self):
+        build._pending_exec = ["/bin/echo", "--port", "3099"]
+        with mock.patch.object(build, "_require_free_port"), mock.patch.object(
+            build, "os"
+        ) as os_mod:
+            build._exec_pending(0)
+        os_mod.execv.assert_called_once_with(
+            "/bin/echo", ["/bin/echo", "--port", "3099"]
+        )
+
+    def test_rechecks_the_port_before_the_exec(self):
+        build._pending_exec = ["/bin/echo", "--port", "3099"]
+        with mock.patch.object(
+            build, "_require_free_port", side_effect=SystemExit(1)
+        ), mock.patch.object(build, "os") as os_mod:
+            with self.assertRaises(SystemExit):
+                build._exec_pending(0)
+        os_mod.execv.assert_not_called()
+
+    def test_does_not_exec_on_failure(self):
+        build._pending_exec = ["/bin/echo"]
+        with mock.patch.object(build, "os") as os_mod:
+            build._exec_pending(1)
+        os_mod.execv.assert_not_called()
+
+    def test_does_not_exec_when_nothing_pending(self):
+        build._pending_exec = None
+        with mock.patch.object(build, "os") as os_mod:
+            build._exec_pending(0)
+        os_mod.execv.assert_not_called()
+
+    def test_clears_pending_after_one_call(self):
+        build._pending_exec = ["/bin/echo"]
+        with mock.patch.object(build, "_require_free_port"), mock.patch.object(build, "os"):
+            build._exec_pending(0)
+        self.assertIsNone(build._pending_exec)
+
+
+class MainRunTests(unittest.TestCase):
+    """main() routes `run` to run_server and stores the exec argv for __main__."""
+
+    def tearDown(self):
+        build._pending_exec = None
+
+    @staticmethod
+    def _run_args():
+        return SimpleNamespace(
+            command="run", cleanup=False, diagnostic_benchmark=False, llm_only=False
+        )
+
+    def _run_main(self, run_server):
+        memlog = _MemLog()
+        with (
+            mock.patch.object(build, "parse_args", return_value=self._run_args()),
+            mock.patch.object(build, "run_server", side_effect=run_server) as server,
+            mock.patch.object(build, "run_step") as step,
+            mock.patch.object(build, "_append_history"),
+            mock.patch.object(build, "clean_old_logs"),
+            mock.patch("builtins.print"),
+            mock.patch("builtins.open", return_value=memlog),
+        ):
+            rc = build.main()
+        return rc, server, step
+
+    def test_stores_argv_and_never_calls_run_step(self):
+        rc, server, step = self._run_main(
+            lambda args, record: ["/bin/echo", "--port", "9"]
+        )
+        self.assertEqual(rc, 0)
+        server.assert_called_once()
+        step.assert_not_called()
+        self.assertEqual(build._pending_exec, ["/bin/echo", "--port", "9"])
+
+    def test_failed_build_leaves_nothing_pending(self):
+        def boom(args, record):
+            raise SystemExit(101)
+
+        with self.assertRaises(SystemExit) as ctx:
+            self._run_main(boom)
+        self.assertEqual(ctx.exception.code, 101)
+        self.assertIsNone(build._pending_exec)
+
+
 class StepCommandTests(unittest.TestCase):
     """Step command assembly, including nextest pattern quoting."""
 
@@ -174,6 +435,7 @@ class StepCommandTests(unittest.TestCase):
         "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser) and not binary(architecture) and not binary(guardrails)'",
         "browser": "cargo nextest run --no-fail-fast -E 'binary(browser)'",
         "test-pattern": "cargo nextest run --no-fail-fast",
+        "run": "cargo build --bin chronicler_engine",
     }
 
     def test_every_spec_command_pinned(self):

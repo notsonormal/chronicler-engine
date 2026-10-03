@@ -12,7 +12,7 @@ An interactive fiction / text-adventure engine in Rust. An LLM-driven narrative 
 
 ```bash
 python build.py                  # full gate: fmt + clippy + guardrails + tests (~1 min)
-cargo run -- --port 3000         # run the server (defaults: redmist_estate world, julian persona)
+python build.py run -- --port 3000   # run the server (defaults: redmist_estate world, julian persona)
 ```
 
 Then open `http://localhost:3000`. Use `--list-worlds` to see shipped worlds.

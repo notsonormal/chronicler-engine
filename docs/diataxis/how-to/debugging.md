@@ -13,13 +13,13 @@ Run the checks in this order. Most failures resolve before step 7.
 4. **Run `python build.py`.** Standard full validation (fmt + clippy + tests + coverage). If green, the failure is logic, not build.
 5. **Inspect the diff.** `git diff`, `git status --short`, `git log @{u}..HEAD`. Most test failures after a code change are diff-visible.
 6. **For layer/import violations**, run `arch-lint` (or read the deny messages from `cargo build`).
-7. **For runtime/server-startup hangs**, spawn the binary manually: `cargo run -p chronicler_engine -- --world <name> --persona <name>`. Raw `cargo run` is the documented exception for server spawns (AGENTS.md) — the server is not a gate action. Check stdout/stderr and `ss -tlnp` for port bindings. Reach for `RUST_LOG=info` or `=trace` only when steps 1–6 don't surface the bug — see next section.
+7. **For runtime/server-startup hangs**, spawn the binary manually: `python build.py run -- --world <name> --persona <name>`. Raw `cargo run` still works, but it recompiles the tree on the next gate. Check stdout and stderr, and check that something is listening on the port. Reach for `RUST_LOG=info` or `=trace` only when steps 1–6 don't surface the bug — see next section.
 
 ## Read Tracing Output
 
 `RUST_LOG` is read by `bootstrap/logging.rs::init_logging()`; only the binary entry point (`main.rs`) calls it. Test binaries do not initialise the subscriber themselves.
 
-For integration tests that spawn the engine as a subprocess, `tests/test_utils/server.rs` **hardcodes** `chronicler_engine=debug` on the child — it does not forward a user-set `RUST_LOG`. To get `=trace` output from the child, rebuild and rerun the failing test against the manually-spawned binary with `RUST_LOG=trace cargo run -p chronicler_engine -- --world <name> --persona <name>`.
+For integration tests that spawn the engine as a subprocess, `tests/test_utils/server.rs` **hardcodes** `chronicler_engine=debug` on the child — it does not forward a user-set `RUST_LOG`. To get `=trace` output from the child, rebuild and rerun the failing test against the manually-spawned binary with `RUST_LOG=trace python build.py run -- --world <name> --persona <name>`.
 
 Raw `RUST_LOG=info` and `RUST_LOG=trace` (no module filter) are the dominant patterns; module-filter patterns are rare. `python build.py test-pattern <name>` is the project standard; pass `--nocapture`-style flags by running raw `cargo nextest` only when the build.py step cannot express them.
 
@@ -88,3 +88,4 @@ Variants with non-trivial First Checks. For variants not listed here, the varian
 ## Document References
 
 - [`../reference/coding_standards/testing.md`](../reference/coding_standards/testing.md) — testing policy; the `*_tests.rs` sibling-file convention; test categories.
+- [`../../../ENVIRONMENT.md`](../../../ENVIRONMENT.md) has build-environment notes, including why raw `cargo run` and `build.py` have different build signatures.

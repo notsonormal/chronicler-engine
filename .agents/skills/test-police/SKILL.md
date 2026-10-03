@@ -96,7 +96,6 @@ Gate is **overall ≥80%**, not per-file. Per-file numbers are reference, not ga
 
 **Expected low-coverage files (do not flag):**
 - `cli.rs` — CLI entry points (not run in tests)
-- `port_utils.rs` — covered by integration tests
 - `bootstrap/` — startup code (partially expected)
 - `bootstrap/logging.rs` — expect 0% coverage
 - `adapters/driven/llm/` HTTP-transport path (`transport/utils/client.rs`, `transport/utils/request.rs`, `transport/utils/response.rs`, `providers/openrouter.rs`, `providers/ollama.rs`) — real HTTP dispatch; `MockBackend` bypasses it, and only the `#[ignore]`d `tests/llm/` suite exercises the real endpoint

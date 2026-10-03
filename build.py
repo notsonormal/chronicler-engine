@@ -8,9 +8,16 @@ Two invocation modes:
   guardrails, the full test suite, and packaging.
 - Step mode: ``python build.py <step>`` runs one registry step (e.g.
   ``clippy``, ``fmt``, ``test-pattern <pattern>``) with a minimal prelude — no
-  port-3000 kill, no asset copy, no SQLite cleanup. ``--target-dir`` is
+  asset copy, no SQLite cleanup. ``--target-dir`` is
   accepted on either side of the step; all other top-level flags are gate-only
   and rejected next to a step.
+
+``python build.py run [-- <server flags>]`` builds the binary and then replaces
+this process with it, so the dev server links in the ``build.py`` environment
+(lld linker, chosen target dir) and switching between a build step and the
+server costs no recompile. The build runs under the machine-wide slot; the
+server itself runs without any lock. The port is checked before the build and
+again just before the exec. ``run`` is dev-profile only.
 
 Stdout carries the agent-facing decision signal + tailable progress (banner,
 step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
@@ -32,7 +39,7 @@ agents sharing a checkout pass ``--no-fmt`` so ``cargo fmt`` cannot rewrite each
 
     python build.py --target-dir target/agent2 --no-fmt
 
-``--cleanup`` removes lingering build processes and artifacts for a target
+``--cleanup`` removes stale port locks and build artifacts for a target
 dir. Tests are already concurrency-safe: they allocate ports dynamically from
 3010-3050 using file-based locking (``tests/test_utils/server.rs``).
 
@@ -42,13 +49,14 @@ wait for the build lock. Use a tool timeout of at least 1200 seconds. ``--covera
 
 import argparse
 import contextlib
+import errno
 import io
 import json
 import os
 import re
 import shlex
 import shutil
-import signal
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -547,6 +555,15 @@ REGISTRY: dict[str, StepSpec] = {
             pattern_arg=True,
             help="Run the tests whose name matches a pattern, across all test binaries.",
         ),
+        StepSpec(
+            "run",
+            "Building dev server...",
+            "cargo build --bin chronicler_engine",
+            help=(
+                "Build the dev server and replace this process with the binary."
+                " Server flags go after `--`, e.g. `run -- --port 3099`."
+            ),
+        ),
     ]
 }
 
@@ -641,7 +658,7 @@ def parse_args(argv=None):
         "--cleanup",
         action="store_true",
         dest="cleanup",
-        help="Kill lingering chronicler processes and clean build artifacts",
+        help="Remove stale port locks and build artifacts for a target dir",
     )
     parser.add_argument(
         "--diagnostic-benchmark",
@@ -672,6 +689,15 @@ def parse_args(argv=None):
         if spec.pattern_arg:
             step_parser.add_argument(
                 "pattern", help="Test-name pattern passed to cargo nextest"
+            )
+        if spec.name == "run":
+            # REMAINDER keeps everything after the step (including a leading
+            # ``--``) so the flags reach the server binary unparsed. Strip the
+            # ``--`` once in _strip_passthrough, not here.
+            step_parser.add_argument(
+                "server_flags",
+                nargs=argparse.REMAINDER,
+                help="Flags forwarded verbatim to the server binary",
             )
         if spec.name == "duplicates":
             # Forward the duplicate scope flags through to healthcheck.py.
@@ -797,59 +823,6 @@ def _step_command(
     if extra:
         cmd = " ".join([cmd, *(shlex.quote(arg) for arg in extra)])
     return cmd
-
-
-def kill_port(port: int):
-    """Kill any process using the specified port."""
-    try:
-        result = subprocess.run(
-            f"netstat -ano | Select-String ':{port}'",
-            shell=True,
-            capture_output=True,
-            text=True,
-        )
-        if result.stdout:
-            for line in result.stdout.strip().split("\n"):
-                if "LISTENING" in line:
-                    parts = line.split()
-                    if len(parts) >= 5:
-                        pid = int(parts[-1])
-                        log_status(f"Killing process {pid} on port {port}...")
-                        try:
-                            os.kill(pid, signal.SIGTERM)
-                        except (ProcessLookupError, PermissionError):
-                            subprocess.run(f"taskkill /F /PID {pid}", shell=True)
-    except Exception as e:
-        log_status(f"Note: Could not check port {port}: {e}")
-
-
-def kill_by_name(name: str):
-    """Kill any process with the given name substring."""
-    try:
-        result = subprocess.run(
-            f"tasklist | findstr -i {name}",
-            shell=True,
-            capture_output=True,
-            text=True,
-        )
-        if result.stdout:
-            for line in result.stdout.splitlines():
-                # Format: image name PID session# mem usage
-                parts = line.split()
-                if len(parts) >= 2:
-                    pid = parts[1]
-                    if pid.isdigit():
-                        log_status(f"Killing process {parts[0]} (PID {pid})...")
-                        try:
-                            subprocess.run(
-                                f"taskkill /F /PID {pid}",
-                                shell=True,
-                                capture_output=True,
-                            )
-                        except Exception as e:
-                            log_status(f"Failed to kill PID {pid}: {e}")
-    except Exception as e:
-        log_status(f"Note: Could not search for processes: {e}")
 
 
 def clean_sqlite_dbs(data_dir: Path):
@@ -1353,12 +1326,7 @@ def _gate_tail(args):
 
 
 def _gate_prelude(args) -> dict:
-    """Gate-mode prelude: port-3000 kill, target-dir env + lock warning."""
-    # Always kill manual runs on the default port first — this may release
-    # the target directory lock if a manual `cargo run` was holding it.
-    log_status("Checking for processes on port 3000...")
-    kill_port(3000)
-
+    """Gate-mode prelude: target-dir env + lock warning."""
     cargo_target_dir, _ = _target_paths(args)
     cargo_env = _cargo_env_for(args)
     custom = bool(getattr(args, "target_dir", None))
@@ -1385,7 +1353,7 @@ def run_gate(args, record):
 def run_step(args, record):
     """Single-step mode: run one registry step with a minimal prelude.
 
-    Skips the gate-only prelude (port-3000 kill, asset copy, SQLite cleanup)
+    Skips the gate-only prelude (asset copy, SQLite cleanup)
     so quick iteration does not disturb a running dev server.
     """
     check_rust_version()
@@ -1427,11 +1395,140 @@ def _step_extra_args(spec: StepSpec, args) -> list[str] | None:
     return None
 
 
+# Server bind defaults, mirrored from src/utils/cli.rs (--port 3000, --host 0.0.0.0).
+# Kept here so the pre-build port check can run before any cargo command.
+_DEFAULT_PORT = 3000
+_DEFAULT_HOST = "0.0.0.0"
+
+
+def _strip_passthrough(flags: list[str]) -> list[str]:
+    """Drop exactly one leading ``--`` that separates build.py flags from server flags."""
+    if flags and flags[0] == "--":
+        return flags[1:]
+    return list(flags)
+
+
+def _parse_bind_target(flags: list[str]) -> tuple[int, str] | None:
+    """Return the (port, host) the server will bind, or None to skip the check.
+
+    Accepts ``--port N``/``--port=N`` and ``--host H``/``--host=H``; later flags
+    win. Returns None when the flags ask for a non-serving mode
+    (``--list-worlds``, ``--help``, ``--version``) or carry a value the parser
+    cannot understand — the server's own clap parser produces the authoritative
+    error in those cases.
+    """
+    if any(
+        flag in ("--list-worlds", "--help", "-h", "--version", "-V")
+        for flag in flags
+    ):
+        return None
+    port, host = _DEFAULT_PORT, _DEFAULT_HOST
+    for index, flag in enumerate(flags):
+        value = None
+        if flag in ("--port", "--host"):
+            if index + 1 >= len(flags):
+                return None
+            value = flags[index + 1]
+        elif flag.startswith("--port="):
+            value = flag.split("=", 1)[1]
+        elif flag.startswith("--host="):
+            value = flag.split("=", 1)[1]
+        if value is None:
+            continue
+        if flag.startswith("--port"):
+            try:
+                port = int(value)
+            except ValueError:
+                return None
+            if not 0 <= port <= 65535:
+                return None
+        else:
+            host = value
+    return port, host
+
+
+def _port_in_use(host: str, port: int) -> bool:
+    """Probe whether the server's bind address is already taken.
+
+    Sets SO_REUSEADDR, as tokio's Unix listener does, so the probe reports the
+    same conflict the real bind would. Other bind failures (e.g. a host the
+    kernel rejects) read as free: the server's own bind decides. mio omits
+    SO_REUSEADDR on Windows, so there a TIME_WAIT port reads free and the
+    server's own bind stays authoritative.
+    """
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    with socket.socket(family, socket.SOCK_STREAM) as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind((host, port))
+        except OSError as exc:
+            return exc.errno == errno.EADDRINUSE
+    return False
+
+
+def _require_free_port(bind_target: tuple[int, str] | None) -> None:
+    """Stop with a clear message when the server's port is already bound."""
+    if bind_target is None:
+        return
+    port, host = bind_target
+    if _port_in_use(host, port):
+        both_print(f"ERROR: port {port} is in use.")
+        both_print(
+            f"       Stop the process using port {port}, or pass"
+            " `-- --port <other>` to run on a different port."
+        )
+        sys.exit(1)
+
+
+_pending_exec: list[str] | None = None
+
+
+def run_server(args, record):
+    """Build the dev server and return the argv to exec once main() finishes.
+
+    No exec happens here: main() must first run its finally (summary, banner,
+    log close, history line). The port is checked before the build so a busy
+    port fails fast without invoking cargo.
+    """
+    check_rust_version()
+    spec = REGISTRY["run"]
+    server_flags = _strip_passthrough(getattr(args, "server_flags", []))
+    _require_free_port(_parse_bind_target(server_flags))
+
+    cargo_env = _cargo_env_for(args)
+    _set_target_args(args)
+    cargo_target_dir, _ = _target_paths(args)
+    _warn_if_target_locked(
+        cargo_target_dir, custom=bool(getattr(args, "target_dir", None))
+    )
+
+    counter = StepCounter(1)
+    _timed_run(counter, record, spec.label, spec.cmd, check=True, env=cargo_env)
+
+    _, profile_dir = _target_paths(args)
+    return [str(profile_dir / "chronicler_engine"), *server_flags]
+
+
+def _exec_pending(exit_code: int) -> None:
+    """Replace this process with the server when a ``run`` step armed it.
+
+    Called only from the ``__main__`` block, after main()'s finally has written
+    the epilogue and history line. Re-checks the port because the build took
+    time; a port taken meanwhile fails here with the same message.
+    """
+    global _pending_exec
+    argv, _pending_exec = _pending_exec, None
+    if exit_code != 0 or not argv:
+        return
+    _require_free_port(_parse_bind_target(argv[1:]))
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.execv(argv[0], argv)
+
+
 def run_cleanup(args, record):
-    """Cleanup mode: kill lingering processes and remove build artifacts."""
+    """Cleanup mode: remove stale port locks and build artifacts."""
     both_print("=== Cleanup Mode ===")
-    log_status("Killing lingering chronicler processes...")
-    kill_by_name("chronicler")
 
     lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
     if lock_dir.exists():
@@ -1533,6 +1630,7 @@ def _append_history(path: Path, args_str: str, duration_sec: float, exit_code: i
 
 
 def main():
+    global _pending_exec
     args = parse_args()
 
     # Journal inputs, captured before any chdir so the record reflects
@@ -1559,7 +1657,12 @@ def main():
         both_print(f"Full build log: {log_path}")
         both_print("=" * 60)
 
-        if args.command:
+        if args.command == "run":
+            # run_server returns the argv to exec; the exec happens in the
+            # __main__ block, after this function's finally has written the
+            # epilogue and history line.
+            _pending_exec = run_server(args, record)
+        elif args.command:
             run_step(args, record)
         elif args.diagnostic_benchmark:
             run_diagnostic(args, record)
@@ -1573,6 +1676,7 @@ def main():
         # Step failure (check=True) re-raises SystemExit. Capture the code so
         # the finally can print the summary, then propagate.
         exit_code = int(e.code) if e.code is not None else 1
+        _pending_exec = None  # a failed build must never exec the server
         raise
     finally:
         # Print the epilogue BEFORE closing the log so the summary + banner are
@@ -1621,4 +1725,6 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _exit_code = main()
+    _exec_pending(_exit_code)
+    sys.exit(_exit_code)

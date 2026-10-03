@@ -19,7 +19,6 @@ async fn run_server_binds_and_accepts_connections() {
     let config = ServerConfig {
         host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port: 0,
-        bind_attempts: Some(1),
     };
 
     let (addr, server_handle) = run_server_with_config(build_test_wired_app(), config)
@@ -45,14 +44,17 @@ async fn run_server_propagates_bind_error_for_occupied_port() {
     let config = ServerConfig {
         host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port,
-        bind_attempts: Some(1),
     };
 
     let result = run_server_with_config(build_test_wired_app(), config).await;
 
-    assert!(
-        result.is_err(),
+    let err = result.expect_err(&format!(
         "expected bind error when port {port} is already in use"
+    ));
+    assert!(
+        err.to_string()
+            .contains(&format!("Failed to bind to port {port}")),
+        "expected a clear bind error naming port {port}, got: {err}"
     );
 
     drop(listener);

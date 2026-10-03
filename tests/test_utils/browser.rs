@@ -32,7 +32,7 @@ pub async fn goto_with_connection_check(
                 "CONNECTION REFUSED: Server not running on port {port}. \
                  Likely causes: port conflict (another process using port {port}), \
                  server failed to start, or server crashed. \
-                 Check with: netstat -ano | Select-String {port}",
+                 Check whether another process is listening on port {port}",
             )
         } else {
             format!("Navigation failed to {url}: {err_str}")

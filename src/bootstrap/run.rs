@@ -42,7 +42,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let config = ServerConfig {
         host: args.host,
         port: args.port,
-        bind_attempts: None,
     };
     let state = prepare_state(&data)?;
     start_server(state, config)?;
