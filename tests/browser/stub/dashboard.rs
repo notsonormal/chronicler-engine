@@ -1,4 +1,4 @@
-//! Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status error observer) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status-error toast) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
 
 // The engine's failing action route answers 500, so htmx fires
 // `htmx:beforeSwap` with `isError` on its own. The stub's Error outcome serves
@@ -216,7 +216,7 @@ async fn test_send_locks_and_unlocks_after_action_area_swap() {
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.10
 #[tokio::test]
-async fn test_status_error_reaches_observer_after_action_area_swap() {
+async fn test_status_error_reaches_toast_after_action_area_swap() {
     with_stub_page(StubActionOutcome::Pending, |page, stub| {
         let status = stub.status_handle();
         async move {
@@ -230,9 +230,9 @@ async fn test_status_error_reaches_observer_after_action_area_swap() {
             confirm_text_check_preview(&page).await;
             assert_status_display_restored(&page).await;
 
-            // The stub's /status/generating answers the error span a failed
+            // The stub's /status/generating answers the error fragment a failed
             // generation renders; the fresh #status-display's own poll swaps it in
-            // and the body-level observer toasts it — the toast's beforeSwap
+            // and its after-swap reconciler toasts it — the toast's beforeSwap
             // listener is not involved.
             assert!(
                 wait_for_condition_async(
@@ -241,7 +241,7 @@ async fn test_status_error_reaches_observer_after_action_area_swap() {
                     || async { read_error_toast(&page).await.0 },
                 )
                 .await,
-                "status error should reach the observer after an action-area swap"
+                "status error should reach the toast after an action-area swap"
             );
             let (_, text) = read_error_toast(&page).await;
             assert_eq!(
@@ -265,8 +265,8 @@ async fn test_status_error_reaches_observer_after_action_area_swap() {
             );
 
             // The Ready status reset the dedupe, so the SAME error must toast
-            // again. If the observer survived the swap but its dedupe state leaked
-            // across it, the repeat stays hidden.
+            // again. If the dedupe state leaked across the swap, the repeat stays
+            // hidden.
             status.set(StubStatus::Error("narration failed".to_string()));
             assert!(
                 wait_for_condition_async(

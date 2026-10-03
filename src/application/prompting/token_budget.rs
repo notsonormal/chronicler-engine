@@ -7,9 +7,6 @@ pub const MAX_CONTEXT_TOKENS: u32 = 32768;
 /// Maximum tokens for history (conversation log).
 pub const MAX_HISTORY_TOKENS: u32 = 16000;
 
-/// Maximum tokens for system prompt.
-pub const MAX_SYSTEM_TOKENS: u32 = 1024;
-
 /// Maximum tokens for LLM response generation (fallback default).
 pub const MAX_RESPONSE_TOKENS: u32 = 2048;
 

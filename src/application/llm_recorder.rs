@@ -3,15 +3,18 @@
 
 use std::sync::Arc;
 
-use crate::application::llm_message::SaveLlmMessageFn;
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::application::prompting::sanitize::sanitize_llm_output;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::error::EngineError;
 
 /// Resolves the provider for one call, so a dashboard change to the narrator or
 /// quantifier connection takes effect on the next call without a restart.
 pub type ProviderResolver =
     Arc<dyn Fn() -> Result<Arc<dyn LlmProvider>, EngineError> + Send + Sync>;
+
+/// Persists one forensics record; injected so a test can capture or fail a save.
+pub type SaveLlmMessageFn = Arc<dyn Fn(&LlmMessage) -> Result<(), EngineError> + Send + Sync>;
 
 pub struct LlmCallRecorder {
     resolve: ProviderResolver,

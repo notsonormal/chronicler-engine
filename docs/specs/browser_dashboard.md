@@ -52,14 +52,14 @@ When the status poll reports idle and the status display returns to Ready
 Then #submit-btn is enabled again with a "Send" label
 ```
 
-#### Scenario 16.10: Status errors still reach the observer after an action-area swap
+#### Scenario 16.10: Status errors still reach the toast after an action-area swap
 
 ```gherkin
 Given the client submitted a command the text-check preview intercepted, so #action-area was replaced by the preview
 When the client confirms the preview, so a fresh #status-display is swapped in
-And the /status/generating poll returns an error span
+And the /status/generating poll returns an error fragment
 Then #error-notification becomes visible and displays the error text
-And after the status poll returns Ready, the same error span returned again re-shows the notification (the lastStatusError dedupe was reset)
+And after the status poll returns Ready, the same error fragment returned again re-shows the notification (the dedupe resets once the status is no longer an error)
 ```
 
 #### Scenario 16.11: Text-check result does not replace the command form

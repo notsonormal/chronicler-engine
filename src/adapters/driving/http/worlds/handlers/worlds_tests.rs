@@ -1,6 +1,6 @@
 //! Worlds HTTP handler tests.
 
-use axum::{body::to_bytes, extract::Path};
+use axum::extract::Path;
 
 use crate::adapters::driving::http::worlds::handlers::{
     update_world_handler, update_world_posture_handler, WorldForm, WorldPostureForm,
@@ -9,12 +9,7 @@ use crate::adapters::driving::http::AppState;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::world::WorldCard;
-use crate::test_support::TestAppBuilder;
-
-async fn body_string(response: axum::response::Response) -> String {
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    String::from_utf8(bytes.to_vec()).unwrap()
-}
+use crate::test_support::{body_text, TestAppBuilder};
 
 fn seed_world(state: &AppState, key: &str) {
     let world = WorldCard {
@@ -35,7 +30,7 @@ async fn post_posture(state: &AppState, key: &str, form: WorldPostureForm) -> St
         axum::extract::Form(form),
     )
     .await;
-    body_string(response).await
+    body_text(response).await
 }
 
 #[tokio::test]
@@ -71,7 +66,7 @@ async fn test_world_posture_invalid_value_renders_error_and_mutates_nothing() {
     .await;
     assert!(
         body.contains(r#"class="error-message""#),
-        "invalid value should render the error span: {body}"
+        "invalid value should render the error fragment: {body}"
     );
     assert!(
         body.contains("Unknown narrator mode"),

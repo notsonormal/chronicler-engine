@@ -41,6 +41,13 @@ Each script's docstring has its details. These are the reasons and measurements 
   dir before a relink can break the seeded build; rewriting the paths is the open option.
 - **Per-test cost:** nextest runs each test in its own process, so an in-process cache never carries
   across tests. Each Harper text-check test builds its own dictionary, which `Cargo.toml` speeds up.
+- **Coverage** (`cargo-llvm-cov`, `python build.py --coverage`): it overrides `RUSTC_WRAPPER`, so
+  sccache is bypassed and every crate rebuilds under instrumentation. It also runs the gate first,
+  so a coverage run is a full gate plus the coverage build; give it a dedicated `--target-dir`.
+  Two things install outside the repo, and `cargo-llvm-cov` lands in the user home (`~/.cargo/bin`),
+  so a rebuilt container drops it. Reinstall with `rustup component add llvm-tools-preview` and
+  `cargo install cargo-llvm-cov --locked` (v0.9.1, installed 2026-10-03). On rustup 1.29 the
+  component is reported as `llvm-tools`; the `-preview` name still resolves.
 
 ## Typical gate cost
 

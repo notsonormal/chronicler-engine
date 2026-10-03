@@ -23,3 +23,16 @@ pub fn card_html_slice<'a>(body: &'a str, card_class: &str, anchor: &str) -> Opt
 pub fn preset_card_html_slice<'a>(body: &'a str, anchor: &str) -> Option<&'a str> {
     card_html_slice(body, "preset-card", anchor)
 }
+
+/// Slice one `<h2>{heading}</h2>` section out of a rendered panel: from the
+/// heading to the next `<h2>` (or EOF). `None` when `heading` is absent.
+pub fn panel_section_html_slice<'a>(body: &'a str, heading: &str) -> Option<&'a str> {
+    let marker = format!("<h2>{heading}</h2>");
+    let start = body.find(&marker)?;
+    let after_heading = start + marker.len();
+    let end = body[after_heading..]
+        .find("<h2>")
+        .map(|offset| after_heading + offset)
+        .unwrap_or(body.len());
+    Some(&body[start..end])
+}

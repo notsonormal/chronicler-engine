@@ -27,7 +27,7 @@ enabled = true
 severity = "error"
 allow_in_tests = true
 
-# Project uses `log` + `env_logger`, not `tracing`.
+# The project logs through `tracing` (no `log` or `env_logger` dependency).
 [rules.require-tracing]
 enabled = false
 

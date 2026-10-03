@@ -16,7 +16,7 @@ Create a task list (using `TaskCreate`) for all these steps.
 5. Update all the unit and integration tests as needed for the latest changes.
 6. Ensure that there is no 'ai slop' or 'hacks' in the code due to repetitive fixes without a cleanup.
 7. Check if there is any duplicated code, any 'bad tests', any implemented or missing features.
-    - Run `python scripts/healthcheck.py duplicates` to get a prioritized duplicate-code summary. For full options, run `python scripts/healthcheck.py duplicates --help`.
+    - The full gate already reports duplicate-code clones scoped to files changed vs `main` (the `Checking for duplicate code...` step). Read that summary from the gate log instead of running the script again, so the two scopes cannot disagree. For a whole-repo view or a different base ref, run `python scripts/healthcheck.py duplicates --all` or `python scripts/healthcheck.py duplicates --ref <ref>` (full options: `--help`).
 8. Check to make sure that the code is consistent with any existing patterns or, if the new pattern is an improvement, that older code is updated to match.
 9. Run the `/code-simplification` skill against the (usually uncommitted) changes
 10. Run the `/chronicler-comment-fixer` skill against the (usually uncommitted) changes. Sometimes comments are written in lieu of fixing issues, surface any comments like that for investigation.

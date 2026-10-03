@@ -3,6 +3,7 @@
 use chronicler_engine::domain::model::map::{MapDef, Overworld};
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::domain::model::scenario::StartingScenario;
+use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::error::EngineError;
@@ -46,6 +47,91 @@ fn make_test_npc(id: &str, name: &str) -> NpcCard {
         triggers: vec![],
         relationships: vec![],
     }
+}
+
+/// A world whose every persisted column carries `tag`, so a re-seed that misses
+/// a column leaves the previous tag visible. `variant` flips the enum and bool
+/// columns so those are covered too.
+fn make_tagged_world(key: &str, tag: &str, variant: bool) -> WorldCard {
+    WorldCard {
+        key: key.to_string(),
+        name: format!("{tag} name"),
+        description: format!("{tag} description"),
+        global_rules: vec![format!("{tag} rule")],
+        scenarios: vec![StartingScenario {
+            id: format!("{tag}_scenario"),
+            name: format!("{tag} scenario"),
+            description: format!("{tag} scenario description"),
+            starting_room_id: "start".to_string(),
+            text: format!("{tag} opening"),
+            npcs: vec![],
+        }],
+        default_scenario_id: Some(format!("{tag}_scenario")),
+        default_room_image: Some(format!("/images/{tag}.png")),
+        narrator_mode: if variant {
+            NarratorMode::InteractiveFiction
+        } else {
+            NarratorMode::Novel
+        },
+        narrative_perspective: if variant {
+            NarrativePerspective::Second
+        } else {
+            NarrativePerspective::Third
+        },
+        narrative_tense: if variant {
+            NarrativeTense::Present
+        } else {
+            NarrativeTense::Past
+        },
+        options_always_on: variant,
+    }
+}
+
+/// Assert every persisted world column carries `tag` and the `variant` flags.
+fn assert_tagged_card(card: &WorldCard, key: &str, tag: &str, variant: bool) {
+    assert_eq!(card.key, key, "re-seeding must keep the world key");
+    assert_eq!(card.name, format!("{tag} name"));
+    assert_eq!(card.description, format!("{tag} description"));
+    assert_eq!(card.global_rules, vec![format!("{tag} rule")]);
+    assert_eq!(
+        card.scenarios.len(),
+        1,
+        "scenarios must survive the re-seed"
+    );
+    assert_eq!(card.scenarios[0].id, format!("{tag}_scenario"));
+    assert_eq!(
+        card.default_scenario_id.as_deref(),
+        Some(format!("{tag}_scenario").as_str())
+    );
+    assert_eq!(
+        card.default_room_image.as_deref(),
+        Some(format!("/images/{tag}.png").as_str())
+    );
+    assert_eq!(
+        card.narrator_mode,
+        if variant {
+            NarratorMode::InteractiveFiction
+        } else {
+            NarratorMode::Novel
+        }
+    );
+    assert_eq!(
+        card.narrative_perspective,
+        if variant {
+            NarrativePerspective::Second
+        } else {
+            NarrativePerspective::Third
+        }
+    );
+    assert_eq!(
+        card.narrative_tense,
+        if variant {
+            NarrativeTense::Present
+        } else {
+            NarrativeTense::Past
+        }
+    );
+    assert_eq!(card.options_always_on, variant);
 }
 
 #[test]
@@ -341,23 +427,24 @@ fn test_create_world_after_delete_does_not_reuse_id() {
 fn test_seed_world_replaces_existing_key_in_memory() {
     let storage = Storage::new_in_memory();
 
-    let first = make_test_world("reseed", "First");
     storage
-        .seed_world(&first, &make_test_map("first_map", "First Map"))
+        .seed_world(
+            &make_tagged_world("reseed", "first", false),
+            &make_test_map("first_map", "First Map"),
+        )
         .unwrap();
-
-    let second = make_test_world("reseed", "Second");
     storage
-        .seed_world(&second, &make_test_map("second_map", "Second Map"))
+        .seed_world(
+            &make_tagged_world("reseed", "second", true),
+            &make_test_map("second_map", "Second Map"),
+        )
         .unwrap();
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1, "re-seeding must keep one world");
-    assert_eq!(
-        worlds[0].name, "Second",
-        "re-seeding must replace the existing card"
-    );
+    assert_tagged_card(&worlds[0], "reseed", "second", true);
     let stored = storage.get_world("reseed").unwrap().unwrap();
+    assert_tagged_card(&stored.world_card, "reseed", "second", true);
     assert_eq!(
         stored.map.overworld.id, "second_map",
         "re-seeding must replace the existing map"
@@ -566,23 +653,24 @@ fn test_sqlite_create_world_after_delete_does_not_reuse_id() {
 fn test_sqlite_seed_world_replaces_existing_key() {
     let storage = create_test_storage(1);
 
-    let first = make_test_world("reseed", "First");
     storage
-        .seed_world(&first, &make_test_map("first_map", "First Map"))
+        .seed_world(
+            &make_tagged_world("reseed", "first", false),
+            &make_test_map("first_map", "First Map"),
+        )
         .unwrap();
-
-    let second = make_test_world("reseed", "Second");
     storage
-        .seed_world(&second, &make_test_map("second_map", "Second Map"))
+        .seed_world(
+            &make_tagged_world("reseed", "second", true),
+            &make_test_map("second_map", "Second Map"),
+        )
         .unwrap();
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1, "re-seeding must keep one world");
-    assert_eq!(
-        worlds[0].name, "Second",
-        "re-seeding must replace the existing card"
-    );
+    assert_tagged_card(&worlds[0], "reseed", "second", true);
     let stored = storage.get_world("reseed").unwrap().unwrap();
+    assert_tagged_card(&stored.world_card, "reseed", "second", true);
     assert_eq!(
         stored.map.overworld.id, "second_map",
         "re-seeding must replace the existing map"

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
-use crate::application::llm_message::SaveLlmMessageFn;
+use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::error::EngineError;

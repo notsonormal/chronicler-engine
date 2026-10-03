@@ -6,17 +6,13 @@ pub mod init_game;
 mod load;
 mod logging;
 mod run;
-mod validate;
 pub mod wiring;
 
 pub use logging::init_logging;
 pub use run::run;
-pub use validate::validate_loaded_data;
 #[cfg(test)]
 mod load_tests;
 #[cfg(test)]
 mod run_tests;
-#[cfg(test)]
-mod validate_tests;
 #[cfg(test)]
 mod wiring_tests;

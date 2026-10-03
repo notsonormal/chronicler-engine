@@ -31,20 +31,32 @@ pub struct WorldBundle {
 }
 
 impl Storage {
+    /// The `worlds` read query. `where_clause` is appended verbatim (empty or
+    /// `WHERE ...`); the column list derives from `WORLD_COLUMNS`, so the read
+    /// list cannot drift from the write list. `DbWorld::from_row` reads every
+    /// column by name.
+    fn world_select_sql(where_clause: &str) -> String {
+        format!(
+            "SELECT id, {}, created_at, updated_at FROM worlds {where_clause}",
+            WORLD_COLUMNS.join(", ")
+        )
+    }
+
     pub fn list_worlds(&self) -> Result<Vec<WorldCard>, EngineError> {
         self.with_backend_mut("list_worlds", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let mut stmt = conn.prepare(
-                    "SELECT id, key, name, description, global_rules, scenarios, default_scenario_id, default_room_image, narrator_mode, narrative_perspective, narrative_tense, created_at, updated_at, options_always_on FROM worlds",
-                )?;
+                let mut stmt = conn.prepare(&Self::world_select_sql(""))?;
                 let rows = stmt.query_map([], DbWorld::from_row)?;
                 rows.map(|r| {
                     let db = r?;
                     db.to_card()
-                }).collect()
+                })
+                .collect()
             }
-            Backend::InMemory(data) => Ok(data.worlds.iter().map(|w| w.world_card.clone()).collect()),
+            Backend::InMemory(data) => {
+                Ok(data.worlds.iter().map(|w| w.world_card.clone()).collect())
+            }
         })
     }
 
@@ -52,11 +64,7 @@ impl Storage {
         self.with_backend_mut("get_world", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let mut world_stmt = conn.prepare(
-                    "SELECT id, key, name, description, global_rules, scenarios, default_scenario_id, default_room_image, narrator_mode, narrative_perspective, narrative_tense, created_at, updated_at, options_always_on
-                     FROM worlds
-                     WHERE key = ?",
-                )?;
+                let mut world_stmt = conn.prepare(&Self::world_select_sql("WHERE key = ?"))?;
                 let db_world = match world_stmt.query_row([key], DbWorld::from_row) {
                     Ok(w) => w,
                     Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
@@ -68,7 +76,8 @@ impl Storage {
                      FROM maps
                      WHERE world_id = ?",
                 )?;
-                let db_map = map_stmt.query_row([db_world.id], DbMap::from_row)
+                let db_map = map_stmt
+                    .query_row([db_world.id], DbMap::from_row)
                     .map_err(EngineError::Database)?;
 
                 let world_card = db_world.to_card()?;
@@ -81,16 +90,15 @@ impl Storage {
                     map,
                 }))
             }
-            Backend::InMemory(data) => Ok(
-                data.worlds
-                    .iter()
-                    .find(|w| w.world_card.key == key)
-                    .map(|w| WorldWithMap {
-                        world_id: w.world_id,
-                        world_card: w.world_card.clone(),
-                        map: w.map.clone(),
-                    })
-            ),
+            Backend::InMemory(data) => Ok(data
+                .worlds
+                .iter()
+                .find(|w| w.world_card.key == key)
+                .map(|w| WorldWithMap {
+                    world_id: w.world_id,
+                    world_card: w.world_card.clone(),
+                    map: w.map.clone(),
+                })),
         })
     }
 
@@ -320,10 +328,7 @@ impl Storage {
                         &id
                     ],
                 )?;
-                conn.execute(
-                    "UPDATE maps SET map_data=?, updated_at=? WHERE world_id=?",
-                    rusqlite::params![serde_json::to_string(map)?, &now, &id],
-                )?;
+                Self::write_map_row(&conn, id, map, &now)?;
                 Ok(())
             }
             Backend::InMemory(data) => {
@@ -340,11 +345,10 @@ impl Storage {
         self.with_backend_mut("get_world_by_id", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                // Separate statements avoid column-index conflicts in `DbWorld::from_row` vs `DbMap::from_row`.
-                let mut world_stmt = conn.prepare(
-                    "SELECT id, key, name, description, global_rules, scenarios, default_scenario_id, default_room_image, narrator_mode, narrative_perspective, narrative_tense, created_at, updated_at, options_always_on
-                     FROM worlds WHERE id = ?",
-                )?;
+                // World and map are read with separate statements: `DbWorld`
+                // reads by column name, `DbMap` positionally within its own
+                // result set.
+                let mut world_stmt = conn.prepare(&Self::world_select_sql("WHERE id = ?"))?;
                 let db_world = match world_stmt.query_row([id], DbWorld::from_row) {
                     Ok(w) => w,
                     Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
@@ -413,8 +417,8 @@ impl Storage {
 }
 
 /// The `worlds` columns every write binds, in `params!` order. The insert
-/// column list, the upsert set and `update_world`'s set all derive from it, so
-/// a new column is listed here once.
+/// column list, the upsert set, `update_world`'s set and the read query all
+/// derive from it, so a new column is listed here once.
 const WORLD_COLUMNS: &[&str] = &[
     "key",
     "name",

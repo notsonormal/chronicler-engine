@@ -44,9 +44,7 @@ impl WorldCatalogue {
         self.storage
             .create_world(&world_card, &map)
             .map_err(|e| match e {
-                EngineError::WorldAlreadyExists(key) => {
-                    ApplicationError::validation(format!("A world with key '{key}' already exists"))
-                }
+                EngineError::WorldAlreadyExists(_) => ApplicationError::validation(e.to_string()),
                 other => ApplicationError::Engine(other),
             })
     }

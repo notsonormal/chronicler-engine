@@ -62,7 +62,7 @@ When the client POST /worlds/{key}/posture with a valid tense patch
 Then the response is a 200 carrying the "Saved" status span
 And the stored world's tense is the patched value
 When the client POST /worlds/{key}/posture with an invalid narrator_mode
-Then the response is a 200 carrying an error span
+Then the response is a 200 carrying an error fragment
 And the stored world is mutated not at all
 When the client POST /worlds/{key}/posture for an unknown key
 Then the response is a 400
@@ -95,6 +95,19 @@ When the client POST /worlds with a second World whose identifier is "posture_wo
 Then the response is a 400
 And the body names the identifier and says it already exists
 And the stored World keeps its name, description, and map
+```
+
+### World creation storage failures
+
+#### Scenario 25.9: A storage failure during world creation renders the error fragment with a 200
+
+A storage failure is not a client refusal, so it keeps the panel's in-fragment rendering: the create handler answers 200 carrying the shared error fragment rather than a 500.
+
+```gherkin
+Given a storage that rejects world creation
+When the client POST /worlds with a valid World form
+Then the response status is "200 OK" (not a 500)
+And the body carries the error fragment naming the storage failure
 ```
 
 ### World list

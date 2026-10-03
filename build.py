@@ -241,10 +241,15 @@ def get_integration_test_cmd(include_llm=False):
 
 # nextest per-test result line, e.g.:
 #   "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x"
+#   "        LEAK [   0.229s] ( 2/2) leakprobe::leak leaks_a_child"
 # The progress counter is optional: nextest only prints it in some
 # --show-progress modes, and the timing report must survive config drift.
+# LEAK is a passing-but-leaking test, so it must not read as a failure. The
+# gate's NEXTEST_STATUS_LEVEL=fail suppresses live PASS/LEAK lines, and the
+# timing report's --final-status-level does not accept `leak`, so naming a
+# leaking test needs --test-timings or an explicit --status-level leak.
 _NEXTEST_RESULT_RE = re.compile(
-    r"^\s*(?:PASS|FAIL|SKIP)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
+    r"^\s*(?:PASS|FAIL|SKIP|LEAK)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
 )
 
 # nextest final summary line, e.g.:
@@ -268,8 +273,8 @@ def _nextest_summary_line(output: str) -> str | None:
     carries no nextest summary (compile error, non-nextest command).
     nextest omits the "failed" segment when nothing failed, but the epilogue
     line always shows it (0 when absent) so a clean run still reads as clean.
-    A zero "skipped" segment is omitted; a nonzero one is kept so the counts
-    still add up to the total run.
+    A zero "skipped" or "leaky" segment is omitted; a nonzero one is kept so a
+    passing-but-leaking run cannot read as fully clean.
     """
     rendered = None
     for line in output.splitlines():
@@ -278,9 +283,12 @@ def _nextest_summary_line(output: str) -> str | None:
         passed = _summary_count(line, "passed") or "?"
         failed = _summary_count(line, "failed") or "0"
         skipped = _summary_count(line, "skipped")
+        leaky = _summary_count(line, "leaky")
         rendered = f"nextest: {passed} passed, {failed} failed"
         if skipped and skipped != "0":
             rendered += f", {skipped} skipped"
+        if leaky and leaky != "0":
+            rendered += f", {leaky} leaky"
     return rendered
 
 
@@ -471,6 +479,15 @@ REGISTRY: dict[str, StepSpec] = {
             help="Run the Python unit tests under scripts/tests.",
         ),
         StepSpec(
+            "duplicates",
+            "Checking for duplicate code...",
+            "python scripts/healthcheck.py duplicates",
+            help=(
+                "Report duplicate-code clones, scoped to files changed vs main"
+                " (report-only; pass --all for the whole repo or --ref <ref>)."
+            ),
+        ),
+        StepSpec(
             "http-routes-check",
             "Checking http_routes.md freshness...",
             "python scripts/extract_http_routes.py --check",
@@ -553,6 +570,7 @@ GATE_ORDER = [
     "http-routes-check",
     "guardrails-doc-check",
     "validate-docs",
+    "DUPLICATES",
     "COPY",
     "architecture",
     "guardrails",
@@ -655,6 +673,20 @@ def parse_args(argv=None):
             step_parser.add_argument(
                 "pattern", help="Test-name pattern passed to cargo nextest"
             )
+        if spec.name == "duplicates":
+            # Forward the duplicate scope flags through to healthcheck.py.
+            step_parser.add_argument(
+                "--all",
+                action="store_true",
+                dest="duplicates_all",
+                help="Report the whole repo instead of only changed files",
+            )
+            step_parser.add_argument(
+                "--ref",
+                dest="duplicates_ref",
+                default=None,
+                help="Base ref for the changed-files scope (default: main)",
+            )
 
     args = parser.parse_args(argv)
     _reject_gate_flags_with_step(parser, args)
@@ -703,11 +735,10 @@ def _lld_linker_env(host=None, cache_dir=None) -> dict:
     if os.environ.get("CHRONICLER_NO_LLD") or not sys.platform.startswith("linux"):
         return {}
     if host is None:
-        out = subprocess.run(["rustc", "-vV"], capture_output=True, text=True).stdout
-        match = re.search(r"^host: (\S+)$", out, re.M)
-        if not match:
+        try:
+            host = target_seed.rustc_host_triple()
+        except RuntimeError:
             return {}
-        host = match.group(1)
     var = "CARGO_TARGET_" + re.sub(r"[^A-Z0-9]", "_", host.upper()) + "_LINKER"
     if os.environ.get(var):
         return {}
@@ -755,11 +786,17 @@ def _warn_if_target_locked(cargo_target_dir: Path, custom: bool):
         both_print("         python build.py --target-dir target/<unique-name>")
 
 
-def _step_command(spec: StepSpec, pattern: str | None = None) -> str:
+def _step_command(
+    spec: StepSpec, pattern: str | None = None, extra: list[str] | None = None
+) -> str:
     """Assemble the shell command for a step spec (quotes the nextest pattern)."""
     if spec.pattern_arg:
-        return f"{spec.cmd} {shlex.quote(pattern)}"
-    return spec.cmd
+        cmd = f"{spec.cmd} {shlex.quote(pattern)}"
+    else:
+        cmd = spec.cmd
+    if extra:
+        cmd = " ".join([cmd, *(shlex.quote(arg) for arg in extra)])
+    return cmd
 
 
 def kill_port(port: int):
@@ -989,33 +1026,17 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
 
 
 def is_target_locked(target_dir: Path) -> bool:
-    """Check if cargo holds a lock on the target directory via .cargo-lock."""
-    # Cargo creates .cargo-lock inside the profile subdirectory
-    # and holds an OS lock on it.
+    """Check if cargo holds a build lock on a profile dir under ``target_dir``.
+
+    Delegates to target_seed's shared-flock probe, so a target seed in progress (which holds the
+    lock shared) does not read as a cargo build.
+    """
     for profile in ["debug", "release"]:
-        lock_file = target_dir / profile / ".cargo-lock"
-        if not lock_file.exists():
-            continue
-        try:
-            fd = os.open(str(lock_file), os.O_RDWR)
-            try:
-                if sys.platform == "win32":
-                    import msvcrt
-
-                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
-                else:
-                    import fcntl
-
-                    fcntl.flock(fd, fcntl.LOCK_NB | fcntl.LOCK_EX)
-                os.close(fd)
-                return False  # We got the lock, so cargo doesn't hold it
-            except (OSError, BlockingIOError, IOError):
-                os.close(fd)
-                return True  # Lock is held by another process (cargo)
-        except OSError:
-            continue
-    return False  # No lock file found, assume not locked
+        handle = target_seed.probe_shared_lock(target_dir / profile / ".cargo-lock")
+        if handle is None:
+            return True  # An exclusive holder (cargo) has the lock
+        handle.close()  # We got the shared lock, so cargo doesn't hold it
+    return False  # No lock file, or shared holders only, assume not locked
 
 
 def _print_step_summary(step_timings, step_failures, log_path):
@@ -1189,6 +1210,9 @@ def _plan_gate_steps(args) -> list[GateStep]:
                     GateStep("note", "Skipping coverage report (use --coverage to enable)")
                 )
             continue
+        if name == "DUPLICATES":
+            plan.append(GateStep("duplicates", REGISTRY["duplicates"].label))
+            continue
         spec = REGISTRY[name]
         if name == "fmt" and args.no_fmt:
             continue
@@ -1249,8 +1273,23 @@ def _execute_gate_plan(plan, args, cargo_env, record):
                 )
         elif step.kind == "note":
             counter.next(step.label)
+        elif step.kind == "duplicates":
+            counter.next(step.label)
+            _run_duplicates_report(cargo_env)
         else:  # pragma: no cover - guarded by construction
             raise ValueError(f"Unknown gate step kind: {step.kind}")
+
+
+def _run_duplicates_report(cargo_env):
+    """Report duplicate-code clones without ever failing the gate.
+
+    The summary is written to the build log by ``run``'s captured child output.
+    A missing jscpd or an unparsable report warns and continues, so this step is
+    report-only per decision D3.
+    """
+    rc = run(REGISTRY["duplicates"].cmd, check=False, env=cargo_env)
+    if rc != 0:
+        both_print("    Warning: duplicate check did not complete (report-only step).")
 
 
 def _copy_deployment_assets(args):
@@ -1367,10 +1406,25 @@ def run_step(args, record):
         counter,
         record,
         spec.label,
-        _step_command(spec, getattr(args, "pattern", None)),
+        _step_command(
+            spec, getattr(args, "pattern", None), _step_extra_args(spec, args)
+        ),
         check=True,
         env=cargo_env,
     )
+
+
+def _step_extra_args(spec: StepSpec, args) -> list[str] | None:
+    """Build the extra pass-through flags for a step from its parsed args."""
+    if spec.name == "duplicates":
+        extra: list[str] = []
+        if getattr(args, "duplicates_all", False):
+            extra.append("--all")
+        ref = getattr(args, "duplicates_ref", None)
+        if ref:
+            extra.extend(["--ref", ref])
+        return extra
+    return None
 
 
 def run_cleanup(args, record):

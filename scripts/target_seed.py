@@ -9,6 +9,7 @@ different code. A half-copied seed is renamed into place, and a source cargo is 
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -38,10 +39,12 @@ _SEEN_LIMIT = 3
 
 
 def build_signature(repo_root: Path) -> str:
-    """Hash of what invalidates every unit at once; ``Cargo.lock`` is deliberately excluded."""
+    """Hash of what invalidates every unit at once; ``Cargo.lock`` is deliberately excluded.
+
+    ``rust-toolchain.toml`` stands in for the compiler version: it pins the toolchain, so a
+    separate ``rustc -vV`` probe would add nothing to the signature.
+    """
     digest = hashlib.sha256()
-    rustc = subprocess.run(["rustc", "-vV"], capture_output=True, text=True)
-    digest.update(rustc.stdout.encode())
     for rel in _SIGNATURE_FILES:
         path = repo_root / rel
         digest.update(rel.encode())
@@ -70,7 +73,9 @@ def is_warm(profile_dir: Path) -> bool:
     return (profile_dir / ".fingerprint").is_dir() and any((profile_dir / ".fingerprint").iterdir())
 
 
-def _host_triple() -> str:
+@functools.lru_cache(maxsize=1)
+def rustc_host_triple() -> str:
+    """The rustc host triple, probed once per process and cached for every caller."""
     out = subprocess.run(["rustc", "-vV"], capture_output=True, text=True).stdout
     match = re.search(r"^host: (\S+)$", out, re.M)
     if not match:
@@ -91,7 +96,16 @@ def shareable_packages(repo_root: Path) -> set[str]:
     """``--filter-platform`` is what lets ``--offline`` work: without it cargo
     wants other platforms' crates."""
     result = subprocess.run(
-        ["cargo", "metadata", "--offline", "--locked", "--filter-platform", _host_triple(), "--format-version", "1"],
+        [
+            "cargo",
+            "metadata",
+            "--offline",
+            "--locked",
+            "--filter-platform",
+            rustc_host_triple(),
+            "--format-version",
+            "1",
+        ],
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -202,18 +216,32 @@ def copy_third_party(source: Path, destination: Path, shareable: set[str]) -> tu
     return files, size
 
 
-def _source_is_idle(source: Path):
-    """Shared flock on the source's .cargo-lock; None if cargo is building there."""
-    lock = source / ".cargo-lock"
+def probe_shared_lock(lock: Path):
+    """Open ``lock`` and hold a non-blocking shared flock on it.
+
+    The single lock mode used by every probe: a target-seed copy holds the lock shared, so a
+    probe must not mistake it for cargo's exclusive build lock. Returns the open handle (shared
+    lock held until ``close()``), or ``None`` when an exclusive holder has the lock. A missing or
+    unreadable lock file, or a platform without ``fcntl``, returns a devnull handle so callers can
+    always ``close()`` the result.
+    """
     if fcntl is None or not lock.exists():
         return open(os.devnull)
-    handle = open(lock, "rb")
+    try:
+        handle = open(lock, "rb")
+    except OSError:
+        return open(os.devnull)
     try:
         fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
     except BlockingIOError:
         handle.close()
         return None
     return handle
+
+
+def _source_is_idle(source: Path):
+    """Shared flock on the source's .cargo-lock; None if cargo is building there."""
+    return probe_shared_lock(source / ".cargo-lock")
 
 
 def seed_if_cold(

@@ -9,23 +9,13 @@ use crate::adapters::driving::http::builders::connections::{
     connection_card_html, connection_edit_form_html,
 };
 use crate::adapters::driving::http::settings::templates::settings::SettingsTemplate;
-use crate::adapters::driving::http::utils::error::render_error;
-use crate::adapters::driving::http::utils::handler_helpers::{opt_string, render_template};
-use crate::adapters::driving::http::utils::response::bad_request;
-use crate::application::errors::ApplicationError;
+use crate::adapters::driving::http::utils::error::{error_response, render_error};
+use crate::adapters::driving::http::utils::handler_helpers::{
+    generate_storage_id, opt_string, render_template,
+};
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{LlmProviderConfig, TextCheckMode};
 use crate::error::EngineError;
-
-/// A refusal reaches the user as a 400, which the shell shows as a toast and
-/// leaves the panel in place. Other errors keep the existing in-fragment
-/// error rendering.
-fn application_error_response(error: ApplicationError) -> Response<Body> {
-    match error {
-        ApplicationError::Validation(message) => bad_request(render_error(&message)),
-        other => Html(render_error(&other.to_string())).into_response(),
-    }
-}
 
 pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
     match app_state.settings() {
@@ -106,13 +96,7 @@ pub async fn add_connection_handler(
         Err(e) => return Html(render_error(&e.to_string())).into_response(),
     };
 
-    let id = format!(
-        "conn-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
-    );
+    let id = generate_storage_id("conn");
 
     let connection = LlmProviderConfig {
         id,
@@ -128,7 +112,7 @@ pub async fn add_connection_handler(
 
     match app_state.settings_service.add_connection(connection) {
         Ok(updated) => render_template(SettingsTemplate::from_settings(&updated)).into_response(),
-        Err(e) => application_error_response(e),
+        Err(e) => error_response(e, "Error"),
     }
 }
 
@@ -200,7 +184,7 @@ pub async fn edit_connection_handler(
             is_quantifier,
         ))
         .into_response(),
-        Err(e) => application_error_response(e),
+        Err(e) => error_response(e, "Error"),
     }
 }
 

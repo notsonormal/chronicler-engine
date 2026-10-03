@@ -1,5 +1,10 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Settings service — settings persistence orchestration at the application layer.
+//!
+//! A refusal is `ApplicationError::Validation`. The name-uniqueness rule runs
+//! inside a `Storage` closure, whose error type is `EngineError`, so it raises
+//! `EngineError::Validation` and `settings_error_to_application` converts it at
+//! the boundary.
 
 use std::sync::Arc;
 
@@ -95,6 +100,9 @@ impl SettingsService {
         }
     }
 
+    /// The one conversion point from storage/domain failures to the
+    /// application envelope: a validation failure is a refusal, everything else
+    /// is wrapped as an engine failure.
     fn settings_error_to_application(error: EngineError) -> ApplicationError {
         match error {
             EngineError::Validation(message) => ApplicationError::Validation(message),

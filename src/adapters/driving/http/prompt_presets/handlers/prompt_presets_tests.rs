@@ -11,6 +11,7 @@ use crate::adapters::driving::http::prompt_presets::handlers::{
 };
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::TestPromptPreset;
+use crate::test_support::body_text;
 
 fn make_test_app_state_with_preset(
     preset: PromptPreset,
@@ -27,13 +28,6 @@ fn make_test_app_state_with_storage(
     let wired = crate::bootstrap::wiring::build_app_graph_for_tests(Arc::clone(&storage), None)
         .expect("build_app_graph_for_tests should succeed");
     crate::adapters::driving::http::AppState::from_wired(wired)
-}
-
-async fn body_text(response: axum::response::Response<axum::body::Body>) -> String {
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("handler response body");
-    String::from_utf8_lossy(&bytes).to_string()
 }
 
 #[tokio::test]

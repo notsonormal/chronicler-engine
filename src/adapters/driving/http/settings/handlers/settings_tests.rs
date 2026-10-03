@@ -15,6 +15,7 @@ use crate::adapters::driving::http::settings::handlers::{
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
+use crate::test_support::body_text;
 
 fn make_test_app_state() -> AppState {
     make_app_state_with_settings(AppSettings::default())
@@ -28,13 +29,6 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     let wired = build_app_graph_for_tests(Arc::clone(&storage), None)
         .expect("build_app_graph_for_tests should succeed");
     AppState::from_wired(wired)
-}
-
-async fn body_text(response: axum::response::Response<axum::body::Body>) -> String {
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("handler response body");
-    String::from_utf8_lossy(&bytes).to_string()
 }
 
 #[tokio::test]

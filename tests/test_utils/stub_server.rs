@@ -106,7 +106,7 @@ pub enum StubActionOutcome {
 }
 
 /// What the stub's `GET /status/generating` answers. The real endpoint returns
-/// "idle", a phase name, or the error span a failed generation produces.
+/// "idle", a phase name, or the error fragment a failed generation produces.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum StubStatus {
     /// The engine is idle; the poll answers "idle".
@@ -114,7 +114,7 @@ pub enum StubStatus {
     Idle,
     /// The engine is generating; the poll answers the phase name.
     Phase(String),
-    /// A failed generation; the poll answers the error span.
+    /// A failed generation; the poll answers the error fragment.
     Error(String),
 }
 
@@ -313,7 +313,7 @@ async fn action_check(
 }
 
 /// The real `/status/generating` poll answer: idle text, a phase name, or the
-/// error span a failed generation renders.
+/// error fragment a failed generation renders.
 async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body> {
     let status = state
         .status

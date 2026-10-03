@@ -148,6 +148,88 @@ def dedupe_pair_overlaps(entries: list[dict]) -> list[dict]:
     return unique
 
 
+def normalize_report_path(path: str) -> str:
+    """Normalize a jscpd file path to a repo-relative, forward-slash path."""
+    candidate = Path(path.replace("\\", "/"))
+    if candidate.is_absolute():
+        try:
+            candidate = candidate.relative_to(WORKSPACE_ROOT)
+        except ValueError:
+            return candidate.as_posix()
+    return candidate.as_posix()
+
+
+def _git_run(*args: str) -> subprocess.CompletedProcess:
+    """Run a git command in the workspace root, capturing its output."""
+    return subprocess.run(
+        ["git", *args],
+        cwd=WORKSPACE_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+
+def is_git_available() -> bool:
+    """True when git is on PATH and the workspace is inside a work tree."""
+    if shutil.which("git") is None:
+        return False
+    return _git_run("rev-parse", "--git-dir").returncode == 0
+
+
+def is_head_detached() -> bool:
+    """True when HEAD is detached (so there is no branch to diff against)."""
+    return _git_run("symbolic-ref", "-q", "HEAD").returncode != 0
+
+
+def resolve_base_ref(ref: str | None) -> str | None:
+    """Return the first resolvable base ref, or None when none resolves.
+
+    With no explicit ``ref`` the default candidates are ``main`` then
+    ``origin/main``.
+    """
+    candidates = (ref,) if ref else ("main", "origin/main")
+    for candidate in candidates:
+        result = _git_run("rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}")
+        if result.returncode == 0:
+            return candidate
+    return None
+
+
+def list_changed_files(base_ref: str) -> set[str]:
+    """Return repo-relative paths changed against ``base_ref``.
+
+    Uses two-dot ``git diff`` so uncommitted tracked edits count, plus
+    untracked files so brand-new files are in scope.
+    """
+    tracked = _git_run("diff", "--name-only", base_ref).stdout
+    untracked = _git_run("ls-files", "--others", "--exclude-standard").stdout
+    names = tracked.splitlines() + untracked.splitlines()
+    return {normalize_report_path(name) for name in names if name.strip()}
+
+
+def resolve_scope(all_files: bool, ref: str | None) -> tuple[set[str] | None, str | None]:
+    """Resolve which files the duplicate report is scoped to.
+
+    Returns ``(changed_paths, note)``. ``changed_paths`` is None for whole-repo
+    scope; ``note`` is a message to print when the requested scoping had to fall
+    back (git missing, detached HEAD, or no resolvable base ref).
+    """
+    if all_files:
+        return None, None
+    if not is_git_available():
+        return None, "git unavailable; reporting whole-repo duplicates"
+    if is_head_detached():
+        return None, "HEAD is detached; reporting whole-repo duplicates"
+    base = resolve_base_ref(ref)
+    if base is None:
+        if ref:
+            return None, f"{ref} does not resolve; reporting whole-repo duplicates"
+        return None, (
+            "neither main nor origin/main resolves; reporting whole-repo duplicates"
+        )
+    return list_changed_files(base), None
+
+
 @register("duplicates")
 def check_duplicates(args: argparse.Namespace) -> CheckResult:
     """Run jscpd and summarize the top duplicate regions for LLM review."""
@@ -175,6 +257,9 @@ def check_duplicates(args: argparse.Namespace) -> CheckResult:
             False,
             f"Failed to parse jscpd JSON report: {e}",
         )
+    changed, note = resolve_scope(all_files=args.all, ref=args.ref)
+    if note:
+        print(f"Note: {note}", file=sys.stderr)
     text = summarize_report(
         report,
         cross_file_only=not args.include_self,
@@ -182,6 +267,7 @@ def check_duplicates(args: argparse.Namespace) -> CheckResult:
         max_snippet=args.max_snippet,
         top_pairs=args.top_pairs,
         top_clusters=args.top_clusters,
+        changed=changed,
     )
 
     out_path = None
@@ -209,11 +295,26 @@ def summarize_report(
     max_snippet: int = 200,
     top_pairs: int = 25,
     top_clusters: int = 3,
+    changed: set[str] | None = None,
 ) -> str:
-    """Convert jscpd report JSON to LLM-consumable prioritized text."""
+    """Convert jscpd report JSON to LLM-consumable prioritized text.
+
+    ``changed`` is a set of repo-relative paths. When given, a clone pair is in
+    scope only if either side is in the set — the parsed pairs are filtered, not
+    jscpd's input, so new code cloning old code still shows. None keeps every
+    pair (whole-repo scope).
+    """
     dups = [d for d in report["duplicates"] if d["lines"] >= min_lines]
     if cross_file_only:
         dups = [d for d in dups if d["firstFile"]["name"] != d["secondFile"]["name"]]
+    pre_scope = len(dups)
+    if changed is not None:
+        dups = [
+            d
+            for d in dups
+            if normalize_report_path(d["firstFile"]["name"]) in changed
+            or normalize_report_path(d["secondFile"]["name"]) in changed
+        ]
 
     by_pair: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for d in dups:
@@ -232,9 +333,27 @@ def summarize_report(
     out.append("# Duplicate Summary")
     out.append("")
     out.append(
+        "- Scope: "
+        + (
+            "whole repository"
+            if changed is None
+            else f"changed files only ({len(changed)} in scope)"
+        )
+    )
+    out.append(
         f"- Total clone pairs: {len(dups)} "
         f"(filtered: min-lines={min_lines}, cross-file-only={cross_file_only})"
     )
+    if changed is not None and not changed:
+        out.append(
+            "- No files changed against the base ref, so the scope is empty by "
+            "construction; use --all for the whole-repo view"
+        )
+    elif changed is not None and pre_scope and not dups:
+        out.append(
+            f"- No pair survived the scope filter: none of the {len(changed)} "
+            f"changed files appear in the report ({pre_scope} pairs before filtering)"
+        )
     out.append(f"- Unique file pairs: {len(by_pair)}")
     out.append(f"- Showing top {min(top_pairs, len(pair_stats))} pairs by dup lines")
     out.append("")
@@ -282,6 +401,17 @@ def build_parser() -> argparse.ArgumentParser:
     dup.add_argument("--top-clusters", type=int, default=3)
     dup.add_argument("--max-snippet", type=int, default=200)
     dup.add_argument("--include-self", action="store_true", help="Include same-file dups")
+    dup.add_argument(
+        "--all",
+        action="store_true",
+        help="Report the whole repo instead of only files changed vs the base ref",
+    )
+    dup.add_argument(
+        "--ref",
+        type=str,
+        default=None,
+        help="Base ref to diff against for the changed-files scope (default: main)",
+    )
     dup.add_argument(
         "--out",
         type=str,

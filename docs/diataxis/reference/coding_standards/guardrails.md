@@ -48,7 +48,7 @@ Scan scope: `root = "./src"`, excluding `**/target/**`, `**/tests/**`, `**/*_tes
 | `storage` | `application` | Storage adapter must not depend on the application layer; depend on domain models only. |
 <!-- AUTO-GUARDRAILS: arch-lint END -->
 
-Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline comments and the hexagonal-reorganization superplan. The four arch-lint rules (`no-unwrap-expect`, `require-doc-comments`, `require-tracing`, `no-sync-io`) are configured in the same file with their severities (`error`, `warning`, `disabled`, `disabled`); two are disabled because the project intentionally uses `log` instead of `tracing` and sync I/O during startup.
+Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline comments and the hexagonal-reorganization superplan. The four arch-lint rules (`no-unwrap-expect`, `require-doc-comments`, `require-tracing`, `no-sync-io`) are configured in the same file with their severities (`error`, `warning`, `disabled`, `disabled`); two are disabled, and the project logs through `tracing` with no `log` or `env_logger` dependency, while startup performs sync I/O by design.
 
 ## 3. Custom syn-Based Convention Tests
 
@@ -71,13 +71,13 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |
 | nesting depth | Warns when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`. | `tests/infrastructure/guardrails/nesting.rs:12` |
-| doc standards | Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files. | `tests/infrastructure/guardrails/structure.rs:59` |
-| mod purity | Enforces mod.rs purity: only module declarations, imports, and module docs are allowed. | `tests/infrastructure/guardrails/structure.rs:158` |
-| empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:234` |
-| no std thread all | Exposes the internal no-std-thread check for use outside the standard walker. | `tests/infrastructure/guardrails/structure.rs:268` |
-| browser interactions use htmx settle | Full-stack browser tests must interact only through htmx-settled helpers. | `tests/infrastructure/guardrails/structure.rs:289` |
-| file length | Enforces a maximum of 2000 non-blank lines per file. | `tests/infrastructure/guardrails/structure.rs:339` |
-| test module header | Test files must have a single-line `//!` summary on the first non-blank line: | `tests/infrastructure/guardrails/structure.rs:363` |
+| doc standards | Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files. | `tests/infrastructure/guardrails/structure.rs:38` |
+| mod purity | Enforces mod.rs purity: only module declarations, imports, and module docs are allowed. | `tests/infrastructure/guardrails/structure.rs:128` |
+| empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:204` |
+| no std thread all | Exposes the internal no-std-thread check for use outside the standard walker. | `tests/infrastructure/guardrails/structure.rs:238` |
+| browser interactions use htmx settle | Full-stack browser tests must interact only through htmx-settled helpers. | `tests/infrastructure/guardrails/structure.rs:259` |
+| file length | Enforces a maximum of 2000 non-blank lines per file. | `tests/infrastructure/guardrails/structure.rs:309` |
+| test module header | Test files must have a single-line `//!` summary on the first non-blank line: | `tests/infrastructure/guardrails/structure.rs:333` |
 | import ordering | Enforces import ordering: std/core/alloc, then external crates, then crate/super/self. | `tests/infrastructure/guardrails/style.rs:9` |
 | long comment runs | Warns when five or more countable comment lines appear consecutively. | `tests/infrastructure/guardrails/style.rs:124` |
 | template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:165` |

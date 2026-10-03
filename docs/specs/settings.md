@@ -77,7 +77,7 @@ Given a fresh app state
 When the client POST /settings with narration_connection_id set to a string that is not any connection's id
 And quantifier_connection_id set to the current quantifier connection
 Then the response is 200
-And the response body contains "<span class='error'>Save failed:" (a dangling id is a configuration fault, not a HTTP error status)
+And the response body contains `<div class="error-message">Save failed:` (a dangling id is a configuration fault, not a HTTP error status)
 And the saved narration connection id is unchanged
 ```
 
@@ -95,7 +95,7 @@ Then the response is 422 Unprocessable Entity (axum Form rejection)
 Given an app state whose settings storage fails on save
 When the client POST /settings with valid narration_connection_id and quantifier_connection_id fields
 Then the response is 200
-And the response body contains "<span class='error'>Save failed:" (the error is surfaced in the fragment, not as a HTTP error status)
+And the response body contains `<div class="error-message">Save failed:` (the error is surfaced in the fragment, not as a HTTP error status)
 ```
 
 ### Backend resolution

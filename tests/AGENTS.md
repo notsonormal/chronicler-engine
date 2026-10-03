@@ -56,7 +56,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `prompt_presets.rs` — Browser prompt-presets tests: the duplicate → edit → save click chain wiring guard. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
     - **stub/**
-      - `dashboard.rs` — Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status error observer) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
+      - `dashboard.rs` — Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status-error toast) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
       - `invariants.rs` — Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
       - `mod.rs` — Stub-browser tests: browser-only behaviour against a fake engine.
       - `options.rs` — Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
@@ -67,7 +67,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
-    - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error spans instead of panics.
+    - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
     - `games_delete.rs` — HTTP E2E tests for game deletion (POST /games/:id/delete).
     - `games_fragment.rs` — HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.

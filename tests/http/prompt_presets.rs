@@ -10,18 +10,13 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::prompt_preset_service::PromptPresetService;
+use chronicler_engine::test_support::body_text;
 use chronicler_engine::TestAppBuilder;
 
 use crate::test_utils::preset_card_html_slice;
+use crate::test_utils::panel_section_html_slice;
 
 use crate::SettingsTestGuard;
-
-async fn body_string(response: axum::response::Response<Body>) -> String {
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    String::from_utf8_lossy(&body).to_string()
-}
 
 fn get_request(uri: &str) -> Request<Body> {
     Request::builder()
@@ -104,7 +99,7 @@ async fn test_prompt_presets_panel_renders_full_surface() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
 
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
     assert!(body.contains("<h2>System Prompts</h2>"));
@@ -120,12 +115,26 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="quantifier" />"#));
     assert!(body.contains("<h2>Impersonate Prompts</h2>"));
     assert!(body.contains("Add Impersonate Prompt Preset"));
-    assert!(body.contains(r#"<input type="hidden" name="preset_type" value="impersonate" />"#));
-    assert!(body.contains(r#"name="name""#));
-    assert!(body.contains(r#"name="role""#));
-    assert!(body.contains(r#"name="instructions""#));
-    assert!(body.contains(r#"name="writing_style""#));
-    assert!(body.contains(r#"name="output_format""#));
+    let impersonate_marker = r#"<input type="hidden" name="preset_type" value="impersonate" />"#;
+    let impersonate_start = body
+        .find(impersonate_marker)
+        .expect("impersonate add-form must render");
+    let impersonate_form = &body[impersonate_start..];
+    let impersonate_form = &impersonate_form[..impersonate_form
+        .find("</form>")
+        .expect("impersonate add-form must close")];
+    for field in [
+        "name",
+        "role",
+        "instructions",
+        "writing_style",
+        "output_format",
+    ] {
+        assert!(
+            impersonate_form.contains(&format!(r#"name="{field}""#)),
+            "impersonate add-form must contain input `{field}`: {impersonate_form}"
+        );
+    }
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.28
@@ -139,7 +148,7 @@ async fn test_prompt_presets_add_forms_collapsed_by_default() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
 
     assert_eq!(
         body.matches(r#"<details class="preset-add">"#).count(),
@@ -170,7 +179,7 @@ async fn test_prompt_preset_single_card_renders() {
         .await
         .unwrap();
     assert_eq!(create_response.status(), StatusCode::OK);
-    let panel = body_string(create_response).await;
+    let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -180,7 +189,7 @@ async fn test_prompt_preset_single_card_renders() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="preset-card""#));
     assert!(body.contains("My System Prompt"));
     assert!(body.contains("Set Active"));
@@ -200,8 +209,8 @@ async fn test_prompt_preset_single_card_missing_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Preset not found</span>");
+    let body = body_text(response).await;
+    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.4
@@ -218,7 +227,7 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
         ))
         .await
         .unwrap();
-    let panel = body_string(create_response).await;
+    let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -228,7 +237,7 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="preset-card edit-form">"#));
     assert!(body.contains(&format!(r#"hx-post="/prompt-presets/{preset_id}""#)));
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="system" />"#));
@@ -252,8 +261,8 @@ async fn test_prompt_preset_edit_form_missing_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Preset not found</span>");
+    let body = body_text(response).await;
+    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.6
@@ -267,10 +276,10 @@ async fn test_prompt_preset_edit_form_default_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(
         body,
-        "<span class='error'>Cannot edit default presets</span>"
+        "<div class=\"error-message\">Cannot edit default presets</div>"
     );
 }
 
@@ -285,7 +294,7 @@ async fn test_prompt_preset_view_form_renders_for_default() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="preset-card view-form">"#));
     assert!(body.contains("Default Test System"));
     assert!(body.contains("Role"));
@@ -306,8 +315,8 @@ async fn test_prompt_preset_view_form_missing_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Preset not found</span>");
+    let body = body_text(response).await;
+    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.9
@@ -324,7 +333,7 @@ async fn test_create_system_preset_renders_panel() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
     assert!(body.contains("My System Prompt"));
     assert!(body.contains("You are a test narrator."));
@@ -346,7 +355,7 @@ async fn test_create_quantifier_preset_renders_panel() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
     assert!(body.contains("My Quantifier Prompt"));
     assert!(body.contains("Quantify this scene."));
@@ -366,8 +375,11 @@ async fn test_create_preset_invalid_type_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Invalid preset type</span>");
+    let body = body_text(response).await;
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">Invalid preset type</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.12
@@ -405,8 +417,8 @@ async fn test_create_preset_reports_save_failure() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert!(body.contains(r#"<span class='error'>Save failed:"#));
+    let body = body_text(response).await;
+    assert!(body.contains(r#"<div class="error-message">Save failed:"#));
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.14
@@ -423,7 +435,7 @@ async fn test_update_preset_renders_card_with_new_name() {
         ))
         .await
         .unwrap();
-    let panel = body_string(create_response).await;
+    let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -434,7 +446,7 @@ async fn test_update_preset_renders_card_with_new_name() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="preset-card""#));
     assert!(body.contains("After"));
     assert!(!body.contains("Before"));
@@ -454,8 +466,8 @@ async fn test_update_missing_preset_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Preset not found</span>");
+    let body = body_text(response).await;
+    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.16
@@ -473,7 +485,7 @@ async fn test_update_preset_ignores_form_preset_type() {
         ))
         .await
         .unwrap();
-    let panel = body_string(create_response).await;
+    let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -484,7 +496,7 @@ async fn test_update_preset_ignores_form_preset_type() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(!body.contains("error"), "update must succeed: {body}");
     assert!(body.contains("preset-card"));
 
@@ -511,10 +523,10 @@ async fn test_update_default_preset_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(
         body,
-        "<span class='error'>Cannot edit default presets</span>"
+        "<div class=\"error-message\">Cannot edit default presets</div>"
     );
 }
 
@@ -532,7 +544,7 @@ async fn test_delete_non_default_preset_returns_empty_body() {
         ))
         .await
         .unwrap();
-    let panel = body_string(create_response).await;
+    let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -542,7 +554,7 @@ async fn test_delete_non_default_preset_returns_empty_body() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.is_empty());
 }
 
@@ -557,8 +569,8 @@ async fn test_delete_missing_preset_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Preset not found</span>");
+    let body = body_text(response).await;
+    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.20
@@ -572,10 +584,10 @@ async fn test_delete_default_preset_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(
         body,
-        "<span class='error'>Cannot delete default presets</span>"
+        "<div class=\"error-message\">Cannot delete default presets</div>"
     );
 }
 
@@ -593,7 +605,7 @@ async fn test_duplicate_preset_renders_panel_with_copy() {
         ))
         .await
         .unwrap();
-    let panel = body_string(create_response).await;
+    let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -603,7 +615,7 @@ async fn test_duplicate_preset_renders_panel_with_copy() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
     assert!(body.contains("Original (Copy)"));
 }
@@ -621,8 +633,8 @@ async fn test_duplicate_missing_preset_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Preset not found</span>");
+    let body = body_text(response).await;
+    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.23
@@ -639,7 +651,7 @@ async fn test_activate_system_preset_renders_active_badge() {
         ))
         .await
         .unwrap();
-    let panel = body_string(create_response).await;
+    let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -649,7 +661,7 @@ async fn test_activate_system_preset_renders_active_badge() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
     // Scope both assertions to the activated preset's card: the panel holds
     // several presets, and a panel-wide check can pass or fail on an
@@ -678,8 +690,8 @@ async fn test_activate_missing_preset_returns_error() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert_eq!(body, "<span class='error'>Preset not found</span>");
+    let body = body_text(response).await;
+    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.26
@@ -711,10 +723,10 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(
         body,
-        "<span class='error'>Preset not allowed for novel mode</span>"
+        "<div class=\"error-message\">Preset not allowed for novel mode</div>"
     );
 }
 
@@ -759,7 +771,7 @@ async fn test_activate_if_only_preset_via_if_mode_populates_if_bundle() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(
         body.contains("Active · Interactive Fiction"),
         "IF activation must badge the preset Active · Interactive Fiction"
@@ -810,7 +822,7 @@ async fn test_panel_gates_activation_buttons_by_allowed_modes() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(
         body.contains(r#"hx-post="/prompt-presets/if-only/activate?mode=interactive_fiction""#),
         "IF-only preset must render an IF activation button"
@@ -876,7 +888,7 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
         .await
         .unwrap();
     assert_eq!(edit_form.status(), StatusCode::OK);
-    let form = body_string(edit_form).await;
+    let form = body_text(edit_form).await;
     assert!(
         form.contains(r#"class="preset-card edit-form""#),
         "the edit form must render for the copy: {form}"
@@ -901,7 +913,7 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
         .await
         .unwrap();
     assert_eq!(saved.status(), StatusCode::OK);
-    let card = body_string(saved).await;
+    let card = body_text(saved).await;
     assert!(
         card.contains("Set Active (Interactive Fiction)"),
         "the saved card must offer Set Active (Interactive Fiction): {card}"
@@ -953,7 +965,7 @@ async fn test_create_preset_duplicate_name_in_category_is_refused() {
         StatusCode::BAD_REQUEST,
         "a duplicate preset name in the same category must be refused"
     );
-    let body = body_string(second).await;
+    let body = body_text(second).await;
     assert!(body.contains("Alpha"), "body: {body}");
     assert!(body.contains("already exists"), "body: {body}");
 }
@@ -986,7 +998,7 @@ async fn test_create_preset_case_and_space_variant_is_refused() {
         StatusCode::BAD_REQUEST,
         "a case-and-space variant must be refused"
     );
-    let body = body_string(second).await;
+    let body = body_text(second).await;
     assert!(body.contains("already exists"), "body: {body}");
 }
 
@@ -1014,8 +1026,13 @@ async fn test_create_preset_same_name_in_another_category_is_allowed() {
         .await
         .unwrap();
     assert_eq!(second.status(), StatusCode::OK);
-    let body = body_string(second).await;
-    assert!(body.contains("Alpha"), "body: {body}");
+    let body = body_text(second).await;
+    let quantifier_section = panel_section_html_slice(&body, "Quantifier Prompts")
+        .expect("the panel must render a Quantifier section");
+    assert!(
+        quantifier_section.contains("<span class=\"card-title\">Alpha</span>"),
+        "the Quantifier section must list the same-named preset: {quantifier_section}"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.32
@@ -1032,7 +1049,7 @@ async fn test_update_preset_keeps_its_own_name() {
         ))
         .await
         .unwrap();
-    let panel = body_string(created).await;
+    let panel = body_text(created).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -1043,10 +1060,18 @@ async fn test_update_preset_keeps_its_own_name() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert!(body.contains("Alpha"), "body: {body}");
+    let body = body_text(response).await;
+    let card = preset_card_html_slice(&body, "Alpha").expect("the updated card must render");
     assert!(
-        !body.contains("error"),
+        card.contains("<span class=\"card-title\">Alpha</span>"),
+        "the card must keep the preset's own name: {card}"
+    );
+    assert!(
+        card.contains("Changed."),
+        "the card must show the posted instructions: {card}"
+    );
+    assert!(
+        !body.contains("error-message"),
         "keeping the own name must succeed: {body}"
     );
 }
@@ -1065,7 +1090,7 @@ async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
         ))
         .await
         .unwrap();
-    let panel = body_string(created).await;
+    let panel = body_text(created).await;
     let source_id = extract_first_preset_id(&panel);
 
     let first = app
@@ -1076,7 +1101,7 @@ async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
         .await
         .unwrap();
     assert_eq!(first.status(), StatusCode::OK);
-    let first_panel = body_string(first).await;
+    let first_panel = body_text(first).await;
     assert!(
         first_panel.contains("Original (Copy)"),
         "first copy: {first_panel}"
@@ -1089,7 +1114,7 @@ async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
         .await
         .unwrap();
     assert_eq!(second.status(), StatusCode::OK);
-    let second_panel = body_string(second).await;
+    let second_panel = body_text(second).await;
     assert!(
         second_panel.contains("Original (Copy 2)"),
         "second copy must get the next free number: {second_panel}"
@@ -1135,7 +1160,7 @@ async fn test_update_preset_onto_sibling_name_is_refused() {
         StatusCode::BAD_REQUEST,
         "renaming onto a sibling's name must be refused"
     );
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains("Alpha"), "body: {body}");
     assert!(body.contains("already exists"), "body: {body}");
 

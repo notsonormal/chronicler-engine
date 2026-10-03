@@ -1,7 +1,7 @@
 //! Tests for `builders/sections.rs` prompt-section renderers.
 
 use crate::application::prompting::builders::sections::{
-    render_known_npc_entry, render_preset_xml_parts, render_present_relationships,
+    render_known_npc_entry, render_present_relationships,
 };
 use crate::domain::model::character::{CharacterSheet, NpcCard, Relationship};
 use crate::domain::model::prompt_preset::{PresetField, PromptPreset};
@@ -34,19 +34,19 @@ fn make_npc(
 }
 
 #[test]
-fn render_preset_xml_parts_omits_all_fields_when_preset_has_none() {
+fn render_field_parts_omits_all_fields_when_preset_has_none() {
     let preset = PromptPreset::default();
-    let parts = render_preset_xml_parts(&preset, &[], None, None);
+    let parts = preset.render_field_parts(&[], None, None);
     assert!(parts.is_empty(), "no fields set → expected no parts");
 }
 
 #[test]
-fn render_preset_xml_parts_emits_only_present_fields() {
+fn render_field_parts_emits_only_present_fields() {
     let preset = PromptPreset {
         role: Some("r".to_string()),
         ..PromptPreset::default()
     };
-    let parts = render_preset_xml_parts(&preset, &["rule one".to_string()], None, None);
+    let parts = preset.render_field_parts(&["rule one".to_string()], None, None);
     let sections: Vec<_> = parts.iter().map(|(s, _)| *s).collect();
     assert!(sections.contains(&PresetField::Role));
     assert!(sections.contains(&PresetField::GlobalRules));
@@ -56,12 +56,12 @@ fn render_preset_xml_parts_emits_only_present_fields() {
 }
 
 #[test]
-fn render_preset_xml_parts_appends_response_length_to_output_format() {
+fn render_field_parts_appends_response_length_to_output_format() {
     let preset = PromptPreset {
         output_format: Some("fmt".to_string()),
         ..PromptPreset::default()
     };
-    let parts = render_preset_xml_parts(&preset, &[], Some("3 paragraphs"), None);
+    let parts = preset.render_field_parts(&[], Some("3 paragraphs"), None);
     let (_, text) = parts
         .iter()
         .find(|(s, _)| *s == PresetField::OutputFormat)

@@ -69,22 +69,3 @@ impl TryFrom<(&Message, i64)> for DbMessage {
         })
     }
 }
-
-/// Kept free because one Message maps to multiple persistence rows.
-pub fn model_swipes_to_db(msg: &Message) -> Vec<DbSwipe> {
-    msg.swipes
-        .iter()
-        .enumerate()
-        .map(|(idx, swipe)| DbSwipe {
-            id: 0,
-            message_id: msg.id as i64,
-            swipe_index: idx as i64,
-            text: swipe.text.clone(),
-            snapshot_id: swipe.snapshot_id.map(|id| id as i64),
-            location_header: swipe.location_header.clone(),
-            event_header: swipe.event_header.clone(),
-            impersonated: if swipe.impersonated { 1 } else { 0 },
-            steering_instruction: swipe.steering_instruction.clone(),
-        })
-        .collect()
-}

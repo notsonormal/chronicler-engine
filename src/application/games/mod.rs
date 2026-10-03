@@ -9,6 +9,3 @@ mod catalogue_tests;
 
 #[cfg(test)]
 mod view_query_tests;
-
-pub use catalogue::GameCatalogue;
-pub use view_query::GameViewQuery;

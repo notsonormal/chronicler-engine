@@ -64,13 +64,13 @@ And the body contains a "Delete" button
 And the body contains a "Duplicate" button
 ```
 
-#### Scenario 21.3: Single card for a nonexistent preset returns an error span
+#### Scenario 21.3: Single card for a nonexistent preset returns an error fragment
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/prompt-presets/does-not-exist
 Then the response is 200
-And the response body is "<span class='error'>Preset not found</span>"
+And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
 ### GET /fragment/prompt-presets/{id}/edit — edit form
@@ -90,22 +90,22 @@ And the body contains a "Save" button
 And the body contains a "Cancel" button
 ```
 
-#### Scenario 21.5: Edit form for a nonexistent preset returns an error span
+#### Scenario 21.5: Edit form for a nonexistent preset returns an error fragment
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/prompt-presets/does-not-exist/edit
 Then the response is 200
-And the response body is "<span class='error'>Preset not found</span>"
+And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
-#### Scenario 21.6: Edit form for a default preset returns an error span
+#### Scenario 21.6: Edit form for a default preset returns an error fragment
 
 ```gherkin
 Given a fresh app state with a seeded default system preset
 When the client GET /fragment/prompt-presets/{default_id}/edit
 Then the response is 200
-And the response body is "<span class='error'>Cannot edit default presets</span>"
+And the response body is `<div class="error-message">Cannot edit default presets</div>`
 ```
 
 ### GET /fragment/prompt-presets/{id}/view — view form
@@ -122,13 +122,13 @@ And the body contains read-only fields for Role, Instructions, Writing Style, Ou
 And the body contains a "Close" button
 ```
 
-#### Scenario 21.8: View form for a nonexistent preset returns an error span
+#### Scenario 21.8: View form for a nonexistent preset returns an error fragment
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/prompt-presets/does-not-exist/view
 Then the response is 200
-And the response body is "<span class='error'>Preset not found</span>"
+And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
 ### POST /prompt-presets — create
@@ -157,13 +157,13 @@ And the body contains the preset name "My Quantifier Prompt"
 And the body contains the preview text "Quantify this scene."
 ```
 
-#### Scenario 21.11: Create with an invalid preset_type returns an error span
+#### Scenario 21.11: Create with an invalid preset_type returns an error fragment
 
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets with name="Bad Type" and instructions="Test." and preset_type="invalid"
 Then the response is 200
-And the response body is "<span class='error'>Invalid preset type</span>"
+And the response body is `<div class="error-message">Invalid preset type</div>`
 ```
 
 #### Scenario 21.12: Create with a missing required field returns 422
@@ -180,12 +180,12 @@ Then the response is 422 Unprocessable Entity (axum Form rejection)
 Given an app state whose preset storage fails on save
 When the client POST /prompt-presets with valid name and preset_type="system" fields
 Then the response is 200
-And the response body contains "<span class='error'>Save failed:" (the error is surfaced in the fragment, not as a HTTP error status)
+And the response body contains `<div class="error-message">Save failed:` (the error is surfaced in the fragment, not as a HTTP error status)
 ```
 
 The same failure shape applies to `POST /prompt-presets/{id}` (update),
 `POST /{id}/delete`, and `POST /{id}/activate` — 200 with a
-`<span class='error'>{Update|Delete|Save} failed: …</span>` span. Not
+`<div class="error-message">{Update|Delete|Save} failed: …</div>` fragment. Not
 enumerated as separate scenarios; this one covers the shape.
 
 ### POST /prompt-presets/{id} — update
@@ -202,13 +202,13 @@ And the body does not contain the old name "Before"
 And the body preserves the stored allowed modes (the form omitted them)
 ```
 
-#### Scenario 21.15: Update a nonexistent preset returns an error span
+#### Scenario 21.15: Update a nonexistent preset returns an error fragment
 
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist with name="Updated" and instructions="Updated." and preset_type="system"
 Then the response is 200
-And the response body is "<span class='error'>Preset not found</span>"
+And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
 #### Scenario 21.16: Update ignores the form's preset_type and keeps the stored type
@@ -217,17 +217,17 @@ And the response body is "<span class='error'>Preset not found</span>"
 Given a fresh app state with a seeded non-default system preset
 When the client POST /prompt-presets/{id} with name="Updated" and instructions="Updated." and preset_type="quantifier"
 Then the response is 200
-And the response body contains "preset-card" and no error span
+And the response body contains "preset-card" and no error fragment
 And the stored preset still has preset_type "system" and name "Updated"
 ```
 
-#### Scenario 21.17: Update a default preset returns an error span
+#### Scenario 21.17: Update a default preset returns an error fragment
 
 ```gherkin
 Given a fresh app state with a seeded default system preset
 When the client POST /prompt-presets/{default_id} with name="Changed" and instructions="Changed." and preset_type="system"
 Then the response is 200
-And the response body is "<span class='error'>Cannot edit default presets</span>"
+And the response body is `<div class="error-message">Cannot edit default presets</div>`
 ```
 
 ### POST /prompt-presets/{id}/delete — delete
@@ -241,22 +241,22 @@ Then the response is 200
 And the response body is empty
 ```
 
-#### Scenario 21.19: Delete a nonexistent preset returns an error span
+#### Scenario 21.19: Delete a nonexistent preset returns an error fragment
 
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist/delete
 Then the response is 200
-And the response body is "<span class='error'>Preset not found</span>"
+And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
-#### Scenario 21.20: Delete a default preset returns an error span
+#### Scenario 21.20: Delete a default preset returns an error fragment
 
 ```gherkin
 Given a fresh app state with a seeded default system preset
 When the client POST /prompt-presets/{default_id}/delete
 Then the response is 200
-And the response body is "<span class='error'>Cannot delete default presets</span>"
+And the response body is `<div class="error-message">Cannot delete default presets</div>`
 ```
 
 ### POST /prompt-presets/{id}/duplicate — duplicate
@@ -271,13 +271,13 @@ And the response body contains "<div class=\"prompt-presets-panel\">"
 And the body contains the copy name "Original (Copy)"
 ```
 
-#### Scenario 21.22: Duplicate a nonexistent preset returns an error span
+#### Scenario 21.22: Duplicate a nonexistent preset returns an error fragment
 
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist/duplicate
 Then the response is 200
-And the response body is "<span class='error'>Preset not found</span>"
+And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
 ### POST /prompt-presets/{id}/activate — activate
@@ -311,7 +311,7 @@ When the client POST /prompt-presets/{id}/activate?mode=interactive_fiction
 Then the response is 200
 And the response body contains an "Active · Interactive Fiction" badge in that preset's card-badges
 And the Interactive Fiction bundle's system slot holds that preset's id
-And activating the same preset without the mode parameter returns "<span class='error'>Preset not allowed for novel mode</span>"
+And activating the same preset without the mode parameter returns `<div class="error-message">Preset not allowed for novel mode</div>`
 ```
 
 #### Scenario 21.26: Panel gates activation buttons by allowed_modes
@@ -323,13 +323,13 @@ Then that preset's card contains a "Set Active (Interactive Fiction)" button
 And that preset's card does not contain a "Set Active (Novel)" button
 ```
 
-#### Scenario 21.24: Activate a nonexistent preset returns an error span
+#### Scenario 21.24: Activate a nonexistent preset returns an error fragment
 
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist/activate
 Then the response is 200
-And the response body is "<span class='error'>Preset not found</span>"
+And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
 #### Scenario 21.27: Duplicate → edit-form flags → save toggles per-mode activation

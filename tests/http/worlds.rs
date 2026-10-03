@@ -162,7 +162,7 @@ async fn test_world_posture_invalid_value_returns_error_span_http() {
     let body = response_body(resp).await;
     assert!(
         body.contains("error"),
-        "an invalid posture value must render an error span, got: {body:?}"
+        "an invalid posture value must render an error fragment, got: {body:?}"
     );
 
     let (stored, _) = updated_world(&state).await;
@@ -376,5 +376,44 @@ async fn test_world_create_existing_key_is_refused_http() {
     assert_eq!(
         stored_map.overworld.regions[0].rooms[0].id, "start",
         "the existing map must not be overwritten"
+    );
+}
+
+// A storage failure is not a client refusal: the create handler answers the
+// shared error fragment with a 200, unlike the duplicate-key refusal's 400 and
+// the posture endpoint's 500 on the same storage seam.
+// [docs/specs/worlds.md] SCENARIO: 25.9
+#[tokio::test]
+async fn test_world_create_storage_failure_renders_error_fragment_http() {
+    let storage = Arc::new(Storage::new_in_memory().with_failure(
+        "create_world",
+        TestOverride::internal("create_world failure"),
+    ));
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+
+    let world = WorldCard {
+        key: "new_world".to_string(),
+        name: "New World".to_string(),
+        description: "A world that must not be stored.".to_string(),
+        ..Default::default()
+    };
+    let resp = post_form(
+        &app,
+        "/worlds",
+        &world_form_body(&world, &TestMap::single_room("start")),
+    )
+    .await;
+
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::OK,
+        "a storage failure is rendered in-fragment with a 200, not a 500"
+    );
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("error-message") && body.contains("create_world failure"),
+        "the error fragment must name the storage failure: {body:?}"
     );
 }

@@ -10,18 +10,12 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
+use chronicler_engine::test_support::body_text;
 use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::app_with_production_graph;
 use crate::test_utils::card_html_slice;
-
-async fn body_string(response: axum::response::Response<Body>) -> String {
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    String::from_utf8_lossy(&body).to_string()
-}
 
 fn post_form_request(uri: &str, body: &str) -> Request<Body> {
     Request::builder()
@@ -39,7 +33,7 @@ async fn get_body(app: &axum::Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    body_string(response).await
+    body_text(response).await
 }
 
 fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
@@ -90,7 +84,7 @@ async fn test_settings_panel_renders_full_surface() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="settings-panel">"#));
     assert!(body.contains("<h2>Connections</h2>"));
     assert!(body.contains("connection-card"));
@@ -123,7 +117,7 @@ async fn test_post_settings_switches_narrator() {
     let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(body, "Settings saved!");
 
     let panel = get_body(&app, "/fragment/settings").await;
@@ -152,7 +146,7 @@ async fn test_post_settings_switches_quantifier() {
     let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(body, "Settings saved!");
 
     let panel = get_body(&app, "/fragment/settings").await;
@@ -181,7 +175,7 @@ async fn test_post_settings_switches_both_connections() {
     let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(body, "Settings saved!");
 
     let panel = get_body(&app, "/fragment/settings").await;
@@ -210,7 +204,7 @@ async fn test_post_settings_rejects_unknown_connection_id() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains("error-message"));
     assert!(body.contains("is not in the connections list"));
 
@@ -247,7 +241,7 @@ async fn test_post_settings_reports_save_failure() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains("error-message"));
     assert!(body.contains("settings save failure"));
 }
@@ -317,7 +311,7 @@ async fn test_connection_add_duplicate_name_is_refused() {
         StatusCode::BAD_REQUEST,
         "a duplicate connection name must be refused"
     );
-    let body = body_string(second).await;
+    let body = body_text(second).await;
     assert!(body.contains("Duplicate Probe"), "body: {body}");
     assert!(body.contains("already exists"), "body: {body}");
 
@@ -358,7 +352,7 @@ async fn test_connection_add_case_and_space_variant_is_refused() {
         StatusCode::BAD_REQUEST,
         "a case-and-space variant must be refused"
     );
-    let body = body_string(second).await;
+    let body = body_text(second).await;
     assert!(body.contains("already exists"), "body: {body}");
 }
 
@@ -377,7 +371,7 @@ async fn test_connection_edit_keeps_its_own_name() {
         .await
         .unwrap();
     assert_eq!(added.status(), StatusCode::OK);
-    let panel = body_string(added).await;
+    let panel = body_text(added).await;
     let id = added_connection_id(&panel);
 
     let response = app
@@ -388,7 +382,14 @@ async fn test_connection_edit_keeps_its_own_name() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
-    assert!(body.contains("Alpha"), "body: {body}");
-    assert!(body.contains("alpha-model-2"), "body: {body}");
+    let body = body_text(response).await;
+    let card = connection_card(&body, &id);
+    assert!(
+        card.contains(r#"<span class="card-title">Alpha</span>"#),
+        "the card must keep the connection's own name: {card}"
+    );
+    assert!(
+        card.contains("alpha-model-2"),
+        "the card must show the changed model: {card}"
+    );
 }

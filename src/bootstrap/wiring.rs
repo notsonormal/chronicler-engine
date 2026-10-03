@@ -14,7 +14,7 @@ use crate::application::agents::registry::AgentRegistry;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
-use crate::application::llm_message::SaveLlmMessageFn;
+use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::application::llm_recorder::{LlmCallRecorder, ProviderResolver};
 use crate::application::message_service::MessageService;
 use crate::application::persona_catalogue::PersonaCatalogue;

@@ -27,7 +27,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `response.rs` — LLM response parsing
       - **storage/**
         - `characters.rs` — Character storage backend operations
-        - `core.rs` — Storage backend trait and core abstractions
+        - `core.rs` — Storage backend and core abstractions
         - `db.rs` — SQLite database connection pool
         - `games.rs` — Game storage operations
         - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
@@ -144,7 +144,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `mod.rs` — HTTP utility modules.
           - `port_utils.rs` — Port management helpers used by `bind_with_retry`.
           - `response.rs` — HTTP response helpers
-          - `template_helpers.rs` — Settings template rendering helpers (provider options HTML).
+          - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`
           - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
           - `view_models.rs` — View-model helpers shared between template code and tests.
         - **worlds/**
@@ -158,7 +158,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - **application/**
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
-    - `llm_message.rs` — LLM recorder save seam
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
     - `message_service.rs` — Game-state lifecycle seam for message history and snapshots.
     - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
@@ -205,7 +204,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.
       - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
       - `pipeline_run.rs` — PipelineRun and its phase implementations for the action pipeline.
-      - `spawn.rs` — Shared spawn helper for pipeline tasks
       - **action_pipeline/**
         - `action.rs` — Action entry path for the pipeline.
         - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
@@ -238,7 +236,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution
-    - `validate.rs` — Data validation utilities
     - `wiring.rs` — Composition root for application orchestrators
   - **domain/**
     - **model/**
@@ -274,13 +271,13 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `mod.rs` — Domain model utility modules.
         - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.
         - `settings_defaults.rs` — Serde default-fn-pointers for `AppSettings` fields. Cannot become methods — `#[serde(default = "...")]` requires a fn path.
-        - `template.rs` — Template placeholder substitution for author-controlled text fields.
         - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.
         - `xml.rs` — XML string formatting utilities.
   - **test_support/**
     - `context.rs` — Builds `WiredApp` instances for integration tests.
     - `env_guard.rs` — `ApiKeyEnvGuard` — serializes tests that mutate API-key environment variables.
     - `fixtures.rs` — Test fixtures shared between unit and integration tests.
+    - `http.rs` — HTTP response helpers for unit tests that call handlers directly.
     - `quantifier.rs` — Quantifier test utilities
     - `test_app_builder.rs` — Test application builder for HTTP and integration tests.
     - `test_data_builder.rs` — Test data bundle builder for integration tests.

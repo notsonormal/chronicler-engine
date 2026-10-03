@@ -3,27 +3,6 @@
 
 use crate::domain::model::character::NpcCard;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PromptLayer {
-    /// Top-level system instructions and persona rules.
-    System,
-    /// Current game-state snapshot (room, flags, inventory) injected into the prompt.
-    GameState,
-    /// NPC card block for NPCs present in the current scene.
-    NpcCards,
-    /// Persona card block driving narrator voice.
-    Persona,
-    /// World lore and metadata block.
-    WorldInfo,
-    /// Prior message history rolling window.
-    History,
-    /// Current player input turn.
-    User,
-    /// Transient per-turn steering instruction (guided generation). Rendered last,
-    /// after `User`, so it wins recency over the player input and output format.
-    Guide,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct NpcContext<'a> {
     pub all_npcs: &'a [NpcCard],

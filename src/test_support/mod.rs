@@ -3,6 +3,7 @@
 pub mod context;
 pub mod env_guard;
 pub mod fixtures;
+pub mod http;
 pub mod quantifier;
 pub mod test_app_builder;
 pub mod test_data_builder;
@@ -14,5 +15,6 @@ pub use context::{
     seed_default_impersonate_preset, seed_default_preset, seed_test_world_into_storage,
 };
 pub use fixtures::*;
+pub use http::body_text;
 pub use test_app_builder::TestAppBuilder;
 pub use test_data_builder::{TestData, TestDataBuilder};

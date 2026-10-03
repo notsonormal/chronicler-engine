@@ -1,7 +1,28 @@
 use crate::domain::model::message::Message;
 use crate::domain::model::state::message_types::MessageType;
-use crate::adapters::driven::storage::mappers::message::model_swipes_to_db;
 use crate::adapters::driven::storage::models::message::DbMessage;
+use crate::adapters::driven::storage::models::swipe::DbSwipe;
+
+/// Test-local row builder for a message's swipes. Production writes swipe rows
+/// inline in `Storage::insert_swipe`; the mapper roundtrip tests need the same
+/// row shape to exercise `Message::try_from`.
+fn to_db_swipes(msg: &Message) -> Vec<DbSwipe> {
+    msg.swipes
+        .iter()
+        .enumerate()
+        .map(|(idx, swipe)| DbSwipe {
+            id: 0,
+            message_id: msg.id as i64,
+            swipe_index: idx as i64,
+            text: swipe.text.clone(),
+            snapshot_id: swipe.snapshot_id.map(|id| id as i64),
+            location_header: swipe.location_header.clone(),
+            event_header: swipe.event_header.clone(),
+            impersonated: if swipe.impersonated { 1 } else { 0 },
+            steering_instruction: swipe.steering_instruction.clone(),
+        })
+        .collect()
+}
 
 #[test]
 fn test_message_roundtrip() {
@@ -21,7 +42,7 @@ fn test_message_roundtrip() {
         steering_instruction: None,
     }];
     let db = DbMessage::try_from((&original, 1)).unwrap();
-    let swipes = model_swipes_to_db(&original);
+    let swipes = to_db_swipes(&original);
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert_eq!(original.id, back.id);
@@ -51,7 +72,7 @@ fn test_message_unpersisted_roundtrip() {
         steering_instruction: None,
     }];
     let db = DbMessage::try_from((&original, 2)).unwrap();
-    let swipes = model_swipes_to_db(&original);
+    let swipes = to_db_swipes(&original);
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert_eq!(back.id, 0);
@@ -71,7 +92,7 @@ fn test_message_log_type_json_serialization() {
         steering_instruction: None,
     }];
     let db = DbMessage::try_from((&msg, 1)).unwrap();
-    let _swipes = model_swipes_to_db(&msg);
+    let _swipes = to_db_swipes(&msg);
 
     assert_eq!(db.message_type_json, "\"Input\"");
 }
@@ -104,7 +125,7 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
         },
     ];
     let db = DbMessage::try_from((&original, 1)).unwrap();
-    let swipes = model_swipes_to_db(&original);
+    let swipes = to_db_swipes(&original);
 
     // Simulate stale active_swipe_index by mutating the db row
     let mut db_stale = db;
@@ -129,7 +150,7 @@ fn test_swipe_stored_inputs_roundtrip() {
     }];
 
     let db = DbMessage::try_from((&original, 1)).unwrap();
-    let swipes = model_swipes_to_db(&original);
+    let swipes = to_db_swipes(&original);
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert!(back.impersonated());

@@ -1,19 +1,31 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! Settings template rendering helpers (provider options HTML).
+//! Shared template rendering helpers: the Askama renderer for `<option>`
+//! lists.
 
-fn provider_option_html(value: &str, label: &str, selected: bool) -> String {
-    let sel = if selected { " selected" } else { "" };
-    format!(r#"<option value="{value}"{sel}>{label}</option>"#)
+use askama::Template;
+
+use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
+
+/// Renders an `<option>` list from `SelectOptionView`s, so the selects that
+/// use it share one escaping and markup path. The game templates build their
+/// own option lists.
+#[derive(Template)]
+#[template(
+    source = r#"{% for option in options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+{% endfor %}"#,
+    ext = "html"
+)]
+pub struct SelectOptionsTemplate {
+    pub options: Vec<SelectOptionView>,
 }
 
-pub(crate) fn provider_options_html(selected: &str) -> String {
-    [
-        ("openrouter", "OpenRouter"),
-        ("deepseek", "DeepSeek"),
-        ("ollama", "Ollama"),
-    ]
-    .iter()
-    .map(|(v, l)| provider_option_html(v, l, *v == selected))
-    .collect::<Vec<_>>()
-    .join("\n")
+/// Render `options` as `<option>` markup. The template only reads its fields,
+/// so rendering cannot fail; a failure degrades to no options rather than a
+/// page error.
+pub(crate) fn select_options_html(options: Vec<SelectOptionView>) -> SafeHtml {
+    SafeHtml::new(
+        SelectOptionsTemplate { options }
+            .render()
+            .unwrap_or_default(),
+    )
 }

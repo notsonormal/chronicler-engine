@@ -60,10 +60,6 @@ impl AppState {
         }
     }
 
-    pub fn current_shutdown_token(&self) -> CancellationToken {
-        self.shutdown_token.clone()
-    }
-
     pub fn settings(&self) -> Result<AppSettings> {
         self.settings_service.get_settings()
     }

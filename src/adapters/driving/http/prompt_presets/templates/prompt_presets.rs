@@ -3,8 +3,9 @@
 
 use askama::Template;
 
+use crate::adapters::driving::http::builders::presets::preset_card_view;
+use crate::adapters::driving::http::view_models::SafeHtml;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::NarratorMode;
 
 #[derive(Template)]
 #[template(
@@ -13,33 +14,8 @@ use crate::domain::model::settings::NarratorMode;
     <div class="preset-section">
         <h2>System Prompts</h2>
         <p class="preset-section-desc">These prompts are sent as the system message to the narration LLM.</p>
-        {% for preset in system_presets %}
-        <div class="preset-card{% if preset.is_default %} default{% endif %}{% if preset.id == active_system.novel || preset.id == active_system.interactive_fiction %} active{% endif %}">
-            <div class="card-header">
-                <span class="card-title">{{ preset.name }}</span>
-                <div class="card-badges">
-                    {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
-                    {% if preset.id == active_system.novel %}<span class="badge primary">Active · {{ self.novel_label() }}</span>{% endif %}
-                    {% if preset.id == active_system.interactive_fiction %}<span class="badge primary">Active · {{ self.interactive_fiction_label() }}</span>{% endif %}
-                </div>
-            </div>
-            <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
-            <div class="card-actions">
-                {% if preset.allows_novel() && preset.id != active_system.novel %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.novel_label() }})</button>
-                {% endif %}
-                {% if preset.allows_interactive_fiction() && preset.id != active_system.interactive_fiction %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.interactive_fiction_label() }})</button>
-                {% endif %}
-                {% if preset.is_default %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
-                {% else %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
-                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
-                {% endif %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
-            </div>
-        </div>
+        {% for card in self.system_cards() %}
+        {{ card }}
         {% endfor %}
 
         <details class="preset-add">
@@ -76,33 +52,8 @@ use crate::domain::model::settings::NarratorMode;
     <div class="preset-section">
         <h2>Quantifier Prompts</h2>
         <p class="preset-section-desc">These prompts guide the quantifier LLM that determines NPC presence and player movement.</p>
-        {% for preset in quantifier_presets %}
-        <div class="preset-card{% if preset.is_default %} default{% endif %}{% if preset.id == active_quantifier.novel || preset.id == active_quantifier.interactive_fiction %} active{% endif %}">
-            <div class="card-header">
-                <span class="card-title">{{ preset.name }}</span>
-                <div class="card-badges">
-                    {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
-                    {% if preset.id == active_quantifier.novel %}<span class="badge primary">Active · {{ self.novel_label() }}</span>{% endif %}
-                    {% if preset.id == active_quantifier.interactive_fiction %}<span class="badge primary">Active · {{ self.interactive_fiction_label() }}</span>{% endif %}
-                </div>
-            </div>
-            <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
-            <div class="card-actions">
-                {% if preset.allows_novel() && preset.id != active_quantifier.novel %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.novel_label() }})</button>
-                {% endif %}
-                {% if preset.allows_interactive_fiction() && preset.id != active_quantifier.interactive_fiction %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.interactive_fiction_label() }})</button>
-                {% endif %}
-                {% if preset.is_default %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
-                {% else %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
-                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
-                {% endif %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
-            </div>
-        </div>
+        {% for card in self.quantifier_cards() %}
+        {{ card }}
         {% endfor %}
 
         <details class="preset-add">
@@ -135,33 +86,8 @@ use crate::domain::model::settings::NarratorMode;
     <div class="preset-section">
         <h2>Impersonate Prompts</h2>
         <p class="preset-section-desc">These prompts replace the narrator voice when the AI writes as the player's persona via /impersonate. Use the user and persona (persona_description, persona_personality, persona_background) macros to inject persona data.</p>
-        {% for preset in impersonate_presets %}
-        <div class="preset-card{% if preset.is_default %} default{% endif %}{% if preset.id == active_impersonate.novel || preset.id == active_impersonate.interactive_fiction %} active{% endif %}">
-            <div class="card-header">
-                <span class="card-title">{{ preset.name }}</span>
-                <div class="card-badges">
-                    {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
-                    {% if preset.id == active_impersonate.novel %}<span class="badge primary">Active · {{ self.novel_label() }}</span>{% endif %}
-                    {% if preset.id == active_impersonate.interactive_fiction %}<span class="badge primary">Active · {{ self.interactive_fiction_label() }}</span>{% endif %}
-                </div>
-            </div>
-            <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
-            <div class="card-actions">
-                {% if preset.allows_novel() && preset.id != active_impersonate.novel %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.novel_label() }})</button>
-                {% endif %}
-                {% if preset.allows_interactive_fiction() && preset.id != active_impersonate.interactive_fiction %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.interactive_fiction_label() }})</button>
-                {% endif %}
-                {% if preset.is_default %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
-                {% else %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
-                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
-                {% endif %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
-            </div>
-        </div>
+        {% for card in self.impersonate_cards() %}
+        {{ card }}
         {% endfor %}
 
         <details class="preset-add">
@@ -208,15 +134,26 @@ pub struct PromptPresetsTemplate {
 }
 
 impl PromptPresetsTemplate {
-    /// The Novel label every card badge and activation button renders.
-    pub fn novel_label(&self) -> &'static str {
-        NarratorMode::Novel.display_label()
+    fn cards(presets: &[PromptPreset], active: &ModeActiveIds) -> Vec<SafeHtml> {
+        presets
+            .iter()
+            .map(|preset| preset_card_view(preset, active))
+            .collect()
     }
 
-    /// The Interactive Fiction label every card badge and activation button
-    /// renders.
-    pub fn interactive_fiction_label(&self) -> &'static str {
-        NarratorMode::InteractiveFiction.display_label()
+    /// Rendered cards for the System section.
+    pub fn system_cards(&self) -> Vec<SafeHtml> {
+        Self::cards(&self.system_presets, &self.active_system)
+    }
+
+    /// Rendered cards for the Quantifier section.
+    pub fn quantifier_cards(&self) -> Vec<SafeHtml> {
+        Self::cards(&self.quantifier_presets, &self.active_quantifier)
+    }
+
+    /// Rendered cards for the Impersonate section.
+    pub fn impersonate_cards(&self) -> Vec<SafeHtml> {
+        Self::cards(&self.impersonate_presets, &self.active_impersonate)
     }
 }
 

@@ -9,9 +9,8 @@ pub mod token_budget;
 pub mod types;
 pub mod utils;
 
-pub use assembler::{AssembledPrompt, PromptAssembler, PromptContext};
-pub use types::{NpcContext, PromptLayer};
-pub use utils::context::fit_messages_to_context;
+pub use assembler::{PromptAssembler, PromptContext};
+pub use types::NpcContext;
 
 #[cfg(test)]
 mod assembler_tests;
@@ -19,5 +18,3 @@ mod assembler_tests;
 mod sanitize_tests;
 #[cfg(test)]
 mod token_budget_tests;
-#[cfg(test)]
-mod types_tests;

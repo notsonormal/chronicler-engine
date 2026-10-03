@@ -3,7 +3,6 @@
 
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::utils::template::render_template;
 use crate::application::agents::quantifier::types::QuantifierPromptContext;
 
 pub struct QuantifierPromptBuilder<'a> {
@@ -21,12 +20,11 @@ impl<'a> QuantifierPromptBuilder<'a> {
 
     fn build_system_prompt(&self) -> String {
         let vars = TemplateVars::new(self.context.player_name);
-        let mut prompt = render_template(
+        let mut prompt = vars.render(
             self.context
                 .quantifier_prompt_override
                 .as_deref()
                 .unwrap_or(""),
-            &vars,
         );
 
         if !prompt.is_empty() {

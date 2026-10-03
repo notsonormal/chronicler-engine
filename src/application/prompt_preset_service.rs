@@ -1,5 +1,8 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Prompt preset service — prompt preset persistence orchestration at the application layer.
+//!
+//! A refusal is `ApplicationError::Validation`, raised where the rule lives (see
+//! `settings_service`, where the same rule runs inside a storage closure).
 
 use std::sync::Arc;
 

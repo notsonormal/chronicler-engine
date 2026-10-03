@@ -153,32 +153,52 @@
         }
       }
 
-      function updateToThinking() {
-        setButtonState(true);
-        setStatus("Thinking...", "thinking");
+      // The last error text the status display reported, so a poll that keeps
+      // returning the same error toasts once, not every cycle.
+      let lastStatusError = null;
+
+      // One reconciler for the status display: reads the live DOM, so it covers
+      // both the spans this script writes and the fragments htmx swaps in (the
+      // poll's phase text, and the error span a failed generation renders). The
+      // Send button, the toast and the dedupe state all follow from it.
+      function applyStatusDisplay() {
+        const statusDisplay = document.getElementById("status-display");
+        if (!statusDisplay) return;
+        setButtonState(
+          statusDisplay.querySelector(".status.thinking") !== null,
+        );
+        const statusText = statusDisplay.textContent;
+        if (statusText.includes("Error")) {
+          if (statusText !== lastStatusError) {
+            lastStatusError = statusText;
+            showError(statusText);
+          }
+        } else {
+          lastStatusError = null;
+        }
       }
 
-      // /status/generating returns a bare phase name or "idle" as plain text.
+      function updateToThinking() {
+        setStatus("Thinking...", "thinking");
+        applyStatusDisplay();
+      }
+
+      // /status/generating returns a bare phase name or "idle" as plain text,
+      // or an error fragment, which stays in place for applyStatusDisplay.
       function onStatusPoll(el) {
         const text = el.textContent.trim();
+        const phaseMap = {
+          narrating: "Generating narration...",
+          quantifying: "Quantifying scene...",
+          "generating-event": "Generating event...",
+          options: "Generating options...",
+        };
         if (text === "idle") {
           setStatus("Ready", "ready");
-          setButtonState(false);
-        } else if (
-          text === "narrating" ||
-          text === "quantifying" ||
-          text === "generating-event" ||
-          text === "options"
-        ) {
-          const phaseMap = {
-            narrating: "Generating narration...",
-            quantifying: "Quantifying scene...",
-            "generating-event": "Generating event...",
-            options: "Generating options...",
-          };
+        } else if (phaseMap[text]) {
           setStatus(phaseMap[text], "thinking");
-          setButtonState(true);
         }
+        applyStatusDisplay();
       }
 
       // Body-level, so the #action-area swaps never replace it.
@@ -356,7 +376,7 @@
       // without this it stays on "Thinking..." with a disabled Stop button.
       function resetStatusToReady() {
         setStatus("Ready", "ready");
-        setButtonState(false);
+        applyStatusDisplay();
       }
 
       // Retry/retrigger run through raw fetch, so a failed request reports its
@@ -689,43 +709,6 @@
       window.addEventListener("scroll", closeSlashMenu, true);
       window.addEventListener("resize", closeSlashMenu);
 
-      // The status poll re-renders the same error each cycle; dedupe on the
-      // text so the toast fires once per distinct error.
-      let lastStatusError = null;
-
-      const statusObserver = new MutationObserver(function (mutations) {
-        mutations.forEach(function (mutation) {
-          if (
-            mutation.type === "childList" ||
-            mutation.type === "characterData"
-          ) {
-            // Only mutations inside the live status display count; the
-            // story-log and options-dock pollers mutate elsewhere and must
-            // not churn the Send button.
-            const statusDisplay = document.getElementById("status-display");
-            if (!statusDisplay || !statusDisplay.contains(mutation.target)) {
-              return;
-            }
-            const isThinking =
-              statusDisplay.querySelector(".status.thinking") !== null;
-            if (isThinking) {
-              setButtonState(true);
-            } else {
-              setButtonState(false);
-            }
-            const statusText = statusDisplay.textContent;
-            if (statusText.includes("Error")) {
-              if (statusText !== lastStatusError) {
-                lastStatusError = statusText;
-                showError(statusText);
-              }
-            } else {
-              lastStatusError = null;
-            }
-          }
-        });
-      });
-
       document.body.addEventListener("action-area-refresh", function () {
         htmx.ajax("GET", "/fragment/action-area", {
           target: "#action-area",
@@ -734,21 +717,9 @@
       });
 
       document.addEventListener("DOMContentLoaded", function () {
-        // Observe the body: the text-check flow replaces #action-area, so an
-        // observation on #status-display would watch the detached node.
-        statusObserver.observe(document.body, {
-          childList: true,
-          characterData: true,
-          subtree: true,
-        });
-
-        const initialStatusDisplay = document.getElementById("status-display");
-        if (
-          initialStatusDisplay &&
-          initialStatusDisplay.textContent.includes("Thinking")
-        ) {
-          setButtonState(true);
-        }
+        // A page loaded mid-generation renders a thinking status span; the
+        // reconciler locks Send and reads any error the span already carries.
+        applyStatusDisplay();
 
         document.querySelectorAll(".tab").forEach((btn) => {
           btn.addEventListener("click", () => {
