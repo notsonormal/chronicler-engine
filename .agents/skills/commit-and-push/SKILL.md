@@ -15,6 +15,7 @@ action-required: EXECUTES — runs actual git commands (stage, commit, push) whe
 > 2. **Do NOT ask for confirmation** — the user's invocation IS the confirmation
 > 3. **Do NOT output a tutorial** — execute the workflow immediately
 > 4. **Do NOT delete, stash, revert or change existing files** - you should not overthink
+> 5. **Do not try to build or tests to validate the that application is working* - that's not part of this workflow
 >
 > **This is an ACTION skill, not a DOCUMENTATION skill.**
 

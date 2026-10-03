@@ -146,6 +146,41 @@ Fix only if one bites. Each is low.
 - **#23** dropping `image` saved nothing; `playwright-rs` still pulls it in (`Cargo.lock:2108,2117`). Nothing to fix; correct the expectation.
 - **R10** `once_cell` → `LazyLock` and duplicate dev-deps stay with the dependency-audit ticket.
 
+### B5: Duplicate check runs in the gate, scoped to changed files
+
+- **Files:** `scripts/healthcheck.py` (`summarize_report` `:204`, the `duplicates` parser `:272`), `build.py` (gate step + a `duplicates` subcommand), `.agents/skills/chronicler-after-plan-workflow/SKILL.md` step 7.
+- **Current state:** the check always reports the whole repo — 577 clone pairs over 237 file pairs — so the after-plan step cannot separate branch-introduced clones from inherited ones (only 4 of the top 25 pairs touch branch files). `build.py` never calls it, so it runs only when someone remembers. Cost is not the obstacle: measured 2026-10-03, the full run takes about 1 s (`jscpd` re-ran; `report/jscpd-report.json` rewritten).
+- **Decision (user, 2026-10-03):** changed files are the default scope, and the gate runs the check so no manual run is needed.
+- **Fix:**
+  - Scope by filtering the **parsed pairs**, not jscpd's input list. Pointing jscpd only at changed files would hide the case that matters most: new code cloning pre-existing code elsewhere. A pair is in scope when either side changed.
+  - "Changed" is `git diff --name-only <base>` — two-dot, so uncommitted tracked edits are included — **plus** untracked files from `git ls-files --others --exclude-standard`. New files are where new duplication appears, and `git diff` alone misses them.
+  - Fall back to whole-repo scope, with a printed note, when git is unavailable, HEAD is detached, or no `main`/`origin/main` resolves.
+  - Keep `--all` for forced whole-repo scope and `--ref <ref>` to choose the base.
+  - Add `python build.py duplicates` (AGENTS.md's convention that every gate step is also a subcommand) and call it from the full gate.
+- **Decision needed — does the gate fail on clones?** jscpd pairs are heuristic; today's top pairs are legitimate near-identical test blocks.
+
+| Option | Effect |
+|---|---|
+| Report-only (recommended) | The gate prints the changed-file summary; judgement stays with the reviewer |
+| Fail above a line threshold | Needs a threshold that survives the inherited test-block pairs, or the gate goes red on untouched code |
+
+- **Sequencing:** once the gate prints the summary, workflow step 7 reads the gate output instead of running the script again, so the two scopes cannot disagree.
+- **Verification:** the default run keeps the 4 known branch pairs (`tests/http/prompt_presets.rs`, `tests/http/settings.rs`, `tests/http/requires_migration/{fragment,connections}.rs`) and drops the inherited test-block clones; `--all` restores 577; the gate log carries the summary.
+
+### B6: The gate summary hides a leaky test
+
+- **Files:** `build.py` (`_nextest_summary_line` `:264-285`, `_NEXTEST_RESULT_RE` `:245`, `--final-status-level pass` `:314`), `scripts/tests/test_build_cli.py` (`NextestSummaryTests` `:316`), `.config/nextest.toml`.
+- **Current state:** nextest reports a leak only as a parenthetical in its Summary line — `logs/build_20261003_021636.log:309` reads `30 tests run: 30 passed (1 leaky), 0 skipped`, and `logs/build_20261002_171811.log:293` matches. No `LEAK` line appears in any log, so nothing names the test.
+  - `build.py` renders its own epilogue from that line and extracts only passed/failed/skipped, so the condensed summary an agent reads says `nextest: 30 passed, 0 failed`. The leak stays invisible once anything condenses the raw output.
+  - `_NEXTEST_RESULT_RE` matches `PASS|FAIL|SKIP` only, so a `LEAK` status line would also be dropped from the timing report.
+  - `leak` is not a valid `--final-status-level` value (accepted: `none, fail, flaky, slow, skip, pass, all`); it is only a `--status-level` value. Naming the test is therefore not a one-flag change.
+- **Fix:**
+  - Parse `(\d+) leaky` in `_nextest_summary_line` and render it — `nextest: 30 passed, 0 failed, 1 leaky` — so no condensed summary can hide a leak.
+  - Then find the name. First establish whether nextest emits a `LEAK` line in this run mode at all: the browser step's log carries no per-test lines, only the run banner and the Summary. If it does, accept `LEAK` in `_NEXTEST_RESULT_RE` and surface it in the timing report. If it does not, read the name from a structured reporter (`--message-format json`, JUnit) or an explicit `--status-level leak` browser run.
+- **Unknown:** why the browser step's log holds no per-test lines, and whether nextest emits `LEAK` at all in non-interactive mode. Open the ticket with that question.
+- **Sequencing:** before E2, which cannot name the test until this lands.
+- **Verification:** a unit test in `NextestSummaryTests` feeds the recorded line `30 tests run: 30 passed (1 leaky), 0 skipped` and expects the leaky count in the one-liner, run via `python build.py py-tests`. No live leak needed.
+
 ## Phase 4 — Environment and unknowns
 
 ### E1: Coverage
@@ -154,8 +189,9 @@ Fix only if one bites. Each is low.
 - **Durability:** the binary lands in the container's user home, so a container rebuild drops it again. Record both steps in `ENVIRONMENT.md`, or bake them into the image.
 
 ### E2: Name the leaky browser test
-- **Current state:** `logs/build_20261003_021636.log` shows `30 passed (1 leaky)`; three direct runs and the final gate showed 0. Root cause unknown (report #25).
+- **Current state:** nextest's Summary line in `logs/build_20261003_021636.log:309` reads `30 tests run: 30 passed (1 leaky), 0 skipped`; three direct runs and the final gate showed 0. No line names the leaking test, so the root cause is unknown (report #25).
 - **Fix:** run the browser binary with nextest's leak status reporting enabled until a run names the test; then fix its teardown.
+- **Sequencing:** B6 first — it makes the leak visible in the gate summary and settles whether nextest can name the test at all.
 
 ### E3: Watch the timed stub tests
 - `tests/browser/stub/dashboard.rs:141` and `:219` depend on wall-clock timers (report #26). Stable in four runs. No action unless they flake.

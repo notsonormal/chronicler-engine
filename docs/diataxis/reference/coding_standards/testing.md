@@ -25,7 +25,7 @@ Diagnostics on failure land in `tmp/screenshots/` (PNG) and `tmp/test_diagnostic
 
 ## Smart Waiting
 
-Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_utils/wait.rs`: `wait_for_llm_idle`, `wait_for_status_ready`, and `wait_for_element_children`. Each helper retries until the condition is met or a per-helper timeout fires; the helpers are the contract for browser and HTTP-test synchronization.
+Tests poll for conditions rather than `sleep`. The polling helpers live in `tests/test_utils/wait.rs` — that file is the list and the contract. Each helper retries until its condition is met or a per-helper timeout fires; browser and HTTP tests synchronize through them.
 
 ## Document References
 
