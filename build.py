@@ -513,14 +513,14 @@ REGISTRY: dict[str, StepSpec] = {
             "Running integration tests...",
             get_integration_test_cmd(),
             needs_nextest=True,
-            help="Run every test binary except browser, architecture and guardrails (~1 min).",
+            help="Run every test binary except browser, architecture and guardrails (~20s warm).",
         ),
         StepSpec(
             "browser",
             "Running browser tests...",
             get_browser_test_cmd(),
             needs_nextest=True,
-            help="Run only the browser (Playwright) test binary (~4.5 min).",
+            help="Run only the browser (Playwright) test binary (~1 min warm).",
         ),
         StepSpec(
             "test-pattern",

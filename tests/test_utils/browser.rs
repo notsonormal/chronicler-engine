@@ -275,7 +275,6 @@ pub async fn fill_command_input(page: &playwright_rs::Page, command: &str) {
         .await;
 }
 
-/// Send an action via the command form
 pub async fn send_action(page: &playwright_rs::Page, text: &str) {
     fill_command_input(page, text).await;
     let _: Result<(), _> = page

@@ -8,8 +8,8 @@ use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::test_utils::wait_for_condition_async;
 
-/// Consume a response into its body as a String. The single body reader for
-/// the binary — one cap (65536) covers every fragment and page this suite
+/// Consume a response into its body as a String. The body reader the support
+/// helpers use — one cap (65536) covers every fragment and page this suite
 /// reads.
 pub async fn response_body(resp: axum::response::Response<Body>) -> String {
     let bytes = axum::body::to_bytes(resp.into_body(), 65536)

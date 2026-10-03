@@ -29,6 +29,8 @@ Clippy lints are denied at the crate root in `src/lib.rs` via `#![deny(...)]`. T
 Declarative architecture rules in `arch-lint.toml`.
 
 <!-- AUTO-GUARDRAILS: arch-lint START -->
+Scan scope: `root = "./src"`, excluding `**/target/**`, `**/tests/**`, `**/*_tests.rs`, `**/.pi/**`, `**/tmp/**`.
+
 | From Scope | To Scope(s) | Rationale |
 |------------|-------------|----------|
 | `model` | `server, narrative, application` | Model layer must be pure; cannot depend on outer layers. |

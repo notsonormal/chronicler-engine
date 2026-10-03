@@ -357,8 +357,6 @@ Avoid **analysis paralysis**: when reasoning stops converging, act instead — r
 
 Temporary files should be written into tmp folders e.g. `tmp`.
 
-Pi wraps commands with rtk and condenses long output — not just git/diff: piped `rg`, `grep`, and build tails get truncated or mangled too. Redirect any command you pipe or filter to a file first, then search that file.
-
 Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
 
 `build.py` writes logs to both standard output and to the `logs/` folder. A standard build takes about 2 minutes once the target dir is warm. A cold one takes far longer.
@@ -421,7 +419,7 @@ Five canonical role strings, used as `Status:` lines in local-markdown files (pe
 
 ### Domain docs
 
-Read `CONTEXT.md` for details.
+Single-context: one `CONTEXT.md` glossary at the repo root (per `docs/agents/domain.md`).
 
 ### Codebase research
 

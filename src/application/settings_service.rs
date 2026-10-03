@@ -72,27 +72,20 @@ impl SettingsService {
             .map_err(Self::settings_error_to_application)
     }
 
-    fn connection_name_available(
+    fn ensure_connection_name_available(
         settings: &AppSettings,
         name: &str,
         except_id: Option<&str>,
-    ) -> bool {
-        name_is_available(
+    ) -> Result<()> {
+        let available = name_is_available(
             settings
                 .connections
                 .iter()
                 .map(|connection| (connection.id.as_str(), connection.name.as_str())),
             name,
             except_id,
-        )
-    }
-
-    fn ensure_connection_name_available(
-        settings: &AppSettings,
-        name: &str,
-        except_id: Option<&str>,
-    ) -> Result<()> {
-        if Self::connection_name_available(settings, name, except_id) {
+        );
+        if available {
             Ok(())
         } else {
             Err(EngineError::Validation(format!(

@@ -158,11 +158,6 @@
         setStatus("Thinking...", "thinking");
       }
 
-      // Locks on submit; the status poll unlocks.
-      function updateButtonState() {
-        setButtonState(true);
-      }
-
       // /status/generating returns a bare phase name or "idle" as plain text.
       function onStatusPoll(el) {
         const text = el.textContent.trim();
@@ -448,7 +443,8 @@
         const form = document.getElementById("command-form");
         if (form && form.querySelector("input[name=command]")) {
           form.reset();
-          updateButtonState();
+          // Locks on submit; the status poll unlocks.
+          setButtonState(true);
         }
       }
 

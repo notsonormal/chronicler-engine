@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -78,6 +79,55 @@ class DiscoveryPatternTests(unittest.TestCase):
                     ggd.parse_syn_table()
             finally:
                 ggd.ROOT, ggd.GUARDRAILS_DIR = originals
+
+
+class AnalyzerScopeTests(unittest.TestCase):
+    """The generated arch-lint block states the scan scope from `[analyzer]`.
+
+    The regression this guards: the reference doc showed only the
+    `deny-scope-dep` rules, never which tree the linter scans or what it skips,
+    so an agent had to read arch-lint.toml (or its vendored crate) to answer
+    whether test files are analyzed.
+    """
+
+    def _scope_for(self, toml_text: str) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "arch-lint.toml"
+            path.write_text(toml_text)
+            original = ggd.ARCH_LINT_TOML
+            ggd.ARCH_LINT_TOML = path
+            try:
+                return ggd.parse_analyzer_scope()
+            finally:
+                ggd.ARCH_LINT_TOML = original
+
+    def test_scope_line_lists_root_and_excludes(self) -> None:
+        scope = self._scope_for(
+            '[analyzer]\nroot = "./src"\nexclude = ["**/tests/**", "**/*_tests.rs"]\n'
+        )
+        self.assertIn('root = "./src"', scope)
+        self.assertIn("`**/tests/**`", scope)
+        self.assertIn("`**/*_tests.rs`", scope)
+
+    def test_missing_analyzer_section_is_an_error(self) -> None:
+        with self.assertRaises(SystemExit):
+            self._scope_for('preset = "recommended"\n')
+
+    def test_analyzer_without_exclude_is_an_error(self) -> None:
+        with self.assertRaises(SystemExit):
+            self._scope_for('[analyzer]\nroot = "./src"\n')
+
+    def test_live_doc_states_every_live_exclude_glob(self) -> None:
+        """Ratchet: every live exclude glob must appear in the committed doc."""
+        with ggd.ARCH_LINT_TOML.open("rb") as f:
+            excludes = tomllib.load(f)["analyzer"]["exclude"]
+        doc = (ggd.ROOT / ggd.DOC_REL).read_text(encoding="utf-8")
+        for pattern in excludes:
+            self.assertIn(
+                f"`{pattern}`",
+                doc,
+                f"exclude glob `{pattern}` is missing from {ggd.DOC_REL}",
+            )
 
 
 class LiveRepoExhaustivenessTests(unittest.TestCase):

@@ -147,6 +147,67 @@ class TestDiataxisValidator(unittest.TestCase):
         return Path(tempfile.mkdtemp(prefix="diataxis-fix-"))
 
 
+class _LineCitationFixture:
+    """Builds a synthetic docs/diataxis tree for LINE_CITATION checks."""
+
+    def __init__(self) -> None:
+        self.docs_root = Path(tempfile.mkdtemp(prefix="line-cit-")) / "docs" / "diataxis"
+        self.docs_root.mkdir(parents=True)
+
+    def write(self, rel: str, text: str) -> Path:
+        path = self.docs_root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def scan(self, path: Path) -> list[vd.Violation]:
+        report = vd.FileReport(path)
+        vd.check_line_citations(report, self.docs_root)
+        return report.violations
+
+
+class TestLineCitations(unittest.TestCase):
+    """LINE_CITATION: flags `path:line`, exempts fenced blocks and generated docs."""
+
+    def test_flags_path_line_citation(self) -> None:
+        fix = _LineCitationFixture()
+        path = fix.write("reference/foo.md", "See `src/bar.rs:42` for the details.\n")
+        rules = [v.rule for v in fix.scan(path)]
+        self.assertEqual(rules, ["LINE_CITATION"])
+
+    def test_flags_line_range_and_list(self) -> None:
+        fix = _LineCitationFixture()
+        path = fix.write(
+            "reference/foo.md",
+            "A `src/a.rs:12-14`, B `src/b.rs:12,15`.\n",
+        )
+        self.assertEqual(len(fix.scan(path)), 2)
+
+    def test_clean_symbol_citation(self) -> None:
+        fix = _LineCitationFixture()
+        path = fix.write(
+            "reference/foo.md",
+            "See `Storage::get_settings` and `resolve_api_key()`.\n",
+        )
+        self.assertEqual(fix.scan(path), [])
+
+    def test_fenced_block_exempt(self) -> None:
+        fix = _LineCitationFixture()
+        path = fix.write(
+            "reference/foo.md",
+            "Real output:\n\n```\nthread 'x' panicked at src/bar.rs:42\n```\n",
+        )
+        self.assertEqual(fix.scan(path), [])
+
+    def test_generated_doc_exempt(self) -> None:
+        fix = _LineCitationFixture()
+        path = fix.write(
+            "reference/coding_standards/guardrails.md",
+            "| rule | `tests/infrastructure/guardrails/enums.rs:69` |\n",
+        )
+        self.assertEqual(fix.scan(path), [])
+
+
 class _AnchorFixture:
     """Builds a synthetic engine-root tree under a tmp dir for anchor checks."""
 

@@ -27,17 +27,23 @@ impl PromptPresetService {
         self.storage.list_presets(preset_type)
     }
 
+    /// Whether `candidate` is free among `siblings`, ignoring the entry being
+    /// renamed.
+    fn name_available(siblings: &[PromptPreset], candidate: &str, except_id: &str) -> bool {
+        name_is_available(
+            siblings
+                .iter()
+                .map(|sibling| (sibling.id.as_str(), sibling.name.as_str())),
+            candidate,
+            Some(except_id),
+        )
+    }
+
     /// Save a preset. Refuses a name already used by another preset in the
     /// same category; the saved preset keeps its own name.
     pub fn save_preset(&self, preset: &PromptPreset) -> std::result::Result<(), ApplicationError> {
         let siblings = self.storage.list_presets(preset.preset_type)?;
-        if !name_is_available(
-            siblings
-                .iter()
-                .map(|sibling| (sibling.id.as_str(), sibling.name.as_str())),
-            &preset.name,
-            Some(&preset.id),
-        ) {
+        if !Self::name_available(&siblings, &preset.name, &preset.id) {
             return Err(ApplicationError::validation(format!(
                 "A {} preset named '{}' already exists",
                 preset.preset_type.as_str(),
@@ -58,26 +64,15 @@ impl PromptPresetService {
         source: &PromptPreset,
     ) -> std::result::Result<String, ApplicationError> {
         let siblings = self.storage.list_presets(source.preset_type)?;
+        let available = |candidate: &str| Self::name_available(&siblings, candidate, &source.id);
         let base = format!("{} (Copy)", source.name);
-        if name_is_available(
-            siblings
-                .iter()
-                .map(|sibling| (sibling.id.as_str(), sibling.name.as_str())),
-            &base,
-            Some(&source.id),
-        ) {
+        if available(&base) {
             return Ok(base);
         }
         let mut copy_number = 2;
         loop {
             let candidate = format!("{} (Copy {copy_number})", source.name);
-            if name_is_available(
-                siblings
-                    .iter()
-                    .map(|sibling| (sibling.id.as_str(), sibling.name.as_str())),
-                &candidate,
-                Some(&source.id),
-            ) {
+            if available(&candidate) {
                 return Ok(candidate);
             }
             copy_number += 1;

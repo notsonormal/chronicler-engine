@@ -211,7 +211,7 @@ fn test_preset_edit_form_html_renders() {
         instructions: Some("Edit me.".into()),
         ..Default::default()
     };
-    let html = preset_edit_form_html(&preset, "system", false);
+    let html = preset_edit_form_html(&preset, "system");
     assert!(html.contains("edit-form"));
     assert!(html.contains("Editable"));
     assert!(html.contains("edit-1"));
@@ -226,7 +226,7 @@ fn test_preset_edit_form_html_with_all_optional_fields_none() {
         name: "Empty Edit".into(),
         ..Default::default()
     };
-    let html = preset_edit_form_html(&preset, "narrator", true);
+    let html = preset_edit_form_html(&preset, "narrator");
     assert!(html.contains("Empty Edit"));
     assert!(html.contains(r#"name="preset_type" value="narrator""#));
     assert!(
@@ -252,7 +252,7 @@ fn test_preset_edit_form_html_escapes_special_chars() {
         preset_type: PresetType::Quantifier,
         ..Default::default()
     };
-    let html = preset_edit_form_html(&preset, "quantifier", true);
+    let html = preset_edit_form_html(&preset, "quantifier");
     assert!(!html.contains("<Name>"));
     assert!(html.contains("&lt;Name&gt;"));
     assert!(html.contains("&quot;Text&quot;"));

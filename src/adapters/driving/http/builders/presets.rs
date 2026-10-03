@@ -38,11 +38,7 @@ pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
     )
 }
 
-pub(crate) fn preset_edit_form_html(
-    preset: &PromptPreset,
-    preset_type: &str,
-    _is_active: bool,
-) -> String {
+pub(crate) fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String {
     let id = html_escape(&preset.id);
     let name = html_escape(&preset.name);
     let preset_type_escaped = html_escape(preset_type);

@@ -2,7 +2,7 @@
 
 Sources:
   - `src/lib.rs` clippy `#![deny(...)]` lints + `//` rationale comments
-  - `arch-lint.toml` `[[deny-scope-dep]]` rows
+  - `arch-lint.toml` `[analyzer]` scan scope + `[[deny-scope-dep]]` rows
   - `tests/infrastructure/guardrails/*.rs` `pub fn check_*` `///` doc comments
 
 Default mode rewrites the three tables in place between sentinel comments.
@@ -108,6 +108,38 @@ def format_arch_lint_table(rows: list[tuple[str, str, str]]) -> str:
     return "\n".join(lines)
 
 
+def parse_analyzer_scope() -> str:
+    """Return the arch-lint scan scope line from `[analyzer]` in arch-lint.toml.
+
+    The scope is the fact an agent needs before deciding whether a guardrail
+    applies to a given file: which tree is scanned and what is skipped. It is
+    emitted from the config, so the reference doc cannot disagree with the
+    linter it describes.
+    """
+    with ARCH_LINT_TOML.open("rb") as f:
+        analyzer = tomllib.load(f).get("analyzer")
+    if not analyzer:
+        print("error: arch-lint.toml has no [analyzer] section", file=sys.stderr)
+        sys.exit(1)
+
+    root = analyzer.get("root", "")
+    excludes = analyzer.get("exclude", [])
+    if not root or not excludes:
+        print(
+            "error: arch-lint.toml [analyzer] must set both `root` and `exclude`",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    excluded = ", ".join(f"`{pattern}`" for pattern in excludes)
+    return f'Scan scope: `root = "{root}"`, excluding {excluded}.'
+
+
+def format_arch_lint_block(scope: str, rows: list[tuple[str, str, str]]) -> str:
+    """Compose the arch-lint auto-block: scan scope line, blank line, rules table."""
+    return f"{scope}\n\n{format_arch_lint_table(rows)}"
+
+
 def parse_syn_table() -> list[tuple[str, str, str, int]]:
     """Return (rule_name, description, file, line) rows from guardrail check functions.
 
@@ -174,6 +206,7 @@ def format_syn_table(rows: list[tuple[str, str, str, int]]) -> str:
 
 def generate_doc() -> str:
     clippy_rows = parse_clippy_table()
+    arch_scope = parse_analyzer_scope()
     arch_rows = parse_arch_lint_table()
     syn_rows = parse_syn_table()
 
@@ -195,7 +228,9 @@ def generate_doc() -> str:
         return pattern.sub(replacement, content, count=1)
 
     content = replace_between(CLIPPY_START, CLIPPY_END, format_clippy_table(clippy_rows))
-    content = replace_between(ARCH_LINT_START, ARCH_LINT_END, format_arch_lint_table(arch_rows))
+    content = replace_between(
+        ARCH_LINT_START, ARCH_LINT_END, format_arch_lint_block(arch_scope, arch_rows)
+    )
     content = replace_between(SYN_START, SYN_END, format_syn_table(syn_rows))
 
     return content

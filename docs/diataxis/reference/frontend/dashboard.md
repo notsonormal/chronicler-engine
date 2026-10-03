@@ -42,7 +42,7 @@ Inactive-tab content is `display: none`; the active tab uses `display: flex; fle
 
 ## Game Tab
 
-The Game tab is the only view with three live regions stacked: the **main container** (story log + visual sidebar) and the **action area**.
+The Game tab is the only view with three live regions stacked: the **main container** (story log + visual sidebar), the **options dock** (`#options-dock`), and the **action area**.
 
 ### Story Log (80%)
 
@@ -83,7 +83,7 @@ State transitions happen on three events: form submission (immediately sets Thin
 
 ## Polling Cadences
 
-Four endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: story log 2s, visual sidebar 5s, status display 5s, LLM messages 4s; the header fetches once on load. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive.
+Five endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s; the header fetches once on load. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive.
 
 ## Edit, Delete, Swipe, Retrigger Flows
 

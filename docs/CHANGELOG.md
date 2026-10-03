@@ -2,6 +2,21 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-10-03
+
+### Fixed
+
+- **Failed message save, swipe, and retrigger recover.** The command form restores its previous input and the submit button returns to Ready when the server rejects the request, instead of leaving the action area stuck on "Thinking".
+- **World create refuses an existing key, and SQLite re-seed keeps the world id, map, and characters.** Re-seeding now upserts by key instead of overwriting the row.
+- **Duplicate connection and preset names are refused.** Names compare trimmed and case-insensitive; duplicating a preset appends `(Copy N)`.
+- **Edit mode fixes.** The entry textarea auto-grows to 50vh, focuses on open, saves on Cmd/Ctrl+Enter and cancels on Escape, and locks the action controls while editing.
+- **Copy sweep.** Corrected the new-game label associations and rendered NPC portrait names as `.image-label` with a tooltip.
+
+### Changed
+
+- **Single `#story-log` container and a dedicated `#text-check-result` element.** The story-log fragment is a bare list owned by the static shell; the text-check result no longer replaces the action area.
+- **Action-area handles rebind after swaps, and Prompt Presets add forms start collapsed.** A body-level mutation observer re-resolves `#submit-btn` and the command input after the action area is replaced; each category's add form is a closed disclosure until opened.
+
 ## 2026-10-02
 
 ### Changed

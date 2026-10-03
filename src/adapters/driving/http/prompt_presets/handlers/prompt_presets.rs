@@ -52,14 +52,8 @@ macro_rules! require_preset {
     ($storage:expr, $id:expr) => {
         match $storage.get_preset($id) {
             Ok(Some(p)) => p,
-            Ok(None) => {
-                return Html("<span class='error'>Preset not found</span>".to_string())
-                    .into_response();
-            }
-            Err(e) => {
-                return Html(format!("<span class='error'>Load failed: {e}</span>"))
-                    .into_response();
-            }
+            Ok(None) => return error_span("Preset not found"),
+            Err(e) => return error_span(format!("Load failed: {e}")),
         }
     };
 }
@@ -72,9 +66,7 @@ pub async fn preset_card_handler(
 
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => {
-            return Html(format!("<span class='error'>Load failed: {e}</span>")).into_response();
-        }
+        Err(e) => return error_span(format!("Load failed: {e}")),
     };
     let novel_bundle = settings
         .mode_preset_registry
@@ -155,13 +147,18 @@ fn form_allowed_modes(novel: bool, if_mode: bool) -> Vec<NarratorMode> {
     modes
 }
 
+/// The in-fragment error a handler's failure path renders.
+fn error_span(message: impl std::fmt::Display) -> Response<Body> {
+    Html(format!("<span class='error'>{message}</span>")).into_response()
+}
+
 /// A refusal reaches the user as a 400, which the shell shows as a toast and
 /// leaves the panel in place. Other errors keep the existing in-fragment
 /// error rendering.
 fn preset_save_error_response(error: ApplicationError, prefix: &str) -> Response<Body> {
     match error {
         ApplicationError::Validation(message) => bad_request(render_error(&message)),
-        other => Html(format!("<span class='error'>{prefix}: {other}</span>")).into_response(),
+        other => error_span(format!("{prefix}: {other}")),
     }
 }
 
@@ -192,10 +189,7 @@ pub async fn save_preset_handler(
 ) -> Response<Body> {
     let preset_type = match parse_preset_type(&form.preset_type) {
         Some(pt) => pt,
-        None => {
-            return Html("<span class='error'>Invalid preset type</span>".to_string())
-                .into_response();
-        }
+        None => return error_span("Invalid preset type"),
     };
 
     // Create forms render no checkboxes; both-false means "flags not
@@ -222,27 +216,16 @@ pub async fn edit_preset_form_handler(
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     if preset.is_default {
-        return Html("<span class='error'>Cannot edit default presets</span>".to_string())
-            .into_response();
+        return error_span("Cannot edit default presets");
     }
 
-    let settings = match app_state.settings() {
-        Ok(s) => s,
-        Err(e) => {
-            return Html(format!("<span class='error'>Load failed: {e}</span>")).into_response();
-        }
-    };
-    let novel_bundle = settings
-        .mode_preset_registry
-        .bundle_for(NarratorMode::Novel);
-    let is_active = preset.preset_type.bundle_slot(&novel_bundle) == id;
+    // The edit form reads nothing from settings, but a failed settings load
+    // must still surface as an error fragment rather than a form.
+    if let Err(e) = app_state.settings() {
+        return error_span(format!("Load failed: {e}"));
+    }
 
-    Html(preset_edit_form_html(
-        &preset,
-        preset.preset_type.as_str(),
-        is_active,
-    ))
-    .into_response()
+    Html(preset_edit_form_html(&preset, preset.preset_type.as_str())).into_response()
 }
 
 pub async fn update_preset_handler(
@@ -253,8 +236,7 @@ pub async fn update_preset_handler(
     let mut preset = require_preset!(app_state.prompt_preset_service, &id);
 
     if preset.is_default {
-        return Html("<span class='error'>Cannot edit default presets</span>".to_string())
-            .into_response();
+        return error_span("Cannot edit default presets");
     }
 
     // preset_type is fixed at creation, so the form's hidden input is
@@ -279,9 +261,7 @@ pub async fn update_preset_handler(
 
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => {
-            return Html(format!("<span class='error'>Load failed: {e}</span>")).into_response();
-        }
+        Err(e) => return error_span(format!("Load failed: {e}")),
     };
     let novel_bundle = settings
         .mode_preset_registry
@@ -299,8 +279,7 @@ pub async fn delete_preset_handler(
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     if preset.is_default {
-        return Html("<span class='error'>Cannot delete default presets</span>".to_string())
-            .into_response();
+        return error_span("Cannot delete default presets");
     }
 
     // Refuse presets referenced as any mode's default — deleting one would
@@ -308,22 +287,15 @@ pub async fn delete_preset_handler(
     {
         let settings = match app_state.settings() {
             Ok(s) => s,
-            Err(e) => {
-                return Html(format!("<span class='error'>Load failed: {e}</span>"))
-                    .into_response();
-            }
+            Err(e) => return error_span(format!("Load failed: {e}")),
         };
         if settings.mode_preset_registry.references(&id) {
-            return Html(
-                "<span class='error'>Preset is a mode default; change the default before deleting</span>"
-                    .to_string(),
-            )
-            .into_response();
+            return error_span("Preset is a mode default; change the default before deleting");
         }
     }
 
     if let Err(e) = app_state.prompt_preset_service.delete_preset(&id) {
-        return Html(format!("<span class='error'>Delete failed: {e}</span>")).into_response();
+        return error_span(format!("Delete failed: {e}"));
     }
 
     Html(String::new()).into_response()
@@ -371,11 +343,7 @@ pub async fn activate_preset_handler(
     // Refuse before any write so a rejected activation leaves settings
     // untouched.
     if !preset.allows(mode) {
-        return Html(format!(
-            "<span class='error'>Preset not allowed for {} mode</span>",
-            mode.as_str()
-        ))
-        .into_response();
+        return error_span(format!("Preset not allowed for {} mode", mode.as_str()));
     }
 
     let outcome = app_state.settings_service.update_settings(|settings| {
@@ -387,9 +355,7 @@ pub async fn activate_preset_handler(
 
     let settings = match outcome {
         Ok(s) => s,
-        Err(e) => {
-            return Html(format!("<span class='error'>Save failed: {e}</span>")).into_response();
-        }
+        Err(e) => return error_span(format!("Save failed: {e}")),
     };
 
     let system_presets = app_state

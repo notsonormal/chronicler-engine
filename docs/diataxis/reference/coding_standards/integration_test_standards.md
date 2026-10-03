@@ -26,9 +26,10 @@ overrides storage; `.pipeline(pipeline)` injects a mock-wired `ActionPipeline`;
 `(Router, AppState)`, `build_service_with_storage()` → `(AppState, Arc<Storage>)`.
 
 **Wiring the mock pipeline.** Build the recorder with `make_test_recorder` /
-`make_test_recorder_with_storage`, then the pipeline with
-`make_test_pipeline_with_backends` or `make_test_pipeline_with_mock_quantifier`
-(`src/test_support/context.rs`). Configure narration per call with
+`make_test_recorder_with_storage` (`src/test_support/fixtures.rs`), then the
+pipeline with `make_test_pipeline_with_backends` or
+`make_test_pipeline_with_mock_quantifier` (`src/test_support/context.rs`).
+Configure narration per call with
 `MockBackend::default().with_narrations(vec![...])`; quantifier responses with
 `.with_prompt_responses(vec![...])` (Cross-cutting 7).
 
@@ -57,7 +58,7 @@ at test exit. This is the integration tier's only end-to-end process shape.
 `tests/test_utils/browser.rs` is the entry point: it allocates a file-locked
 port, spawns the binary, waits for HTTP readiness, launches Chromium, and passes
 `(page, port)` to the closure. Poll real conditions with the helpers in
-`tests/test_utils/wait.rs` — e.g. `wait_for_element_children(&page, "#story-log .log-entry", n)` or `count_log_entries` — never a fixed `sleep`.
+`tests/test_utils/wait.rs` — e.g. `wait_for_element_children(&page, "#story-log .log-entry", n)` — or `count_log_entries` (`tests/test_utils/browser.rs`) — never a fixed `sleep`.
 
 **Teardown.** `TestServer::Drop` kills the child (SIGKILL via `Child::kill`),
 waits, releases the port lock, and deletes the SQLite DB file, so tests do no
@@ -192,7 +193,7 @@ instead and do not dump. `wait_for_status_ready_or_error` captures because both
 "ready" and "error" are terminal. Never swallow a capturing helper's panic:
 returning `Err` would suppress the dump. See `tests/test_utils/wait.rs` for the
 current list. There is no sync-polling equivalent; sync failures rely on
-`cargo nextest`'s `--retries` / `--failure-output` reporting.
+`cargo nextest`'s `--failure-output` reporting.
 
 ### Cross-cutting 6 — `TestAppBuilder` storage handoff for snapshot assertions
 

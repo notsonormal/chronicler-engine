@@ -74,7 +74,6 @@ async fn confirm_text_check_preview(page: &playwright_rs::Page) {
     wait_until_visible(page, "#status-display", Duration::from_secs(5)).await;
 }
 
-/// Drive the shipped text-check swap end to end.
 async fn swap_action_area_via_text_check_confirm(page: &playwright_rs::Page) {
     submit_intercepted_command(page).await;
     confirm_text_check_preview(page).await;

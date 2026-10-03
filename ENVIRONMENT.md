@@ -33,7 +33,12 @@ Each script's docstring has its details. These are the reasons and measurements 
   no setting to share them. Seeding avoids both.
 - **Browser concurrency:** nextest runs `test-threads / threads-required` browser tests at once. In a
   trial of four runs each, 2 at once took 75 s, 3 took 66 s, and 4 took 65 s. Four hit the memory
-  limit in every run, so the setting is 3.
+  limit in every run, so the setting is 3. `test-threads` is global, so the integration tier also
+  runs three test processes at once.
+- **Known limitation — seeded build outputs carry absolute paths:** seeding copies
+  `build/<pkg>/output`, and those files hold absolute `-L` paths into the source checkout's target
+  dir, so a seeded profile links against the sibling's build outputs. Removing the sibling's target
+  dir before a relink can break the seeded build; rewriting the paths is the open option.
 - **Per-test cost:** nextest runs each test in its own process, so an in-process cache never carries
   across tests. Each Harper text-check test builds its own dictionary, which `Cargo.toml` speeds up.
 
@@ -50,7 +55,7 @@ Each script's docstring has its details. These are the reasons and measurements 
 | Signal | Meaning |
 |---|---|
 | `Waiting for the build slot` | Another checkout holds the slot. This is normal. |
-| `Target seeding: no warm sibling ...` | This dir builds from scratch. The line lists the dirs it saw and their signatures. |
+| `Target seeding: no warm sibling ...` | This dir builds from scratch. The line names up to three rejected warm dirs and why each was rejected. |
 | `oom_kill` rising | Builds exceeded the memory limit. |
 | `some avg300` rising in `/sys/fs/cgroup/cpu.pressure` | The host is squeezing the container. |
 

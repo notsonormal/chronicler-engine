@@ -20,7 +20,6 @@ pub fn card_html_slice<'a>(body: &'a str, card_class: &str, anchor: &str) -> Opt
     Some(&body[start..end])
 }
 
-/// Slice one `<div class="preset-card…">…</div>` region.
 pub fn preset_card_html_slice<'a>(body: &'a str, anchor: &str) -> Option<&'a str> {
     card_html_slice(body, "preset-card", anchor)
 }

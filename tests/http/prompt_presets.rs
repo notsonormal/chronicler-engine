@@ -118,6 +118,9 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     assert!(body.contains("Default"));
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="system" />"#));
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="quantifier" />"#));
+    assert!(body.contains("<h2>Impersonate Prompts</h2>"));
+    assert!(body.contains("Add Impersonate Prompt Preset"));
+    assert!(body.contains(r#"<input type="hidden" name="preset_type" value="impersonate" />"#));
     assert!(body.contains(r#"name="name""#));
     assert!(body.contains(r#"name="role""#));
     assert!(body.contains(r#"name="instructions""#));

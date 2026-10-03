@@ -1,8 +1,8 @@
 #!/bin/sh
 # build.py installs this at one fixed path: cargo hashes the linker's absolute path into every unit
 # fingerprint, so a per-checkout `linker` in .cargo/config.toml would stop worktrees reusing each
-# other's seeds. `CHRONICLER_NO_LLD=1` opts out. The gcc-ld dir is cached because rustc runs this
-# wrapper for every build script and proc macro.
+# other's seeds. build.py reads `CHRONICLER_NO_LLD=1` and opts out of installing this wrapper.
+# The gcc-ld dir is cached because rustc runs this wrapper for every build script and proc macro.
 cache="${TMPDIR:-/tmp}/chronicler-gcc-ld-$(id -u)"
 gccld="$(cat "$cache" 2>/dev/null)"
 if [ ! -x "$gccld/ld.lld" ]; then

@@ -32,6 +32,10 @@ And the system add-form contains inputs named name, role, instructions, writing_
 And the system add-form contains a hidden input named preset_type with value "system"
 And the quantifier add-form contains inputs named name, role, instructions, output_format
 And the quantifier add-form contains a hidden input named preset_type with value "quantifier"
+And the body contains an "Impersonate Prompts" heading
+And the body contains an "Add Impersonate Prompt Preset" toggle
+And the impersonate add-form contains inputs named name, role, instructions, writing_style, output_format
+And the impersonate add-form contains a hidden input named preset_type with value "impersonate"
 ```
 
 #### Scenario 21.28: Each Add form is a closed disclosure

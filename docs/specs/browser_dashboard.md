@@ -8,7 +8,7 @@ Endpoint: browser DOM.
 
 ```gherkin
 Given the command form #command-form is rendered
-When the client submits the form (htmx POST to /action)
+When the client submits the form (htmx POST to /action/check)
 And the story log updates with new entries
 Then the same #command-form element is still in the document (form is a static shell, not re-rendered)
 ```
