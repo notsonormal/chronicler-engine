@@ -417,10 +417,6 @@ Five canonical role strings, used as `Status:` lines in local-markdown files (pe
 
 Single-context: one `CONTEXT.md` glossary at the repo root (per `docs/agents/domain.md`).
 
-### Codebase research
-
-When a task needs you to understand code you have not read — how a pipeline works, where a behaviour lives — dispatch the `scout` subagent with a focused question instead of reading many files into your own context.
-
 ## Permissions System
 
 Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
