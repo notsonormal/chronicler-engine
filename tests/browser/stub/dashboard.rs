@@ -1,4 +1,4 @@
-//! Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status-error toast) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for dashboard chrome: the error toast, the action-area state machine, and the read-only text-check result. Tagged against `docs/specs/browser_dashboard.md`.
 
 // The engine's failing action route answers 500, so htmx fires
 // `htmx:beforeSwap` with `isError` on its own. The stub's Error outcome serves
@@ -40,14 +40,43 @@ async fn wait_for_toast_text(page: &playwright_rs::Page, text: &str) {
     assert!(shown, "toast never displayed {expected:?}");
 }
 
-/// Submit a command the auto-check intercepts and wait for the preview that
-/// replaces #action-area. Every node the page-load handles pointed at (form,
-/// status display, Send button) is now detached; the ids live on in fresh
-/// nodes after the confirm.
+/// Stash the command form and status display node identities on the page, so a
+/// test can prove a swap did not replace them.
+async fn stash_action_area_nodes(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"(() => {
+            window.__formBefore = document.getElementById('command-form');
+            window.__statusBefore = document.getElementById('status-display');
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+/// True when the live command form / status display are the stashed nodes
+/// (node identity, not the id string a replacement would also carry).
+async fn action_area_nodes_unchanged(page: &playwright_rs::Page) -> (bool, bool) {
+    page.evaluate::<(), (bool, bool)>(
+        r#"(() => {
+            const form = document.getElementById('command-form');
+            const status = document.getElementById('status-display');
+            return [
+                !!form && form === window.__formBefore,
+                !!status && status === window.__statusBefore,
+            ];
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap()
+}
+
+/// Submit a command the auto-check intercepts and wait for the preview in
+/// `#action-preview`.
 async fn submit_intercepted_command(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
-            window.__statusBeforeSwap = document.getElementById('status-display');
             const input = document.querySelector('#command-form input[name="command"]');
             input.value = 'look at the casle';
             document.querySelector('#command-form button[type="submit"]').click();
@@ -60,43 +89,33 @@ async fn submit_intercepted_command(page: &playwright_rs::Page) {
     wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
 }
 
-/// Confirm the intercepted preview, so `/action/confirm` swaps a fresh
-/// #action-area (and #status-display) in.
+/// Submit an intercepted command even while the primary button is disabled: the
+/// player can still submit the form mid-generation.
+async fn submit_intercepted_command_direct(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"(() => {
+            const input = document.querySelector('#command-form input[name="command"]');
+            input.value = 'look at the casle';
+            document.getElementById('command-form').requestSubmit();
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap();
+
+    wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
+}
+
+/// Confirm the intercepted preview; the client closes it.
 async fn confirm_text_check_preview(page: &playwright_rs::Page) {
-    page.locator(".text-check-preview button:has-text('Send Original')")
+    page.locator(".text-check-preview .btn-original")
         .await
         .click(None)
         .await
         .unwrap();
 
-    // The confirm response replaces #action-area through htmx (outerHTML), so a
-    // fresh #status-display arrives.
-    wait_until_visible(page, "#status-display", Duration::from_secs(5)).await;
-}
-
-async fn swap_action_area_via_text_check_confirm(page: &playwright_rs::Page) {
-    submit_intercepted_command(page).await;
-    confirm_text_check_preview(page).await;
-}
-
-/// Assert the confirm swap produced a fresh #status-display node (not the one
-/// the page-load handles pointed at).
-async fn assert_status_display_restored(page: &playwright_rs::Page) {
-    let fresh = page
-        .evaluate::<(), bool>(
-            r#"(() => {
-                const before = window.__statusBeforeSwap;
-                const now = document.getElementById('status-display');
-                return !!now && now !== before;
-            })()"#,
-            None,
-        )
-        .await
-        .unwrap();
-    assert!(
-        fresh,
-        "the confirm swap did not produce a fresh #status-display"
-    );
+    wait_until_hidden(page, ".text-check-preview", Duration::from_secs(5)).await;
+    wait_for_status_generating(page).await;
 }
 
 /// Read the live Send button's disabled state and label.
@@ -108,6 +127,19 @@ async fn read_submit_button(page: &playwright_rs::Page) -> (bool, String) {
             return [btn.disabled, btn.textContent.trim()];
         })()"#,
         None,
+    )
+    .await
+    .unwrap()
+}
+
+/// True while `selector`'s element is the page's focused element.
+async fn active_element_is(page: &playwright_rs::Page, selector: &str) -> bool {
+    page.evaluate::<String, bool>(
+        r#"(selector) => {
+            const el = document.querySelector(selector);
+            return !!el && document.activeElement === el;
+        }"#,
+        Some(&selector.to_string()),
     )
     .await
     .unwrap()
@@ -169,31 +201,38 @@ async fn test_newer_error_keeps_toast_visible() {
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.9
 #[tokio::test]
-async fn test_send_locks_and_unlocks_after_action_area_swap() {
+async fn test_primary_button_locks_and_unlocks_after_confirm() {
     with_stub_page(StubActionOutcome::Pending, |page, stub| {
         let status = stub.status_handle();
         async move {
-            swap_action_area_via_text_check_confirm(&page).await;
-            assert_status_display_restored(&page).await;
-
-            // The fresh #status-display's `load` poll can land after the ack.
-            // Were it to serve "idle", onStatusPoll would reset Ready and
-            // unlock Send before the assertion reads it. Serve a phase instead,
-            // so no poll in the window can unlock the button.
+            // Keep the stub generating, so no poll can unlock the button
+            // before the assertion reads it.
             status.set(StubStatus::Phase("narrating".to_string()));
+            stash_action_area_nodes(&page).await;
 
-            // The form's htmx ack swaps in the pending status; that is when the
-            // lock must appear.
-            send_action(&page, "wait").await;
+            submit_intercepted_command(&page).await;
+            confirm_text_check_preview(&page).await;
 
+            // The confirm's status span locks the button as a generating indicator.
             let (disabled, label) = read_submit_button(&page).await;
             assert!(
                 disabled,
-                "Send should lock during generation after an action-area swap (label {label:?})"
+                "Send should lock while the turn runs (label {label:?})"
             );
             assert!(
-                label.contains("Stop"),
-                "locked button should read Stop after the swap, got {label:?}"
+                !label.contains("Stop"),
+                "the locked button must not claim a Stop action, got {label:?}"
+            );
+            assert!(
+                label.contains("Generating"),
+                "the locked button should read as a generating indicator, got {label:?}"
+            );
+
+            let (form_same, status_same) = action_area_nodes_unchanged(&page).await;
+            assert!(form_same, "confirming the preview replaced #command-form");
+            assert!(
+                status_same,
+                "confirming the preview replaced #status-display"
             );
 
             // Return the stub to idle, so the next 5s poll clears the status and
@@ -203,11 +242,11 @@ async fn test_send_locks_and_unlocks_after_action_area_swap() {
             let (disabled, label) = read_submit_button(&page).await;
             assert!(
                 !disabled,
-                "Send should unlock once the status returns to Ready after the swap"
+                "Send should unlock once the status returns to Ready"
             );
             assert!(
                 label.contains("Send"),
-                "unlocked button should read Send after the swap, got {label:?}"
+                "unlocked button should read Send, got {label:?}"
             );
         }
     })
@@ -216,24 +255,16 @@ async fn test_send_locks_and_unlocks_after_action_area_swap() {
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.10
 #[tokio::test]
-async fn test_status_error_reaches_toast_after_action_area_swap() {
+async fn test_status_error_reaches_toast_after_confirm() {
     with_stub_page(StubActionOutcome::Pending, |page, stub| {
         let status = stub.status_handle();
         async move {
             submit_intercepted_command(&page).await;
-
-            // Set the error before the confirm swap, so the fresh
-            // #status-display's `load` poll serves it instead of the test
-            // waiting a full 5s poll cycle.
-            status.set(StubStatus::Error("narration failed".to_string()));
-
             confirm_text_check_preview(&page).await;
-            assert_status_display_restored(&page).await;
 
-            // The stub's /status/generating answers the error fragment a failed
-            // generation renders; the fresh #status-display's own poll swaps it in
-            // and its after-swap reconciler toasts it — the toast's beforeSwap
-            // listener is not involved.
+            // The next poll reports a failed generation; its fragment lands in
+            // the same #status-display the confirm swapped the pending span into.
+            status.set(StubStatus::Error("narration failed".to_string()));
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(8),
@@ -241,7 +272,7 @@ async fn test_status_error_reaches_toast_after_action_area_swap() {
                     || async { read_error_toast(&page).await.0 },
                 )
                 .await,
-                "status error should reach the toast after an action-area swap"
+                "status error should reach the toast after confirming a preview"
             );
             let (_, text) = read_error_toast(&page).await;
             assert_eq!(
@@ -265,8 +296,7 @@ async fn test_status_error_reaches_toast_after_action_area_swap() {
             );
 
             // The Ready status reset the dedupe, so the SAME error must toast
-            // again. If the dedupe state leaked across the swap, the repeat stays
-            // hidden.
+            // again. If the dedupe state leaked, the repeat stays hidden.
             status.set(StubStatus::Error("narration failed".to_string()));
             assert!(
                 wait_for_condition_async(
@@ -289,18 +319,9 @@ async fn test_status_error_reaches_toast_after_action_area_swap() {
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.11
 #[tokio::test]
-async fn test_text_check_result_keeps_command_form() {
+async fn test_log_entry_check_is_read_only_and_dismissable() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // Stash the live nodes; the result must not replace them.
-        page.evaluate::<(), ()>(
-            r#"(() => {
-                window.__formBefore = document.getElementById('command-form');
-                window.__statusBefore = document.getElementById('status-display');
-            })()"#,
-            None,
-        )
-        .await
-        .unwrap();
+        stash_action_area_nodes(&page).await;
 
         let clicked = page
             .evaluate::<(), bool>(
@@ -315,9 +336,6 @@ async fn test_text_check_result_keeps_command_form() {
             .unwrap();
         assert!(clicked, "Should find and click a log-entry check button");
 
-        // The result renders in its own element beside the form. Waiting on
-        // the element being non-empty asserts the shipped contract without
-        // asserting the stub's canned body.
         wait_until_visible(
             &page,
             "#text-check-result:not(:empty)",
@@ -325,32 +343,210 @@ async fn test_text_check_result_keeps_command_form() {
         )
         .await;
 
-        // Node identity, not the id string: a fresh #command-form would carry
-        // the same id and pass a string check while the form was replaced.
-        let (form_same, status_same, result_text) = page
-            .evaluate::<(), (bool, bool, String)>(
-                r#"(() => {
-                    const form = document.getElementById('command-form');
-                    const status = document.getElementById('status-display');
-                    const result = document.getElementById('text-check-result');
-                    return [
-                        !!form && form === window.__formBefore,
-                        !!status && status === window.__statusBefore,
-                        result ? result.textContent.trim() : '',
-                    ];
-                })()"#,
-                None,
-            )
-            .await
-            .unwrap();
+        let (form_same, status_same) = action_area_nodes_unchanged(&page).await;
         assert!(form_same, "the text-check result replaced #command-form");
         assert!(
             status_same,
             "the text-check result replaced #status-display"
         );
+
+        let (text, send_buttons, confirm_forms) = page
+            .evaluate::<(), (String, usize, usize)>(
+                r#"(() => {
+                    const result = document.getElementById('text-check-result');
+                    const buttons = Array.from(result.querySelectorAll('button'));
+                    const sendButtons = buttons.filter((b) => /Send/.test(b.textContent)).length;
+                    const confirmForms = result.querySelectorAll('form[hx-post="/action/confirm"]').length;
+                    return [result.textContent.trim(), sendButtons, confirmForms];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
         assert!(
-            !result_text.is_empty(),
-            "#text-check-result should be non-empty, got {result_text:?}"
+            text.contains("Checked entry #2"),
+            "the result should name the entry it checked, got {text:?}"
+        );
+        assert_eq!(
+            send_buttons, 0,
+            "a log-entry check must not offer to send a turn, got {send_buttons} Send button(s)"
+        );
+        assert_eq!(
+            confirm_forms, 0,
+            "a log-entry check must not contain a confirm form"
+        );
+
+        page.locator(".check-result-dismiss")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(3),
+                Duration::from_millis(50),
+                || async {
+                    page.evaluate::<(), bool>(
+                        "(() => document.getElementById('text-check-result').innerHTML.trim() === '')()",
+                        None,
+                    )
+                    .await
+                    .unwrap_or(false)
+                },
+            )
+            .await,
+            "dismissing the result should empty its element"
+        );
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.13
+#[tokio::test]
+async fn test_preview_opens_beside_status_display() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let status = stub.status_handle();
+        async move {
+            status.set(StubStatus::Phase("narrating".to_string()));
+            wait_for_status_generating(&page).await;
+
+            // The primary button is a disabled generating indicator now, so
+            // submit the form directly (the player's Enter path).
+            submit_intercepted_command_direct(&page).await;
+
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(3),
+                    Duration::from_millis(50),
+                    || async { active_element_is(&page, "#corrected-textarea").await },
+                )
+                .await,
+                "focus should land in the correction textarea even mid-generation"
+            );
+
+            let (preview_visible, status_present, status_text) = page
+                .evaluate::<(), (bool, bool, String)>(
+                    r#"(() => {
+                        const preview = document.querySelector('.text-check-preview');
+                        const status = document.getElementById('status-display');
+                        return [
+                            !!preview,
+                            !!status,
+                            status ? status.textContent.trim() : '',
+                        ];
+                    })()"#,
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(preview_visible, "the send preview should be open");
+            assert!(
+                status_present,
+                "opening the preview must not take the status display off screen"
+            );
+            assert!(
+                status_text.contains("Generating") || status_text.contains("Thinking"),
+                "the status display should still show the in-flight phase, got {status_text:?}"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.14
+#[tokio::test]
+async fn test_clean_log_entry_check_can_be_dismissed() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        // Drive the shipped check function directly with a clean text and an
+        // entry id; the stub keys the clean outcome on the text.
+        page.evaluate::<(), ()>(
+            "(() => { window.checkText('look at the castle', '2'); })()",
+            None,
+        )
+        .await
+        .unwrap();
+
+        wait_until_visible(
+            &page,
+            "#text-check-result:not(:empty)",
+            Duration::from_secs(5),
+        )
+        .await;
+
+        let text = page
+            .evaluate::<(), String>(
+                "(() => document.getElementById('text-check-result').textContent.trim())()",
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            text.contains("Checked entry #2"),
+            "a clean result should still name the entry it checked, got {text:?}"
+        );
+        assert!(
+            text.contains("No issues found"),
+            "a clean result should report no issues, got {text:?}"
+        );
+
+        page.locator(".check-result-dismiss")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(3),
+                Duration::from_millis(50),
+                || async {
+                    page.evaluate::<(), bool>(
+                        "(() => document.getElementById('text-check-result').innerHTML.trim() === '')()",
+                        None,
+                    )
+                    .await
+                    .unwrap_or(false)
+                },
+            )
+            .await,
+            "dismissing a clean result should empty its element"
+        );
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.15
+#[tokio::test]
+async fn test_preview_focus_moves_to_correction_and_back() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        submit_intercepted_command(&page).await;
+
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(3),
+                Duration::from_millis(50),
+                || async { active_element_is(&page, "#corrected-textarea").await },
+            )
+            .await,
+            "focus should land in the correction textarea when the preview opens"
+        );
+
+        page.locator(".preview-cancel")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
+
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(3),
+                Duration::from_millis(50),
+                || async {
+                    active_element_is(&page, "#command-form input[name=\"command\"]").await
+                },
+            )
+            .await,
+            "cancelling the preview should return focus to the command input"
         );
     })
     .await;

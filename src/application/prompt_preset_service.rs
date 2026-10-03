@@ -1,16 +1,13 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Prompt preset service — prompt preset persistence orchestration at the application layer.
-//!
-//! A refusal is `ApplicationError::Validation`, raised where the rule lives (see
-//! `settings_service`, where the same rule runs inside a storage closure).
 
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
-use crate::application::utils::name_is_available;
+use crate::domain::model::utils::name_is_available;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::error::Result;
+use crate::error::{EngineError, Result};
 
 #[derive(Clone)]
 pub struct PromptPresetService {
@@ -30,8 +27,6 @@ impl PromptPresetService {
         self.storage.list_presets(preset_type)
     }
 
-    /// Whether `candidate` is free among `siblings`, ignoring the entry being
-    /// renamed.
     fn name_available(siblings: &[PromptPreset], candidate: &str, except_id: &str) -> bool {
         name_is_available(
             siblings
@@ -42,26 +37,23 @@ impl PromptPresetService {
         )
     }
 
-    /// Save a preset. Refuses a name already used by another preset in the
-    /// same category; the saved preset keeps its own name.
     pub fn save_preset(&self, preset: &PromptPreset) -> std::result::Result<(), ApplicationError> {
-        let siblings = self.storage.list_presets(preset.preset_type)?;
-        if !Self::name_available(&siblings, &preset.name, &preset.id) {
-            return Err(ApplicationError::validation(format!(
-                "A {} preset named '{}' already exists",
-                preset.preset_type.as_str(),
-                preset.name.trim()
-            )));
+        self.storage
+            .save_preset(preset)
+            .map_err(Self::preset_error_to_application)
+    }
+
+    fn preset_error_to_application(error: EngineError) -> ApplicationError {
+        match error {
+            EngineError::Validation(message) => ApplicationError::Validation(message),
+            other => ApplicationError::Engine(other),
         }
-        self.storage.save_preset(preset).map_err(Into::into)
     }
 
     pub fn delete_preset(&self, id: &str) -> Result<()> {
         self.storage.delete_preset(id)
     }
 
-    /// The first copy name free in `source`'s category: `<name> (Copy)`, then
-    /// `<name> (Copy 2)`, `<name> (Copy 3)`, …
     pub fn next_copy_name(
         &self,
         source: &PromptPreset,

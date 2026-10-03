@@ -67,14 +67,31 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 37 [Follow up on small issues found during review, round 2](issues/37-follow-up-small-review-issues-2.md): resolved — 17 of 20 items fixed, the 16.9 acknowledgement flake explained and fixed, 3 deferred or dropped with reasons; judgement leftovers listed in its answer.
 
+09 [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md): resolved — every LLM attempt is recorded, success or failure; the failure marker is the existing nullable `error_message`; the error text is stored and shown verbatim; no attempt number, no degraded-outcome row, no duration or tokens; graduated [Record failed LLM attempts and show them in LLM Messages](issues/41-record-failed-llm-attempts.md).
+
+04 [Review the text-check-enabled flow](issues/04-review-text-check-enabled.md): resolved — 8 findings, one P1: a confirm through the send preview leaves the command input permanently disabled while the status reads "Ready". Graduated [Rework the action area so a text check cannot strand it](issues/42-rework-the-action-area.md); the ✓-while-disabled half of C5 joins 15, the tofu ✍ joins 13.
+
+06 [Review swipes, the options dock and the Thinking states](issues/06-review-swipes-options-thinking.md): resolved — 6 findings, one P1: switching a swipe restores the snapshot written mid-narration, so `/status/generating` answers `narrating` for good and the dashboard sticks on "Generating narration..." with no in-page way out. Graduated [Reset the generation status and the options dock when a swipe switch restores a snapshot](issues/43-reset-status-and-dock-on-swipe-switch.md); the Stop-label finding went into [Rework the action area so a text check cannot strand it](issues/42-rework-the-action-area.md), and the ▶ glyph instance joins 13. Thinking/generating states are now captured with a slow-stub connection (`tmp/ui-review/t06-llm-stub.py`).
+
+07 [Review keyboard use and screen-reader output](issues/07-review-keyboard-screen-reader.md): resolved — 11 findings, two P1: the 2s story-log poll ejects keyboard focus to `<body>`, and LLM Messages rows are mouse-only (`div onclick`, zero focusable elements). Graduated [Make LLM Messages rows keyboard-operable](issues/44-keyboard-operable-llm-messages.md), [Restore keyboard focus after in-place htmx swaps](issues/45-restore-focus-after-inline-swaps.md), [Expose the dashboard to assistive technology](issues/46-expose-dashboard-to-assistive-technology.md) and [Announce dynamic state changes to assistive technology](issues/47-announce-state-changes-to-at.md) (blocked by 08); the story-log focus findings K1/K7 joined [Decide how the story-log poll keeps DOM state](issues/10-decide-story-log-poll-swap.md).
+
+10 [Decide how the story-log poll keeps DOM state](issues/10-decide-story-log-poll-swap.md): resolved — morph the poll swap (vendored idiomorph) instead of a server no-swap or a selection pause. Keeps selection, hover, focus and scroll on idle polls; closes the switchSwipe hole for free; no client-side hash to maintain. K7 joins as `tabindex="0"` on `#story-log`. Tier 2 tests. Graduated [Morph the story-log poll swap](issues/48-morph-story-log-poll-swap.md) and [Delete the dead `htmx:refresh` calls and fix the docs](issues/49-delete-dead-htmx-refresh.md).
+
+42 [Rework the action area so a text check cannot strand it](issues/42-rework-the-action-area.md): resolved — the action area is a static shell driven by one client state machine (`checking → generating → preview → idle`); confirm retargets `#status-display` instead of swapping a disabled input back in; `/check-text` renders a read-only result; the preview lives in its own `#action-preview`; focus follows the preview; the primary button is a disabled "Generating…" indicator, not a fake "Stop"; no cancel route built. 16.9–16.15, tier-3 proof 16.12.
+
+41 [Record failed LLM attempts and show them in LLM Messages](issues/41-record-failed-llm-attempts.md): resolved — every LLM attempt persists one row (success or failure); the failure text is stored verbatim in `error_message` and rendered in the panel; the row names its agent and backend/model; new `docs/specs/llm_messages.md` 33.1/33.2 with tier-1 HTTP tests.
+
+39 [Enforce preset name uniqueness in storage](issues/39-storage-level-preset-name-uniqueness.md): resolved — `Storage::save_preset` checks and writes under one backend lock (no TOCTOU); the service delegates to it; no `UNIQUE` constraint, so legacy duplicate-holding DBs still open; predicate moved to `domain/model/utils` to satisfy `arch-lint.toml`; driven-adapter InMemory/SQLite pair + legacy-duplicates test.
+
+40 [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md): resolved — worth a tier-2 scenario; 30.10 drives the shipped `submitRetrigger` against the fixture's real control and the stub's counted `/retrigger` → 500 route, proving the URL and the shared recovery. (The earlier planted-control/fetch-intercept version was replaced during the review follow-up.)
+
 Candidates raised while closing the AFK tickets, now tickets: [Stop editing a second entry from freezing the story-log poll](issues/38-edit-another-entry-freezes-poll.md) (grilling), [Enforce preset name uniqueness in storage](issues/39-storage-level-preset-name-uniqueness.md), [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md).
 
 ## Not yet specified
 
-- **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) and [Decide whether failed LLM calls appear in LLM Messages](issues/09-decide-failed-llm-calls.md) resolve. A prototype may come first.
-- **Fixes found by the review tickets.** Review tickets 04–07 will produce findings. Each becomes a ticket or joins an existing one.
+- **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) resolves. A prototype may come first.
+- **Other snapshot-restore paths.** [Reset the generation status and the options dock when a swipe switch restores a snapshot](issues/43-reset-status-and-dock-on-swipe-switch.md) fixes the swipe case, where the snapshot was written mid-generation. Retrigger and history revert restore snapshots by different paths and may show the same stuck status. Unverified; [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md) drove the failure path only and did not surface it.
 - **Implementation of the other decision tickets:**
-  - story-log poll (10)
   - icon buttons (13)
   - palette (14)
   - Settings panel (15)
@@ -83,7 +100,7 @@ Candidates raised while closing the AFK tickets, now tickets: [Stop editing a se
   - layout convention (19)
   - game names (21)
 - **Browser suite cost.** Each stub-tier test launches its own Chromium, and Theme 1/Theme 2 fixes will add several. Check the cost at the final re-review. Decide then whether it needs action.
-- **Quantifier fallback.** Finding 1.1 is partly backend: the engine uses fallback NPC IDs silently. Showing it is in scope. Whether the fallback itself should change may surface during ticket 08.
+- **Quantifier fallback.** Finding 1.1 is partly backend: the engine uses fallback NPC IDs silently. Showing the degraded state in the header is in scope for [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md). Whether the fallback itself should change may surface during ticket 08.
 - **Spec and test migration after the tier-1 decision.** 65 of 146 scenarios name internal state, and about 40 tier-1 test lines read raw `GameState` fields ([test audit](assets/test-audit/)). How much of this moves, and when, depends on [Decide what a tier-1 test may observe](issues/31-decide-tier-1-observations.md). It may graduate into one ticket per spec file, into a migrate-on-touch rule, or into nothing.
 - **A validator check for spec prose.** `scripts/validate_feature_spec.py` never reads Givens or Thens. One cheap check might flag dotted identifiers in backticks, such as `narrative.last_trigger`. Its false-hit rate is unknown. It takes shape with [Rewrite the test strategy around one checkable tier-1 rule](issues/32-rewrite-test-strategy.md).
 

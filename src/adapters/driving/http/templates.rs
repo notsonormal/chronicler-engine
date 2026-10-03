@@ -22,7 +22,7 @@ pub struct HeaderTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% endif %}{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last && entry.show_retrigger %}<button class="action-btn retrigger-btn" onclick="submitRetrigger()" title="Retrigger Event">&#9851;</button>{% endif %}</div></div><span class="text">{{ entry.text }}</span>{% if loop.last && (entry.log_type == "narration" || entry.log_type == "input") %}<div class="swipe-controls"><button class="action-btn swipe-btn" {% if entry.prev_swipe_index.is_none() %}disabled{% else %}onclick="switchSwipe({{ entry.id }}, {{ entry.prev_swipe_index.unwrap() }})"{% endif %} title="Previous swipe">&#9664;</button><span class="swipe-counter">{{ entry.active_swipe_index + 1 }} / {{ entry.swipe_count }}</span><button class="action-btn swipe-btn" {% if entry.next_swipe_index.is_some() %}onclick="switchSwipe({{ entry.id }}, {{ entry.next_swipe_index.unwrap() }})"{% else %}onclick="submitNewSwipe()"{% endif %} title="{% if entry.next_swipe_index.is_some() %}Next swipe{% else %}Retry{% endif %}">&#9654;</button></div>{% endif %}</div>{% endfor %}"##,
+    source = r##"{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% endif %}{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText, this.closest('.log-entry').dataset.id)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last && entry.show_retrigger %}<button class="action-btn retrigger-btn" onclick="submitRetrigger()" title="Retrigger Event">&#9851;</button>{% endif %}</div></div><span class="text">{{ entry.text }}</span>{% if loop.last && (entry.log_type == "narration" || entry.log_type == "input") %}<div class="swipe-controls"><button class="action-btn swipe-btn" {% if entry.prev_swipe_index.is_none() %}disabled{% else %}onclick="switchSwipe({{ entry.id }}, {{ entry.prev_swipe_index.unwrap() }})"{% endif %} title="Previous swipe">&#9664;</button><span class="swipe-counter">{{ entry.active_swipe_index + 1 }} / {{ entry.swipe_count }}</span><button class="action-btn swipe-btn" {% if entry.next_swipe_index.is_some() %}onclick="switchSwipe({{ entry.id }}, {{ entry.next_swipe_index.unwrap() }})"{% else %}onclick="submitNewSwipe()"{% endif %} title="{% if entry.next_swipe_index.is_some() %}Next swipe{% else %}Retry{% endif %}">&#9654;</button></div>{% endif %}</div>{% endfor %}"##,
     ext = "html"
 )]
 pub struct NarrativeLogTemplate {
@@ -73,7 +73,7 @@ impl CharacterHeadshotsTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"<div class="action-area" id="action-area"><form id="command-form" hx-post="/action/check" hx-target="#action-area" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="saveActionArea()" hx-on::after-request="onActionFormAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" {% if vm.is_disabled %}disabled{% endif %} /><button type="submit" id="submit-btn" {% if vm.is_disabled %}disabled{% endif %}><span class="btn-icon">&#9654;</span> Send</button></form><div class="{{ vm.status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)"><span class="{{ vm.status_class }}">{{ vm.status_text }}</span></div><div id="text-check-result" class="text-check-result"></div></div>"##,
+    source = r##"<div class="action-area" id="action-area"><div id="action-preview" class="action-preview"></div><form id="command-form" hx-post="/action/check" hx-target="#action-preview" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="onCommandBeforeRequest()" hx-on::after-request="onCommandAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" /><button type="submit" id="submit-btn" {% if vm.is_disabled %}disabled{% endif %}><span class="btn-icon">{% if vm.is_disabled %}&#8230;{% else %}&#9654;{% endif %}</span> {% if vm.is_disabled %}Generating&#8230;{% else %}Send{% endif %}</button></form><div class="{{ vm.status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)"><span class="{{ vm.status_class }}">{{ vm.status_text }}</span></div><div id="text-check-result" class="text-check-result"></div></div>"##,
     ext = "html"
 )]
 pub struct ActionAreaTemplate {
@@ -106,31 +106,32 @@ impl OptionsDockTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"<div class=text-check-preview>
-    <div class=preview-header>
-        <span class=preview-icon>&#x270D;</span>
-        <span>Did you mean?</span>
+    source = r##"<div class="text-check-preview" role="group" aria-label="Text check suggestions">
+    <div class="preview-header">
+        <span class="preview-icon">&#x270D;</span>
+        <span>Text check suggestions</span>
     </div>
-    <div class=preview-original>
+    <p class="preview-note">Suggestions only — nothing changes unless you choose “Send with edits”.</p>
+    <div class="preview-original">
         <label>Original</label>
         <span>{{ original }}</span>
     </div>
-    <div class=preview-corrected>
-        <label>Corrected (edit if needed)</label>
-        <textarea name=command class=preview-edit-textarea id=corrected-textarea>{{ corrected }}</textarea>
+    <div class="preview-corrected">
+        <label>Suggested text (edit freely)</label>
+        <textarea name="command" class="preview-edit-textarea" id="corrected-textarea">{{ corrected }}</textarea>
     </div>
-    <div class=preview-issues>
+    <div class="preview-issues">
         {% for issue in issues %}<span class="issue-tag {{ issue.kind }}">{{ issue.message }}</span>{% endfor %}
     </div>
     <div class="form-actions">
-        <form method=post hx-post=/action/confirm hx-target="#action-area" hx-swap="outerHTML" hx-include="#corrected-textarea">
-            <button type=submit class="btn-primary">Send</button>
+        <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-on::after-request="closeActionPreview()">
+            <input type="hidden" name="command" value="{{ original }}" />
+            <button type="submit" class="btn-primary btn-original">Send Original</button>
         </form>
-        <form method=post hx-post=/action/confirm hx-target="#action-area" hx-swap="outerHTML">
-            <input type=hidden name=command value="{{ original }}" />
-            <button type=submit class="btn-cyan">Send Original</button>
+        <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-include="#corrected-textarea" hx-on::after-request="closeActionPreview()">
+            <button type="submit" class="btn-cyan">Send with edits</button>
         </form>
-        <button type=button class="btn-cyan" onclick="restoreActionArea()">Cancel</button>
+        <button type="button" class="btn-cyan preview-cancel" onclick="closeActionPreview()">Cancel</button>
     </div>
 </div>"##,
     ext = "html"
@@ -151,6 +152,20 @@ impl TextCheckPreviewTemplate {
     }
 }
 
+/// The read-only result of a text check on a log entry or the command input.
+/// Unlike the send preview it never offers to submit a turn, because checking a
+/// historical entry must not re-send it.
+#[derive(Template)]
+#[template(
+    source = r##"<div class="text-check-result-panel" role="status"><div class="check-result-header"><span class="check-result-owner">{% if entry_id.is_some() %}Checked entry #{{ entry_id.as_ref().unwrap() }}{% else %}Checked text{% endif %}</span><button type="button" class="check-result-dismiss" onclick="clearTextCheckResult()" title="Dismiss" aria-label="Dismiss text-check result">&#10005;</button></div>{% if issues.is_empty() %}<p class="check-result-clean">No issues found</p>{% else %}<p class="check-result-note">Suggestions only — nothing is applied automatically.</p><ul class="check-result-issues">{% for issue in issues %}<li class="issue-tag {{ issue.kind }}">{{ issue.message }}</li>{% endfor %}</ul><div class="check-result-corrected"><span class="label">If you edit it</span><span class="value">{{ corrected }}</span></div>{% endif %}</div>"##,
+    ext = "html"
+)]
+pub struct TextCheckResultTemplate {
+    pub entry_id: Option<String>,
+    pub corrected: String,
+    pub issues: Vec<PreviewIssueView>,
+}
+
 #[derive(Template)]
 #[template(
     source = r##"<div class="llm-message-list" id="llm-message-list">
@@ -160,33 +175,53 @@ impl TextCheckPreviewTemplate {
         <span class="llm-message-agent">{{ msg.agent_name }}</span>
         <span class="llm-message-model">{{ msg.backend_name }} / {{ msg.model_name }}</span>
         <span class="llm-message-time">{{ msg.timestamp }}</span>
-        {% if msg.has_error %}<span class="llm-message-error">ERROR</span>{% endif %}
+        {% if msg.error_message.is_some() %}<span class="llm-message-error">ERROR</span>{% endif %}
     </div>
     <div class="llm-message-body">
+        {% if msg.error_message.is_some() %}
+        <div class="llm-message-failure">
+            <span class="llm-message-failure-label">Failure</span>
+            <pre class="llm-message-failure-text">{{ msg.error_message.as_deref().unwrap_or_default() }}</pre>
+        </div>
+        {% endif %}
+        {% if !msg.system_prompt_preview.is_empty() || !msg.user_prompt_preview.is_empty() || !msg.parsed_response_preview.is_empty() %}
         <div class="llm-message-prompts">
+            {% if !msg.system_prompt_preview.is_empty() %}
             <details class="llm-message-prompt-details">
                 <summary>System</summary>
                 <pre class="llm-message-prompt-pre">{{ msg.system_prompt_preview }}</pre>
             </details>
+            {% endif %}
+            {% if !msg.user_prompt_preview.is_empty() %}
             <details class="llm-message-prompt-details">
                 <summary>User</summary>
                 <pre class="llm-message-prompt-pre">{{ msg.user_prompt_preview }}</pre>
             </details>
+            {% endif %}
+            {% if !msg.parsed_response_preview.is_empty() %}
             <details class="llm-message-prompt-details" open>
                 <summary>Response</summary>
                 <pre class="llm-message-prompt-pre">{{ msg.parsed_response_preview }}</pre>
             </details>
+            {% endif %}
         </div>
+        {% endif %}
+        {% if !msg.raw_request_json.is_empty() || !msg.raw_response_json.is_empty() %}
         <div class="llm-message-raw">
+            {% if !msg.raw_request_json.is_empty() %}
             <details>
                 <summary>Raw Request JSON</summary>
                 <pre>{{ msg.raw_request_json }}</pre>
             </details>
+            {% endif %}
+            {% if !msg.raw_response_json.is_empty() %}
             <details>
                 <summary>Raw Response JSON</summary>
                 <pre>{{ msg.raw_response_json }}</pre>
             </details>
+            {% endif %}
         </div>
+        {% endif %}
     </div>
 </div>
 {% endfor %}

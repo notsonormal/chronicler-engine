@@ -3,6 +3,7 @@
 
 use crate::error::EngineError;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::utils::name_is_available;
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::prompt_preset::DbPromptPreset;
 
@@ -73,8 +74,74 @@ impl Storage {
         })
     }
 
+    /// Runs inside the same backend acquisition as the write in `save_preset`,
+    /// so check-and-write is one step and two concurrent creates cannot both
+    /// pass. The check is a scan, not a `UNIQUE` constraint, so a legacy
+    /// database that already holds duplicates still opens.
+    fn ensure_preset_name_available(
+        backend: &Backend,
+        preset: &PromptPreset,
+    ) -> Result<(), EngineError> {
+        let available = match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let mut stmt = conn
+                    .prepare("SELECT id, name FROM prompt_presets WHERE preset_type = ?1")
+                    .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+
+                let rows = stmt
+                    .query_map([preset.preset_type.as_str()], |row| {
+                        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                    })
+                    .map_err(|e| {
+                        EngineError::Config(format!("Failed to query preset names: {e}"))
+                    })?;
+
+                let mut existing = Vec::new();
+                for row in rows {
+                    existing.push(row.map_err(|e| {
+                        EngineError::Config(format!("Failed to read preset name: {e}"))
+                    })?);
+                }
+
+                name_is_available(
+                    existing
+                        .iter()
+                        .map(|(id, name)| (id.as_str(), name.as_str())),
+                    &preset.name,
+                    Some(preset.id.as_str()),
+                )
+            }
+            Backend::InMemory(data) => name_is_available(
+                data.presets
+                    .iter()
+                    .filter(|candidate| candidate.preset_type == preset.preset_type)
+                    .map(|candidate| (candidate.id.as_str(), candidate.name.as_str())),
+                &preset.name,
+                Some(preset.id.as_str()),
+            ),
+        };
+
+        if available {
+            Ok(())
+        } else {
+            Err(EngineError::Validation(format!(
+                "A {} preset named '{}' already exists",
+                preset.preset_type.as_str(),
+                preset.name.trim()
+            )))
+        }
+    }
+
     pub fn save_preset(&self, preset: &PromptPreset) -> Result<(), EngineError> {
-        self.with_backend_mut("save_preset", |backend| match backend {
+        self.with_backend_mut("save_preset", |backend| {
+            Self::ensure_preset_name_available(backend, preset)?;
+            Self::write_preset(backend, preset)
+        })
+    }
+
+    fn write_preset(backend: &mut Backend, preset: &PromptPreset) -> Result<(), EngineError> {
+        match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
@@ -122,7 +189,7 @@ impl Storage {
                 }
                 Ok(())
             }
-        })
+        }
     }
 
     pub fn delete_preset(&self, id: &str) -> Result<(), EngineError> {

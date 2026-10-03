@@ -91,3 +91,15 @@ Then the entry's swipe controls are disabled
 When the client cancels the edit
 Then the entry's pre-edit action controls are restored immediately
 ```
+
+#### Scenario 30.10: A failed retrigger reports the failure and restores the ready state
+
+```gherkin
+Given the dashboard is idle with Send enabled
+And a retrigger control is available on the last narration
+When the client clicks the retrigger control and the retrigger request fails
+Then #error-notification is visible
+And the client sent the request to the retrigger endpoint
+And #status-display no longer shows "Thinking..."
+And #submit-btn is enabled
+```

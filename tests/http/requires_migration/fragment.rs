@@ -688,41 +688,6 @@ async fn test_check_text_handler_disabled() {
 }
 
 #[tokio::test]
-async fn test_check_text_handler_finds_issues() {
-    let app = TestAppBuilder::default_test()
-        .settings(AppSettings {
-            text_check: TextCheckSettings {
-                mode: TextCheckMode::Spell,
-                enable_auto_check: true,
-                ignored_words: vec![],
-            },
-            ..Default::default()
-        })
-        .build();
-
-    let req = Request::builder()
-        .uri("/check-text")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=go+to+the+casle"))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("text-check-preview"),
-        "Expected preview fragment: {body_str}"
-    );
-}
-
-#[tokio::test]
 async fn test_switch_swipe_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
     let app = TestAppBuilder::default_test()

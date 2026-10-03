@@ -1,7 +1,13 @@
 //! Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset
 
+use std::sync::{Arc, Barrier};
+
 use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::adapters::driven::storage::db::DbPool;
+use chronicler_engine::error::EngineError;
+
+use crate::fixtures::create_test_storage;
 
 fn create_storage() -> Storage {
     Storage::new_in_memory()
@@ -541,4 +547,99 @@ fn test_allowed_modes_round_trip() {
 
     let loaded = storage.get_preset("modes").unwrap().unwrap();
     assert_eq!(loaded.allowed_modes, vec![NarratorMode::Novel]);
+}
+
+#[test]
+fn test_save_preset_refuses_duplicate_name_in_same_category() {
+    let storage = create_storage();
+    storage
+        .save_preset(&make_system_preset("one", "Alpha"))
+        .unwrap();
+
+    let error = storage
+        .save_preset(&make_system_preset("two", "Alpha"))
+        .expect_err("a duplicate name in the same category must be refused");
+
+    assert!(matches!(error, EngineError::Validation(_)));
+    let system = storage.list_presets(PresetType::System).unwrap();
+    assert_eq!(system.len(), 1, "the refused preset must not be written");
+}
+
+#[test]
+fn test_sqlite_save_preset_refuses_duplicate_name_in_same_category() {
+    let storage = create_test_storage(1);
+    storage
+        .save_preset(&make_system_preset("one", "Alpha"))
+        .unwrap();
+
+    let error = storage
+        .save_preset(&make_system_preset("two", "Alpha"))
+        .expect_err("a duplicate name in the same category must be refused");
+
+    assert!(matches!(error, EngineError::Validation(_)));
+    let system = storage.list_presets(PresetType::System).unwrap();
+    assert_eq!(system.len(), 1, "the refused preset must not be written");
+}
+
+#[test]
+fn test_sqlite_opens_database_holding_preexisting_duplicate_names() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone(), 1);
+
+    {
+        let conn = pool.conn();
+        for id in ["one", "two"] {
+            conn.execute(
+                "INSERT INTO prompt_presets
+                 (id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at, allowed_modes)
+                 VALUES (?1, 'Alpha', 'system', NULL, NULL, NULL, NULL, 0, '', '', '[]')",
+                rusqlite::params![id],
+            )
+            .expect("a legacy database may hold duplicate names; the raw insert must succeed");
+        }
+    }
+
+    let system = storage
+        .list_presets(PresetType::System)
+        .expect("a database holding duplicate names must still open and list");
+    assert_eq!(system.len(), 2, "both legacy rows must remain readable");
+}
+
+#[test]
+fn test_concurrent_save_preset_admits_exactly_one_name() {
+    let storage = Arc::new(create_storage());
+    let barrier = Arc::new(Barrier::new(2));
+
+    let handles: Vec<_> = ["one", "two"]
+        .into_iter()
+        .map(|id| {
+            let storage = Arc::clone(&storage);
+            let barrier = Arc::clone(&barrier);
+            std::thread::spawn(move || {
+                barrier.wait();
+                storage.save_preset(&make_system_preset(id, "Alpha"))
+            })
+        })
+        .collect();
+
+    let results: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().expect("worker thread panicked"))
+        .collect();
+
+    let accepted = results.iter().filter(|result| result.is_ok()).count();
+    let refused = results
+        .iter()
+        .filter(|result| matches!(result, Err(EngineError::Validation(_))))
+        .count();
+    assert_eq!(
+        accepted, 1,
+        "exactly one concurrent create must win: {results:?}"
+    );
+    assert_eq!(refused, 1, "the losing create must be refused: {results:?}");
+    assert_eq!(
+        storage.list_presets(PresetType::System).unwrap().len(),
+        1,
+        "only the winner's preset must be stored"
+    );
 }

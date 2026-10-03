@@ -11,6 +11,7 @@ mod games_create;
 mod games_delete;
 mod games_fragment;
 mod games_switch;
+mod llm_messages;
 mod narrator_mode;
 mod options;
 mod prompt_presets;
@@ -20,6 +21,7 @@ mod settings;
 mod story_log;
 mod support;
 mod swipe_new;
+mod text_check;
 mod visual_sidebar;
 mod worlds;
 

@@ -57,22 +57,7 @@ pub async fn action_confirm_handler(
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-
-    let action_response = dispatch_action(&state, command).await;
-    let status = action_response.status();
-
-    let action_area_html = match state.render_action_area() {
-        Ok(html) => html,
-        Err(e) => {
-            tracing::error!("Failed to render action area: {e}");
-            render_error(&e.to_string())
-        }
-    };
-
-    Response::builder()
-        .status(status)
-        .body(Body::from(action_area_html))
-        .expect("static response body is valid")
+    dispatch_with_status_headers(&state, command).await
 }
 
 async fn dispatch_with_status_headers(state: &AppState, command: String) -> Response<Body> {

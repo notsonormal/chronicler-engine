@@ -259,6 +259,23 @@ Engine commands are the slash commands the dispatch layer itself handles
 (`Action::is_engine_command`: `/guide`, `/impersonate`, `/options`); unknown
 slash commands stay free text and are checked like ordinary player input.
 
+### Confirm
+
+#### Scenario 1.13: Confirming a preview retargets the status display
+
+```gherkin
+Given a game state with a command held in the text-check preview
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action/confirm with that command
+Then the response is the status fragment alone, not the action area or the command form
+And the response retargets #status-display
+And the pipeline returns to idle
+```
+
+The confirm path is the preview's send: it dispatches the checked command
+without swapping a fresh action area back in, so the status display alone
+reflects the running turn.
+
 ## Invariants
 
 These properties hold across every `POST /action` and are observable

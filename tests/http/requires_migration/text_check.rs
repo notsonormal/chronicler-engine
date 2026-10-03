@@ -1,4 +1,4 @@
-//! HTTP integration tests for the text-check endpoints: action-check dispatch (disabled vs. enabled), empty-command handling, and confirm-flow returning the full action area with check results.
+//! HTTP integration tests for the text-check endpoints: action-check dispatch (disabled vs. enabled) and empty-command handling.
 
 use std::sync::Arc;
 
@@ -105,40 +105,6 @@ async fn test_action_check_empty_command() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[tokio::test]
-async fn test_action_confirm_returns_full_action_area() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/action/confirm")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=look"))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("id=\"action-area\""),
-        "Expected action-area container: {body_str}"
-    );
-    assert!(
-        body_str.contains(r#"<form id="command-form""#),
-        "Expected command form: {body_str}"
-    );
-    assert!(
-        !body_str.starts_with("<span class=\"status"),
-        "Must not return bare status span: {body_str}"
-    );
 }
 
 #[tokio::test]

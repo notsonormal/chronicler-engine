@@ -1140,15 +1140,13 @@ body {
     border-color: rgba(128, 128, 128, 0.25);
 }
 
-/* The text-check result gets its own element so it never replaces the command
-   form. An empty result must not add a flex gap. */
+/* An empty element must not add a flex gap. */
+#action-preview:empty,
 #text-check-result:empty {
     display: none;
 }
 
-/* Allow the action area to expand for a text-check preview (auto-check path,
-   which replaces the action area) or a non-empty result element (check path). */
-.action-area:has(.text-check-preview),
+.action-area:has(#action-preview:not(:empty)),
 .action-area:has(#text-check-result:not(:empty)) {
     flex-wrap: wrap;
     height: auto;
@@ -1159,11 +1157,90 @@ body {
     padding-bottom: var(--spacing-md);
 }
 
-/* Any non-empty result (preview or a plain status span) takes its own row so it
-   does not squeeze the command form. */
+/* Full-width row so neither squeezes the command form. */
+#action-preview:not(:empty),
 #text-check-result:not(:empty) {
     flex: 1 1 100%;
     min-width: 0;
+}
+
+/* Read-only text-check result */
+.text-check-result-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.check-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+}
+
+.check-result-owner {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.check-result-dismiss {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    line-height: 1;
+    padding: 2px 6px;
+}
+
+.check-result-dismiss:hover {
+    color: var(--color-text-primary);
+}
+
+.check-result-clean {
+    color: var(--color-accent-green);
+    margin: 0;
+}
+
+.check-result-note {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    margin: 0;
+}
+
+.check-result-issues {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.check-result-corrected {
+    display: flex;
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+}
+
+.check-result-corrected .label {
+    color: var(--color-text-muted);
+}
+
+.check-result-corrected .value {
+    color: var(--color-accent-green);
+}
+
+.preview-note {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    margin: 0;
 }
 
 /* Preview editable textarea */

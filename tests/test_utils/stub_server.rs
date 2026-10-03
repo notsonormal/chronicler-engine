@@ -1,17 +1,10 @@
 //! Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
-
-// What is real: `assets/index.html` (the shipped shell, `include_str!`-ed) and
-// the static assets, served through `ServeDir` exactly as the engine routes
-// them.
-//
-// What is canned: every fragment the shell loads or polls, under
-// `tests/test_utils/stub_fixtures/` — except the options dock, which is
-// rendered through the engine's own `OptionsDockTemplate` (a pure vm → HTML
-// render, so the drift tax there is avoidable). The dynamic endpoints answer
-// scripted outcomes a test names up front: `POST /action/check`, `POST
-// /action/confirm`, `POST /check-text`, and `GET /status/generating` (whose
-// `StubStatus` a live test may change between polls). `POST /history/:id` and
-// `POST /swipe/new` always answer 500.
+//!
+//! The shell and static assets are real; every polled fragment is canned under
+//! `tests/test_utils/stub_fixtures/`, except the options dock, which renders
+//! through the engine's own `OptionsDockTemplate`. The dynamic endpoints answer
+//! scripted outcomes a test names up front; `/history/:id`, `/swipe/new` and
+//! `/retrigger` always answer 500.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -121,6 +114,7 @@ pub enum StubStatus {
 struct StubState {
     action_outcome: StubActionOutcome,
     status: std::sync::Mutex<StubStatus>,
+    retrigger_requests: std::sync::atomic::AtomicUsize,
 }
 
 /// A running stub server. Dropping it shuts the server down and releases
@@ -145,6 +139,7 @@ impl StubServer {
         let state = Arc::new(StubState {
             action_outcome,
             status: std::sync::Mutex::new(StubStatus::default()),
+            retrigger_requests: std::sync::atomic::AtomicUsize::new(0),
         });
         let app = stub_router(Arc::clone(&state));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
@@ -178,9 +173,17 @@ impl StubServer {
             state: Arc::clone(&self.state),
         }
     }
+
+    /// A cloneable handle to the retrigger request count, so a test closure can
+    /// assert the control fired without borrowing the server.
+    pub fn retrigger_handle(&self) -> StubRetriggerHandle {
+        StubRetriggerHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
 }
 
-/// A cloneable handle to the stub's scripted status.
+/// A cloneable handle to the scripted status.
 #[derive(Clone)]
 pub struct StubStatusHandle {
     state: Arc<StubState>,
@@ -191,6 +194,21 @@ impl StubStatusHandle {
     /// display polls every 5s, so the change lands on a later poll cycle.
     pub fn set(&self, status: StubStatus) {
         *self.state.status.lock().expect("stub status lock poisoned") = status;
+    }
+}
+
+/// A cloneable handle to the retrigger request count.
+#[derive(Clone)]
+pub struct StubRetriggerHandle {
+    state: Arc<StubState>,
+}
+
+impl StubRetriggerHandle {
+    /// How many `POST /retrigger` requests the stub has answered.
+    pub fn count(&self) -> usize {
+        self.state
+            .retrigger_requests
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -209,10 +227,10 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/action/check", post(action_check))
         .route("/action/confirm", post(action_confirm))
         .route("/check-text", post(check_text))
-        // Client-side failure recovery: the save and retry paths are raw
-        // `fetch`, so their failure handling is stub-tier behaviour with no
-        // htmx swap. These routes always answer 500; no stub-tier test drives
-        // a successful save/retry through the client JS.
+        // Client-side failure recovery: the save, retry and retrigger paths
+        // are raw `fetch`, so their failure handling is stub-tier behaviour
+        // with no htmx swap. These routes always answer 500; no stub-tier test
+        // drives a successful save/retry/retrigger through the client JS.
         .route(
             "/history/:id",
             post(|| async { client_failure("Stub save failure") }),
@@ -221,6 +239,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/swipe/new",
             post(|| async { client_failure("Stub retry failure") }),
         )
+        .route("/retrigger", post(record_retrigger))
         .route("/status/generating", get(status_generating))
         .route("/fragment/header", get(|| async { Html(FIXTURE_HEADER) }))
         .route(
@@ -335,21 +354,70 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
         .into_response()
 }
 
-/// The real `POST /action/confirm` swaps a fresh `#action-area` back in
-/// (`hx-swap="outerHTML"`); the stub serves the canned action area.
-async fn action_confirm() -> Html<&'static str> {
-    Html(FIXTURE_ACTION_AREA)
+/// The real `POST /action/confirm` retargets its status fragment at
+/// `#status-display`; the stub consumes the engine's `add_status_swap_headers`
+/// so the canned shape cannot drift from it.
+async fn action_confirm() -> Response<Body> {
+    let mut response = (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        r#"<span class="status thinking">Thinking...</span>"#,
+    )
+        .into_response();
+    add_status_swap_headers(&mut response);
+    response
 }
 
-/// The real `POST /check-text` renders its result into the shell's
-/// `#text-check-result` element; the stub serves the disabled-mode body.
-async fn check_text() -> Response<Body> {
+/// Render the read-only check result through the engine's own template, so the
+/// canned result cannot drift from the shipped `TextCheckResultTemplate`.
+fn text_check_result_html(entry_id: Option<String>, has_issues: bool) -> String {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::TextCheckResultTemplate;
+    use chronicler_engine::adapters::driving::http::view_models::PreviewIssueView;
+
+    let (corrected, issues) = if has_issues {
+        (
+            "look at the castle".to_string(),
+            vec![PreviewIssueView {
+                message: "\"casle\" is a misspelling of \"castle\"".to_string(),
+                kind: "spell".to_string(),
+            }],
+        )
+    } else {
+        (String::new(), vec![])
+    };
+    TextCheckResultTemplate {
+        entry_id,
+        corrected,
+        issues,
+    }
+    .render()
+    .expect("render text check result")
+}
+
+/// The real `POST /check-text` renders into the shell's `#text-check-result`
+/// element; the stub keys the outcome on the canned misspelling.
+async fn check_text(Form(form): Form<HashMap<String, String>>) -> Response<Body> {
+    let command = form.get("command").map(String::as_str).unwrap_or_default();
+    let html = text_check_result_html(
+        form.get("entry_id").cloned(),
+        command.contains(TEXT_CHECK_TRIGGER),
+    );
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        r#"<span class="status ready">Text check is disabled</span>"#,
+        html,
     )
         .into_response()
+}
+
+/// Counts the request before answering 500, so a test can assert the
+/// retrigger control fired exactly once.
+async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body> {
+    state
+        .retrigger_requests
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    client_failure("Stub retrigger failure")
 }
 
 /// A canned 500 for a raw-fetch route whose only stub-tier use is the client

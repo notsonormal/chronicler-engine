@@ -10,7 +10,8 @@ use axum::{
 use serde::Deserialize;
 
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
+use crate::adapters::driving::http::templates::TextCheckResultTemplate;
+use crate::adapters::driving::http::view_models::PreviewIssueView;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok, ok_refresh};
 use crate::application::errors::{ApplicationError, ProcessActionResult};
 use crate::domain::model::settings::TextCheckMode;
@@ -74,6 +75,24 @@ pub async fn switch_swipe_handler(
 #[derive(Deserialize)]
 pub struct CheckTextForm {
     pub command: String,
+    #[serde(default)]
+    pub entry_id: Option<String>,
+}
+
+fn render_check_result(
+    entry_id: Option<String>,
+    corrected: String,
+    issues: Vec<PreviewIssueView>,
+) -> axum::response::Response<Body> {
+    let template = TextCheckResultTemplate {
+        entry_id,
+        corrected,
+        issues,
+    };
+    match template.render() {
+        Ok(html) => ok(html),
+        Err(e) => internal_error(format!("Template error: {e}")),
+    }
 }
 
 #[allow(clippy::expect_used)]
@@ -103,14 +122,12 @@ pub async fn check_text_handler(
         settings.text_check.mode,
         &settings.text_check.ignored_words,
     ) {
-        Ok(Some(result)) => {
-            let template = TextCheckPreviewTemplate::from_check_result(&result);
-            match template.render() {
-                Ok(html) => ok(html),
-                Err(e) => internal_error(format!("Template error: {e}")),
-            }
-        }
-        Ok(None) => ok("<span class=\"status ready\">No issues found</span>"),
+        Ok(Some(result)) => render_check_result(
+            form.entry_id,
+            result.corrected.clone(),
+            PreviewIssueView::from_check_result(&result),
+        ),
+        Ok(None) => render_check_result(form.entry_id, String::new(), vec![]),
         Err(e) => internal_error(format!("Check failed: {e}")),
     }
 }

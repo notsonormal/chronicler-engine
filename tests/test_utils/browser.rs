@@ -301,9 +301,8 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
     dismiss_text_check_if_present(page).await;
 }
 
-/// Detect and dismiss the text check "Did you mean?" dialog by clicking
-/// "Send Original". Without it, the dialog replaces the action-area and
-/// removes #status-display, breaking status polling.
+/// Detect and dismiss the text check preview by clicking "Send Original".
+/// Confirming starts the turn the same way the player's own Send would.
 pub async fn dismiss_text_check_if_present(page: &playwright_rs::Page) {
     let locator = page.locator(".text-check-preview .btn-original").await;
     if let Ok(true) = locator.is_visible().await {

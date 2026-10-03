@@ -15,7 +15,9 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::app_wiring::{app_with_narrator, app_with_narrator_and_settings};
-use crate::support::http_requests::{post_action, post_action_check, post_empty, wait_idle};
+use crate::support::http_requests::{
+    post_action, post_action_check, post_empty, post_form, response_body, wait_idle,
+};
 
 // [docs/specs/actions.md] SCENARIO: 1.1
 #[tokio::test]
@@ -832,4 +834,32 @@ async fn test_slash_command_bypasses_text_check_http() {
         body_str.contains("text-check-preview"),
         "plain input should surface the text-check preview: {body_str}"
     );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.13
+#[tokio::test]
+async fn test_confirm_retargets_status_display() {
+    let narrator =
+        Arc::new(MockBackend::default().with_narrations(vec!["You look around.".to_string()]));
+    let (app, state) = app_with_narrator(narrator);
+
+    let resp = post_form(&app, "/action/confirm", "command=look").await;
+    assert!(resp.status().is_success());
+    // The confirm retargets its status fragment at #status-display; it must not
+    // swap a fresh (disabled) action area back in.
+    assert_eq!(
+        resp.headers().get("HX-Retarget"),
+        Some(&axum::http::HeaderValue::from_static("#status-display")),
+        "confirm must retarget the status display"
+    );
+    let body = response_body(resp).await;
+    assert!(
+        body.starts_with("<span class=\"status"),
+        "confirm must return a bare status span: {body}"
+    );
+    assert!(
+        !body.contains("id=\"action-area\"") && !body.contains("command-form"),
+        "confirm must not replace the action area or the command form: {body}"
+    );
+    assert!(wait_idle(&state, 1000).await, "confirm should complete");
 }

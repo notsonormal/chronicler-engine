@@ -477,3 +477,62 @@ async fn test_edit_locks_entry_controls_and_cancel_restores_them() {
     })
     .await;
 }
+
+// The fixture carries the template's retrigger control on its narration entry,
+// and the stub answers `/retrigger` with a 500, so the shipped
+// `submitRetrigger` runs against the real control and the real route shape.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.10
+#[tokio::test]
+async fn test_failed_retrigger_posts_to_retrigger_and_recovers() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let retrigger = stub.retrigger_handle();
+        async move {
+            page.evaluate::<(), ()>(
+                r#"(() => {
+                    document.querySelector('.log-entry.narration .retrigger-btn').click();
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+            // The toast is the observable end of the recovery; reading it first
+            // also guarantees the recovery ran before the assertions below.
+            wait_until_visible(&page, "#error-notification.visible", Duration::from_secs(5)).await;
+            assert!(
+                !read_error_toast(&page).await.1.is_empty(),
+                "the failed retrigger should show an error message"
+            );
+
+            assert_eq!(
+                retrigger.count(),
+                1,
+                "clicking the retrigger control should send exactly one request"
+            );
+
+            let (status, disabled) = page
+                .evaluate::<(), (String, bool)>(
+                    r#"(() => {
+                        const status = document.getElementById('status-display');
+                        const btn = document.getElementById('submit-btn');
+                        return [
+                            status ? status.textContent.trim() : '',
+                            btn ? btn.disabled : true,
+                        ];
+                    })()"#,
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(
+                status.contains("Ready"),
+                "a failed retrigger should reset the status to Ready, got {status:?}"
+            );
+            assert!(
+                !disabled,
+                "a failed retrigger should re-enable the Send button"
+            );
+        }
+    })
+    .await;
+}

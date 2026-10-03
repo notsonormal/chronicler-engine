@@ -77,7 +77,7 @@ fn complete_strips_thought_tags_from_parsed_response() {
 }
 
 #[test]
-fn complete_propagates_provider_error_without_forensics_write() {
+fn complete_propagates_provider_error_and_records_failure_row() {
     let provider = Arc::new(MockBackend::new().with_fail());
     let storage = Arc::new(Storage::new_in_memory());
     let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
@@ -89,13 +89,90 @@ fn complete_propagates_provider_error_without_forensics_write() {
     // Error propagates (MockBackend uses Narrative error variant)
     assert!(matches!(err, EngineError::Narrative(_)));
 
-    // No forensics write happened
-    assert_eq!(
-        storage
-            .list_latest_llm_messages(10)
-            .expect("list should not error")
-            .len(),
-        0
+    let saved = storage
+        .list_latest_llm_messages(10)
+        .expect("list should not error")
+        .pop()
+        .expect("a failed attempt must be recorded");
+
+    assert_eq!(saved.agent_name, "narrator");
+    assert_eq!(saved.backend_name, "Mock");
+    assert_eq!(saved.model_name, "mock");
+    assert_eq!(saved.system_prompt, "system");
+    assert_eq!(saved.user_prompt, "user");
+    let text = saved.error_message.expect("the failure marker must be set");
+    assert!(text.starts_with("LLM Error:"), "{text}");
+    assert!(text.contains("configured_failure"), "{text}");
+
+    // No response arrived, so every response column is empty.
+    assert!(saved.raw_request_json.is_empty());
+    assert!(saved.raw_response_json.is_empty());
+    assert!(saved.parsed_response.is_empty());
+}
+
+#[test]
+fn complete_failed_then_succeeded_leaves_both_rows() {
+    let provider = Arc::new(MockBackend::new().with_fail_first_n(1));
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
+
+    recorder
+        .complete("narrator", "s", "u", None)
+        .expect_err("the first attempt fails");
+    recorder
+        .complete("narrator", "s", "u", None)
+        .expect("the second attempt succeeds");
+
+    let saved = storage
+        .list_latest_llm_messages(10)
+        .expect("list should not error");
+    assert_eq!(saved.len(), 2, "each attempt leaves its own row");
+    assert!(
+        saved[0].error_message.is_some(),
+        "the first row is the failure"
+    );
+    assert!(
+        saved[1].error_message.is_none(),
+        "the second row is the success"
+    );
+}
+
+#[test]
+fn complete_success_row_has_no_failure_marker() {
+    // Boundary: a transport success is a success row even when the caller
+    // cannot parse the response (e.g. a 200 with no parseable options).
+    let provider = Arc::new(
+        MockBackend::new().with_prompt_responses(vec!["no parseable options here".to_string()]),
+    );
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
+
+    recorder
+        .complete("options", "s", "u", None)
+        .expect("the transport succeeded");
+
+    let saved = storage
+        .list_latest_llm_messages(10)
+        .expect("list should not error");
+    assert_eq!(saved.len(), 1);
+    assert!(
+        saved[0].error_message.is_none(),
+        "an unparseable 200 response is still a success row"
+    );
+}
+
+#[test]
+fn complete_returns_provider_error_even_when_failure_save_fails() {
+    // The failure row is diagnostics; a failure to write it must not mask the
+    // provider error the caller retries or falls back on.
+    let provider = Arc::new(MockBackend::new().with_fail());
+    let save_fn: SaveLlmMessageFn = Arc::new(|_| Err(EngineError::Io("disk full".into())));
+    let recorder = LlmCallRecorder::new(provider, save_fn);
+
+    let err = recorder.complete("narrator", "s", "u", None).unwrap_err();
+    assert!(
+        matches!(err, EngineError::Narrative(_)),
+        "the provider error must survive a failed forensics write"
     );
 }
 

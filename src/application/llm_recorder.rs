@@ -56,7 +56,25 @@ impl LlmCallRecorder {
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
         let provider = self.provider()?;
-        let result = provider.complete(agent_name, system_prompt, user_prompt, max_tokens)?;
+        let result = match provider.complete(agent_name, system_prompt, user_prompt, max_tokens) {
+            Ok(result) => result,
+            Err(error) => {
+                let failure = Self::failed_message(
+                    agent_name,
+                    provider.name(),
+                    provider.model(),
+                    system_prompt,
+                    user_prompt,
+                    &error,
+                );
+                if let Err(save_error) = (*self.save_fn)(&failure) {
+                    tracing::warn!(
+                        "[LLM] failed to record the failed attempt for agent '{agent_name}': {save_error}"
+                    );
+                }
+                return Err(error);
+            }
+        };
 
         let sanitized_text = sanitize_llm_output(&result.text);
 
@@ -67,5 +85,31 @@ impl LlmCallRecorder {
         let mut sanitized_result = result;
         sanitized_result.text = sanitized_text;
         Ok(sanitized_result)
+    }
+
+    /// A forensics record for a failed attempt. The transport builds the
+    /// request payload and returns it only on success, so a failed row blanks
+    /// `raw_request_json` along with the response columns.
+    fn failed_message(
+        agent_name: &str,
+        backend_name: &str,
+        model_name: &str,
+        system_prompt: &str,
+        user_prompt: &str,
+        error: &EngineError,
+    ) -> LlmMessage {
+        LlmMessage {
+            id: 0,
+            agent_name: agent_name.to_string(),
+            backend_name: backend_name.to_string(),
+            model_name: model_name.to_string(),
+            system_prompt: system_prompt.to_string(),
+            user_prompt: user_prompt.to_string(),
+            raw_request_json: String::new(),
+            raw_response_json: String::new(),
+            parsed_response: String::new(),
+            error_message: Some(error.llm_error_string()),
+            created_at: chrono::Utc::now(),
+        }
     }
 }

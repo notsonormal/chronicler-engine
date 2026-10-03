@@ -347,3 +347,39 @@ fn test_list_latest_llm_messages_failure() {
     let result = storage.list_latest_llm_messages(50);
     assert!(result.is_err());
 }
+
+/// A recorder-shaped failure record (empty response columns, failure text in
+/// `error_message`) round-trips through real SQLite intact.
+#[test]
+fn test_failed_llm_attempt_persists_through_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: "quantifier".to_string(),
+        backend_name: "OpenRouter".to_string(),
+        model_name: "gpt-4".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: Some("LLM Error: request timed out".to_string()),
+        created_at: Utc::now(),
+    };
+    storage.save_llm_message(&msg).unwrap();
+
+    let list = storage.list_latest_llm_messages(50).unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].agent_name, "quantifier");
+    assert_eq!(list[0].backend_name, "OpenRouter");
+    assert_eq!(list[0].model_name, "gpt-4");
+    assert_eq!(list[0].system_prompt, "sys");
+    assert_eq!(list[0].user_prompt, "user");
+    assert!(list[0].raw_request_json.is_empty());
+    assert!(list[0].raw_response_json.is_empty());
+    assert!(list[0].parsed_response.is_empty());
+    assert_eq!(
+        list[0].error_message.as_deref(),
+        Some("LLM Error: request timed out")
+    );
+}

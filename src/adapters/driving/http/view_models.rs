@@ -173,7 +173,7 @@ pub struct LlmMessageView {
     pub system_prompt_preview: String,
     pub user_prompt_preview: String,
     pub parsed_response_preview: String,
-    pub has_error: bool,
+    pub error_message: Option<String>,
     pub raw_request_json: String,
     pub raw_response_json: String,
 }
@@ -199,7 +199,7 @@ impl From<&LlmMessage> for LlmMessageView {
             system_prompt_preview: msg.system_prompt.clone(),
             user_prompt_preview: msg.user_prompt.clone(),
             parsed_response_preview: msg.parsed_response.clone(),
-            has_error: msg.error_message.is_some(),
+            error_message: msg.error_message.clone(),
             raw_request_json: pretty_json(&msg.raw_request_json),
             raw_response_json: pretty_json(&msg.raw_response_json),
         }

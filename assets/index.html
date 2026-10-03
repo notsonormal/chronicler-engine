@@ -43,9 +43,9 @@
         ></div>
       </div>
 
-      <!-- Static shell: the command form survives a submit (the response
-           retargets to #status-display); a text-check result renders in its
-           own #text-check-result element instead of replacing the action area. -->
+      <!-- Static shell: the command form and status display survive every
+           submit; the send preview and check result render in their own
+           elements. -->
       <!-- Options dock: sibling bar above the action area (V4 shape); its
            inner content self-polls and is empty until options exist. -->
       <div
@@ -55,14 +55,15 @@
         hx-swap="innerHTML"
       ></div>
       <div class="action-area" id="action-area">
+        <div id="action-preview" class="action-preview"></div>
         <form
           id="command-form"
           hx-post="/action/check"
-          hx-target="#action-area"
+          hx-target="#action-preview"
           hx-swap="innerHTML"
           hx-sync="this:drop"
-          hx-on::before-request="saveActionArea()"
-          hx-on::after-request="onActionFormAfterRequest()"
+          hx-on::before-request="onCommandBeforeRequest()"
+          hx-on::after-request="onCommandAfterRequest()"
         >
           <input
             type="text"
@@ -129,19 +130,68 @@
     <script>
       console.log("[HTMX] Initializing...");
 
-      // The text-check flow (preview and confirm) replaces #action-area, which
-      // detaches the old Send button; a command submit retargets to
-      // #status-display and leaves it in place. Resolve by id on every call.
-      function setButtonState(isThinking) {
-        const submitBtn = document.getElementById("submit-btn");
-        if (!submitBtn) return;
-        if (isThinking) {
-          submitBtn.innerHTML = '<span class="btn-icon">&#9632;</span> Stop';
-          submitBtn.disabled = true;
-        } else {
-          submitBtn.innerHTML = '<span class="btn-icon">&#9654;</span> Send';
-          submitBtn.disabled = false;
+      // Action-area state machine. The DOM holds every state except an
+      // in-flight check request, so re-derive it after each swap or poll.
+      let checkInFlight = false;
+
+      function statusIsGenerating() {
+        const statusDisplay = document.getElementById("status-display");
+        return !!(statusDisplay && statusDisplay.querySelector(".status.thinking"));
+      }
+
+      function previewIsOpen() {
+        const preview = document.getElementById("action-preview");
+        return !!(preview && preview.firstElementChild !== null);
+      }
+
+      function deriveActionState() {
+        if (checkInFlight) return "checking";
+        if (statusIsGenerating()) return "generating";
+        if (previewIsOpen()) return "preview";
+        return "idle";
+      }
+
+      // The disabled button shows a generating indicator; it cannot cancel a turn.
+      function applyActionState(state) {
+        const btn = document.getElementById("submit-btn");
+        const input = document.querySelector('#command-form input[name="command"]');
+        if (btn) {
+          if (state === "generating") {
+            btn.innerHTML = '<span class="btn-icon">&#8230;</span> Generating…';
+            btn.disabled = true;
+          } else {
+            btn.innerHTML = '<span class="btn-icon">&#9654;</span> Send';
+            btn.disabled = state === "checking";
+          }
         }
+        if (input) {
+          input.disabled = state === "checking";
+        }
+      }
+
+      function focusCorrectedTextarea() {
+        const textarea = document.getElementById("corrected-textarea");
+        if (textarea) textarea.focus();
+      }
+
+      function focusCommandInput() {
+        const input = commandInput();
+        if (input) input.focus();
+      }
+
+      // Re-derive after a swap or poll. Focus follows the preview surface, so
+      // it lands in the correction textarea even while a turn runs behind it.
+      let previewWasOpen = false;
+
+      function syncActionState() {
+        applyActionState(deriveActionState());
+        const open = previewIsOpen();
+        if (open && !previewWasOpen) {
+          focusCorrectedTextarea();
+        } else if (!open && previewWasOpen) {
+          focusCommandInput();
+        }
+        previewWasOpen = open;
       }
 
       // One writer for the status span: its label and class always travel together.
@@ -160,13 +210,11 @@
       // One reconciler for the status display: reads the live DOM, so it covers
       // both the spans this script writes and the fragments htmx swaps in (the
       // poll's phase text, and the error span a failed generation renders). The
-      // Send button, the toast and the dedupe state all follow from it.
+      // state machine, the toast and the dedupe state all follow from it.
       function applyStatusDisplay() {
         const statusDisplay = document.getElementById("status-display");
         if (!statusDisplay) return;
-        setButtonState(
-          statusDisplay.querySelector(".status.thinking") !== null,
-        );
+        syncActionState();
         const statusText = statusDisplay.textContent;
         if (statusText.includes("Error")) {
           if (statusText !== lastStatusError) {
@@ -201,7 +249,7 @@
         applyStatusDisplay();
       }
 
-      // Body-level, so the #action-area swaps never replace it.
+      // Body-level, so no fragment swap replaces it.
       const errorNotification = document.getElementById("error-notification");
 
       let errorHideTimer = null;
@@ -226,6 +274,10 @@
           const text = response.replace(/<[^>]*>/g, "").trim();
           showError(text || "Request failed");
         }
+      });
+
+      document.body.addEventListener("htmx:afterSwap", function () {
+        syncActionState();
       });
 
       // One bundle for the edit in progress: the entry id and the pre-edit HTML
@@ -373,7 +425,8 @@
       }
 
       // Raw-fetch failures have no htmx swap to restore the status display;
-      // without this it stays on "Thinking..." with a disabled Stop button.
+      // without this it stays on "Thinking..." with the button stuck as a
+      // generating indicator.
       function resetStatusToReady() {
         setStatus("Ready", "ready");
         applyStatusDisplay();
@@ -446,26 +499,28 @@
           });
       }
 
-      function saveActionArea() {
-        const actionArea = document.getElementById("action-area");
-        const input = actionArea.querySelector('input[name="command"]');
-        const btn = actionArea.querySelector("#submit-btn");
-        actionArea.dataset.originalHtml = actionArea.innerHTML;
-        if (input) {
-          actionArea.dataset.originalValue = input.value;
-        }
-        if (btn) {
-          btn.disabled = true;
-        }
+      function onCommandBeforeRequest() {
+        checkInFlight = true;
+        syncActionState();
       }
 
-      function onActionFormAfterRequest() {
-        const form = document.getElementById("command-form");
-        if (form && form.querySelector("input[name=command]")) {
-          form.reset();
-          // Locks on submit; the status poll unlocks.
-          setButtonState(true);
+      function onCommandAfterRequest() {
+        checkInFlight = false;
+        // The preview keeps the flagged command for editing; a dispatched
+        // command has been consumed, so clear the input.
+        if (!previewIsOpen()) {
+          const form = document.getElementById("command-form");
+          if (form) form.reset();
         }
+        syncActionState();
+      }
+
+      // Closing the preview lets the already-swapped status display and the
+      // reconciler drive the rest.
+      function closeActionPreview() {
+        const preview = document.getElementById("action-preview");
+        if (preview) preview.innerHTML = "";
+        syncActionState();
       }
 
       // An option is a pre-written player input: Use submits it through
@@ -490,7 +545,7 @@
           '#command-form input[name="command"]',
         );
         if (!input || !input.value.trim()) return;
-        checkText(input.value.trim());
+        checkText(input.value.trim(), null);
       }
 
       function htmlUnescape(str) {
@@ -499,9 +554,12 @@
         return textarea.value;
       }
 
-      function checkText(text) {
+      function checkText(text, entryId) {
         const formData = new URLSearchParams();
         formData.append("command", text);
+        if (entryId !== undefined && entryId !== null && entryId !== "") {
+          formData.append("entry_id", String(entryId));
+        }
 
         fetch("/check-text", {
           method: "POST",
@@ -510,8 +568,6 @@
         })
           .then((response) => response.text())
           .then((html) => {
-            // The result has its own element: replacing #action-area would
-            // take the command form and status display with it.
             const result = document.getElementById("text-check-result");
             if (result) {
               result.innerHTML = html;
@@ -524,8 +580,8 @@
           });
       }
 
-      function checkLogText(rawText) {
-        checkText(htmlUnescape(rawText));
+      function checkLogText(rawText, entryId) {
+        checkText(htmlUnescape(rawText), entryId);
       }
 
       function clearTextCheckResult() {
@@ -533,23 +589,6 @@
         if (result) {
           result.innerHTML = "";
         }
-      }
-
-      function restoreActionArea() {
-        clearTextCheckResult();
-        const actionArea = document.getElementById("action-area");
-        if (!actionArea || !actionArea.dataset.originalHtml) return;
-        // Only restore when the preview actually replaced the command form; a
-        // text-check result beside a live form just needs dismissing.
-        if (document.getElementById("command-form")) return;
-        actionArea.innerHTML = actionArea.dataset.originalHtml;
-        if (actionArea.dataset.originalValue) {
-          const input = actionArea.querySelector('input[name="command"]');
-          if (input) {
-            input.value = actionArea.dataset.originalValue;
-          }
-        }
-        htmx.process(actionArea);
       }
 
       const SLASH_COMMANDS = [
@@ -701,7 +740,8 @@
         }
       });
 
-      // Close on form submit — the text-check swap recreates the input.
+      // Close on form submit, so the suggestion menu does not outlive the
+      // command.
       document.addEventListener("submit", closeSlashMenu, true);
 
       // Close on scroll/resize — the fixed position is stale once the
