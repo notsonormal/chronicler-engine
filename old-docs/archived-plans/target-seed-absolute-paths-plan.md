@@ -1,7 +1,23 @@
 # Plan: Seeded target dirs reference the source checkout
 
 **Date:** 2026-10-03
-**Status:** Parked, not started, not scheduled. This plan is where the seeded-`build/` item lives now; it is **not part of the `dashboard-ui-updates` change set** and nothing in that branch depends on it. The two decisions below (D1, D2) belong to whoever picks this up, not to the dashboard work. Nothing here blocks other work.
+**Status:** Closed 2026-10-03 — Option D (do nothing). Not a defect for relinks; see Outcome. `ENVIRONMENT.md` was corrected. Archived.
+
+## Outcome
+
+D1 and D2 are decided: keep the seeding as it is (Option D). The "When it actually breaks" scenario does not hold for a normal relink. Checked read-only on 2026-10-03 against the warm `target/debug`:
+
+- **All 10 stale directives link `static=` libraries (known).** `aws_lc_0_39_1_crypto`, `zstd`, `ring_core_0_17_14_` (+ `_test`), `sqlite3`.
+- **rustc bundled the C code into the rlibs (known).** `ar t` lists 342 C objects in `libaws_lc_sys-*.rlib` (e.g. `asn1_lib.o`), 26 in `libzstd_sys-*.rlib`, 30 in `libring-*.rlib`, and `sqlite3.o` in `liblibsqlite3_sys-*.rlib`. A relink of a dependent crate takes the C code from the seeded rlib, not from the sibling's `out/`.
+- **A missing `-L` directory is harmless (known).** `rustc -L native=/nonexistent/dir/out` links with no error and no warning, with the default linker and with `lld-linker.sh`.
+
+One narrow path remains (inferred, not observed): a `-sys` crate's own rlib recompiles while its build script does not re-run. Only that compile reads the `.a` through the stale path. Option A's `output` rewrite is one way to cause it, which is a further reason not to take A.
+
+The Mechanism section's claim that a rewritten `output` makes cargo re-run the build script was not verified. As understood, `RerunIfChanged` treats a newer `output` as fresh, though dependents may rebuild. The claim no longer matters with Option D.
+
+The end-to-end experiment below was not run. The rlib evidence made its cost (a ~35 GB profile copy plus a seeded cold build) not worth paying.
+
+The rest of this document is the plan as written before the outcome.
 **Sources:** measurements taken in this checkout against a warm `target/debug` on 2026-10-03; the "Known limitation" paragraph in `ENVIRONMENT.md`; item B1 of `docs/plans/dashboard-ui-updates-followups-plan.md`, which this plan takes over.
 **Goal:** Decide whether a seeded target dir must be self-contained, and make it so only if the cost is small.
 

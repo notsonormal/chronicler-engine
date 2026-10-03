@@ -35,10 +35,13 @@ Each script's docstring has its details. These are the reasons and measurements 
   trial of four runs each, 2 at once took 75 s, 3 took 66 s, and 4 took 65 s. Four hit the memory
   limit in every run, so the setting is 3. `test-threads` is global, so the integration tier also
   runs three test processes at once.
-- **Known limitation — seeded build outputs carry absolute paths:** seeding copies
-  `build/<pkg>/output`, and those files hold absolute `-L` paths into the source checkout's target
-  dir, so a seeded profile links against the sibling's build outputs. Removing the sibling's target
-  dir before a relink can break the seeded build; rewriting the paths is the open option.
+- **Seeded build outputs carry absolute paths:** seeding copies `build/<pkg>/output`, and the
+  outputs of four C-building crates (`aws-lc-sys`, `zstd-sys`, `ring`, `libsqlite3-sys`) hold
+  absolute `-L` paths into the source checkout's target dir. A relink does not read those paths:
+  each crate links its C code as a `static=` library, which rustc bundles into the crate's `.rlib`,
+  and a missing `-L` directory is not an error. Removing the sibling's target dir therefore leaves
+  the seeded profile working. Measured 2026-10-03; the evidence is in
+  `old-docs/archived-plans/target-seed-absolute-paths-plan.md`.
 - **Per-test cost:** nextest runs each test in its own process, so an in-process cache never carries
   across tests. Each Harper text-check test builds its own dictionary, which `Cargo.toml` speeds up.
 - **Coverage** (`cargo-llvm-cov`, `python build.py --coverage`): it overrides `RUSTC_WRAPPER`, so

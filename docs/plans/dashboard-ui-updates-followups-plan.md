@@ -1,7 +1,7 @@
 # Plan: `dashboard-ui-updates` follow-ups
 
 **Date:** 2026-10-03
-**Status:** Reviewed against HEAD `19712ddd`. D1, D3, D4, D5, D6, D7, D8, D9 and D10 are decided (see below). D2 moved out of this plan on 2026-10-03 to `docs/plans/target-seed-absolute-paths-plan.md`. No decisions are open. Everything else is implemented; see the progress log. This plan lands on `dashboard-ui-updates`, merges into `main`, and the remaining dashboard work (map tickets) continues on a new branch.
+**Status:** Reviewed against HEAD `19712ddd`. D1, D3, D4, D5, D6, D7, D8, D9 and D10 are decided (see below). D2 moved out of this plan on 2026-10-03 to `old-docs/archived-plans/target-seed-absolute-paths-plan.md`. No decisions are open. Everything else is implemented; see the progress log. This plan lands on `dashboard-ui-updates`, merges into `main`, and the remaining dashboard work (map tickets) continues on a new branch.
 **Sources:** `tmp/afterplan/report.md` (after-plan run of `dashboard-ui-updates` vs `main`, plus its verification pass) and `tmp/deletion-audit/report.md` (repo-wide deletion-test audit). `tmp/` is gitignored, so this file is the durable record. Report tags (`#N`, `R`, `N`, `D`) are kept so findings trace back.
 **Goal:** Close what the after-plan report left open, as work packages (WP) ordered by cost and dependency.
 
@@ -20,7 +20,7 @@
 |---|---|---|
 | WP0 | **Done** | P0.1, P0.2 landed; P0.6 dropped per D6. `tests/http/prompt_presets.rs` slices the impersonate add-form and fails when a field is renamed out of it. |
 | WP1 | **Done** | S1–S6 landed; E4 notes fixed; DC5 notes fixed except two recorded below. Gate `logs/build_20261003_115325.log`: 1528 integration, 137 guardrail, 30 browser, 1 architecture, 0 failed. |
-| WP2 | **Done** | B2, B3, B6 landed by `wp2-build-tooling` (own target dir); B5 landed 2026-10-03 after D3 was decided report-only. Gate `logs/build_20261003_144517.log` (18 steps): architecture 1, guardrails 137, integration 1523 (2 skipped), browser 30, 0 failed, with the duplicate summary in the log. B1 moved out of this plan to `docs/plans/target-seed-absolute-paths-plan.md`. |
+| WP2 | **Done** | B2, B3, B6 landed by `wp2-build-tooling` (own target dir); B5 landed 2026-10-03 after D3 was decided report-only. Gate `logs/build_20261003_144517.log` (18 steps): architecture 1, guardrails 137, integration 1523 (2 skipped), browser 30, 0 failed, with the duplicate summary in the log. B1 moved out of this plan to `old-docs/archived-plans/target-seed-absolute-paths-plan.md`. |
 | WP3 | **Done** | 3a (DC1, DC2, D4, visibility) by `wp3-dead-code`; 3b (DC3 merges, A7 #17, DC4 inlines) by this session. |
 | WP4 | **Done** | A2 landed; `python build.py browser` green (`logs/build_20261003_121531.log`, 30 passed). |
 | WP5 | **Done** | A3, A5, A6 by `wp5-structure` (own target dir). |
@@ -138,7 +138,7 @@ Open decisions:
 
 | # | Decision | Options | Recommendation | Gates |
 |---|---|---|---|---|
-| D2 | B1: seeded `build/` output | Rewrite source→destination prefix in copied `output` files, or exclude `build/` | **Moved out of this plan on 2026-10-03** to `docs/plans/target-seed-absolute-paths-plan.md`, which carries the measurements and the two options. | — |
+| D2 | B1: seeded `build/` output | Rewrite source→destination prefix in copied `output` files, or exclude `build/` | **Moved out of this plan on 2026-10-03** to `old-docs/archived-plans/target-seed-absolute-paths-plan.md`, which carries the measurements and the two options. | — |
 | D3 | B5: does the gate fail on clones? | Report-only, or fail above a threshold | **Decided 2026-10-03: report-only.** jscpd is heuristic, and today's top pairs are legitimate near-identical test blocks, so any threshold low enough to catch real clones also reds untouched code. Revisit only after changed-file scoping has run for a while. | WP2 |
 
 ## WP0 — Close out the committed tree
@@ -187,7 +187,7 @@ Open decisions:
    - B2: `build.py` `is_target_locked` takes `LOCK_EX`; `scripts/target_seed.py` `_source_is_idle` takes `LOCK_SH`. A seed in progress makes `build.py` report the dir busy. One shared helper, one lock mode.
    - B3: `rustc -vV` is run in `build.py` (~L706) and twice in `target_seed.py` (~L43, ~L74). One helper in `target_seed.py`; `build.py` imports it; drop the discarded third call.
    - Verify: `python build.py py-tests`.
-2. **B1** — **moved out of this plan** (2026-10-03) to `docs/plans/target-seed-absolute-paths-plan.md`. It is a build-tooling change to a file WP2 had just touched, and the peer build-tooling session owns that area. Do not re-open it here; the new plan holds the measurements (10 `output` files, four C crates), the mechanism (cargo compares the `output` mtime), and the options.
+2. **B1** — **moved out of this plan** (2026-10-03) to `old-docs/archived-plans/target-seed-absolute-paths-plan.md`. It is a build-tooling change to a file WP2 had just touched, and the peer build-tooling session owns that area. Do not re-open it here; the new plan holds the measurements (10 `output` files, four C crates), the mechanism (cargo compares the `output` mtime), and the options.
 3. **B6** — the gate summary hides a leaky test.
    - Facts: `logs/build_20261003_021636.log:309` reads `30 tests run: 30 passed (1 leaky), 0 skipped`, but the gate line says `nextest: 30 passed, 0 failed`. `_nextest_summary_line` (`build.py` ~L264) drops the leaky count. `_NEXTEST_RESULT_RE` (~L246) matches `PASS|FAIL|SKIP` only. `leak` is not a valid `--final-status-level` value (valid: `none, fail, flaky, slow, skip, pass, all`).
    - Step 1: parse `(\d+) leaky` and render `nextest: 30 passed, 0 failed, 1 leaky`. Test in `NextestSummaryTests` (`scripts/tests/test_build_cli.py`) feeds the recorded line and expects the leaky count. Run with `python build.py py-tests`.
@@ -283,7 +283,7 @@ Open decisions:
 
 | Finding | Owner |
 |---|---|
-| B1: seeded `build/` output carries absolute paths | `docs/plans/target-seed-absolute-paths-plan.md` (moved out on 2026-10-03) |
+| B1: seeded `build/` output carries absolute paths | `old-docs/archived-plans/target-seed-absolute-paths-plan.md` (moved out on 2026-10-03) |
 | Theme 1: errors and health redesign | Tickets 08, 09 (decisions) → 25, 26 (fixes). All open; 08 is blocked by 04 and 05. |
 | #3: error fragments replace whole panels | Tickets 25, 26 |
 | Text-check-enabled review (blocks 08) | Ticket 04 (blocked by 03) |
@@ -324,7 +324,7 @@ Prior rulings stay closed: `.scratch/ponytail-audit-cuts` "Out of scope" (thin s
 |---|---|---|
 | DC1 re-export removal | Compile error in a file or test that used the hub path | Restore that line; it is not dead |
 | DC2 deletions | A deleted item had a hidden caller (macro, `cfg(test)`, doc anchor) | `python build.py check` covers `tests/`; `validate-docs` covers doc anchors |
-| B1 prefix rewrite | Rewritten `output` file breaks a build script's cached flags | Moved out of this plan; `docs/plans/target-seed-absolute-paths-plan.md` owns it |
+| B1 prefix rewrite | Rewritten `output` file breaks a build script's cached flags | Moved out of this plan; `old-docs/archived-plans/target-seed-absolute-paths-plan.md` owns it |
 | B5 scoping | Git missing or detached HEAD gives an empty change set and a false "no clones" | Whole-repo fallback with a printed note |
 | B6 parser | Nextest changes its summary wording | The unit test pins the recorded line; add new wording as a second case |
 | A2 observer removal | Send button sticks after a text-check swap | Browser specs 16.5–16.11 and 30.4–30.9 |
