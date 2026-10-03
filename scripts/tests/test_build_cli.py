@@ -109,11 +109,15 @@ class ParseArgsTests(unittest.TestCase):
         args = build.parse_args(["clippy", "--target-dir", "target/agent2"])
         self.assertEqual(args.target_dir, "target/agent2")
 
-    def test_strict_after_step(self):
-        self.assertTrue(build.parse_args(["clippy", "--strict"]).strict)
+    def test_strict_flag_rejected(self):
+        with self.assertRaises(SystemExit) as ctx:
+            build.parse_args(["clippy", "--strict"])
+        self.assertEqual(ctx.exception.code, 2)
 
-    def test_strict_before_step(self):
-        self.assertTrue(build.parse_args(["--strict", "clippy"]).strict)
+    def test_strict_flag_before_step_rejected(self):
+        with self.assertRaises(SystemExit) as ctx:
+            build.parse_args(["--strict", "clippy"])
+        self.assertEqual(ctx.exception.code, 2)
 
 
 class StepCommandTests(unittest.TestCase):
@@ -137,7 +141,7 @@ class StepCommandTests(unittest.TestCase):
         "architecture": "cargo nextest run --no-fail-fast --test architecture",
         "guardrails": "cargo nextest run --no-fail-fast --test guardrails",
         "unit": "cargo test --lib",
-        "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser)'",
+        "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser) and not binary(architecture) and not binary(guardrails)'",
         "browser": "cargo nextest run --no-fail-fast -E 'binary(browser)'",
         "test-pattern": "cargo nextest run --no-fail-fast",
     }
@@ -202,10 +206,10 @@ class GatePlanTests(unittest.TestCase):
         self.assertIn("Running integration tests...", labels)
         self.assertIn("Running browser tests...", labels)
         by_label = {step.label: step for step in plan}
-        self.assertIn(
-            "-E 'not binary(browser)'",
-            by_label["Running integration tests..."].cmd,
-        )
+        integration_cmd = by_label["Running integration tests..."].cmd
+        self.assertIn("-E 'not binary(browser)", integration_cmd)
+        self.assertIn("not binary(architecture)", integration_cmd)
+        self.assertIn("not binary(guardrails)", integration_cmd)
         self.assertIn("-E 'binary(browser)'", by_label["Running browser tests..."].cmd)
         self.assertNotIn(
             "not binary(browser)", by_label["Running browser tests..."].cmd
@@ -227,6 +231,13 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn(
             "Skipping coverage report (use --coverage to enable)", labels
         )
+        # Coverage keeps the full non-browser filter: unlike the integration
+        # step it still instruments the architecture and guardrails binaries.
+        by_label = {step.label: step for step in plan}
+        cov_cmd = by_label["Running integration tests with coverage..."].cmd
+        self.assertIn("-E 'not binary(browser)'", cov_cmd)
+        self.assertNotIn("binary(architecture)", cov_cmd)
+        self.assertNotIn("binary(guardrails)", cov_cmd)
 
     def test_architecture_runs_after_asset_copy(self):
         plan = build._plan_gate_steps(self.gate_args())

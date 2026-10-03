@@ -2,6 +2,12 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-10-02
+
+### Changed
+
+- **`build.py` `--strict` flag removed**. It only set `RUSTFLAGS=-D warnings`, which the gate's `cargo clippy --all-targets --all-features -- -D warnings` already enforces, and its help text falsely claimed debug assertions were enabled. Setting `RUSTFLAGS` also forced a full dependency rebuild and changed the target-seeding build signature, disabling seeding.
+
 ## 2026-09-27
 
 ### Changed

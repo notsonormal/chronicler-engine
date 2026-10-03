@@ -205,6 +205,7 @@ class SeedIfColdTests(unittest.TestCase):
             self.assertFalse(self.seed())
         self.assertFalse((self.target / "debug").exists())
         self.assertTrue(any("being built" in m for m in self.messages))
+        self.assertTrue(any("every candidate source is busy" in m for m in self.messages))
 
     def test_the_richer_source_wins(self):
         poor = self.root / "target" / "poor" / "debug"
@@ -239,6 +240,43 @@ class SeedIfColdTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {target_seed.DISABLE_ENV: "1"}):
             self.assertFalse(self.seed())
         self.assertFalse((self.target / "debug").exists())
+
+    def test_a_seed_miss_is_silent_when_disabled_by_environment(self):
+        target_seed.stamp(self.src, "sig-old")  # a miss that seeding-on would report
+        with mock.patch.dict(os.environ, {target_seed.DISABLE_ENV: "1"}):
+            self.assertFalse(self.seed())
+        self.assertEqual(self.messages, [])
+        self.assertFalse(self.seed())  # same miss, seeding enabled: it must be reported
+        self.assertTrue(any("no warm sibling with build signature" in m for m in self.messages))
+
+    def test_a_miss_names_the_warm_dirs_rejected_for_their_signature(self):
+        target_seed.stamp(self.src, "sig-old")
+        self.assertFalse(self.seed())
+        miss = [m for m in self.messages if m.startswith("Target seeding: no warm sibling")]
+        self.assertEqual(len(miss), 1, self.messages)
+        self.assertIn("building dependencies from scratch", miss[0])
+        self.assertIn(str(self.src), miss[0])
+        self.assertIn("signature sig-old", miss[0])
+
+    def test_a_miss_names_a_check_only_warm_dir(self):
+        check_only = self.root / "target" / "check" / "debug"
+        make_profile_dir(check_only, rlibs=0)
+        for rlib in (check_only / "deps").glob("*.rlib"):  # a check-only target holds no .rlib
+            rlib.unlink()
+        target_seed.stamp(check_only, target_seed.build_signature(self.root))
+        target_seed.stamp(self.src, "sig-old")
+        self.assertFalse(self.seed())
+        miss = [m for m in self.messages if m.startswith("Target seeding: no warm sibling")][0]
+        self.assertIn(f"{check_only} (no compiled libraries)", miss)
+        self.assertIn(f"{self.src} (signature sig-old)", miss)
+
+    def test_a_miss_says_when_there_is_no_warm_target_dir_at_all(self):
+        for path in sorted(self.src.rglob("*"), reverse=True):
+            path.unlink() if path.is_file() else path.rmdir()
+        self.assertFalse(self.seed())
+        miss = [m for m in self.messages if m.startswith("Target seeding: no warm sibling")]
+        self.assertEqual(len(miss), 1, self.messages)
+        self.assertIn("no warm target dir in any worktree", miss[0])
 
     def test_no_candidates_means_a_normal_cold_build(self):
         for path in sorted(self.src.rglob("*"), reverse=True):

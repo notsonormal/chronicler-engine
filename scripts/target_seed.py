@@ -36,6 +36,8 @@ _SIGNATURE_FILES = (".cargo/config.toml", "scripts/lld-linker.sh", "rust-toolcha
 _SIGNATURE_ENV = ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS")
 # Coverage builds use instrumentation flags, so none of their hashes match.
 _NOT_SEEDS = {"llvm-cov-target", "tmp", "fix"}
+# How many rejected warm dirs a seed-miss message names before summarising the rest.
+_SEEN_LIMIT = 3
 
 
 def build_signature(repo_root: Path) -> str:
@@ -116,13 +118,11 @@ def worktree_roots(repo_root: Path) -> list[Path]:
     return roots or [repo_root]
 
 
-def candidate_sources(
-    repo_root: Path, profile: str, destination: Path, signature: str | None = None
-) -> list[Path]:
-    """Warm ``<target>/<profile>`` dirs of every checkout, best seed first.
+def _warm_candidates(repo_root: Path, profile: str, destination: Path) -> list[tuple[int, float, Path]]:
+    """Warm ``<target>/<profile>`` dirs of every checkout, best seed first, excluding the destination.
 
-    With a signature, only dirs stamped with it qualify. Ranking is by compiled libraries (a
-    ``cargo check`` dir has none), then recency.
+    A dir's compiled-library count is reported but not filtered on. Ranking is by compiled
+    libraries, then recency.
     """
     found = []
     for root in worktree_roots(repo_root):
@@ -136,13 +136,44 @@ def candidate_sources(
                 continue
             deps = profile_dir / "deps"
             libs = sum(1 for f in deps.iterdir() if f.suffix == ".rlib") if deps.is_dir() else 0
-            if not libs:
-                continue
-            if signature is not None and read_stamp(profile_dir) != signature:
-                continue
             found.append((libs, (profile_dir / ".fingerprint").stat().st_mtime, profile_dir))
     found.sort(key=lambda item: item[:2], reverse=True)
-    return [item[2] for item in found]
+    return found
+
+
+def candidate_sources(
+    repo_root: Path, profile: str, destination: Path, signature: str | None = None
+) -> list[Path]:
+    """Warm ``<target>/<profile>`` dirs of every checkout, best seed first.
+
+    With a signature, only dirs stamped with it qualify.
+    """
+    return [
+        profile_dir
+        for libs, _, profile_dir in _warm_candidates(repo_root, profile, destination)
+        if libs and (signature is None or read_stamp(profile_dir) == signature)
+    ]
+
+
+def _describe_rejections(repo_root: Path, profile: str, destination: Path) -> str:
+    """Name the warm dirs that could not seed and why, capped so the line stays short."""
+    warm = _warm_candidates(repo_root, profile, destination)
+    if not warm:
+        return "no warm target dir in any worktree"
+    seen = []
+    for libs, _, profile_dir in warm[:_SEEN_LIMIT]:
+        stamp = read_stamp(profile_dir)
+        if not libs:  # a cargo check dir carries no .rlib to seed
+            why = "no compiled libraries"
+        elif stamp:
+            why = f"signature {stamp}"
+        else:
+            why = "unstamped"
+        seen.append(f"{profile_dir} ({why})")
+    hidden = len(warm) - len(seen)
+    if hidden:
+        seen.append(f"and {hidden} more")
+    return ", ".join(seen)
 
 
 def _shareable_hashes(source: Path, shareable: set[str]) -> set[str]:
@@ -218,10 +249,22 @@ def seed_if_cold(
     if is_warm(destination) or destination.exists() and any(destination.iterdir()):
         return False
     try:
+        signature = build_signature(repo_root)
         shareable = shareable_packages(repo_root)
-        sources = candidate_sources(repo_root, profile, destination, build_signature(repo_root))
+        sources = candidate_sources(repo_root, profile, destination, signature)
     except (OSError, RuntimeError, ValueError) as err:
         log(f"Target seeding skipped: {err}")
+        return False
+
+    if not sources:
+        try:
+            seen = _describe_rejections(repo_root, profile, destination)
+        except OSError as err:
+            seen = f"unavailable ({err})"
+        log(
+            f"Target seeding: no warm sibling with build signature {signature};"
+            f" building dependencies from scratch. Seen: {seen}"
+        )
         return False
 
     for source in sources:
@@ -248,4 +291,5 @@ def seed_if_cold(
             return False
         finally:
             guard.close()
+    log("Target seeding: every candidate source is busy right now; building from scratch.")
     return False

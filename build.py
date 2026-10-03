@@ -8,9 +8,9 @@ Two invocation modes:
   guardrails, the full test suite, and packaging.
 - Step mode: ``python build.py <step>`` runs one registry step (e.g.
   ``clippy``, ``fmt``, ``test-pattern <pattern>``) with a minimal prelude — no
-  port-3000 kill, no asset copy, no SQLite cleanup. ``--target-dir`` and
-  ``--strict`` are accepted on either side of the step; all other top-level
-  flags are gate-only and rejected next to a step.
+  port-3000 kill, no asset copy, no SQLite cleanup. ``--target-dir`` is
+  accepted on either side of the step; all other top-level flags are gate-only
+  and rejected next to a step.
 
 Stdout carries the agent-facing decision signal + tailable progress (banner,
 step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
@@ -204,6 +204,13 @@ def require_nextest():
 # verdict.
 _BROWSER_FILTER = "binary(browser)"
 _NON_BROWSER_FILTER = "not binary(browser)"
+# The gate runs the architecture and guardrails binaries as their own steps
+# before TESTS, so the integration step excludes them instead of running them a
+# second time. Coverage keeps the full non-browser filter: its merged report
+# still instruments those binaries.
+_INTEGRATION_FILTER = (
+    "not binary(browser) and not binary(architecture) and not binary(guardrails)"
+)
 
 
 def get_test_cmd(include_llm=False):
@@ -220,13 +227,15 @@ def get_browser_test_cmd():
 
 
 def get_integration_test_cmd(include_llm=False):
-    """Return the command running every test binary except `browser`.
+    """Return the command running every test binary except browser, architecture
+    and guardrails.
 
     The engine, http, storage, bootstrap and llm tiers are CPU-light; excluding
     the browser binary keeps this step to ~20s, so it works as a standalone
-    check.
+    check. The architecture and guardrails binaries have their own gate steps
+    and subcommands, so re-running them here would only duplicate work.
     """
-    cmd = f"{_NEXTEST_RUN} -E '{_NON_BROWSER_FILTER}'"
+    cmd = f"{_NEXTEST_RUN} -E '{_INTEGRATION_FILTER}'"
     if include_llm:
         cmd += " --profile llm --run-ignored all"
     return cmd
@@ -376,10 +385,11 @@ def get_coverage_cmd(browser_only=False):
     """Return the coverage test command using nextest.
 
     ``browser_only`` selects which half the gate's split runs: False yields
-    the integration tier (everything except the browser binary), True the
-    browser binary alone. The coverage step runs twice, once per half, so
-    both profiling runs share the single merged report that ``--no-report``
-    defers.
+    the non-browser tier (everything except the browser binary; unlike the
+    integration step this keeps architecture and guardrails so the merged
+    report still instruments them), True the browser binary alone. The coverage
+    step runs twice, once per half, so both profiling runs share the single
+    merged report that ``--no-report`` defers.
     """
     cmd = "cargo llvm-cov nextest --no-report --no-fail-fast"
     if browser_only:
@@ -507,7 +517,7 @@ REGISTRY: dict[str, StepSpec] = {
             "Running integration tests...",
             get_integration_test_cmd(),
             needs_nextest=True,
-            help="Run every test binary except browser (~1 min).",
+            help="Run every test binary except browser, architecture and guardrails (~1 min).",
         ),
         StepSpec(
             "browser",
@@ -572,9 +582,9 @@ def parse_args(argv=None):
     """Parse CLI arguments into a namespace. Pure: no filesystem or subprocess
     side effects.
 
-    Step subcommands share the top-level ``--target-dir`` and ``--strict``
-    flags; the shared copies use ``SUPPRESS`` defaults so a value given before
-    the subcommand is not clobbered by the subparser.
+    Step subcommands share the top-level ``--target-dir`` flag; the shared copy
+    uses a ``SUPPRESS`` default so a value given before the subcommand is not
+    clobbered by the subparser.
     """
     parser = argparse.ArgumentParser(description="Chronicler Engine build script")
     parser.add_argument(
@@ -600,11 +610,6 @@ def parse_args(argv=None):
         help=(
             "Run only the slow LLM tests (skips formatting, clippy, guardrails, and other tests)"
         ),
-    )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Enable strict mode: warnings are errors, debug assertions enabled",
     )
     parser.add_argument(
         "--target-dir",
@@ -647,12 +652,6 @@ def parse_args(argv=None):
         step_parser.add_argument(
             "--target-dir",
             dest="target_dir",
-            default=argparse.SUPPRESS,
-            help=argparse.SUPPRESS,
-        )
-        step_parser.add_argument(
-            "--strict",
-            action="store_true",
             default=argparse.SUPPRESS,
             help=argparse.SUPPRESS,
         )
@@ -740,13 +739,6 @@ def _cargo_env_for(args) -> dict:
     if getattr(args, "target_dir", None):
         env["CARGO_TARGET_DIR"] = str(Path(args.target_dir).resolve())
     return env
-
-
-def _apply_strict(args):
-    """Enable strict mode: warnings treated as errors via RUSTFLAGS."""
-    if getattr(args, "strict", False):
-        os.environ["RUSTFLAGS"] = "-D warnings"
-        both_print("Strict mode enabled: warnings treated as errors.")
 
 
 def _warn_if_target_locked(cargo_target_dir: Path, custom: bool):
@@ -1332,9 +1324,7 @@ def _gate_tail(args):
 
 
 def _gate_prelude(args) -> dict:
-    """Gate-mode prelude: strict env, port-3000 kill, target-dir env + lock warning."""
-    _apply_strict(args)
-
+    """Gate-mode prelude: port-3000 kill, target-dir env + lock warning."""
     # Always kill manual runs on the default port first — this may release
     # the target directory lock if a manual `cargo run` was holding it.
     log_status("Checking for processes on port 3000...")
@@ -1374,7 +1364,6 @@ def run_step(args, record):
     if spec.needs_nextest:
         require_nextest()
 
-    _apply_strict(args)
     cargo_env = _cargo_env_for(args)
     _set_target_args(args)
     cargo_target_dir, _ = _target_paths(args)
