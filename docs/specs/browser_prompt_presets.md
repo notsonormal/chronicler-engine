@@ -16,5 +16,5 @@ When the client clicks the copy's Edit button
 Then that card renders an edit form with the mode checkboxes
 When the client ticks the Interactive Fiction checkbox and submits Save
 And the page is reloaded
-Then the re-opened panel's copy card offers both "Set Active (Novel)" and "Set Active (IF)"
+Then the re-opened panel's copy card offers both "Set Active (Novel)" and "Set Active (Interactive Fiction)"
 ```

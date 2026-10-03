@@ -26,6 +26,10 @@ Rules (only enforced on STANDARD docs):
                                     contains a `.md` path
                               All forms must appear only in the `## Document
                               References` section at the bottom of the file.
+  LINE_CITATION            — backticked `path:line` citation (e.g. `foo.rs:42`).
+                              Line numbers rot; cite the symbol instead. Fenced
+                              code blocks are exempt, as is the auto-generated
+                              guardrails doc (see GENERATED_DOC_PATHS).
 
 Diátaxis-front-matter rules (only enforced on STANDARD docs under
 docs/diataxis/):
@@ -116,6 +120,11 @@ LINE_MD_TOKEN = re.compile(r"[A-Za-z0-9_./-]+\.md")
 # Fenced code block delimiter (``` or ~~~), optionally with language tag.
 FENCE_DELIMITER = re.compile(r"^\s*(```|~~~)")
 
+# Backticked `path:line` citation: `foo.rs:123`, `foo.rs:12-14`, `foo.rs:12,15`.
+LINE_CITATION = re.compile(
+    r"`[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:rs|py|toml|html|css|js|json):[0-9][0-9,\-]*`"
+)
+
 # Front-matter delimiter: a line that is exactly `---` (optional whitespace).
 FRONTMATTER_DELIMITER = re.compile(r"^---\s*$")
 
@@ -165,6 +174,14 @@ EXCLUDED_FILE_NAMES: set[str] = {
 
 # Directories whose entire subtree is exempt (archives, etc.).
 EXCLUDED_DIR_NAMES: set[str] = {"old-docs"}
+
+# Auto-generated docs exempt from LINE_CITATION. Their line numbers are emitted
+# from the current source by the generator, and the `--check` freshness step
+# keeps them current — the citation cannot rot between generation and commit.
+# Paths are relative to docs/diataxis/.
+GENERATED_DOC_PATHS: set[str] = {
+    "reference/coding_standards/guardrails.md",  # generate_guardrails_doc.py
+}
 
 # Transient file paths: exempt because they are historical or forward-looking
 # logs, not canonical specs.
@@ -699,6 +716,41 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+def check_line_citations(report: FileReport, docs_root: Path) -> None:
+    """STANDARD docs cite symbols, not line numbers.
+
+    A backticked `path:line` citation rots the moment the target file gains or
+    loses a line. The symbol is the stable identity. Fenced code blocks are
+    exempt — they may quote real tool output — and so are auto-generated docs
+    whose line numbers are refreshed by their generator.
+    """
+    rel = relative_to(report.path, docs_root)
+    if rel is not None and rel.as_posix() in GENERATED_DOC_PATHS:
+        return
+
+    text = read_text(report)
+    if text is None:
+        return
+
+    in_fence = False
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if FENCE_DELIMITER.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        for match in LINE_CITATION.finditer(line):
+            citation = match.group(0)[1:-1]  # strip the backticks
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "LINE_CITATION",
+                    f"Line {lineno}: `{citation}` pins a line number that goes "
+                    f"stale; cite the symbol instead",
+                )
+            )
+
+
 def check_diataxis_frontmatter(report: FileReport) -> None:
     """Enforce YAML front-matter conventions on docs/diataxis/ STANDARD docs.
 
@@ -964,6 +1016,7 @@ def scan_file(
     check_markdown_links(report, docs_root)
     check_standard_plan_links(report, docs_root)
     check_standard_body_references(report, docs_root)
+    check_line_citations(report, docs_root)
 
     check_diataxis_frontmatter(report)
 

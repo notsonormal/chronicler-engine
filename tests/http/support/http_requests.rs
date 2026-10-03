@@ -8,8 +8,8 @@ use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::test_utils::wait_for_condition_async;
 
-/// Consume a response into its body as a String. The single body reader for
-/// the binary — one cap (65536) covers every fragment and page this suite
+/// Consume a response into its body as a String. The body reader the support
+/// helpers use — one cap (65536) covers every fragment and page this suite
 /// reads.
 pub async fn response_body(resp: axum::response::Response<Body>) -> String {
     let bytes = axum::body::to_bytes(resp.into_body(), 65536)
@@ -100,7 +100,12 @@ pub async fn post_form_with_hx(
 }
 
 /// Poll `AppState` until generation is idle (timeout `timeout_ms`, 15ms interval).
+///
+/// Also waits for the generation slot: the pipeline persists `Idle` before its
+/// guard releases the slot, so a status-only check can return while
+/// `try_claim` still rejects the next action as `ConcurrentGeneration`.
 pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
+    let game_id = state.game_catalogue.current_game_id();
     wait_for_condition_async(
         std::time::Duration::from_millis(timeout_ms),
         std::time::Duration::from_millis(15),
@@ -112,6 +117,7 @@ pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
                 .input_buffer
                 .status
                 .is_generating()
+                && !state.generation_gate.is_busy(game_id)
         },
     )
     .await

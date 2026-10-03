@@ -6,9 +6,6 @@ pub(crate) mod types;
 pub(crate) mod utils;
 
 pub use agent::OptionsAgent;
-pub use prompt::OptionsPromptBuilder;
-pub use utils::orchestration::generate_options;
-pub use utils::parser::parse_options;
 
 #[cfg(test)]
 mod agent_tests;

@@ -4,7 +4,6 @@
 use crate::domain::model::character::{NpcCard, Relationship};
 use crate::domain::model::prompt_preset::{PresetField, PromptPreset};
 use crate::domain::model::template::TemplateVars;
-use crate::domain::model::utils::template::render_template;
 
 pub(crate) fn sanitize_for_prompt(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
@@ -40,21 +39,13 @@ fn scan_filtered_block(chars: &[char], start: usize) -> Option<usize> {
     None
 }
 
-pub(crate) fn render_preset_xml_parts(
-    preset: &PromptPreset,
-    global_rules: &[String],
-    response_length: Option<&str>,
-    template_vars: Option<&TemplateVars>,
-) -> Vec<(PresetField, String)> {
-    preset.render_field_parts(global_rules, response_length, template_vars)
-}
-
 pub(crate) fn build_system_prompt(
     preset: &PromptPreset,
     global_rules: &[String],
     vars: &TemplateVars,
 ) -> String {
-    render_preset_xml_parts(preset, global_rules, None, Some(vars))
+    preset
+        .render_field_parts(global_rules, None, Some(vars))
         .into_iter()
         .filter(|(field, _)| {
             matches!(
@@ -72,7 +63,8 @@ pub(crate) fn build_post_history_prompt(
     response_length: Option<&str>,
     vars: &TemplateVars,
 ) -> String {
-    render_preset_xml_parts(preset, &[], response_length, Some(vars))
+    preset
+        .render_field_parts(&[], response_length, Some(vars))
         .into_iter()
         .filter(|(field, _)| matches!(field, PresetField::WritingStyle | PresetField::OutputFormat))
         .map(|(_, rendered)| rendered)
@@ -105,7 +97,7 @@ pub(crate) fn render_known_npc_entry(
                 .collect::<Vec<_>>()
                 .join("\n")
         });
-    let rendered_summary = render_template(&summary_text, template_vars);
+    let rendered_summary = template_vars.render(&summary_text);
 
     for line in rendered_summary.lines() {
         entry.push_str(&format!("  {line}\n"));
@@ -140,7 +132,7 @@ pub(crate) fn render_present_relationships(
         block.push_str(&format!(
             "  → {}: {}\n",
             partner_name,
-            render_template(rel.display_text(), template_vars)
+            template_vars.render(rel.display_text())
         ));
     }
     Some(block)

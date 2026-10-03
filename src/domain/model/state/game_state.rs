@@ -8,7 +8,6 @@ use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::quantifier::{NpcEvent, NpcEventList, NpcTransitionType, QuantifierResult};
 use crate::domain::model::template::TemplateVars;
-use crate::domain::model::utils::template::render_template;
 use crate::domain::model::trigger::{NpcEncounterLog, Trigger};
 use crate::domain::model::world::WorldCard;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
@@ -189,7 +188,7 @@ impl GameState {
             .unwrap_or_else(|| scenario.starting_room_id.clone());
 
         self.narrative.pending_location = Some(room_name);
-        let text = render_template(&scenario.text, &TemplateVars::new(&player.sheet.name));
+        let text = TemplateVars::new(&player.sheet.name).render(&scenario.text);
         self.add_message(text, MessageType::Narration);
     }
 }
@@ -365,10 +364,8 @@ impl GameState {
                     trigger_idx: idx,
                     trigger_name: trigger.narration.name,
                     trigger_repeat: trigger.repeat,
-                    trigger_narration_prompt: render_template(
-                        &trigger.narration.narration_prompt,
-                        &TemplateVars::new(&persona.sheet.name),
-                    ),
+                    trigger_narration_prompt: TemplateVars::new(&persona.sheet.name)
+                        .render(&trigger.narration.narration_prompt),
                 });
 
         let events = NpcEventList::from_diff(&previous_npc_ids, &current_npc_ids);

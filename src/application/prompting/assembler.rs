@@ -11,7 +11,6 @@ use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::template::TemplateVars;
-use crate::domain::model::utils::template::render_template;
 use crate::domain::model::world::WorldCard;
 use crate::application::prompting::token_budget as budget;
 use crate::application::prompting::token_budget::truncate_to_budget;
@@ -248,7 +247,7 @@ impl<'a> LayerRenderer<'a> {
         output.push_str("Current Location: ");
         output.push_str(&self.room.name);
         output.push_str("\n\n");
-        output.push_str(&render_template(&self.room.description, self.template_vars));
+        output.push_str(&self.template_vars.render(&self.room.description));
         output.push_str("\n\n");
         output.push_str("</GameState>\n");
         output
@@ -286,14 +285,14 @@ impl<'a> LayerRenderer<'a> {
                 output.push_str(&npc.sheet.name);
                 output.push_str(" ---\n");
                 output.push_str("Description: ");
-                output.push_str(&render_template(&npc.sheet.description, self.template_vars));
+                output.push_str(&self.template_vars.render(&npc.sheet.description));
                 output.push('\n');
                 output.push_str("Personality: ");
-                output.push_str(&render_template(&npc.sheet.personality, self.template_vars));
+                output.push_str(&self.template_vars.render(&npc.sheet.personality));
                 output.push('\n');
                 if !npc.sheet.scenario.is_empty() {
                     output.push_str("Context: ");
-                    output.push_str(&render_template(&npc.sheet.scenario, self.template_vars));
+                    output.push_str(&self.template_vars.render(&npc.sheet.scenario));
                     output.push('\n');
                 }
 
@@ -324,22 +323,13 @@ impl<'a> LayerRenderer<'a> {
         output.push_str(&self.persona.sheet.name);
         output.push_str("\n\n");
         output.push_str("Description: ");
-        output.push_str(&render_template(
-            &self.persona.sheet.description,
-            self.template_vars,
-        ));
+        output.push_str(&self.template_vars.render(&self.persona.sheet.description));
         output.push_str("\n\n");
         output.push_str("Personality: ");
-        output.push_str(&render_template(
-            &self.persona.sheet.personality,
-            self.template_vars,
-        ));
+        output.push_str(&self.template_vars.render(&self.persona.sheet.personality));
         output.push_str("\n\n");
         output.push_str("Background: ");
-        output.push_str(&render_template(
-            &self.persona.sheet.scenario,
-            self.template_vars,
-        ));
+        output.push_str(&self.template_vars.render(&self.persona.sheet.scenario));
         output.push('\n');
 
         output.push_str("</PlayerCharacter>\n");
@@ -351,10 +341,7 @@ impl<'a> LayerRenderer<'a> {
         output.push_str("World: ");
         output.push_str(&self.world.name);
         output.push_str("\n\n");
-        output.push_str(&render_template(
-            &self.world.description,
-            self.template_vars,
-        ));
+        output.push_str(&self.template_vars.render(&self.world.description));
         output.push_str("\n\n");
 
         output.push_str("</WorldLore>\n");

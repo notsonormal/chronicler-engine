@@ -87,10 +87,6 @@ pub enum EngineError {
     #[error("Parse error: {0}")]
     Parse(String),
 
-    /// Serialization attempted on an incomplete/inconsistent value (not a serde decode failure).
-    #[error("Serialize error: {0}")]
-    Serialize(String),
-
     /// Room navigation lookup missed; message is room identifier or context.
     #[error("Navigation error: {0}")]
     Navigation(String),
@@ -123,6 +119,10 @@ pub enum EngineError {
     #[error("World not found: {0}")]
     WorldNotFound(String),
 
+    /// A world with this key already exists; the user-facing create path refuses to replace it.
+    #[error("A world with key '{0}' already exists")]
+    WorldAlreadyExists(String),
+
     /// World cannot be deleted because games still reference it; `game_count` is the blocker count.
     #[error("Cannot delete world with {game_count} games")]
     WorldHasGames { game_count: usize },
@@ -138,10 +138,6 @@ pub enum EngineError {
     /// Template substitution failed (missing var, bad type, recursion limit).
     #[error("Template error: {0}")]
     Template(String),
-
-    /// Render stage (HTMX/Tera) failed downstream of template substitution.
-    #[error("Render error: {0}")]
-    Render(String),
 
     /// Engine invariant violated; inner carries the invariant name for triage.
     #[error("Internal invariant violated: {0}")]

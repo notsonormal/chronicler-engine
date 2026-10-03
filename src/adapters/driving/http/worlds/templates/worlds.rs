@@ -2,6 +2,8 @@
 //! Worlds templates
 
 use askama::Template;
+use crate::adapters::driving::http::utils::template_helpers::select_options_html;
+use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
 use crate::domain::model::world::WorldCard;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::scenario::StartingScenario;
@@ -25,7 +27,7 @@ pub struct WorldRowView {
     <ul class="worlds-list">
         {% for world in worlds %}
         <li class="world-item">
-            <strong>{{ world.name }}</strong> - {{ world.description }} <em>({{ world.game_count }} games)</em>
+            <strong>{{ world.name }}</strong> {{ world.description }} <em>({{ world.game_count }} {% if world.game_count == 1 %}game{% else %}games{% endif %})</em>
             <button class="btn-cyan" hx-get="/worlds/{{ world.key }}/edit" hx-target=".worlds-panel" hx-swap="outerHTML">Edit</button>
             <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
         </li>
@@ -82,8 +84,7 @@ impl WorldsPanelTemplate {
         <div class="form-group posture-group">
             <label>Narrator Mode:
                 <select name="narrator_mode" {% if is_edit %}hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML"{% endif %}>
-                    <option value="novel" {% if narrator_mode == "novel" %}selected{% endif %}>Novel</option>
-                    <option value="interactive_fiction" {% if narrator_mode == "interactive_fiction" %}selected{% endif %}>Interactive Fiction</option>
+                    {{ narrator_mode_options }}
                 </select>
             </label>
             <label>Perspective:
@@ -132,7 +133,7 @@ pub struct WorldFormTemplate {
     pub default_room_image: String,
     pub map_json: String,
     pub scenarios_json: String,
-    pub narrator_mode: String,
+    pub narrator_mode_options: SafeHtml,
     pub narrative_perspective: String,
     pub narrative_tense: String,
     pub options_always_on: bool,
@@ -181,7 +182,9 @@ impl WorldFormTemplate {
             default_room_image: w.default_room_image.clone().unwrap_or_default(),
             map_json: map_json_str,
             scenarios_json: scenarios_json_str,
-            narrator_mode: w.narrator_mode.as_str().to_string(),
+            narrator_mode_options: select_options_html(SelectOptionView::narrator_modes(
+                w.narrator_mode,
+            )),
             options_always_on: w.options_always_on,
             narrative_perspective: w.narrative_perspective.as_str().to_string(),
             narrative_tense: w.narrative_tense.as_str().to_string(),

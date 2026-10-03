@@ -14,27 +14,6 @@ fn is_module_doc_exempt(path: &str) -> bool {
         .any(|exempt| normalized.contains(exempt))
 }
 
-// TODO: These system.md files no longer exists so specific guardrails (related to system.md)
-//  need to be removed or at least updated
-fn points_to_system_md(doc_path: &str) -> bool {
-    doc_path == "docs/architecture/system.md" || doc_path.ends_with("/architecture/system.md")
-}
-
-const SYSTEM_MD_EXEMPT: &[&str] = &[
-    "model/",    // model tier IS architecture
-    "storage/",  // storage tier IS architecture
-    "domain/",   // domain tier IS architecture
-    "adapters/", // adapters tier IS architecture
-    "error.rs",  // error taxonomy IS architecture
-];
-
-fn is_system_md_exempt(path: &str) -> bool {
-    let normalized = path.replace("\\", "/");
-    SYSTEM_MD_EXEMPT
-        .iter()
-        .any(|exempt| normalized.contains(exempt))
-}
-
 fn extract_doc_anchor_path(line: &str) -> Option<&str> {
     let start = line.find('[')? + 1;
     let end = line.find(']')?;
@@ -109,14 +88,6 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
                 ),
             ));
         }
-
-        if points_to_system_md(anchor) && !is_system_md_exempt(path) {
-            violations.push(Violation::warn(
-                path,
-                1,
-                format!("Module `{path}` points to `system.md` but should point to a domain-specific doc. Files outside model/storage tiers must use specific docs (e.g., `game_flow.md`, `navigation.md`)."),
-            ));
-        }
     }
 
     if lines.len() < 2 {
@@ -152,9 +123,8 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
-// TODO: IS this actually catching all problems? Or is catching products in
-//  just `src` and not `tests/`
 /// Enforces mod.rs purity: only module declarations, imports, and module docs are allowed.
+/// The guardrail runner discovers `src` files only; `tests/` has its own structure rules.
 pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -190,31 +160,6 @@ pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation
         ));
     }
 
-    violations
-}
-
-/// Rejects legacy test-context helpers in integration tests.
-pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation> {
-    let mut violations = Vec::new();
-
-    if !path.starts_with("integration/") {
-        return violations;
-    }
-
-    for (line_num, line) in content.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("//") || trimmed.starts_with("/*") {
-            continue;
-        }
-
-        if line.contains("make_test_context(") && !line.contains("make_test_context_with_sqlite(") {
-            violations.push(Violation::error(
-                path,
-                line_num + 1,
-                "Integration tests must use SqliteTestAppBuilder for consistent SQLite testing; make_test_app_with_* helpers deleted.".to_string(),
-            ));
-        }
-    }
     violations
 }
 

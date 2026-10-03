@@ -3,4 +3,4 @@
 
 pub mod games;
 
-pub use self::games::{GameRowView, GamesPanelTemplate, PersonaRowView};
+pub use self::games::GameRowView;

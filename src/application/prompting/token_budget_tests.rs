@@ -5,7 +5,6 @@ use crate::application::prompting::token_budget::{estimate_tokens, truncate_to_b
 fn test_token_budgets() {
     assert_eq!(budget::MAX_CONTEXT_TOKENS, 32768);
     assert_eq!(budget::MAX_HISTORY_TOKENS, 16000);
-    assert_eq!(budget::MAX_SYSTEM_TOKENS, 1024);
     assert_eq!(budget::SAFETY_MARGIN_TOKENS, 256);
     assert_eq!(budget::MIN_INPUT_BUDGET_TOKENS, 512);
 }

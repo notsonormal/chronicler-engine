@@ -368,11 +368,13 @@ body {
 
 .image-container.npc-portrait {
     width: 80px;
-    height: 80px;
+    min-height: 80px;
     overflow: hidden;
     position: relative;
     box-sizing: border-box;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .image-container.npc-portrait img {
@@ -380,6 +382,14 @@ body {
     height: 80px;
     object-fit: cover;
     box-sizing: border-box;
+}
+
+.image-container.npc-portrait .image-label {
+    box-sizing: border-box;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .image-container .image-label {
@@ -952,6 +962,10 @@ body {
     display: block;
     line-height: 1.5;
     margin: 0;
+    /* Auto-grow (see autoResizeTextarea); cap very long entries so the edit
+       box cannot outgrow the viewport, then scroll inside it. */
+    max-height: 50vh;
+    overflow-y: auto;
 }
 
 /* Save/Cancel Buttons */
@@ -1126,14 +1140,30 @@ body {
     border-color: rgba(128, 128, 128, 0.25);
 }
 
-/* Allow action area to expand when showing text-check preview */
-.action-area:has(.text-check-preview) {
+/* The text-check result gets its own element so it never replaces the command
+   form. An empty result must not add a flex gap. */
+#text-check-result:empty {
+    display: none;
+}
+
+/* Allow the action area to expand for a text-check preview (auto-check path,
+   which replaces the action area) or a non-empty result element (check path). */
+.action-area:has(.text-check-preview),
+.action-area:has(#text-check-result:not(:empty)) {
+    flex-wrap: wrap;
     height: auto;
     min-height: var(--action-area-height);
     align-items: flex-start;
     justify-content: center;
     padding-top: var(--spacing-md);
     padding-bottom: var(--spacing-md);
+}
+
+/* Any non-empty result (preview or a plain status span) takes its own row so it
+   does not squeeze the command form. */
+#text-check-result:not(:empty) {
+    flex: 1 1 100%;
+    min-width: 0;
 }
 
 /* Preview editable textarea */
@@ -1530,6 +1560,42 @@ input[type="checkbox"]:focus {
     display: flex;
     gap: var(--spacing-sm);
     flex-wrap: wrap;
+}
+
+/* Prompt Presets add-form disclosure */
+.preset-add-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.preset-add-toggle:focus-visible {
+    outline: none;
+    border-color: var(--color-accent-cyan);
+    box-shadow: 0 0 0 2px rgba(0, 255, 255, 0.1);
+}
+
+.preset-add-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.preset-add-toggle::marker {
+    content: "";
+}
+
+.preset-add-toggle::before {
+    content: "▸";
+}
+
+.preset-add[open] > .preset-add-toggle::before {
+    content: "▾";
+}
+
+.preset-add > form {
+    margin-top: var(--spacing-sm);
 }
 
 /* Prompt Presets Buttons — gradient rules moved to .btn-primary, .btn-cyan, .btn-danger utilities */

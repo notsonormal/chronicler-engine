@@ -9,10 +9,16 @@ import io
 import os
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl; cargo target locking is skipped there.
+    fcntl = None
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -32,6 +38,7 @@ class RegistryTests(unittest.TestCase):
             "test-structure",
             "docstrings",
             "py-tests",
+            "duplicates",
             "http-routes-check",
             "guardrails-doc-check",
             "validate-docs",
@@ -93,6 +100,28 @@ class ParseArgsTests(unittest.TestCase):
         args = build.parse_args(["test-pattern", "behaviour::test_x"])
         self.assertEqual(args.pattern, "behaviour::test_x")
 
+    def test_duplicates_step_forwards_extra_args(self):
+        args = build.parse_args(["duplicates", "--all"])
+        self.assertTrue(args.duplicates_all)
+        extra = build._step_extra_args(build.REGISTRY["duplicates"], args)
+        self.assertEqual(
+            build._step_command(build.REGISTRY["duplicates"], None, extra),
+            "python scripts/healthcheck.py duplicates --all",
+        )
+
+    def test_duplicates_step_forwards_ref(self):
+        args = build.parse_args(["duplicates", "--ref", "develop"])
+        self.assertEqual(args.duplicates_ref, "develop")
+        extra = build._step_extra_args(build.REGISTRY["duplicates"], args)
+        self.assertEqual(
+            build._step_command(build.REGISTRY["duplicates"], None, extra),
+            "python scripts/healthcheck.py duplicates --ref develop",
+        )
+
+    def test_non_duplicates_step_has_no_extra(self):
+        args = build.parse_args(["clippy"])
+        self.assertIsNone(build._step_extra_args(build.REGISTRY["clippy"], args))
+
     def test_gate_flag_after_step_rejected(self):
         with self.assertRaises(SystemExit):
             build.parse_args(["clippy", "--coverage"])
@@ -109,11 +138,15 @@ class ParseArgsTests(unittest.TestCase):
         args = build.parse_args(["clippy", "--target-dir", "target/agent2"])
         self.assertEqual(args.target_dir, "target/agent2")
 
-    def test_strict_after_step(self):
-        self.assertTrue(build.parse_args(["clippy", "--strict"]).strict)
+    def test_strict_flag_rejected(self):
+        with self.assertRaises(SystemExit) as ctx:
+            build.parse_args(["clippy", "--strict"])
+        self.assertEqual(ctx.exception.code, 2)
 
-    def test_strict_before_step(self):
-        self.assertTrue(build.parse_args(["--strict", "clippy"]).strict)
+    def test_strict_flag_before_step_rejected(self):
+        with self.assertRaises(SystemExit) as ctx:
+            build.parse_args(["--strict", "clippy"])
+        self.assertEqual(ctx.exception.code, 2)
 
 
 class StepCommandTests(unittest.TestCase):
@@ -131,13 +164,14 @@ class StepCommandTests(unittest.TestCase):
         "spec-coverage": "python scripts/validate_feature_spec.py",
         "docstrings": "python scripts/check_python_docstrings.py",
         "py-tests": "python -m unittest discover scripts/tests -v",
+        "duplicates": "python scripts/healthcheck.py duplicates",
         "http-routes-check": "python scripts/extract_http_routes.py --check",
         "guardrails-doc-check": "python scripts/generate_guardrails_doc.py --check",
         "validate-docs": "python scripts/validate_docs.py",
         "architecture": "cargo nextest run --no-fail-fast --test architecture",
         "guardrails": "cargo nextest run --no-fail-fast --test guardrails",
         "unit": "cargo test --lib",
-        "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser)'",
+        "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser) and not binary(architecture) and not binary(guardrails)'",
         "browser": "cargo nextest run --no-fail-fast -E 'binary(browser)'",
         "test-pattern": "cargo nextest run --no-fail-fast",
     }
@@ -158,6 +192,11 @@ class StepCommandTests(unittest.TestCase):
 
 
 class CargoEnvTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ, {"CHRONICLER_NO_LLD": "1"})  # keep ~/.cache untouched
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_target_dir_sets_env_var(self):
         env = build._cargo_env_for(SimpleNamespace(target_dir="target/agent2"))
         self.assertIn("CARGO_TARGET_DIR", env)
@@ -183,12 +222,12 @@ class GatePlanTests(unittest.TestCase):
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_full_gate_installs_hooks_first_and_has_17_steps(self):
+    def test_full_gate_installs_hooks_first_and_has_18_steps(self):
         plan = build._plan_gate_steps(self.gate_args())
         self.assertEqual(plan[0].kind, "hooks")
         self.assertEqual(plan[0].label, "Installing git hooks...")
         self.assertEqual(plan[1].label, "Formatting...")
-        self.assertEqual(len(plan), 17)
+        self.assertEqual(len(plan), 18)
 
     def test_gate_splits_browser_from_integration(self):
         """The gate runs the browser binary as its own step, not merged in."""
@@ -197,10 +236,10 @@ class GatePlanTests(unittest.TestCase):
         self.assertIn("Running integration tests...", labels)
         self.assertIn("Running browser tests...", labels)
         by_label = {step.label: step for step in plan}
-        self.assertIn(
-            "-E 'not binary(browser)'",
-            by_label["Running integration tests..."].cmd,
-        )
+        integration_cmd = by_label["Running integration tests..."].cmd
+        self.assertIn("-E 'not binary(browser)", integration_cmd)
+        self.assertIn("not binary(architecture)", integration_cmd)
+        self.assertIn("not binary(guardrails)", integration_cmd)
         self.assertIn("-E 'binary(browser)'", by_label["Running browser tests..."].cmd)
         self.assertNotIn(
             "not binary(browser)", by_label["Running browser tests..."].cmd
@@ -211,7 +250,7 @@ class GatePlanTests(unittest.TestCase):
         labels = [step.label for step in plan]
         self.assertNotIn("Formatting...", labels)
         self.assertIn("Installing git hooks...", labels)
-        self.assertEqual(len(plan), 16)
+        self.assertEqual(len(plan), 17)
 
     def test_coverage_mode_swaps_test_and_report_steps(self):
         plan = build._plan_gate_steps(self.gate_args(coverage=True))
@@ -222,6 +261,12 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn(
             "Skipping coverage report (use --coverage to enable)", labels
         )
+        # Coverage keeps the full non-browser filter.
+        by_label = {step.label: step for step in plan}
+        cov_cmd = by_label["Running integration tests with coverage..."].cmd
+        self.assertIn("-E 'not binary(browser)'", cov_cmd)
+        self.assertNotIn("binary(architecture)", cov_cmd)
+        self.assertNotIn("binary(guardrails)", cov_cmd)
 
     def test_architecture_runs_after_asset_copy(self):
         plan = build._plan_gate_steps(self.gate_args())
@@ -253,6 +298,8 @@ class GatePlanTests(unittest.TestCase):
         ), mock.patch.object(build, "_copy_deployment_assets"), mock.patch.object(
             build, "_generate_coverage_report"
         ), mock.patch.object(
+            build, "run", return_value=0
+        ), mock.patch.object(
             build, "both_print", side_effect=lambda msg="": printed.append(msg)
         ):
             build._execute_gate_plan(plan, args, {}, record)
@@ -268,6 +315,20 @@ class GatePlanTests(unittest.TestCase):
         self.assertEqual(len(progress), len(plan))
         totals = {msg.split("]")[0].split("/")[1] for msg in progress}
         self.assertEqual(totals, {str(len(plan))})
+
+    def test_duplicates_step_is_report_only(self):
+        plan = build._plan_gate_steps(self.gate_args())
+        dup_steps = [step for step in plan if step.kind == "duplicates"]
+        self.assertEqual(len(dup_steps), 1)
+        self.assertEqual(dup_steps[0].label, "Checking for duplicate code...")
+        with mock.patch.object(build, "run", return_value=1) as runner, mock.patch.object(
+            build, "both_print"
+        ) as printer:
+            build._run_duplicates_report({})
+        # Report-only: a failed command warns, it does not raise or record.
+        self.assertFalse(runner.call_args.kwargs["check"])
+        self.assertEqual(runner.call_args.args[0], "python scripts/healthcheck.py duplicates")
+        printer.assert_called_once()
 
 
 class SessionStampTests(unittest.TestCase):
@@ -329,6 +390,23 @@ class NextestSummaryLineTests(unittest.TestCase):
             "nextest: 21 passed, 0 failed, 1462 skipped",
         )
 
+    def test_leaky_count_is_kept(self):
+        # Recorded from logs/build_20261003_021636.log:309 (the browser tier).
+        output = (
+            "     Summary [  60.628s] 30 tests run: 30 passed (1 leaky), 0 skipped\n"
+        )
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 30 passed, 0 failed, 1 leaky",
+        )
+
+    def test_leaky_count_survives_a_skipped_segment(self):
+        output = "     Summary [  10.000s] 12 tests run: 9 passed (2 leaky), 1 failed, 3 skipped\n"
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 9 passed, 1 failed, 3 skipped, 2 leaky",
+        )
+
     def test_last_summary_line_wins(self):
         output = (
             "     Summary [   1.000s] 2 tests run: 1 passed, 1 failed\n"
@@ -344,6 +422,23 @@ class NextestSummaryLineTests(unittest.TestCase):
     def test_compilation_output_without_summary_returns_none(self):
         output = "   Compiling chronicler-engine v0.1.0\n     Running unittests\n"
         self.assertIsNone(build._nextest_summary_line(output))
+
+
+class NextestResultLineTests(unittest.TestCase):
+    """_NEXTEST_RESULT_RE drives the per-test timing report."""
+
+    def test_leak_line_is_parsed_with_its_duration_and_name(self):
+        line = "        LEAK [   0.229s] ( 2/2) leakprobe::leak leaks_a_child"
+        match = build._NEXTEST_RESULT_RE.match(line)
+        self.assertIsNotNone(match)
+        self.assertEqual(build._nextest_duration_to_secs(match.group(1)), 0.229)
+        self.assertEqual(match.group(2).strip(), "leakprobe::leak leaks_a_child")
+
+    def test_pass_line_still_parses_after_adding_leak(self):
+        line = "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x"
+        match = build._NEXTEST_RESULT_RE.match(line)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(2).strip(), "chronicler_engine::browser behaviour::test_x")
 
 
 class NextestStashTests(unittest.TestCase):
@@ -491,6 +586,86 @@ class MainStampTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         first_line = memlog.getvalue().splitlines()[0]
         self.assertEqual(first_line, "Session-Id: 0123abcd-0000-1111-2222-333344445555")
+
+
+class LldLinkerEnvTests(unittest.TestCase):
+    """The linker wrapper is installed at one fixed path, whichever checkout runs the build."""
+
+    HOST = "x86_64-unknown-linux-gnu"
+    VAR = "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER"
+
+    def setUp(self):
+        import tempfile
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cache = Path(tmp.name)
+        patcher = mock.patch.dict(os.environ, {}, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("CHRONICLER_NO_LLD", None)
+        os.environ.pop(self.VAR, None)
+
+    def test_installs_the_wrapper_and_names_the_per_triple_variable(self):
+        env = build._lld_linker_env(self.HOST, self.cache)
+        path = Path(env[self.VAR])
+        self.assertEqual(path, self.cache / "chronicler-engine" / "lld-linker.sh")
+        self.assertTrue(os.access(path, os.X_OK))
+        self.assertEqual(path.read_bytes(), (REPO_ROOT / "scripts" / "lld-linker.sh").read_bytes())
+
+    def test_the_path_does_not_depend_on_the_checkout(self):
+        first = build._lld_linker_env(self.HOST, self.cache)
+        other = self.cache / "other-checkout"
+        (other / "scripts").mkdir(parents=True)
+        (other / "scripts" / "lld-linker.sh").write_text("#!/bin/sh\nexec cc \"$@\"\n")
+        with mock.patch.object(build, "__file__", str(other / "build.py")):
+            second = build._lld_linker_env(self.HOST, self.cache)
+        self.assertEqual(first, second)
+        self.assertIn("exec cc", Path(second[self.VAR]).read_text())  # the newer wrapper replaced it
+
+    def test_an_existing_linker_setting_wins(self):
+        os.environ[self.VAR] = "/opt/my-linker"
+        self.assertEqual(build._lld_linker_env(self.HOST, self.cache), {})
+
+    def test_opt_out(self):
+        os.environ["CHRONICLER_NO_LLD"] = "1"
+        self.assertEqual(build._lld_linker_env(self.HOST, self.cache), {})
+
+    def test_other_platforms_get_nothing(self):
+        with mock.patch.object(build.sys, "platform", "win32"):
+            self.assertEqual(build._lld_linker_env(self.HOST, self.cache), {})
+
+
+class IsTargetLockedTests(unittest.TestCase):
+    """is_target_locked scans a profile lock with the same shared mode the seed uses."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.target = Path(tmp.name)
+        profile = self.target / "debug"
+        profile.mkdir()
+        self.lock = profile / ".cargo-lock"
+        self.lock.write_text("")
+
+    def test_unheld_lock_reads_as_free(self):
+        self.assertFalse(build.is_target_locked(self.target))
+
+    def test_a_missing_profile_dir_reads_as_free(self):
+        self.assertFalse(build.is_target_locked(self.target / "nope"))
+
+    @unittest.skipIf(fcntl is None, "the target lock probe is an flock")
+    def test_a_shared_seed_holder_is_not_a_cargo_build(self):
+        # A seed in progress holds the lock shared; build.py must not warn.
+        with open(self.lock, "rb") as seed:
+            fcntl.flock(seed, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            self.assertFalse(build.is_target_locked(self.target))
+
+    @unittest.skipIf(fcntl is None, "the target lock probe is an flock")
+    def test_an_exclusive_cargo_holder_reads_as_locked(self):
+        with open(self.lock, "rb") as cargo:
+            fcntl.flock(cargo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertTrue(build.is_target_locked(self.target))
 
 
 if __name__ == "__main__":

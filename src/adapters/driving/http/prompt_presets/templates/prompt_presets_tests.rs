@@ -105,7 +105,7 @@ fn test_prompt_presets_template_has_add_forms() {
 }
 
 #[test]
-fn test_prompt_presets_template_shows_full_preview() {
+fn test_prompt_presets_template_truncates_preview() {
     let long_text = "a".repeat(200);
     let template = PromptPresetsTemplate {
         system_presets: vec![PromptPreset {
@@ -123,5 +123,8 @@ fn test_prompt_presets_template_shows_full_preview() {
 
     let html = template.render().unwrap();
     assert!(html.contains("Test"));
-    assert!(html.contains(&"a".repeat(150)));
+    // The shared card truncates at 120 chars, so the panel matches an
+    // edit-refreshed card instead of showing the full preview.
+    assert!(html.contains(&"a".repeat(120)));
+    assert!(!html.contains(&"a".repeat(121)));
 }

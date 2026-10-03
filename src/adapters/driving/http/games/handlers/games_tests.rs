@@ -218,11 +218,11 @@ async fn test_posture_fragment_renders_preset_load_error_span() {
     let body = String::from_utf8_lossy(&body);
     assert!(
         body.contains(r#"class="error-message""#),
-        "preset load failure should render the error span: {body}"
+        "preset load failure should render the error fragment: {body}"
     );
     assert!(
         body.contains("Presets unavailable"),
-        "error span should name the failure: {body}"
+        "error fragment should name the failure: {body}"
     );
     assert!(
         body.contains(r#"name="narrator_mode""#),

@@ -27,7 +27,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `response.rs` — LLM response parsing
       - **storage/**
         - `characters.rs` — Character storage backend operations
-        - `core.rs` — Storage backend trait and core abstractions
+        - `core.rs` — Storage backend and core abstractions
         - `db.rs` — SQLite database connection pool
         - `games.rs` — Game storage operations
         - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
@@ -88,7 +88,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `server.rs` — Server implementation
         - **builders/**
           - `connections.rs` — LLM-connection card + edit-form HTML builders.
-          - `forms.rs` — Textarea field HTML builders.
+          - `forms.rs` — Form field HTML builders.
           - `headers.rs` — Header fragment + status-swap header builders.
           - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
           - `presets.rs` — Prompt-preset card + form HTML builders.
@@ -144,7 +144,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `mod.rs` — HTTP utility modules.
           - `port_utils.rs` — Port management helpers used by `bind_with_retry`.
           - `response.rs` — HTTP response helpers
-          - `template_helpers.rs` — Settings template rendering helpers (provider options HTML).
+          - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`
           - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
           - `view_models.rs` — View-model helpers shared between template code and tests.
         - **worlds/**
@@ -158,7 +158,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - **application/**
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
-    - `llm_message.rs` — LLM recorder save seam
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
     - `message_service.rs` — Game-state lifecycle seam for message history and snapshots.
     - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
@@ -205,7 +204,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.
       - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
       - `pipeline_run.rs` — PipelineRun and its phase implementations for the action pipeline.
-      - `spawn.rs` — Shared spawn helper for pipeline tasks
       - **action_pipeline/**
         - `action.rs` — Action entry path for the pipeline.
         - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
@@ -230,12 +228,14 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **utils/**
         - `context.rs` — Prompt context fitting — message budget enforcement.
         - `mod.rs` — Narrative prompt utility modules.
+    - **utils/**
+      - `mod.rs` — Application-layer utility helpers.
+      - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings and prompt-preset services.
   - **bootstrap/**
     - `init_game.rs` — Game state initialization and arrival narration spawning
     - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution
-    - `validate.rs` — Data validation utilities
     - `wiring.rs` — Composition root for application orchestrators
   - **domain/**
     - **model/**
@@ -271,13 +271,13 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `mod.rs` — Domain model utility modules.
         - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.
         - `settings_defaults.rs` — Serde default-fn-pointers for `AppSettings` fields. Cannot become methods — `#[serde(default = "...")]` requires a fn path.
-        - `template.rs` — Template placeholder substitution for author-controlled text fields.
         - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.
         - `xml.rs` — XML string formatting utilities.
   - **test_support/**
     - `context.rs` — Builds `WiredApp` instances for integration tests.
     - `env_guard.rs` — `ApiKeyEnvGuard` — serializes tests that mutate API-key environment variables.
     - `fixtures.rs` — Test fixtures shared between unit and integration tests.
+    - `http.rs` — HTTP response helpers for unit tests that call handlers directly.
     - `quantifier.rs` — Quantifier test utilities
     - `test_app_builder.rs` — Test application builder for HTTP and integration tests.
     - `test_data_builder.rs` — Test data bundle builder for integration tests.
@@ -286,6 +286,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `settings.rs` — Application settings and configuration
 - `build.py` — Full build, validate, and test for Chronicler Engine.
 - **scripts/**
+  - `build_slot.py` — Machine-wide build slot: one cargo compile or test step at a time across all checkouts.
   - `check_python_docstrings.py` — Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings.
   - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.
   - `coverage_summary.py` — Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON.
@@ -301,6 +302,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `install_git_hooks.py` — Install git hooks from scripts/git-hooks/ to .git/hooks/.
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
   - `refine_character_json.py` — Split character card descriptions into structured personality/scenario/description fields.
+  - `target_seed.py` — Seed a cold cargo target dir with dependency artifacts from a warm sibling checkout.
   - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
   - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
   - `validate_docs.py` — Validate markdown docs + DOC anchors under docs/.
@@ -352,13 +354,11 @@ Avoid **analysis paralysis**: when reasoning stops converging, act instead — r
 
 Temporary files should be written into tmp folders e.g. `tmp`.
 
-Pi wraps commands with rtk and condenses long output — not just git/diff: piped `rg`, `grep`, and build tails get truncated or mangled too. Redirect any command you pipe or filter to a file first, then search that file.
-
 Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
 
-`build.py` writes logs to both standard output and to the `logs/` folder. The standard build should take about 2-3 minute normally. On a cold start, it can take 4-5 minutes to finish due the integration test suite.
+`build.py` writes logs to both standard output and to the `logs/` folder. A standard build takes about 2 minutes once the target dir is warm. A cold one takes far longer.
 
-Use the Pi bash tool with a timeout of 600 seconds when calling `build.py`, or 1200 seconds if you are running with `--coverage`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
+Use the Pi bash tool with a timeout of 1200 seconds when calling `build.py`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
 
 ```bash
 tail -n 10 "$(ls -t logs/build_*.log | head -1)"
@@ -377,27 +377,32 @@ python build.py unit                            # Run the unit tests
 python build.py architecture                    # Run the architecture tests
 python build.py guardrails                      # Run the guardrails tests
 python build.py test-pattern "action_pipeline::options_tests" # Run tests whose name matches a substring, across all test binaries
-python build.py integration                     # Every test binary except browser (~20s)
-python build.py browser                         # Only the browser/Playwright binary (~2.5 min)
+python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s)
+python build.py browser                         # Only the browser/Playwright binary (~1 min)
 python build.py validate-docs                   # Validate markdown docs
 cargo run -- --world redmist_estate --port 3000 # Run the server (raw cargo; not a gate action)
 ```
 
-Almost every full-gate step is also a subcommand — see `python build.py --help`. Only the packaging, test-suite, and coverage-report phases stay gate-internal. `--target-dir` and `--strict` work on either side of the subcommand; all other top-level flags are full-gate only.
+Almost every full-gate step is also a subcommand — see `python build.py --help`. Only the packaging, test-suite, and coverage-report phases stay gate-internal. `--target-dir` works on either side of the subcommand; all other top-level flags are full-gate only.
 
 #### Final Validation (run once before considering done)
 
 ```bash
-python build.py # Full gate: fmt + clippy + guardrails + tests (~1 min)
+python build.py # Full gate: fmt + clippy + guardrails + tests (~2 min warm)
 ```
 
 A majority of the time taken by `build.py` is the browser tests. Running the full suite just before running the `build.py` is inefficient. Either run a targeted step (`python build.py test-pattern <pattern>`) or skip them and run `build.py` straight away.
 
 ## Concurrent Builds
 
-Secondary agents must not share the primary's target dir or run fmt: use
-`python build.py --target-dir target/<name> --no-fmt`. The full protocol lives
-in the `build.py` module docstring.
+Use one target dir per checkout and never switch, because a new dir starts cold. In a git worktree, run `python build.py` with no extra flags. Agents that share one checkout run `python build.py --target-dir target/<name> --no-fmt`. The `build.py` docstring has the details.
+
+`ENVIRONMENT.md`: read it when a build or test run is slow, waits for the build slot, or runs out of memory.
+
+Cold worktree builds compile the whole dependency tree into a fresh target dir;
+`scripts/sccache-wrapper.sh` (wired as `rustc-wrapper` in `.cargo/config.toml`)
+routes that through sccache, so the second build onward reuses the artifacts.
+Check it with `sccache --show-stats`.
 
 ## Agent Skills
 
@@ -411,7 +416,7 @@ Five canonical role strings, used as `Status:` lines in local-markdown files (pe
 
 ### Domain docs
 
-Read `CONTEXT.md` for details.
+Single-context: one `CONTEXT.md` glossary at the repo root (per `docs/agents/domain.md`).
 
 ### Codebase research
 

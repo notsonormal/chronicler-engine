@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use crate::domain::model::settings::{ModePresetBundle, NarratorMode};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::settings_defaults;
-use crate::domain::model::utils::template::render_template;
 use crate::domain::model::utils::xml::wrap_xml;
 
 /// [TRIVIAL_ENUM]
@@ -149,7 +148,7 @@ impl PromptPreset {
     ) -> Vec<(PresetField, String)> {
         let render_text = |source: &str| -> String {
             match template_vars {
-                Some(template_vars) => render_template(source, template_vars),
+                Some(template_vars) => template_vars.render(source),
                 None => source.to_string(),
             }
         };

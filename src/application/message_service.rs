@@ -13,7 +13,6 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::template::TemplateVars;
-use crate::domain::model::utils::template::render_template;
 use crate::error::EngineError;
 
 pub struct MessageService {
@@ -98,7 +97,7 @@ impl MessageService {
         self.storage.load_messages_with_swipes()
     }
 
-    pub fn load_messages_into_state(&self, state: &mut GameState) {
+    fn load_messages_into_state(&self, state: &mut GameState) {
         if let Ok(msgs) = self.load_messages() {
             state.narrative.history.replace(msgs);
         }
@@ -124,7 +123,7 @@ impl MessageService {
 
             initial_state.narrative.pending_location = Some(room_name);
 
-            let text = render_template(&scenario.text, &TemplateVars::new(&persona.sheet.name));
+            let text = TemplateVars::new(&persona.sheet.name).render(&scenario.text);
             if !text.is_empty() {
                 initial_state.add_message(text, MessageType::Narration);
             }

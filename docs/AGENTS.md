@@ -168,6 +168,12 @@ What Reference docs **do** carry:
 
 If a reader needs the exact column list, field type, or function signature, they open the source file — one hop. The doc's value is what the source *doesn't* say.
 
+### Cite symbols, not line numbers
+
+A backticked `path:line` citation (`` `foo.rs:42` ``) is a promise about a line number that the next edit breaks. Cite the symbol instead — `resolve_api_key()`, `Storage::get_settings`, `bootstrap::run::prepare_data`. Symbols move with the code; line numbers do not.
+
+`scripts/validate_docs.py` enforces this (`LINE_CITATION`) on every doc under `docs/diataxis/`. Fenced code blocks are exempt (they may quote real tool output), as is the auto-generated `guardrails.md`, whose line numbers the generator refreshes.
+
 ### Relationships diagrams
 
 Where aggregate structure isn't obvious from reading the source sequentially, a relationships diagram earns its place. Use Mermaid `flowchart`, not `erDiagram`, not C4.

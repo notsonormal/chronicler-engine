@@ -171,8 +171,8 @@ pub async fn update_game_presets_handler(
 }
 
 /// Re-render the override fragment after a posture action. Validation
-/// failures surface as an error span in place of the fragment (house style);
-/// storage failures stay 500s so htmx leaves the page alone.
+/// failures surface as an error fragment in place of the fragment (house
+/// style); storage failures stay 500s so htmx leaves the page alone.
 fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError>) -> Response {
     match result {
         Ok(game) => ok(posture_controls_html(state, &game)),
@@ -182,7 +182,7 @@ fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError
 }
 
 /// Renders the posture-override fragment for one game. A preset-library
-/// load failure degrades to an error span in the picker row; the posture
+/// load failure degrades to an error fragment in the picker row; the posture
 /// controls still render so the auto-saves keep working.
 fn posture_controls_html(state: &AppState, game: &Game) -> String {
     let presets = (

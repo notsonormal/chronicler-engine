@@ -2,39 +2,38 @@
 
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::template::TemplateVars;
-use crate::domain::model::utils::template::render_template;
 
 #[test]
-fn render_template_replaces_user() {
+fn render_replaces_user() {
     let text = "Hello {{user}}";
     let vars = TemplateVars::new("Julian");
-    let result = render_template(text, &vars);
+    let result = vars.render(text);
     assert_eq!(result, "Hello Julian");
 }
 
 #[test]
-fn render_template_unknown_placeholder_left_as_is() {
+fn render_unknown_placeholder_left_as_is() {
     let text = "Hello {{char}}";
     let vars = TemplateVars::new("Julian");
-    let result = render_template(text, &vars);
+    let result = vars.render(text);
     assert_eq!(result, "Hello {{char}}");
 }
 
 #[test]
-fn render_template_multiple_same_key() {
+fn render_multiple_same_key() {
     let text = "{{user}} meets {{user}}";
     let vars = TemplateVars::new("Julian");
-    let result = render_template(text, &vars);
+    let result = vars.render(text);
     assert_eq!(result, "Julian meets Julian");
 }
 
 #[test]
-fn render_template_replaces_persona_macros_from_persona_card() {
+fn render_replaces_persona_macros_from_persona_card() {
     let persona = crate::test_support::TestPersona::named("Julian");
     let vars = TemplateVars::from_persona(&persona);
     let text =
         "{{user}}: {{persona_description}} | {{persona_personality}} | {{persona_background}}";
-    let result = render_template(text, &vars);
+    let result = vars.render(text);
     assert_eq!(
         result,
         "Julian: The protagonist named Julian. | Determined | Test scenario."
@@ -48,7 +47,7 @@ fn template_vars_new_has_empty_persona_macros() {
     assert_eq!(vars.persona_description, "");
     assert_eq!(vars.persona_personality, "");
     assert_eq!(vars.persona_background, "");
-    let result = render_template("{{persona_description}}", &vars);
+    let result = vars.render("{{persona_description}}");
     assert_eq!(result, "");
 }
 
@@ -68,25 +67,25 @@ fn template_vars_from_persona_defaults_to_third_person_past_tense() {
 }
 
 #[test]
-fn render_template_replaces_narrative_perspective() {
+fn render_replaces_narrative_perspective() {
     let mut vars = TemplateVars::new("Julian");
     vars.narrative_perspective = "second".to_string();
-    let result = render_template("{{narrative_perspective}}-person view", &vars);
+    let result = vars.render("{{narrative_perspective}}-person view");
     assert_eq!(result, "second-person view");
 }
 
 #[test]
-fn render_template_replaces_narrative_tense() {
+fn render_replaces_narrative_tense() {
     let mut vars = TemplateVars::new("Julian");
     vars.narrative_tense = "present".to_string();
-    let result = render_template("{{narrative_tense}} tense", &vars);
+    let result = vars.render("{{narrative_tense}} tense");
     assert_eq!(result, "present tense");
 }
 
 #[test]
-fn render_template_unknown_narrative_placeholder_left_as_is() {
+fn render_unknown_narrative_placeholder_left_as_is() {
     let vars = TemplateVars::new("Julian");
-    let result = render_template("{{narrative_voice}}", &vars);
+    let result = vars.render("{{narrative_voice}}");
     assert_eq!(result, "{{narrative_voice}}");
 }
 
@@ -97,22 +96,19 @@ fn template_vars_new_defaults_option_count_to_three() {
 }
 
 #[test]
-fn render_template_replaces_option_count() {
+fn render_replaces_option_count() {
     let vars = TemplateVars::new("Julian");
-    let result = render_template(
-        "Generate *exactly* {{option_count}} actions for {{user}}.",
-        &vars,
-    );
+    let result = vars.render("Generate *exactly* {{option_count}} actions for {{user}}.");
     assert_eq!(result, "Generate *exactly* 3 actions for Julian.");
 }
 
 #[test]
-fn render_template_option_count_survives_preset_seed_render() {
+fn render_option_count_survives_preset_seed_render() {
     let content = include_str!("../../../data/prompt_presets/options/default.json");
     let preset: PromptPreset = serde_json::from_str(content).expect("options seed should parse");
     let instructions = preset.instructions.expect("options seed has instructions");
 
-    let rendered = render_template(&instructions, &TemplateVars::new("Julian"));
+    let rendered = TemplateVars::new("Julian").render(&instructions);
     assert!(
         !rendered.contains("{{option_count}}"),
         "{{option_count}} must substitute in the options seed"
@@ -144,19 +140,19 @@ fn system_preset_writing_style_renders_coherently_for_all_voices() {
         .writing_style
         .expect("system preset has writing_style");
 
-    let third_past = render_template(&writing_style, &make_vars("third", "past"));
+    let third_past = make_vars("third", "past").render(&writing_style);
     assert!(third_past.contains("third-person limited perspective"));
     assert!(third_past.contains("past tense narrative prose"));
 
-    let second_past = render_template(&writing_style, &make_vars("second", "past"));
+    let second_past = make_vars("second", "past").render(&writing_style);
     assert!(second_past.contains("second-person limited perspective"));
     assert!(second_past.contains("past tense narrative prose"));
 
-    let third_present = render_template(&writing_style, &make_vars("third", "present"));
+    let third_present = make_vars("third", "present").render(&writing_style);
     assert!(third_present.contains("third-person limited perspective"));
     assert!(third_present.contains("present tense narrative prose"));
 
-    let second_present = render_template(&writing_style, &make_vars("second", "present"));
+    let second_present = make_vars("second", "present").render(&writing_style);
     assert!(second_present.contains("second-person limited perspective"));
     assert!(second_present.contains("present tense narrative prose"));
 }
@@ -168,19 +164,19 @@ fn impersonate_preset_writing_style_renders_coherently_for_all_voices() {
         .writing_style
         .expect("impersonate preset has writing_style");
 
-    let third_past = render_template(&writing_style, &make_vars("third", "past"));
+    let third_past = make_vars("third", "past").render(&writing_style);
     assert!(third_past.contains("third-person perspective as Julian"));
     assert!(third_past.contains("past tense"));
 
-    let second_past = render_template(&writing_style, &make_vars("second", "past"));
+    let second_past = make_vars("second", "past").render(&writing_style);
     assert!(second_past.contains("second-person perspective as Julian"));
     assert!(second_past.contains("past tense"));
 
-    let third_present = render_template(&writing_style, &make_vars("third", "present"));
+    let third_present = make_vars("third", "present").render(&writing_style);
     assert!(third_present.contains("third-person perspective as Julian"));
     assert!(third_present.contains("present tense"));
 
-    let second_present = render_template(&writing_style, &make_vars("second", "present"));
+    let second_present = make_vars("second", "present").render(&writing_style);
     assert!(second_present.contains("second-person perspective as Julian"));
     assert!(second_present.contains("present tense"));
 }
@@ -192,11 +188,11 @@ fn impersonate_preset_instructions_render_coherent_perspective_and_tense() {
         .instructions
         .expect("impersonate preset has instructions");
 
-    let third_past = render_template(&instructions, &make_vars("third", "past"));
+    let third_past = make_vars("third", "past").render(&instructions);
     assert!(third_past.contains("third person for speech and internal thought"));
     assert!(third_past.contains("in past tense"));
 
-    let second_present = render_template(&instructions, &make_vars("second", "present"));
+    let second_present = make_vars("second", "present").render(&instructions);
     assert!(second_present.contains("second person for speech and internal thought"));
     assert!(second_present.contains("in present tense"));
 }

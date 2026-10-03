@@ -100,11 +100,10 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
     let _ = post_action(&app, "examine room").await;
     assert!(wait_idle(&state, 1000).await);
 
-    // Delete the last message (the narration). The Input remains but no anchor narration.
+    // The delete leaves an Input with no anchor narration.
     let resp = post_empty(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Retry with no anchor narration must not leave state generating.
     let resp = post_empty(&app, "/swipe/new").await;
     assert_ne!(
         resp.status(),
@@ -117,10 +116,8 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
     );
 }
 
-// `deleteMessage()` in `assets/index.html:336` does exactly two things:
-// `fetch("/history/delete", {method: "POST"})` and then re-fetch
-// `/fragment/story-log`. This test performs both hops and asserts the rendered
-// entry count drops, so the delete is observed through the server response.
+// Mirrors the client's two hops after a delete: POST /history/delete, then
+// re-fetch /fragment/story-log.
 // [docs/specs/story_log.md] SCENARIO: 8.4
 #[tokio::test]
 async fn test_delete_removes_entry_from_fragment_http() {
@@ -145,5 +142,30 @@ async fn test_delete_removes_entry_from_fragment_http() {
         after_count,
         before_count - 1,
         "deleting must drop exactly one rendered log entry"
+    );
+}
+
+// The shell polls this fragment with `hx-swap="innerHTML"` into its own
+// `#story-log`; a second container here would nest on every swap.
+// [docs/specs/story_log.md] SCENARIO: 8.5
+#[tokio::test]
+async fn test_story_log_fragment_declares_no_log_container() {
+    let app = TestAppBuilder::default_test()
+        .log("You look around.", MessageType::Narration)
+        .build();
+
+    let body = fetch_body(&app, "/fragment/story-log").await;
+
+    assert!(
+        body.contains(r#"class="log-entry"#),
+        "fragment must still render the entries: {body}"
+    );
+    assert!(
+        !body.contains(r#"id="story-log""#),
+        "fragment must not declare a second #story-log: {body}"
+    );
+    assert!(
+        !body.contains(r#"class="story-log""#),
+        "fragment must not wrap entries in a .story-log container: {body}"
     );
 }

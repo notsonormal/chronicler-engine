@@ -7,7 +7,7 @@ title: UI Design
 
 The dashboard's visual language is defined by a small set of CSS custom properties (design tokens) and a structured set of component specifications. Tokens are the source of truth for colors, typography, spacing, sizing, and animation timings; components declare the token-derived styling for each dashboard region. The static stylesheet at `assets/styles.css` is the binding code that consumes both.
 
-This doc carries the token tables verbatim because the tokens ARE the reference — there is no single source in code that an LLM can grep to recover the `--color-accent-green` value. Component specs describe structure and visual state in prose; enforced interaction contracts live in the per-region browser specs (`docs/specs/browser_*.md`), and the CSS implementation lives in `assets/styles.css`.
+This doc carries the token tables verbatim because the tables are the curated token→usage reference — the `--color-accent-green` value itself lives in `assets/styles.css`. Component specs describe structure and visual state in prose; enforced interaction contracts live in the per-region browser specs (`docs/specs/browser_*.md`), and the CSS implementation lives in `assets/styles.css`.
 
 ## Design Tokens
 
@@ -325,6 +325,8 @@ Replaces the entry's text span when the user clicks Edit.
 - `display: block`
 - Line-height: 1.5 (matches `.log-entry .text`)
 - `margin: 0`
+- Auto-grows to fit its content, capped at `max-height: 50vh` with `overflow-y: auto`
+- Takes focus when it appears; Escape cancels, Ctrl/Cmd+Enter saves
 
 ### Save / Cancel Buttons (Edit Mode)
 

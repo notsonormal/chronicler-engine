@@ -1,15 +1,18 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Settings handlers
 
-use axum::{Form, extract::State, response::Html};
+use axum::body::Body;
+use axum::{Form, extract::State, response::Html, response::IntoResponse, response::Response};
 
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::connections::{
     connection_card_html, connection_edit_form_html,
 };
 use crate::adapters::driving::http::settings::templates::settings::SettingsTemplate;
-use crate::adapters::driving::http::utils::error::render_error;
-use crate::adapters::driving::http::utils::handler_helpers::{opt_string, render_template};
+use crate::adapters::driving::http::utils::error::{error_response, render_error};
+use crate::adapters::driving::http::utils::handler_helpers::{
+    generate_storage_id, opt_string, render_template,
+};
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{LlmProviderConfig, TextCheckMode};
 use crate::error::EngineError;
@@ -87,19 +90,13 @@ pub async fn save_text_check_handler(
 pub async fn add_connection_handler(
     State(app_state): State<AppState>,
     Form(form): Form<ConnectionForm>,
-) -> Html<String> {
+) -> Response<Body> {
     let provider = match form.conn_provider.as_str().parse::<LlmBackendType>() {
         Ok(p) => p,
-        Err(e) => return Html(render_error(&e.to_string())),
+        Err(e) => return Html(render_error(&e.to_string())).into_response(),
     };
 
-    let id = format!(
-        "conn-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
-    );
+    let id = generate_storage_id("conn");
 
     let connection = LlmProviderConfig {
         id,
@@ -113,15 +110,9 @@ pub async fn add_connection_handler(
         max_context_tokens: None,
     };
 
-    // Return a snapshot so the panel renders outside the storage lock.
-    let outcome = app_state.settings_service.update_settings(|settings| {
-        settings.connections.push(connection.clone());
-        Ok(settings.clone())
-    });
-
-    match outcome {
-        Ok(updated) => render_template(SettingsTemplate::from_settings(&updated)),
-        Err(e) => Html(render_error(&e.to_string())),
+    match app_state.settings_service.add_connection(connection) {
+        Ok(updated) => render_template(SettingsTemplate::from_settings(&updated)).into_response(),
+        Err(e) => error_response(e, "Error"),
     }
 }
 
@@ -136,7 +127,7 @@ pub async fn connection_card_fragment(
 
     let conn = match settings.find_connection(&id) {
         Some(c) => c.clone(),
-        None => return Html(render_error("LlmProviderConfig not found")),
+        None => return Html(render_error("Connection not found")),
     };
 
     Html(connection_card_html(
@@ -157,7 +148,7 @@ pub async fn edit_connection_form(
 
     let conn = match settings.find_connection(&id) {
         Some(c) => c.clone(),
-        None => return Html(render_error("LlmProviderConfig not found")),
+        None => return Html(render_error("Connection not found")),
     };
 
     Html(connection_edit_form_html(&conn))
@@ -167,41 +158,33 @@ pub async fn edit_connection_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<ConnectionForm>,
-) -> Html<String> {
+) -> Response<Body> {
     let provider = match form.conn_provider.as_str().parse::<LlmBackendType>() {
         Ok(p) => p,
-        Err(e) => return Html(render_error(&e.to_string())),
+        Err(e) => return Html(render_error(&e.to_string())).into_response(),
     };
 
-    let outcome = app_state.settings_service.update_settings(|settings| {
-        let is_narrator = settings.narration_connection_id == id;
-        let is_quantifier = settings.quantifier_connection_id == id;
-
-        let conn = match settings.find_connection_mut(&id) {
-            Some(c) => c,
-            None => {
-                return Err(EngineError::Config(
-                    "LlmProviderConfig not found".to_string(),
-                ));
-            }
-        };
-
-        conn.name = form.conn_name.clone();
-        conn.provider = provider;
-        conn.model = form.conn_model.clone();
-        conn.api_key = opt_string(&form.conn_api_key);
-        conn.base_url = opt_string(&form.conn_base_url);
-        conn.single_user_message = form.single_user_message;
-
-        let updated = conn.clone();
-        Ok((updated, is_narrator, is_quantifier))
-    });
+    let api_key = opt_string(&form.conn_api_key);
+    let base_url = opt_string(&form.conn_base_url);
+    let outcome = app_state
+        .settings_service
+        .update_connection(&id, move |connection| {
+            connection.name = form.conn_name;
+            connection.provider = provider;
+            connection.model = form.conn_model;
+            connection.api_key = api_key;
+            connection.base_url = base_url;
+            connection.single_user_message = form.single_user_message;
+        });
 
     match outcome {
-        Ok((conn, is_narrator, is_quantifier)) => {
-            Html(connection_card_html(&conn, is_narrator, is_quantifier))
-        }
-        Err(e) => Html(render_error(&e.to_string())),
+        Ok((connection, is_narrator, is_quantifier)) => Html(connection_card_html(
+            &connection,
+            is_narrator,
+            is_quantifier,
+        ))
+        .into_response(),
+        Err(e) => error_response(e, "Error"),
     }
 }
 
@@ -211,9 +194,7 @@ pub async fn delete_connection_handler(
 ) -> Html<String> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         let Some(idx) = settings.connections.iter().position(|c| c.id == id) else {
-            return Err(EngineError::Config(
-                "LlmProviderConfig not found".to_string(),
-            ));
+            return Err(EngineError::Config("Connection not found".to_string()));
         };
 
         if settings.connections.len() <= 1 {
@@ -245,9 +226,7 @@ pub async fn set_narrator_handler(
 ) -> Html<String> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         if settings.find_connection(&id).is_none() {
-            return Err(EngineError::Config(
-                "LlmProviderConfig not found".to_string(),
-            ));
+            return Err(EngineError::Config("Connection not found".to_string()));
         }
         settings.narration_connection_id = id.clone();
         Ok(settings.clone())
@@ -265,9 +244,7 @@ pub async fn set_quantifier_handler(
 ) -> Html<String> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         if settings.find_connection(&id).is_none() {
-            return Err(EngineError::Config(
-                "LlmProviderConfig not found".to_string(),
-            ));
+            return Err(EngineError::Config("Connection not found".to_string()));
         }
         settings.quantifier_connection_id = id.clone();
         Ok(settings.clone())

@@ -1,9 +1,12 @@
-//! Integration tests for world persistence: create/list/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
+//! Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 
 use chronicler_engine::domain::model::map::{MapDef, Overworld};
+use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::domain::model::scenario::StartingScenario;
+use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::error::EngineError;
 
 use crate::fixtures::create_test_storage;
 
@@ -28,6 +31,107 @@ fn make_test_map(id: &str, name: &str) -> MapDef {
             regions: vec![],
         },
     }
+}
+
+fn make_test_npc(id: &str, name: &str) -> NpcCard {
+    NpcCard {
+        id: id.to_string(),
+        sheet: CharacterSheet {
+            name: name.to_string(),
+            description: "Test NPC".to_string(),
+            personality: "Curious".to_string(),
+            scenario: "In a test world".to_string(),
+            ..Default::default()
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![],
+    }
+}
+
+/// A world whose every persisted column carries `tag`, so a re-seed that misses
+/// a column leaves the previous tag visible. `variant` flips the enum and bool
+/// columns so those are covered too.
+fn make_tagged_world(key: &str, tag: &str, variant: bool) -> WorldCard {
+    WorldCard {
+        key: key.to_string(),
+        name: format!("{tag} name"),
+        description: format!("{tag} description"),
+        global_rules: vec![format!("{tag} rule")],
+        scenarios: vec![StartingScenario {
+            id: format!("{tag}_scenario"),
+            name: format!("{tag} scenario"),
+            description: format!("{tag} scenario description"),
+            starting_room_id: "start".to_string(),
+            text: format!("{tag} opening"),
+            npcs: vec![],
+        }],
+        default_scenario_id: Some(format!("{tag}_scenario")),
+        default_room_image: Some(format!("/images/{tag}.png")),
+        narrator_mode: if variant {
+            NarratorMode::InteractiveFiction
+        } else {
+            NarratorMode::Novel
+        },
+        narrative_perspective: if variant {
+            NarrativePerspective::Second
+        } else {
+            NarrativePerspective::Third
+        },
+        narrative_tense: if variant {
+            NarrativeTense::Present
+        } else {
+            NarrativeTense::Past
+        },
+        options_always_on: variant,
+    }
+}
+
+/// Assert every persisted world column carries `tag` and the `variant` flags.
+fn assert_tagged_card(card: &WorldCard, key: &str, tag: &str, variant: bool) {
+    assert_eq!(card.key, key, "re-seeding must keep the world key");
+    assert_eq!(card.name, format!("{tag} name"));
+    assert_eq!(card.description, format!("{tag} description"));
+    assert_eq!(card.global_rules, vec![format!("{tag} rule")]);
+    assert_eq!(
+        card.scenarios.len(),
+        1,
+        "scenarios must survive the re-seed"
+    );
+    assert_eq!(card.scenarios[0].id, format!("{tag}_scenario"));
+    assert_eq!(
+        card.default_scenario_id.as_deref(),
+        Some(format!("{tag}_scenario").as_str())
+    );
+    assert_eq!(
+        card.default_room_image.as_deref(),
+        Some(format!("/images/{tag}.png").as_str())
+    );
+    assert_eq!(
+        card.narrator_mode,
+        if variant {
+            NarratorMode::InteractiveFiction
+        } else {
+            NarratorMode::Novel
+        }
+    );
+    assert_eq!(
+        card.narrative_perspective,
+        if variant {
+            NarrativePerspective::Second
+        } else {
+            NarrativePerspective::Third
+        }
+    );
+    assert_eq!(
+        card.narrative_tense,
+        if variant {
+            NarrativeTense::Present
+        } else {
+            NarrativeTense::Past
+        }
+    );
+    assert_eq!(card.options_always_on, variant);
 }
 
 #[test]
@@ -265,20 +369,124 @@ fn test_world_with_empty_optionals() {
 }
 
 #[test]
-fn test_create_world_duplicate_key_idempotent() {
+fn test_create_world_duplicate_key_refused() {
     let storage = Storage::new_in_memory();
 
     let world_card = make_test_world("duplicate", "First");
     let map = make_test_map("dup_map", "Duplicate Map");
-    let id1 = storage.create_world(&world_card, &map).unwrap();
+    storage.create_world(&world_card, &map).unwrap();
 
     let world_card2 = make_test_world("duplicate", "Second");
-    let id2 = storage.create_world(&world_card2, &map).unwrap();
+    let result = storage.create_world(&world_card2, &map);
 
-    assert_eq!(id1, id2, "Duplicate key should be idempotent");
+    assert!(
+        matches!(&result, Err(EngineError::WorldAlreadyExists(key)) if key == "duplicate"),
+        "a duplicate key must be refused, got: {result:?}"
+    );
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1, "Should only have one world");
+    assert_eq!(
+        worlds[0].name, "First",
+        "the existing world must not be overwritten"
+    );
+}
+
+#[test]
+fn test_create_world_after_delete_does_not_reuse_id() {
+    let storage = Storage::new_in_memory();
+
+    storage
+        .create_world(
+            &make_test_world("first", "First"),
+            &make_test_map("first_map", "First Map"),
+        )
+        .unwrap();
+    let second_id = storage
+        .create_world(
+            &make_test_world("second", "Second"),
+            &make_test_map("second_map", "Second Map"),
+        )
+        .unwrap();
+    storage.delete_world("second").unwrap();
+
+    let third_id = storage
+        .create_world(
+            &make_test_world("third", "Third"),
+            &make_test_map("third_map", "Third Map"),
+        )
+        .unwrap();
+
+    assert!(
+        third_id > second_id,
+        "a new world must not reuse a deleted world's id (second={second_id}, third={third_id})"
+    );
+}
+
+#[test]
+fn test_seed_world_replaces_existing_key_in_memory() {
+    let storage = Storage::new_in_memory();
+
+    storage
+        .seed_world(
+            &make_tagged_world("reseed", "first", false),
+            &make_test_map("first_map", "First Map"),
+        )
+        .unwrap();
+    storage
+        .seed_world(
+            &make_tagged_world("reseed", "second", true),
+            &make_test_map("second_map", "Second Map"),
+        )
+        .unwrap();
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(worlds.len(), 1, "re-seeding must keep one world");
+    assert_tagged_card(&worlds[0], "reseed", "second", true);
+    let stored = storage.get_world("reseed").unwrap().unwrap();
+    assert_tagged_card(&stored.world_card, "reseed", "second", true);
+    assert_eq!(
+        stored.map.overworld.id, "second_map",
+        "re-seeding must replace the existing map"
+    );
+}
+
+#[test]
+fn test_seed_world_keeps_id_and_dependents() {
+    let storage = Storage::new_in_memory();
+
+    storage
+        .seed_world(
+            &make_test_world("reseed_id", "First"),
+            &make_test_map("map_v1", "Map V1"),
+        )
+        .unwrap();
+    let original_id = storage.get_world("reseed_id").unwrap().unwrap().world_id;
+    storage
+        .seed_character(original_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .unwrap();
+
+    storage
+        .seed_world(
+            &make_test_world("reseed_id", "Second"),
+            &make_test_map("map_v2", "Map V2"),
+        )
+        .unwrap();
+
+    let stored = storage.get_world("reseed_id").unwrap().unwrap();
+    assert_eq!(
+        stored.world_id, original_id,
+        "re-seeding must keep the world id"
+    );
+    assert_eq!(stored.world_card.name, "Second");
+    assert_eq!(stored.map.overworld.id, "map_v2");
+    let characters = storage.list_characters(original_id).unwrap();
+    assert_eq!(
+        characters.len(),
+        1,
+        "re-seeding must keep the world's characters"
+    );
+    assert_eq!(characters[0].id, "elena_voss");
 }
 
 #[test]
@@ -309,6 +517,28 @@ fn test_delete_world_nonexistent_idempotent() {
 
     let result = storage.delete_world("nonexistent");
     assert!(result.is_ok(), "Should succeed even if world doesn't exist");
+}
+
+#[test]
+fn test_delete_world_drops_its_characters() {
+    let storage = Storage::new_in_memory();
+
+    let world_id = storage
+        .create_world(
+            &make_test_world("char_world", "Character World"),
+            &make_test_map("char_map", "Character Map"),
+        )
+        .unwrap();
+    storage
+        .seed_character(world_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .unwrap();
+
+    storage.delete_world("char_world").unwrap();
+
+    assert!(
+        storage.list_characters(world_id).unwrap().is_empty(),
+        "deleting a world must drop its characters, as SQLite's cascade does"
+    );
 }
 
 #[test]
@@ -365,6 +595,127 @@ fn test_sqlite_seed_world_idempotent() {
 }
 
 #[test]
+fn test_sqlite_create_world_duplicate_key_refused() {
+    let storage = create_test_storage(1);
+
+    let world_card = make_test_world("duplicate", "First");
+    let map = make_test_map("dup_map", "Duplicate Map");
+    storage.create_world(&world_card, &map).unwrap();
+
+    let world_card2 = make_test_world("duplicate", "Second");
+    let result = storage.create_world(&world_card2, &map);
+
+    assert!(
+        matches!(&result, Err(EngineError::WorldAlreadyExists(key)) if key == "duplicate"),
+        "a duplicate key must be refused, got: {result:?}"
+    );
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(worlds.len(), 1, "Should only have one world");
+    assert_eq!(
+        worlds[0].name, "First",
+        "the existing world must not be overwritten"
+    );
+}
+
+#[test]
+fn test_sqlite_create_world_after_delete_does_not_reuse_id() {
+    let storage = create_test_storage(1);
+
+    storage
+        .create_world(
+            &make_test_world("first", "First"),
+            &make_test_map("first_map", "First Map"),
+        )
+        .unwrap();
+    let second_id = storage
+        .create_world(
+            &make_test_world("second", "Second"),
+            &make_test_map("second_map", "Second Map"),
+        )
+        .unwrap();
+    storage.delete_world("second").unwrap();
+
+    let third_id = storage
+        .create_world(
+            &make_test_world("third", "Third"),
+            &make_test_map("third_map", "Third Map"),
+        )
+        .unwrap();
+
+    assert!(
+        third_id > second_id,
+        "a new world must not reuse a deleted world's id (second={second_id}, third={third_id})"
+    );
+}
+
+#[test]
+fn test_sqlite_seed_world_replaces_existing_key() {
+    let storage = create_test_storage(1);
+
+    storage
+        .seed_world(
+            &make_tagged_world("reseed", "first", false),
+            &make_test_map("first_map", "First Map"),
+        )
+        .unwrap();
+    storage
+        .seed_world(
+            &make_tagged_world("reseed", "second", true),
+            &make_test_map("second_map", "Second Map"),
+        )
+        .unwrap();
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(worlds.len(), 1, "re-seeding must keep one world");
+    assert_tagged_card(&worlds[0], "reseed", "second", true);
+    let stored = storage.get_world("reseed").unwrap().unwrap();
+    assert_tagged_card(&stored.world_card, "reseed", "second", true);
+    assert_eq!(
+        stored.map.overworld.id, "second_map",
+        "re-seeding must replace the existing map"
+    );
+}
+
+#[test]
+fn test_sqlite_seed_world_keeps_id_and_dependents() {
+    let storage = create_test_storage(1);
+
+    storage
+        .seed_world(
+            &make_test_world("reseed_id", "First"),
+            &make_test_map("map_v1", "Map V1"),
+        )
+        .unwrap();
+    let original_id = storage.get_world("reseed_id").unwrap().unwrap().world_id;
+    storage
+        .seed_character(original_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .unwrap();
+
+    storage
+        .seed_world(
+            &make_test_world("reseed_id", "Second"),
+            &make_test_map("map_v2", "Map V2"),
+        )
+        .unwrap();
+
+    let stored = storage.get_world("reseed_id").unwrap().unwrap();
+    assert_eq!(
+        stored.world_id, original_id,
+        "re-seeding must keep the world id"
+    );
+    assert_eq!(stored.world_card.name, "Second");
+    assert_eq!(stored.map.overworld.id, "map_v2");
+    let characters = storage.list_characters(original_id).unwrap();
+    assert_eq!(
+        characters.len(),
+        1,
+        "re-seeding must keep the world's characters"
+    );
+    assert_eq!(characters[0].id, "elena_voss");
+}
+
+#[test]
 fn test_sqlite_get_world_by_id() {
     let storage = create_test_storage(1);
 
@@ -400,4 +751,26 @@ fn test_sqlite_delete_world_blocked_by_games() {
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1, "World should still exist");
+}
+
+#[test]
+fn test_sqlite_delete_world_drops_its_characters() {
+    let storage = create_test_storage(1);
+
+    let world_id = storage
+        .create_world(
+            &make_test_world("char_world", "Character World"),
+            &make_test_map("char_map", "Character Map"),
+        )
+        .unwrap();
+    storage
+        .seed_character(world_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .unwrap();
+
+    storage.delete_world("char_world").unwrap();
+
+    assert!(
+        storage.list_characters(world_id).unwrap().is_empty(),
+        "deleting a world must drop its characters, as SQLite's cascade does"
+    );
 }

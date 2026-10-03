@@ -256,24 +256,38 @@ pub fn preset_card_selector(name: &str) -> String {
     format!(r#".preset-card:has(.card-title:text-is("{name}"))"#)
 }
 
-/// Send an action via the command form
-pub async fn send_action(page: &playwright_rs::Page, text: &str) {
-    let text_owned = text.to_string();
+/// Put `command` into the shipped command input. Shared by the helpers that
+/// submit it, so both address the same field.
+pub async fn fill_command_input(page: &playwright_rs::Page, command: &str) {
+    let command = command.to_string();
     let _: Result<(), _> = page
-        .evaluate(
+        .evaluate::<String, ()>(
             r#"
-            (text) => {
+            (command) => {
                 const input = document.querySelector('#command-form input[name="command"]');
-                const btn = document.querySelector('#command-form button[type="submit"]');
                 if (input) {
-                    input.value = text;
+                    input.value = command;
                 }
+            }
+            "#,
+            Some(&command),
+        )
+        .await;
+}
+
+pub async fn send_action(page: &playwright_rs::Page, text: &str) {
+    fill_command_input(page, text).await;
+    let _: Result<(), _> = page
+        .evaluate::<(), ()>(
+            r#"
+            () => {
+                const btn = document.querySelector('#command-form button[type="submit"]');
                 if (btn) {
                     btn.click();
                 }
             }
             "#,
-            Some(&text_owned),
+            None,
         )
         .await;
 
@@ -310,6 +324,20 @@ pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
         .await
         .unwrap_or_default()
         .len()
+}
+
+/// The error toast's `.visible` state and displayed text.
+pub async fn read_error_toast(page: &playwright_rs::Page) -> (bool, String) {
+    page.evaluate::<(), (bool, String)>(
+        r#"(() => {
+            const el = document.getElementById('error-notification');
+            if (!el) return [false, ''];
+            return [el.classList.contains('visible'), el.textContent || ''];
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap()
 }
 
 /// Capture failure diagnostics before panicking: screenshot to

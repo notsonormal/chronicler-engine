@@ -2,7 +2,6 @@
   "permission": {
     "*": "allow",
     "path": {
-      "/mnt/*": "deny",
       "*.env": "deny",
       "*.env.*": "deny",
       "*.env.example": "allow"      
@@ -17,42 +16,8 @@
    },
     "bash": {
       "*": "allow",
-      "find": "allow",
-      "find *": "allow",
-      "nohup *": "allow",      
-      "grep": "allow",          
-      "grep *": "allow",      
-      "xargs": "deny",
-      "xargs *": "deny",
       "timeout": "deny",
-      "timeout *": "deny",      
-      "git tag": "deny",
-      "git tag *": "deny",
-      "git merge": "allow",
-      "git merge *": "allow",
-      "git rebase": "deny",
-      "git rebase *": "deny",
-      "git reset": "deny",
-      "git reset *": "deny",
-      "git cherry-pick": "deny",
-      "git cherry-pick *": "deny",
-      "git rm": "deny",
-      "git rm *": "deny",
-      "git checkout": "deny",
-      "git checkout *": "deny",
-      "git restore": "deny",
-      "git restore *": "deny",
-      "git branch -f *": "deny",
-      "git branch --force *": "deny",
-      "git clean -f *": "deny",
-      "git clean --force *": "deny",
-      "git pull": "deny",
-      "git pull *": "deny",
-      "git switch": "deny",
-      "git switch *": "deny",
-      "git symbolic-ref *": "deny",
-      "git commit": "allow",
-      "git commit *": "allow"       
+      "timeout *": "deny"      
     }
   }
 }

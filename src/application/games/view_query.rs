@@ -11,7 +11,7 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::error::EngineError;
 
-pub use crate::application::debug::DebugStateView;
+use crate::application::debug::DebugStateView;
 
 #[derive(Clone)]
 pub struct GameViewQuery {

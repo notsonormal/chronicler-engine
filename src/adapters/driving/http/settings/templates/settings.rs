@@ -4,7 +4,8 @@
 use askama::Template;
 
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
-use crate::adapters::driving::http::utils::template_helpers::provider_options_html;
+use crate::adapters::driving::http::utils::template_helpers::select_options_html;
+use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
 
 #[derive(Template)]
 #[template(
@@ -36,7 +37,7 @@ use crate::adapters::driving::http::utils::template_helpers::provider_options_ht
     </div>
     {% endfor %}
 
-    <h3>Add LlmProviderConfig</h3>
+    <h3>Add Connection</h3>
     <form hx-post="/connections/add" hx-target=".settings-panel" hx-swap="innerHTML">
         <div class="form-group">
             <label for="conn_name">Name</label>
@@ -45,7 +46,7 @@ use crate::adapters::driving::http::utils::template_helpers::provider_options_ht
         <div class="form-group">
             <label for="conn_provider">Provider</label>
             <select name="conn_provider" id="conn_provider">
-                {{ provider_options|safe }}
+                {{ provider_options }}
             </select>
         </div>
         <div class="form-group">
@@ -66,7 +67,7 @@ use crate::adapters::driving::http::utils::template_helpers::provider_options_ht
                 Single User Message (merge system + user for models that ignore system prompts)
             </label>
         </div>
-        <button type="submit" class="btn-primary">Add LlmProviderConfig</button>
+        <button type="submit" class="btn-primary">Add Connection</button>
     </form>
     <span id="settings-status"></span>
 
@@ -107,7 +108,7 @@ pub struct SettingsTemplate {
     pub connections: Vec<LlmProviderConfig>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
-    pub provider_options: String,
+    pub provider_options: SafeHtml,
     pub text_check_mode: String,
     pub enable_auto_check: bool,
 }
@@ -118,7 +119,7 @@ impl SettingsTemplate {
             connections: settings.connections.clone(),
             narration_connection_id: settings.narration_connection_id.clone(),
             quantifier_connection_id: settings.quantifier_connection_id.clone(),
-            provider_options: provider_options_html("openrouter"),
+            provider_options: select_options_html(SelectOptionView::providers("openrouter")),
             text_check_mode: match settings.text_check.mode {
                 TextCheckMode::Disabled => "disabled",
                 TextCheckMode::Spell => "spell",

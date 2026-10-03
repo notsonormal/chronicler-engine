@@ -41,6 +41,15 @@ impl NarratorMode {
         }
     }
 
+    /// The label the dashboard renders for this mode: the mode select's option
+    /// text, the allowed-mode checkbox, and the preset badges all derive from it.
+    pub fn display_label(&self) -> &'static str {
+        match self {
+            Self::Novel => "Novel",
+            Self::InteractiveFiction => "Interactive Fiction",
+        }
+    }
+
     pub fn parse_or_default(s: &str) -> Self {
         Self::from_str(s).unwrap_or_else(|e| {
             tracing::warn!("Invalid narrator mode '{s}', falling back to Novel: {e}");

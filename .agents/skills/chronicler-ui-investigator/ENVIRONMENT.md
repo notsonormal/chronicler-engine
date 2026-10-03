@@ -14,7 +14,13 @@ toolchains are available, and both drive the **same** Chrome over CDP on
 | Toolchain | Surface | Role here |
 |---|---|---|
 | `@narumitw/pi-chrome-devtools` | `chrome_devtools_*` tools | Primary path for ad-hoc interactive checks |
-| `chrome-cdp` | `scripts/cdp.mjs` invoked through `bash` | Used by the `visual-tester` subagent; zero-dependency fallback |
+| `chrome-cdp` | `scripts/cdp.mjs` invoked through `bash` | Zero-dependency fallback for any session or managed agent with `bash` |
+
+The extension registers eight tools: `chrome_devtools_load`, five stable DevTools
+capabilities, and two experimental WebMCP gateways. Only the loader starts active
+on models with native deferred-tool support; on models without it — the default
+`opencode-go/deepseek-v4.1-flash` included — all five capabilities activate before
+the first request. `/chrome-devtools enable` activates everything by hand.
 
 ## Start the browser
 
@@ -99,9 +105,11 @@ would have to propagate into every spawned subagent process.
 | `/tmp/chrome-launch.log` | Chrome stdout/stderr; dbus errors here are noise |
 
 The launcher and its config are machine-scoped, not repo files. `scripts/cdp.mjs`
-is vendored into the repo because `visual-tester` checks for it at a
-project-relative path (`test -x scripts/cdp.mjs`) and no packaged skill places it
-there.
+is a vendored copy of the `pi-chrome-cdp` skill script, kept at a project-relative
+path so the packaged skill's literal `scripts/cdp.mjs` commands resolve from the
+repo root and so any `bash`-capable session or agent can drive it. The package also
+ships its own copy at
+`~/.pi/agent/npm/node_modules/pi-chrome-cdp/skills/chrome-cdp/scripts/cdp.mjs`.
 
 ## Headed mode is unavailable
 
@@ -118,8 +126,8 @@ Two consequences:
 - `HEADED=1 python build.py ...` cannot work here. The Playwright helper only sets
   `headless = false` when `HEADED=1`, so the default headless path is fine, but
   do not reach for headed mode to watch a test. `SLOW_MO` alone still works.
-- **Screenshots are the only way to see the UI.** There is no window to glance at,
-  which makes the Mandatory Screenshot Verification rule in `SKILL.md` the only
+- **A shot is the only way to see the UI.** There is no window to glance at,
+  which makes the look-at-the-shot rule in `SKILL.md` (step 3) the only
   visual check available rather than merely the preferred one.
 
 ## Coexistence with the Playwright tier
@@ -146,24 +154,36 @@ for pid in $(pgrep -x chrome); do kill "$pid"; done
 Note the process comm name is `chrome`, not `google-chrome`, so `pgrep -x
 google-chrome` matches nothing.
 
-## `visual-tester` prerequisites
+## Vision models and image caps
 
-Both halves are in place:
+Providers cap the images one request may carry (`glm-5.3-flash` rejects at 31:
+`Too many images in request`). Long reviews reach that cap fast, so lean on DOM
+dumps for structure and look at shots in small batches. `@getpipher/vision`
+is configured (`~/.pi/agent/vision.json`) to delegate image description to
+`deepseek-v4-flash-vision-exp` for text-only primaries, with `glm-5.3-flash` as
+fallback; `opencode-go/deepseek-v4.1-flash`, the current default model, is
+multimodal itself and takes images natively.
 
-1. `npm:pi-chrome-cdp` installed globally, so `/skill:chrome-cdp` resolves from the
-   subagent's `skills: chrome-cdp` frontmatter.
-2. `scripts/cdp.mjs` vendored into the repo, so the agent's `test -x` precondition
-   passes.
+## Delegated screenshot sweeps
 
-It produced a full screenshot sweep across every tab and three viewports
-(desktop 1280, tablet 768, mobile 375), so the chain works end to end.
+The `visual-tester` agent that used to drive `scripts/cdp.mjs` shipped with
+`pi-herdr-subagents` and is gone; pi-herdsman does not replace it. Its five
+bundled definitions (`generalist`, `implementer`, `researcher`, `reviewer`,
+`scout`) all declare `noSkills: true`, and none carries browser extension tools,
+so a sweep needs the method written into the task:
 
-Note how it weighs those breakpoints: its bundled instructions treat all three as
-peers, which does not match this app, where desktop is the primary target and mobile
-is secondary. Say **desktop first** in the task when delegating a sweep. Do not fork
-the bundled agent into a project override just to reorder breakpoints — a project
-definition of the same name replaces the bundled one entirely, with no merging, so
-it would mean owning all ~235 lines of it.
+- Use `generalist`: it has `bash` + `read`, and its model
+  (`opencode-go/deepseek-v4.1-flash`) accepts image input, so it can run
+  `node scripts/cdp.mjs list` / `shot` / `eval` and then look at the PNGs it
+  captured. Verified by having one read `tmp/visual-tester-smoke/01-initial.png`
+  and describe the layout.
+- Give it the viewport sequence (**desktop first**: 1280x800 — the launcher's
+  default — then 768, then 375) and the priority scale. The old agent's P0–P3
+  went with it, so name the dashboard review's P1–P3
+  (`.scratch/dashboard-ui-review/review-2026-09-29.md`).
+- For a standing sweep definition instead of writing the method into a prompt
+  each time, add a new project definition under `<cwd>/.pi/agents/`, which is
+  empty today; a new name is standalone rather than an overlay.
 
 ## If the browser stops responding
 

@@ -3,7 +3,6 @@
 
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::utils::template::render_template;
 use crate::application::agents::options::types::OptionsPromptContext;
 
 /// Used when the active options preset is unreadable so the agent still
@@ -35,7 +34,7 @@ impl<'a> OptionsPromptBuilder<'a> {
             .as_deref()
             .filter(|text| !text.trim().is_empty())
             .unwrap_or(FALLBACK_SYSTEM_PROMPT);
-        render_template(base, &vars)
+        vars.render(base)
     }
 
     fn build_user_prompt(&self) -> String {

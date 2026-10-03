@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! Storage backend trait and core abstractions
+//! Storage backend and core abstractions
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};

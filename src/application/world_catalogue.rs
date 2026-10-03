@@ -7,6 +7,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
+use crate::error::EngineError;
 
 #[derive(Clone)]
 pub struct WorldCatalogue {
@@ -32,6 +33,9 @@ impl WorldCatalogue {
             .map_err(Into::into)
     }
 
+    /// Create a new world. Refuses a key that already exists — the user-facing
+    /// create path must never silently replace an authored world. Bootstrap
+    /// seeding uses the storage `seed_world` upsert instead.
     pub fn create_world(
         &self,
         world_card: WorldCard,
@@ -39,7 +43,10 @@ impl WorldCatalogue {
     ) -> Result<i64, ApplicationError> {
         self.storage
             .create_world(&world_card, &map)
-            .map_err(Into::into)
+            .map_err(|e| match e {
+                EngineError::WorldAlreadyExists(_) => ApplicationError::validation(e.to_string()),
+                other => ApplicationError::Engine(other),
+            })
     }
 
     pub fn update_world(

@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the worlds update endpoint: the posture merge contract, the options-toggle checkbox grammar, and the auto-save posture endpoint.
+//! HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, and the duplicate-identifier create refusal.
 
 use std::sync::Arc;
 
@@ -44,13 +44,15 @@ fn posture_world_app() -> (
     (app, state)
 }
 
-async fn updated_world(state: &chronicler_engine::adapters::driving::http::AppState) -> WorldCard {
-    let (_world_id, card, _map) = state
+async fn updated_world(
+    state: &chronicler_engine::adapters::driving::http::AppState,
+) -> (WorldCard, chronicler_engine::domain::model::map::MapDef) {
+    let (_world_id, card, map) = state
         .world_catalogue
         .get_world("posture_world")
         .expect("get_world should succeed")
         .expect("the world should exist");
-    card
+    (card, map)
 }
 
 // [docs/specs/worlds.md] SCENARIO: 25.1
@@ -67,7 +69,7 @@ async fn test_world_update_without_posture_fields_preserves_posture_http() {
     .await;
     assert!(resp.status().is_success(), "the update should succeed");
 
-    let stored = updated_world(&state).await;
+    let (stored, _) = updated_world(&state).await;
     assert_eq!(stored.narrator_mode, NarratorMode::InteractiveFiction);
     assert_eq!(stored.narrative_perspective, NarrativePerspective::Second);
     assert_eq!(stored.narrative_tense, NarrativeTense::Past);
@@ -86,7 +88,7 @@ async fn test_world_update_partial_posture_merges_per_field_http() {
     let resp = post_form(&app, "/worlds/posture_world", &body).await;
     assert!(resp.status().is_success());
 
-    let stored = updated_world(&state).await;
+    let (stored, _) = updated_world(&state).await;
     assert_eq!(stored.narrative_tense, NarrativeTense::Present);
     assert_eq!(stored.narrator_mode, NarratorMode::InteractiveFiction);
     assert_eq!(stored.narrative_perspective, NarrativePerspective::Second);
@@ -108,7 +110,7 @@ async fn test_world_update_unknown_posture_value_falls_back_to_default_http() {
         "the update should still succeed"
     );
 
-    let stored = updated_world(&state).await;
+    let (stored, _) = updated_world(&state).await;
     assert_eq!(
         stored.narrator_mode,
         NarratorMode::Novel,
@@ -134,8 +136,9 @@ async fn test_world_posture_autosave_returns_saved_span_http() {
         "the auto-save must return the Saved status span, got: {body:?}"
     );
 
+    let (stored, _) = updated_world(&state).await;
     assert_eq!(
-        updated_world(&state).await.narrative_tense,
+        stored.narrative_tense,
         NarrativeTense::Present,
         "the tense patch must be persisted"
     );
@@ -159,11 +162,12 @@ async fn test_world_posture_invalid_value_returns_error_span_http() {
     let body = response_body(resp).await;
     assert!(
         body.contains("error"),
-        "an invalid posture value must render an error span, got: {body:?}"
+        "an invalid posture value must render an error fragment, got: {body:?}"
     );
 
+    let (stored, _) = updated_world(&state).await;
     assert_eq!(
-        updated_world(&state).await.narrator_mode,
+        stored.narrator_mode,
         NarratorMode::InteractiveFiction,
         "an invalid patch must mutate nothing"
     );
@@ -230,8 +234,9 @@ async fn test_world_update_options_toggle_checkbox_grammar_http() {
     );
     let resp = post_form(&app, "/worlds/posture_world", &checked).await;
     assert!(resp.status().is_success());
+    let (stored, _) = updated_world(&state).await;
     assert!(
-        updated_world(&state).await.options_always_on,
+        stored.options_always_on,
         "a checked box must set the toggle"
     );
 
@@ -242,8 +247,9 @@ async fn test_world_update_options_toggle_checkbox_grammar_http() {
     )
     .await;
     assert!(resp.status().is_success());
+    let (reset_stored, _) = updated_world(&state).await;
     assert!(
-        !updated_world(&state).await.options_always_on,
+        !reset_stored.options_always_on,
         "an absent field must reset the toggle to false"
     );
 }
@@ -293,5 +299,121 @@ async fn test_world_edit_form_renders_posture_selects_http() {
     assert!(
         html.contains(r#"hx-post="/worlds/posture_world/posture""#),
         "the posture selects must auto-save to this world: {html}"
+    );
+}
+
+// The world list is a plain server render; a GET observes the pluralised
+// game count directly, with no browser round-trip.
+// [docs/specs/worlds.md] SCENARIO: 25.8
+#[tokio::test]
+async fn test_worlds_fragment_pluralises_game_count_http() {
+    // `default_test` seeds one World with exactly one game in it.
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+
+    let html = fetch_body(&app, "/fragment/worlds").await;
+
+    assert!(
+        html.contains("(1 game)"),
+        "a World with one game must show a singular count: {html}"
+    );
+    assert!(
+        !html.contains("(1 games)"),
+        "the count must not pluralise a single game: {html}"
+    );
+
+    // A second game in the same World switches the count to the plural arm.
+    state
+        .game_catalogue
+        .create_game("test", "test_player")
+        .expect("create a second game");
+
+    let html = fetch_body(&app, "/fragment/worlds").await;
+    assert!(
+        html.contains("(2 games)"),
+        "a World with two games must use the plural count: {html}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.7
+#[tokio::test]
+async fn test_world_create_existing_key_is_refused_http() {
+    let (app, state) = posture_world_app();
+
+    let second = WorldCard {
+        key: "posture_world".to_string(),
+        name: "Second World".to_string(),
+        description: "A second world that must never be stored.".to_string(),
+        ..Default::default()
+    };
+    let resp = post_form(
+        &app,
+        "/worlds",
+        &world_form_body(&second, &TestMap::single_room("second_room")),
+    )
+    .await;
+
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::BAD_REQUEST,
+        "a duplicate-key create must be refused"
+    );
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("posture_world") && body.contains("already exists"),
+        "the refusal must name the key and say it exists: {body:?}"
+    );
+
+    let (stored, stored_map) = updated_world(&state).await;
+    assert_eq!(
+        stored.name, "Posture World",
+        "the existing world must not be overwritten"
+    );
+    assert_eq!(stored.key, "posture_world");
+    assert_eq!(
+        stored.description, "A world for the update contract tests.",
+        "the existing description must not be overwritten"
+    );
+    assert_eq!(
+        stored_map.overworld.regions[0].rooms[0].id, "start",
+        "the existing map must not be overwritten"
+    );
+}
+
+// A storage failure is not a client refusal: the create handler answers the
+// shared error fragment with a 200, unlike the duplicate-key refusal's 400 and
+// the posture endpoint's 500 on the same storage seam.
+// [docs/specs/worlds.md] SCENARIO: 25.9
+#[tokio::test]
+async fn test_world_create_storage_failure_renders_error_fragment_http() {
+    let storage = Arc::new(Storage::new_in_memory().with_failure(
+        "create_world",
+        TestOverride::internal("create_world failure"),
+    ));
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+
+    let world = WorldCard {
+        key: "new_world".to_string(),
+        name: "New World".to_string(),
+        description: "A world that must not be stored.".to_string(),
+        ..Default::default()
+    };
+    let resp = post_form(
+        &app,
+        "/worlds",
+        &world_form_body(&world, &TestMap::single_room("start")),
+    )
+    .await;
+
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::OK,
+        "a storage failure is rendered in-fragment with a 200, not a 500"
+    );
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("error-message") && body.contains("create_world failure"),
+        "the error fragment must name the storage failure: {body:?}"
     );
 }

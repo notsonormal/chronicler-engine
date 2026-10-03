@@ -14,6 +14,8 @@ Apply the highest-impact ponytail-audit cuts to reduce dependency surface and in
 
 <!-- As tickets close, append a one-line gist + link here. -->
 
+- 03: delete the Windows-only port killing (server and `build.py`); single bind, port check moves to `build.py run`. Executed by `docs/plans/build-py-run-step-plan.md`. [issue](issues/03-decide-port-killing.md)
+
 ## Not yet specified
 
 - None yet.

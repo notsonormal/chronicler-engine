@@ -4,6 +4,8 @@ Endpoints:
  - `GET /fragment/settings`
  - `POST /settings`
  - `POST /settings/text-check`
+ - `POST /connections/add`
+ - `POST /connections/{id}/edit`
  - `POST /connections/:id/set-narrator`
  - `GET /debug/backend`
 
@@ -20,7 +22,7 @@ Then the response is 200
 And the response body contains "<div class=\"settings-panel\">"
 And the body contains a "Connections" heading
 And the body contains one connection-card per connection (name, provider, model)
-And the body contains an "Add LlmProviderConfig" heading
+And the body contains an "Add Connection" heading
 And the body contains a conn_name input
 And the body contains a conn_provider select (with OpenRouter, DeepSeek, Ollama options)
 And the body contains a conn_model input
@@ -42,6 +44,7 @@ When the client POST /settings with narration_connection_id set to a different e
 And quantifier_connection_id set to the current quantifier connection
 Then the response is 200
 And the response body is "Settings saved!"
+And a following GET /fragment/settings marks the switched narrator connection as Narrator
 ```
 
 #### Scenario 20.3: POST /settings switches the quantifier connection
@@ -52,6 +55,7 @@ When the client POST /settings with quantifier_connection_id set to a different 
 And narration_connection_id set to the current narrator connection
 Then the response is 200
 And the response body is "Settings saved!"
+And a following GET /fragment/settings marks the switched quantifier connection as Quantifier
 ```
 
 #### Scenario 20.4: POST /settings switches both connections
@@ -61,6 +65,7 @@ Given a fresh app state where the narrator and quantifier connections are both t
 When the client POST /settings with narration_connection_id and quantifier_connection_id each set to a different existing connection
 Then the response is 200
 And the response body is "Settings saved!"
+And a following GET /fragment/settings marks the switched narrator connection as Narrator and the switched quantifier connection as Quantifier
 ```
 
 ### POST /settings — error paths
@@ -72,7 +77,7 @@ Given a fresh app state
 When the client POST /settings with narration_connection_id set to a string that is not any connection's id
 And quantifier_connection_id set to the current quantifier connection
 Then the response is 200
-And the response body contains "<span class='error'>Save failed:" (a dangling id is a configuration fault, not a HTTP error status)
+And the response body contains `<div class="error-message">Save failed:` (a dangling id is a configuration fault, not a HTTP error status)
 And the saved narration connection id is unchanged
 ```
 
@@ -90,7 +95,7 @@ Then the response is 422 Unprocessable Entity (axum Form rejection)
 Given an app state whose settings storage fails on save
 When the client POST /settings with valid narration_connection_id and quantifier_connection_id fields
 Then the response is 200
-And the response body contains "<span class='error'>Save failed:" (the error is surfaced in the fragment, not as a HTTP error status)
+And the response body contains `<div class="error-message">Save failed:` (the error is surfaced in the fragment, not as a HTTP error status)
 ```
 
 ### Backend resolution
@@ -103,4 +108,36 @@ And a second mock connection with model mock-model-b
 When the client POST /connections/mock-b/set-narrator
 Then the response is 200
 And a following GET /debug/backend reports mock-model-b (settings resolve per request, so the switch needs no restart)
+```
+
+### POST /connections/add — create
+
+#### Scenario 20.9: Adding a Connection whose name already exists is refused
+
+```gherkin
+Given a fresh app state with a Connection named "Duplicate Probe"
+When the client adds a second Connection named "Duplicate Probe"
+Then the response is a 400
+And the body names "Duplicate Probe" and says a connection with that name already exists
+And the Connection list still holds exactly one Connection named "Duplicate Probe"
+```
+
+#### Scenario 20.10: Adding a Connection differing only in case and surrounding space is refused
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha"
+When the client adds a Connection named "  alpha  "
+Then the response is a 400
+And the body says a connection with that name already exists
+```
+
+### POST /connections/{id}/edit — update
+
+#### Scenario 20.11: Editing a Connection keeps its own name
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha"
+When the client edits that Connection with the same name "Alpha" and a changed model
+Then the response is 200
+And the body contains a Connection card named "Alpha" and the changed model
 ```

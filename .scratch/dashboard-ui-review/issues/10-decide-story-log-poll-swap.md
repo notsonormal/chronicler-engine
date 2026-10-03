@@ -19,6 +19,7 @@ The 2-second story-log poll replaces every entry node, even when nothing changed
   - Which htmx version is bundled (`assets/htmx.min.js`)?
   - Is a morph extension available?
 - Poll cadences are in `docs/diataxis/explanation/dashboard_design.md`.
+- Added from [Recover from a failed message save instead of freezing the story log](27-recover-failed-message-save.md): `htmx.trigger("#story-log", "htmx:refresh")` (also used for `#visual-sidebar`, `#header` and the LLM panel) fires an event nothing listens for; `assets/htmx.min.js` has no `htmx:refresh`. After save, cancel, delete or swipe, the log only updates on its next 2s poll. [reported by the implementer]
 
 ## Done when
 

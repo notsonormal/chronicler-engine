@@ -3,8 +3,6 @@
 
 use axum::{body::Body, http::StatusCode, response::Response};
 
-use crate::adapters::driving::http::utils::error::render_error;
-
 #[allow(clippy::expect_used)]
 fn status_response(status: StatusCode, body: impl Into<String>) -> Response<Body> {
     Response::builder()
@@ -36,10 +34,6 @@ pub fn internal_error(body: impl Into<String>) -> Response<Body> {
 
 pub fn service_unavailable(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::SERVICE_UNAVAILABLE, body)
-}
-
-pub fn service_unavailable_generating() -> Response<Body> {
-    service_unavailable(render_error("Generation in progress, please wait..."))
 }
 
 pub fn html_escape(s: &str) -> String {

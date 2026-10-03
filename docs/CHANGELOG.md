@@ -2,6 +2,33 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-10-03
+
+### Fixed
+
+- **Failed message save, swipe, and retrigger recover.** The command form restores its previous input and the submit button returns to Ready when the server rejects the request, instead of leaving the action area stuck on "Thinking".
+- **World create refuses an existing key, and SQLite re-seed keeps the world id, map, and characters.** Re-seeding now upserts by key instead of overwriting the row.
+- **Duplicate connection and preset names are refused.** Names compare trimmed and case-insensitive; duplicating a preset appends `(Copy N)`.
+- **Edit mode fixes.** The entry textarea auto-grows to 50vh, focuses on open, saves on Cmd/Ctrl+Enter and cancels on Escape, and locks the action controls while editing.
+- **Copy sweep.** Corrected the new-game label associations.
+- **Character portrait names.** Rendered as `.image-label` with a tooltip.
+- **Two connections added in the same millisecond no longer overwrite each other.** Connection ids now carry the same uuid-v4 suffix the preset ids already had, through one shared id generator.
+
+### Changed
+
+- **Single `#story-log` container and a dedicated `#text-check-result` element.** The story-log fragment is a bare list owned by the static shell; the text-check result no longer replaces the action area.
+- **Action-area handles rebind after swaps, and Prompt Presets add forms start collapsed.** The after-swap status reconciler re-resolves `#submit-btn` and the command input once the action area is replaced; each category's add form is a closed disclosure until opened.
+- **One error fragment and one error class.** Every refusal and handler failure renders `<div class="error-message">` through one helper in `http/utils/error.rs`. The prompt-presets handlers' unstyled `<span class='error'>` is gone, the prompt-presets panel renders the same fragment when settings fail to load, and the create-world refusal reuses the storage error's message instead of repeating the sentence, and a world-creation failure that is not a refusal now renders that fragment with a 200 instead of the 400 every failure used to get.
+- **Narrower public surface and fewer single-caller modules.** Dead re-export lines and unused items are deleted (an `EngineError` variant, the `PromptLayer` enum, `MAX_SYSTEM_TOKENS`, the unwired `validate_loaded_data`, two unused `ActionAreaViewModel` fields, `ActionPipeline::prompt_assembler`). Two modules merged into their owners (`domain::model::utils::template` → `domain::model::template`, `application::llm_message` → `application::llm_recorder`), and forward-only wrappers (`spawn_pipeline_task`, `parse_preset_type`, `render_preset_xml_parts`, `AppState::current_shutdown_token`) are inlined or deleted.
+- **One preset card.** The Prompt Presets panel and the single-card endpoints render the same card partial, so an edit-refreshed card matches the panel: the preview is truncated to 120 characters with newlines flattened.
+- **One status writer in the shell.** The dashboard's Send button, status text and error toast are derived by one `applyStatusDisplay()` that reads the live status display; the body-wide `MutationObserver` is gone.
+
+## 2026-10-02
+
+### Changed
+
+- **`build.py --strict` removed**. It only set `RUSTFLAGS=-D warnings`, and the clippy step already enforces that. It also forced a full dependency rebuild and made target seeding miss.
+
 ## 2026-09-27
 
 ### Changed

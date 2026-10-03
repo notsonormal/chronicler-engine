@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! Textarea field HTML builders.
+//! Form field HTML builders.
 
 use crate::adapters::driving::http::utils::response::html_escape;
 

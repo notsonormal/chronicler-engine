@@ -25,11 +25,11 @@ Diagnostics on failure land in `tmp/screenshots/` (PNG) and `tmp/test_diagnostic
 
 ## Smart Waiting
 
-Tests poll for conditions rather than `sleep`. The helpers live in `tests/test_utils/wait.rs`: `wait_for_llm_idle`, `wait_for_status_ready`, and `wait_for_element_children`. Each helper retries until the condition is met or a per-helper timeout fires; the helpers are the contract for browser and HTTP-test synchronization.
+Tests poll for conditions rather than `sleep`. The polling helpers live in `tests/test_utils/wait.rs` — that file is the list and the contract. Each helper retries until its condition is met or a per-helper timeout fires; browser and HTTP tests synchronize through them.
 
 ## Document References
 
-- [`./unit_test_standards.md`](./unit_test_standards.md) — canonical nine-pattern form for `*_tests.rs` unit tests, with four cross-cutting patterns (XSS regression is Cross-cutting B).
+- [`./unit_test_standards.md`](./unit_test_standards.md) — canonical eight-pattern form for `*_tests.rs` unit tests, with four cross-cutting patterns (XSS regression is Cross-cutting B).
 - [`./integration_test_standards.md`](./integration_test_standards.md) — canonical seven-pattern form for tests under `tests/`, with eight cross-cutting patterns.
 - [`./guardrails.md`](./guardrails.md) — coverage-exclusion policy and the test-module-header convention guardrail.
 - `tests/AGENTS.md` — live structure index for the integration test tree and the TEST MIRROR CONVENTION.

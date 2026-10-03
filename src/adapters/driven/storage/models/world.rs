@@ -24,20 +24,20 @@ pub struct DbWorld {
 impl DbWorld {
     pub fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
         Ok(DbWorld {
-            id: row.get(0)?,
-            key: row.get(1)?,
-            name: row.get(2)?,
-            description: row.get(3)?,
-            global_rules: row.get(4)?,
-            scenarios: row.get(5)?,
-            default_scenario_id: row.get(6)?,
-            default_room_image: row.get(7)?,
-            narrator_mode: row.get(8)?,
-            narrative_perspective: row.get(9)?,
-            narrative_tense: row.get(10)?,
-            created_at: row.get(11)?,
-            updated_at: row.get(12)?,
-            options_always_on: row.get::<_, i64>(13)? != 0,
+            id: row.get("id")?,
+            key: row.get("key")?,
+            name: row.get("name")?,
+            description: row.get("description")?,
+            global_rules: row.get("global_rules")?,
+            scenarios: row.get("scenarios")?,
+            default_scenario_id: row.get("default_scenario_id")?,
+            default_room_image: row.get("default_room_image")?,
+            narrator_mode: row.get("narrator_mode")?,
+            narrative_perspective: row.get("narrative_perspective")?,
+            narrative_tense: row.get("narrative_tense")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            options_always_on: row.get::<_, i64>("options_always_on")? != 0,
         })
     }
 

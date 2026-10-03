@@ -2,9 +2,10 @@
 //! Games templates
 
 use askama::Template;
+use crate::adapters::driving::http::utils::template_helpers::select_options_html;
+use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
 use crate::domain::model::game::Game;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::world::WorldCard;
 
 pub struct GameRowView {
@@ -32,7 +33,6 @@ pub struct PersonaRowView {
                 <span class="game-name">{{ game.name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
                 <span class="persona-badge">{{ game.persona_name }}</span>
-                <span class="game-badge">Current</span>
             </div>
             <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
         </div>
@@ -49,7 +49,8 @@ pub struct PersonaRowView {
         {% else %}
         <form class="new-game-form" hx-post="/games" hx-swap="none">
             <div class="form-row">
-                <select name="world_key" required>
+                <label for="new-game-world">World</label>
+                <select id="new-game-world" name="world_key" required>
                     {% for world in worlds %}
                     <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
                     {% endfor %}
@@ -59,7 +60,8 @@ pub struct PersonaRowView {
                 {% if personas.is_empty() %}
                 <div class="games-empty">No personas available. Create a persona first.</div>
                 {% else %}
-                <select name="persona_key" required>
+                <label for="new-game-persona">Persona</label>
+                <select id="new-game-persona" name="persona_key" required>
                     {% for p in personas %}
                     <option value="{{ p.key }}">{{ p.name }}</option>
                     {% endfor %}
@@ -78,7 +80,7 @@ pub struct PersonaRowView {
         <h2>Saved Games</h2>
         <div class="games-list">
             {% if saved_games.is_empty() %}
-            <div class="games-empty">No saved games.</div>
+            <div class="games-empty">No other saved games.</div>
             {% else %}
             {% for game in saved_games %}
             <div class="game-item" data-id="{{ game.id }}">
@@ -108,13 +110,6 @@ pub struct GamesPanelTemplate {
     pub posture_html: String,
 }
 
-/// One `<option>` in a per-game preset picker dropdown.
-pub struct PresetOptionView {
-    pub value: String,
-    pub label: String,
-    pub selected: bool,
-}
-
 /// In-game posture override (mode/perspective/tense) + per-game preset
 /// picker for the active game. Every dropdown auto-saves on change and
 /// re-renders this fragment.
@@ -125,8 +120,7 @@ pub struct PresetOptionView {
     <div class="posture-row">
         <label>Mode
             <select name="narrator_mode" hx-post="/games/{{ game_id }}/mode" hx-trigger="change" hx-target="#game-posture-controls" hx-swap="outerHTML">
-                <option value="novel"{% if mode == "novel" %} selected{% endif %}>Novel</option>
-                <option value="interactive_fiction"{% if mode == "interactive_fiction" %} selected{% endif %}>Interactive Fiction</option>
+                {{ mode_options }}
             </select>
         </label>
         <label>Perspective
@@ -170,12 +164,12 @@ pub struct PresetOptionView {
 )]
 pub struct GamePostureTemplate {
     pub game_id: u64,
-    pub mode: String,
+    pub mode_options: SafeHtml,
     pub perspective: String,
     pub tense: String,
-    pub system_options: Vec<PresetOptionView>,
-    pub quantifier_options: Vec<PresetOptionView>,
-    pub impersonate_options: Vec<PresetOptionView>,
+    pub system_options: Vec<SelectOptionView>,
+    pub quantifier_options: Vec<SelectOptionView>,
+    pub impersonate_options: Vec<SelectOptionView>,
     /// Set when the preset library failed to load: the picker row renders
     /// this message instead of the three selects.
     pub preset_load_error: Option<String>,
@@ -190,57 +184,25 @@ impl GamePostureTemplate {
     ) -> Self {
         Self {
             game_id: game.id,
-            mode: game.narrator_mode.as_str().to_string(),
+            mode_options: select_options_html(SelectOptionView::narrator_modes(game.narrator_mode)),
             perspective: game.narrative_perspective.as_str().to_string(),
             tense: game.narrative_tense.as_str().to_string(),
-            system_options: PresetOptionView::options(
+            system_options: SelectOptionView::presets(
                 system_presets,
                 game.narrator_mode,
                 &game.active_system_prompt_preset_id,
             ),
-            quantifier_options: PresetOptionView::options(
+            quantifier_options: SelectOptionView::presets(
                 quantifier_presets,
                 game.narrator_mode,
                 &game.active_quantifier_prompt_preset_id,
             ),
-            impersonate_options: PresetOptionView::options(
+            impersonate_options: SelectOptionView::presets(
                 impersonate_presets,
                 game.narrator_mode,
                 &game.active_impersonate_prompt_preset_id,
             ),
             preset_load_error: None,
         }
-    }
-}
-
-impl PresetOptionView {
-    /// Picker options for one slot: presets allowing the game's mode, plus
-    /// the stored selection (even when disallowed or absent from the
-    /// library) so the browser never silently substitutes another preset.
-    pub fn options(
-        presets: &[PromptPreset],
-        mode: NarratorMode,
-        selected_id: &str,
-    ) -> Vec<PresetOptionView> {
-        let mut options: Vec<PresetOptionView> = presets
-            .iter()
-            .filter(|p| p.allows(mode) || p.id == selected_id)
-            .map(|p| PresetOptionView {
-                value: p.id.clone(),
-                label: p.name.clone(),
-                selected: p.id == selected_id,
-            })
-            .collect();
-        if !options.iter().any(|o| o.value == selected_id) {
-            options.insert(
-                0,
-                PresetOptionView {
-                    value: selected_id.to_string(),
-                    label: format!("(missing) {selected_id}"),
-                    selected: true,
-                },
-            );
-        }
-        options
     }
 }

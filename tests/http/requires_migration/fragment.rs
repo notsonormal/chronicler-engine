@@ -24,10 +24,14 @@ use crate::TEST_PERSONA;
 
 #[tokio::test]
 async fn test_basic_fragments_return_html() {
-    let app = TestAppBuilder::default_app();
+    // The story-log fragment renders entries only — the shell owns the
+    // `#story-log` container — so seed one entry to give it something to show.
+    let app = TestAppBuilder::default_test()
+        .log("You look around.", MessageType::Narration)
+        .build();
     let fragments = [
         ("/fragment/header", "class=\"header\""),
-        ("/fragment/story-log", "id=\"story-log\""),
+        ("/fragment/story-log", "class=\"log-entry"),
         ("/fragment/visual-sidebar", "id=\"visual-sidebar\""),
         ("/fragment/action-area", "id=\"action-area\""),
     ];

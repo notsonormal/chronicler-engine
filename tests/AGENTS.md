@@ -56,19 +56,18 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `prompt_presets.rs` — Browser prompt-presets tests: the duplicate → edit → save click chain wiring guard. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
     - **stub/**
-      - `dashboard.rs` — Stub-browser tests for dashboard chrome: the error toast's response-body handling and hide-timer behaviour. Tagged against `docs/specs/browser_dashboard.md`.
+      - `dashboard.rs` — Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status-error toast) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
       - `invariants.rs` — Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
       - `mod.rs` — Stub-browser tests: browser-only behaviour against a fake engine.
       - `options.rs` — Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
       - `slash_menu.rs` — Stub-browser tests for the slash menu: the client-side command palette rendered from the shipped shell's `input` listener. Tagged against `docs/specs/browser_slash_menu.md`.
       - `story_log.rs` — Stub-browser tests for the story log: the client-side edit-mode flow over a canned entry. Tagged against `docs/specs/browser_story_log.md`.
 - **helpers/**
-    - `application_ext.rs` — Test-only `AppState` extension trait for driving pipeline scenarios.
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage instances with deterministic defaults so tests can focus on the behaviour under test.
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
-    - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error spans instead of panics.
+    - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
     - `games_delete.rs` — HTTP E2E tests for game deletion (POST /games/:id/delete).
     - `games_fragment.rs` — HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.
@@ -82,7 +81,8 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `settings.rs` — HTTP E2E tests for the settings endpoints: panel rendering and POST /settings.
     - `story_log.rs` — HTTP E2E tests for the story-log delete endpoint (POST /history/delete).
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
-    - `worlds.rs` — HTTP E2E tests for the worlds update endpoint: the posture merge contract, the options-toggle checkbox grammar, and the auto-save posture endpoint.
+    - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.
+    - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, and the duplicate-identifier create refusal.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.
@@ -125,7 +125,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `mod.rs` — Driven-adapter storage seam tests: repositories exercised against a real SQLite-backed `Storage`.
     - `preset_storage.rs` — Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset
     - `snapshot_storage.rs` — Integration tests for game-state snapshot persistence: save/load, missing-snapshot errors, and message/swipe round-tripping against a real SQLite-backed `Storage`.
-    - `world_storage.rs` — Integration tests for world persistence: create/list/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
+    - `world_storage.rs` — Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 - **test_utils/**
     - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.
     - `html.rs` — HTML slicing helpers for panel markup without element ids — locate a region by a stable anchor string.

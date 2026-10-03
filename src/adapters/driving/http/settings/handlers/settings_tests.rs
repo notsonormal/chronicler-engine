@@ -15,6 +15,7 @@ use crate::adapters::driving::http::settings::handlers::{
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
+use crate::test_support::body_text;
 
 fn make_test_app_state() -> AppState {
     make_app_state_with_settings(AppSettings::default())
@@ -146,8 +147,9 @@ async fn test_add_connection_handler_adds_connection() {
 
     let response =
         add_connection_handler(axum::extract::State(app_state.clone()), Form(form)).await;
+    let body = body_text(response).await;
 
-    assert!(response.0.contains("<div class=\"settings-panel\">"));
+    assert!(body.contains("<div class=\"settings-panel\">"));
 
     let settings = app_state.settings().expect("settings read should succeed");
     let new_conn = settings.connections.last().unwrap();
@@ -229,7 +231,7 @@ async fn test_connection_card_fragment_not_found() {
     let response =
         connection_card_fragment(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("LlmProviderConfig not found"));
+    assert!(response.0.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -262,7 +264,7 @@ async fn test_edit_connection_form_not_found() {
     let response =
         edit_connection_form(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("LlmProviderConfig not found"));
+    assert!(response.0.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -296,9 +298,10 @@ async fn test_edit_connection_handler_updates_connection() {
         Form(form),
     )
     .await;
+    let body = body_text(response).await;
 
-    assert!(response.0.contains("New Name"));
-    assert!(response.0.contains("connection-card"));
+    assert!(body.contains("New Name"));
+    assert!(body.contains("connection-card"));
 }
 
 #[tokio::test]
@@ -319,8 +322,9 @@ async fn test_edit_connection_handler_not_found() {
         Form(form),
     )
     .await;
+    let body = body_text(response).await;
 
-    assert!(response.0.contains("LlmProviderConfig not found"));
+    assert!(body.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -410,7 +414,7 @@ async fn test_delete_connection_handler_not_found() {
     let response =
         delete_connection_handler(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("LlmProviderConfig not found"));
+    assert!(response.0.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -472,7 +476,7 @@ async fn test_set_narrator_handler_not_found() {
     let response =
         set_narrator_handler(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("LlmProviderConfig not found"));
+    assert!(response.0.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -511,5 +515,5 @@ async fn test_set_quantifier_handler_not_found() {
     let response =
         set_quantifier_handler(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("LlmProviderConfig not found"));
+    assert!(response.0.contains("Connection not found"));
 }

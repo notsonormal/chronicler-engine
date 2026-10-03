@@ -1,16 +1,15 @@
 use crate::adapters::driving::http::builders::presets::{
     preset_card_html, preset_edit_form_html, preset_view_form_html,
 };
+use crate::adapters::driving::http::prompt_presets::templates::ModeActiveIds;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::{ModePresetBundle, NarratorMode};
+use crate::domain::model::settings::NarratorMode;
 use crate::test_support::TestPromptPreset;
 
-/// Registry-bundle stand-in for card tests: `id` sits in the system slot;
-/// the other slots stay empty.
-fn bundle_with_system_slot(id: &str) -> ModePresetBundle {
-    ModePresetBundle {
-        system_prompt_preset_id: id.to_string(),
-        ..ModePresetBundle::default()
+fn mode_ids(novel: &str, interactive_fiction: &str) -> ModeActiveIds {
+    ModeActiveIds {
+        novel: novel.into(),
+        interactive_fiction: interactive_fiction.into(),
     }
 }
 
@@ -18,11 +17,7 @@ fn bundle_with_system_slot(id: &str) -> ModePresetBundle {
 fn test_preset_card_html_default_preset() {
     let preset =
         TestPromptPreset::system_default_with_instructions("default", "Default", "System prompt.");
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot(""),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("", ""));
     assert!(html.contains("Default"));
     assert!(html.contains(r#"badge">Default</span>"#));
     assert!(html.contains("View</button>"));
@@ -39,11 +34,7 @@ fn test_preset_card_html_non_default_preset() {
         instructions: Some("Custom prompt.".into()),
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot(""),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("", ""));
     assert!(html.contains("Custom"));
     assert!(!html.contains(r#"badge">Default</span>"#));
     assert!(html.contains("Edit</button>"));
@@ -59,14 +50,10 @@ fn test_preset_card_html_active_preset() {
         instructions: Some("Active prompt.".into()),
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot("active-1"),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("active-1", ""));
     assert!(html.contains(r#"badge primary">Active · Novel</span>"#));
     assert!(!html.contains("Set Active (Novel)</button>"));
-    assert!(html.contains("Set Active (IF)</button>"));
+    assert!(html.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[test]
@@ -77,15 +64,11 @@ fn test_preset_card_html_active_in_if_mode_only() {
         instructions: Some("IF prompt.".into()),
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot(""),
-        &bundle_with_system_slot("active-if"),
-    );
-    assert!(html.contains(r#"badge primary">Active · IF</span>"#));
+    let html = preset_card_html(&preset, &mode_ids("", "active-if"));
+    assert!(html.contains(r#"badge primary">Active · Interactive Fiction</span>"#));
     assert!(!html.contains(r#"badge primary">Active · Novel</span>"#));
     assert!(html.contains("Set Active (Novel)</button>"));
-    assert!(!html.contains("Set Active (IF)</button>"));
+    assert!(!html.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[test]
@@ -97,13 +80,9 @@ fn test_preset_card_html_disallowed_mode_has_no_activate_button() {
         allowed_modes: vec![NarratorMode::Novel],
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot(""),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("", ""));
     assert!(html.contains("Set Active (Novel)</button>"));
-    assert!(!html.contains("Set Active (IF)</button>"));
+    assert!(!html.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[test]
@@ -116,11 +95,7 @@ fn test_preset_card_html_default_and_active_preset() {
         is_default: true,
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot("default-active"),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("default-active", ""));
     assert!(html.contains(r#"badge">Default</span>"#));
     assert!(html.contains(r#"badge primary">Active · Novel</span>"#));
     assert!(!html.contains("Set Active (Novel)</button>"));
@@ -138,11 +113,7 @@ fn test_preset_card_html_no_instructions_uses_empty_preview() {
         name: "No Instructions".into(),
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot(""),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("", ""));
     assert!(html.contains("No Instructions"));
     assert!(html.contains("class=\"card-details preset-preview\">"));
 }
@@ -155,15 +126,11 @@ fn test_preset_card_html_inactive_preset() {
         instructions: Some("Inactive prompt.".into()),
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot(""),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("", ""));
     assert!(!html.contains("Active · Novel</span>"));
-    assert!(!html.contains("Active · IF</span>"));
+    assert!(!html.contains("Active · Interactive Fiction</span>"));
     assert!(html.contains("Set Active (Novel)</button>"));
-    assert!(html.contains("Set Active (IF)</button>"));
+    assert!(html.contains("Set Active (Interactive Fiction)</button>"));
 }
 
 #[test]
@@ -175,11 +142,7 @@ fn test_preset_card_html_preview_truncates() {
         instructions: Some(long_text.clone()),
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot(""),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("", ""));
     assert!(html.contains(&"a".repeat(120)));
     assert!(!html.contains(&"a".repeat(121)));
 }
@@ -192,15 +155,13 @@ fn test_preset_card_html_escapes_special_chars() {
         instructions: Some(r#"Say "hello" & goodbye."#.into()),
         ..Default::default()
     };
-    let html = preset_card_html(
-        &preset,
-        &bundle_with_system_slot(""),
-        &bundle_with_system_slot(""),
-    );
+    let html = preset_card_html(&preset, &mode_ids("", ""));
     assert!(!html.contains("<b>Name</b>"));
-    assert!(html.contains("&lt;b&gt;Name&lt;/b&gt;"));
-    assert!(html.contains("&quot;hello&quot;"));
-    assert!(html.contains("&amp;"));
+    // Askama escapes to numeric entities: `<` => `&#60;`, `>` => `&#62;`,
+    // `"` => `&#34;`, `&` => `&#38;`.
+    assert!(html.contains("&#60;b&#62;Name&#60;/b&#62;"));
+    assert!(html.contains("&#34;hello&#34;"));
+    assert!(html.contains("&#38;"));
 }
 
 #[test]
@@ -211,7 +172,7 @@ fn test_preset_edit_form_html_renders() {
         instructions: Some("Edit me.".into()),
         ..Default::default()
     };
-    let html = preset_edit_form_html(&preset, "system", false);
+    let html = preset_edit_form_html(&preset, "system");
     assert!(html.contains("edit-form"));
     assert!(html.contains("Editable"));
     assert!(html.contains("edit-1"));
@@ -226,7 +187,7 @@ fn test_preset_edit_form_html_with_all_optional_fields_none() {
         name: "Empty Edit".into(),
         ..Default::default()
     };
-    let html = preset_edit_form_html(&preset, "narrator", true);
+    let html = preset_edit_form_html(&preset, "narrator");
     assert!(html.contains("Empty Edit"));
     assert!(html.contains(r#"name="preset_type" value="narrator""#));
     assert!(
@@ -252,7 +213,7 @@ fn test_preset_edit_form_html_escapes_special_chars() {
         preset_type: PresetType::Quantifier,
         ..Default::default()
     };
-    let html = preset_edit_form_html(&preset, "quantifier", true);
+    let html = preset_edit_form_html(&preset, "quantifier");
     assert!(!html.contains("<Name>"));
     assert!(html.contains("&lt;Name&gt;"));
     assert!(html.contains("&quot;Text&quot;"));

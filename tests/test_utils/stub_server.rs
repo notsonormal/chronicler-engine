@@ -7,9 +7,11 @@
 // What is canned: every fragment the shell loads or polls, under
 // `tests/test_utils/stub_fixtures/` — except the options dock, which is
 // rendered through the engine's own `OptionsDockTemplate` (a pure vm → HTML
-// render, so the drift tax there is avoidable). The one dynamic endpoint is
-// `POST /action/check`, which answers with a scripted outcome the test names up
-// front.
+// render, so the drift tax there is avoidable). The dynamic endpoints answer
+// scripted outcomes a test names up front: `POST /action/check`, `POST
+// /action/confirm`, `POST /check-text`, and `GET /status/generating` (whose
+// `StubStatus` a live test may change between polls). `POST /history/:id` and
+// `POST /swipe/new` always answer 500.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -23,6 +25,7 @@ use axum::routing::{get, post};
 use axum::Router;
 
 use chronicler_engine::adapters::driving::http::builders::headers::add_status_swap_headers;
+use chronicler_engine::adapters::driving::http::utils::error::render_error;
 
 use super::server::{get_config_port, release_port_lock};
 use super::CONFIG_PATH;
@@ -66,6 +69,28 @@ fn options_dock_html() -> String {
         .expect("render options dock")
 }
 
+/// The command the stub treats as a text check with issues. The real
+/// `POST /action/check` runs the text check before dispatch and returns the
+/// preview for a misspelling; the stub keys on this one token so a test can
+/// drive the preview → confirm swap without a real text-check engine.
+const TEXT_CHECK_TRIGGER: &str = "casle";
+
+/// Render the text-check preview through the engine's own template — a pure
+/// `vm → HTML` render, so the canned preview cannot drift from the shipped
+/// `TextCheckPreviewTemplate`.
+fn text_check_preview_html() -> String {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::TextCheckPreviewTemplate;
+
+    TextCheckPreviewTemplate {
+        original: "look at the casle".to_string(),
+        corrected: "look at the castle".to_string(),
+        issues: vec![],
+    }
+    .render()
+    .expect("render text check preview")
+}
+
 /// What `POST /action/check` should answer with. A test names the outcome it
 /// needs; the stub runs no pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -74,15 +99,28 @@ pub enum StubActionOutcome {
     /// pending generation.
     #[default]
     Pending,
-    /// A 500 error, as a failing engine action would produce.
+    /// A 500, as a failing engine action would produce. The body is the
+    /// engine's own error render naming the command, so the toast text is the
+    /// server's response rather than the input echoed back.
     Error,
-    /// The plain idle action area, no work started.
-    Idle,
 }
 
-#[derive(Clone)]
+/// What the stub's `GET /status/generating` answers. The real endpoint returns
+/// "idle", a phase name, or the error fragment a failed generation produces.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum StubStatus {
+    /// The engine is idle; the poll answers "idle".
+    #[default]
+    Idle,
+    /// The engine is generating; the poll answers the phase name.
+    Phase(String),
+    /// A failed generation; the poll answers the error fragment.
+    Error(String),
+}
+
 struct StubState {
     action_outcome: StubActionOutcome,
+    status: std::sync::Mutex<StubStatus>,
 }
 
 /// A running stub server. Dropping it shuts the server down and releases
@@ -90,6 +128,7 @@ struct StubState {
 pub struct StubServer {
     addr: SocketAddr,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    state: Arc<StubState>,
 }
 
 impl StubServer {
@@ -103,8 +142,11 @@ impl StubServer {
 
     /// Start the stub on a named port.
     async fn start_on_port(port: u16, action_outcome: StubActionOutcome) -> Self {
-        let state = Arc::new(StubState { action_outcome });
-        let app = stub_router(state);
+        let state = Arc::new(StubState {
+            action_outcome,
+            status: std::sync::Mutex::new(StubStatus::default()),
+        });
+        let app = stub_router(Arc::clone(&state));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
             .unwrap_or_else(|e| panic!("bind stub on port {port}: {e}"));
@@ -120,12 +162,35 @@ impl StubServer {
         Self {
             addr,
             shutdown: Some(tx),
+            state,
         }
     }
 
     /// Base URL, e.g. `http://127.0.0.1:3011`.
     pub fn url(&self) -> String {
         format!("http://{}", self.addr)
+    }
+
+    /// A cloneable handle to the scripted status, so a test closure can change
+    /// what `/status/generating` answers without borrowing the server.
+    pub fn status_handle(&self) -> StubStatusHandle {
+        StubStatusHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+}
+
+/// A cloneable handle to the stub's scripted status.
+#[derive(Clone)]
+pub struct StubStatusHandle {
+    state: Arc<StubState>,
+}
+
+impl StubStatusHandle {
+    /// Set what the next `GET /status/generating` poll answers. The status
+    /// display polls every 5s, so the change lands on a later poll cycle.
+    pub fn set(&self, status: StubStatus) {
+        *self.state.status.lock().expect("stub status lock poisoned") = status;
     }
 }
 
@@ -142,7 +207,21 @@ fn stub_router(state: Arc<StubState>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/action/check", post(action_check))
-        .route("/status/generating", get(|| async { "idle" }))
+        .route("/action/confirm", post(action_confirm))
+        .route("/check-text", post(check_text))
+        // Client-side failure recovery: the save and retry paths are raw
+        // `fetch`, so their failure handling is stub-tier behaviour with no
+        // htmx swap. These routes always answer 500; no stub-tier test drives
+        // a successful save/retry through the client JS.
+        .route(
+            "/history/:id",
+            post(|| async { client_failure("Stub save failure") }),
+        )
+        .route(
+            "/swipe/new",
+            post(|| async { client_failure("Stub retry failure") }),
+        )
+        .route("/status/generating", get(status_generating))
         .route("/fragment/header", get(|| async { Html(FIXTURE_HEADER) }))
         .route(
             "/fragment/story-log",
@@ -192,8 +271,19 @@ async fn index() -> impl IntoResponse {
 
 async fn action_check(
     State(state): State<Arc<StubState>>,
-    Form(_form): Form<HashMap<String, String>>,
+    Form(form): Form<HashMap<String, String>>,
 ) -> Response<Body> {
+    // The real handler runs the text check before dispatch; the stub keys on a
+    // canned misspelling so a test can drive the preview → confirm swap.
+    let command = form.get("command").map(String::as_str).unwrap_or_default();
+    if command.contains(TEXT_CHECK_TRIGGER) {
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            text_check_preview_html(),
+        )
+            .into_response();
+    }
     match state.action_outcome {
         // The real `POST /action/check` acknowledgement retargets the status
         // span rather than replacing the action area: consume the engine's
@@ -209,17 +299,66 @@ async fn action_check(
             add_status_swap_headers(&mut response);
             response
         }
-        StubActionOutcome::Idle => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            FIXTURE_ACTION_AREA,
-        )
-            .into_response(),
-        StubActionOutcome::Error => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            "<p>Stub action failure</p>",
-        )
-            .into_response(),
+        StubActionOutcome::Error => {
+            let mut response = (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                render_error(&format!("Failed to process action: {command}")),
+            )
+                .into_response();
+            add_status_swap_headers(&mut response);
+            response
+        }
     }
+}
+
+/// The real `/status/generating` poll answer: idle text, a phase name, or the
+/// error fragment a failed generation renders.
+async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body> {
+    let status = state
+        .status
+        .lock()
+        .expect("stub status lock poisoned")
+        .clone();
+    let body = match status {
+        StubStatus::Idle => "idle".to_string(),
+        StubStatus::Phase(phase) => phase,
+        StubStatus::Error(message) => {
+            format!(r#"<span class="status error">Error: {message}</span>"#)
+        }
+    };
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        body,
+    )
+        .into_response()
+}
+
+/// The real `POST /action/confirm` swaps a fresh `#action-area` back in
+/// (`hx-swap="outerHTML"`); the stub serves the canned action area.
+async fn action_confirm() -> Html<&'static str> {
+    Html(FIXTURE_ACTION_AREA)
+}
+
+/// The real `POST /check-text` renders its result into the shell's
+/// `#text-check-result` element; the stub serves the disabled-mode body.
+async fn check_text() -> Response<Body> {
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        r#"<span class="status ready">Text check is disabled</span>"#,
+    )
+        .into_response()
+}
+
+/// A canned 500 for a raw-fetch route whose only stub-tier use is the client
+/// failure-recovery path.
+fn client_failure(message: &str) -> Response<Body> {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        format!("<p>{message}</p>"),
+    )
+        .into_response()
 }

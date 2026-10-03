@@ -23,8 +23,8 @@ Read the file at the referenced path. The user normally passes the path or the i
 Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
 
 - **Map**: `.scratch/<effort>/map.md` — Destination, Notes, Decisions-so-far, Not-yet-specified, Out-of-scope.
-- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`. A `Type:` line records ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
+- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`. A `Type:` line records ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `open`/`claimed`/`resolved`.
 - **Blocking**: `Blocked by: NN, NN` line near the top of the child body. A ticket is unblocked when every listed blocker is `resolved`.
 - **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
 - **Claim**: set `Status: claimed` and save before any work.
-- **Resolve**: append the answer under `## Answer`, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
+- **Resolve**: append the answer under `## Answer`, set `Status: resolved`, then add the context pointer (gist + link) to the map's Decisions-so-far in `map.md` (in parallel runs, the coordinator owns that edit).

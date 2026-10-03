@@ -17,9 +17,9 @@ Run the checks in this order. Most failures resolve before step 7.
 
 ## Read Tracing Output
 
-`RUST_LOG` is read by `bootstrap/logging.rs::init_logging()`; only `main.rs:15` calls it. Test binaries do not initialise the subscriber themselves.
+`RUST_LOG` is read by `bootstrap/logging.rs::init_logging()`; only the binary entry point (`main.rs`) calls it. Test binaries do not initialise the subscriber themselves.
 
-For integration tests that spawn the engine as a subprocess, `tests/test_utils/server.rs:126,138` **hardcodes** `chronicler_engine=debug` on the child — it does not forward a user-set `RUST_LOG`. To get `=trace` output from the child, rebuild and rerun the failing test against the manually-spawned binary with `RUST_LOG=trace cargo run -p chronicler_engine -- --world <name> --persona <name>`.
+For integration tests that spawn the engine as a subprocess, `tests/test_utils/server.rs` **hardcodes** `chronicler_engine=debug` on the child — it does not forward a user-set `RUST_LOG`. To get `=trace` output from the child, rebuild and rerun the failing test against the manually-spawned binary with `RUST_LOG=trace cargo run -p chronicler_engine -- --world <name> --persona <name>`.
 
 Raw `RUST_LOG=info` and `RUST_LOG=trace` (no module filter) are the dominant patterns; module-filter patterns are rare. `python build.py test-pattern <name>` is the project standard; pass `--nocapture`-style flags by running raw `cargo nextest` only when the build.py step cannot express them.
 
@@ -47,7 +47,7 @@ Variants with non-trivial First Checks. For variants not listed here, the varian
 
 **First Check.** The `status` code in the error payload: `401` = API key issue; `429` = rate limited; `5xx` = provider outage.
 
-**Common Causes.** Invalid API key (note: keys live on `LlmProviderConfig.api_key`, not `AppSettings`; the `OPENROUTER_API_KEY` env-var fallback lives in `LlmProviderConfig::resolve_api_key()` at `src/domain/model/settings.rs:83-94`). Rate limiting. Model-routing failure. Provider maintenance. The response body is captured in `body` for forensics.
+**Common Causes.** Invalid API key (note: keys live on `LlmProviderConfig.api_key`, not `AppSettings`; the `OPENROUTER_API_KEY` env-var fallback lives in `LlmProviderConfig::resolve_api_key()`). Rate limiting. Model-routing failure. Provider maintenance. The response body is captured in `body` for forensics.
 
 ### `EngineError::Llm(LlmFailure::Network { url, detail })`
 
@@ -75,7 +75,7 @@ Variants with non-trivial First Checks. For variants not listed here, the varian
 
 ### `EngineError::ContextOverflow { requested, max }`
 
-**First Check.** The token-budget calculation in `src/application/narrative_prompt/`.
+**First Check.** The token-budget calculation in `src/application/prompting/`.
 
 **Common Causes.** History too long. System prompt too large. Combined context exceeds `max_context_tokens`.
 
@@ -83,8 +83,8 @@ Variants with non-trivial First Checks. For variants not listed here, the varian
 
 **First Check.** The `game_count` payload. List games whose `world_key` matches the offending world.
 
-**Common Causes.** Games created against the world after the delete attempt began. Admin trying to delete a world with active sessions. The engine's default SQLite file is `chronicler.db` (relative to CWD), not `data/chronicler.db` (`src/bootstrap/run.rs:59`).
+**Common Causes.** Games created against the world after the delete attempt began. Admin trying to delete a world with active sessions. A stale database from an earlier run also counts: the engine opens `chronicler_{port}.db` beside the executable, falling back to `data/` (`bootstrap::run::prepare_data`).
 
 ## Document References
 
-- [`../reference/coding_standards/testing.md`](../reference/coding_standards/testing.md) — testing policy; the `*_tests.rs` sibling-file convention; test categories. The runtime `llm_messages` forensics table and the `RecordingSaveSpy` test fixture are documented there as test-writing helpers, not debugging tools.
+- [`../reference/coding_standards/testing.md`](../reference/coding_standards/testing.md) — testing policy; the `*_tests.rs` sibling-file convention; test categories.

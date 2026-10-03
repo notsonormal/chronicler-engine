@@ -1,9 +1,8 @@
-//! Unit tests for AppState helpers and shutdown-token wiring.
+//! Unit tests for AppState helpers.
 
 use std::sync::Arc;
 
 use chrono::Utc;
-use tokio_util::sync::CancellationToken;
 
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::AppState;
@@ -114,17 +113,4 @@ fn test_settings_survive_a_rebuilt_app_state() {
         .get_settings()
         .expect("get_settings should succeed");
     assert_eq!(settings.narration_connection_id, "stored-narrator");
-}
-
-#[test]
-fn test_current_shutdown_token_returns_configured_token() {
-    let token = CancellationToken::new();
-    let mut app_state = build_app_state();
-    app_state.shutdown_token = token.clone();
-
-    let recovered = app_state.current_shutdown_token();
-    assert!(
-        !recovered.is_cancelled(),
-        "current_shutdown_token() should return the configured token"
-    );
 }

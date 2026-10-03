@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error spans instead of panics.
+//! HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
 
 use std::sync::Arc;
 
@@ -37,7 +37,7 @@ async fn test_posture_save_failure_surfaces_500_error_span_http() {
     let body_str = String::from_utf8_lossy(&body);
     assert!(
         body_str.contains("update_game_config failure"),
-        "the error span must name the storage failure: {body_str}"
+        "the error fragment must name the storage failure: {body_str}"
     );
 }
 
@@ -61,7 +61,7 @@ async fn test_presets_save_failure_surfaces_500_error_span_http() {
     let body_str = String::from_utf8_lossy(&body);
     assert!(
         body_str.contains("update_game_config failure"),
-        "the error span must name the storage failure: {body_str}"
+        "the error fragment must name the storage failure: {body_str}"
     );
 }
 
@@ -85,7 +85,7 @@ async fn test_mode_switch_failure_surfaces_500_error_span_http() {
     let body_str = String::from_utf8_lossy(&body);
     assert!(
         body_str.contains("update_game_config failure"),
-        "the error span must name the storage failure: {body_str}"
+        "the error fragment must name the storage failure: {body_str}"
     );
 }
 

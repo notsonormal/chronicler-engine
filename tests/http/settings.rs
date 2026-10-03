@@ -10,17 +10,12 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
+use chronicler_engine::test_support::body_text;
 use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::app_with_production_graph;
-
-async fn body_string(response: axum::response::Response<Body>) -> String {
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    String::from_utf8_lossy(&body).to_string()
-}
+use crate::test_utils::card_html_slice;
 
 fn post_form_request(uri: &str, body: &str) -> Request<Body> {
     Request::builder()
@@ -38,7 +33,7 @@ async fn get_body(app: &axum::Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    body_string(response).await
+    body_text(response).await
 }
 
 fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
@@ -55,6 +50,28 @@ fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
     }
 }
 
+/// The id of the connection just added through the Settings panel. Added ids
+/// start with `conn-`; the seeded fixture connections carry author-chosen ids.
+fn added_connection_id(panel: &str) -> String {
+    let prefix = "hx-get=\"/fragment/connections/";
+    let marker = format!("{prefix}conn-");
+    let start = panel.find(&marker).expect("added connection edit link") + prefix.len();
+    let end = start
+        + panel[start..]
+            .find('/')
+            .expect("connection edit link must close");
+    panel[start..end].to_string()
+}
+
+/// The `<div class="connection-card">…</div>` slice for connection `id` in the
+/// rendered settings panel. Cards carry no data-id, so the anchor is the
+/// connection's own edit link and the slice ends at the next card.
+fn connection_card<'a>(panel: &'a str, id: &str) -> &'a str {
+    let anchor = format!(r#"hx-get="/fragment/connections/{id}/edit"#);
+    card_html_slice(panel, "connection-card", &anchor)
+        .unwrap_or_else(|| panic!("no connection card for '{id}' in panel: {panel}"))
+}
+
 // [docs/specs/settings.md] SCENARIO: 20.1
 #[tokio::test]
 async fn test_settings_panel_renders_full_surface() {
@@ -67,11 +84,11 @@ async fn test_settings_panel_renders_full_surface() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains(r#"<div class="settings-panel">"#));
     assert!(body.contains("<h2>Connections</h2>"));
     assert!(body.contains("connection-card"));
-    assert!(body.contains("<h3>Add LlmProviderConfig</h3>"));
+    assert!(body.contains("<h3>Add Connection</h3>"));
     assert!(body.contains(r#"id="conn_name""#));
     assert!(body.contains(r#"name="conn_provider""#));
     assert!(body.contains("OpenRouter"));
@@ -97,11 +114,23 @@ async fn test_post_settings_switches_narrator() {
         "/settings",
         "narration_connection_id=openrouter-euryale&quantifier_connection_id=openrouter-gpt-4o-mini",
     );
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(body, "Settings saved!");
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert!(
+        connection_card(&panel, "openrouter-euryale")
+            .contains(r#"<span class="badge">Narrator</span>"#),
+        "the switched narrator should render its badge: {panel}"
+    );
+    assert!(
+        !connection_card(&panel, "openrouter-gpt-4o-mini")
+            .contains(r#"<span class="badge">Narrator</span>"#),
+        "the previous narrator should no longer render the Narrator badge: {panel}"
+    );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.3
@@ -114,11 +143,23 @@ async fn test_post_settings_switches_quantifier() {
         "/settings",
         "narration_connection_id=openrouter-gpt-4o-mini&quantifier_connection_id=ollama-gemma-4-26B",
     );
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(body, "Settings saved!");
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert!(
+        !connection_card(&panel, "openrouter-gpt-4o-mini")
+            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
+        "the previous quantifier should no longer render the Quantifier badge: {panel}"
+    );
+    assert!(
+        connection_card(&panel, "ollama-gemma-4-26B")
+            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
+        "the switched quantifier should render its badge: {panel}"
+    );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.4
@@ -131,11 +172,23 @@ async fn test_post_settings_switches_both_connections() {
         "/settings",
         "narration_connection_id=openrouter-euryale&quantifier_connection_id=ollama-gemma-4-26B",
     );
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert_eq!(body, "Settings saved!");
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert!(
+        connection_card(&panel, "openrouter-euryale")
+            .contains(r#"<span class="badge">Narrator</span>"#),
+        "the switched narrator should render its badge: {panel}"
+    );
+    assert!(
+        connection_card(&panel, "ollama-gemma-4-26B")
+            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
+        "the switched quantifier should render its badge: {panel}"
+    );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.5
@@ -151,7 +204,7 @@ async fn test_post_settings_rejects_unknown_connection_id() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains("error-message"));
     assert!(body.contains("is not in the connections list"));
 
@@ -188,7 +241,7 @@ async fn test_post_settings_reports_save_failure() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_string(response).await;
+    let body = body_text(response).await;
     assert!(body.contains("error-message"));
     assert!(body.contains("settings save failure"));
 }
@@ -226,5 +279,117 @@ async fn test_narrator_switch_takes_effect_without_a_restart() {
     assert!(
         body.contains("mock-model-b"),
         "the switch should take effect on the next resolution: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.9
+#[tokio::test]
+async fn test_connection_add_duplicate_name_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let first = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Duplicate+Probe&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Duplicate+Probe&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        second.status(),
+        StatusCode::BAD_REQUEST,
+        "a duplicate connection name must be refused"
+    );
+    let body = body_text(second).await;
+    assert!(body.contains("Duplicate Probe"), "body: {body}");
+    assert!(body.contains("already exists"), "body: {body}");
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert_eq!(
+        panel.matches("Duplicate Probe").count(),
+        1,
+        "the refused connection must not be stored"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.10
+#[tokio::test]
+async fn test_connection_add_case_and_space_variant_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let first = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Alpha&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=++alpha++&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        second.status(),
+        StatusCode::BAD_REQUEST,
+        "a case-and-space variant must be refused"
+    );
+    let body = body_text(second).await;
+    assert!(body.contains("already exists"), "body: {body}");
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.11
+#[tokio::test]
+async fn test_connection_edit_keeps_its_own_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let added = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(added.status(), StatusCode::OK);
+    let panel = body_text(added).await;
+    let id = added_connection_id(&panel);
+
+    let response = app
+        .oneshot(post_form_request(
+            &format!("/connections/{id}/edit"),
+            "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model-2&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_text(response).await;
+    let card = connection_card(&body, &id);
+    assert!(
+        card.contains(r#"<span class="card-title">Alpha</span>"#),
+        "the card must keep the connection's own name: {card}"
+    );
+    assert!(
+        card.contains("alpha-model-2"),
+        "the card must show the changed model: {card}"
     );
 }

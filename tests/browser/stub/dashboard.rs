@@ -1,41 +1,111 @@
-//! Stub-browser tests for dashboard chrome: the error toast's response-body handling and hide-timer behaviour. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for dashboard chrome: the error toast, and the action-area handles (Send lock, status-error toast) surviving an #action-area swap. Tagged against `docs/specs/browser_dashboard.md`.
 
-// The error toast is a body-level `htmx:beforeSwap` listener with an
-// `isError` guard; it reads the response body, strips tags, and shows the
-// toast. No engine endpoint produces this event in the test — the test
-// dispatches it directly — so the stub server cannot change the behaviour.
+// The engine's failing action route answers 500, so htmx fires
+// `htmx:beforeSwap` with `isError` on its own. The stub's Error outcome serves
+// that 500, and its `/status/generating` serves the spans the status poll
+// swaps; no test dispatches either event by hand.
 
 use std::time::Duration;
 
 use super::*;
 
-/// Dispatch the synthetic `htmx:beforeSwap` error the toast listens for.
-/// The message is wrapped in a tag so the handler's tag-stripping path runs.
-async fn dispatch_error_toast(page: &playwright_rs::Page, message: &str) {
-    let script = format!(
-        r#"(() => {{
-            const evt = new CustomEvent('htmx:beforeSwap', {{
-                bubbles: true,
-                cancelable: true,
-                detail: {{
-                    isError: true,
-                    serverResponse: '<p>{message}</p>',
-                    target: document.getElementById('action-area'),
-                }},
-            }});
-            document.body.dispatchEvent(evt);
-        }})()"#
-    );
-    page.evaluate::<(), ()>(&script, None).await.unwrap();
+/// Submit `command` through the shipped command form. Unlike `send_action`,
+/// this does not wait for the status span: a 500 is not swapped, so the status
+/// stays Ready and the error toast is the observable outcome. The form is
+/// submitted directly rather than by clicking Send: the failure path leaves
+/// Send locked until the next idle poll, and a second error must land inside
+/// the first toast's 5s timer.
+async fn submit_command(page: &playwright_rs::Page, command: &str) {
+    fill_command_input(page, command).await;
+    page.evaluate::<(), ()>(
+        r#"() => {
+            const form = document.getElementById('command-form');
+            form.requestSubmit();
+        }"#,
+        None,
+    )
+    .await
+    .unwrap();
 }
 
-/// Read the toast's `.visible` state and displayed text.
-async fn read_error_toast(page: &playwright_rs::Page) -> (bool, String) {
+/// Wait until the toast displays `text`, so a timer measurement starts from the
+/// toast actually being up.
+async fn wait_for_toast_text(page: &playwright_rs::Page, text: &str) {
+    let expected = text.to_string();
+    let shown = wait_for_condition_async(Duration::from_secs(3), Duration::from_millis(50), || {
+        let expected = expected.clone();
+        async move { read_error_toast(page).await.1 == expected }
+    })
+    .await;
+    assert!(shown, "toast never displayed {expected:?}");
+}
+
+/// Submit a command the auto-check intercepts and wait for the preview that
+/// replaces #action-area. Every node the page-load handles pointed at (form,
+/// status display, Send button) is now detached; the ids live on in fresh
+/// nodes after the confirm.
+async fn submit_intercepted_command(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"(() => {
+            window.__statusBeforeSwap = document.getElementById('status-display');
+            const input = document.querySelector('#command-form input[name="command"]');
+            input.value = 'look at the casle';
+            document.querySelector('#command-form button[type="submit"]').click();
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap();
+
+    wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
+}
+
+/// Confirm the intercepted preview, so `/action/confirm` swaps a fresh
+/// #action-area (and #status-display) in.
+async fn confirm_text_check_preview(page: &playwright_rs::Page) {
+    page.locator(".text-check-preview button:has-text('Send Original')")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    // The confirm response replaces #action-area through htmx (outerHTML), so a
+    // fresh #status-display arrives.
+    wait_until_visible(page, "#status-display", Duration::from_secs(5)).await;
+}
+
+async fn swap_action_area_via_text_check_confirm(page: &playwright_rs::Page) {
+    submit_intercepted_command(page).await;
+    confirm_text_check_preview(page).await;
+}
+
+/// Assert the confirm swap produced a fresh #status-display node (not the one
+/// the page-load handles pointed at).
+async fn assert_status_display_restored(page: &playwright_rs::Page) {
+    let fresh = page
+        .evaluate::<(), bool>(
+            r#"(() => {
+                const before = window.__statusBeforeSwap;
+                const now = document.getElementById('status-display');
+                return !!now && now !== before;
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(
+        fresh,
+        "the confirm swap did not produce a fresh #status-display"
+    );
+}
+
+/// Read the live Send button's disabled state and label.
+async fn read_submit_button(page: &playwright_rs::Page) -> (bool, String) {
     page.evaluate::<(), (bool, String)>(
         r#"(() => {
-            const el = document.getElementById('error-notification');
-            if (!el) return [false, ''];
-            return [el.classList.contains('visible'), el.textContent || ''];
+            const btn = document.getElementById('submit-btn');
+            if (!btn) return [false, ''];
+            return [btn.disabled, btn.textContent.trim()];
         })()"#,
         None,
     )
@@ -46,21 +116,21 @@ async fn read_error_toast(page: &playwright_rs::Page) -> (bool, String) {
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.7
 #[tokio::test]
 async fn test_error_toast_on_action_failure() {
-    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // serverResponse carries HTML tags so the assertion exercises the
-        // handler's tag-stripping path (`response.replace(/<[^>]*>/g, "")`) and
-        // proves the toast text is *derived from* the response body, not just
-        // non-empty.
-        dispatch_error_toast(&page, "Internal server error").await;
+    with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
+        // The server's 500 body is the engine's error render, so the toast text
+        // is distinguishably the server's, not the submitted command echoed.
+        submit_command(&page, "Internal server error").await;
+        let expected = "Error: Failed to process action: Internal server error";
+        wait_for_toast_text(&page, expected).await;
 
         let (visible, text) = read_error_toast(&page).await;
         assert!(
             visible,
-            "#error-notification should gain .visible class on a 500 htmx:beforeSwap event"
+            "#error-notification should gain the .visible class on a 500 response"
         );
         assert_eq!(
-            text, "Internal server error",
-            "#error-notification should display the response body with tags stripped, got {text:?}"
+            text, expected,
+            "#error-notification should display the server's response with tags stripped, got {text:?}"
         );
     })
     .await;
@@ -69,26 +139,218 @@ async fn test_error_toast_on_action_failure() {
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.8
 #[tokio::test]
 async fn test_newer_error_keeps_toast_visible() {
-    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // Two errors inside the 5s hide window. The bug was that the first
-        // error's hide timer was never cleared, so it hid the toast while the
-        // second error's toast was still on screen — the banner slid up and
-        // down on a loop. Six seconds after the first event the first timer
-        // has fired (5s) but the second (7.5s) has not: a correct toast is
-        // still visible.
-        dispatch_error_toast(&page, "First failure").await;
+    with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
+        submit_command(&page, "First failure").await;
+        wait_for_toast_text(&page, "Error: Failed to process action: First failure").await;
         tokio::time::sleep(Duration::from_millis(2500)).await;
-        dispatch_error_toast(&page, "Second failure").await;
-        tokio::time::sleep(Duration::from_millis(3500)).await;
+        submit_command(&page, "Second failure").await;
+        wait_for_toast_text(&page, "Error: Failed to process action: Second failure").await;
 
-        let (visible, text) = read_error_toast(&page).await;
+        // Poll across the window in which the first toast's 5s timer fires but
+        // the second's 7.5s timer does not. A single read 3.5s after the second
+        // toast appeared is load-sensitive: a slow submit shifts the read past
+        // the second timer and the toast has already hidden.
+        let window_end = std::time::Instant::now() + Duration::from_millis(3500);
+        while std::time::Instant::now() < window_end {
+            let (visible, text) = read_error_toast(&page).await;
+            assert!(
+                visible,
+                "toast should stay visible until the second error's own timer fires, got text {text:?}"
+            );
+            assert_eq!(
+                text, "Error: Failed to process action: Second failure",
+                "#error-notification should show the most recent server error, got {text:?}"
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.9
+#[tokio::test]
+async fn test_send_locks_and_unlocks_after_action_area_swap() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let status = stub.status_handle();
+        async move {
+            swap_action_area_via_text_check_confirm(&page).await;
+            assert_status_display_restored(&page).await;
+
+            // The fresh #status-display's `load` poll can land after the ack.
+            // Were it to serve "idle", onStatusPoll would reset Ready and
+            // unlock Send before the assertion reads it. Serve a phase instead,
+            // so no poll in the window can unlock the button.
+            status.set(StubStatus::Phase("narrating".to_string()));
+
+            // The form's htmx ack swaps in the pending status; that is when the
+            // lock must appear.
+            send_action(&page, "wait").await;
+
+            let (disabled, label) = read_submit_button(&page).await;
+            assert!(
+                disabled,
+                "Send should lock during generation after an action-area swap (label {label:?})"
+            );
+            assert!(
+                label.contains("Stop"),
+                "locked button should read Stop after the swap, got {label:?}"
+            );
+
+            // Return the stub to idle, so the next 5s poll clears the status and
+            // the button must follow it back to Send.
+            status.set(StubStatus::Idle);
+            wait_for_status_ready(&page).await;
+            let (disabled, label) = read_submit_button(&page).await;
+            assert!(
+                !disabled,
+                "Send should unlock once the status returns to Ready after the swap"
+            );
+            assert!(
+                label.contains("Send"),
+                "unlocked button should read Send after the swap, got {label:?}"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.10
+#[tokio::test]
+async fn test_status_error_reaches_toast_after_action_area_swap() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let status = stub.status_handle();
+        async move {
+            submit_intercepted_command(&page).await;
+
+            // Set the error before the confirm swap, so the fresh
+            // #status-display's `load` poll serves it instead of the test
+            // waiting a full 5s poll cycle.
+            status.set(StubStatus::Error("narration failed".to_string()));
+
+            confirm_text_check_preview(&page).await;
+            assert_status_display_restored(&page).await;
+
+            // The stub's /status/generating answers the error fragment a failed
+            // generation renders; the fresh #status-display's own poll swaps it in
+            // and its after-swap reconciler toasts it — the toast's beforeSwap
+            // listener is not involved.
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(8),
+                    Duration::from_millis(100),
+                    || async { read_error_toast(&page).await.0 },
+                )
+                .await,
+                "status error should reach the toast after an action-area swap"
+            );
+            let (_, text) = read_error_toast(&page).await;
+            assert_eq!(
+                text, "Error: narration failed",
+                "#error-notification should show the status error, got {text:?}"
+            );
+
+            // A Ready poll clears lastStatusError; wait for it, then for the first
+            // toast's 5s hide timer to run out, so visibility alone proves the
+            // second show call.
+            status.set(StubStatus::Idle);
+            wait_for_status_ready(&page).await;
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(12),
+                    Duration::from_millis(100),
+                    || async { !read_error_toast(&page).await.0 },
+                )
+                .await,
+                "toast should have hidden before the dedupe check"
+            );
+
+            // The Ready status reset the dedupe, so the SAME error must toast
+            // again. If the dedupe state leaked across the swap, the repeat stays
+            // hidden.
+            status.set(StubStatus::Error("narration failed".to_string()));
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(8),
+                    Duration::from_millis(100),
+                    || async { read_error_toast(&page).await.0 },
+                )
+                .await,
+                "the same error should toast again after a Ready status reset the dedupe"
+            );
+            let (_, text) = read_error_toast(&page).await;
+            assert_eq!(
+                text, "Error: narration failed",
+                "#error-notification should show the status error again, got {text:?}"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.11
+#[tokio::test]
+async fn test_text_check_result_keeps_command_form() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        // Stash the live nodes; the result must not replace them.
+        page.evaluate::<(), ()>(
+            r#"(() => {
+                window.__formBefore = document.getElementById('command-form');
+                window.__statusBefore = document.getElementById('status-display');
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let clicked = page
+            .evaluate::<(), bool>(
+                r#"(() => {
+                    const btn = document.querySelector('.check-btn');
+                    if (btn) { btn.click(); return true; }
+                    return false;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(clicked, "Should find and click a log-entry check button");
+
+        // The result renders in its own element beside the form. Waiting on
+        // the element being non-empty asserts the shipped contract without
+        // asserting the stub's canned body.
+        wait_until_visible(
+            &page,
+            "#text-check-result:not(:empty)",
+            Duration::from_secs(5),
+        )
+        .await;
+
+        // Node identity, not the id string: a fresh #command-form would carry
+        // the same id and pass a string check while the form was replaced.
+        let (form_same, status_same, result_text) = page
+            .evaluate::<(), (bool, bool, String)>(
+                r#"(() => {
+                    const form = document.getElementById('command-form');
+                    const status = document.getElementById('status-display');
+                    const result = document.getElementById('text-check-result');
+                    return [
+                        !!form && form === window.__formBefore,
+                        !!status && status === window.__statusBefore,
+                        result ? result.textContent.trim() : '',
+                    ];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(form_same, "the text-check result replaced #command-form");
         assert!(
-            visible,
-            "toast should stay visible until the second error's own timer fires, got text {text:?}"
+            status_same,
+            "the text-check result replaced #status-display"
         );
-        assert_eq!(
-            text, "Second failure",
-            "#error-notification should show the most recent error, got {text:?}"
+        assert!(
+            !result_text.is_empty(),
+            "#text-check-result should be non-empty, got {result_text:?}"
         );
     })
     .await;

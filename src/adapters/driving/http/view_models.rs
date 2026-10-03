@@ -4,6 +4,8 @@
 use std::fmt;
 
 use crate::domain::model::llm_message::LlmMessage;
+use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::application::ports::text_checker::CheckResult;
@@ -13,7 +15,82 @@ use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 #[derive(Debug, Clone)]
 pub struct SafeHtml(String);
 
+impl SafeHtml {
+    /// Wrap already-escaped markup so an Askama template renders it verbatim.
+    pub(crate) fn new(html: String) -> Self {
+        Self(html)
+    }
+}
+
 impl askama::filters::HtmlSafe for SafeHtml {}
+
+/// One `<option>` in a `<select>`: the value and label a template renders,
+/// and whether this is the current selection. `SelectOptionsTemplate` renders
+/// it so Askama escapes every value; the constructors here are the single
+/// source for which options each select offers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectOptionView {
+    pub value: String,
+    pub label: String,
+    pub selected: bool,
+}
+
+impl SelectOptionView {
+    /// The narrator-mode options, marking `selected`.
+    pub fn narrator_modes(selected: NarratorMode) -> Vec<Self> {
+        [NarratorMode::Novel, NarratorMode::InteractiveFiction]
+            .into_iter()
+            .map(|mode| Self {
+                value: mode.as_str().to_string(),
+                label: mode.display_label().to_string(),
+                selected: mode == selected,
+            })
+            .collect()
+    }
+
+    /// The LLM-connection provider options, marking the provider whose wire
+    /// id is `selected` (an unknown id selects none).
+    pub fn providers(selected: &str) -> Vec<Self> {
+        [
+            ("openrouter", "OpenRouter"),
+            ("deepseek", "DeepSeek"),
+            ("ollama", "Ollama"),
+        ]
+        .into_iter()
+        .map(|(value, label)| Self {
+            value: value.to_string(),
+            label: label.to_string(),
+            selected: value == selected,
+        })
+        .collect()
+    }
+
+    /// Picker options for one preset slot: presets allowing the game's mode,
+    /// plus the stored selection (even when disallowed or absent from the
+    /// library) so the browser never silently substitutes another preset.
+    pub fn presets(presets: &[PromptPreset], mode: NarratorMode, selected_id: &str) -> Vec<Self> {
+        let mut options: Vec<Self> = presets
+            .iter()
+            .filter(|p| p.allows(mode) || p.id == selected_id)
+            .map(|p| Self {
+                value: p.id.clone(),
+                label: p.name.clone(),
+                selected: p.id == selected_id,
+            })
+            .collect();
+        if !options.iter().any(|o| o.value == selected_id) {
+            options.insert(
+                0,
+                Self {
+                    value: selected_id.to_string(),
+                    label: format!("(missing) {selected_id}"),
+                    selected: true,
+                },
+            );
+        }
+        options
+    }
+}
 
 impl fmt::Display for SafeHtml {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -133,10 +210,8 @@ impl From<&LlmMessage> for LlmMessageView {
 #[derive(Debug, Clone)]
 pub struct ActionAreaViewModel {
     pub is_disabled: bool,
-    pub error_message: String,
     pub status_class: String,
     pub status_text: String,
-    pub available_actions: Vec<String>,
 }
 
 impl ActionAreaViewModel {
@@ -160,10 +235,8 @@ impl ActionAreaViewModel {
 
         Self {
             is_disabled,
-            error_message: error_msg,
             status_class,
             status_text,
-            available_actions: vec![],
         }
     }
 }

@@ -313,7 +313,7 @@ pub async fn inject_mock_connections(port: u16) {
         );
         let body = resp.text().await.expect("set role body");
         assert!(
-            !body.contains("class='error'"),
+            !body.contains("error-message"),
             "{action} reported an error: {body}"
         );
     }

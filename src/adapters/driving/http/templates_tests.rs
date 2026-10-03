@@ -47,7 +47,10 @@ fn test_header_template_connection_status() {
 fn test_story_log_template_empty() {
     let template = NarrativeLogTemplate::new(&[], false);
     let rendered = template.render().unwrap();
-    assert!(rendered.contains(r#"id="story-log""#));
+    assert!(
+        rendered.is_empty(),
+        "no entries means no markup — the shell owns the container: {rendered}"
+    );
 }
 
 #[test]
@@ -191,7 +194,6 @@ fn test_story_log_template_renders_event_header() {
     assert!(rendered.contains("edit-btn"));
     assert!(rendered.contains("delete-btn"));
     assert!(!rendered.contains("check-btn"));
-    // Retry button removed — swipe right arrow handles new swipe generation
     assert!(!rendered.contains("retry-btn"));
 }
 

@@ -10,7 +10,6 @@ use tracing::instrument;
 use crate::application::pipeline::phase_error::PhaseError;
 use crate::application::pipeline::narration_generation;
 use crate::application::pipeline::pipeline_run::PipelineRun;
-use crate::application::pipeline::spawn::spawn_pipeline_task;
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::adapters::driven::storage::Storage;
 
@@ -103,10 +102,6 @@ impl ActionPipeline {
         &self.recorder
     }
 
-    pub fn prompt_assembler(&self) -> &Arc<PromptAssembler> {
-        &self.prompt_assembler
-    }
-
     pub fn rebind_for_test(
         mut self,
         message_service: Arc<MessageService>,
@@ -174,14 +169,14 @@ impl ActionPipeline {
 
         let gate = generation_gate.clone();
         let pipeline_arc = Arc::new(self.clone());
-        spawn_pipeline_task(pipeline_arc, move |pipeline| {
+        tokio::task::spawn_blocking(move || {
             tracing::debug!("spawn_blocking: task started");
             let _guard = gate.guard(started_game_id, started_generation_id);
-            if pipeline.is_shutting_down() {
+            if pipeline_arc.is_shutting_down() {
                 tracing::debug!("spawn_blocking: shutting down before executing task");
                 return;
             }
-            spawn_task(pipeline);
+            spawn_task(&pipeline_arc);
             tracing::debug!("spawn_blocking: task completed");
         });
         Ok(ProcessActionResult::Started)

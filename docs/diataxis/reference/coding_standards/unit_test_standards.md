@@ -5,7 +5,7 @@ title: Unit Test Standards
 
 ## Pattern 1 — Pure unit
 
-**Purpose.** Test a pure function or a method on a domain type with no external dependencies. The function under test is the only thing the test constructs (plus optional domain-builder helpers like `TestPersona::default()`).
+**Purpose.** Test a pure function or a method on a domain type with no external dependencies. The function under test is the only thing the test constructs (plus optional domain-builder helpers like `TestPersona::standard()`).
 
 **The standard.**
 
@@ -67,7 +67,7 @@ fn test_<backend>_<method>_<expected_outcome>() {
 }
 ```
 
-For non-mock backends, the assertion is typically `name()` / `model_name()` returning the expected strings, plus any backend-specific configuration behaviour. For `MockBackend`, the assertion is typically that `complete()` echoes a configured response.
+For non-mock backends, the assertion is typically `name()` / `model()` returning the expected strings, plus any backend-specific configuration behaviour. For `MockBackend`, the assertion is typically that `complete()` echoes a configured response.
 
 ## Pattern 4 — LLM recorder / orchestration
 
@@ -98,7 +98,7 @@ Use `MockBackend::default()` for the deterministic default response. Use `MockBa
 
 ## Pattern 5 — Application service-layer
 
-**Purpose.** Test an application service method (`execute_action`, `commit_trigger_narration`, query handlers, etc.) end-to-end through the pipeline-override seam. The service is the system under test; the LLM is mocked.
+**Purpose.** Test an application service method (`process_action`, `retry_last_response`, a `GameViewQuery` query, etc.) end-to-end through the pipeline-override seam. The service is the system under test; the LLM is mocked.
 
 **The standard.**
 
@@ -123,13 +123,13 @@ fn test_<method>_<expected_outcome>() {
         .build_service();
 
     <call app.<method>(<args>)>;
-    <assert final_state via app.persistence_gate.load_or_fresh() or service observable>;
+    <assert final_state via app.message_service.load_or_fresh() or service observable>;
 }
 ```
 
 The override supplies recorder / assembler / agent registry; `build_app_graph_for_tests` rebinds the pipeline's persistence and settings to the app graph, so the pipeline and the seeded storage always agree.
 
-The service method under test is invoked directly on the built `app` (e.g., `app.process_action(input)` or `app.execute_action(input)`). To exercise the public `process_action` API path end-to-end against real SQLite, use Pattern 1 (`SqliteTestAppBuilder`) and place the test under `tests/http/`.
+The service method under test is invoked through the wired collaborator on the built `app` — `app.pipeline`, `app.game_catalogue`, or the service that owns the method. To exercise the public `process_action` API path end-to-end against real SQLite, use the SQLite-backed integration-test builder pattern and place the test under `tests/http/`.
 
 ## Pattern 6 — HTTP handler
 
@@ -210,7 +210,7 @@ Co-locate `proptest!` blocks with regular `#[test]`s for the same function — p
 
 ### Cross-cutting A — Failure injection via `TestOverride`
 
-**Purpose.** Test that the storage layer handles storage failures correctly (insert_message that returns a SQL error, save that fails because the file is unwritable, etc.). Used in 14 files.
+**Purpose.** Test that the storage layer handles storage failures correctly (insert_message that returns a SQL error, save that fails because the file is unwritable, etc.).
 
 **The standard.**
 
@@ -235,7 +235,7 @@ fn test_<method>_failure() {
 
 The two `TestOverride` variants (`internal` and `config`) map to two different `EngineError` arms downstream. Use `internal` for unexpected runtime errors (DB corruption, write failure) and `config` for input-validation failures.
 
-Applied at storage, action-pipeline, and HTTP-fragment tiers (`storage/*_tests.rs`, `application/action_pipeline/{pipeline,retry}_tests.rs`, `adapters/driving/http/{settings,prompt_presets}/handlers/*_tests.rs`).
+Applied at storage, action-pipeline, and HTTP-fragment tiers (`src/adapters/driven/storage/*_tests.rs`, `src/application/pipeline/action_pipeline/{core,retry}_tests.rs`, `src/adapters/driving/http/{settings,prompt_presets}/handlers/*_tests.rs`).
 
 ### Cross-cutting B — XSS regression checks
 
@@ -259,7 +259,7 @@ Coverage scope: every renderer that interpolates user-controlled data — Askama
 
 ### Cross-cutting C — Idempotency tests
 
-**Purpose.** Test a function that should be safe to call twice with the same input and produce the same observable state (e.g., `seed_game_data`, `world_seeded_default`). Used where the operation touches a side-effecting store.
+**Purpose.** Test a function that should be safe to call twice with the same input and produce the same observable state (e.g., `seed_game_data`, `seed_persona`). Used where the operation touches a side-effecting store.
 
 **The standard.**
 
@@ -297,7 +297,7 @@ fn <trait>_dispatches_across_impls() {
 }
 ```
 
-Critical rule: **scope-guard the test to polymorphism only** — implementation-internal tests belong with the impl (e.g., Harper-specific tests live in `harper_text_checker_tests.rs`, not `text_checker_tests.rs`).
+Critical rule: **scope-guard the test to polymorphism only** — implementation-internal tests belong with the impl (e.g., Harper-specific tests live in `harper_text_checker_tests.rs`, not in the port's `src/application/ports/text_checker_tests.rs`).
 
 ## Document References
 

@@ -17,6 +17,9 @@ mod handler_helpers_tests;
 mod response_tests;
 
 #[cfg(test)]
+mod template_helpers_tests;
+
+#[cfg(test)]
 mod view_mappers_tests;
 
 #[cfg(test)]

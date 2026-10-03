@@ -83,34 +83,34 @@ Then the response status is "200 OK"
 
 ### Per-game posture, mode, and presets
 
-#### Scenario 20.4: A posture auto-save that fails storage surfaces a 500 error span
+#### Scenario 20.4: A posture auto-save that fails storage surfaces a 500 error fragment
 
 ```gherkin
 Given #game-posture-controls is rendered for the active game
 And the storage rejects game-config writes
 When the client POST /games/{game_id}/posture with a valid posture row
 Then the response status is "500 INTERNAL_SERVER_ERROR"
-And the response body is an error span naming the storage failure
+And the response body is an error fragment naming the storage failure
 ```
 
-#### Scenario 20.5: A presets auto-save that fails storage surfaces a 500 error span
+#### Scenario 20.5: A presets auto-save that fails storage surfaces a 500 error fragment
 
 ```gherkin
 Given the per-game preset picker is rendered for the active game
 And the storage rejects game-config writes
 When the client POST /games/{game_id}/presets with a valid preset selection
 Then the response status is "500 INTERNAL_SERVER_ERROR"
-And the response body is an error span naming the storage failure
+And the response body is an error fragment naming the storage failure
 ```
 
-#### Scenario 20.6: A mode switch that fails storage surfaces a 500 error span
+#### Scenario 20.6: A mode switch that fails storage surfaces a 500 error fragment
 
 ```gherkin
 Given the active game is in Novel mode
 And the storage rejects game-config writes
 When the client POST /games/{game_id}/mode with narrator_mode="interactive_fiction"
 Then the response status is "500 INTERNAL_SERVER_ERROR"
-And the response body is an error span naming the storage failure
+And the response body is an error fragment naming the storage failure
 ```
 
 #### Scenario 20.7: A perspective or tense auto-save re-renders the fragment with the new value selected
@@ -137,4 +137,24 @@ And the narrative_perspective select renders "third" selected
 And the narrative_tense select renders "past" selected
 And the system_preset_id, quantifier_preset_id, and impersonate_preset_id selects are rendered
 And the selects auto-save to /games/{active_game_id}/mode, /posture, and /presets
+```
+
+#### Scenario 20.9: The games fragment lists only the games other than the active one
+
+```gherkin
+Given a seeded world with key "test" and an active game in Novel mode
+When the client GET /fragment/games
+Then the response status is "200 OK"
+And the Saved Games section says there are no other saved games (the active game is the only game)
+And the active game card carries no status badge repeating the section heading
+```
+
+#### Scenario 20.10: The games fragment lists the other saved games and excludes the active one
+
+```gherkin
+Given a seeded world with key "test", an active game, and a second saved game
+When the client GET /fragment/games
+Then the response status is "200 OK"
+And the Saved Games section lists the second game
+And the Saved Games section does not list the active game
 ```

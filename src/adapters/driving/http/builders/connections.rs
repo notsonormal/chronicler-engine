@@ -2,7 +2,8 @@
 //! LLM-connection card + edit-form HTML builders.
 
 use crate::adapters::driving::http::utils::response::html_escape;
-use crate::adapters::driving::http::utils::template_helpers::provider_options_html;
+use crate::adapters::driving::http::utils::template_helpers::select_options_html;
+use crate::adapters::driving::http::view_models::SelectOptionView;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::LlmProviderConfig;
 
@@ -115,7 +116,7 @@ pub(crate) fn connection_edit_form_html(conn: &LlmProviderConfig) -> String {
         html_escape(&conn.name),
         conn.id,
         conn.id,
-        provider_options_html(provider),
+        select_options_html(SelectOptionView::providers(provider)),
         conn.id,
         conn.id,
         html_escape(&conn.model),

@@ -345,13 +345,22 @@ async fn check_edit_textarea_matches_original_height(page: Page) {
 
     assert!(textarea_height > 0.0, "Textarea should have a valid height");
 
+    // The auto-grow stops at half the viewport, so an entry taller than the
+    // cap is shown in a capped, internally scrolling textarea rather than one
+    // matching the original height.
+    let viewport_height: f64 = page
+        .evaluate::<(), f64>("window.innerHeight", None)
+        .await
+        .unwrap();
+    let expected_height = original_height.min(viewport_height * 0.5);
+
     assert!(
-        textarea_height >= original_height,
-        "Textarea height ({textarea_height}) should not be smaller than original text height ({original_height})"
+        textarea_height >= expected_height,
+        "Textarea height ({textarea_height}) should not be smaller than the entry text height ({expected_height})"
     );
     assert!(
-        textarea_height <= original_height * 2.0 + 20.0,
-        "Textarea height ({textarea_height}) should not be drastically larger than original text height ({original_height})"
+        textarea_height <= expected_height * 2.0 + 20.0,
+        "Textarea height ({textarea_height}) should not be drastically larger than the entry text height ({expected_height})"
     );
 }
 

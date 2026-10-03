@@ -6,7 +6,7 @@ Blocked by: 03
 
 ## Question
 
-What UI findings does the flow have when text check is enabled? This covers the ✓ on the player input, the ✓ on log entries, "check before sending to LLM", how results display, and what happens when the check fails.
+What UI findings does the flow have when text check is enabled? This covers the ✓ on the player input, the ✓ on log entries, "check before sending to LLM", how results display, and what happens when the check fails.P
 
 ## Context
 

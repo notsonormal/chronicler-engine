@@ -27,6 +27,15 @@ fn narrator_mode_as_str_round_trips() {
 }
 
 #[test]
+fn narrator_mode_display_label_is_the_rendered_copy() {
+    assert_eq!(NarratorMode::Novel.display_label(), "Novel");
+    assert_eq!(
+        NarratorMode::InteractiveFiction.display_label(),
+        "Interactive Fiction"
+    );
+}
+
+#[test]
 fn narrator_mode_parse_or_default_falls_back_to_novel() {
     assert_eq!(NarratorMode::parse_or_default("bogus"), NarratorMode::Novel);
 }
