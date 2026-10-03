@@ -1,6 +1,6 @@
 # Subplan B: Quantifier `destination` field split
 
-**Parent Plan:** [mapless-worlds-plan.md](./mapless-worlds-plan.md)
+**Parent Plan:** [mapless-worlds-plan.md](../../old-docs/archived-plans/mapless-worlds-plan.md) (archived)
 **Status:** Decision-complete
 **Date:** 2026-06-25
 **Depends on:** none (independent of Subplan A)

@@ -1,6 +1,6 @@
 # Subplan C: Atomic mapless enablement
 
-**Parent Plan:** [mapless-worlds-plan.md](./mapless-worlds-plan.md)
+**Parent Plan:** [mapless-worlds-plan.md](../../old-docs/archived-plans/mapless-worlds-plan.md) (archived)
 **Status:** Decision-complete
 **Date:** 2026-06-25
 **Depends on:** Subplan A (relocate starting_room_id), Subplan B (quantifier field split)
