@@ -1,9 +1,8 @@
 """Machine-wide build slot: one cargo compile or test step at a time across all checkouts.
 
-Overlapping builds pass the container's memory cap and run slower than the same builds in turn.
-The lock is an ``flock``, so the kernel releases it when the holder dies; waiters print who holds
-it. It fails open: on a lock error, or after waiting ``CHRONICLER_BUILD_SLOT_WAIT`` seconds
-(default 1800, per step), the step runs anyway. ``CHRONICLER_BUILD_SLOT=0`` disables it.
+Overlapping builds overrun the container's memory cap. The ``flock`` is released by the kernel when
+the holder dies. It fails open: a lock error, or ``CHRONICLER_BUILD_SLOT_WAIT`` seconds (default
+1800, per step), runs the step anyway. ``CHRONICLER_BUILD_SLOT=0`` disables it.
 """
 
 from __future__ import annotations
@@ -34,7 +33,6 @@ _LIGHT_CARGO_SUBCOMMANDS = {"fmt"}
 
 
 def is_heavy(cmd: str) -> bool:
-    """True for cargo commands that compile or run tests."""
     parts = cmd.split()
     if not parts or parts[0] != "cargo":
         return False
@@ -54,7 +52,6 @@ def _holder_path(lock: Path) -> Path:
 
 
 def _read_holder(lock: Path) -> str:
-    """The holder, described for the waiting message; empty if unknown."""
     try:
         info = json.loads(_holder_path(lock).read_text())
         age = int(time.time() - info["since"])
@@ -86,7 +83,6 @@ def _enabled() -> bool:
 
 
 def _acquire(fd: int, lock: Path, echo: Callable[[str], None]) -> bool:
-    """Block until the flock is ours; False once the wait limit passes."""
     limit = _wait_limit()
     start = time.monotonic()
     next_status = 0.0
@@ -112,7 +108,6 @@ def _acquire(fd: int, lock: Path, echo: Callable[[str], None]) -> bool:
 
 @contextlib.contextmanager
 def hold(label: str, echo: Callable[[str], None] = print) -> Iterator[bool]:
-    """Hold the slot for the ``with`` block. Yields False when it was skipped or the wait ran out."""
     if not _enabled():
         yield False
         return
@@ -141,7 +136,6 @@ def hold(label: str, echo: Callable[[str], None] = print) -> Iterator[bool]:
 
 
 def maybe_hold(cmd: str, label: str, echo: Callable[[str], None] = print):
-    """``hold`` for heavy cargo commands, a no-op for everything else."""
     if is_heavy(cmd):
         return hold(label, echo)
     return contextlib.nullcontext(False)

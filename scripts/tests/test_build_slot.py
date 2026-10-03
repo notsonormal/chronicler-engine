@@ -75,7 +75,7 @@ class SlotTests(unittest.TestCase):
             self.assertEqual(os.environ.get(build_slot.HELD_ENV), "1")
         self.assertNotIn(build_slot.HELD_ENV, os.environ)
         self.assertEqual(self.messages, [])
-        with build_slot.hold("y", self.messages.append) as got:  # free again
+        with build_slot.hold("y", self.messages.append) as got:
             self.assertTrue(got)
 
     def test_second_holder_waits_and_names_the_first(self):

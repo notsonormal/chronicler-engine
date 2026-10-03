@@ -1,10 +1,8 @@
 """Seed a cold cargo target dir with dependency artifacts from a warm sibling checkout.
 
-Only units of packages from a registry or git source are copied. Cargo's artifact hashes ignore
-absolute paths, so the workspace crate, path dependencies and ``[patch]`` entries look identical in
-checkouts with different code; they are never copied, and neither is anything whose source is
-unrecognised. ``incremental/`` is skipped, a source that cargo is building is skipped, and the copy
-is renamed into place so a half-copied seed never looks valid.
+Only registry and git packages are copied: cargo's artifact hashes ignore absolute paths, so the
+workspace crate, path dependencies and ``[patch]`` entries look identical across checkouts with
+different code. A half-copied seed is renamed into place, and a source cargo is building is skipped.
 
 ``CHRONICLER_NO_SEED=1`` disables seeding.
 """
@@ -36,12 +34,11 @@ _SIGNATURE_FILES = (".cargo/config.toml", "scripts/lld-linker.sh", "rust-toolcha
 _SIGNATURE_ENV = ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS")
 # Coverage builds use instrumentation flags, so none of their hashes match.
 _NOT_SEEDS = {"llvm-cov-target", "tmp", "fix"}
-# How many rejected warm dirs a seed-miss message names before summarising the rest.
 _SEEN_LIMIT = 3
 
 
 def build_signature(repo_root: Path) -> str:
-    """Short hash of what invalidates every unit at once. ``Cargo.lock`` is deliberately excluded."""
+    """Hash of what invalidates every unit at once; ``Cargo.lock`` is deliberately excluded."""
     digest = hashlib.sha256()
     rustc = subprocess.run(["rustc", "-vV"], capture_output=True, text=True)
     digest.update(rustc.stdout.encode())
@@ -55,7 +52,6 @@ def build_signature(repo_root: Path) -> str:
 
 
 def read_stamp(profile_dir: Path) -> str | None:
-    """The signature this profile dir was last built with, if stamped."""
     try:
         return (profile_dir / SIGNATURE_FILE).read_text().strip() or None
     except OSError:
@@ -63,7 +59,6 @@ def read_stamp(profile_dir: Path) -> str | None:
 
 
 def stamp(profile_dir: Path, signature: str) -> None:
-    """Record the signature this profile dir was built with (best effort)."""
     try:
         if profile_dir.is_dir():
             (profile_dir / SIGNATURE_FILE).write_text(signature + "\n")
@@ -72,7 +67,6 @@ def stamp(profile_dir: Path, signature: str) -> None:
 
 
 def is_warm(profile_dir: Path) -> bool:
-    """A profile dir with fingerprints has been built in before."""
     return (profile_dir / ".fingerprint").is_dir() and any((profile_dir / ".fingerprint").iterdir())
 
 
@@ -85,7 +79,7 @@ def _host_triple() -> str:
 
 
 def shareable_from_metadata(metadata: dict) -> set[str]:
-    """Names of packages whose every appearance comes from a registry or git source."""
+    """Package names whose every appearance comes from a registry or git source."""
     shareable, other = set(), set()
     for pkg in metadata["packages"]:
         source = pkg.get("source") or ""
@@ -94,10 +88,8 @@ def shareable_from_metadata(metadata: dict) -> set[str]:
 
 
 def shareable_packages(repo_root: Path) -> set[str]:
-    """Names of packages whose artifacts can be shared between checkouts.
-
-    ``--filter-platform`` is what lets ``--offline`` work: without it cargo wants other platforms' crates.
-    """
+    """``--filter-platform`` is what lets ``--offline`` work: without it cargo
+    wants other platforms' crates."""
     result = subprocess.run(
         ["cargo", "metadata", "--offline", "--locked", "--filter-platform", _host_triple(), "--format-version", "1"],
         cwd=repo_root,
@@ -110,7 +102,6 @@ def shareable_packages(repo_root: Path) -> set[str]:
 
 
 def worktree_roots(repo_root: Path) -> list[Path]:
-    """Every checkout of this repository, the primary one first."""
     result = subprocess.run(
         ["git", "worktree", "list", "--porcelain"], cwd=repo_root, capture_output=True, text=True
     )
@@ -119,11 +110,6 @@ def worktree_roots(repo_root: Path) -> list[Path]:
 
 
 def _warm_candidates(repo_root: Path, profile: str, destination: Path) -> list[tuple[int, float, Path]]:
-    """Warm ``<target>/<profile>`` dirs of every checkout, best seed first, excluding the destination.
-
-    A dir's compiled-library count is reported but not filtered on. Ranking is by compiled
-    libraries, then recency.
-    """
     found = []
     for root in worktree_roots(repo_root):
         target = root / "target"
@@ -144,10 +130,7 @@ def _warm_candidates(repo_root: Path, profile: str, destination: Path) -> list[t
 def candidate_sources(
     repo_root: Path, profile: str, destination: Path, signature: str | None = None
 ) -> list[Path]:
-    """Warm ``<target>/<profile>`` dirs of every checkout, best seed first.
-
-    With a signature, only dirs stamped with it qualify.
-    """
+    """Warm profile dirs that qualify as a seed source; a signature restricts them to stamped dirs."""
     return [
         profile_dir
         for libs, _, profile_dir in _warm_candidates(repo_root, profile, destination)
@@ -156,7 +139,6 @@ def candidate_sources(
 
 
 def _describe_rejections(repo_root: Path, profile: str, destination: Path) -> str:
-    """Name the warm dirs that could not seed and why, capped so the line stays short."""
     warm = _warm_candidates(repo_root, profile, destination)
     if not warm:
         return "no warm target dir in any worktree"
@@ -177,7 +159,6 @@ def _describe_rejections(repo_root: Path, profile: str, destination: Path) -> st
 
 
 def _shareable_hashes(source: Path, shareable: set[str]) -> set[str]:
-    """Unit hashes of every shareable unit, read from the source's fingerprint dirs."""
     hashes = set()
     for entry in (source / ".fingerprint").iterdir():
         match = _UNIT_DIR.match(entry.name)
@@ -195,7 +176,6 @@ def _keep(top: str, name: str, shareable: set[str], hashes: set[str]) -> bool:
 
 
 def copy_third_party(source: Path, destination: Path, shareable: set[str]) -> tuple[int, int]:
-    """Copy shareable artifacts from ``source`` to ``destination``. Returns (files, bytes)."""
     hashes = _shareable_hashes(source, shareable)
     files = size = 0
     for top in _COPIED_DIRS:
@@ -223,7 +203,7 @@ def copy_third_party(source: Path, destination: Path, shareable: set[str]) -> tu
 
 
 def _source_is_idle(source: Path):
-    """Hold a shared flock on the source's .cargo-lock; None if cargo is building there."""
+    """Shared flock on the source's .cargo-lock; None if cargo is building there."""
     lock = source / ".cargo-lock"
     if fcntl is None or not lock.exists():
         return open(os.devnull)
@@ -242,7 +222,7 @@ def seed_if_cold(
     profile: str,
     log: Callable[[str], None] = print,
 ) -> bool:
-    """Seed ``target_dir/<profile>`` from the best warm sibling. True when a seed was applied."""
+    """Seed ``target_dir/<profile>`` from the best warm sibling; True when a seed was applied."""
     if os.environ.get(DISABLE_ENV):
         return False
     destination = target_dir / profile

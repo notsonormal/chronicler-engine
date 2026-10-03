@@ -231,8 +231,7 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn(
             "Skipping coverage report (use --coverage to enable)", labels
         )
-        # Coverage keeps the full non-browser filter: unlike the integration
-        # step it still instruments the architecture and guardrails binaries.
+        # Coverage keeps the full non-browser filter.
         by_label = {step.label: step for step in plan}
         cov_cmd = by_label["Running integration tests with coverage..."].cmd
         self.assertIn("-E 'not binary(browser)'", cov_cmd)

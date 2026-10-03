@@ -24,10 +24,11 @@ Concurrent builds:
 
 Cargo compile and test steps queue on a machine-wide lock (``scripts/build_slot.py``), so builds
 from different checkouts run one at a time. A cold target dir is seeded from a warm sibling
-(``scripts/target_seed.py``) and cargo links with the toolchain's lld (``scripts/lld-linker.sh``).
-Each script's docstring lists its ``CHRONICLER_*`` switches. Use one target dir per checkout and do
-not switch. Agents sharing a single checkout must also keep ``cargo fmt`` from rewriting sources
-under each other::
+(``scripts/target_seed.py``); cargo links with the toolchain's lld (``scripts/lld-linker.sh``).
+The lock does not cover ``cargo fmt``, the Python checks, ``cargo llvm-cov report`` or
+``--diagnostic-benchmark``. A step waits up to 30 minutes for it, then runs anyway.
+Each script's docstring lists its ``CHRONICLER_*`` switches. Use one target dir per checkout;
+agents sharing a checkout pass ``--no-fmt`` so ``cargo fmt`` cannot rewrite each other's sources::
 
     python build.py --target-dir target/agent2 --no-fmt
 
@@ -35,8 +36,8 @@ under each other::
 dir. Tests are already concurrency-safe: they allocate ports dynamically from
 3010-3050 using file-based locking (``tests/test_utils/server.rs``).
 
-A full gate takes about 4 minutes on a warm target dir and about 15 on a cold unseeded one, plus
-any wait for the build lock. Use a tool timeout of at least 1200 seconds. ``--coverage`` takes longer.
+A full gate takes about 2 minutes on a warm target dir, about 15 on a cold unseeded one, plus any
+wait for the build lock. Use a tool timeout of at least 1200 seconds. ``--coverage`` takes longer.
 """
 
 import argparse
@@ -204,10 +205,8 @@ def require_nextest():
 # verdict.
 _BROWSER_FILTER = "binary(browser)"
 _NON_BROWSER_FILTER = "not binary(browser)"
-# The gate runs the architecture and guardrails binaries as their own steps
-# before TESTS, so the integration step excludes them instead of running them a
-# second time. Coverage keeps the full non-browser filter: its merged report
-# still instruments those binaries.
+# The gate runs architecture and guardrails as their own steps, so this filter
+# drops them. Coverage uses _NON_BROWSER_FILTER to still instrument them.
 _INTEGRATION_FILTER = (
     "not binary(browser) and not binary(architecture) and not binary(guardrails)"
 )
@@ -232,8 +231,7 @@ def get_integration_test_cmd(include_llm=False):
 
     The engine, http, storage, bootstrap and llm tiers are CPU-light; excluding
     the browser binary keeps this step to ~20s, so it works as a standalone
-    check. The architecture and guardrails binaries have their own gate steps
-    and subcommands, so re-running them here would only duplicate work.
+    check.
     """
     cmd = f"{_NEXTEST_RUN} -E '{_INTEGRATION_FILTER}'"
     if include_llm:
@@ -385,11 +383,9 @@ def get_coverage_cmd(browser_only=False):
     """Return the coverage test command using nextest.
 
     ``browser_only`` selects which half the gate's split runs: False yields
-    the non-browser tier (everything except the browser binary; unlike the
-    integration step this keeps architecture and guardrails so the merged
-    report still instruments them), True the browser binary alone. The coverage
-    step runs twice, once per half, so both profiling runs share the single
-    merged report that ``--no-report`` defers.
+    the non-browser tier (everything except the browser binary), True the
+    browser binary alone. The coverage step runs twice, once per half, so both
+    profiling runs share the single merged report that ``--no-report`` defers.
     """
     cmd = "cargo llvm-cov nextest --no-report --no-fail-fast"
     if browser_only:
@@ -703,10 +699,7 @@ def _target_paths(args) -> tuple[Path, Path]:
 
 
 def _lld_linker_env(host=None, cache_dir=None) -> dict:
-    """Point cargo at the lld wrapper, installed at one path shared by every checkout.
-
-    ``CHRONICLER_NO_LLD=1`` or an already-set linker variable opts out.
-    """
+    """Point cargo at the lld wrapper, installed at one path shared by every checkout."""
     if os.environ.get("CHRONICLER_NO_LLD") or not sys.platform.startswith("linux"):
         return {}
     if host is None:
@@ -1099,7 +1092,6 @@ def _stamp_target():
 
 @contextlib.contextmanager
 def _cargo_slot(cmd, label):
-    """Queue heavy cargo commands behind other builds; seed a cold target dir, stamp it afterwards."""
     heavy = build_slot.is_heavy(cmd)
     with build_slot.maybe_hold(cmd, label, both_print):
         if heavy:
@@ -1110,10 +1102,8 @@ def _cargo_slot(cmd, label):
 
 
 def _timed_run(counter, record, label, cmd, check=True, env=None, timings=False):
-    """Run one step, print progress, and record its timing and outcome.
-
-    The recorded time starts after any wait for the build slot.
-    """
+    """Run one step, print progress, and record its timing and outcome; the
+    recorded time excludes any build-slot wait."""
     counter.next(label)
     _NextestSummary.label = label
     with _cargo_slot(cmd, label):

@@ -93,13 +93,10 @@ name = "llm"
 path = "tests/llm/mod.rs"
 required-features = ["testing"]
 
-# Harper builds its curated dictionary (FstDictionary::curated) once per checker
-# and each test runs in its own process, so the dev-profile dictionary build
-# dominated the text-check tests (~3.9s of a ~4.2s test; ~0.7s with harper-core
-# optimised and ~0.4s adding fst). These overrides touch only the named
-# dependencies; the rest of the dev profile stays unoptimised. syn is left
-# unoptimised on purpose: it saves ~3s per gate but costs a ~4 minute rebuild of
-# syn and every proc-macro crate in each cold target dir.
+# Each Harper test builds its own curated dictionary in its own process: ~3.9s
+# unoptimised, ~0.4s with these two optimised. syn stays unoptimised: it would
+# save ~3s per gate but costs a ~4 minute rebuild of syn and every proc-macro
+# crate in each cold target dir.
 [profile.dev.package.harper-core]
 opt-level = 2
 

@@ -18,10 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import target_seed  # noqa: E402
 
-OWN = "aaaaaaaaaaaaaaaa"  # hash shared by every unit of the workspace package
-DEP = "bbbbbbbbbbbbbbbb"  # hash of a third-party crate
+OWN = "aaaaaaaaaaaaaaaa"
+DEP = "bbbbbbbbbbbbbbbb"
 HTTP_CRATE = "cccccccccccccccc"  # third-party crate that shares a name with a test binary
-LOCAL = "dddddddddddddddd"  # hash of a path dependency living outside the workspace
+LOCAL = "dddddddddddddddd"
 SHAREABLE = {"serde", "aws-lc-sys", "http"}  # what cargo metadata reports from registry or git
 
 

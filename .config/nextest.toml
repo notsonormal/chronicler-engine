@@ -13,12 +13,9 @@ slow-timeout = { period = "60s", terminate-after = 1, on-timeout = "fail" }
 filter = 'binary(architecture)'
 slow-timeout = { period = "180s", terminate-after = 1, on-timeout = "fail" }
 
-# Browser tests launch Playwright/Chromium instances. Concurrency is
-# test-threads / threads-required, so 3 / 1 runs three at once, matching the
-# 3-CPU container quota. Measured 2026-10-02: 3-way ~66s vs 2-way ~75s with no
-# failures; 4-way gained nothing more and pushed memory to the 8 GiB cap. Change
-# test-threads and threads-required together or the browser tier silently drops
-# to one test at a time.
+# Browser concurrency is test-threads / threads-required, so 3 / 1 runs three
+# Playwright/Chromium tests at once. Four at once gained nothing and hit the
+# 8 GiB memory limit. Change both values together, or concurrency drops.
 [[profile.default.overrides]]
 filter = 'binary(browser)'
 threads-required = 1

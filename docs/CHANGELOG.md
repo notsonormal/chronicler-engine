@@ -6,7 +6,7 @@ NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when y
 
 ### Changed
 
-- **`build.py` `--strict` flag removed**. It only set `RUSTFLAGS=-D warnings`, which the gate's `cargo clippy --all-targets --all-features -- -D warnings` already enforces, and its help text falsely claimed debug assertions were enabled. Setting `RUSTFLAGS` also forced a full dependency rebuild and changed the target-seeding build signature, disabling seeding.
+- **`build.py --strict` removed**. It only set `RUSTFLAGS=-D warnings`, and the clippy step already enforces that. It also forced a full dependency rebuild and made target seeding miss.
 
 ## 2026-09-27
 

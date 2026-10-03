@@ -1,80 +1,64 @@
 # Build environment
 
-Why the build and test tooling is set up the way it is, and what to check when a build is slow.
-How to run builds is in `AGENTS.md` ("Development Loop", "Concurrent Builds"). Numbers were
-measured on 2026-10-02 as single runs on a shared host; treat gaps under ~10 % as noise.
+Read this when a build or test run is slow, waits, or runs out of memory. `AGENTS.md` says how to
+run builds. Numbers are single runs from 2026-10-02 on a shared host, so treat gaps under 10 % as noise.
 
 ## Limits
 
-| limit | value |
-|---|---|
-| CPU quota (cgroup `cpu.max`) | 3 CPUs, on a 4-thread host (`nproc` says 4) |
-| Memory cap (cgroup `memory.max`) | 8 GiB |
+- **CPU:** the container has a 3-CPU quota on a 4-thread host, and `nproc` says 4. Cargo reads the
+  quota and runs 3 jobs. nextest's thread count is set by hand in `.config/nextest.toml`.
+- **Memory:** 8 GiB. This limit bites first. Three overlapping builds ran 2.1 times slower than the
+  same builds one after another, and `oom_kill` in `/sys/fs/cgroup/memory.events` stands at 8.
+- **Host load:** other work on the host often saturates it, so wall times vary. `nr_throttled` in
+  `cpu.stat` stays low even then, so it does not show whether CPU is free.
 
-- Cargo reads the quota, so it runs 3 jobs, not 4. nextest's thread count is set by hand.
-- The memory cap is what bites. Three overlapping builds ran 2.1x slower than the same builds
-  one after another, and `memory.events` shows `oom_kill 8` (one was GNU `ld`; the rest are
-  undated).
-- The host is shared and often saturated by work outside the container, so wall times are noisy.
-  `nr_throttled` stays low even then, so it does not show whether CPU is free.
+## Why the build works this way
 
-## Build setup
+Each script's docstring has its details. These are the reasons and measurements the code can't show.
 
-Each piece is a small script; read the file for switches and edge cases.
-
-| piece | file | what and why |
-|---|---|---|
-| Build slot | `scripts/build_slot.py` | A machine-wide lock so one heavy cargo step runs at a time across all checkouts, because overlapping builds exceed the memory cap. Waiters print the holder. After 30 minutes (`CHRONICLER_BUILD_SLOT_WAIT`) a waiter gives up and runs anyway. `fmt` and the Python checks skip it. |
-| Target seeding | `scripts/target_seed.py` | A cold target dir gets third-party artifacts copied from a git-worktree sibling with the same build signature. Workspace crates, path deps and `[patch]` entries are never copied, so another checkout's code can't be served. A seeded new-worktree gate took 344 s against 728 s unseeded. A miss logs why. |
-| Build signature | `target_seed.py:build_signature` | Hash of `rustc -vV`, `.cargo/config.toml`, `scripts/lld-linker.sh`, `rust-toolchain.toml` and the `RUSTFLAGS` variables. Only dirs with the same stamp seed each other. `Cargo.toml` is deliberately left out: a profile or dependency change rebuilds the affected units but still seeds. |
-| lld linker | `build.py:_lld_linker_env`, `scripts/lld-linker.sh` | Linking is about 4x faster than GNU ld, and a warm edit-rebuild fell from ~52 s to ~20 s. The wrapper is copied to `~/.cache/chronicler-engine/` and passed through `CARGO_TARGET_<triple>_LINKER`. It is not in `.cargo/config.toml`, because cargo hashes the linker's absolute path into every unit and a per-checkout path would defeat seeding. |
-| sccache | `scripts/sccache-wrapper.sh` | Shares Rust compiles across worktrees (~84 % hits on a cold build). It unsets `CARGO_TARGET_DIR` for sccache, which keys on its environment. C from build scripts (`aws-lc-sys`, `libsqlite3-sys`) is not cached, because `cc` only uses a wrapper whose file name is exactly `sccache`. Inferred from the `cc` source, not re-measured. |
-| Check and build compiles | cargo | Clippy compiles dependencies in check mode and the tests compile them again in build mode, so on a cold dir `aws-lc-sys`'s ~117 s C build runs twice. Cargo has no setting to share them; seeding is the fix. |
-
-## Test setup
-
-`.config/nextest.toml`:
-
-- `test-threads = 3`, matching the CPU quota. Integration tests stop speeding up past 3 threads.
-- The browser binary has `threads-required = 1`, so **3 browser tests run at once**
-  (`test-threads / threads-required`). Change the two values together. Lowering `test-threads`
-  alone silently reduces browser concurrency.
-- Browser trial, 4 interleaved runs each, medians: 2 at once 75 s, 3 at once 66 s, 4 at once
-  65 s. Three beat two with no overlap in ranges. Four was within noise of three and hit the
-  8 GiB cap in every run, so it stays at 3. No failures or OOM kills in any run.
-- nextest runs each test in its own process, so an in-process cache never carries across tests.
-  The Harper text-check tests each build a dictionary, taking ~3.9 s unoptimised and ~0.4 s
-  with `opt-level = 2` on `harper-core` and `fst` in `Cargo.toml`. `syn` was tried and dropped:
-  it saved ~3 s per gate but cost a ~4 minute rebuild of `syn` and every proc-macro crate in
-  each cold target dir.
-- The integration step excludes the `architecture` and `guardrails` binaries, which have their
-  own gate steps. `--coverage` keeps them in.
+- **Build slot** (`scripts/build_slot.py`): one heavy cargo step runs at a time, because overlapping
+  builds exceed the memory limit.
+- **Target seeding** (`scripts/target_seed.py`): a cold target dir copies dependency artifacts from
+  a worktree with the same build signature. A seeded new-worktree gate took 344 s, against 728 s
+  unseeded.
+- **lld linker** (`build.py`, `scripts/lld-linker.sh`): it links about 4 times faster than GNU ld.
+  It is set through an environment variable, not `.cargo/config.toml`, because cargo hashes the
+  linker's absolute path into every unit.
+- **sccache** (`scripts/sccache-wrapper.sh`): it shares Rust compiles across worktrees, with about
+  84 % hits on a cold build. It does not cache the C code that `aws-lc-sys` and `libsqlite3-sys`
+  compile, because the `cc` crate only uses a wrapper whose file name is exactly `sccache`. This is
+  inferred from the `cc` source, not measured.
+- **Two compiles per dependency:** clippy compiles dependencies in check mode, and the tests compile
+  them again in build mode. On a cold dir, the ~117 s C build in `aws-lc-sys` runs twice. Cargo has
+  no setting to share them. Seeding avoids both.
+- **Browser concurrency:** nextest runs `test-threads / threads-required` browser tests at once. In a
+  trial of four runs each, 2 at once took 75 s, 3 took 66 s, and 4 took 65 s. Four hit the memory
+  limit in every run, so the setting is 3.
+- **Per-test cost:** nextest runs each test in its own process, so an in-process cache never carries
+  across tests. Each Harper text-check test builds its own dictionary, which `Cargo.toml` speeds up.
 
 ## Typical gate cost
 
-| scenario | total | clippy | arch | guardrails | integration | browser |
+| Scenario | Total | clippy | architecture | guardrails | integration | browser |
 |---|---|---|---|---|---|---|
 | Warm, no Rust change | 97 s | 1 | 4 | 7 | 19 | 60 |
-| Warm, after a source edit (before the test-speed changes) | ~208 s | 18 | 15 | | 78 | 81 |
-| Seeded new worktree (before the test-speed changes) | 344 s | 52 | 37 | | 136 | 98 |
-| Seed miss (before the test-speed changes) | 728 s | 239 | 242 | | 146 | 81 |
+| Seeded new worktree, before the test speed-ups | 344 s | 52 | 37 | n/a | 136 | 98 |
+| Seed miss, before the test speed-ups | 728 s | 239 | 242 | n/a | 146 | 81 |
 
-Warm, the browser tier is most of the time. On a seed miss it is compiling dependencies twice.
+## Diagnose a slow build
 
-## What to check
-
-| signal | meaning |
+| Signal | Meaning |
 |---|---|
-| `oom_kill` in `/sys/fs/cgroup/memory.events` (baseline 8) | A rise means builds exceeded the memory cap. |
-| `some avg300` in `/sys/fs/cgroup/cpu.pressure` | Rising means the host is squeezing the container. |
-| `Waiting for the build slot` | Another checkout holds the slot. Normal. |
+| `Waiting for the build slot` | Another checkout holds the slot. This is normal. |
 | `Target seeding: no warm sibling ...` | This dir builds from scratch. The line lists the dirs it saw and their signatures. |
+| `oom_kill` rising | Builds exceeded the memory limit. |
+| `some avg300` rising in `/sys/fs/cgroup/cpu.pressure` | The host is squeezing the container. |
 
 ## What forces a rebuild
 
-| change | effect |
+| Change | Effect |
 |---|---|
-| Toolchain bump; edit to `.cargo/config.toml`, `scripts/lld-linker.sh`, `rust-toolchain.toml`; `RUSTFLAGS` | New signature, so every seed misses once. |
-| `Cargo.toml` profile or dependency change | Seeds still copy; cargo rebuilds the affected units. |
-| `--target-dir` switched mid-task | The new dir is cold. Use one target dir per checkout. |
-| Raw `cargo build` or IDE build in a `build.py` target dir | Raw cargo uses GNU ld, a different hash space from the lld builds, so each side rebuilds the other's units. Inferred, not measured. |
+| Toolchain bump, or an edit to `.cargo/config.toml`, `scripts/lld-linker.sh`, `rust-toolchain.toml`, or `RUSTFLAGS` | New build signature, so every seed misses once. |
+| `Cargo.toml` profile or dependency change | Seeds still copy. Cargo rebuilds the affected units. |
+| Switching `--target-dir` mid-task | The new dir is cold. |
+| A raw `cargo build` or IDE build in a `build.py` target dir | Raw cargo uses GNU ld, so it and `build.py` rebuild each other's units. Inferred, not measured. |

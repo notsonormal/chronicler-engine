@@ -361,7 +361,7 @@ Pi wraps commands with rtk and condenses long output — not just git/diff: pipe
 
 Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
 
-`build.py` writes logs to both standard output and to the `logs/` folder. The standard build takes about 4 minutes once the target dir is warm.
+`build.py` writes logs to both standard output and to the `logs/` folder. A standard build takes about 2 minutes once the target dir is warm. A cold one takes far longer.
 
 Use the Pi bash tool with a timeout of 1200 seconds when calling `build.py`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
 
@@ -383,7 +383,7 @@ python build.py architecture                    # Run the architecture tests
 python build.py guardrails                      # Run the guardrails tests
 python build.py test-pattern "action_pipeline::options_tests" # Run tests whose name matches a substring, across all test binaries
 python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s)
-python build.py browser                         # Only the browser/Playwright binary (~2.5 min)
+python build.py browser                         # Only the browser/Playwright binary (~1 min)
 python build.py validate-docs                   # Validate markdown docs
 cargo run -- --world redmist_estate --port 3000 # Run the server (raw cargo; not a gate action)
 ```
@@ -393,18 +393,16 @@ Almost every full-gate step is also a subcommand — see `python build.py --help
 #### Final Validation (run once before considering done)
 
 ```bash
-python build.py # Full gate: fmt + clippy + guardrails + tests (~4 min)
+python build.py # Full gate: fmt + clippy + guardrails + tests (~2 min warm)
 ```
 
 A majority of the time taken by `build.py` is the browser tests. Running the full suite just before running the `build.py` is inefficient. Either run a targeted step (`python build.py test-pattern <pattern>`) or skip them and run `build.py` straight away.
 
 ## Concurrent Builds
 
-Use one target dir per checkout and never switch (a new dir starts cold); in a worktree pass
-nothing. Only agents sharing a single checkout need
-`python build.py --target-dir target/<name> --no-fmt`. Details are in the `build.py` docstring.
+Use one target dir per checkout and never switch, because a new dir starts cold. In a git worktree, run `python build.py` with no extra flags. Agents that share one checkout run `python build.py --target-dir target/<name> --no-fmt`. The `build.py` docstring has the details.
 
-For the machine limits, why the build is set up this way, and what a slow build means, read `ENVIRONMENT.md`.
+`ENVIRONMENT.md`: read it when a build or test run is slow, waits for the build slot, or runs out of memory.
 
 Cold worktree builds compile the whole dependency tree into a fresh target dir;
 `scripts/sccache-wrapper.sh` (wired as `rustc-wrapper` in `.cargo/config.toml`)
