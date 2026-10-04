@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 
 use crate::adapters::driven::storage::utils::run_migrations;
+use crate::domain::model::game::NewGame;
+use crate::domain::model::utils::game_name::default_display_name;
 
 #[derive(Clone)]
 pub struct DbPool {
@@ -43,10 +45,11 @@ impl DbPool {
     ) -> Result<u64, crate::error::EngineError> {
         let conn = self.conn();
         let now = chrono::Utc::now().to_rfc3339();
+        let display_name = default_display_name(name);
         conn.execute(
-            "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
-            rusqlite::params![world_name, world_key, persona_key, persona_name, name, &now],
+            "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, display_name, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+            rusqlite::params![world_name, world_key, persona_key, persona_name, name, display_name, &now],
         )
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
         Ok(conn.last_insert_rowid() as u64)
@@ -54,19 +57,21 @@ impl DbPool {
 
     pub fn insert_game_from_request(
         &self,
-        request: &crate::domain::model::game::NewGame,
+        request: &NewGame,
     ) -> Result<u64, crate::error::EngineError> {
         let conn = self.conn();
         let now = chrono::Utc::now().to_rfc3339();
+        let display_name = default_display_name(&request.name);
         conn.execute(
-            "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, created_at, updated_at, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, display_name, created_at, updated_at, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             rusqlite::params![
                 request.world_name,
                 request.world_key,
                 request.persona_key,
                 request.persona_name,
                 request.name,
+                display_name,
                 &now,
                 request.narrator_mode.as_str(),
                 request.narrative_perspective.as_str(),

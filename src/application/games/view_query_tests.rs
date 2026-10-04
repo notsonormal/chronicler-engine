@@ -49,9 +49,9 @@ fn test_get_generating_status_returns_current_state() {
 }
 
 #[test]
-fn test_get_current_game_name_unknown_when_no_game() {
+fn test_get_current_game_display_name_unknown_when_no_game() {
     let app = minimal_app_no_game();
-    let name = app.game_view_query.get_current_game_name().unwrap();
+    let name = app.game_view_query.get_current_game_display_name().unwrap();
     assert_eq!(name, "Unknown");
 }
 

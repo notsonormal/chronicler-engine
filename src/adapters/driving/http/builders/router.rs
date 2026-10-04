@@ -97,6 +97,10 @@ pub fn build_router(app_state: AppState) -> Router {
             post(games::handlers::switch_game_handler),
         )
         .route(
+            "/games/:id/rename",
+            post(games::handlers::rename_game_handler),
+        )
+        .route(
             "/games/:id/delete",
             post(games::handlers::delete_game_handler),
         )

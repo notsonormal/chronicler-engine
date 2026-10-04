@@ -15,9 +15,9 @@ use crate::support::http_fixtures::seeded_storage_with_initial_game;
 async fn test_switch_game_handler_success() {
     let (storage, _world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
 
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build();
+        .build_with_state();
 
     let other_id = storage
         .create_game(
@@ -28,7 +28,7 @@ async fn test_switch_game_handler_success() {
             "Test World_2026-01-01_1",
         )
         .unwrap();
-    assert_ne!(other_id, storage.current_game_id());
+    assert_ne!(other_id, state.game_catalogue.current_game_id());
 
     let req = Request::builder()
         .uri(format!("/games/{other_id}/switch"))
@@ -42,7 +42,7 @@ async fn test_switch_game_handler_success() {
         "true",
         "Should return HX-Refresh header"
     );
-    assert_eq!(storage.current_game_id(), other_id);
+    assert_eq!(state.game_catalogue.current_game_id(), other_id);
 }
 
 // [docs/specs/games.md] SCENARIO: 18.2

@@ -75,7 +75,7 @@ impl AppState {
     pub fn render_header(&self) -> Result<String> {
         let game_name = self
             .game_view_query
-            .get_current_game_name()
+            .get_current_game_display_name()
             .unwrap_or_else(|_| "Unknown".to_string());
         render_header_unlocked(game_name)
     }

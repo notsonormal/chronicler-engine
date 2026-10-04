@@ -30,3 +30,12 @@ Then the browser POSTs /action/check with the option text read from the rendered
 And the story log gains an input entry carrying that same text
 And a narration follows it
 ```
+
+#### Scenario 26.5: An option click during a generation does not submit
+
+```gherkin
+Given the dock shows a generated option set
+And a turn is in flight (the status display is generating)
+When the client clicks an option's Use button
+Then no command is submitted (no POST /action/check)
+```

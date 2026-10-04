@@ -45,9 +45,9 @@ async fn test_create_game_handler() {
         .unwrap();
     storage.set_game_id(initial_game_id);
 
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build();
+        .build_with_state();
 
     let old_id = storage.current_game_id();
 
@@ -68,12 +68,13 @@ async fn test_create_game_handler() {
         "Should return HX-Refresh header"
     );
 
-    let new_id = storage.current_game_id();
-    assert_ne!(new_id, old_id, "Should have switched to the new game");
+    assert_ne!(
+        state.game_catalogue.current_game_id(),
+        old_id,
+        "Should have switched to the new game"
+    );
 
-    let latest = storage.load_latest_snapshot().unwrap();
-    assert!(latest.is_some(), "New game should have an initial snapshot");
-    let messages = storage.load_message_rows().unwrap();
+    let messages = state.message_service.load_messages().unwrap();
     assert!(
         !messages.is_empty(),
         "New game should have at least one message (scenario introduction)"
@@ -84,11 +85,13 @@ async fn test_create_game_handler() {
         MessageType::Narration,
         "First message should be Narration type"
     );
-    let swipe_count = storage.count_swipes_for_message(scenario_msg.id).unwrap();
     assert!(
-        swipe_count > 0,
-        "Scenario message should have at least one swipe (text content)"
+        !scenario_msg.swipes.is_empty(),
+        "the scenario message must carry its first swipe"
     );
+    // The initial GameStateSnapshot is written by the same
+    // `save_message_and_snapshot` call as the message; snapshots are not a
+    // tier-1 read surface, so `message_service_tests` asserts it through the seam.
 }
 
 // [docs/specs/games.md] SCENARIO: 17.2

@@ -63,6 +63,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `options.rs` — Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
       - `slash_menu.rs` — Stub-browser tests for the slash menu: the client-side command palette rendered from the shipped shell's `input` listener. Tagged against `docs/specs/browser_slash_menu.md`.
       - `story_log.rs` — Stub-browser tests for the story log: the client-side edit-mode flow over a canned entry. Tagged against `docs/specs/browser_story_log.md`.
+      - `swipes.rs` — Stub-browser test for switching swipes: the client's restore handling and the dock it leaves behind.
 - **helpers/**
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage instances with deterministic defaults so tests can focus on the behaviour under test.
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
@@ -72,6 +73,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
     - `games_delete.rs` — HTTP E2E tests for game deletion (POST /games/:id/delete).
     - `games_fragment.rs` — HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.
+    - `games_rename.rs` — HTTP E2E tests for game rename (POST /games/:id/rename).
     - `games_switch.rs` — HTTP E2E tests for game switching (POST /games/:id/switch).
     - `llm_messages.rs` — HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders.
     - `mod.rs` — HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, server wiring, and the per-endpoint text-check suite.
@@ -83,6 +85,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `settings.rs` — HTTP E2E tests for the settings endpoints: panel rendering and POST /settings.
     - `story_log.rs` — HTTP E2E tests for the story-log delete endpoint (POST /history/delete).
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
+    - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
     - `text_check.rs` — HTTP E2E tests for the text-check endpoint (POST /check-text).
     - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.
     - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, and the duplicate-identifier create refusal.

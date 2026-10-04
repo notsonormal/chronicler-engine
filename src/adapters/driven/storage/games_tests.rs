@@ -193,3 +193,82 @@ fn active_options_preset_id_falls_back_to_settings_without_current_game() {
         "settings_options_fallback"
     );
 }
+
+#[test]
+fn test_create_game_persists_a_readable_display_name() {
+    let storage = Storage::new_in_memory();
+    let id = storage
+        .create_game(
+            "Redmist Estate",
+            "redmist_estate",
+            "p",
+            "P",
+            "Redmist Estate_2026-09-29_1",
+        )
+        .unwrap();
+    let game = storage.get_game(id).unwrap().unwrap();
+    assert_eq!(game.name, "Redmist Estate_2026-09-29_1");
+    assert_eq!(game.display_name, "Redmist Estate — 29 Sep 2026 (1)");
+}
+
+#[test]
+fn test_create_game_persists_a_readable_display_name_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let id = storage
+        .create_game(
+            "Redmist Estate",
+            "redmist_estate",
+            "p",
+            "P",
+            "Redmist Estate_2026-09-29_1",
+        )
+        .unwrap();
+    let game = storage.get_game(id).unwrap().unwrap();
+    assert_eq!(game.display_name, "Redmist Estate — 29 Sep 2026 (1)");
+}
+
+#[test]
+fn test_update_game_display_name_persists_in_memory() {
+    let storage = Storage::new_in_memory();
+    let id = storage.create_game("w", "w", "p", "P", "Game A").unwrap();
+
+    storage.update_game_display_name(id, "Renamed").unwrap();
+
+    let game = storage.get_game(id).unwrap().unwrap();
+    assert_eq!(game.display_name, "Renamed");
+    assert_eq!(game.name, "Game A", "the stable name is untouched");
+}
+
+#[test]
+fn test_update_game_display_name_persists_sqlite() {
+    let storage = sqlite_storage().unwrap();
+    let id = storage.create_game("w", "w", "p", "P", "Game A").unwrap();
+
+    storage.update_game_display_name(id, "Renamed").unwrap();
+
+    let game = storage.get_game(id).unwrap().unwrap();
+    assert_eq!(game.display_name, "Renamed");
+    assert_eq!(game.name, "Game A", "the stable name is untouched");
+}
+
+#[test]
+fn test_update_game_display_name_missing_returns_not_found() {
+    let storage = Storage::new_in_memory();
+    let result = storage.update_game_display_name(9999, "Nope");
+    assert!(matches!(
+        result,
+        Err(crate::error::EngineError::GameNotFound(9999))
+    ));
+}
+
+#[test]
+fn test_update_game_display_name_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        "update_game_display_name",
+        TestOverride::config("rename failed"),
+    );
+
+    let result = storage.update_game_display_name(1, "Nope");
+    assert!(result.is_err());
+}

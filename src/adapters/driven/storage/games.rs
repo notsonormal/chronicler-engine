@@ -6,6 +6,7 @@ use crate::domain::model::game::{Game, NewGame};
 use crate::domain::model::settings::{
     AppSettings, ModePresetBundle, NarrativePerspective, NarrativeTense, NarratorMode,
 };
+use crate::domain::model::utils::game_name::default_display_name;
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
 
@@ -16,7 +17,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on, display_name
                          FROM games
                          ORDER BY updated_at DESC",
                     )
@@ -63,6 +64,7 @@ impl Storage {
                     persona_key: persona_key.to_string(),
                     persona_name: persona_name.to_string(),
                     name: name.to_string(),
+                    display_name: default_display_name(name),
                     created_at: now,
                     updated_at: now,
                     narrator_mode: NarratorMode::Novel,
@@ -93,6 +95,7 @@ impl Storage {
                     persona_key: request.persona_key.clone(),
                     persona_name: request.persona_name.clone(),
                     name: request.name.clone(),
+                    display_name: default_display_name(&request.name),
                     created_at: now,
                     updated_at: now,
                     narrator_mode: request.narrator_mode,
@@ -107,6 +110,39 @@ impl Storage {
                     options_always_on: request.options_always_on,
                 });
                 Ok(id)
+            }
+        })
+    }
+
+    /// The stable `name` is never touched, so the uniqueness scan stays valid
+    /// across a rename.
+    pub fn update_game_display_name(&self, id: u64, display_name: &str) -> Result<(), EngineError> {
+        self.with_backend_mut("update_game_display_name", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let now = chrono::Utc::now().to_rfc3339();
+                let affected = conn
+                    .execute(
+                        "UPDATE games SET display_name=?, updated_at=? WHERE id=?",
+                        rusqlite::params![display_name, &now, id as i64],
+                    )
+                    .map_err(|e| {
+                        EngineError::Config(format!("Failed to update game display name: {e}"))
+                    })?;
+                if affected == 0 {
+                    return Err(EngineError::GameNotFound(id));
+                }
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                let stored = data
+                    .games
+                    .iter_mut()
+                    .find(|g| g.id == id)
+                    .ok_or(EngineError::GameNotFound(id))?;
+                stored.display_name = display_name.to_string();
+                stored.updated_at = chrono::Utc::now();
+                Ok(())
             }
         })
     }
@@ -135,7 +171,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on, display_name
                          FROM games
                          WHERE id = ?1
                          LIMIT 1",

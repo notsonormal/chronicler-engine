@@ -10,7 +10,6 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::message::Message;
-use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use chronicler_engine::test_support::{
@@ -20,7 +19,8 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::app_wiring::app_with_narrator;
-use crate::support::http_requests::{post_action, post_empty, wait_idle};
+use crate::support::http_assertions::status_error_message;
+use crate::support::http_requests::{fetch_generating_status, post_action, post_empty, wait_idle};
 
 // [docs/specs/swipe_new.md] SCENARIO: 9.1
 #[tokio::test]
@@ -46,15 +46,11 @@ async fn test_retry_replaces_narration_with_new_swipe_http() {
     assert_eq!(narrations.len(), 1, "exactly one Narration message");
     assert_eq!(narrations[0].swipes.len(), 2, "retry appended a swipe");
     assert_eq!(narrations[0].text(), "Second.", "active swipe is the retry");
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "retry should finish in the Idle state"
+    );
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 9.2
@@ -84,18 +80,23 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action should complete");
     {
-        let gs = state.message_service.load_or_fresh();
-        assert_eq!(gs.movement.current_room_id, "room_1", "first action: stay");
+        let room = state
+            .game_view_query
+            .get_debug_state()
+            .expect("get_debug_state should succeed")
+            .current_room_id;
+        assert_eq!(room, "room_1", "first action: stay");
     }
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "retry should complete");
-    let gs = state.message_service.load_or_fresh();
-    assert_eq!(
-        gs.movement.current_room_id, "room2",
-        "retry re-ran quantifier → moved to room2"
-    );
+    let room = state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed")
+        .current_room_id;
+    assert_eq!(room, "room2", "retry re-ran quantifier → moved to room2");
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 9.3
@@ -140,12 +141,12 @@ async fn test_retry_uses_edited_input_text_http() {
     assert!(wait_idle(&state, 1000).await);
 
     let messages = state.message_service.load_messages().unwrap();
-    let input_id = messages
+    let input = messages
         .iter()
         .find(|m| m.message_type == MessageType::Input)
-        .expect("Input message")
-        .id;
-    let index = storage.require_active_swipe_index(input_id).unwrap();
+        .expect("Input message");
+    let input_id = input.id;
+    let index = input.active_swipe_index;
     storage
         .update_swipe_text(input_id, index, "sprint forward")
         .expect("update_swipe_text should succeed");
@@ -212,12 +213,12 @@ async fn test_retry_reevaluates_triggers_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action should complete");
     {
-        let gs = state.message_service.load_or_fresh();
-        let events = gs
-            .narrative
-            .history()
+        let events = state
+            .message_service
+            .load_messages()
+            .unwrap()
             .iter()
-            .filter(|m| m.event_header.is_some())
+            .filter(|m| m.event_header().is_some())
             .count();
         assert_eq!(events, 0, "first action: no trigger (player not in room2)");
     }
@@ -225,12 +226,12 @@ async fn test_retry_reevaluates_triggers_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "retry should complete");
-    let gs = state.message_service.load_or_fresh();
-    let events = gs
-        .narrative
-        .history()
+    let events = state
+        .message_service
+        .load_messages()
+        .unwrap()
         .iter()
-        .filter(|m| m.event_header.is_some())
+        .filter(|m| m.event_header().is_some())
         .count();
     assert_eq!(
         events, 1,
@@ -266,9 +267,9 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
         wait_idle(&state, 1000).await,
         "retry should complete even with no movement"
     );
-    let gs = state.message_service.load_or_fresh();
-    assert!(
-        !gs.narrative.input_buffer.status.is_generating(),
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
         "status should not be Generating"
     );
 }
@@ -319,15 +320,11 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
         "Event narration",
         "active swipe text should be the new retry narration, not the original"
     );
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "event retry should finish in the Idle state"
+    );
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 10.2
@@ -355,20 +352,19 @@ async fn test_event_retry_does_not_rerun_quantifier_http() {
     seed_event_flow(&state, &storage).unwrap();
 
     let room_before = state
-        .message_service
-        .load_or_fresh()
-        .movement
-        .current_room_id
-        .clone();
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed")
+        .current_room_id;
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "event retry should complete");
 
     let room_after = state
-        .message_service
-        .load_or_fresh()
-        .movement
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed")
         .current_room_id;
     assert_eq!(
         room_before, room_after,
@@ -424,9 +420,9 @@ async fn test_retry_no_game_context_returns_400_http() {
 #[tokio::test]
 async fn test_retry_anchor_no_snapshot_returns_500_http() {
     let storage = Arc::new(Storage::new_in_memory());
-    let (app, state) = TestAppBuilder::default_test()
+    let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build_with_state();
+        .build();
 
     // Seed an Input message with snapshot_id = None (broken integrity).
     let input_msg = Message::new("look", MessageType::Input, None, None);
@@ -438,25 +434,20 @@ async fn test_retry_anchor_no_snapshot_returns_500_http() {
         StatusCode::INTERNAL_SERVER_ERROR,
         "anchor with no snapshot_id should 500"
     );
-    let gs = state.message_service.load_or_fresh();
-    match &gs.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("snapshot_id") || msg.contains("snapshot"),
-                "error should mention snapshot, got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("snapshot_id") || status.contains("snapshot"),
+        "error should mention snapshot, got: {status}"
+    );
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 11.4
 #[tokio::test]
 async fn test_retry_anchor_snapshot_deleted_returns_500_http() {
     let storage = Arc::new(Storage::new_in_memory());
-    let (app, state) = TestAppBuilder::default_test()
+    let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build_with_state();
+        .build();
 
     // Seed an Input message with a snapshot_id that doesn't exist in storage.
     let mut input_msg = Message::new("look", MessageType::Input, None, None);
@@ -469,16 +460,11 @@ async fn test_retry_anchor_snapshot_deleted_returns_500_http() {
         StatusCode::INTERNAL_SERVER_ERROR,
         "anchor with deleted snapshot should 500"
     );
-    let gs = state.message_service.load_or_fresh();
-    match &gs.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("no snapshot found") || msg.contains("snapshot"),
-                "error should mention snapshot not found, got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("no snapshot found") || status.contains("snapshot"),
+        "error should mention snapshot not found, got: {status}"
+    );
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 11.5
@@ -514,13 +500,9 @@ async fn test_retry_llm_failure_sets_error_http() {
         "retry should complete (with error)"
     );
 
-    let gs = state.message_service.load_or_fresh();
-    match &gs.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(!msg.is_empty(), "error message should be non-empty: {msg}");
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    let message = status_error_message(&status);
+    assert!(!message.is_empty(), "error message should be non-empty");
     let swipes_after = state
         .message_service
         .load_messages()
@@ -567,16 +549,11 @@ async fn test_retry_empty_narration_sets_error_http() {
         "retry should complete (with error)"
     );
 
-    let gs = state.message_service.load_or_fresh();
-    match &gs.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("empty"),
-                "error message should mention 'empty', got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("empty"),
+        "error message should mention 'empty', got: {status}"
+    );
     let swipes_after = state
         .message_service
         .load_messages()
@@ -633,16 +610,11 @@ async fn test_retry_room_not_found_sets_error_http() {
         "retry should complete (with error)"
     );
 
-    let gs = state.message_service.load_or_fresh();
-    match &gs.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("Room not found"),
-                "error should mention room invalid, got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("Room not found"),
+        "error should mention room invalid, got: {status}"
+    );
 
     // Spec 11.7 Then: original narration's swipes unchanged (no new swipe appended).
     let messages = state.message_service.load_messages().unwrap();
@@ -683,16 +655,11 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
         "event retry should complete (with error)"
     );
 
-    let gs = state.message_service.load_or_fresh();
-    match &gs.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("Trigger narration failed"),
-                "error should mention 'Trigger narration failed', got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("Trigger narration failed"),
+        "error should mention 'Trigger narration failed', got: {status}"
+    );
     let messages = state.message_service.load_messages().unwrap();
     assert!(
         messages.iter().any(|m| {
@@ -776,11 +743,11 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "retry should complete");
 
-    let gs = state.message_service.load_or_fresh();
-    assert!(matches!(
-        gs.narrative.input_buffer.status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "retry should finish in the Idle state"
+    );
 
     let messages = state.message_service.load_messages().unwrap();
     let inputs: Vec<_> = messages
@@ -837,11 +804,11 @@ async fn test_retry_user_regen_generates_input_swipe_http() {
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "retry should complete");
 
-    let gs = state.message_service.load_or_fresh();
-    assert!(matches!(
-        gs.narrative.input_buffer.status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "retry should finish in the Idle state"
+    );
 
     let messages = state.message_service.load_messages().unwrap();
     let inputs: Vec<_> = messages
@@ -909,11 +876,12 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     let narrator = Arc::new(
         MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
     );
-    let forensics_storage = Arc::new(Storage::new_in_memory());
     let app_storage = Arc::new(Storage::new_in_memory());
+    // The recorder persists its LLM calls into the wired storage, so the app's
+    // `GameViewQuery` reads them back through the application seam.
     let recorder = make_test_recorder_with_storage(
         Arc::clone(&narrator) as Arc<dyn LlmProvider>,
-        Arc::clone(&forensics_storage),
+        Arc::clone(&app_storage),
     );
     let pipeline = make_test_pipeline_with_backends(
         Arc::clone(&app_storage),
@@ -943,7 +911,8 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     // never reach the prompt.
     let marker = "MARKER-IMPERSONATE-PRESET-V2";
     {
-        let mut preset = app_storage
+        let mut preset = state
+            .prompt_preset_service
             .get_preset("impersonate_default")
             .expect("get impersonate preset")
             .expect("impersonate_default seeded");
@@ -961,7 +930,8 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "retry should complete");
 
-    let forensics = forensics_storage
+    let forensics = state
+        .game_view_query
         .list_latest_llm_messages(10)
         .expect("list llm forensics");
     let narrator_call = forensics

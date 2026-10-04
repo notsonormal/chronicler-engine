@@ -1,10 +1,68 @@
 //! Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
 
-// `editOption` copies the option text into the command input and focuses it.
-// The stub serves the dock fragment in the real template's shape, so the client
-// wiring is exercised unchanged.
+use std::time::Duration;
 
 use super::*;
+
+/// How long a click the guard must swallow still gets to reach the stub. The
+/// fixed client sends nothing at all, so the window only has to outlast a
+/// submit that a regressed client would have fired immediately.
+const SUBMIT_SETTLE: Duration = Duration::from_millis(500);
+
+// [docs/specs/browser_options.md] SCENARIO: 26.5
+#[tokio::test]
+async fn test_option_click_during_generation_does_not_submit() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let actions = stub.action_handle();
+        async move {
+            wait_for_element_children(&page, "#options-dock .option-item", 3).await;
+
+            // The stub's acknowledgement lands "Thinking..." in the status
+            // display, so the dock's options outlive their turn.
+            send_action(&page, "look").await;
+            let requests_before = actions.count();
+            assert_eq!(
+                requests_before, 1,
+                "the command submit is the only /action/check request so far"
+            );
+
+            let generating: bool = page
+                .evaluate::<(), bool>(
+                    r#"(() => {
+                    const status = document.getElementById('status-display');
+                    return !!status && !!status.querySelector('.status.thinking');
+                })()"#,
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(generating, "the turn must be in flight before the click");
+
+            let clicked: bool = page
+                .evaluate::<(), bool>(
+                    r#"(() => {
+                    const btn = document.querySelector('#options-dock .option-btn');
+                    if (!btn) return false;
+                    btn.click();
+                    return true;
+                })()"#,
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(clicked, "the dock must render an option button");
+
+            // Give the (buggy) submit a chance to reach the stub.
+            tokio::time::sleep(SUBMIT_SETTLE).await;
+            assert_eq!(
+                actions.count(),
+                requests_before,
+                "an option click while a generation is in flight must not submit"
+            );
+        }
+    })
+    .await;
+}
 
 // [docs/specs/browser_options.md] SCENARIO: 26.3
 #[tokio::test]

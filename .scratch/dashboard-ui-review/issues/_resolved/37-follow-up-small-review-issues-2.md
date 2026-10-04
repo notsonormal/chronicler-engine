@@ -39,6 +39,13 @@ From [Fix the weak dashboard and settings tests](34-fix-weak-dashboard-and-setti
 - Spec 16.6 prose names the `send_action("wait")` helper.
 - A 16.9 acknowledgement race failed one gate run and passed on re-run; with the earlier stub-browser timing flake, check whether the stub browser tests share a timing assumption.
 
+From the code review of the merged `43` / `50` / `59` / `61` batch — checked against the code and all five fixed in that batch, nothing open:
+- `tests/browser/stub/swipes.rs` hand-rolled its two poll loops; both now use `wait_for_condition_async`.
+- `tests/browser/stub/options.rs`'s bare 500ms sleep is now the named `SUBMIT_SETTLE` window.
+- The `<span class="status error">Error: ` parse duplicated in `tests/http/actions.rs` and `tests/http/swipe_new.rs` is one `status_error_message` in `tests/http/support/http_assertions.rs`.
+- The display-name default was derived at five sites, and `NewGame` carried a `display_name` beside the `name` it is derived from; the field is gone, both insert paths derive it, the v25 backfill keeps its own call, and the function is `default_display_name` — `display_name_from_key` read like `world_key`.
+- `announceSwipeRestore` repeated `showError`'s pending-clear timer shape; both now use one `scheduleNoticeClear`.
+
 ## Done when
 
 - Each item is fixed, dropped with a reason, or promoted to a ticket.

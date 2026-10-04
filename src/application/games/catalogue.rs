@@ -89,6 +89,18 @@ impl GameCatalogue {
         Ok(())
     }
 
+    /// The stable generated `name` is untouched; display names may collide.
+    pub fn rename_game(&self, id: u64, display_name: &str) -> Result<Game, ApplicationError> {
+        let display_name = display_name.trim();
+        if display_name.is_empty() {
+            return Err(ApplicationError::validation("Display name cannot be empty"));
+        }
+        let mut game = self.require_game(id)?;
+        self.storage.update_game_display_name(id, display_name)?;
+        game.display_name = display_name.to_string();
+        Ok(game)
+    }
+
     pub fn delete_game(&self, id: u64) -> Result<(), ApplicationError> {
         if id == self.storage.current_game_id() {
             return Err(ApplicationError::validation(

@@ -1,10 +1,12 @@
 //! Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
 
-// The shell and static assets are real; every polled fragment is canned under
-// `tests/test_utils/stub_fixtures/`, except the options dock, which renders
-// through the engine's own `OptionsDockTemplate`. The dynamic endpoints answer
-// scripted outcomes a test names up front; `/history/:id`, `/swipe/new` and
-// `/retrigger` always answer 500.
+// The shell and static assets are real; the story log, the LLM Messages
+// panel, the options dock and the text-check preview render through the
+// engine's own templates, so a hook change in a shipped template reaches the
+// served fragment with no fixture to keep in step. The remaining polled
+// fragments are canned under `tests/test_utils/stub_fixtures/`. The dynamic
+// endpoints answer scripted outcomes a test names up front; `/history/:id`,
+// `/swipe/new` and `/retrigger` always answer 500.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -16,9 +18,12 @@ use axum::http::{header, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
+use chrono::{TimeZone, Utc};
 
 use chronicler_engine::adapters::driving::http::builders::headers::add_status_swap_headers;
 use chronicler_engine::adapters::driving::http::utils::error::render_error;
+use chronicler_engine::domain::model::llm_message::LlmMessage;
+use chronicler_engine::domain::model::state::message_types::{MessageEntry, MessageType};
 
 use super::server::{get_config_port, release_port_lock};
 use super::CONFIG_PATH;
@@ -27,9 +32,7 @@ use super::CONFIG_PATH;
 /// htmx wiring.
 const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 
-const FIXTURE_STORY_LOG: &str = include_str!("stub_fixtures/story_log.html");
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
-const FIXTURE_LLM_MESSAGES: &str = include_str!("stub_fixtures/llm_messages.html");
 const FIXTURE_HEADER: &str = include_str!("stub_fixtures/header.html");
 const FIXTURE_SETTINGS: &str = include_str!("stub_fixtures/settings.html");
 const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.html");
@@ -37,17 +40,74 @@ const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
 const FIXTURE_ACTION_AREA: &str = include_str!("stub_fixtures/action_area.html");
 
-/// Canned options the rendered dock offers — the three texts the old fixture
-/// carried, which the stub-tier tests interact with.
+/// The canned narration the story-log stub serves.
+const NARRATIVE_TEXT: &str = "Welcome to the Test World, Test Player! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine.\n\nThe tavern around you is warm and inviting. Wooden beams stretch across the ceiling, and a crackling fire in the hearth casts dancing shadows on the walls. The smell of fresh bread and mulled cider fills the air.\n\nBehind the bar, the bartender wipes down a mug and glances your way. \"First time in the Test Realm?\" he asks with a knowing smile. \"Don't worry, everyone here is friendly. Mostly.\"\n\nA merchant in the corner adjusts her pack and catches your eye. \"If you're heading north to the village square, mind the cobblestones. They get slippery after dark,\" she advises.\n\nYou take a moment to gather your bearings. The road ahead promises adventure, but for now, the warmth of the tavern offers a brief respite.";
+
+/// Render the story log through the shipped `NarrativeLogTemplate`.
+fn story_log_html(entries: &[MessageEntry]) -> String {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::NarrativeLogTemplate;
+
+    NarrativeLogTemplate::new(entries, true)
+        .render()
+        .expect("render story log")
+}
+
+/// The canned entry pair every stub test starts from: the player input first,
+/// then the narration last so the template renders its swipe controls and the
+/// retrigger control the stub tests drive.
+fn default_story_log_entries() -> Vec<MessageEntry> {
+    vec![
+        MessageEntry {
+            id: 2,
+            text: "look at the casle".to_string(),
+            message_type: MessageType::Input,
+            timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 7, 0).unwrap(),
+            ..Default::default()
+        },
+        MessageEntry {
+            id: 1,
+            text: NARRATIVE_TEXT.to_string(),
+            message_type: MessageType::Narration,
+            timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 8, 0).unwrap(),
+            location_header: Some("Test Tavern".to_string()),
+            ..Default::default()
+        },
+    ]
+}
+
+/// Render the LLM Messages panel through the shipped `LlmMessagesTemplate`.
+fn llm_messages_html() -> String {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::LlmMessagesTemplate;
+
+    let messages = vec![LlmMessage {
+        id: 1,
+        agent_name: "narrator".to_string(),
+        backend_name: "Mock".to_string(),
+        model_name: "mock".to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: "canned narration".to_string(),
+        error_message: None,
+        created_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+    }];
+    LlmMessagesTemplate::new(&messages)
+        .render()
+        .expect("render LLM messages")
+}
+
+/// Canned options the rendered dock offers.
 const CANNED_OPTIONS: [&str; 3] = [
     "Ask the bartender about the Test Realm",
     "Examine the merchant's pack",
     "Step outside into the night air",
 ];
 
-/// Render the options dock through the engine's own template — the dock is a
-/// pure `vm → HTML` render needing no `AppState`, so serving a hand-copy
-/// fixture would be drift we pay for nothing. Askama escapes the texts.
+/// Render the options dock through the shipped template — a pure `vm → HTML`
+/// render needing no `AppState`. Askama escapes the texts.
 fn options_dock_html() -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::OptionsDockTemplate;
@@ -68,9 +128,7 @@ fn options_dock_html() -> String {
 /// drive the preview → confirm swap without a real text-check engine.
 const TEXT_CHECK_TRIGGER: &str = "casle";
 
-/// Render the text-check preview through the engine's own template — a pure
-/// `vm → HTML` render, so the canned preview cannot drift from the shipped
-/// `TextCheckPreviewTemplate`.
+/// Render the text-check preview through the shipped `TextCheckPreviewTemplate`.
 fn text_check_preview_html() -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::TextCheckPreviewTemplate;
@@ -115,6 +173,16 @@ struct StubState {
     action_outcome: StubActionOutcome,
     status: std::sync::Mutex<StubStatus>,
     retrigger_requests: std::sync::atomic::AtomicUsize,
+    action_requests: std::sync::atomic::AtomicUsize,
+    /// The story log is scripted through two variants a swipe-switch test
+    /// drives: the default single-swipe fixture, then a two-swipe one.
+    two_swipes: std::sync::atomic::AtomicBool,
+    /// Set once `POST /message/:id/swipe/:index` has been answered; the story
+    /// log and dock then render the post-switch shapes.
+    switched: std::sync::atomic::AtomicBool,
+    /// The dock carries the canned set until a switch restores a Swipe with
+    /// no set of its own.
+    dock_options_live: std::sync::atomic::AtomicBool,
 }
 
 /// A running stub server. Dropping it shuts the server down and releases
@@ -134,12 +202,15 @@ impl StubServer {
         Self::start_on_port(port, action_outcome).await
     }
 
-    /// Start the stub on a named port.
     async fn start_on_port(port: u16, action_outcome: StubActionOutcome) -> Self {
         let state = Arc::new(StubState {
             action_outcome,
             status: std::sync::Mutex::new(StubStatus::default()),
             retrigger_requests: std::sync::atomic::AtomicUsize::new(0),
+            action_requests: std::sync::atomic::AtomicUsize::new(0),
+            two_swipes: std::sync::atomic::AtomicBool::new(false),
+            switched: std::sync::atomic::AtomicBool::new(false),
+            dock_options_live: std::sync::atomic::AtomicBool::new(true),
         });
         let app = stub_router(Arc::clone(&state));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
@@ -166,20 +237,48 @@ impl StubServer {
         format!("http://{}", self.addr)
     }
 
-    /// A cloneable handle to the scripted status, so a test closure can change
-    /// what `/status/generating` answers without borrowing the server.
+    /// A cloneable handle to the scripted status.
     pub fn status_handle(&self) -> StubStatusHandle {
         StubStatusHandle {
             state: Arc::clone(&self.state),
         }
     }
 
-    /// A cloneable handle to the retrigger request count, so a test closure can
-    /// assert the control fired without borrowing the server.
+    /// A cloneable handle to the retrigger request count.
     pub fn retrigger_handle(&self) -> StubRetriggerHandle {
         StubRetriggerHandle {
             state: Arc::clone(&self.state),
         }
+    }
+
+    /// A cloneable handle to the `/action/check` request count.
+    pub fn action_handle(&self) -> StubActionHandle {
+        StubActionHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    /// The handle a swipe-switch test scripts the story log and dock with.
+    pub fn swipe_handle(&self) -> StubSwipeHandle {
+        StubSwipeHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+}
+
+/// A cloneable handle to the scripted swipe-switch story log and dock.
+#[derive(Clone)]
+pub struct StubSwipeHandle {
+    state: Arc<StubState>,
+}
+
+impl StubSwipeHandle {
+    /// Script the story log as a Message with two Swipes. The log's 2s poll
+    /// renders it on a later cycle.
+    pub fn set_two_swipes(&self) {
+        self.state
+            .two_swipes
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -201,6 +300,21 @@ impl StubStatusHandle {
 #[derive(Clone)]
 pub struct StubRetriggerHandle {
     state: Arc<StubState>,
+}
+
+/// A cloneable handle to the `/action/check` request count.
+#[derive(Clone)]
+pub struct StubActionHandle {
+    state: Arc<StubState>,
+}
+
+impl StubActionHandle {
+    /// How many `POST /action/check` requests the stub has answered.
+    pub fn count(&self) -> usize {
+        self.state
+            .action_requests
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 impl StubRetriggerHandle {
@@ -240,23 +354,20 @@ fn stub_router(state: Arc<StubState>) -> Router {
             post(|| async { client_failure("Stub retry failure") }),
         )
         .route("/retrigger", post(record_retrigger))
+        // The real switch restores a Snapshot; the stub scripts only the two
+        // log shapes and the dock drop a switch test observes.
+        .route("/message/:id/swipe/:index", post(switch_swipe))
         .route("/status/generating", get(status_generating))
         .route("/fragment/header", get(|| async { Html(FIXTURE_HEADER) }))
-        .route(
-            "/fragment/story-log",
-            get(|| async { Html(FIXTURE_STORY_LOG) }),
-        )
+        .route("/fragment/story-log", get(story_log_fragment))
         .route(
             "/fragment/visual-sidebar",
             get(|| async { Html(FIXTURE_VISUAL_SIDEBAR) }),
         )
-        .route(
-            "/fragment/options-dock",
-            get(|| async { Html(options_dock_html()) }),
-        )
+        .route("/fragment/options-dock", get(options_dock_fragment))
         .route(
             "/fragment/llm-messages",
-            get(|| async { Html(FIXTURE_LLM_MESSAGES) }),
+            get(|| async { Html(llm_messages_html()) }),
         )
         .route(
             "/fragment/settings",
@@ -281,6 +392,64 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .with_state(state)
 }
 
+/// The scripted story log: the default entry pair, the two-Swipe shape a
+/// switch test enables, or the settled shape a switch restores.
+async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    use std::sync::atomic::Ordering::SeqCst;
+    if state.two_swipes.load(SeqCst) {
+        if state.switched.load(SeqCst) {
+            Html(story_log_html(&restored_swipe_entries()))
+        } else {
+            Html(story_log_html(&two_swipe_entries()))
+        }
+    } else {
+        Html(story_log_html(&default_story_log_entries()))
+    }
+}
+
+/// A scripted Message with two Swipes at `active_swipe_index`.
+fn swipe_script_entries(text: &str, active_swipe_index: usize) -> Vec<MessageEntry> {
+    vec![MessageEntry {
+        id: 1,
+        text: text.to_string(),
+        message_type: MessageType::Narration,
+        timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 7, 0).unwrap(),
+        swipe_count: 2,
+        active_swipe_index,
+        ..Default::default()
+    }]
+}
+
+/// The scripted Message on its second Swipe: the shape a switch test starts
+/// from, whose Previous control switches to the first.
+fn two_swipe_entries() -> Vec<MessageEntry> {
+    swipe_script_entries("A tavern by night.", 1)
+}
+
+/// The settled shape a switch restores: the same Message on its first Swipe.
+fn restored_swipe_entries() -> Vec<MessageEntry> {
+    swipe_script_entries("A road at dawn.", 0)
+}
+
+/// The stub answers a swipe switch with the restored log and drops the dock's
+/// option set, mirroring the engine's settled-restore outcome.
+async fn switch_swipe(State(state): State<Arc<StubState>>) -> Html<String> {
+    use std::sync::atomic::Ordering::SeqCst;
+    state.switched.store(true, SeqCst);
+    state.dock_options_live.store(false, SeqCst);
+    Html(story_log_html(&restored_swipe_entries()))
+}
+
+/// The canned dock set until a switch has restored a set-less Swipe.
+async fn options_dock_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    use std::sync::atomic::Ordering::SeqCst;
+    if state.dock_options_live.load(SeqCst) {
+        Html(options_dock_html())
+    } else {
+        Html(String::new())
+    }
+}
+
 async fn index() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
@@ -292,6 +461,9 @@ async fn action_check(
     State(state): State<Arc<StubState>>,
     Form(form): Form<HashMap<String, String>>,
 ) -> Response<Body> {
+    state
+        .action_requests
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     // The real handler runs the text check before dispatch; the stub keys on a
     // canned misspelling so a test can drive the preview → confirm swap.
     let command = form.get("command").map(String::as_str).unwrap_or_default();

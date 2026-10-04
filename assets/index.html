@@ -95,6 +95,12 @@
         </div>
         <div id="text-check-result" class="text-check-result"></div>
       </div>
+      <div
+        id="restore-notice"
+        class="restore-notice"
+        role="status"
+        aria-live="polite"
+      ></div>
     </div>
     <div class="tab-content" id="settings-tab" role="tabpanel" aria-labelledby="tab-settings">
       <div
@@ -261,19 +267,31 @@
       // Body-level, so no fragment swap replaces it.
       const errorNotification = document.getElementById("error-notification");
 
-      let errorHideTimer = null;
+      // One pending clear per notice element, so a newer notice is never
+      // wiped by an older notice's timer.
+      const noticeClearTimers = new WeakMap();
+
+      function scheduleNoticeClear(element, onClear, delayMs) {
+        const pending = noticeClearTimers.get(element);
+        if (pending !== undefined) clearTimeout(pending);
+        noticeClearTimers.set(
+          element,
+          setTimeout(() => {
+            noticeClearTimers.delete(element);
+            onClear();
+          }, delayMs)
+        );
+      }
 
       function showError(message) {
-        if (errorNotification) {
-          errorNotification.textContent = message;
-          errorNotification.classList.add("visible");
-          // A stale hide timer would hide a newer error's toast.
-          if (errorHideTimer !== null) clearTimeout(errorHideTimer);
-          errorHideTimer = setTimeout(() => {
-            errorNotification.classList.remove("visible");
-            errorHideTimer = null;
-          }, 5000);
-        }
+        if (!errorNotification) return;
+        errorNotification.textContent = message;
+        errorNotification.classList.add("visible");
+        scheduleNoticeClear(
+          errorNotification,
+          () => errorNotification.classList.remove("visible"),
+          5000
+        );
       }
 
       // htmx:beforeSwap can cancel the swap; show the toast and let it proceed.
@@ -506,6 +524,19 @@
         submitGenerationRequest("/retrigger", "Failed to retrigger the event");
       }
 
+      // A restored swipe has no state signal of its own — the counter alone
+      // does not tell the player a snapshot was restored.
+      function announceSwipeRestore() {
+        const notice = document.getElementById("restore-notice");
+        if (!notice) return;
+        const counter = document.querySelector("#story-log .swipe-counter");
+        const label = counter ? counter.textContent.trim() : "";
+        notice.textContent = label ? `Restored swipe ${label}` : "Swipe restored";
+        scheduleNoticeClear(notice, () => {
+          notice.textContent = "";
+        }, 4000);
+      }
+
       function switchSwipe(messageId, index) {
         fetch(`/message/${messageId}/swipe/${index}`, { method: "POST" })
           .then((response) => {
@@ -518,6 +549,10 @@
             document.getElementById("story-log").innerHTML = html;
             htmx.trigger("#visual-sidebar", "htmx:refresh");
             htmx.trigger("#header", "htmx:refresh");
+            // The restore is a settled state: drop any stale generating label
+            // at once rather than waiting for the next 5s status poll.
+            resetStatusToReady();
+            announceSwipeRestore();
           })
           .catch((err) => {
             console.error("Swipe switch failed:", err);
@@ -572,7 +607,10 @@
       // /action/check, Edit copies it into the input for editing.
       function useOption(btn) {
         const input = commandInput();
-        if (!input || input.disabled) return;
+        // A generation in flight owns the input: a stale option left over from
+        // the previous turn must not hijack it. `input.disabled` alone misses
+        // this — the input is only disabled while a text check is in flight.
+        if (!input || input.disabled || statusIsGenerating()) return;
         input.value = btn.textContent;
         document.getElementById("command-form").requestSubmit();
       }

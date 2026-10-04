@@ -8,9 +8,8 @@ use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::test_utils::wait_for_condition_async;
 
-/// Consume a response into its body as a String. The body reader the support
-/// helpers use — one cap (65536) covers every fragment and page this suite
-/// reads.
+/// The body reader the support helpers use — one cap (65536) covers every
+/// fragment and page this suite reads.
 pub async fn response_body(resp: axum::response::Response<Body>) -> String {
     let bytes = axum::body::to_bytes(resp.into_body(), 65536)
         .await
@@ -18,7 +17,6 @@ pub async fn response_body(resp: axum::response::Response<Body>) -> String {
     String::from_utf8_lossy(&bytes).to_string()
 }
 
-/// GET the given URI and return the response body as a String.
 /// Panics if the request fails or returns non-success status.
 pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
@@ -27,7 +25,13 @@ pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     response_body(response).await
 }
 
-/// POST a url-encoded body to an arbitrary URI.
+/// The generation-status read seam: `GET /status/generating` returns `idle`,
+/// the phase's endpoint string, or an `Error: {message}` span.
+pub async fn fetch_generating_status(app: &axum::Router) -> String {
+    fetch_body(app, "/status/generating").await
+}
+
+/// POST a pre-encoded form body to an arbitrary URI.
 pub async fn post_form(
     app: &axum::Router,
     uri: &str,
@@ -68,7 +72,7 @@ pub async fn post_action_check(
     .await
 }
 
-/// POST to a no-body endpoint (`/swipe/new`, `/history/delete`, `/reset`).
+/// POST to a no-body endpoint.
 pub async fn post_empty(app: &axum::Router, uri: &str) -> axum::response::Response<Body> {
     let req = Request::builder()
         .uri(uri)
@@ -79,8 +83,7 @@ pub async fn post_empty(app: &axum::Router, uri: &str) -> axum::response::Respon
 }
 
 /// POST a url-encoded body carrying the `HX-Request` header, the way htmx
-/// sends every fragment swap. Use this for endpoints whose response is a
-/// fragment rather than a full page.
+/// sends every fragment swap.
 pub async fn post_form_with_hx(
     app: &axum::Router,
     uri: &str,

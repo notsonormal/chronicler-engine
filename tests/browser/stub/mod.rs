@@ -12,3 +12,4 @@ mod llm_messages;
 mod options;
 mod slash_menu;
 mod story_log;
+mod swipes;

@@ -1,7 +1,7 @@
 # Migrate tier-1 tests to observe through legal read seams
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -21,3 +21,14 @@ Migrate the existing violations now:
 - No `tests/http/` test dereferences a `GameState` field for an assertion (excluding synchronization waits).
 - No `tests/http/` test reads storage for an observation.
 - `python build.py` is green, including `spec-coverage`. The user reviews the diff. Commit after approval.
+
+## Answer
+
+All violations named by the audit list migrated, plus sites the list omitted but the Done-when covers.
+
+- **Raw `GameState` reads.** Status reads now go through `GET /status/generating` (a new `fetch_generating_status` beside `wait_idle` in `tests/http/support/http_requests.rs`); room, scene, and encounter observations go through `GameViewQuery::get_debug_state`; message and event observations through `MessageService::load_messages`. `wait_idle` stays as the allowed synchronization wait. The 45 sites in the audit list are covered, along with the `options.rs` helper and the second `get_settings` / extra `get_preset` sites.
+- **Storage observation reads.** `list_latest_llm_messages` → `GameViewQuery::list_latest_llm_messages`; `get_settings` → `SettingsService::get_settings`; `get_preset` → `PromptPresetService::get_preset`; `load_message_rows` → `MessageService::load_messages`; `get_game` → `GET /fragment/games` plus `GameCatalogue`; `current_game_id` assertions → `GameCatalogue::current_game_id()`; `require_active_swipe_index` → `Message.active_swipe_index` through `load_messages`.
+- **The three persistence facts.** The scenario message's swipe is asserted in `tests/http/games_create.rs` through `load_messages` (`!scenario_msg.swipes.is_empty()`). The initial snapshot is asserted at the application tier by the new `message_service_tests::test_save_message_and_snapshot_persists_a_snapshot` — a snapshot row is not a tier-1 read surface. Skipping the `write_snapshot` call in `save_message_and_snapshot` fails that test, verified by temporary mutation.
+- No production read seam was added; production code is unchanged.
+
+Tier: tier 1 (HTTP E2E) for the migrated tests, unit for the snapshot assertion. The quarantined `tests/http/requires_migration/fragment.rs` keeps one `wait_idle`-style status poll, which the ticket's exception covers. `python build.py` is green, including `spec-coverage`.

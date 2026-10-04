@@ -14,6 +14,9 @@ pub struct Game {
     pub persona_key: String,
     pub persona_name: String,
     pub name: String,
+    /// Player-facing label shown in the header and Games tab. Distinct from
+    /// the stable generated `name`; display names may collide.
+    pub display_name: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub narrator_mode: NarratorMode,
@@ -34,6 +37,8 @@ pub struct NewGame {
     pub world_key: String,
     pub persona_key: String,
     pub persona_name: String,
+    /// The stable generated name. The stored display name is derived from it
+    /// when the row is written; a rename is the only other way to set it.
     pub name: String,
     pub narrator_mode: NarratorMode,
     pub narrative_perspective: NarrativePerspective,

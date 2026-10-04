@@ -7,7 +7,7 @@ use crate::domain::model::game::Game;
 pub fn game_to_view(game: Game) -> GameRowView {
     GameRowView {
         id: game.id,
-        name: game.name.clone(),
+        display_name: game.display_name.clone(),
         world_name: game.world_name.clone(),
         persona_name: game.persona_name.clone(),
     }

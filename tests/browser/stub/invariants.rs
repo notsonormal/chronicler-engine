@@ -463,9 +463,12 @@ async fn check_forced_colors_focus_ring(page: Page) {
     .expect("Failed to emulate forced colors");
 
     // Reach the input with real key input: `:focus-visible` matches a keyboard
-    // focus, not a programmatic one.
+    // focus, not a programmatic one. The bound is generous rather than tuned to
+    // the current tab-stop count: the story log is rendered through the shipped
+    // template, so adding a control there (for example the last entry's delete
+    // button) shifts where `#command-input` sits.
     let mut reached = false;
-    for _ in 0..20 {
+    for _ in 0..30 {
         page.keyboard().press("Tab", None).await.unwrap();
         let active: String = page
             .evaluate::<(), String>("() => document.activeElement.id", None)

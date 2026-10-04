@@ -56,6 +56,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 |--------|------|---------|
 | POST | `/games` | `create_game_handler` |
 | POST | `/games/:id/switch` | `switch_game_handler` |
+| POST | `/games/:id/rename` | `rename_game_handler` |
 | POST | `/games/:id/delete` | `delete_game_handler` |
 | POST | `/games/:id/mode` | `switch_game_mode_handler` |
 | POST | `/games/:id/posture` | `update_game_posture_handler` |

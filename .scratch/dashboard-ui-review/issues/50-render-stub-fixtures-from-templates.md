@@ -1,7 +1,7 @@
 # Render the story-log and LLM Messages stub fixtures from the real templates
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -36,3 +36,17 @@ No new spec scenario: this changes where the stub gets its markup, not what the 
 - Every existing stub test passes unchanged.
 - A template hook change reaches the served stub fragment with no fixture edit, proven by a temporary mutation.
 - `python build.py` is green, the user reviews the diff, then commit through `/commit-and-push`.
+
+## Answer
+
+**Both fixtures convert.** `/fragment/story-log` serves `NarrativeLogTemplate::new(&entries, true).render()` and `/fragment/llm-messages` serves `LlmMessagesTemplate::new(&messages).render()`. The canned narrative text and the single LLM attempt are now Rust data (`MessageEntry` / `LlmMessage`); the markup comes from the templates. `tests/test_utils/stub_fixtures/story_log.html` and `llm_messages.html` are deleted.
+
+**Decision on the other fixtures: they follow in a later ticket.** `header`, `settings`, `prompt_presets`, `worlds`, `games` and `action_area` stay hand-copied for now — this ticket's scope is the two the accessibility tickets churned.
+
+**The drift is gone, proven by mutation.** A temporary test asserted `id="edit-entry-MUTANT-1"` in the served fragment: it failed before any mutation, passed while `NarrativeLogTemplate`'s edit-button id was temporarily changed, and `templates.rs` was then reverted byte-identical to HEAD. The temporary test was deleted; no mutant string remains.
+
+**Deviation the ticket did not allow for.** `stub/invariants.rs::check_forced_colors_focus_ring`'s Tab loop widened from `0..20` to `0..30`. Truthful rendering gives the last entry its delete control — the hand-copied fixture had drifted by omitting it — so `#command-input` moved from tab stop 19 to 20, exactly at the old bound. The bound is a search limit, not an assertion, and the focus-ring assertion is unchanged.
+
+**Merge note.** The two scripted story-log fixtures added by [Reset the generation status and the options dock when a swipe switch restores a snapshot](43-reset-status-and-dock-on-swipe-switch.md) were dropped here for the same reason: the scripted two-Swipe and restored shapes now render through `NarrativeLogTemplate` from scripted `MessageEntry` data, so no hand-written log markup remains.
+
+No new spec scenario: this changes where the stub gets its markup, not what the dashboard does. Every stub test passes. `python build.py` is green.

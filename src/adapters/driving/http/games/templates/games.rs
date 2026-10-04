@@ -10,7 +10,7 @@ use crate::domain::model::world::WorldCard;
 
 pub struct GameRowView {
     pub id: u64,
-    pub name: String,
+    pub display_name: String,
     pub world_name: String,
     pub persona_name: String,
 }
@@ -30,11 +30,20 @@ pub struct PersonaRowView {
         {% when Some(game) %}
         <div class="game-item active">
             <div class="active-game-info">
-                <span class="game-name">{{ game.name }}</span>
+                <span class="game-name">{{ game.display_name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
                 <span class="persona-badge">{{ game.persona_name }}</span>
             </div>
-            <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
+            <div class="game-actions">
+                <details class="game-rename">
+                    <summary>Rename</summary>
+                    <form hx-post="/games/{{ game.id }}/rename" hx-swap="none">
+                        <input type="text" name="display_name" value="{{ game.display_name }}" required maxlength="120" aria-label="Game display name">
+                        <button type="submit" class="btn-primary">Save</button>
+                    </form>
+                </details>
+                <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
+            </div>
         </div>
         {{ posture_html|safe }}
         {% when None %}
@@ -84,10 +93,17 @@ pub struct PersonaRowView {
             {% else %}
             {% for game in saved_games %}
             <div class="game-item" data-id="{{ game.id }}">
-                <span class="game-name">{{ game.name }}</span>
+                <span class="game-name">{{ game.display_name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
                 <span class="persona-badge">{{ game.persona_name }}</span>
                 <div class="game-actions">
+                    <details class="game-rename">
+                        <summary>Rename</summary>
+                        <form hx-post="/games/{{ game.id }}/rename" hx-swap="none">
+                            <input type="text" name="display_name" value="{{ game.display_name }}" required maxlength="120" aria-label="Game display name">
+                            <button type="submit" class="btn-primary">Save</button>
+                        </form>
+                    </details>
                     <button class="btn-primary" hx-post="/games/{{ game.id }}/switch" hx-swap="none">Switch</button>
                     <button class="btn-danger" hx-post="/games/{{ game.id }}/delete" hx-target="closest .game-item" hx-swap="outerHTML" hx-confirm="Delete this game? This cannot be undone.">Delete</button>
                 </div>

@@ -8,15 +8,16 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::test_support::{
     make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder, TestDataBuilder,
 };
 
+use crate::support::http_assertions::status_error_message;
 use crate::support::app_wiring::{app_with_narrator, app_with_narrator_and_settings};
 use crate::support::http_requests::{
-    post_action, post_action_check, post_empty, post_form, response_body, wait_idle,
+    fetch_generating_status, post_action, post_action_check, post_empty, post_form, response_body,
+    wait_idle,
 };
 
 // [docs/specs/actions.md] SCENARIO: 1.1
@@ -44,15 +45,11 @@ async fn test_action_succeeds_one_narration_idle_http() {
         .collect();
     assert_eq!(narrations.len(), 1, "one Narration");
     assert_eq!(narrations[0].text(), "You see a small wooden room.");
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "action should finish in the Idle state"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.2
@@ -82,15 +79,11 @@ async fn test_input_persisted_before_narration_http() {
     );
     assert_eq!(messages[input_idx].text(), "examine the room");
     assert_eq!(messages[narration_idx].text(), "It is a small wooden room.");
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "input persistence should finish in the Idle state"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.4
@@ -158,15 +151,11 @@ async fn test_quantifier_npc_fires_trigger_http() {
         narration_count >= 2,
         "main + trigger continuation narrations, got {narration_count}"
     );
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "trigger action should finish in the Idle state"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.7
@@ -211,15 +200,11 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
             n.event_header()
         );
     }
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "no-trigger action should finish in the Idle state"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.8
@@ -283,15 +268,11 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         trigger_narrations <= 1,
         "one-shot trigger should fire at most once, got {trigger_narrations} trigger narrations"
     );
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "second encounter should finish in the Idle state"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.5
@@ -317,15 +298,11 @@ async fn test_empty_command_continuation_no_input_http() {
         .collect();
     assert_eq!(narrations.len(), 1, "one continuation narration");
     assert_eq!(narrations[0].text(), "The scene continues.");
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "continuation should finish in the Idle state"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.6
@@ -371,15 +348,17 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action should complete");
 
-    let gs = state.message_service.load_or_fresh();
-    let npc_ids_in_area: Vec<String> = gs.scene.npcs_in_area.iter().map(|n| n.id.clone()).collect();
+    let debug = state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed");
     assert!(
-        npc_ids_in_area.contains(&"gabriella".to_string()),
-        "gabriella should be in npcs_in_area after trigger continuation, got: {npc_ids_in_area:?}"
+        debug.npcs_in_area.contains(&"gabriella".to_string()),
+        "gabriella should be in npcs_in_area after trigger continuation, got: {:?}",
+        debug.npcs_in_area
     );
-    let gabriella_state = gs
+    let gabriella_state = debug
         .npc_encounter_log
-        .npcs
         .get("gabriella")
         .expect("gabriella should have encounter-log entry");
     assert_eq!(gabriella_state.times_met, 1, "times_met should be 1");
@@ -405,16 +384,11 @@ async fn test_nonexistent_room_sets_error_status_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
 
-    let final_state = state.message_service.load_or_fresh();
-    match &final_state.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("Room not found"),
-                "expected 'Room not found' in error, got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("Room not found"),
+        "expected 'Room not found' in the status, got: {status}"
+    );
     let messages = state.message_service.load_messages().unwrap();
     let new_narrations: Vec<_> = messages
         .iter()
@@ -435,22 +409,9 @@ async fn test_failing_narrator_sets_error_status_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
 
-    let final_state = state.message_service.load_or_fresh();
-    match &final_state.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(!msg.is_empty(), "error message should be non-empty");
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
-    assert!(
-        final_state
-            .narrative
-            .input_buffer
-            .status
-            .error_message()
-            .is_some(),
-        "error_message() should be Some"
-    );
+    let status = fetch_generating_status(&app).await;
+    let message = status_error_message(&status);
+    assert!(!message.is_empty(), "error message should be non-empty");
 }
 
 // [docs/specs/actions.md] SCENARIO: 2.3
@@ -463,16 +424,11 @@ async fn test_empty_narrator_response_sets_error_no_narration_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
 
-    let final_state = state.message_service.load_or_fresh();
-    match &final_state.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("empty"),
-                "error message should mention 'empty', got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("empty"),
+        "error message should mention 'empty', got: {status}"
+    );
     // No new narration persisted. The fresh-game opening narration may exist
     // from setup; count narrations before and after to be sure.
     let messages = state.message_service.load_messages().unwrap();
@@ -538,16 +494,11 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
 
-    let final_state = state.message_service.load_or_fresh();
-    match &final_state.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("Trigger narration failed"),
-                "error should mention 'Trigger narration failed', got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("Trigger narration failed"),
+        "error should mention 'Trigger narration failed', got: {status}"
+    );
     let messages = state.message_service.load_messages().unwrap();
     assert!(
         messages.iter().any(|m| {
@@ -579,9 +530,9 @@ async fn test_delayed_llm_completes_without_deadlock_http() {
         wait_idle(&state, 2000).await,
         "delayed LLM should complete within 2s"
     );
-    let final_state = state.message_service.load_or_fresh();
-    assert!(
-        !final_state.narrative.input_buffer.status.is_generating(),
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
         "status should not be Generating"
     );
 }

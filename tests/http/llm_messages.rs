@@ -20,13 +20,14 @@ fn narrator_app(narrator: Arc<MockBackend>) -> (axum::Router, AppState, Arc<Stor
 // [docs/specs/llm_messages.md] SCENARIO: 33.1
 #[tokio::test]
 async fn test_failed_narration_attempt_records_and_renders_failure_http() {
-    let (app, state, storage) = narrator_app(Arc::new(MockBackend::new().with_fail()));
+    let (app, state, _storage) = narrator_app(Arc::new(MockBackend::new().with_fail()));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action should complete");
 
-    let messages = storage
+    let messages = state
+        .game_view_query
         .list_latest_llm_messages(50)
         .expect("list_latest_llm_messages should succeed");
     let failures: Vec<_> = messages
@@ -77,7 +78,7 @@ async fn test_failed_narration_attempt_records_and_renders_failure_http() {
 // [docs/specs/llm_messages.md] SCENARIO: 33.2
 #[tokio::test]
 async fn test_failed_attempt_survives_a_later_success_http() {
-    let (app, state, storage) = narrator_app(Arc::new(MockBackend::new().with_fail_first_n(1)));
+    let (app, state, _storage) = narrator_app(Arc::new(MockBackend::new().with_fail_first_n(1)));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
@@ -93,7 +94,8 @@ async fn test_failed_attempt_survives_a_later_success_http() {
         "second action should complete"
     );
 
-    let messages = storage
+    let messages = state
+        .game_view_query
         .list_latest_llm_messages(50)
         .expect("list_latest_llm_messages should succeed");
     assert_eq!(messages.len(), 2, "each attempt leaves its own row");

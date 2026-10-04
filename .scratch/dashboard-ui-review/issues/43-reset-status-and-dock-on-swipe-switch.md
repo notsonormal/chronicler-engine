@@ -1,7 +1,7 @@
 # Reset the generation status and the options dock when a swipe switch restores a snapshot
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -26,3 +26,19 @@ Also decide finding 6.6: while the next turn generates, the dock keeps the previ
 - A browser test covers switch-between-swipes (Ready, enabled Send, dock contents) and option-click-during-generation.
 - Test placement follows `tests/STRATEGY.md`, and the answer names the tier. Until [Decide what a tier-1 test may observe](31-decide-tier-1-observations.md) resolves, write new spec Givens and Thens in `CONTEXT.md` terms rather than field names.
 - `python build.py` is green, the user reviews the diff, and the work is committed through `/commit-and-push`.
+
+## Answer
+
+**A restored Swipe is a settled branch point.** `MessageService::switch_swipe` normalises the restored snapshot: the game is `Idle`, the phase is the default, and the offered options are cleared. The restore is surfaced in a transient `#restore-notice` line (`role="status"`, cleared after 4s).
+
+**Why not persist the post-turn snapshot instead.** A Swipe's snapshot *is* its retry anchor: `find_retry_anchor` reads the message's active-swipe snapshot, and guided / impersonate / user-regeneration redos reconstruct from it (pinned by `retry_tests::test_retry_flow_guided_turn_retries_without_older_input_text`). Re-pointing that snapshot at the post-turn state would make those redos start *after* their own turn. Regenerating the options on switch was rejected: an LLM call plus a gate claim inside the switch handler.
+
+**Finding 6.6 is a defect, not intended.** `useOption` checked only `input.disabled`, which is false while a generation runs (only the primary button is disabled), so a stale option could be picked mid-turn. The client now refuses while the live status is generating.
+
+**Tiers.** Unit: `message_service_tests::test_switch_swipe_restores_a_settled_snapshot`. Tier 1: `tests/http/swipe_switch.rs`, scenarios 36.1/36.2 in the new `docs/specs/swipe_switch.md`. Tier 2 (stub browser): 37.1 in the new `docs/specs/browser_swipes.md` and 26.5 in `docs/specs/browser_options.md`. The browser half is tier 2 because the real LLM mock cannot produce two swipeable swipes — its unparseable response appends an uncertain-NPC `[System]` message, so no swipe controls render; the server outcome is tier 1.
+
+**Fail-without-fix evidence.** Commenting out the three normalisation lines fails the unit test; reverting `resetStatusToReady()` fails 37.1 on the status; reverting `announceSwipeRestore()` fails the notice assertion; reverting the `statusIsGenerating()` guard fails 26.5.
+
+**Merge note.** With [Render the story-log and LLM Messages stub fixtures from the real templates](50-render-stub-fixtures-from-templates.md), the two hand-written story-log fixtures this ticket added were dropped: the scripted two-Swipe and restored shapes now render through `NarrativeLogTemplate` from scripted entry data.
+
+`python build.py` is green on the merged tree.

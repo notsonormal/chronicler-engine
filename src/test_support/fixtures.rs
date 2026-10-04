@@ -597,8 +597,8 @@ pub fn seed_default_game_row(
 ) -> Result<(), crate::error::EngineError> {
     let conn = pool.conn();
     conn.execute(
-        "INSERT INTO games (id, world_name, world_key, persona_key, persona_name, name, created_at, updated_at)
-         VALUES (?1, 'test', 'test', 'test_player', 'Test Player', 'Test Game', ?2, ?2)",
+        "INSERT INTO games (id, world_name, world_key, persona_key, persona_name, name, display_name, created_at, updated_at)
+         VALUES (?1, 'test', 'test', 'test_player', 'Test Player', 'Test Game', 'Test Game', ?2, ?2)",
         rusqlite::params![game_id as i64, chrono::Utc::now().to_rfc3339()],
     )
     .map_err(|e| crate::error::EngineError::Config(format!("seed_default_game_row: {e}")))?;

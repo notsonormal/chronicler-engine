@@ -3,6 +3,7 @@
 Endpoints:
 - `POST /games`
 - `POST /games/:id/switch`
+- `POST /games/:id/rename`
 - `POST /games/:id/delete`
 
 ## Scenarios
@@ -79,6 +80,30 @@ And the response body mentions "Cannot delete the active game"
 ```gherkin
 When the client POST /games/99999999/delete
 Then the response status is "200 OK"
+```
+
+### Rename
+
+#### Scenario 17.4: Renaming a game sets its display name, shown in the header and the Games tab
+
+```gherkin
+Given a seeded world with key "test" and an active game
+When the client POST /games/{active_id}/rename with display_name="The Long Road"
+Then the response status is "200 OK"
+And the response has an "HX-Refresh: true" header
+And the active game's display name is "The Long Road"
+And the active game's stable name is unchanged
+And a GET /fragment/header renders "The Long Road" as the game name
+And a GET /fragment/games renders "The Long Road" as the active game name
+```
+
+#### Scenario 17.5: Renaming a game to a blank display name is rejected
+
+```gherkin
+Given a seeded world with key "test" and an active game
+When the client POST /games/{active_id}/rename with display_name="   "
+Then the response status is "400 BAD_REQUEST"
+And the response body mentions "Display name cannot be empty"
 ```
 
 ### Per-game posture, mode, and presets

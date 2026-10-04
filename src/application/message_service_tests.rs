@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use crate::application::message_service::MessageService;
 use crate::application::world_catalogue::WorldCatalogue;
+use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::fixtures::{TestMap, TestPersona, TestWorld};
 
@@ -137,6 +139,58 @@ fn test_switch_swipe_rejects_concurrent_generation() {
     ));
 }
 
+fn swipe_with_snapshot(text: &str, snapshot_id: u64) -> Swipe {
+    Swipe {
+        text: text.to_string(),
+        snapshot_id: Some(snapshot_id),
+        location_header: None,
+        event_header: None,
+        impersonated: false,
+        steering_instruction: None,
+    }
+}
+
+#[test]
+fn test_switch_swipe_restores_a_settled_snapshot() {
+    let (service, storage, _game_id) = make_service_with_game();
+
+    // A mid-generation snapshot: the status a narration turn leaves on the
+    // Swipe's snapshot, plus a stale option set inherited from the scene the
+    // redo reconstructed from.
+    let mut generating = GameState::new("start");
+    generating.narrative.input_buffer.status = GenerationStatus::Generating;
+    generating.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    generating.narrative.current_options = vec!["a stale option".to_string()];
+    let snapshot_id = service.save_state(&generating).unwrap();
+
+    let msg = Message::new("narration", MessageType::Narration, None, None);
+    let id = storage.insert_message(&msg).unwrap();
+    storage
+        .insert_swipe(id, &swipe_with_snapshot("first", snapshot_id), 0)
+        .unwrap();
+    storage
+        .insert_swipe(id, &swipe_with_snapshot("second", snapshot_id), 1)
+        .unwrap();
+    storage.update_active_swipe(id, 1).unwrap();
+
+    service.switch_swipe(false, id, 0).unwrap();
+
+    let restored = storage.load_latest_snapshot().unwrap().unwrap();
+    assert_eq!(
+        restored.narrative.input_buffer.status,
+        GenerationStatus::Idle,
+        "a restored swipe must leave the game idle, not stuck generating"
+    );
+    assert_eq!(
+        restored.narrative.input_buffer.phase,
+        GenerationPhase::default()
+    );
+    assert!(
+        restored.narrative.current_options.is_empty(),
+        "a restored swipe must not offer another scene's option set"
+    );
+}
+
 #[test]
 fn test_delete_last_removes_message_and_snapshot() {
     let (service, _storage, _game_id) = make_service_with_game();
@@ -199,4 +253,18 @@ fn test_save_message_and_snapshot_assigns_snapshot_id_to_message() {
             .is_some()
     );
     assert!(state.narrative.history.last().unwrap().id > 0);
+}
+
+#[test]
+fn test_save_message_and_snapshot_persists_a_snapshot() {
+    let (service, storage, _game_id) = make_service_with_game();
+
+    let mut state = GameState::new("start");
+    state.add_message("hello".to_string(), MessageType::Narration);
+    service.save_message_and_snapshot(&mut state).unwrap();
+
+    assert!(
+        storage.load_latest_snapshot().unwrap().is_some(),
+        "saving a message must persist the snapshot the restores read"
+    );
 }

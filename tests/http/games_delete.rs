@@ -9,15 +9,16 @@ use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::TestPersona;
 
 use crate::support::http_fixtures::seeded_storage_with_initial_game;
+use crate::support::http_requests::fetch_body;
 
 // [docs/specs/games.md] SCENARIO: 19.1
 #[tokio::test]
 async fn test_delete_game_handler_success() {
     let (storage, _world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
 
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build();
+        .build_with_state();
 
     let other_id = storage
         .create_game(
@@ -28,16 +29,20 @@ async fn test_delete_game_handler_success() {
             "Test World_2026-01-01_1",
         )
         .unwrap();
-    assert_ne!(other_id, storage.current_game_id());
+    assert_ne!(other_id, state.game_catalogue.current_game_id());
 
     let req = Request::builder()
         .uri(format!("/games/{other_id}/delete"))
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(storage.get_game(other_id).unwrap().is_none());
+    let panel = fetch_body(&app, "/fragment/games").await;
+    assert!(
+        !panel.contains(&format!("data-id=\"{other_id}\"")),
+        "the deleted game {other_id} must not render in the games panel"
+    );
 }
 
 // [docs/specs/games.md] SCENARIO: 19.2

@@ -22,6 +22,7 @@ pub struct DbGame {
     pub active_impersonate_prompt_preset_id: String,
     pub active_options_prompt_preset_id: String,
     pub options_always_on: bool,
+    pub display_name: String,
 }
 
 impl DbGame {
@@ -43,6 +44,7 @@ impl DbGame {
             active_impersonate_prompt_preset_id: row.get(13)?,
             active_options_prompt_preset_id: row.get(14)?,
             options_always_on: row.get::<_, i64>(15)? != 0,
+            display_name: row.get(16)?,
         })
     }
 
@@ -71,6 +73,7 @@ impl DbGame {
             active_impersonate_prompt_preset_id: self.active_impersonate_prompt_preset_id.clone(),
             active_options_prompt_preset_id: self.active_options_prompt_preset_id.clone(),
             options_always_on: self.options_always_on,
+            display_name: self.display_name.clone(),
         })
     }
 }

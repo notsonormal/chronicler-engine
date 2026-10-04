@@ -160,10 +160,10 @@ impl GameViewQuery {
         Ok(game_state.narrative.current_options.clone())
     }
 
-    pub fn get_current_game_name(&self) -> Result<String, ApplicationError> {
+    pub fn get_current_game_display_name(&self) -> Result<String, ApplicationError> {
         let storage = &self.storage;
         match storage.get_game(storage.current_game_id())? {
-            Some(g) => Ok(g.name),
+            Some(g) => Ok(g.display_name),
             None => Ok("Unknown".to_string()),
         }
     }

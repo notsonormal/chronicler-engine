@@ -11,6 +11,7 @@ use crate::application::errors::ApplicationError;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::template::TemplateVars;
 use crate::error::EngineError;
@@ -177,6 +178,14 @@ impl MessageService {
             .storage
             .load_snapshot_by_id(snapshot_id)?
             .ok_or_else(|| ApplicationError::internal("Snapshot not found"))?;
+
+        // A Swipe's snapshot is written while its narration still generates,
+        // so it carries `Generating`/`Narrating` and whatever option set the
+        // redo reconstructed from. A restore must leave a settled game: Idle,
+        // with no options (the set is generated per turn, afterwards).
+        snapshot.narrative.input_buffer.status = GenerationStatus::Idle;
+        snapshot.narrative.input_buffer.phase = GenerationPhase::default();
+        snapshot.narrative.current_options.clear();
 
         snapshot.created_at = Utc::now();
         self.storage.save_snapshot(&snapshot)?;

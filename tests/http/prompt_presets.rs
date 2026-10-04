@@ -749,13 +749,15 @@ async fn test_activate_if_only_preset_via_if_mode_populates_if_bundle() {
     };
     storage.save_preset(&preset).unwrap();
 
-    let app = TestAppBuilder::default_test()
+    let app_state = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build();
+        .build_service();
+    let app = build_router(app_state.clone());
 
     // Captured before activation: equality (not inequality) proves that IF
     // activation leaves the Novel bundle's system slot untouched.
-    let novel_before = storage
+    let novel_before = app_state
+        .settings_service
         .get_settings()
         .unwrap()
         .mode_preset_registry
@@ -777,7 +779,7 @@ async fn test_activate_if_only_preset_via_if_mode_populates_if_bundle() {
         "IF activation must badge the preset Active · Interactive Fiction"
     );
 
-    let settings = storage.get_settings().unwrap();
+    let settings = app_state.settings_service.get_settings().unwrap();
     let if_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::InteractiveFiction);
@@ -846,7 +848,7 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
     let app_state = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_service();
-    let app = build_router(app_state);
+    let app = build_router(app_state.clone());
 
     // 1. Seed the source with a fixed id. The chain under test is
     //    duplicate -> edit-form -> save, so the source's provenance is
@@ -923,7 +925,8 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
         "the saved card must still offer Set Active (Novel): {card}"
     );
 
-    let stored = storage
+    let stored = app_state
+        .prompt_preset_service
         .get_preset(&copy_id)
         .unwrap()
         .expect("the updated copy must persist");
@@ -1133,7 +1136,7 @@ async fn test_update_preset_onto_sibling_name_is_refused() {
     let app_state = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_service();
-    let app = build_router(app_state);
+    let app = build_router(app_state.clone());
 
     for name in ["Alpha", "Beta"] {
         let response = app
@@ -1164,7 +1167,11 @@ async fn test_update_preset_onto_sibling_name_is_refused() {
     assert!(body.contains("Alpha"), "body: {body}");
     assert!(body.contains("already exists"), "body: {body}");
 
-    let stored = storage.get_preset(&beta_id).unwrap().unwrap();
+    let stored = app_state
+        .prompt_preset_service
+        .get_preset(&beta_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(stored.name, "Beta");
     assert_eq!(stored.instructions.as_deref(), Some("First."));
 }

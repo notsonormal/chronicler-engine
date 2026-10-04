@@ -98,6 +98,22 @@ pub async fn switch_game_handler(
     Ok(ok_refresh())
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct RenameGameForm {
+    pub display_name: String,
+}
+
+/// Refresh-triggering so the header and the Games tab both re-render from the
+/// renamed row.
+pub async fn rename_game_handler(
+    State(state): State<AppState>,
+    Path(id): Path<u64>,
+    Form(form): Form<RenameGameForm>,
+) -> Result<Response, ApplicationError> {
+    state.game_catalogue.rename_game(id, &form.display_name)?;
+    Ok(ok_refresh())
+}
+
 pub async fn delete_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,

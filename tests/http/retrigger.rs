@@ -9,14 +9,13 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::message::Message;
-use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder,
     TestStoredTriggerContext,
 };
 
-use crate::support::http_requests::{post_empty, wait_idle};
+use crate::support::http_requests::{fetch_generating_status, post_empty, wait_idle};
 
 // [docs/specs/retrigger.md] SCENARIO: 13.1
 #[tokio::test]
@@ -53,15 +52,11 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
         new_msg.event_header().is_some(),
         "new message should have event_header"
     );
-    assert!(matches!(
-        state
-            .message_service
-            .load_or_fresh()
-            .narrative
-            .input_buffer
-            .status,
-        GenerationStatus::Idle
-    ));
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "retrigger should finish in the Idle state"
+    );
 }
 
 // [docs/specs/retrigger.md] SCENARIO: 13.2
@@ -86,20 +81,19 @@ async fn test_retrigger_does_not_rerun_quantifier_http() {
         .build_with_state();
 
     let room_before = state
-        .message_service
-        .load_or_fresh()
-        .movement
-        .current_room_id
-        .clone();
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed")
+        .current_room_id;
 
     let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "retrigger should complete");
 
     let room_after = state
-        .message_service
-        .load_or_fresh()
-        .movement
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed")
         .current_room_id;
     assert_eq!(
         room_before, room_after,
@@ -227,16 +221,11 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
         "retrigger should complete (with error)"
     );
 
-    let gs = state.message_service.load_or_fresh();
-    match &gs.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => {
-            assert!(
-                msg.contains("Trigger narration failed"),
-                "error should mention 'Trigger narration failed', got: {msg}"
-            );
-        }
-        other => panic!("expected Error status, got {other:?}"),
-    }
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("Trigger narration failed"),
+        "error should mention 'Trigger narration failed', got: {status}"
+    );
     let messages_after = state.message_service.load_messages().unwrap();
     // A System message is logged on trigger failure (expected). Assert no new
     // event Narration was added — the failed continuation is not persisted.

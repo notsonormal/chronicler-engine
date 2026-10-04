@@ -27,8 +27,9 @@ fn narrated_app() -> (axum::Router, AppState, Arc<Storage>) {
     )
 }
 
-fn narrator_prompts(storage: &Storage) -> Vec<(String, String)> {
-    storage
+fn narrator_prompts(state: &AppState) -> Vec<(String, String)> {
+    state
+        .game_view_query
         .list_latest_llm_messages(50)
         .expect("list_latest_llm_messages should succeed")
         .into_iter()
@@ -60,7 +61,7 @@ async fn test_if_world_game_inherits_posture_and_bundle_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action should complete");
 
-    let prompts = narrator_prompts(&storage);
+    let prompts = narrator_prompts(&state);
     assert!(
         !prompts.is_empty(),
         "the narration must have recorded a prompt"
@@ -108,7 +109,7 @@ async fn test_mode_switch_retargets_system_preset_http() {
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
-    let prompts = narrator_prompts(&storage);
+    let prompts = narrator_prompts(&state);
     assert!(
         prompts
             .iter()
@@ -128,7 +129,7 @@ async fn test_mode_switch_retargets_system_preset_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
 
-    let (last_system, _) = narrator_prompts(&storage)
+    let (last_system, _) = narrator_prompts(&state)
         .pop()
         .expect("the switched-mode narration must record a prompt");
     assert!(
@@ -168,7 +169,7 @@ async fn test_mode_switch_renders_if_bundle_and_nudges_perspective_http() {
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
-    let (last_system, last_user) = narrator_prompts(&storage)
+    let (last_system, last_user) = narrator_prompts(&state)
         .pop()
         .expect("the post-switch narration must record a prompt");
     assert!(
@@ -215,7 +216,7 @@ async fn test_deliberate_perspective_survives_mode_switch_http() {
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
-    let (_, last_user) = narrator_prompts(&storage)
+    let (_, last_user) = narrator_prompts(&state)
         .pop()
         .expect("the post-switch narration must record a prompt");
     assert!(

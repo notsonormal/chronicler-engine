@@ -154,7 +154,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
                 scenarios TEXT NOT NULL DEFAULT '[]',     -- JSON: Vec<StartingScenario>
                 default_scenario_id TEXT,
                 default_room_image TEXT,
-                player_key TEXT NOT NULL DEFAULT '',  -- dropped in v13
+                player_key TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )",
@@ -385,7 +385,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             )?;
         }
 
-        // Games inherit posture from their world (the new source of truth).
+        // Games inherit posture from their world.
         // COALESCE keeps the migration alive for a game whose world_key has
         // no matching world row — the subquery would otherwise produce NULL
         // and fail the NOT NULL constraint, aborting startup.
@@ -666,6 +666,42 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         }
 
         conn.pragma_update(None, "user_version", 24)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 25 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // The Game display name is separate from the stable generated `name`,
+        // so a rename can never disturb the uniqueness scan. Existing rows are
+        // backfilled from their key so the first render after upgrade already
+        // shows a readable label; a key that does not parse passes through.
+        if !column_exists(conn, "games", "display_name") {
+            exec("ALTER TABLE games ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")?;
+        }
+        let legacy_rows: Vec<(i64, String)> = {
+            let mut stmt = conn
+                .prepare("SELECT id, name FROM games WHERE display_name = ''")
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            let rows = stmt
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
+        };
+        for (id, name) in legacy_rows {
+            let display_name = crate::domain::model::utils::game_name::default_display_name(&name);
+            conn.execute(
+                "UPDATE games SET display_name = ?1 WHERE id = ?2",
+                rusqlite::params![display_name, id],
+            )
+            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+        }
+
+        conn.pragma_update(None, "user_version", 25)
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 

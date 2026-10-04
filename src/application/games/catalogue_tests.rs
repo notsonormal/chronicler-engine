@@ -148,6 +148,75 @@ fn test_create_game_generates_unique_names() {
 }
 
 #[test]
+fn test_create_game_sets_readable_display_name() {
+    let (catalogue, storage, world_key, persona_key) = seeded_catalogue();
+    let id = catalogue.create_game(&world_key, &persona_key).unwrap();
+
+    let game = storage.get_game(id).unwrap().unwrap();
+    let today = chrono::Utc::now().format("%d %b %Y").to_string();
+    assert_eq!(game.display_name, format!("Test World — {today} (1)"));
+    assert!(
+        !game.display_name.contains('_'),
+        "the display name must not show the raw key: {}",
+        game.display_name
+    );
+}
+
+#[test]
+fn test_rename_game_updates_display_name_and_keeps_stable_name() {
+    let (catalogue, storage, world_key, persona_key) = seeded_catalogue();
+    let id = catalogue.create_game(&world_key, &persona_key).unwrap();
+    let stable_name = storage.get_game(id).unwrap().unwrap().name;
+
+    let renamed = catalogue.rename_game(id, "  The Long Road  ").unwrap();
+
+    assert_eq!(renamed.display_name, "The Long Road", "rename must trim");
+    let stored = storage.get_game(id).unwrap().unwrap();
+    assert_eq!(
+        stored.name, stable_name,
+        "rename must not touch the stable generated name"
+    );
+    assert_eq!(stored.display_name, "The Long Road");
+}
+
+#[test]
+fn test_rename_game_allows_colliding_display_names() {
+    let (catalogue, _storage, world_key, persona_key) = seeded_catalogue();
+    let id1 = catalogue.create_game(&world_key, &persona_key).unwrap();
+    let id2 = catalogue.create_game(&world_key, &persona_key).unwrap();
+
+    catalogue.rename_game(id1, "Same Name").unwrap();
+    catalogue
+        .rename_game(id2, "Same Name")
+        .expect("display names may collide");
+}
+
+#[test]
+fn test_rename_game_rejects_blank_display_name() {
+    let (catalogue, _storage, world_key, persona_key) = seeded_catalogue();
+    let id = catalogue.create_game(&world_key, &persona_key).unwrap();
+
+    let result = catalogue.rename_game(id, "   ");
+
+    assert!(
+        matches!(result, Err(ApplicationError::Validation(ref msg)) if msg.contains("Display name cannot be empty")),
+        "Expected blank-display-name validation error, got {result:?}"
+    );
+}
+
+#[test]
+fn test_rename_game_errors_when_game_missing() {
+    let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
+
+    let result = catalogue.rename_game(9999, "New Name");
+
+    assert!(
+        matches!(result, Err(ApplicationError::Validation(ref msg)) if msg.contains("Game not found")),
+        "Expected game-not-found validation error, got {result:?}"
+    );
+}
+
+#[test]
 fn test_create_game_restores_current_game_on_persist_failure() {
     let data = TestDataBuilder::default_test().build();
     let raw_storage = Storage::new_in_memory();
