@@ -1,7 +1,7 @@
 # Clamp the status-display error and move the raw text into a popover
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 08
 
 ## Question
@@ -24,3 +24,10 @@ Blocked by: 08
 - The action area's height and the command input's width do not change when the error appears.
 - A test covers the clamped line and the popover. Tier by `tests/STRATEGY.md` and name it in the answer.
 - `python build.py` is green, the user reviews the diff, then commit through `/commit-and-push`.
+
+## Answer
+
+Absorbed into [Redesign the error and health display](63-redesign-error-health-display.md).
+The clamped status error moved into the Theme 1 redesign, where it reuses that
+ticket's anchored popover instead of building its own. Closed as absorbed, not
+fixed.

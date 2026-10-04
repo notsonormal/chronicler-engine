@@ -2,7 +2,7 @@
 
 Type: task (AFK)
 Status: open
-Blocked by: 25, 26, 51, 52, 53
+Blocked by: 63, 64
 
 ## Question
 

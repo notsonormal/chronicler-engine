@@ -1,7 +1,7 @@
 # Add a failure banner for degraded roles and an unreachable server
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 08
 
 ## Question
@@ -28,3 +28,10 @@ Decided in [Decide how the dashboard shows each kind of failure](08-decide-failu
 - A test covers a role degrading, then recovering, and the unreachable state. Tier by `tests/STRATEGY.md` and name it in the answer. Until [Decide what a tier-1 test may observe](31-decide-tier-1-observations.md) resolves, write new spec Givens and Thens in `CONTEXT.md` terms rather than field names.
 - The spec scenario for the banner exists (a new scenario in `docs/specs/browser_dashboard.md`, or the right spec if one already covers the header). Add or change a scenario only if the spec is incomplete or wrong.
 - `python build.py` is green, the user reviews the diff, then commit through `/commit-and-push`.
+
+## Answer
+
+Absorbed into [Redesign the error and health display](63-redesign-error-health-display.md).
+The banner moved into the Theme 1 redesign, where it shares the anchored popover,
+the `beforeSwap` listener and the `/fragment/header` poll with the rest of the
+error and health surfaces. Closed as absorbed, not fixed.

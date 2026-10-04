@@ -1,7 +1,7 @@
 # Stop failed edits and refused deletes from destroying the entity card
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 08
 
 ## Question
@@ -19,3 +19,10 @@ A failed connection edit replaces the connection's own card with a bare error di
 - A failed connection edit and a refused preset delete both leave the card visible and usable, with the message shown nearby.
 - Tests cover both paths; tier by `tests/STRATEGY.md`.
 - `python build.py` is green. Commit after user approval.
+
+## Answer
+
+Absorbed into [Keep failed forms and cards in place](64-keep-failed-requests-in-place.md).
+The failed-edit and refused-delete card cases moved there with ticket 25, so both
+surfaces of findings 05.F1 and 05.F2 share one implementation and one error
+fragment. Closed as absorbed, not fixed.

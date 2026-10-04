@@ -1,7 +1,7 @@
 # Morph the story-log poll swap
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -38,3 +38,10 @@ Watch: the `MAX_LOG_DISPLAY = 50` cap makes removal routine, not an edge case. A
 ## Done when
 
 - `python build.py` is green, the user reviews the diff, then commit through `/commit-and-push`.
+
+## Answer
+
+Absorbed into [Keep DOM state and focus through in-place swaps](65-keep-dom-state-through-swaps.md).
+The story-log morph moved into the DOM-state sweep, beside the edit-button lock
+that shares `pausePolling` and the same spec and test files. Closed as absorbed,
+not fixed.

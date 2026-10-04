@@ -1,7 +1,7 @@
 # Decide the panel layout convention and supported viewports
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -23,3 +23,32 @@ What convention should every panel follow? And which viewports does the dashboar
 ## Done when
 
 - The decision is in the ticket answer. Implementation tickets are created.
+
+## Answer
+
+**Option A1 — one centered column, and the tab body is the only scroll region.**
+
+- Every panel renders in the same content column: `max-width` 960px, 24px
+  padding. This replaces Settings/Games at 800px, Prompt Presets at 900px, and
+  Worlds with no cap.
+- The tab body scrolls. The inner scroll boxes on Games, Prompt Presets, and
+  Worlds are removed; the scrollbar lands at the viewport edge instead of
+  floating mid-page (finding 4.6). Settings already scrolls the whole tab.
+- The Worlds text inset stops changing because the form view gets the same card
+  frame as the list view (or the card inset is removed in both). The review's
+  "32px → 16px" was panel padding (16px) plus card padding (16px) stacking, not
+  a class toggle.
+- The tab bar scrolls horizontally below 1024px, so the 4.9 overflow cannot
+  happen.
+- **Viewports are declared, desktop-first:** ≥1024×700 is fully supported;
+  768–1024 is best-effort (the existing 768px media query stays); phone layouts
+  are out of scope and are documented as such.
+
+**Pushed to the fog:** editing Map and Scenarios JSON in structured fields
+rather than plain textareas (finding 4.8). It is a separate question and can
+wait for a later pass.
+
+### Graduated
+
+[Make the dashboard panels consistent: save model and layout](58-panel-consistency.md),
+shared with the save-model decision.

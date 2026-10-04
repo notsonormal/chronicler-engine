@@ -1,7 +1,7 @@
 # Keep a failed poll from replacing its region
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 08
 
 ## Question
@@ -25,3 +25,10 @@ A fragment failure returns HTTP 200 carrying `<div class="error-message">` (`ren
 - A dead server produces that same inline message for a pending action, instead of silence.
 - Tests cover a poll failure, an action failure with the server up, and one with the server down. Tier by `tests/STRATEGY.md` and name it in the answer.
 - `python build.py` is green, the user reviews the diff, then commit through `/commit-and-push`.
+
+## Answer
+
+Absorbed into [Redesign the error and health display](63-redesign-error-health-display.md).
+The shared short-message + anchored-popover fragment and the poll non-2xx
+behaviour moved into the Theme 1 redesign, which now owns the fragment the form
+and card tickets consume. Closed as absorbed, not fixed.

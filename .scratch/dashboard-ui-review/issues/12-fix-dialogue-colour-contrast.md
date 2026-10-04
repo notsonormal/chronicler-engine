@@ -1,8 +1,8 @@
 # Fix dialogue colour and small-text contrast
 
 Type: task (AFK)
-Status: open
-Blocked by: 14
+Status: resolved
+Blocked by: 57
 
 ## Question
 
@@ -15,10 +15,18 @@ Change the rules or tokens so every text meets WCAG AA (4.5:1).
 
 ## Context
 
-- Blocked by [Decide whether to keep the neon palette](14-decide-palette.md), because a palette change would redo this.
+- This ticket is closed; its work moved to [Apply the chosen palette and fix the colour contrast](57-apply-chosen-palette.md) when the palette decision landed.
 - This is a pure CSS fix, so no new test is needed. Keep `ui_design.md` in step with any token change.
 
 ## Done when
 
 - Dialogue uses the documented colour. Each measured text is at least 4.5:1.
 - `python build.py` is green. Commit after user approval.
+
+## Answer
+
+Absorbed into [Apply the chosen palette and fix the colour contrast](57-apply-chosen-palette.md).
+Both findings (dialogue mapped to `--color-accent-red`; `#888` small text at
+3.46:1) and the 4.5:1 check moved into that ticket, so the palette values and
+the contrast fixes land in one commit instead of two sessions over the same
+rules. Closed as absorbed, not fixed.

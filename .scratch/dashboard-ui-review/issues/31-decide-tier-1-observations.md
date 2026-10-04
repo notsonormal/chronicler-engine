@@ -1,7 +1,7 @@
 # Decide what a tier-1 test may observe
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -28,6 +28,38 @@ A tier-1 (HTTP E2E) test acts through HTTP. What may it assert on: only the resp
 
 - The session leaned to C. The proposed leading word is **domain outcome**: a Given or Then describes a domain outcome in `CONTEXT.md` terms, or something a client sees in a response.
 - This map's tickets place tests by `tests/STRATEGY.md`. Most of them add tier-2 browser tests, which this decision barely touches.
+
+## Answer
+
+**Option C — domain outcome.** A tier-1 test observes the response, plus stored state read through a read seam. The leading word is **domain outcome**.
+
+**Read seam (the one-sentence definition).** A read seam is a read the application exposes to a driving adapter — an HTTP GET, or a method on an application read service/port — through which a test observes stored state; a test leaks when it dereferences a field of `GameState` or reads a storage row.
+
+Reviewer test for one line: *does it call an HTTP GET or a named application read, or does it dereference a `GameState` field / read a storage row?*
+
+### Sub-decisions
+
+| Question | Decision | Reason |
+|---|---|---|
+| Storage reads as seams | **No.** Storage is not a read surface. Observed state goes through an HTTP GET or an application read service/port. | The recorder seam already has an application read — `GameViewQuery::list_latest_llm_messages()` exists in `src/application/games/view_query.rs` with zero callers. The other storage observation reads have HTTP/service substitutes or are persistence facts that belong to the storage tier. An allowlist is unnecessary. |
+| Helpers | **Transitive.** The rule judges the read the helper performs. A helper may wrap a seam; it may not wrap a field reach-through. | A helper is not a seam (it is not exposed by the application). H2 would let `fn current_status(&state) { … .narrative.input_buffer.status }` pass behind a named call, reopening the hole. A check over `tests/http/` including helper bodies is exactly this rule. |
+| Spec Given/Then vocabulary | **CONTEXT.md domain nouns.** A Given/Then names a domain thing only as a `CONTEXT.md` term, and a client-seen thing only as a response value or a DOM `id`/`class`. Rust identifiers, field paths, and module names are banned. Plain English is fine when the nouns are glossary terms. | Gives a reviewer one test: *is the noun a `CONTEXT.md` term or a client-seen value?* |
+
+The rule governs assertions. Synchronization waits (for example `wait_idle`) may keep reading state.
+
+### Migration of the existing corpus
+
+**Split.** Field reads migrate now; scenario prose migrates on touch.
+
+- **Now:** [Migrate tier-1 tests to observe through legal read seams](61-migrate-tier-1-test-reads.md). The 45 raw `GameState` field reads and the storage observation reads (~11 sites) move to HTTP GETs, `GameViewQuery`, `MessageService`, and `PromptPresetService`. The three persistence facts (`load_latest_snapshot`, `count_swipes_for_message`, `require_active_swipe_index`) reduce to storage-tier assertions.
+- **On touch:** the 58 scenarios whose Given/Then names an internal identifier are reworded in `CONTEXT.md` terms when their spec file is next edited. [Rewrite the test strategy around one checkable tier-1 rule](32-rewrite-test-strategy.md) records this rule in `tests/STRATEGY.md`.
+- **Nothing:** the 7 soft-leak scenarios (`worlds.md` 25.1–25.5, `prompt_presets.md` 21.16, 21.25) already read as clean domain prose, and under this decision their covering tests' `world_catalogue` / `prompt_preset_service` reads are legal seams. Their wording stands.
+
+### Facts corrected against the ticket context
+
+- 45 raw `GameState` field reads, not ~40 ([raw_gamestate_reads.txt](../assets/test-audit/raw_gamestate_reads.txt)).
+- The `tests/http/settings.rs` 20.2–20.4 example is stale. [Fix the weak dashboard and settings tests](34-fix-weak-dashboard-and-settings-tests.md) added a follow-up `GET /fragment/settings` badge assertion; they are no longer the opposite failure.
+
 
 ## Done when
 

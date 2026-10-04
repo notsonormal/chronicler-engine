@@ -1,7 +1,7 @@
 # Restore keyboard focus after in-place htmx swaps
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -21,3 +21,10 @@ Keyboard focus falls to `<body>` whenever a swap replaces the element holding it
 - A browser test covers at least the posture-select and Worlds-Cancel paths.
 - Test placement follows `tests/STRATEGY.md`, and the answer names the tier. Until [Decide what a tier-1 test may observe](31-decide-tier-1-observations.md) resolves, write new spec Givens and Thens in `CONTEXT.md` terms rather than field names.
 - `python build.py` is green, the user reviews the diff, and the work is committed through `/commit-and-push`.
+
+## Answer
+
+Absorbed into [Keep DOM state and focus through in-place swaps](65-keep-dom-state-through-swaps.md).
+Focus restoration moved into the DOM-state sweep, so every swap site that loses
+focus or selection is fixed with one mechanism in one pass over
+`assets/index.html`. Closed as absorbed, not fixed.

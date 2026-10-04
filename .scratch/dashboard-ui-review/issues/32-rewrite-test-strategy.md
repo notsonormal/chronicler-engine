@@ -17,6 +17,7 @@ How should `tests/STRATEGY.md` read, so that an agent placing a test, or writing
   - **Negation.** Prefer stating the target over listing bans.
 - The rules that nothing enforces today should say so, or gain a check. Examples: unit "every branch gets a test", the XSS assertion rule, and the storage backend-pair "character-for-character identical" rule. Coverage-% targets are out of scope, by precedent from the `test-strategy-execution` map. [unverified list: [docs_drift.md](../assets/test-audit/docs_drift.md), Part 3]
 - Keep what works. The UI placement rule ("The rule, in order", tie-breaker "file down") placed every browser test correctly in the audit.
+- The tier-1 decision is settled ([Decide what a tier-1 test may observe](31-decide-tier-1-observations.md)): the leading word is **domain outcome**; a read seam is an HTTP GET or a method on an application read service/port; storage is not a read surface; the rule judges helper bodies too; a spec Given/Then uses `CONTEXT.md` terms. The 58 hard-leak scenarios reword on touch; the 45 raw field reads and the storage observation reads move now in [Migrate tier-1 tests to observe through legal read seams](61-migrate-tier-1-test-reads.md).
 - Update the **Tests** bullet in this map's Notes if the rule it cites changes.
 
 ## Done when

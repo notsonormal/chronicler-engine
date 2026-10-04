@@ -1,7 +1,7 @@
 # Stop server errors from wiping whole panels
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 08
 
 ## Question
@@ -23,3 +23,10 @@ Failed adds replace the entire panel with a bare error fragment: an invalid prov
 - A failed add (connection or preset) leaves the panel and its other controls intact, and the error is visible near the form.
 - A test covers the failed add path; tier by `tests/STRATEGY.md`.
 - `python build.py` is green. Commit after user approval.
+
+## Answer
+
+Absorbed into [Keep failed forms and cards in place](64-keep-failed-requests-in-place.md).
+The failed-add panel cases (Settings connection add, preset add, preset edit)
+moved there, so all the "a failure must not wipe its region" work lands in one
+session against the same handlers. Closed as absorbed, not fixed.

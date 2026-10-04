@@ -1,7 +1,7 @@
 # Delete the dead `htmx:refresh` calls and fix the docs
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 48
 
 ## Question
@@ -24,3 +24,10 @@ Six `htmx.trigger(..., "htmx:refresh")` calls in `assets/index.html` fire an eve
 
 - No dead `htmx:refresh` (or `action-area-refresh`) remains, and `docs/diataxis/reference/frontend/dashboard.md` matches the shell.
 - `python build.py` is green, the user reviews the diff, then commit through `/commit-and-push`.
+
+## Answer
+
+Absorbed into [Keep DOM state and focus through in-place swaps](65-keep-dom-state-through-swaps.md).
+The dead `htmx:refresh` cleanup moved into the DOM-state sweep: the call sites
+are in the same file (`assets/index.html`), and the morph makes them harmless so
+deletion is the right call. Closed as absorbed, not fixed.
