@@ -35,7 +35,7 @@ Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-d
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-09-23 20:45 UTC*
+*Index last generated: 2026-10-04 00:31 UTC*
 
 ### `docs/diataxis/explanation/`
 
@@ -47,10 +47,6 @@ Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-d
 - [Rust Idioms](./diataxis/explanation/rust_idioms.md)
 - [Storage Design](./diataxis/explanation/storage_design.md)
 - [Two State Channels](./diataxis/explanation/two-state-channels.md)
-
-### `docs/diataxis/how-to/`
-
-- [Debugging](./diataxis/how-to/debugging.md)
 
 ### `docs/diataxis/reference/`
 
@@ -108,7 +104,7 @@ Every doc in `docs/diataxis/` is in exactly one of four Diátaxis modes. The mod
 | Mode | Reader problem | Orientation | Chronicler examples |
 |---|---|---|---|
 | **Tutorial** | Learn from zero | Learning-oriented (study) | None exist yet — see "Tutorials" below |
-| **How-to** | Achieve a goal | Goal-oriented (work) | `diataxis/how-to/debugging.md` |
+| **How-to** | Achieve a goal | Goal-oriented (work) | None exist yet — see "How-to" below |
 | **Reference** | Look up a fact | Information-oriented (work) | `diataxis/reference/storage.md`, `diataxis/reference/game_flow.md` |
 | **Explanation** | Understand why | Understanding-oriented (study) | `diataxis/explanation/two-state-channels.md`, `diataxis/explanation/architecture.md` |
 
@@ -225,7 +221,7 @@ None exist yet. Tutorials are learning-by-doing walkthroughs that build a mental
 
 #### How-to
 
-Only `diataxis/how-to/debugging.md`. Goal-oriented directions for already-competent users, written from the user's goal, not from the machinery.
+None exist yet. How-to docs are goal-oriented directions for already-competent users, written from the user's goal, not from the machinery.
 
 ### Diagrams
 
