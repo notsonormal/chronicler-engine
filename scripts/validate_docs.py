@@ -30,6 +30,14 @@ Rules (only enforced on STANDARD docs):
                               Line numbers rot; cite the symbol instead. Fenced
                               code blocks are exempt, as is the auto-generated
                               guardrails doc (see GENERATED_DOC_PATHS).
+  BROKEN_SOURCE_PATH       — backticked `src/`, `tests/`, `scripts/` or
+                              `assets/` path whose target does not exist on
+                              disk. Renames and moves otherwise leave citations
+                              pointing at files that are gone. Fenced code
+                              blocks are exempt, as is the auto-generated
+                              guardrails doc (see GENERATED_DOC_PATHS). `data/`
+                              is out of scope: its contents are runtime
+                              artifacts, absent from a fresh checkout.
 
 Diátaxis-front-matter rules (only enforced on STANDARD docs under
 docs/diataxis/):
@@ -123,6 +131,14 @@ FENCE_DELIMITER = re.compile(r"^\s*(```|~~~)")
 # Backticked `path:line` citation: `foo.rs:123`, `foo.rs:12-14`, `foo.rs:12,15`.
 LINE_CITATION = re.compile(
     r"`[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:rs|py|toml|html|css|js|json):[0-9][0-9,\-]*`"
+)
+
+# Backticked repo-path token: `src/foo/bar.rs`, `tests/x.rs`, `scripts/y.py`,
+# `assets/z.css`. Existence is resolved against the repo root (see
+# check_source_paths). The lookbehind keeps the match from starting mid-token.
+# `data/` is deliberately absent — its contents are runtime artifacts.
+SOURCE_PATH_TOKEN = re.compile(
+    r"(?<![\w/.-])((?:src|tests|scripts|assets)/[A-Za-z0-9_][A-Za-z0-9_./-]*)"
 )
 
 # Front-matter delimiter: a line that is exactly `---` (optional whitespace).
@@ -751,6 +767,56 @@ def check_line_citations(report: FileReport, docs_root: Path) -> None:
             )
 
 
+def check_source_paths(report: FileReport, engine_root: Path) -> None:
+    """Flag backticked repo paths whose target does not exist on disk.
+
+    A STANDARD doc that names `src/`, `tests/`, `scripts/` or `assets/` paths
+    must name paths that exist. A rename or move otherwise leaves the citation
+    pointing at a file that is gone, and no other rule in this validator
+    resolves a non-`.md` path against the tree.
+
+    Fenced code blocks are exempt — they may quote tool output or sketch a
+    tree. A backtick span carrying a wildcard, brace, angle bracket, ellipsis
+    or `:` is a pattern or a `path:line` citation rather than a path: patterns
+    are not paths, and `LINE_CITATION` already rejects the `path:line` form.
+    `data/` is out of scope — its contents are runtime artifacts, absent from
+    a fresh checkout.
+    """
+    docs_root = engine_root / "docs" / "diataxis"
+    rel = relative_to(report.path, docs_root)
+    if rel is not None and rel.as_posix() in GENERATED_DOC_PATHS:
+        return
+
+    text = read_text(report)
+    if text is None:
+        return
+
+    in_fence = False
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if FENCE_DELIMITER.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        for span in BACKTICK_SPAN.finditer(line):
+            inner = span.group(1)
+            if any(char in inner for char in ":*<>{}\u2026"):
+                continue
+            for match in SOURCE_PATH_TOKEN.finditer(inner):
+                token = match.group(1)
+                if token.endswith(("_", "-")):
+                    continue
+                if (engine_root / token).exists():
+                    continue
+                report.violations.append(
+                    Violation(
+                        ERROR,
+                        "BROKEN_SOURCE_PATH",
+                        f"Line {lineno}: `{token}` does not exist",
+                    )
+                )
+
+
 def check_diataxis_frontmatter(report: FileReport) -> None:
     """Enforce YAML front-matter conventions on docs/diataxis/ STANDARD docs.
 
@@ -1017,6 +1083,7 @@ def scan_file(
     check_standard_plan_links(report, docs_root)
     check_standard_body_references(report, docs_root)
     check_line_citations(report, docs_root)
+    check_source_paths(report, engine_root)
 
     check_diataxis_frontmatter(report)
 

@@ -271,15 +271,16 @@ class TestRealRouter(unittest.TestCase):
             (fake_engine_root / "docs" / "AGENTS.md").write_text(
                 "# stub\n", encoding="utf-8"
             )
-            (fake_engine_root / "src" / "adapters" / "driving" / "http").mkdir(
-                parents=True
-            )
+            (
+                fake_engine_root / "src" / "adapters" / "driving" / "http" / "builders"
+            ).mkdir(parents=True)
             (
                 fake_engine_root
                 / "src"
                 / "adapters"
                 / "driving"
                 / "http"
+                / "builders"
                 / "router.rs"
             ).write_text("// stub\n", encoding="utf-8")
             (fake_engine_root / "scripts").mkdir(

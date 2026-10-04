@@ -30,6 +30,12 @@ mod location_tests;
 #[cfg(test)]
 mod structure_tests;
 
+#[cfg(test)]
+mod registry_tests;
+
+#[cfg(test)]
+mod style_tests;
+
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {

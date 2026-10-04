@@ -22,6 +22,7 @@ Clippy lints are denied at the crate root in `src/lib.rs` via `#![deny(...)]`. T
 | `clippy::print_stdout` | No `println!` in library code. |
 | `clippy::print_stderr` | No `eprintln!` in library code. |
 | `clippy::panic` | No explicit panics in production. |
+| `clippy::let_underscore_must_use` | No silently dropped `#[must_use]` result; propagate or log it. |
 <!-- AUTO-GUARDRAILS: clippy END -->
 
 ## 2. arch-lint (Test-Time)
@@ -70,7 +71,7 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | test file naming | Rejects unit-test files with the singular `_test.rs` suffix in favor of `_tests.rs`. | `tests/infrastructure/guardrails/location.rs:7` |
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |
-| nesting depth | Warns when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`. | `tests/infrastructure/guardrails/nesting.rs:12` |
+| nesting depth | Fails when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`. | `tests/infrastructure/guardrails/nesting.rs:12` |
 | doc standards | Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files. | `tests/infrastructure/guardrails/structure.rs:38` |
 | mod purity | Enforces mod.rs purity: only module declarations, imports, and module docs are allowed. | `tests/infrastructure/guardrails/structure.rs:128` |
 | empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:204` |

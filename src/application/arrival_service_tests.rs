@@ -59,7 +59,7 @@ fn test_run_produces_and_persists_narration() {
         .expect("test setup: save initial snapshot");
 
     let (task_ctx, message_service) = make_test_arrival_task(Arc::clone(&storage), "room_1");
-    task_ctx.run_sync();
+    task_ctx.run();
 
     let state = message_service.load_or_fresh();
     let narrations: Vec<_> = state
@@ -107,7 +107,7 @@ fn test_run_falls_back_to_fresh_state_on_load_failure() {
     );
 
     let (task_ctx, message_service) = make_test_arrival_task(Arc::clone(&failing_storage), "room1");
-    task_ctx.run_sync();
+    task_ctx.run();
 
     handle.clear("load_latest_snapshot");
 
@@ -140,7 +140,7 @@ fn test_run_returns_early_without_narration_on_world_fetch_failure() {
     );
 
     let (task_ctx, message_service) = make_test_arrival_task(Arc::clone(&failing_storage), "room1");
-    task_ctx.run_sync();
+    task_ctx.run();
 
     handle.clear("get_world");
 

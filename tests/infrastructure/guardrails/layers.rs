@@ -523,4 +523,61 @@ mod tests {
         );
         assert_eq!(violations.len(), 0);
     }
+
+    #[test]
+    fn test_check_messages_swipes_separation_catches_swipes_table() {
+        let violations = check_messages_swipes_separation(
+            "adapters/driven/storage/messages.rs",
+            "SELECT id FROM message_swipes WHERE message_id = ?\n",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("message_swipes"));
+    }
+
+    #[test]
+    fn test_check_messages_swipes_separation_allows_messages_table() {
+        let violations = check_messages_swipes_separation(
+            "adapters/driven/storage/messages.rs",
+            "SELECT id FROM messages WHERE game_id = ?\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_server_layer_boundaries_catches_game_state() {
+        let violations = check_server_layer_boundaries(
+            "server/renderers.rs",
+            "fn render(state: &GameState) {}\n",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("GameState"));
+    }
+
+    #[test]
+    fn test_check_server_layer_boundaries_allows_game_state_snapshot() {
+        let violations = check_server_layer_boundaries(
+            "server/renderers.rs",
+            "fn render(snapshot: &GameStateSnapshot) {}\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_test_layer_boundaries_catches_game_state_construction() {
+        let violations = check_test_layer_boundaries(
+            "tests/components/dashboard.rs",
+            "let state = GameState::new();\n",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("constructs"));
+    }
+
+    #[test]
+    fn test_check_test_layer_boundaries_allows_game_state_snapshot() {
+        let violations = check_test_layer_boundaries(
+            "tests/components/dashboard.rs",
+            "use crate::domain::model::state::GameStateSnapshot;\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
 }

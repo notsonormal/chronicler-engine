@@ -85,7 +85,7 @@ This doc carries the token tables verbatim because the tables are the curated to
 - Border-bottom: 1px solid `--color-border`
 - Contains: game title (left), current game name, connection status, and reset button (right)
 - Location is **not** in the header — it appears in the story log as the active-room location header
-- Reset button (`.reset-btn`): margin-left auto, margin-right `var(--spacing-sm)`, font-size `--font-size-xs`, padding `4px var(--spacing-sm)`, red gradient with `--color-accent-red` border and text; hover deepens gradient and adds a red glow
+- Reset button (`.btn-reset-small`): `background: none` with a 1px `--color-accent-red` border, `--color-accent-red` text, `border-radius: 4px`, `padding: 4px 8px`, `font-size: 16px`; hover adds a `rgba(255, 68, 68, 0.15)` background and a `0 0 6px rgba(255, 68, 68, 0.25)` glow
 
 ### Tab Bar
 

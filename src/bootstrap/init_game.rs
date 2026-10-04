@@ -169,7 +169,7 @@ pub fn spawn_arrival_task_if_needed(
     );
 
     runtime.spawn_blocking(move || {
-        let _ = task_ctx.run();
+        task_ctx.run();
     });
 
     Ok(())

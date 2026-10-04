@@ -208,6 +208,81 @@ class TestLineCitations(unittest.TestCase):
         self.assertEqual(fix.scan(path), [])
 
 
+class _SourcePathFixture:
+    """Builds a synthetic engine root for BROKEN_SOURCE_PATH checks."""
+
+    def __init__(self) -> None:
+        self.engine = Path(tempfile.mkdtemp(prefix="src-path-")) / "engine"
+        self.docs_root = self.engine / "docs" / "diataxis"
+        self.docs_root.mkdir(parents=True)
+        (self.engine / "src").mkdir(parents=True)
+
+    def write_doc(self, rel: str, text: str) -> Path:
+        path = self.docs_root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def scan(self, path: Path) -> list[vd.Violation]:
+        report = vd.FileReport(path)
+        vd.check_source_paths(report, self.engine)
+        return report.violations
+
+
+class TestSourcePaths(unittest.TestCase):
+    """BROKEN_SOURCE_PATH: flags missing repo paths, exempts patterns and fences."""
+
+    def test_flags_missing_src_path(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.write_doc(
+            "explanation/foo.md", "See `src/gone.rs` for details.\n"
+        )
+        rules = [v.rule for v in fix.scan(path)]
+        self.assertEqual(rules, ["BROKEN_SOURCE_PATH"])
+
+    def test_flags_missing_tests_path(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.write_doc("how-to/foo.md", "Run `tests/gone.rs`.\n")
+        self.assertEqual(len(fix.scan(path)), 1)
+
+    def test_existing_path_passes(self) -> None:
+        fix = _SourcePathFixture()
+        (fix.engine / "src" / "here.rs").write_text("", encoding="utf-8")
+        path = fix.write_doc("explanation/foo.md", "See `src/here.rs`.\n")
+        self.assertEqual(fix.scan(path), [])
+
+    def test_glob_and_line_citation_spans_skipped(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.write_doc(
+            "explanation/foo.md",
+            "`src/domain/**` and `src/gone.rs:42` are not plain paths.\n",
+        )
+        self.assertEqual(fix.scan(path), [])
+
+    def test_fenced_block_exempt(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.write_doc(
+            "explanation/foo.md",
+            "Tree:\n\n```\nsrc/gone.rs\n```\n",
+        )
+        self.assertEqual(fix.scan(path), [])
+
+    def test_data_path_out_of_scope(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.write_doc(
+            "explanation/foo.md", "Runtime file `data/chronicler.db`.\n"
+        )
+        self.assertEqual(fix.scan(path), [])
+
+    def test_generated_doc_exempt(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.write_doc(
+            "reference/coding_standards/guardrails.md",
+            "See `src/gone.rs`.\n",
+        )
+        self.assertEqual(fix.scan(path), [])
+
+
 class _AnchorFixture:
     """Builds a synthetic engine-root tree under a tmp dir for anchor checks."""
 

@@ -266,7 +266,7 @@ impl GameCatalogue {
         let new_id = storage.create_game_from_request(&request)?;
         self.storage.set_game_id(new_id);
 
-        let _ = self.persist_initial_state_with_swipes();
+        self.persist_initial_state_with_swipes()?;
 
         Ok(())
     }

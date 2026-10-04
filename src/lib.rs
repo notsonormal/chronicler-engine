@@ -17,7 +17,9 @@
     // No `eprintln!` in library code.
     clippy::print_stderr,
     // No explicit panics in production.
-    clippy::panic
+    clippy::panic,
+    // No silently dropped `#[must_use]` result; propagate or log it.
+    clippy::let_underscore_must_use
 )]
 // Tests are allowed to panic on assertion failures — that's their purpose.
 #![cfg_attr(
@@ -27,7 +29,8 @@
         clippy::expect_used,
         clippy::panic,
         clippy::print_stdout,
-        clippy::print_stderr
+        clippy::print_stderr,
+        clippy::let_underscore_must_use
     )
 )]
 

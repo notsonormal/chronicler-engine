@@ -1,4 +1,4 @@
-//! Nesting depth guardrail — reports function-body control-flow nesting depth violations (probe only; does not gate the build).
+//! Nesting depth guardrail — fails the build when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`.
 
 use syn::spanned::Spanned;
 use syn::visit::Visit;
@@ -8,7 +8,7 @@ use crate::Violation;
 
 pub const MAX_NESTING_DEPTH: usize = 3;
 
-/// Warns when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`.
+/// Fails when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`.
 pub fn check_nesting_depth(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let ast: File = match syn::parse_file(content) {

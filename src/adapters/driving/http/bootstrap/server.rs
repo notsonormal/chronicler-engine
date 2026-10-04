@@ -49,8 +49,11 @@ pub async fn run_server_with_config(
     tracing::info!("HTMX Dashboard running at http://{addr}");
 
     let shutdown_signal = async move {
-        let _ = tokio::signal::ctrl_c().await;
-        tracing::info!("Shutdown signal received, cancelling in-flight tasks...");
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            tracing::warn!("ctrl_c handler unavailable ({e}); shutting down");
+        } else {
+            tracing::info!("Shutdown signal received, cancelling in-flight tasks...");
+        }
         shutdown_token.cancel();
     };
 

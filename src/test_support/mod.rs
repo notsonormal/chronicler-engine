@@ -1,5 +1,9 @@
 //! Test fixtures + closure factories for the LLM recorder save seam.
 
+// Fixtures deliberately ignore persistence results: their job is to arrange
+// state, and a failed write surfaces in the test's own assertions.
+#![allow(clippy::let_underscore_must_use)]
+
 pub mod context;
 pub mod env_guard;
 pub mod fixtures;

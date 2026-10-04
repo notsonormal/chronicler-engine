@@ -125,7 +125,9 @@ fn build_wired_app(
     let pre_heal = boot_state.narrative.input_buffer.status.clone();
     generation_gate.heal_stale(current_game_id, &mut boot_state);
     if boot_state.narrative.input_buffer.status != pre_heal {
-        let _ = message_service.save_state(&boot_state);
+        if let Err(e) = message_service.save_state(&boot_state) {
+            tracing::warn!("boot heal: failed to persist healed status: {e}");
+        }
     }
 
     Ok(WiredApp {

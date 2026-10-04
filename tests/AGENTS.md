@@ -115,10 +115,12 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `location.rs` — Location guardrail tests: ensures `#[test]` / `#[cfg(test)]` units live in the correct directory (e.g., unit tests stay in `src/`, integration tests stay in `tests/`).
       - `location_tests.rs` — Tests for `location.rs` guardrail.
       - `mod.rs` — Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
-      - `nesting.rs` — Nesting depth guardrail — reports function-body control-flow nesting depth violations (probe only; does not gate the build).
+      - `nesting.rs` — Nesting depth guardrail — fails the build when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`.
+      - `registry_tests.rs` — Guardrail registry tests: every rule is reachable from `mod.rs` and has a detection test.
       - `structure.rs` — Structure guardrail tests: doc-anchor standards, mod.rs purity, no-std-thread, file length, and the new test module-header rule.
       - `structure_tests.rs` — Tests for `structure.rs` guardrail.
       - `style.rs` — Style guardrail tests: import ordering, single-letter variable usage, separator comments, long comment runs, and per-file `cfg(test)` tracking.
+      - `style_tests.rs` — Tests for `style.rs` guardrail.
 - **llm/**
     - `flow_llm_tests.rs` — LLM-driven flow tests: exercises real LLM provider flows end-to-end (ignored by default; run with `python build.py --llm-only`).
     - `mod.rs` — LLM test binary: real LLM provider flows (ignored by default; run with `python build.py --llm-only`).

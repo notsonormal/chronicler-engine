@@ -86,13 +86,15 @@ impl ArrivalTaskContext {
         )
     }
 
-    #[doc(hidden)]
-    pub fn run_sync(self) {
-        let _ = self.run();
+    /// Runs the arrival narration. Failures are logged, not propagated.
+    #[instrument(skip(self), fields(room_id = %self.room_id))]
+    pub(crate) fn run(self) {
+        if let Err(e) = self.run_inner() {
+            tracing::error!("arrival narration failed: {e}");
+        }
     }
 
-    #[instrument(err, skip(self), fields(room_id = %self.room_id))]
-    pub(crate) fn run(self) -> Result<(), EngineError> {
+    fn run_inner(self) -> Result<(), EngineError> {
         let storage = &self.storage;
         let mut state = match self.message_service.load_expecting_valid_state() {
             Ok(s) => s,

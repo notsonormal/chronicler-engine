@@ -13,7 +13,7 @@ The convention fits the constraint that Rust 2024 edition makes async-trait disp
 
 ## LLM-call offload via spawn_blocking
 
-Synchronous services (`ActionPipeline` and its collaborators) run inside `tokio::task::spawn_blocking`. The spawn helper lives at `src/application/pipeline/spawn.rs`; HTTP handlers reach it through `ActionPipeline::process_action` on the `AppState.pipeline` field. The pipeline instance is built once at startup and shared through an `Arc`, so the handler submits work to the same pipeline across requests.
+Synchronous services (`ActionPipeline` and its collaborators) run inside `tokio::task::spawn_blocking`. The offload happens inside `ActionPipeline`'s spawn path (`tokio::task::spawn_blocking`); HTTP handlers reach it through `ActionPipeline::process_action` on the `AppState.pipeline` field. The pipeline instance is built once at startup and shared through an `Arc`, so the handler submits work to the same pipeline across requests.
 
 The offload buys separation between the Axum event loop, which stays responsive, and the LLM network call, which can take seconds. The synchronous service code is unchanged; the handler hands the blocking call to a Tokio blocking pool, returns immediately, and the caller awaits the response on the future the pool returns. Latency from one slow LLM call does not back up unrelated handlers; the synchronous service code runs unchanged inside the blocking pool.
 
@@ -27,7 +27,7 @@ The shape serves a read-mostly workload. Each read is a short storage call; writ
 
 Every `Mutex` and `RwLock` site in the engine recovers from a poisoned lock by calling `.into_inner()` on the guard. Lock poisoning is the Rust standard library's signal that a previous holder panicked while holding the lock; the engine treats poisoning as recoverable rather than fatal.
 
-A panic while holding the lock is a definite bug — the previous code path exited abnormally — but the engine treats the next holder as legitimate. `.into_inner()` consumes the poisoned `Result` and yields the guarded value; the type is unchanged; the next holder sees the state as the previous holder left it and proceeds. The convention holds at every site with a single consistent shape. The invariant is asserted in `tests/poison_recovery.rs`.
+A panic while holding the lock is a definite bug — the previous code path exited abnormally — but the engine treats the next holder as legitimate. `.into_inner()` consumes the poisoned `Result` and yields the guarded value; the type is unchanged; the next holder sees the state as the previous holder left it and proceeds. The convention holds at every site with a single consistent shape; `tests/test_utils/server.rs`'s `buffer_text` shows it.
 
 ## Shutdown gate at the spawn boundary
 

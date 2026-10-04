@@ -267,6 +267,33 @@ fn test_reset_replaces_current_game() {
 }
 
 #[test]
+fn test_reset_propagates_persist_failure() {
+    let data = TestDataBuilder::default_test().build();
+    let raw_storage = Storage::new_in_memory();
+    data.seed_into(&raw_storage);
+    let (storage, handle) = raw_storage.with_test_failures();
+    let storage = Arc::new(storage);
+    let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
+    let catalogue = GameCatalogue::new(Arc::clone(&storage), message_service);
+
+    catalogue
+        .create_game(&data.world_key(), &data.persona.key)
+        .expect("test setup: create_game should succeed");
+
+    handle.set(
+        "save_snapshot",
+        TestOverride::internal("simulated initial snapshot failure"),
+    );
+
+    let result = catalogue.reset();
+
+    assert!(
+        result.is_err(),
+        "reset should surface a failure to persist the fresh game's initial state"
+    );
+}
+
+#[test]
 fn test_current_game_id_matches_storage() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
     assert_eq!(catalogue.current_game_id(), storage.current_game_id());
