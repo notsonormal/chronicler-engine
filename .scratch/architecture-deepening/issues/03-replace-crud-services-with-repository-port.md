@@ -15,9 +15,9 @@ and if so, what is the shape of the deepened module?
 ## Background
 
 This is **candidate 2** of the architecture review. See
-`architecture-review.html` for the mass diagram and evidence.
+`assets/architecture-review.html` for the mass diagram and evidence.
 
-The friction: `arch-lint.toml:136-140` forbids the HTTP layer from importing
+The friction: `arch-lint.toml` (lines 138-142) forbids the HTTP layer from importing
 storage ("Server layer must not depend on storage directly; all storage
 access goes through ApplicationService"). So the codebase grows thin services
 whose entire job is to forward to `Storage` — `PersonaCatalogue`'s own header
@@ -55,3 +55,20 @@ only because of the lint rule; a port removes that reason.
 - Resolution uses `/grilling` and `/domain-modeling`.
 - The map's "Not yet specified" fog on port-trait granularity graduates into
   this ticket and should be cleared from the map on resolution.
+
+## Current state (2026-10-04)
+
+Still present. The fleet is no longer uniformly one-method:
+
+- `PersonaCatalogue`: still `new` + `list_personas`, and its header still says
+  "intentionally a one-method seam".
+- `WorldCatalogue`: 5 delegating methods.
+- `PromptPresetService`: 5 delegating methods.
+- `SettingsService`: now 4 methods (`get_settings`, `update_settings`,
+  `add_connection`, `update_connection`). It was 1. `update_settings` takes a
+  closure, so it is less purely a delegate. The grilling should check whether
+  it now holds real orchestration and survives the port.
+
+The arch-lint rule moved to `arch-lint.toml` lines 138-142 (text unchanged).
+The HTTP adapter still honours it in `src/` (only `app_state_tests.rs`
+imports storage, as an exempt test). Still Strong.

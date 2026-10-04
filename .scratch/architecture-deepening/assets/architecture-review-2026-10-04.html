@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Architecture review — Chronicler Engine — 2026-10-04</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+  </script>
+  <style>
+    .seam { stroke-dasharray: 4 4; }
+    .leak { stroke: #dc2626; }
+    .mod-box { border: 1px solid #94a3b8; background: #fff; }
+    .deep-box { border: 3px solid #0f172a; background: linear-gradient(135deg, #0f172a, #1e293b); color: #e2e8f0; }
+    .ghost { border: 1px dashed #64748b; color: #94a3b8; background: rgba(148,163,184,.08); }
+    .lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+    .diagram { min-height: 300px; }
+  </style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+<header class="space-y-3">
+  <h1 class="font-serif text-4xl">Architecture review — Chronicler Engine</h1>
+  <p class="text-sm text-slate-500">2026-10-04 · second pass · new candidates plus drift on the seven open from 2026-08-16</p>
+  <div class="flex flex-wrap gap-5 text-xs items-center text-slate-600">
+    <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 mod-box"></span> module</span>
+    <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 deep-box"></span> deep module</span>
+    <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 ghost"></span> absorbed / deleted</span>
+    <span class="flex items-center gap-1"><svg width="28" height="6"><line x1="0" y1="3" x2="28" y2="3" class="seam" stroke="#475569" stroke-width="2"/></svg> seam</span>
+    <span class="flex items-center gap-1"><svg width="28" height="6"><line x1="0" y1="3" x2="28" y2="3" class="leak" stroke-width="2"/></svg> leakage / duplication</span>
+  </div>
+</header>
+
+<!-- ============ CARRY-OVER ============ -->
+<section id="carry-over" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+  <h2 class="font-serif text-2xl">Still open from 2026-08-16 (tickets 01–08)</h2>
+  <p class="text-sm text-slate-600">None resolved. Five got wider. Full cards live in <span class="font-mono">.scratch/architecture-deepening/assets/architecture-review.html</span>; this pass does not re-draw them.</p>
+  <table class="w-full text-sm">
+    <thead class="text-left lbl text-slate-500"><tr><th class="py-2">#</th><th>Candidate</th><th>Drift</th><th>Evidence now</th></tr></thead>
+    <tbody class="divide-y divide-slate-100">
+      <tr><td class="py-2">1</td><td>Storage dispatch is a wide inherent interface</td><td class="text-amber-700">wider</td><td>≈50 <span class="font-mono">pub fn</span> on <span class="font-mono">Storage</span> (was ~30); 46 <span class="font-mono">with_backend_mut</span> sites</td></tr>
+      <tr><td class="py-2">2</td><td>One-method CRUD service fleet</td><td class="text-slate-500">same</td><td><span class="font-mono">persona_catalogue.rs</span> still one method; <span class="font-mono">settings_service.rs</span> now 4</td></tr>
+      <tr><td class="py-2">3</td><td>ActionPipeline sliced by entry path</td><td class="text-red-700">worse</td><td>fifth slice <span class="font-mono">options.rs</span>; <span class="font-mono">run_from_input</span> ~155 lines (was ~110)</td></tr>
+      <tr><td class="py-2">4</td><td>MessageService mixes concerns</td><td class="text-slate-500">same</td><td>12 pub methods; <span class="font-mono">retry.rs:71,203</span> still read snapshots past it</td></tr>
+      <tr><td class="py-2">5</td><td>Prompting shallow helpers</td><td class="text-emerald-700">slightly better</td><td>5 consts (was 7); <span class="font-mono">build_narration_prompt</span> still used by arrival</td></tr>
+      <tr><td class="py-2">6</td><td>QuantifierAgent fetches its own preset</td><td class="text-red-700">worse</td><td><span class="font-mono">OptionsAgent</span> copies the same storage fetch (folded into card D below)</td></tr>
+      <tr><td class="py-2">7</td><td>Generation gate / slot / guard split</td><td class="text-red-700">worse</td><td><span class="font-mono">GenerationGate</span> interface 3 → 7 methods</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="candidates" class="space-y-10">
+<h2 class="font-serif text-2xl">New candidates</h2>
+
+<!-- ============ A ============ -->
+<article id="a" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">A · Generation transitions belong to the input buffer</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-emerald-600">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/domain/model/state/generation_status.rs · narrative_state.rs</li>
+    <li>src/application/generation/gate.rs · pipeline/pipeline_run.rs · action_pipeline/{core,options,retry}.rs</li>
+    <li>src/application/message_service.rs · arrival_service.rs · src/test_support/test_app_builder.rs</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50">
+      <div class="lbl text-slate-500 mb-3">Before — 39 hand-written field writes, 8 files</div>
+      <div class="space-y-2 text-xs">
+        <div class="grid grid-cols-4 gap-2">
+          <div class="mod-box p-2 lbl">gate</div><div class="mod-box p-2 lbl">pipeline_run</div><div class="mod-box p-2 lbl">core</div><div class="mod-box p-2 lbl">retry</div>
+          <div class="mod-box p-2 lbl">options</div><div class="mod-box p-2 lbl">message_svc</div><div class="mod-box p-2 lbl">arrival</div><div class="mod-box p-2 lbl">test_app</div>
+        </div>
+        <svg viewBox="0 0 300 46" class="w-full h-10"><g class="leak" stroke-width="1.5" fill="none">
+          <path d="M20 0 L150 40"/><path d="M95 0 L150 40"/><path d="M170 0 L150 40"/><path d="M245 0 L150 40"/><path d="M290 0 L150 40"/>
+        </g></svg>
+        <div class="mod-box p-3 font-mono text-[11px] leading-5">state.narrative.input_buffer.status = …<br/>state.narrative.input_buffer.phase&nbsp; = …</div>
+        <p class="text-slate-500">Status/phase invariant from <span class="font-mono">two-state-channels.md</span> lives in every caller.</p>
+      </div>
+    </div>
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50">
+      <div class="lbl text-slate-500 mb-3">After — callers name the transition</div>
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-4 gap-2 opacity-70">
+          <div class="mod-box p-2 lbl">gate</div><div class="mod-box p-2 lbl">pipeline_run</div><div class="mod-box p-2 lbl">core</div><div class="mod-box p-2 lbl">…5 more</div>
+        </div>
+        <svg viewBox="0 0 300 20" class="w-full h-5"><line x1="0" y1="10" x2="300" y2="10" class="seam" stroke="#475569" stroke-width="2"/></svg>
+        <div class="deep-box p-4 rounded">
+          <div class="lbl mb-2">InputBuffer</div>
+          <div class="font-mono text-[11px] leading-5">begin(phase) · advance(phase) · fail(err) · finish()</div>
+          <div class="mt-3 text-slate-300 text-[11px]">owns: status ↔ phase consistency, error capture, crash-heal reset</div>
+        </div>
+        <p class="text-slate-500">Domain tests cover every transition with no runtime.</p>
+      </div>
+    </div>
+  </div>
+  <p><b>Problem.</b> Generation state is two fields that every caller writes by hand, three levels deep. Nothing enforces how they relate.</p>
+  <p><b>Solution.</b> Put named transitions on the input buffer and make the two fields private to it.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700">
+    <li>Locality: one home for the status/phase invariant</li>
+    <li>Interface is the test surface: pure domain tests</li>
+    <li>Leverage: 39 writes become ~19 calls</li>
+    <li>Shrinks tickets 04 and 08 before grilling</li>
+  </ul>
+</article>
+
+<!-- ============ B ============ -->
+<article id="b" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">B · Arrival narration is a second narrate-and-persist path</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-emerald-600">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/application/arrival_service.rs (190 lines)</li>
+    <li>src/application/pipeline/narration_generation.rs (168) · pipeline/pipeline_run.rs</li>
+    <li>src/bootstrap/init_game.rs (spawn site, recorder threading)</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4 bg-stone-50">
+      <div class="lbl text-slate-500 mb-2">Before</div>
+      <pre class="mermaid">
+flowchart TB
+  IG[init_game] -->|pipeline.recorder| AS[ArrivalTaskContext<br/>10 ctor args]
+  AS --> PC1[PromptContext::new]
+  PC1 --> BNP[build_narration_prompt<br/>spawn-time budget]
+  BNP --> R1[recorder.complete]
+  R1 --> SV1[add_message +<br/>save_message_and_snapshot]
+  AP[ActionPipeline] --> NG[NarrationGeneration::run]
+  NG --> PA[PromptAssembler<br/>settings budget]
+  PA --> R2[call_narrator]
+  R2 --> SV2[persist_snapshot_or_err]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class BNP,R1,SV1 leak
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 bg-stone-50">
+      <div class="lbl text-slate-500 mb-2">After</div>
+      <pre class="mermaid">
+flowchart TB
+  IG[init_game] --> AR[arrival: pick room,<br/>build PromptContext]
+  AP[ActionPipeline] --> NG
+  AR --> NG
+  subgraph NG[Narration generation — deep]
+    direction TB
+    a1[assemble + fit budget] --> a2[recorder call] --> a3[persist message + snapshot]
+  end
+  classDef deep fill:#1e293b,color:#e2e8f0,stroke:#0f172a,stroke-width:3px;
+  class NG deep
+      </pre>
+    </div>
+  </div>
+  <p><b>Problem.</b> The opening scene goes through its own copy of prompt → recorder → persist. It has a separate budget path and a 10-argument constructor that pulls the recorder out of <span class="font-mono">ActionPipeline</span>.</p>
+  <p><b>Solution.</b> Arrival becomes a thin caller of the one narration-generation module. It supplies only the room and the scene context.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700">
+    <li>Locality: one narrate-and-persist path</li>
+    <li>Recorder stops leaking to bootstrap</li>
+    <li>Delete ~60 duplicated lines</li>
+    <li>Arrival tests reuse narration fixtures</li>
+  </ul>
+</article>
+
+<!-- ============ C ============ -->
+<article id="c" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">C · One status-strip module for the action area and the poll</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-emerald-600">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/adapters/driving/http/layout/handlers/endpoints.rs (GET /status/generating)</li>
+    <li>src/adapters/driving/http/view_models.rs (ActionAreaViewModel::new)</li>
+    <li>tests/test_utils/stub_server.rs (third copy)</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs">
+      <div class="lbl text-slate-500 mb-3">Before — same 3-way branch, three places</div>
+      <div class="grid grid-cols-3 gap-2">
+        <div class="mod-box p-2"><div class="lbl">poll endpoint</div><div class="mt-2 text-[11px] text-slate-500">error · <span class="font-mono">as_endpoint_str</span> · "idle"</div><div class="mt-2 text-red-600 text-[11px]">reads message_service, skips GameViewQuery</div></div>
+        <div class="mod-box p-2"><div class="lbl">ActionAreaViewModel</div><div class="mt-2 text-[11px] text-slate-500">error · <span class="font-mono">display_text</span> · "Ready"</div><div class="mt-2 text-red-600 text-[11px]">raw HTML in a view model</div></div>
+        <div class="mod-box p-2"><div class="lbl">stub_server</div><div class="mt-2 text-[11px] text-slate-500">restates poll shape</div><div class="mt-2 text-red-600 text-[11px]">proof copy can drift</div></div>
+      </div>
+      <svg viewBox="0 0 300 30" class="w-full h-8"><path d="M50 0 Q150 40 250 0" class="leak" fill="none" stroke-width="1.5"/></svg>
+      <div class="ghost p-2 text-center lbl">error_disclosure(…) called from each</div>
+    </div>
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs">
+      <div class="lbl text-slate-500 mb-3">After</div>
+      <div class="grid grid-cols-3 gap-2">
+        <div class="mod-box p-2 lbl">poll endpoint</div><div class="mod-box p-2 lbl">action area</div><div class="mod-box p-2 lbl">stub_server</div>
+      </div>
+      <svg viewBox="0 0 300 20" class="w-full h-5"><line x1="0" y1="10" x2="300" y2="10" class="seam" stroke="#475569" stroke-width="2"/></svg>
+      <div class="deep-box p-4 rounded">
+        <div class="lbl mb-1">Status strip</div>
+        <div class="text-[11px] text-slate-300">GenerationStatus → view value → markup, read via GameViewQuery</div>
+      </div>
+    </div>
+  </div>
+  <p><b>Problem.</b> The generation-status display is decided in two adapters and copied a third time in test scaffolding. One copy also skips <span class="font-mono">GameViewQuery</span>.</p>
+  <p><b>Solution.</b> Create one status-strip module. The action area and the poll both render through it, and the stub imports it.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700">
+    <li>Locality: one status rendering</li>
+    <li>Stub stops restating production</li>
+    <li>Read path goes through GameViewQuery</li>
+  </ul>
+</article>
+
+<!-- ============ D ============ -->
+<article id="d" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">D · Options and Quantifier Agents share a body they keep in two copies</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-emerald-600">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-indigo-100 text-indigo-800">absorbs ticket 07</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/application/agents/options/{agent,prompt}.rs · options/utils/orchestration.rs (105)</li>
+    <li>src/application/agents/quantifier/{agent,prompt}.rs · quantifier/utils/orchestration.rs (224)</li>
+    <li>src/domain/model/agent.rs (AgentContext)</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs">
+      <div class="lbl text-slate-500 mb-3">Before — two columns, same rows</div>
+      <div class="grid grid-cols-2 gap-x-3 gap-y-2">
+        <div class="lbl text-center">Options</div><div class="lbl text-center">Quantifier</div>
+        <div class="mod-box p-2 border-red-400">storage → settings → preset</div><div class="mod-box p-2 border-red-400">storage → settings → preset</div>
+        <div class="mod-box p-2 border-red-400">&lt;CurrentRoom&gt; renderer</div><div class="mod-box p-2 border-red-400">&lt;CurrentRoom&gt; renderer</div>
+        <div class="mod-box p-2 border-red-400">&lt;RecentHistory&gt; take(4)</div><div class="mod-box p-2 border-red-400">&lt;RecentHistory&gt; take(4)</div>
+        <div class="mod-box p-2 border-red-400">2-attempt retry loop</div><div class="mod-box p-2 border-red-400">2-attempt retry loop</div>
+        <div class="mod-box p-2">parse options</div><div class="mod-box p-2">parse + NPC diff</div>
+      </div>
+    </div>
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs">
+      <div class="lbl text-slate-500 mb-3">After</div>
+      <div class="deep-box p-3 rounded mb-3">
+        <div class="lbl">Agent call core</div>
+        <div class="text-[11px] text-slate-300 mt-1">preset arrives on AgentContext · scene-context render · call-with-retries(policy)</div>
+      </div>
+      <svg viewBox="0 0 300 20" class="w-full h-5"><line x1="0" y1="10" x2="300" y2="10" class="seam" stroke="#475569" stroke-width="2"/></svg>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="mod-box p-2"><div class="lbl">Options</div><div class="text-[11px] text-slate-500">own prompt tail, parser, zero-parse retry rule</div></div>
+        <div class="mod-box p-2"><div class="lbl">Quantifier</div><div class="text-[11px] text-slate-500">own prompt tail, parser, low-confidence retry rule</div></div>
+      </div>
+    </div>
+  </div>
+  <p><b>Problem.</b> Each Agent re-implements the preset fetch, the scene-context prompt blocks and the retry loop. A change to how Agents see the scene is a two-file edit.</p>
+  <p><b>Solution.</b> Build one shared Agent call core. Each Agent keeps only its prompt tail, its parser and its retry rule.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700">
+    <li>Locality: scene context rendered once</li>
+    <li>Agents stop reaching into Storage</li>
+    <li>Retry policy tested once</li>
+  </ul>
+</article>
+
+<!-- ============ E ============ -->
+<article id="e" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">E · The Agent registry is a hypothetical seam</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-amber-600">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/application/agents/registry.rs (82) · trait_def.rs (11)</li>
+    <li>src/domain/model/agent.rs (ExecutionPhase, AgentResult, BackendSelector, AgentConfig)</li>
+    <li>pipeline/action_pipeline/core.rs (PostGeneration dispatch) · options.rs (OptionsGeneration dispatch)</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs">
+      <div class="lbl text-slate-500 mb-3">Before — interface mass vs. what runs</div>
+      <div class="flex items-end gap-6 h-52">
+        <div class="flex flex-col items-center gap-1">
+          <div class="mod-box w-20 h-44 flex items-center justify-center text-center p-1 text-[10px]">trait + registry + 3 phases + 4 results + selector + config switch</div>
+          <div class="lbl">interface</div>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <div class="mod-box w-20 h-16 flex items-center justify-center text-center p-1 text-[10px]">2 Agents, 1 per phase</div>
+          <div class="lbl">behaviour</div>
+        </div>
+      </div>
+      <ul class="mt-2 text-[11px] text-red-700 space-y-0.5"><li>PreGeneration: no Agent, no dispatcher</li><li>BackendSelector: stored, never read</li><li>Options dispatched at its own gated site</li></ul>
+    </div>
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs">
+      <div class="lbl text-slate-500 mb-3">After — two named collaborators</div>
+      <div class="mod-box p-3 mb-3"><div class="lbl">ActionPipeline</div></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="deep-box p-3 rounded"><div class="lbl">Quantifier</div><div class="text-[10px] text-slate-300 mt-1">post-narration</div></div>
+        <div class="deep-box p-3 rounded"><div class="lbl">Options</div><div class="text-[10px] text-slate-300 mt-1">after narration / on demand</div></div>
+      </div>
+      <div class="ghost p-2 mt-3 text-center lbl">registry · BackendSelector · PreGeneration</div>
+      <p class="mt-2 text-slate-500">Test seam: inject a synchronous Quantifier directly (replaces <span class="font-mono">with_agent</span>).</p>
+    </div>
+  </div>
+  <p><b>Problem.</b> The registry's interface is wider than what it runs: one Agent per phase, a phase with no Agent, and a selector nobody reads.</p>
+  <p><b>Solution.</b> <span class="font-mono">ActionPipeline</span> holds the Quantifier and Options Agents directly. The registry, the unused variants and <span class="font-mono">BackendSelector</span> are deleted.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700">
+    <li>Delete ~230 lines of dispatch</li>
+    <li>Pipeline reads as what it does</li>
+    <li>Test seam stays, named</li>
+  </ul>
+  <div class="rounded bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">Conflicts with the rationale in <span class="font-mono">docs/diataxis/explanation/agent_system_design.md</span> ("pipeline indifferent to which agents exist"). There is no ADR. Worth reopening: the second Agent already needed its own dispatch site, and the doc still describes two phases.</div>
+</article>
+
+<!-- ============ F ============ -->
+<article id="f" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">F · The connection card has two definitions</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-emerald-600">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">small</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/adapters/driving/http/settings/templates/settings.rs (panel loop)</li>
+    <li>src/adapters/driving/http/builders/connections.rs (fragment card)</li>
+    <li>precedent: builders/presets.rs preset_card_view → prompt_presets/templates</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4 bg-stone-50">
+      <div class="lbl text-slate-500 mb-2">Before</div>
+      <pre class="mermaid">
+flowchart LR
+  P[Settings panel template] --> C1[card markup #1<br/>badges · 4 hx buttons]
+  E[edit / cancel fragment] --> C2[connection_card_html<br/>card markup #2]
+  C1 -. must match .- C2
+  linkStyle 2 stroke:#dc2626,stroke-width:2px;
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 bg-stone-50">
+      <div class="lbl text-slate-500 mb-2">After (preset pattern)</div>
+      <pre class="mermaid">
+flowchart LR
+  P[Settings panel template] --> CV
+  E[edit / cancel fragment] --> CV
+  CV[connection card view<br/>SafeHtml]
+  classDef deep fill:#1e293b,color:#e2e8f0,stroke:#0f172a,stroke-width:3px;
+  class CV deep
+      </pre>
+    </div>
+  </div>
+  <p><b>Problem.</b> The card in the panel and the card returned after an edit are two hand-kept copies of the same markup. Only the fragment copy is tested.</p>
+  <p><b>Solution.</b> Follow the prompt-preset pattern: the panel renders each row through the one card builder.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700">
+    <li>One card, two callers</li>
+    <li>Existing tests cover the panel</li>
+  </ul>
+  <p class="text-xs text-slate-500">Checked: the panel copy is escaped (<span class="font-mono">ext = "html"</span>). The risk is drift between the copies, not XSS.</p>
+</article>
+
+<!-- ============ G ============ -->
+<article id="g" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">G · HTTP error policy is decided per handler</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-amber-600">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/adapters/driving/http/error.rs · utils/error.rs · utils/response.rs · utils/fragment.rs</li>
+    <li>src/adapters/driving/http/app_state.rs (7 render_* methods, 9 × EngineError::Config)</li>
+    <li>games/handlers/games.rs · worlds/handlers/worlds.rs</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs space-y-2">
+      <div class="lbl text-slate-500 mb-1">Before — cross-section of one failed request</div>
+      <div class="border-l-4 border-slate-300 bg-white p-2">handler picks return type: <span class="font-mono">Result</span> · <span class="font-mono">Response</span> · <span class="font-mono">Html</span> · <span class="font-mono">String</span></div>
+      <div class="border-l-4 border-red-400 bg-white p-2">Validation → 400 <span class="text-slate-400">(utils/error)</span> or 200 fragment <span class="text-slate-400">(games, worlds)</span></div>
+      <div class="border-l-4 border-red-400 bg-white p-2">render failure → 500 + HX-Reswap: none <span class="text-slate-400">(fragment.rs)</span></div>
+      <div class="border-l-4 border-red-400 bg-white p-2">failed read query → <span class="font-mono">EngineError::Config</span> <span class="text-slate-400">(app_state)</span></div>
+      <div class="border-l-4 border-slate-300 bg-white p-2">ApplicationError → Response, 4 arms <span class="text-slate-400">(error.rs)</span></div>
+    </div>
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs space-y-2">
+      <div class="lbl text-slate-500 mb-1">After</div>
+      <div class="border-l-4 border-slate-300 bg-white p-2">handler returns body or <span class="font-mono">ApplicationError</span></div>
+      <div class="deep-box p-4 rounded h-32 flex flex-col justify-center">
+        <div class="lbl">Fragment error policy</div>
+        <div class="text-[11px] text-slate-300 mt-1">(error, fragment context) → status · disclosure markup · HX-Reswap</div>
+      </div>
+    </div>
+  </div>
+  <p><b>Problem.</b> The same failure gets a different status code and swap behaviour depending on which handler hit it. Read failures are labelled as config errors.</p>
+  <p><b>Solution.</b> One fragment error-policy module decides the status, the markup and the swap. Handlers return a body or an error.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700">
+    <li>Locality: one disclosure rule</li>
+    <li>AppState renderers lose 15 map_err chains</li>
+    <li>Error modes become part of the interface</li>
+  </ul>
+</article>
+
+<!-- ============ H ============ -->
+<article id="h" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">H · Bootstrap creates Games and reads them around the seams</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-amber-600">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">local-substitutable</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/bootstrap/run.rs (raw SQL via db_pool.conn())</li>
+    <li>src/bootstrap/init_game.rs (resolve_game_id rebuilds NewGame + preset bundle)</li>
+    <li>src/application/games/catalogue.rs (GameCatalogue::create_game)</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4 bg-stone-50">
+      <div class="lbl text-slate-500 mb-2">Before</div>
+      <pre class="mermaid">
+flowchart LR
+  RUN[bootstrap::run] -->|raw SQL| DB[(SQLite)]
+  IG[init_game] -->|own NewGame| ST[Storage]
+  HTTP[HTTP games] --> GC[GameCatalogue] --> ST
+  ST --> DB
+  linkStyle 0 stroke:#dc2626,stroke-width:2px;
+  linkStyle 1 stroke:#dc2626,stroke-width:2px;
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 bg-stone-50">
+      <div class="lbl text-slate-500 mb-2">After</div>
+      <pre class="mermaid">
+flowchart LR
+  RUN[bootstrap::run] --> GC
+  IG[init_game] --> GC
+  HTTP[HTTP games] --> GC
+  GC[GameCatalogue] --> ST[Storage] --> DB[(SQLite)]
+  classDef deep fill:#1e293b,color:#e2e8f0,stroke:#0f172a,stroke-width:3px;
+  class GC deep
+      </pre>
+    </div>
+  </div>
+  <p><b>Problem.</b> Game creation has two code paths, and startup queries Games with SQL that the in-memory backend never sees.</p>
+  <p><b>Solution.</b> Bootstrap creates and looks up Games only through <span class="font-mono">GameCatalogue</span>.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700">
+    <li>One Game-creation rule</li>
+    <li>Startup testable on InMemory backend</li>
+  </ul>
+  <div class="rounded bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">Touches the Storage seam, so ticket 01's constraints apply. It does not change the rejected <span class="font-mono">impl Storage</span> consolidation.</div>
+</article>
+
+<!-- ============ I ============ -->
+<article id="i" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+  <div class="flex flex-wrap items-center gap-2">
+    <h3 class="font-serif text-xl mr-2">I · LLM transport: flatten utils/, share the result mapping</h3>
+    <span class="px-2 py-0.5 rounded text-white text-xs bg-slate-500">Speculative</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">ports &amp; adapters</span>
+  </div>
+  <ul class="font-mono text-sm text-slate-600 leading-6">
+    <li>src/adapters/driven/llm/transport/mod.rs (8) · transport/utils/mod.rs (10) · utils/{client,request,response}.rs</li>
+    <li>providers/openrouter.rs · providers/ollama.rs (identical complete bodies)</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs space-y-2">
+      <div class="lbl text-slate-500">Before</div>
+      <div class="border-l-4 border-slate-300 bg-white p-2 h-8">transport/mod.rs — re-export</div>
+      <div class="border-l-4 border-slate-300 bg-white p-2 h-8">transport/utils/mod.rs — re-export</div>
+      <div class="border-l-4 border-slate-300 bg-white p-2">client · request · response</div>
+      <div class="grid grid-cols-2 gap-2"><div class="mod-box p-2 border-red-400">OpenRouter: map result field by field</div><div class="mod-box p-2 border-red-400">Ollama: same mapping</div></div>
+    </div>
+    <div class="diagram rounded-lg border border-slate-200 p-4 bg-stone-50 text-xs space-y-2">
+      <div class="lbl text-slate-500">After</div>
+      <div class="deep-box p-3 rounded h-20">transport — client · request · response · one result mapping</div>
+      <div class="grid grid-cols-2 gap-2"><div class="mod-box p-2">OpenRouter adapter</div><div class="mod-box p-2">Ollama adapter</div></div>
+    </div>
+  </div>
+  <p><b>Problem.</b> Two pass-through modules add nesting but no depth. Two providers copy the same mapping into <span class="font-mono">LlmCallResult</span>.</p>
+  <p><b>Solution.</b> Flatten <span class="font-mono">utils/</span> into <span class="font-mono">transport/</span> and share one mapping. The <span class="font-mono">LlmProvider</span> seam is real (4 adapters) and stays.</p>
+  <ul class="list-disc pl-6 text-sm text-slate-700"><li>Delete two re-export modules</li><li>Low leverage, low risk</li></ul>
+</article>
+
+</section>
+
+<section id="fine" class="rounded-xl border border-slate-200 bg-white p-6 space-y-2 text-sm">
+  <h2 class="font-serif text-xl">Checked and fine</h2>
+  <ul class="list-disc pl-6 text-slate-700 space-y-1">
+    <li><span class="font-mono">LlmProvider</span>: real seam, 4 adapters. <span class="font-mono">LlmCallRecorder</span>: deep orchestration.</li>
+    <li>Trigger evaluation: small interface on <span class="font-mono">GameState</span>, well tested.</li>
+    <li><span class="font-mono">application/games</span> read/write split; <span class="font-mono">DebugStateView</span> is a plain DTO.</li>
+    <li>Router: one flat route table, documentation generated from it.</li>
+    <li>arch-lint server→storage rule: honoured in <span class="font-mono">src/</span>.</li>
+    <li><span class="font-mono">TextChecker</span>: one production adapter plus test stubs, accepted port. Thin and leak-free.</li>
+  </ul>
+</section>
+
+<section id="top-recommendation" class="rounded-xl deep-box p-8 space-y-3">
+  <div class="lbl text-slate-400">Top recommendation</div>
+  <h2 class="font-serif text-3xl"><a href="#a" class="underline decoration-dotted">A · Generation transitions belong to the input buffer</a></h2>
+  <p class="text-slate-300 max-w-3xl">It is the smallest change with the widest reach. The crash-recovery invariant moves from 8 files into one pure domain module with runtime-free tests. It also shrinks the two open tickets that got worse (04 pipeline, 08 gate) before anyone grills them.</p>
+</section>
+
+</main>
+</body>
+</html>

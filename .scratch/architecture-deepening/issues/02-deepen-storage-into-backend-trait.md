@@ -16,12 +16,13 @@ sits behind it, and what tests survive?
 ## Background
 
 This is **candidate 1** of the architecture review — the top recommendation.
-See `architecture-review.html` (this directory) for the before/after diagram
+See `assets/architecture-review.html` for the before/after diagram
 and full evidence.
 
-The friction: `Storage` exposes ~30 inherent `pub fn` methods, and every
-method repeats the same `match backend { Sqlite=>.., InMemory=>.. }` dispatch
-(`core.rs:117-141` `with_backend_mut`; `games.rs`, `worlds.rs`, `messages.rs`,
+The friction: `Storage` exposes ~30 inherent `pub fn` methods (more now —
+see Current state), and every method repeats the same
+`match backend { Sqlite=>.., InMemory=>.. }` dispatch
+(`core.rs` `with_backend_mut`; `games.rs`, `worlds.rs`, `messages.rs`,
 `snapshots.rs` each duplicate the match shape). The seam is the helper plus
 the `Backend` enum, not a trait. Every new operation adds two identical arms.
 
@@ -58,3 +59,12 @@ plus a test double, so the seam earns its place.
   an ADR (the skill's callout) so future reviews don't re-suggest it.
 - This ticket blocks ticket 03 (the Repository port) — its outcome shapes 03's
   interface.
+
+## Current state (2026-10-04)
+
+The friction is still present, and the interface is wider. The 11 `impl
+Storage` source files now hold about 50–65 `pub fn`. The scout counted ~50;
+a raw `pub fn` line count gives 65, which may include helper types. The
+2026-08-16 count was ~30. `with_backend_mut` is at `core.rs:126` with 48
+references, and `games.rs` / `worlds.rs` / `messages.rs` / `snapshots.rs`
+still repeat the match shape. Shape unchanged; still Strong.

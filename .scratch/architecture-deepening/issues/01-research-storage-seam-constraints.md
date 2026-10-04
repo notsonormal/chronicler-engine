@@ -68,6 +68,16 @@ Ticket 02 makes the decision.
   `#[cfg(feature = "testing")]` paths in the storage module.
 - Prior decisions: `.scratch/inherent-impl-locality/issues/03-*.md` and
   `11-*.md` (read their `## Answer` sections).
+- Ticket 16 (bootstrap Game creation) also touches the Storage seam. Its
+  grilling reads this ticket's asset as a constraint.
 - Asset on resolution: save the summary as
   `.scratch/architecture-deepening/assets/storage-seam-constraints.md` and
   link it from the resolution comment.
+
+## Current state (2026-10-04)
+
+Mechanism unchanged. `with_backend_mut` is now at `core.rs:126` and has 48
+references across the storage module. `Backend` / `BackendKind` (including
+`BackendKind::Test`) are still at the top of `core.rs`. There are still 13
+`impl Storage` blocks, and `test_support.rs` is unchanged in role. No
+`StorageBackend` or `Repository` trait exists yet.
