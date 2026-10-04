@@ -57,7 +57,8 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
     - **stub/**
       - `dashboard.rs` — Stub-browser tests for dashboard chrome: the error toast, the action-area state machine, and the read-only text-check result. Tagged against `docs/specs/browser_dashboard.md`.
-      - `invariants.rs` — Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
+      - `invariants.rs` — Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Ten checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
+      - `llm_messages.rs` — Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row. Tagged against `docs/specs/browser_llm_messages.md`.
       - `mod.rs` — Stub-browser tests: browser-only behaviour against a fake engine.
       - `options.rs` — Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
       - `slash_menu.rs` — Stub-browser tests for the slash menu: the client-side command palette rendered from the shipped shell's `input` listener. Tagged against `docs/specs/browser_slash_menu.md`.

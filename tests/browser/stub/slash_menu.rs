@@ -40,6 +40,28 @@ async fn test_slash_menu_opens_on_slash() {
             ],
             "Menu should list the slash commands in canonical order"
         );
+
+        let exposed: bool = page
+            .evaluate::<(), bool>(
+                r#"() => {
+                    const menu = document.getElementById('slash-menu');
+                    const input = document.querySelector('#command-form input[name="command"]');
+                    const options = Array.from(menu.querySelectorAll('.slash-suggestion'));
+                    return menu.getAttribute('role') === 'listbox'
+                        && options.every((o) => o.getAttribute('role') === 'option')
+                        && input.getAttribute('aria-expanded') === 'true'
+                        && input.getAttribute('aria-controls') === 'slash-menu'
+                        && input.getAttribute('aria-activedescendant') === options[0].id
+                        && options[0].getAttribute('aria-selected') === 'true';
+                }"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            exposed,
+            "the open menu must expose a listbox whose first option is active"
+        );
     })
     .await;
 }
@@ -107,6 +129,22 @@ async fn test_slash_menu_arrow_keys_move_active() {
             .await
             .unwrap();
         assert!(second_active, "ArrowDown should move active to the second suggestion");
+
+        let moved: bool = page
+            .evaluate::<(), bool>(
+                r#"() => {
+                    const menu = document.getElementById('slash-menu');
+                    const input = document.querySelector('#command-form input[name="command"]');
+                    const options = Array.from(menu.querySelectorAll('.slash-suggestion'));
+                    return input.getAttribute('aria-activedescendant') === options[1].id
+                        && options[1].getAttribute('aria-selected') === 'true'
+                        && options[0].getAttribute('aria-selected') === 'false';
+                }"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(moved, "ArrowDown must move the reported active option");
 
         input.press("ArrowUp", None).await.unwrap();
         let first_active_again: bool = page

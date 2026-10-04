@@ -115,3 +115,23 @@ Then the preview opens with focus in the correction textarea
 When the client cancels the preview
 Then the preview closes and focus returns to the command input
 ```
+
+#### Scenario 16.16: The tab bar exposes a tablist and its panels
+
+```gherkin
+Given the dashboard is loaded
+Then the tab bar exposes a tablist
+And each tab exposes a tab role and names the panel it controls
+And the Game tab reports itself selected
+When the client activates the Settings tab
+Then the Settings tab reports itself selected and the Game tab reports itself unselected
+And the Settings panel is the visible one
+```
+
+#### Scenario 16.17: The page exposes a main landmark and a labelled command input
+
+```gherkin
+Given the dashboard is loaded
+Then a skip link targets the main landmark
+And a label names the command input "Command"
+```

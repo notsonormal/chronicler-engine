@@ -1,10 +1,10 @@
-//! Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Nine checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
+//! Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Ten checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
 
 use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};
 
 use futures_util::future::FutureExt;
-use playwright_rs::{Page, Viewport};
+use playwright_rs::{EmulateMediaOptions, ForcedColors, Page, Viewport};
 
 use super::*;
 
@@ -123,6 +123,13 @@ async fn test_invariants() {
             &stub,
             "root_design_tokens",
             check_root_design_tokens,
+        )
+        .await,
+        run_subtest(
+            &browser,
+            &stub,
+            "forced_colors_focus_ring",
+            check_forced_colors_focus_ring,
         )
         .await,
     ];
@@ -440,5 +447,50 @@ async fn check_root_design_tokens(page: Page) {
     assert!(
         covered >= 5,
         "CSS :root should define variables in at least 5 of 6 core areas, only {covered}/6 found"
+    );
+}
+
+/// The forced-colors rule in `assets/styles.css` restores the focus ring the
+/// field `outline: none` reset removes. Only a real browser under emulated
+/// forced colors can observe the computed outline.
+async fn check_forced_colors_focus_ring(page: Page) {
+    page.emulate_media(Some(
+        EmulateMediaOptions::builder()
+            .forced_colors(ForcedColors::Active)
+            .build(),
+    ))
+    .await
+    .expect("Failed to emulate forced colors");
+
+    // Reach the input with real key input: `:focus-visible` matches a keyboard
+    // focus, not a programmatic one.
+    let mut reached = false;
+    for _ in 0..20 {
+        page.keyboard().press("Tab", None).await.unwrap();
+        let active: String = page
+            .evaluate::<(), String>("() => document.activeElement.id", None)
+            .await
+            .unwrap_or_default();
+        if active == "command-input" {
+            reached = true;
+            break;
+        }
+    }
+    assert!(reached, "Tab must reach #command-input");
+
+    let ring: bool = page
+        .evaluate::<(), bool>(
+            r#"() => {
+                    const input = document.getElementById('command-input');
+                    const s = window.getComputedStyle(input);
+                    return s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0;
+                }"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(
+        ring,
+        "forced colors must restore a visible focus ring on the command input"
     );
 }

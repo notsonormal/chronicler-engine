@@ -551,3 +551,109 @@ async fn test_preview_focus_moves_to_correction_and_back() {
     })
     .await;
 }
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.16
+#[tokio::test]
+async fn test_tab_bar_exposes_a_tablist_and_panels() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        let list_role: String = page
+            .evaluate::<(), String>(
+                "() => document.querySelector('.tab-bar').getAttribute('role') || ''",
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(list_role, "tablist", "the tab bar must expose a tablist");
+
+        let tabs_ok: bool = page
+            .evaluate::<(), bool>(
+                r#"() => Array.from(document.querySelectorAll('.tab-bar .tab')).every((t) => {
+                    const panel = document.getElementById(t.getAttribute('aria-controls'));
+                    return t.getAttribute('role') === 'tab'
+                        && panel
+                        && panel.getAttribute('role') === 'tabpanel'
+                        && panel.getAttribute('aria-labelledby') === t.id;
+                })"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(tabs_ok, "every tab must control a labelled tabpanel");
+
+        let game_selected: bool = page
+            .evaluate::<(), bool>(
+                r#"() => document.querySelector('.tab[data-tab="game"]').getAttribute('aria-selected') === 'true'"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(game_selected, "the Game tab must start selected");
+
+        page.locator(r#"[data-tab="settings"]"#)
+            .await
+            .click(None)
+            .await
+            .unwrap();
+
+        let after: bool = page
+            .evaluate::<(), bool>(
+                r#"() => {
+                    const settings = document.querySelector('.tab[data-tab="settings"]');
+                    const game = document.querySelector('.tab[data-tab="game"]');
+                    return settings.getAttribute('aria-selected') === 'true'
+                        && game.getAttribute('aria-selected') === 'false'
+                        && document.getElementById('settings-tab').classList.contains('active');
+                }"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            after,
+            "activating Settings must move the selection and show its panel"
+        );
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.17
+#[tokio::test]
+async fn test_dashboard_exposes_landmarks_and_a_labelled_command_input() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        let landmark_ok: bool = page
+            .evaluate::<(), bool>(
+                r#"() => {
+                    const link = document.querySelector('.skip-link');
+                    const main = document.getElementById('main-content');
+                    return !!link
+                        && !!main
+                        && main.tagName === 'MAIN'
+                        && link.getAttribute('href') === '#main-content';
+                }"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(landmark_ok, "a skip link must target the main landmark");
+
+        let label_ok: bool = page
+            .evaluate::<(), bool>(
+                r#"() => {
+                    const input = document.getElementById('command-input');
+                    if (!input) return false;
+                    const label = document.querySelector('label[for="command-input"]');
+                    return !!label
+                        && label.textContent.trim().length > 0
+                        && label.textContent.trim() !== input.placeholder;
+                }"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            label_ok,
+            "the command input must have an accessible name that is not its placeholder"
+        );
+    })
+    .await;
+}

@@ -101,3 +101,54 @@ async fn test_preset_duplicate_edit_save_click_chain() {
     )
     .await;
 }
+
+// [docs/specs/browser_prompt_presets.md] SCENARIO: 28.2
+#[tokio::test]
+async fn test_preset_edit_moves_focus_into_the_form() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, port| async move {
+            let seed_name = "Focus Guard Preset";
+            seed_system_preset(
+                port,
+                seed_name,
+                "Seed instructions for the preset focus guard.",
+            )
+            .await;
+
+            page.reload(None)
+                .await
+                .expect("reload after seeding a preset");
+            open_prompt_presets_tab(&page).await;
+
+            let card = preset_card_selector(seed_name);
+            wait_until_visible(&page, &card, Duration::from_millis(5000)).await;
+
+            open_preset_editor(&page, &card).await;
+
+            let kept = wait_for_condition_async(
+                Duration::from_millis(2000),
+                Duration::from_millis(20),
+                || async {
+                    page.evaluate::<(), bool>(
+                        r#"() => {
+                            const active = document.activeElement;
+                            return !!active && active !== document.body && active.name === 'name';
+                        }"#,
+                        None,
+                    )
+                    .await
+                    .unwrap_or(false)
+                },
+            )
+            .await;
+            assert!(
+                kept,
+                "opening the preset editor must move focus into the form's Name field"
+            );
+        },
+    )
+    .await;
+}

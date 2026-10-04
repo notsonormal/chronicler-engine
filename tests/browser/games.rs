@@ -48,3 +48,43 @@ async fn test_games_posture_change_reaches_server() {
     )
     .await;
 }
+
+// [docs/specs/browser_games.md] SCENARIO: 27.2
+#[tokio::test]
+async fn test_games_posture_change_keeps_focus_on_the_select() {
+    with_test_page(
+        CONFIG_PATH,
+        TEST_WORLD,
+        TEST_PERSONA,
+        |page, _port| async move {
+            open_games_tab(&page).await;
+
+            let selector = r#"#game-posture-controls select[name="narrative_tense"]"#;
+            page.locator(selector).await.focus().await.unwrap();
+
+            select_option_and_settle(&page, selector, "present", "#game-posture-controls").await;
+
+            let kept = wait_for_condition_async(
+                std::time::Duration::from_secs(2),
+                std::time::Duration::from_millis(25),
+                || async {
+                    page.evaluate::<String, bool>(
+                        r#"(selector) => {
+                            const el = document.querySelector(selector);
+                            return !!el && document.activeElement === el;
+                        }"#,
+                        Some(&selector.to_string()),
+                    )
+                    .await
+                    .unwrap_or(false)
+                },
+            )
+            .await;
+            assert!(
+                kept,
+                "the posture select must keep focus across the outerHTML swap"
+            );
+        },
+    )
+    .await;
+}

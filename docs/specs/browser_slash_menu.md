@@ -12,6 +12,9 @@ When the client types "/" into the command input
 Then a #slash-menu element appears in the DOM
 And #slash-menu contains three .slash-suggestion elements
 And the suggestions are /impersonate, /guide, and /options
+And #slash-menu exposes a listbox with one option per suggestion
+And the command input reports the menu expanded and points at the first option
+And the first option reports itself selected
 ```
 
 #### Scenario 31.2: Typing a prefix filters the suggestions
@@ -31,8 +34,11 @@ And the first .slash-suggestion has the .active class
 When the client presses ArrowDown
 Then the second .slash-suggestion gains the .active class
 And the first .slash-suggestion loses the .active class
+And the command input points at the second option
+And the second option reports itself selected
 When the client presses ArrowUp
 Then the first .slash-suggestion regains the .active class
+And the command input points at the first option
 ```
 
 #### Scenario 31.4: Enter populates the input with the highlighted command

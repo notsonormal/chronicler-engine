@@ -119,18 +119,18 @@ pub struct GamesPanelTemplate {
 <div class="posture-override" id="game-posture-controls">
     <div class="posture-row">
         <label>Mode
-            <select name="narrator_mode" hx-post="/games/{{ game_id }}/mode" hx-trigger="change" hx-target="#game-posture-controls" hx-swap="outerHTML">
+            <select name="narrator_mode" id="game-narrator-mode" hx-post="/games/{{ game_id }}/mode" hx-trigger="change" hx-target="#game-posture-controls" hx-swap="outerHTML">
                 {{ mode_options }}
             </select>
         </label>
         <label>Perspective
-            <select name="narrative_perspective" hx-post="/games/{{ game_id }}/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+            <select name="narrative_perspective" id="game-narrative-perspective" hx-post="/games/{{ game_id }}/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
                 <option value="second"{% if perspective == "second" %} selected{% endif %}>Second person</option>
                 <option value="third"{% if perspective == "third" %} selected{% endif %}>Third person</option>
             </select>
         </label>
         <label>Tense
-            <select name="narrative_tense" hx-post="/games/{{ game_id }}/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+            <select name="narrative_tense" id="game-narrative-tense" hx-post="/games/{{ game_id }}/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
                 <option value="past"{% if tense == "past" %} selected{% endif %}>Past</option>
                 <option value="present"{% if tense == "present" %} selected{% endif %}>Present</option>
             </select>
@@ -142,17 +142,17 @@ pub struct GamesPanelTemplate {
         <div class="error-message">Presets unavailable: {{ err }}</div>
         {% when None %}
         <label>System
-            <select name="system_preset_id" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+            <select name="system_preset_id" id="game-system-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
                 {% for opt in system_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
             </select>
         </label>
         <label>Quantifier
-            <select name="quantifier_preset_id" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+            <select name="quantifier_preset_id" id="game-quantifier-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
                 {% for opt in quantifier_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
             </select>
         </label>
         <label>Impersonate
-            <select name="impersonate_preset_id" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+            <select name="impersonate_preset_id" id="game-impersonate-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
                 {% for opt in impersonate_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
             </select>
         </label>

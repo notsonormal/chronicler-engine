@@ -8,6 +8,7 @@ pub use super::*;
 
 mod dashboard;
 mod invariants;
+mod llm_messages;
 mod options;
 mod slash_menu;
 mod story_log;

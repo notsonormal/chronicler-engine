@@ -361,6 +361,69 @@ async fn test_escape_cancels_edit() {
             restored, original_text,
             "Escape should restore the original text"
         );
+
+        // The keyboard must stay on the entry: focus returns to the restored
+        // edit button, and its stable id keeps it there when the resumed 2s
+        // poll replaces the entry.
+        assert!(
+            wait_for_condition_async(
+                Duration::from_millis(500),
+                Duration::from_millis(20),
+                || async {
+                    page.evaluate::<(), bool>(
+                        r#"() => {
+                            const btn = document.querySelector('.log-entry.narration .edit-btn');
+                            return !!btn && document.activeElement === btn;
+                        }"#,
+                        None,
+                    )
+                    .await
+                    .unwrap_or(false)
+                },
+            )
+            .await,
+            "Escape must put focus on the entry's edit button"
+        );
+
+        page.evaluate::<(), ()>(
+            r#"() => { window.__entryBefore = document.querySelector('.log-entry.narration'); }"#,
+            None,
+        )
+        .await
+        .unwrap();
+        let replaced = wait_for_condition_async(
+            Duration::from_millis(4000),
+            Duration::from_millis(20),
+            || async {
+                page.evaluate::<(), bool>(
+                    r#"() => document.querySelector('.log-entry.narration') !== window.__entryBefore"#,
+                    None,
+                )
+                .await
+                .unwrap_or(false)
+            },
+        )
+        .await;
+        assert!(replaced, "the resumed poll never replaced the log entry");
+        assert!(
+            wait_for_condition_async(
+                Duration::from_millis(1000),
+                Duration::from_millis(20),
+                || async {
+                    page.evaluate::<(), bool>(
+                        r#"() => {
+                            const btn = document.querySelector('.log-entry.narration .edit-btn');
+                            return !!btn && document.activeElement === btn;
+                        }"#,
+                        None,
+                    )
+                    .await
+                    .unwrap_or(false)
+                },
+            )
+            .await,
+            "the poll replacement must keep focus on the entry's edit button"
+        );
     })
     .await;
 }

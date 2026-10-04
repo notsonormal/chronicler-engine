@@ -1,10 +1,10 @@
 //! Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
-//!
-//! The shell and static assets are real; every polled fragment is canned under
-//! `tests/test_utils/stub_fixtures/`, except the options dock, which renders
-//! through the engine's own `OptionsDockTemplate`. The dynamic endpoints answer
-//! scripted outcomes a test names up front; `/history/:id`, `/swipe/new` and
-//! `/retrigger` always answer 500.
+
+// The shell and static assets are real; every polled fragment is canned under
+// `tests/test_utils/stub_fixtures/`, except the options dock, which renders
+// through the engine's own `OptionsDockTemplate`. The dynamic endpoints answer
+// scripted outcomes a test names up front; `/history/:id`, `/swipe/new` and
+// `/retrigger` always answer 500.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;

@@ -9,9 +9,19 @@ Endpoint: browser DOM.
 ```gherkin
 Given the dashboard is loaded with an active game in Novel mode (Third person, Past)
 When the client opens the Games tab
-Then #game-posture-controls is rendered with narrator_mode, narrative_perspective, and narrative_tense selects
-And the system_preset_id, quantifier_preset_id, and impersonate_preset_id selects are rendered
-When the client changes the narrative_tense select to "present"
+Then #game-posture-controls is rendered with the Narrator Mode, Perspective, and Tense selects
+And the System, Quantifier, and Impersonate preset selects are rendered
+When the client changes the Tense select to "present"
 Then the browser POSTs /games/{id}/posture with the posture group
 And after a reload the re-opened Games tab shows "present" selected
+```
+
+#### Scenario 27.2: Changing a posture select keeps focus on that select
+
+```gherkin
+Given the client opened the Games tab with #game-posture-controls rendered
+And the Tense select has focus
+When the client changes the Tense select to "present"
+Then the posture fragment is replaced
+And the Tense select has focus again
 ```

@@ -71,6 +71,8 @@ When the client presses Escape in #edit-textarea
 Then #edit-textarea is removed from the DOM
 And .log-entry .text inner text is restored to the original
 And the entry's pre-edit action controls are available again
+And the entry's edit button has focus
+And the edit button still has focus after the resumed polling cycle replaces the entry
 ```
 
 #### Scenario 30.8: Ctrl+Enter saves the edit

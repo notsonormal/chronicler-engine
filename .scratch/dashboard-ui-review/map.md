@@ -85,6 +85,10 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 40 [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md): resolved — worth a tier-2 scenario; 30.10 drives the shipped `submitRetrigger` against the fixture's real control and the stub's counted `/retrigger` → 500 route, proving the URL and the shared recovery. (The earlier planted-control/fetch-intercept version was replaced during the review follow-up.)
 
+44 [Make LLM Messages rows keyboard-operable](issues/44-keyboard-operable-llm-messages.md): resolved — each row header is a real `<button aria-expanded>` with `aria-controls` the body, so Enter/Space use native activation and the state is exposed to AT; the restore hook moved to `hx-on::after-settle` after a swap race left the class on a replaced node, and a stable header id keeps focus through the 4s poll; tier-2 35.1–35.3 in a new `browser_llm_messages.md`.
+
+46 [Expose the dashboard to assistive technology](issues/46-expose-dashboard-to-assistive-technology.md): resolved — skip link plus `<main>` landmark; tablist/tab/tabpanel with `aria-selected`/`aria-controls`; the slash menu is a listbox/option pattern with the input a combobox tracking `aria-activedescendant` (the `.active` highlight is mirrored, not replaced); a real label names the command input; a forced-colors `:focus-visible` ring restores what `outline: none` removed; tier-2 16.16/16.17 and extended 31.1/31.3.
+
 Candidates raised while closing the AFK tickets, now tickets: [Stop editing a second entry from freezing the story-log poll](issues/38-edit-another-entry-freezes-poll.md) (grilling), [Enforce preset name uniqueness in storage](issues/39-storage-level-preset-name-uniqueness.md), [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md).
 
 ## Not yet specified
