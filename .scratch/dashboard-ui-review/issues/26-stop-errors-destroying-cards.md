@@ -12,7 +12,7 @@ A failed connection edit replaces the connection's own card with a bare error di
 
 - Finding 05.F2 (P1). Screenshots 56 (connection card replaced by `Error: Configuration error: Unknown LLM backend 'bogus_provider'`) and 52 (bare `Preset is a mode default; change the default before deleting` where the card was); ticket 05 answer.
 - The refusal logic itself is fine and should stay: default presets and mode-default references must not be deleted.
-- Where the error/refusal should be shown is [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md); this ticket is the implementation for entity cards.
+- Where the error/refusal should be shown was [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md); this ticket is the implementation for entity cards. Decided: a failure never swaps into the region it describes. The card stays, and the message renders in an inline slot inside it — a short user sentence, with the raw server text behind an anchored popover. [Keep a failed poll from replacing its region](52-failed-request-keeps-its-region.md) owns that shared fragment — consume it here.
 
 ## Done when
 

@@ -89,11 +89,12 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 46 [Expose the dashboard to assistive technology](issues/46-expose-dashboard-to-assistive-technology.md): resolved — skip link plus `<main>` landmark; tablist/tab/tabpanel with `aria-selected`/`aria-controls`; the slash menu is a listbox/option pattern with the input a combobox tracking `aria-activedescendant` (the `.active` highlight is mirrored, not replaced); a real label names the command input; a forced-colors `:focus-visible` ring restores what `outline: none` removed; tier-2 16.16/16.17 and extended 31.1/31.3.
 
+08 [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md): resolved — quiet by default. The hardcoded "Connected" is deleted; a banner under the header appears only while a role's newest LLM attempt has failed or the server is unreachable (the latter client-owned), with per-role detail behind a popover and on-demand health in Settings. Four always-on per-role chips were mocked, measured at ~310px, and rejected. The toast retires in sequence after the banner, the inline slots and the clamped status display exist; a failure never swaps into the region it describes; error text is a short message plus an anchored popover. Graduated [51](issues/51-add-failure-banner.md), [52](issues/52-failed-request-keeps-its-region.md), [53](issues/53-clamp-status-error-with-popover.md), [54](issues/54-retire-toast-and-route-callers.md).
+
 Candidates raised while closing the AFK tickets, now tickets: [Stop editing a second entry from freezing the story-log poll](issues/38-edit-another-entry-freezes-poll.md) (grilling), [Enforce preset name uniqueness in storage](issues/39-storage-level-preset-name-uniqueness.md), [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md).
 
 ## Not yet specified
 
-- **Theme 1 implementation.** The work for header health, status-display errors, inline action errors, the toast's future, and the silent failures (finding 1.7). It takes shape when [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md) resolves. A prototype may come first.
 - **Other snapshot-restore paths.** [Reset the generation status and the options dock when a swipe switch restores a snapshot](issues/43-reset-status-and-dock-on-swipe-switch.md) fixes the swipe case, where the snapshot was written mid-generation. Retrigger and history revert restore snapshots by different paths and may show the same stuck status. Unverified; [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md) drove the failure path only and did not surface it.
 - **Implementation of the other decision tickets:**
   - icon buttons (13)
@@ -104,10 +105,9 @@ Candidates raised while closing the AFK tickets, now tickets: [Stop editing a se
   - layout convention (19)
   - game names (21)
 - **Browser suite cost.** Each stub-tier test launches its own Chromium, and Theme 1/Theme 2 fixes will add several. Check the cost at the final re-review. Decide then whether it needs action.
-- **Quantifier fallback.** Finding 1.1 is partly backend: the engine uses fallback NPC IDs silently. Showing the degraded state in the header is in scope for [Decide how the dashboard shows each kind of failure](issues/08-decide-failure-display.md). Whether the fallback itself should change may surface during ticket 08.
 - **Spec and test migration after the tier-1 decision.** 65 of 146 scenarios name internal state, and about 40 tier-1 test lines read raw `GameState` fields ([test audit](assets/test-audit/)). How much of this moves, and when, depends on [Decide what a tier-1 test may observe](issues/31-decide-tier-1-observations.md). It may graduate into one ticket per spec file, into a migrate-on-touch rule, or into nothing.
 - **A validator check for spec prose.** `scripts/validate_feature_spec.py` never reads Givens or Thens. One cheap check might flag dotted identifiers in backticks, such as `narrative.last_trigger`. Its false-hit rate is unknown. It takes shape with [Rewrite the test strategy around one checkable tier-1 rule](issues/32-rewrite-test-strategy.md).
 
 ## Out of scope
 
-<!-- none yet -->
+- **Changing the Quantifier's fallback behaviour.** The engine falling back to fallback NPC IDs is now reported by the failure banner ([51](issues/51-add-failure-banner.md)); whether the fallback itself should behave differently is a backend design question and this map covers the dashboard frontend.

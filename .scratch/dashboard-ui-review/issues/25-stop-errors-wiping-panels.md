@@ -16,6 +16,7 @@ Failed adds replace the entire panel with a bare error fragment: an invalid prov
 - The choice of where the error should appear is [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md). This ticket is the implementation side for adds; do not invent a parallel error surface.
 
 - Added from [Collapse the Prompt Presets add forms](17-collapse-preset-add-forms.md): a failed preset **edit** (`update_preset_handler`) replaces the card with a bare error span and loses in-progress edits. Same class of failure as the add case.
+- Decided in [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md): a failure never swaps into the region it describes, and the message is a short user sentence with the raw server text behind an anchored popover. [Keep a failed poll from replacing its region](52-failed-request-keeps-its-region.md) owns that shared fragment — consume it here rather than building a second shape.
 
 ## Done when
 

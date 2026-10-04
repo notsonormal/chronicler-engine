@@ -12,7 +12,7 @@ No element in the dashboard carries `role` or `aria-live` (the single `aria-hidd
 
 - Finding K4 (P2) of [Review keyboard use and screen-reader output](07-review-keyboard-screen-reader.md). Evidence `tmp/ui-review/A7-toast-no-live-region.png`, `tmp/a11y-*.txt`, attribute scan showing `aria-live` null everywhere (local only).
 - `#story-log` is replaced wholesale every 2s, so a naive `aria-live` on it re-announces the whole log on every poll. Scope the announcement to the changed entry, or wait for [Decide how the story-log poll keeps DOM state](10-decide-story-log-poll-swap.md).
-- Blocked by [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md) so the health and status model settles before regions are wired to it.
+- Blocked by [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md) so the health and status model settles before regions are wired to it. Settled: the failure banner ([51](51-add-failure-banner.md)) is `role="status"` while degraded and `role="alert"` while unreachable; the status display's clamped error and the anchored popovers are the other regions to wire. The toast this ticket lists is retired by [54](54-retire-toast-and-route-callers.md) — drop it from the list.
 - Structural semantics (tablist, listbox, landmarks) are [Expose the dashboard to assistive technology](46-expose-dashboard-to-assistive-technology.md)'s; this ticket is only about what gets announced.
 
 ## Done when

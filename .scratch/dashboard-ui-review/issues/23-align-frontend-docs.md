@@ -21,6 +21,7 @@ Where do `docs/diataxis/reference/frontend/ui_design.md`, `dashboard.md`, `docs/
   - `ui_design.md:341,349,352` still say the preview replaces the action area and name the old buttons and the `:has(.text-check-preview)` selector; the labels are now "Send Original" / "Send with edits" / Cancel and the selector is `#action-preview:not(:empty)`.
   - `game_flow.md:142` says a manual entry check returns the same preview shape; `/check-text` now returns the read-only `TextCheckResultTemplate`.
 - **One choice is the user's:** the docs put the reset button in the header, but the code has it on the Games tab, with a confirm prompt. Ask whether the docs follow the code, or the button moves. This is why the ticket is HITL.
+- Added from [Decide how the dashboard shows each kind of failure](08-decide-failure-display.md): the state names **Healthy**, **Degraded** and **Unreachable** are deliberately not in `CONTEXT.md`, so `dashboard.md` is where they get defined for readers. Also remove the header's `Connected` and the `#error-notification` toast from these docs — the error path is now the failure banner ([51](51-add-failure-banner.md)), the inline slot and the clamped status display.
 - Run `python build.py validate-docs` after the edits.
 
 ## Done when
