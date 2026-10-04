@@ -20,7 +20,11 @@ fn test_header_template_renders_game_name() {
     assert!(rendered.contains("Chronicler Engine"));
     assert!(rendered.contains(r#"class="header""#));
     assert!(rendered.contains(r#"class="game-title""#));
-    assert!(rendered.contains("connection-status"));
+    assert!(rendered.contains("Test Game"));
+    assert!(
+        !rendered.contains("connection-status"),
+        "the header must carry no health signal of its own"
+    );
 }
 
 #[test]
@@ -34,13 +38,13 @@ fn test_header_template_escapes_html() {
 }
 
 #[test]
-fn test_header_template_connection_status() {
+fn test_header_template_has_no_hardcoded_connection_status() {
     let template = HeaderTemplate {
         game_name: "Any Game".to_string(),
     };
     let rendered = template.render().unwrap();
-    assert!(rendered.contains(r#"id="connection-status""#));
-    assert!(rendered.contains("Connected"));
+    assert!(!rendered.contains(r#"id="connection-status""#));
+    assert!(!rendered.contains("Connected"));
 }
 
 #[test]
@@ -477,6 +481,7 @@ fn test_action_area_ready() {
     let rendered = template.render().unwrap();
     assert!(rendered.contains("id=\"action-area\""));
     assert!(rendered.contains("Ready"));
+    assert!(rendered.contains(r#"<span class="status ready">Ready</span>"#));
 }
 
 #[test]
@@ -488,6 +493,7 @@ fn test_action_area_thinking() {
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Generating narration..."));
     assert!(rendered.contains("disabled"));
+    assert!(rendered.contains(r#"<span class="status thinking">Generating narration...</span>"#));
 }
 
 #[test]

@@ -5,11 +5,11 @@ use axum::body::Body;
 use axum::{Form, extract::State, response::Html, response::IntoResponse, response::Response};
 
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::domain::model::utils::settings_defaults;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{
-    preset_card_html, preset_edit_form_html, preset_view_form_html,
+    options_preset_card_html, preset_card_html, preset_edit_form_html, preset_view_form_html,
 };
 use crate::adapters::driving::http::utils::error::{error_fragment_response, error_response};
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, render_template};
@@ -44,6 +44,37 @@ fn mode_active_ids(
     )
 }
 
+fn presets_template(app_state: &AppState, settings: &AppSettings) -> PromptPresetsTemplate {
+    let system_presets = app_state
+        .prompt_preset_service
+        .list_presets(PresetType::System)
+        .unwrap_or_default();
+    let quantifier_presets = app_state
+        .prompt_preset_service
+        .list_presets(PresetType::Quantifier)
+        .unwrap_or_default();
+    let impersonate_presets = app_state
+        .prompt_preset_service
+        .list_presets(PresetType::Impersonate)
+        .unwrap_or_default();
+    let options_presets = app_state
+        .prompt_preset_service
+        .list_presets(PresetType::Options)
+        .unwrap_or_default();
+    let (active_system, active_quantifier, active_impersonate) = mode_active_ids(settings);
+
+    PromptPresetsTemplate {
+        system_presets,
+        quantifier_presets,
+        impersonate_presets,
+        options_presets,
+        active_system,
+        active_quantifier,
+        active_impersonate,
+        active_options: settings.active_options_prompt_preset_id.clone(),
+    }
+}
+
 macro_rules! require_preset {
     ($storage:expr, $id:expr) => {
         match $storage.get_preset($id) {
@@ -70,6 +101,13 @@ pub async fn preset_card_handler(
     let if_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::InteractiveFiction);
+    if preset.preset_type == PresetType::Options {
+        return Html(options_preset_card_html(
+            &preset,
+            &settings.active_options_prompt_preset_id,
+        ))
+        .into_response();
+    }
     let active = ModeActiveIds {
         novel: preset.preset_type.bundle_slot(&novel_bundle).to_string(),
         interactive_fiction: preset.preset_type.bundle_slot(&if_bundle).to_string(),
@@ -87,34 +125,12 @@ pub async fn view_preset_form_handler(
 }
 
 pub async fn panel_handler(State(app_state): State<AppState>) -> Response<Body> {
-    let system_presets = app_state
-        .prompt_preset_service
-        .list_presets(PresetType::System)
-        .unwrap_or_default();
-    let quantifier_presets = app_state
-        .prompt_preset_service
-        .list_presets(PresetType::Quantifier)
-        .unwrap_or_default();
-    let impersonate_presets = app_state
-        .prompt_preset_service
-        .list_presets(PresetType::Impersonate)
-        .unwrap_or_default();
-
     let settings = match app_state.settings() {
         Ok(s) => s,
         Err(e) => return error_fragment_response(format!("Load failed: {e}")),
     };
-    let (active_system, active_quantifier, active_impersonate) = mode_active_ids(&settings);
 
-    render_template(PromptPresetsTemplate {
-        system_presets,
-        quantifier_presets,
-        impersonate_presets,
-        active_system,
-        active_quantifier,
-        active_impersonate,
-    })
-    .into_response()
+    render_template(presets_template(&app_state, &settings)).into_response()
 }
 
 /// Checkbox fields encode the mode flags: a checked box posts
@@ -249,6 +265,13 @@ pub async fn update_preset_handler(
     let if_bundle = settings
         .mode_preset_registry
         .bundle_for(NarratorMode::InteractiveFiction);
+    if preset.preset_type == PresetType::Options {
+        return Html(options_preset_card_html(
+            &preset,
+            &settings.active_options_prompt_preset_id,
+        ))
+        .into_response();
+    }
     let active = ModeActiveIds {
         novel: preset.preset_type.bundle_slot(&novel_bundle).to_string(),
         interactive_fiction: preset.preset_type.bundle_slot(&if_bundle).to_string(),
@@ -276,6 +299,11 @@ pub async fn delete_preset_handler(
         if settings.mode_preset_registry.references(&id) {
             return error_fragment_response(
                 "Preset is a mode default; change the default before deleting",
+            );
+        }
+        if settings.active_options_prompt_preset_id == id {
+            return error_fragment_response(
+                "Preset is the default Options preset; change the default before deleting",
             );
         }
     }
@@ -322,6 +350,18 @@ pub async fn activate_preset_handler(
 ) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
+    if preset.preset_type == PresetType::Options {
+        let outcome = app_state.settings_service.update_settings(|settings| {
+            settings.active_options_prompt_preset_id = id.clone();
+            Ok(settings.clone())
+        });
+        let settings = match outcome {
+            Ok(s) => s,
+            Err(e) => return error_fragment_response(format!("Save failed: {e}")),
+        };
+        return render_template(presets_template(&app_state, &settings)).into_response();
+    }
+
     // Absent or invalid mode falls back to Novel (the single panel button);
     // the flags check still refuses a disallowed preset into the Novel slot.
     let mode = NarratorMode::parse_or_default(query.mode.as_deref().unwrap_or("novel"));
@@ -344,27 +384,5 @@ pub async fn activate_preset_handler(
         Err(e) => return error_fragment_response(format!("Save failed: {e}")),
     };
 
-    let system_presets = app_state
-        .prompt_preset_service
-        .list_presets(PresetType::System)
-        .unwrap_or_default();
-    let quantifier_presets = app_state
-        .prompt_preset_service
-        .list_presets(PresetType::Quantifier)
-        .unwrap_or_default();
-    let impersonate_presets = app_state
-        .prompt_preset_service
-        .list_presets(PresetType::Impersonate)
-        .unwrap_or_default();
-
-    let (active_system, active_quantifier, active_impersonate) = mode_active_ids(&settings);
-    render_template(PromptPresetsTemplate {
-        system_presets,
-        quantifier_presets,
-        impersonate_presets,
-        active_system,
-        active_quantifier,
-        active_impersonate,
-    })
-    .into_response()
+    render_template(presets_template(&app_state, &settings)).into_response()
 }

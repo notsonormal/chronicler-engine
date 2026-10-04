@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
 use crate::application::message_service::MessageService;
-use crate::domain::model::game::Game;
+use crate::domain::model::game::{Game, PresetSelection};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::generate_game_name;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -178,19 +178,20 @@ impl GameCatalogue {
     pub fn set_preset_selection(
         &self,
         id: u64,
-        system_id: &str,
-        quantifier_id: &str,
-        impersonate_id: &str,
+        selection: PresetSelection,
     ) -> Result<Game, ApplicationError> {
         let mut game = self.require_game(id)?;
         let selections = [
-            (system_id, game.active_system_prompt_preset_id.clone()),
             (
-                quantifier_id,
+                selection.system_id.as_str(),
+                game.active_system_prompt_preset_id.clone(),
+            ),
+            (
+                selection.quantifier_id.as_str(),
                 game.active_quantifier_prompt_preset_id.clone(),
             ),
             (
-                impersonate_id,
+                selection.impersonate_id.as_str(),
                 game.active_impersonate_prompt_preset_id.clone(),
             ),
         ];
@@ -210,9 +211,20 @@ impl GameCatalogue {
                 )));
             }
         }
-        game.active_system_prompt_preset_id = system_id.to_string();
-        game.active_quantifier_prompt_preset_id = quantifier_id.to_string();
-        game.active_impersonate_prompt_preset_id = impersonate_id.to_string();
+        if selection.options_id != game.active_options_prompt_preset_id {
+            self.storage
+                .get_preset(&selection.options_id)?
+                .ok_or_else(|| {
+                    ApplicationError::validation(format!(
+                        "Preset not found: {}",
+                        selection.options_id
+                    ))
+                })?;
+        }
+        game.active_system_prompt_preset_id = selection.system_id;
+        game.active_quantifier_prompt_preset_id = selection.quantifier_id;
+        game.active_impersonate_prompt_preset_id = selection.impersonate_id;
+        game.active_options_prompt_preset_id = selection.options_id;
         self.storage.update_game_config(&game)?;
         Ok(game)
     }

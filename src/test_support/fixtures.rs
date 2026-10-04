@@ -318,6 +318,20 @@ impl TestPromptPreset {
         p.instructions = Some(instructions.to_string());
         p
     }
+
+    pub fn options(id: &str, name: &str) -> PromptPreset {
+        PromptPreset {
+            id: id.to_string(),
+            name: name.to_string(),
+            role: None,
+            instructions: Some(format!("{name}.")),
+            writing_style: None,
+            output_format: None,
+            allowed_modes: settings_defaults::default_allowed_modes(),
+            is_default: false,
+            preset_type: PresetType::Options,
+        }
+    }
 }
 
 pub struct TestWorldManifest;

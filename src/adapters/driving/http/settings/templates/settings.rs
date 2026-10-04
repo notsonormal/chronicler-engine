@@ -69,37 +69,9 @@ use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
         </div>
         <button type="submit" class="btn-primary">Add Connection</button>
     </form>
-    <span id="settings-status"></span>
 
     <h2>Text Check</h2>
-    <div class="connection-card">
-        <div class="card-header">
-            <span class="card-title">Spell &amp; Grammar Check</span>
-        </div>
-        <div class="card-details">
-            Check player input for spelling and grammar issues before sending to the LLM.
-        </div>
-        <form hx-post="/settings/text-check" hx-target="#settings-status" hx-swap="innerHTML">
-            <div class="form-group">
-                <label for="check_mode">Check Mode</label>
-                <select name="check_mode" id="check_mode">
-                    <option value="disabled" {% if text_check_mode == "disabled" %}selected{% endif %}>Disabled</option>
-                    <option value="spell" {% if text_check_mode == "spell" %}selected{% endif %}>Spell Check Only</option>
-                    <option value="grammar" {% if text_check_mode == "grammar" %}selected{% endif %}>Grammar Check Only</option>
-                    <option value="spell_grammar" {% if text_check_mode == "spell_grammar" %}selected{% endif %}>Spell + Grammar</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="enable_auto_check" value="true" {% if enable_auto_check %}checked{% endif %} />
-                    Check before sending to LLM
-                </label>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">Save</button>
-            </div>
-        </form>
-    </div>
+    {{ text_check_card }}
 </div>
 "##,
     ext = "html"
@@ -109,8 +81,7 @@ pub struct SettingsTemplate {
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     pub provider_options: SafeHtml,
-    pub text_check_mode: String,
-    pub enable_auto_check: bool,
+    pub text_check_card: SafeHtml,
 }
 
 impl SettingsTemplate {
@@ -120,6 +91,58 @@ impl SettingsTemplate {
             narration_connection_id: settings.narration_connection_id.clone(),
             quantifier_connection_id: settings.quantifier_connection_id.clone(),
             provider_options: select_options_html(SelectOptionView::providers("openrouter")),
+            text_check_card: SafeHtml::new(
+                TextCheckCardTemplate::from_settings(settings, "")
+                    .render()
+                    .unwrap_or_default(),
+            ),
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(
+    source = r##"
+<div class="connection-card" id="text-check-card">
+    <div class="card-header">
+        <span class="card-title">Spell &amp; Grammar Check</span>
+        <span class="text-check-status">{{ status }}</span>
+    </div>
+    <div class="card-details">
+        Check player input for spelling and grammar issues before sending to the LLM.
+    </div>
+    <form class="text-check-form" hx-post="/settings/text-check" hx-trigger="change" hx-target="#text-check-card" hx-swap="outerHTML">
+        <div class="form-group">
+            <label for="check_mode">Check Mode</label>
+            <select name="check_mode" id="check_mode">
+                <option value="disabled" {% if text_check_mode == "disabled" %}selected{% endif %}>Disabled</option>
+                <option value="spell" {% if text_check_mode == "spell" %}selected{% endif %}>Spell Check Only</option>
+                <option value="grammar" {% if text_check_mode == "grammar" %}selected{% endif %}>Grammar Check Only</option>
+                <option value="spell_grammar" {% if text_check_mode == "spell_grammar" %}selected{% endif %}>Spell + Grammar</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" name="enable_auto_check" value="true" {% if enable_auto_check %}checked{% endif %} {% if text_check_disabled %}disabled{% endif %} />
+                Check before sending to LLM
+            </label>
+        </div>
+    </form>
+</div>
+"##,
+    ext = "html"
+)]
+pub struct TextCheckCardTemplate {
+    pub text_check_mode: String,
+    pub enable_auto_check: bool,
+    pub text_check_disabled: bool,
+    pub status: String,
+}
+
+impl TextCheckCardTemplate {
+    pub(crate) fn from_settings(settings: &AppSettings, status: &str) -> Self {
+        let text_check_disabled = matches!(settings.text_check.mode, TextCheckMode::Disabled);
+        Self {
             text_check_mode: match settings.text_check.mode {
                 TextCheckMode::Disabled => "disabled",
                 TextCheckMode::Spell => "spell",
@@ -127,7 +150,9 @@ impl SettingsTemplate {
                 TextCheckMode::SpellGrammar => "spell_grammar",
             }
             .to_string(),
-            enable_auto_check: settings.text_check.enable_auto_check,
+            enable_auto_check: settings.text_check.effective_enable_auto_check(),
+            text_check_disabled,
+            status: status.to_string(),
         }
     }
 }

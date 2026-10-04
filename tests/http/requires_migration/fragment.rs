@@ -912,10 +912,14 @@ async fn test_switch_swipe_handler_concurrent() {
 }
 
 #[tokio::test]
-async fn test_header_fragment_has_connection_status() {
+async fn test_header_fragment_has_no_hardcoded_connection_status() {
     let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/header").await;
     assert!(
-        body.contains("id=\"connection-status\""),
-        "header fragment should render connection-status indicator: {body}"
+        !body.contains("id=\"connection-status\""),
+        "the header no longer claims a live connection: {body}"
+    );
+    assert!(
+        !body.contains("Connected"),
+        "the hardcoded Connected signal is deleted: {body}"
     );
 }

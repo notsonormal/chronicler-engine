@@ -2,11 +2,16 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
+
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::AppState;
 use crate::application::errors::ApplicationError;
+use crate::application::games::view_query::GameViewQuery;
+use crate::application::message_service::MessageService;
 use crate::application::ports::llm_provider::LlmProvider;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::GenerationStatus;
@@ -134,4 +139,54 @@ fn test_active_quantifier_prompt_does_not_panic() {
     let app = minimal_app();
     let prompt = app.game_view_query.active_quantifier_prompt();
     let _ = prompt.len();
+}
+
+fn llm_message(agent: &str, error: Option<&str>, created_offset_secs: i64) -> LlmMessage {
+    LlmMessage {
+        id: 0,
+        agent_name: agent.to_string(),
+        backend_name: "Mock".to_string(),
+        model_name: "mock".to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: error.map(str::to_string),
+        created_at: Utc::now() + chrono::Duration::seconds(created_offset_secs),
+    }
+}
+
+#[test]
+fn test_role_health_reads_each_roles_true_newest_attempt() {
+    let storage = Arc::new(Storage::new_in_memory());
+    storage
+        .save_llm_message(&llm_message("quantifier", Some("q failure"), -20))
+        .unwrap();
+    storage
+        .save_llm_message(&llm_message("quantifier", None, -5))
+        .unwrap();
+    storage
+        .save_llm_message(&llm_message("narrator", Some("n failure"), -15))
+        .unwrap();
+
+    let query = GameViewQuery::new(
+        Arc::clone(&storage),
+        Arc::new(MessageService::new(Arc::clone(&storage))),
+    );
+    let health = query.role_health().unwrap();
+
+    let narrator = health.iter().find(|r| r.role == "narrator").unwrap();
+    assert_eq!(narrator.last_error.as_deref(), Some("n failure"));
+    let quantifier = health.iter().find(|r| r.role == "quantifier").unwrap();
+    assert!(
+        quantifier.last_error.is_none(),
+        "the newer quantifier success must clear the older failure"
+    );
+    let options = health.iter().find(|r| r.role == "options").unwrap();
+    assert!(options.last_error.is_none());
+    assert!(
+        options.backend_model.is_none(),
+        "a role with no recorded attempt reports no backend/model"
+    );
 }

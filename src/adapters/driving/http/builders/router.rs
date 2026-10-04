@@ -143,7 +143,6 @@ pub fn build_router(app_state: AppState) -> Router {
             "/fragment/settings",
             get(settings::handlers::settings_panel),
         )
-        .route("/settings", post(settings::handlers::save_settings_handler))
         .route(
             "/connections/add",
             post(settings::handlers::add_connection_handler),

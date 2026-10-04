@@ -2,7 +2,10 @@
 
 use std::str::FromStr;
 
-use crate::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense, NarratorMode};
+use crate::domain::model::settings::{
+    AppSettings, NarrativePerspective, NarrativeTense, NarratorMode, TextCheckMode,
+    TextCheckSettings,
+};
 
 #[test]
 fn narrator_mode_default_is_novel() {
@@ -268,4 +271,35 @@ fn quantifier_connection_errors_on_a_dangling_id() {
         .quantifier_connection()
         .expect_err("a dangling id is a configuration fault");
     assert!(err.to_string().contains("also-missing"));
+}
+
+#[test]
+fn text_check_effective_auto_check_drops_disabled_mode() {
+    let settings = TextCheckSettings {
+        mode: TextCheckMode::Disabled,
+        enable_auto_check: true,
+        ignored_words: Vec::new(),
+    };
+    assert!(!settings.effective_enable_auto_check());
+}
+
+#[test]
+fn text_check_effective_auto_check_keeps_an_enabled_mode() {
+    let settings = TextCheckSettings {
+        mode: TextCheckMode::Spell,
+        enable_auto_check: true,
+        ignored_words: Vec::new(),
+    };
+    assert!(settings.effective_enable_auto_check());
+}
+
+#[test]
+fn text_check_set_mode_and_auto_check_normalises_the_pair() {
+    let mut settings = TextCheckSettings::default();
+
+    settings.set_mode_and_auto_check(TextCheckMode::Disabled, true);
+    assert!(!settings.enable_auto_check);
+
+    settings.set_mode_and_auto_check(TextCheckMode::Grammar, true);
+    assert!(settings.enable_auto_check);
 }

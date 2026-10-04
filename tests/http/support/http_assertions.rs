@@ -12,14 +12,12 @@ pub fn assert_option_selected(html: &str, value: &str, msg: &str) {
     );
 }
 
-/// Extract the message from a rendered error status fragment.
-///
-/// The generating-status endpoint renders an error turn as
-/// `<span class="status error">Error: …</span>`; the prefix says the turn
-/// failed but not why, so tests assert on the message between the markers.
 pub fn status_error_message(fragment: &str) -> &str {
-    fragment
-        .strip_prefix(r#"<span class="status error">Error: "#)
-        .and_then(|rest| rest.strip_suffix("</span>"))
-        .unwrap_or_else(|| panic!("expected an Error status span, got: {fragment}"))
+    let marker = r#"<pre class="error-detail-raw">"#;
+    let start = fragment
+        .find(marker)
+        .map(|i| i + marker.len())
+        .unwrap_or_else(|| panic!("expected a status error disclosure, got: {fragment}"));
+    let rest = &fragment[start..];
+    rest.split("</pre>").next().unwrap_or(rest)
 }

@@ -231,6 +231,22 @@ impl Default for TextCheckSettings {
     }
 }
 
+impl TextCheckSettings {
+    /// Disabled mode can never carry auto-check, so the invariant lives here: a
+    /// legacy row storing the inconsistent pair (`mode: Disabled` with
+    /// `enable_auto_check: true`) still reads false, and the write path
+    /// normalises through the same predicate.
+    pub fn effective_enable_auto_check(&self) -> bool {
+        self.enable_auto_check && !matches!(self.mode, TextCheckMode::Disabled)
+    }
+
+    pub fn set_mode_and_auto_check(&mut self, mode: TextCheckMode, requested_auto_check: bool) {
+        self.mode = mode;
+        self.enable_auto_check = requested_auto_check;
+        self.enable_auto_check = self.effective_enable_auto_check();
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LlmProviderConfig {
     pub id: String,

@@ -72,7 +72,7 @@ Then #edit-textarea is removed from the DOM
 And .log-entry .text inner text is restored to the original
 And the entry's pre-edit action controls are available again
 And the entry's edit button has focus
-And the edit button still has focus after the resumed polling cycle replaces the entry
+And the edit button still has focus after the resumed polling cycle
 ```
 
 #### Scenario 30.8: Ctrl+Enter saves the edit
@@ -104,4 +104,73 @@ Then #error-notification is visible
 And the client sent the request to the retrigger endpoint
 And #status-display no longer shows "Thinking..."
 And #submit-btn is enabled
+```
+
+#### Scenario 30.11: A text selection in the log survives the poll
+
+```gherkin
+Given a story log with at least one .log-entry rendered
+And no edit is active
+And part of an entry's text is selected
+When at least two story-log polling cycles elapse
+Then the same text is still selected
+And the entries are the same nodes that held the selection
+```
+
+#### Scenario 30.12: Focus inside a log entry survives the poll
+
+```gherkin
+Given a story log with at least one .log-entry rendered
+And no edit is active
+And a control inside an entry has keyboard focus
+When at least two story-log polling cycles elapse
+Then the same control still has keyboard focus
+And the entry is the same node the control belonged to
+```
+
+#### Scenario 30.13: The story log is keyboard-scrollable
+
+```gherkin
+Given a story log whose content overflows its container
+When the client focuses #story-log
+Then #story-log has an accessible name
+And pressing ArrowDown scrolls the log's content
+```
+
+#### Scenario 30.14: A poll that drops the oldest entry keeps the rest
+
+```gherkin
+Given a story log showing an oldest entry the next poll no longer returns
+When the polling cycle renders the shorter log
+Then the dropped entry is removed from the DOM
+And the entries that remain are the same nodes as before the poll
+```
+
+#### Scenario 30.15: Editing locks the other entries' edit controls
+
+```gherkin
+Given a story log with at least two .log-entry rendered
+When the client clicks .edit-btn on one entry
+Then every other entry's .edit-btn is disabled
+When the client cancels the edit
+Then every other entry's .edit-btn is enabled again
+```
+
+#### Scenario 30.16: A failed save releases the edit lock
+
+```gherkin
+Given edit mode is active on one entry
+And every other entry's .edit-btn is disabled
+When the client saves the edit and the save request fails
+Then every other entry's .edit-btn is enabled again
+```
+
+#### Scenario 30.17: A successful save holds the edit lock until the poll re-renders
+
+```gherkin
+Given edit mode is active on one entry
+And every other entry's .edit-btn is disabled
+When the client saves the edit and the save request succeeds
+Then the other entries' .edit-btn stays disabled while the entry still shows its editor
+And the resumed poll re-renders the log and enables every .edit-btn
 ```

@@ -79,6 +79,12 @@ async fn test_new_world_form_handler_returns_form() {
         body_str.contains("Name:") || body_str.contains("name=\"name\""),
         "Expected name field in form: {body_str}"
     );
+    for name in ["narrator_mode", "narrative_perspective", "narrative_tense"] {
+        assert!(
+            body_str.contains(&format!(r#"<select name="{name}""#)),
+            "the create form must render the {name} select: {body_str}"
+        );
+    }
 }
 
 #[tokio::test]

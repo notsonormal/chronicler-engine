@@ -3,7 +3,7 @@
 
 use askama::Template;
 
-use crate::adapters::driving::http::builders::presets::preset_card_view;
+use crate::adapters::driving::http::builders::presets::{options_card_view, preset_card_view};
 use crate::adapters::driving::http::view_models::SafeHtml;
 use crate::domain::model::prompt_preset::PromptPreset;
 
@@ -120,6 +120,44 @@ use crate::domain::model::prompt_preset::PromptPreset;
             </form>
         </details>
     </div>
+
+    <div class="preset-section">
+        <h2>Options Prompts</h2>
+        <p class="preset-section-desc">These prompts guide the options LLM that generates the pickable next-action suggestions. Activating one sets the settings-level default; a game that chose its own Options preset keeps it.</p>
+        {% for card in self.options_cards() %}
+        {{ card }}
+        {% endfor %}
+
+        <details class="preset-add">
+            <summary class="btn-cyan preset-add-toggle">Add Options Prompt Preset</summary>
+            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+                <input type="hidden" name="preset_type" value="options" />
+                <div class="form-group">
+                    <label for="options-preset-name">Name</label>
+                    <input type="text" id="options-preset-name" name="name" placeholder="My Custom Options Prompt" required />
+                </div>
+                <div class="form-group">
+                    <label for="options-preset-role">Role</label>
+                    <textarea id="options-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="options-preset-instructions">Instructions</label>
+                    <textarea id="options-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="options-preset-style">Writing Style</label>
+                    <textarea id="options-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="options-preset-output">Output Format</label>
+                    <textarea id="options-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Add Preset</button>
+                </div>
+            </form>
+        </details>
+    </div>
 </div>
 "##,
     ext = "html"
@@ -128,9 +166,11 @@ pub struct PromptPresetsTemplate {
     pub system_presets: Vec<PromptPreset>,
     pub quantifier_presets: Vec<PromptPreset>,
     pub impersonate_presets: Vec<PromptPreset>,
+    pub options_presets: Vec<PromptPreset>,
     pub active_system: ModeActiveIds,
     pub active_quantifier: ModeActiveIds,
     pub active_impersonate: ModeActiveIds,
+    pub active_options: String,
 }
 
 impl PromptPresetsTemplate {
@@ -155,10 +195,17 @@ impl PromptPresetsTemplate {
     pub fn impersonate_cards(&self) -> Vec<SafeHtml> {
         Self::cards(&self.impersonate_presets, &self.active_impersonate)
     }
+
+    pub fn options_cards(&self) -> Vec<SafeHtml> {
+        self.options_presets
+            .iter()
+            .map(|preset| options_card_view(preset, &self.active_options))
+            .collect()
+    }
 }
 
 /// The active preset id per narrator mode, for one preset type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ModeActiveIds {
     pub novel: String,
     pub interactive_fiction: String,

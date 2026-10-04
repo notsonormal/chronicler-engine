@@ -10,7 +10,7 @@ Endpoint: browser DOM.
 Given the dashboard is loaded with an active game in Novel mode (Third person, Past)
 When the client opens the Games tab
 Then #game-posture-controls is rendered with the Narrator Mode, Perspective, and Tense selects
-And the System, Quantifier, and Impersonate preset selects are rendered
+And the System, Quantifier, Impersonate, and Options preset selects are rendered
 When the client changes the Tense select to "present"
 Then the browser POSTs /games/{id}/posture with the posture group
 And after a reload the re-opened Games tab shows "present" selected

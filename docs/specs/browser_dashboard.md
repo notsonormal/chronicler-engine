@@ -68,6 +68,7 @@ And after the status poll returns Ready, the same error fragment returned again 
 Given the dashboard is loaded with the command form and status display
 When the client checks a log entry that has issues
 Then the result renders in its own element
+And the result is announced to assistive technology
 And the result names the entry it checked and offers a dismiss control
 And the result offers no way to send a turn
 And #command-form and #status-display are the same nodes as before
@@ -134,4 +135,116 @@ And the Settings panel is the visible one
 Given the dashboard is loaded
 Then a skip link targets the main landmark
 And a label names the command input "Command"
+```
+
+#### Scenario 16.18: A failed poll leaves its region unchanged and marks the banner
+
+```gherkin
+Given the dashboard is loaded and the story log shows its entries
+When a story-log poll fails
+Then the banner is visible and reports the engine as unreachable
+And the story log still shows the same entries
+When a later story-log poll succeeds
+Then the banner disappears
+```
+
+#### Scenario 16.19: A failed action renders its message in the form's inline slot
+
+```gherkin
+Given the dashboard is loaded and the action form is visible
+When the client submits a command and the server fails the action
+Then the form shows an inline error naming the action as failed
+And the inline error's short line carries no raw server text
+And the raw server text is reachable in that error's disclosure
+And the banner is not raised
+```
+
+#### Scenario 16.20: A dead engine renders the same inline error for a pending action
+
+```gherkin
+Given the dashboard is loaded and the engine has stopped
+When the client submits a command
+Then the form shows an inline error saying the engine is unreachable
+And the banner is visible and reports the engine as unreachable
+```
+
+#### Scenario 16.21: A generation error clamps to one line with a popover
+
+```gherkin
+Given the dashboard is loaded and idle
+And the action area and command input are measured
+When the status display reports a generation error
+Then the status display shows one short line and the raw text is not visible
+And the action area's height and the command input's width are unchanged
+And the error's Details control opens its disclosure, which shows the raw text
+When the client presses Escape
+Then the disclosure is closed
+When the status returns to Ready
+Then the error is gone
+```
+
+#### Scenario 16.22: A degraded role raises a status banner with its Details disclosure
+
+```gherkin
+Given a role is degraded
+When the header poll carries the degraded-role banner
+Then the banner is visible and reports itself as status
+And its Details control opens the anchored disclosure
+And that disclosure names each role with its backend and model
+```
+
+#### Scenario 16.23: Status-display changes are announced to assistive technology
+
+```gherkin
+Given the dashboard is loaded and idle
+When the status display shows a generation phase
+Then a polite region announces that phase
+And the phase is not announced again while it is unchanged
+When the generation fails
+Then an assertive region announces the error's short line but not its raw text
+When the generation finishes
+Then the polite region announces Ready
+```
+
+#### Scenario 16.24: A new narration and a changed option set are announced once
+
+```gherkin
+Given the dashboard is loaded showing the story log and a set of options
+When a new narration arrives and the option set changes
+Then the new narration is announced once and not the whole log
+And the new options are announced once
+And neither is announced again while its content is unchanged
+```
+
+#### Scenario 16.25: A failed action on a reachable server never reports the engine unreachable
+
+```gherkin
+Given the dashboard is loaded and a panel control's save cannot be stored
+When the client changes that control and the reachable engine fails the save
+Then the failure reports on its own surface
+And the panel keeps the content it had
+And the banner is not raised
+```
+
+#### Scenario 16.26: The status display's open Details disclosure survives a poll
+
+```gherkin
+Given the status display shows a generation error
+And the error's Details disclosure is open with focus in its Details control
+When the status poll re-renders the display
+Then the disclosure is still open
+And focus is still in its Details control
+When the client presses Escape
+Then the disclosure is closed
+```
+
+#### Scenario 16.27: The banner's open Details disclosure survives a poll
+
+```gherkin
+Given the banner reports a degraded role
+And the disclosure's Details control has been activated, so it is open with focus
+When the header poll refreshes the banner
+Then the disclosure is still open
+And focus is still in its Details control
+And the banner is still up
 ```

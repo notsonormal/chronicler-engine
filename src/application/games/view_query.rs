@@ -5,6 +5,9 @@ use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
+use crate::application::ports::llm_provider::{
+    AGENT_NARRATOR, AGENT_OPTIONS, AGENT_QUANTIFIER, AGENT_TRIGGER,
+};
 use crate::domain::model::llm_message::LlmMessage;
 use crate::application::message_service::MessageService;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -12,6 +15,14 @@ use crate::domain::model::state::message_types::MessageEntry;
 use crate::error::EngineError;
 
 use crate::application::debug::DebugStateView;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoleHealth {
+    pub role: String,
+    pub label: String,
+    pub backend_model: Option<String>,
+    pub last_error: Option<String>,
+}
 
 #[derive(Clone)]
 pub struct GameViewQuery {
@@ -175,6 +186,30 @@ impl GameViewQuery {
         self.storage
             .list_latest_llm_messages(limit)
             .map_err(Into::into)
+    }
+
+    pub fn role_health(&self) -> Result<Vec<RoleHealth>, ApplicationError> {
+        const ROLES: [(&str, &str); 4] = [
+            (AGENT_NARRATOR, "Narrator"),
+            (AGENT_QUANTIFIER, "Quantifier"),
+            (AGENT_OPTIONS, "Options"),
+            (AGENT_TRIGGER, "Trigger"),
+        ];
+
+        let messages = self.storage.latest_llm_message_per_agent()?;
+        let health = ROLES
+            .iter()
+            .map(|(role, label)| {
+                let newest = messages.iter().find(|m| m.agent_name == *role);
+                RoleHealth {
+                    role: (*role).to_string(),
+                    label: (*label).to_string(),
+                    backend_model: newest.map(|m| format!("{} {}", m.backend_name, m.model_name)),
+                    last_error: newest.and_then(|m| m.error_message.clone()),
+                }
+            })
+            .collect();
+        Ok(health)
     }
 
     pub fn get_generating_status(

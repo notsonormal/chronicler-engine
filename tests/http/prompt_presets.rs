@@ -11,6 +11,7 @@ use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::prompt_preset_service::PromptPresetService;
 use chronicler_engine::test_support::body_text;
+use chronicler_engine::test_support::TestPromptPreset;
 use chronicler_engine::TestAppBuilder;
 
 use crate::test_utils::preset_card_html_slice;
@@ -152,7 +153,7 @@ async fn test_prompt_presets_add_forms_collapsed_by_default() {
 
     assert_eq!(
         body.matches(r#"<details class="preset-add">"#).count(),
-        3,
+        4,
         "each category's add form must be a closed disclosure"
     );
     assert!(
@@ -162,6 +163,7 @@ async fn test_prompt_presets_add_forms_collapsed_by_default() {
     assert!(body.contains("Add System Prompt Preset"));
     assert!(body.contains("Add Quantifier Prompt Preset"));
     assert!(body.contains("Add Impersonate Prompt Preset"));
+    assert!(body.contains("Add Options Prompt Preset"));
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.2
@@ -588,6 +590,90 @@ async fn test_delete_default_preset_returns_error() {
     assert_eq!(
         body,
         "<div class=\"error-message\">Cannot delete default presets</div>"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.37
+#[tokio::test]
+async fn test_delete_refuses_a_preset_referenced_as_a_mode_default() {
+    use chronicler_engine::domain::model::settings::NarratorMode;
+
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    storage
+        .save_preset(&TestPromptPreset::system("custom_ref", "Custom Ref"))
+        .expect("seed a system preset");
+    let app_state = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_service();
+
+    app_state
+        .settings_service
+        .update_settings(|settings| {
+            let mut bundle = settings
+                .mode_preset_registry
+                .bundle_for(NarratorMode::InteractiveFiction);
+            bundle.system_prompt_preset_id = "custom_ref".to_string();
+            settings.mode_preset_registry.set_bundle(bundle);
+            Ok(())
+        })
+        .expect("update_settings should succeed");
+    let app = build_router(app_state.clone());
+
+    let response = app
+        .oneshot(empty_post_request("/prompt-presets/custom_ref/delete"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_text(response).await;
+    assert!(
+        body.contains("Preset is a mode default; change the default before deleting"),
+        "the refusal must name the mode default: {body}"
+    );
+    assert!(
+        storage.get_preset("custom_ref").unwrap().is_some(),
+        "a referenced preset must not be deleted"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.38
+#[tokio::test]
+async fn test_delete_refuses_the_active_options_default() {
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    storage
+        .save_preset(&TestPromptPreset::options(
+            "options_custom",
+            "Custom Options",
+        ))
+        .expect("seed an options preset");
+    let app_state = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_service();
+    let app = build_router(app_state.clone());
+
+    let activate = app
+        .clone()
+        .oneshot(empty_post_request(
+            "/prompt-presets/options_custom/activate",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(activate.status(), StatusCode::OK);
+
+    let response = app
+        .oneshot(empty_post_request("/prompt-presets/options_custom/delete"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_text(response).await;
+    assert!(
+        body.contains("Preset is the default Options preset; change the default before deleting"),
+        "the refusal must name the Options default: {body}"
+    );
+    assert!(
+        storage.get_preset("options_custom").unwrap().is_some(),
+        "the active Options preset must not be deleted"
     );
 }
 
@@ -1174,4 +1260,81 @@ async fn test_update_preset_onto_sibling_name_is_refused() {
         .unwrap();
     assert_eq!(stored.name, "Beta");
     assert_eq!(stored.instructions.as_deref(), Some("First."));
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.35
+#[tokio::test]
+async fn test_prompt_presets_panel_renders_options_section() {
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    storage
+        .save_preset(&TestPromptPreset::options(
+            "options_custom",
+            "Custom Options",
+        ))
+        .expect("seed an options preset");
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let response = app
+        .oneshot(get_request("/fragment/prompt-presets"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_text(response).await;
+
+    assert!(body.contains("<h2>Options Prompts</h2>"));
+    assert!(body.contains("Add Options Prompt Preset"));
+    assert!(body.contains(r#"name="preset_type" value="options""#));
+    assert!(body.contains("Custom Options"));
+
+    let card = preset_card_slice(&body, "options_custom");
+    assert!(
+        card.contains("Set Active</button>"),
+        "an Options card must offer a single Set Active button: {card}"
+    );
+    assert!(
+        !card.contains("Set Active (Novel)") && !card.contains("Set Active (Interactive Fiction)"),
+        "an Options card must not offer mode-specific activation: {card}"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.36
+#[tokio::test]
+async fn test_activate_options_preset_sets_the_settings_default() {
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    storage
+        .save_preset(&TestPromptPreset::options(
+            "options_custom",
+            "Custom Options",
+        ))
+        .expect("seed an options preset");
+    let app_state = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_service();
+    let app = build_router(app_state.clone());
+
+    let response = app
+        .oneshot(empty_post_request(
+            "/prompt-presets/options_custom/activate",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_text(response).await;
+
+    let card = preset_card_slice(&body, "options_custom");
+    assert!(
+        card.contains(r#"badge primary">Active"#),
+        "the activated Options card must carry the Active badge: {card}"
+    );
+    assert!(
+        !card.contains("Set Active</button>"),
+        "an active Options preset must hide its Set Active button: {card}"
+    );
+
+    let settings = app_state.settings().expect("settings read should succeed");
+    assert_eq!(settings.active_options_prompt_preset_id, "options_custom");
 }

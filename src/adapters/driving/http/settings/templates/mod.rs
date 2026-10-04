@@ -3,7 +3,7 @@
 
 pub mod settings;
 
-pub use self::settings::SettingsTemplate;
+pub use self::settings::{SettingsTemplate, TextCheckCardTemplate};
 
 #[cfg(test)]
 mod settings_tests;

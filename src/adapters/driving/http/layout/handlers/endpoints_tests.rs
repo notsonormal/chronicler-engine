@@ -4,13 +4,13 @@ use crate::adapters::driving::http::layout::handlers::endpoints::{
 };
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::test_support::TestAppBuilder;
+use crate::test_support::{body_text, TestAppBuilder};
 
 #[tokio::test]
 async fn test_header_fragment() {
     let state = TestAppBuilder::default_test().build_service();
-    let result = header_fragment(axum::extract::State(state)).await;
-    assert!(!result.0.is_empty());
+    let result = body_text(header_fragment(axum::extract::State(state)).await).await;
+    assert!(!result.is_empty());
 }
 
 #[tokio::test]
@@ -18,36 +18,36 @@ async fn test_story_log_fragment() {
     let state = TestAppBuilder::default_test()
         .log("You look around.", MessageType::Narration)
         .build_service();
-    let result = story_log_fragment(axum::extract::State(state)).await;
-    assert!(!result.0.is_empty());
+    let result = body_text(story_log_fragment(axum::extract::State(state)).await).await;
+    assert!(!result.is_empty());
 }
 
 #[tokio::test]
 async fn test_action_area_fragment() {
     let state = TestAppBuilder::default_test().build_service();
-    let result = action_area_fragment(axum::extract::State(state)).await;
-    assert!(!result.0.is_empty());
+    let result = body_text(action_area_fragment(axum::extract::State(state)).await).await;
+    assert!(!result.is_empty());
 }
 
 #[tokio::test]
 async fn test_character_headshots_fragment() {
     let state = TestAppBuilder::default_test().build_service();
-    let result = character_headshots_fragment(axum::extract::State(state)).await;
-    assert!(!result.0.is_empty());
+    let result = body_text(character_headshots_fragment(axum::extract::State(state)).await).await;
+    assert!(!result.is_empty());
 }
 
 #[tokio::test]
 async fn test_visual_sidebar_fragment() {
     let state = TestAppBuilder::default_test().build_service();
-    let result = visual_sidebar_fragment(axum::extract::State(state)).await;
-    assert!(!result.0.is_empty());
+    let result = body_text(visual_sidebar_fragment(axum::extract::State(state)).await).await;
+    assert!(!result.is_empty());
 }
 
 #[tokio::test]
 async fn test_llm_messages_fragment() {
     let state = TestAppBuilder::default_test().build_service();
-    let result = llm_messages_fragment(axum::extract::State(state)).await;
-    assert!(!result.0.is_empty());
+    let result = body_text(llm_messages_fragment(axum::extract::State(state)).await).await;
+    assert!(!result.is_empty());
 }
 
 #[tokio::test]

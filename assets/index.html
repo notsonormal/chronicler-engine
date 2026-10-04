@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chronicler Engine</title>
     <script src="/assets/htmx.min.js?v=1"></script>
+    <script src="/assets/idiomorph-ext.min.js?v=1"></script>
     <link rel="stylesheet" href="/assets/styles.css?v=4" />
     <link rel="stylesheet" href="/assets/worlds.css?v=4" />
     <link rel="stylesheet" href="/assets/games.css?v=1" />
   </head>
-  <body>
+  <body hx-ext="morph">
     <a class="skip-link" href="#main-content">Skip to content</a>
     <div class="error-notification" id="error-notification"></div>
     <div class="header-bar">
@@ -17,8 +18,13 @@
         class="header"
         id="header"
         hx-get="/fragment/header"
-        hx-trigger="load"
+        hx-trigger="load, every 5s"
+        hx-swap="innerHTML"
       ></div>
+    </div>
+    <div id="failure-banner" class="failure-banner" role="status" hidden>
+      <div id="failure-banner-degraded" class="failure-banner-degraded"></div>
+      <div id="failure-banner-unreachable" class="failure-banner-unreachable"></div>
     </div>
     <div class="tab-bar" role="tablist" aria-label="Dashboard sections">
       <button class="tab active" role="tab" id="tab-game" aria-controls="game-tab" aria-selected="true" data-tab="game">Game</button>
@@ -34,9 +40,11 @@
         <div
           class="story-log"
           id="story-log"
+          tabindex="0"
+          aria-label="Story log"
           hx-get="/fragment/story-log"
           hx-trigger="load, every 2s"
-          hx-swap="innerHTML"
+          hx-swap="morph:innerHTML"
         ></div>
         <div
           class="visual-sidebar"
@@ -82,6 +90,7 @@
           <button type="submit" id="submit-btn">
             <span class="btn-icon">&#9654;</span> Send
           </button>
+          <div class="inline-error-slot" data-error-slot="action" hidden></div>
         </form>
         <div
           class="status ready"
@@ -93,13 +102,44 @@
         >
           <span class="status ready">Ready</span>
         </div>
-        <div id="text-check-result" class="text-check-result"></div>
+        <div
+          id="text-check-result"
+          class="text-check-result"
+          role="status"
+          aria-live="polite"
+        ></div>
       </div>
       <div
         id="restore-notice"
         class="restore-notice"
         role="status"
         aria-live="polite"
+      ></div>
+      <!-- Hidden live regions for the polled surfaces. Those containers are
+           re-rendered wholesale each cycle, so a live region on them would
+           re-announce unchanged content; these carry only what changed. -->
+      <div
+        id="narration-announcer"
+        class="visually-hidden"
+        role="status"
+        aria-live="polite"
+      ></div>
+      <div
+        id="options-announcer"
+        class="visually-hidden"
+        role="status"
+        aria-live="polite"
+      ></div>
+      <div
+        id="status-announcer"
+        class="visually-hidden"
+        role="status"
+        aria-live="polite"
+      ></div>
+      <div
+        id="status-error-announcer"
+        class="visually-hidden"
+        role="alert"
       ></div>
     </div>
     <div class="tab-content" id="settings-tab" role="tabpanel" aria-labelledby="tab-settings">
@@ -222,23 +262,110 @@
       // returning the same error toasts once, not every cycle.
       let lastStatusError = null;
 
-      // One reconciler for the status display: reads the live DOM, so it covers
-      // both the spans this script writes and the fragments htmx swaps in (the
-      // poll's phase text, and the error span a failed generation renders). The
-      // state machine, the toast and the dedupe state all follow from it.
+      function writeLiveRegion(id, text) {
+        const region = document.getElementById(id);
+        if (!region || region.textContent === text) return;
+        region.textContent = text;
+      }
+
+      let announcedStatusLabel = null;
+
+      function announceStatusDisplay() {
+        const statusDisplay = document.getElementById("status-display");
+        if (!statusDisplay || statusDisplay.querySelector(".error-disclosure")) {
+          return;
+        }
+        const label = statusDisplay.textContent.trim();
+        if (label === "") return;
+        if (announcedStatusLabel === null) {
+          announcedStatusLabel = label;
+          return;
+        }
+        if (label === announcedStatusLabel) return;
+        announcedStatusLabel = label;
+        writeLiveRegion("status-announcer", label);
+      }
+
+      function announceGenerationError(statusDisplay) {
+        const message = statusDisplay.querySelector(".error-disclosure-message");
+        writeLiveRegion(
+          "status-error-announcer",
+          message ? message.textContent.trim() : "",
+        );
+      }
+
       function applyStatusDisplay() {
         const statusDisplay = document.getElementById("status-display");
         if (!statusDisplay) return;
         syncActionState();
-        const statusText = statusDisplay.textContent;
-        if (statusText.includes("Error")) {
-          if (statusText !== lastStatusError) {
-            lastStatusError = statusText;
-            showError(statusText);
+        const disclosure = statusDisplay.querySelector(".error-disclosure");
+        if (disclosure) {
+          const raw = statusDisplay.querySelector(".error-detail-raw");
+          const text = (raw ? raw.textContent : disclosure.textContent).trim();
+          if (text !== lastStatusError) {
+            lastStatusError = text;
+            showError("Error: " + text);
           }
         } else {
           lastStatusError = null;
         }
+        announceGenerationError(statusDisplay);
+        announceStatusDisplay();
+      }
+
+      let announcedEntryIds = null;
+
+      function announceNewNarration() {
+        const log = document.getElementById("story-log");
+        if (!log) return;
+        const entries = Array.from(log.querySelectorAll(".log-entry"));
+        const ids = entries.map((entry) => entry.dataset.id);
+        if (announcedEntryIds === null) {
+          announcedEntryIds = new Set(ids);
+          return;
+        }
+        const added = entries.filter(
+          (entry) => !announcedEntryIds.has(entry.dataset.id),
+        );
+        announcedEntryIds = new Set(ids);
+        const narration = added.filter((entry) =>
+          entry.classList.contains("narration"),
+        );
+        if (narration.length === 0) return;
+        writeLiveRegion(
+          "narration-announcer",
+          narration
+            .map((entry) => {
+              const text = entry.querySelector(".text");
+              return text ? text.textContent.trim() : "";
+            })
+            .filter((text) => text.length > 0)
+            .join("\n\n"),
+        );
+      }
+
+      let announcedOptions = null;
+
+      function announceOptions() {
+        const dock = document.getElementById("options-dock");
+        if (!dock) return;
+        const options = Array.from(dock.querySelectorAll(".option-btn")).map(
+          (btn) => btn.textContent.trim(),
+        );
+        if (announcedOptions === null) {
+          announcedOptions = options;
+          return;
+        }
+        const unchanged =
+          options.length === announcedOptions.length &&
+          options.every((option, index) => option === announcedOptions[index]);
+        if (unchanged) return;
+        announcedOptions = options;
+        if (options.length === 0) return;
+        writeLiveRegion(
+          "options-announcer",
+          options.length + " options available: " + options.join("; "),
+        );
       }
 
       function updateToThinking() {
@@ -303,8 +430,224 @@
         }
       });
 
-      document.body.addEventListener("htmx:afterSwap", function () {
+      // Unreachable is assertive; a degraded-role banner alone stays polite.
+      function refreshFailureBanner() {
+        const banner = document.getElementById("failure-banner");
+        const degraded = document.getElementById("failure-banner-degraded");
+        const unreachable = document.getElementById("failure-banner-unreachable");
+        if (!banner) return;
+        const degradedUp = !!degraded && degraded.innerHTML.trim() !== "";
+        const unreachableUp = !!unreachable && unreachable.innerHTML.trim() !== "";
+        banner.hidden = !(degradedUp || unreachableUp);
+        banner.classList.toggle("unreachable", unreachableUp);
+        banner.setAttribute("role", unreachableUp ? "alert" : "status");
+      }
+
+      function markUnreachable() {
+        const unreachable = document.getElementById("failure-banner-unreachable");
+        if (!unreachable) return;
+        if (unreachable.innerHTML.trim() === "") {
+          unreachable.innerHTML =
+            '<div class="error-disclosure">' +
+            '<span class="error-disclosure-message">The engine is unreachable. Nothing you do is being saved.</span>' +
+            "</div>";
+        }
+        refreshFailureBanner();
+      }
+
+      function clearUnreachable() {
+        const unreachable = document.getElementById("failure-banner-unreachable");
+        if (!unreachable || unreachable.innerHTML.trim() === "") return;
+        unreachable.innerHTML = "";
+        refreshFailureBanner();
+      }
+
+      function escapeHtml(value) {
+        const entities = {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#x27;",
+        };
+        return String(value).replace(/[&<>"']/g, (ch) => entities[ch]);
+      }
+
+      // Mirrors the server's disclosure shape for a request with no response body.
+      function errorDisclosureHtml(popoverId, message, rawText) {
+        return (
+          '<div class="error-disclosure">' +
+          '<span class="error-disclosure-message">' + escapeHtml(message) + "</span>" +
+          '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
+          escapeHtml(popoverId) + '">Details</button>' +
+          '<div class="error-detail-popover" id="' + escapeHtml(popoverId) + '" hidden>' +
+          '<pre class="error-detail-raw">' + escapeHtml(rawText) + "</pre></div></div>"
+        );
+      }
+
+      const INLINE_ERROR_CONTAINERS =
+        "form, .settings-card, .world-item, .preset-card, .game-item, .llm-message-card";
+
+      function inlineErrorSlotFor(elt) {
+        if (!elt || !elt.closest) return null;
+        const container = elt.closest(INLINE_ERROR_CONTAINERS);
+        return container ? container.querySelector("[data-error-slot]") : null;
+      }
+
+      function renderInlineError(slot, message, rawText) {
+        if (!slot) return;
+        const id = slot.dataset.errorSlot || "inline-error";
+        slot.innerHTML = errorDisclosureHtml(id + "-popover", message, rawText);
+        slot.hidden = false;
+      }
+
+      function plainResponseText(xhr) {
+        const body = xhr ? xhr.responseText || "" : "";
+        return body.replace(/<[^>]*>/g, "").trim();
+      }
+
+      // A polled container carries `every` in `hx-trigger`. Only a poll's
+      // failure implies unreachability: a server that answered is reachable,
+      // so a failed action reports on its own surface instead.
+      function isPollRequest(elt) {
+        if (!elt || !elt.getAttribute) return false;
+        const trigger = elt.getAttribute("hx-trigger") || "";
+        return trigger.includes("every");
+      }
+
+      document.body.addEventListener("htmx:responseError", function (evt) {
+        const slot = inlineErrorSlotFor(evt.detail.elt);
+        if (slot) {
+          renderInlineError(slot, "That action failed.", plainResponseText(evt.detail.xhr));
+        } else if (isPollRequest(evt.detail.elt)) {
+          markUnreachable();
+        }
+      });
+
+      document.body.addEventListener("htmx:sendError", function (evt) {
+        markUnreachable();
+        const slot = inlineErrorSlotFor(evt.detail.elt);
+        if (slot) {
+          renderInlineError(slot, "The engine is unreachable.", "No response from the server.");
+        }
+      });
+
+      document.body.addEventListener("htmx:afterRequest", function (evt) {
+        if (!evt.detail.successful) return;
+        clearUnreachable();
+        const slot = inlineErrorSlotFor(evt.detail.elt);
+        if (slot) {
+          slot.innerHTML = "";
+          slot.hidden = true;
+        }
+      });
+
+      document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);
+
+      // The disclosure a swap may replace while it is open. The swap replaces
+      // the node, which would collapse it and drop focus, so this record reopens
+      // it after a swap that keeps the disclosure in the DOM.
+      let openErrorDetails = null;
+
+      function closeErrorPopover(popover) {
+        if (!popover) return;
+        popover.classList.remove("open");
+        popover.hidden = true;
+        if (openErrorDetails && openErrorDetails.popoverId === popover.id) {
+          openErrorDetails = null;
+        }
+        const toggle = document.querySelector(
+          '.error-details-toggle[aria-controls="' + popover.id + '"]',
+        );
+        if (toggle) toggle.setAttribute("aria-expanded", "false");
+      }
+
+      function rememberOpenErrorDetails(popover, toggle) {
+        openErrorDetails = {
+          popoverId: popover.id,
+          hadFocus: document.activeElement === toggle,
+        };
+      }
+
+      function restoreOpenErrorDetails() {
+        if (!openErrorDetails) return;
+        const popover = document.getElementById(openErrorDetails.popoverId);
+        const toggle = document.querySelector(
+          '.error-details-toggle[aria-controls="' + openErrorDetails.popoverId + '"]',
+        );
+        if (!popover || !toggle) {
+          openErrorDetails = null;
+          return;
+        }
+        popover.classList.add("open");
+        popover.hidden = false;
+        toggle.setAttribute("aria-expanded", "true");
+        const focusFell =
+          !document.activeElement || document.activeElement === document.body;
+        if (openErrorDetails.hadFocus && focusFell) toggle.focus();
+        positionErrorPopover(popover, toggle);
+      }
+
+      function closeAllErrorPopovers() {
+        document.querySelectorAll(".error-detail-popover.open").forEach(closeErrorPopover);
+      }
+
+      function positionErrorPopover(popover, toggle) {
+        const rect = toggle.getBoundingClientRect();
+        popover.style.left = Math.max(8, rect.left) + "px";
+        const spaceBelow = window.innerHeight - rect.bottom;
+        if (spaceBelow < 220) {
+          popover.style.bottom = window.innerHeight - rect.top + 6 + "px";
+          popover.style.top = "";
+        } else {
+          popover.style.top = rect.bottom + 6 + "px";
+          popover.style.bottom = "";
+        }
+      }
+
+      document.addEventListener("click", function (evt) {
+        const target = evt.target;
+        if (!(target instanceof HTMLElement)) return;
+        const toggle = target.closest(".error-details-toggle");
+        if (toggle) {
+          const popover = document.getElementById(toggle.getAttribute("aria-controls"));
+          if (popover) {
+            const open = popover.classList.toggle("open");
+            popover.hidden = !open;
+            toggle.setAttribute("aria-expanded", String(open));
+            if (open) {
+              positionErrorPopover(popover, toggle);
+              rememberOpenErrorDetails(popover, toggle);
+            } else {
+              closeErrorPopover(popover);
+            }
+          }
+          return;
+        }
+        if (!target.closest(".error-detail-popover")) closeAllErrorPopovers();
+      });
+
+      document.addEventListener("keydown", function (evt) {
+        if (evt.key === "Escape") closeAllErrorPopovers();
+      });
+
+      window.addEventListener("resize", closeAllErrorPopovers);
+      window.addEventListener("scroll", closeAllErrorPopovers, true);
+
+      // A swap that replaces an open disclosure must not close it; `afterSettle`
+      // sees the final DOM after out-of-band processing.
+      document.body.addEventListener("htmx:afterSwap", restoreOpenErrorDetails);
+      document.body.addEventListener("htmx:afterSettle", restoreOpenErrorDetails);
+
+      document.body.addEventListener("htmx:afterSwap", function (evt) {
         syncActionState();
+        const target = evt.detail && (evt.detail.target || evt.detail.elt);
+        if (!target || !target.id) return;
+        if (target.id === "story-log") {
+          announceNewNarration();
+        } else if (target.id === "options-dock") {
+          announceOptions();
+        }
       });
 
       // Focus policy across in-place swaps. A control that survives the swap in
@@ -344,7 +687,11 @@
       function pausePolling() {
         const storyLog = document.getElementById("story-log");
         if (storyLog) {
-          originalTrigger = storyLog.getAttribute("hx-trigger");
+          // Save the real trigger once. A second pause must not overwrite it
+          // with "none", or the resumed poll never comes back.
+          if (originalTrigger === null) {
+            originalTrigger = storyLog.getAttribute("hx-trigger");
+          }
           storyLog.setAttribute("hx-trigger", "none");
           htmx.process(storyLog);
         }
@@ -368,7 +715,20 @@
         textarea.style.height = textarea.scrollHeight + border + "px";
       }
 
+      function lockOtherEditButtons() {
+        document.querySelectorAll("#story-log .edit-btn").forEach((btn) => {
+          btn.disabled = true;
+        });
+      }
+
+      function unlockEditButtons() {
+        document.querySelectorAll("#story-log .edit-btn").forEach((btn) => {
+          btn.disabled = false;
+        });
+      }
+
       function showEditForm(id) {
+        if (editState !== null) return;
         editState = { id: id, text: null, actions: null, swipeControls: null };
         const entry = document.querySelector(`[data-id="${id}"]`);
         if (entry) {
@@ -414,6 +774,7 @@
             });
           }
 
+          lockOtherEditButtons();
           pausePolling();
           textarea.focus();
         }
@@ -423,7 +784,6 @@
         editState = null;
       }
 
-      // The caller decides whether and when to resume polling.
       function revertEdit() {
         if (editState === null) return;
         const entry = document.querySelector(`[data-id="${editState.id}"]`);
@@ -440,6 +800,7 @@
           }
         }
         clearEditState();
+        unlockEditButtons();
       }
 
       function cancelEdit() {
@@ -447,10 +808,6 @@
         const entryId = editState.id;
         revertEdit();
         resumePolling();
-        htmx.trigger("#story-log", "htmx:refresh");
-        // The textarea that held focus is gone; put the keyboard on the
-        // restored edit button. Its stable id lets htmx keep focus there when
-        // the resumed poll replaces the entry.
         const entry = document.querySelector(`[data-id="${entryId}"]`);
         const editBtn = entry ? entry.querySelector(".edit-btn") : null;
         if (editBtn) editBtn.focus();
@@ -472,9 +829,9 @@
             if (!response.ok) {
               throw new Error(`save failed with status ${response.status}`);
             }
-            // Success: drop edit state and let the refreshed log re-render.
+            // The lock stays until the resumed poll replaces the entry's
+            // controls, so a second editor cannot open on a stale textarea.
             clearEditState();
-            htmx.trigger("#story-log", "htmx:refresh");
           })
           .catch((err) => {
             console.error("Failed to save message:", err);
@@ -495,6 +852,13 @@
         applyStatusDisplay();
       }
 
+      // Clears the posture group's "Saved" confirmation, so a failed Update
+      // World cannot sit under green feedback from an earlier auto-save.
+      function clearPostureStatus() {
+        const status = document.getElementById("world-posture-status");
+        if (status) status.innerHTML = "";
+      }
+
       // Retry/retrigger run through raw fetch, so a failed request reports its
       // own error and resets the status the htmx swaps would otherwise restore.
       function submitGenerationRequest(url, failureMessage) {
@@ -505,9 +869,6 @@
               throw new Error(`${failureMessage} (status ${response.status})`);
             }
             return response.text();
-          })
-          .then(() => {
-            htmx.trigger("#story-log", "htmx:refresh");
           })
           .catch((err) => {
             console.error(`${failureMessage}:`, err);
@@ -547,8 +908,6 @@
           })
           .then((html) => {
             document.getElementById("story-log").innerHTML = html;
-            htmx.trigger("#visual-sidebar", "htmx:refresh");
-            htmx.trigger("#header", "htmx:refresh");
             // The restore is a settled state: drop any stale generating label
             // at once rather than waiting for the next 5s status poll.
             resetStatusToReady();
@@ -857,13 +1216,6 @@
       window.addEventListener("scroll", closeSlashMenu, true);
       window.addEventListener("resize", closeSlashMenu);
 
-      document.body.addEventListener("action-area-refresh", function () {
-        htmx.ajax("GET", "/fragment/action-area", {
-          target: "#action-area",
-          swap: "outerHTML",
-        });
-      });
-
       document.addEventListener("DOMContentLoaded", function () {
         // A page loaded mid-generation renders a thinking status span; the
         // reconciler locks Send and reads any error the span already carries.
@@ -882,13 +1234,6 @@
             document
               .getElementById(btn.dataset.tab + "-tab")
               .classList.add("active");
-
-            if (btn.dataset.tab === "llm-messages") {
-              const panel = document.querySelector(".llm-messages-panel");
-              if (panel) {
-                htmx.trigger(panel, "htmx:refresh");
-              }
-            }
           });
         });
 

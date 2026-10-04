@@ -2,7 +2,6 @@
 
 Endpoints: 
  - `GET /fragment/settings`
- - `POST /settings`
  - `POST /settings/text-check`
  - `POST /connections/add`
  - `POST /connections/{id}/edit`
@@ -34,68 +33,29 @@ And the body contains a check_mode select
 And the body contains an enable_auto_check checkbox
 ```
 
-### POST /settings — success paths
+### POST /settings/text-check — auto-save
 
-#### Scenario 20.2: POST /settings switches the narrator connection
+Text Check is instant: the mode and the check-before-sending box apply on
+change, with no Save button. Disabled mode clears and disables the check box,
+so the two controls cannot contradict each other.
 
-```gherkin
-Given a fresh app state where the narrator connection is the first connection
-When the client POST /settings with narration_connection_id set to a different existing connection
-And quantifier_connection_id set to the current quantifier connection
-Then the response is 200
-And the response body is "Settings saved!"
-And a following GET /fragment/settings marks the switched narrator connection as Narrator
-```
-
-#### Scenario 20.3: POST /settings switches the quantifier connection
-
-```gherkin
-Given a fresh app state where the quantifier connection is the first connection
-When the client POST /settings with quantifier_connection_id set to a different existing connection
-And narration_connection_id set to the current narrator connection
-Then the response is 200
-And the response body is "Settings saved!"
-And a following GET /fragment/settings marks the switched quantifier connection as Quantifier
-```
-
-#### Scenario 20.4: POST /settings switches both connections
-
-```gherkin
-Given a fresh app state where the narrator and quantifier connections are both the first connection
-When the client POST /settings with narration_connection_id and quantifier_connection_id each set to a different existing connection
-Then the response is 200
-And the response body is "Settings saved!"
-And a following GET /fragment/settings marks the switched narrator connection as Narrator and the switched quantifier connection as Quantifier
-```
-
-### POST /settings — error paths
-
-#### Scenario 20.5: POST /settings rejects a connection id that is not in the connections list
+#### Scenario 20.12: The text-check auto-save stores the mode and the check-before-sending box
 
 ```gherkin
 Given a fresh app state
-When the client POST /settings with narration_connection_id set to a string that is not any connection's id
-And quantifier_connection_id set to the current quantifier connection
-Then the response is 200
-And the response body contains `<div class="error-message">Save failed:` (a dangling id is a configuration fault, not a HTTP error status)
-And the saved narration connection id is unchanged
+When the client POST /settings/text-check with check_mode="spell" and the check-before-sending box checked
+Then the response is a 200 carrying the re-rendered Text Check card with its own save feedback
+And a following GET /fragment/settings renders "spell" selected and the check box checked
 ```
 
-#### Scenario 20.6: POST /settings with a missing required field returns 422
+#### Scenario 20.13: Disabling the text-check mode clears and disables the check-before-sending box
 
 ```gherkin
-Given a fresh app state
-When the client POST /settings with a form body that omits quantifier_connection_id
-Then the response is 422 Unprocessable Entity (axum Form rejection)
-```
-
-#### Scenario 20.7: POST /settings reports a save failure in the response body
-
-```gherkin
-Given an app state whose settings storage fails on save
-When the client POST /settings with valid narration_connection_id and quantifier_connection_id fields
-Then the response is 200
-And the response body contains `<div class="error-message">Save failed:` (the error is surfaced in the fragment, not as a HTTP error status)
+Given a fresh app state with text check mode "spell" and check-before-sending enabled
+When the client POST /settings/text-check with check_mode="disabled" and the check-before-sending box checked
+Then the response is a 200
+And the stored check-before-sending is disabled
+And a following GET /fragment/settings renders "disabled" selected and the check box cleared and disabled
 ```
 
 ### Backend resolution

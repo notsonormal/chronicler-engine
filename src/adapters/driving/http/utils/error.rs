@@ -21,6 +21,36 @@ pub fn render_error(message: &str) -> String {
     error_fragment(format!("Error: {message}"))
 }
 
+pub fn error_disclosure(popover_id: &str, message: &str, detail_html: &str) -> String {
+    format!(
+        "<div class=\"error-disclosure\"><span class=\"error-disclosure-message\">{message}</span><button type=\"button\" class=\"error-details-toggle\" aria-expanded=\"false\" aria-controls=\"{popover_id}\">Details</button><div class=\"error-detail-popover\" id=\"{popover_id}\" hidden>{detail_html}</div></div>",
+        message = html_escape(message),
+        popover_id = html_escape(popover_id),
+        detail_html = detail_html,
+    )
+}
+
+pub fn raw_error_detail(raw: &str) -> String {
+    format!("<pre class=\"error-detail-raw\">{}</pre>", html_escape(raw))
+}
+
+pub fn generation_error_summary(raw: &str) -> String {
+    let lower = raw.to_lowercase();
+    if lower.contains("llm") || lower.contains("connection") || lower.contains("backend") {
+        return "The language model could not be reached.".to_string();
+    }
+    if lower.contains("save") {
+        return "The last turn could not be saved.".to_string();
+    }
+    if lower.contains("room") || lower.contains("scene") {
+        return "The current scene could not be found.".to_string();
+    }
+    if lower.contains("preset") {
+        return "The active prompt preset is missing.".to_string();
+    }
+    "The last turn failed to generate.".to_string()
+}
+
 /// A failure the panel keeps in place: a 200 carrying the error fragment.
 pub(crate) fn error_fragment_response(message: impl std::fmt::Display) -> Response<Body> {
     Html(error_fragment(message)).into_response()

@@ -23,7 +23,7 @@ flowchart TD
 
 The error-notification banner sits fixed at the top of the page and surfaces server-side error responses for 5 seconds before auto-hiding. It is populated by the global HTMX `htmx:beforeSwap` handler in the static shell (see `assets/index.html`).
 
-The header bar is 48px tall, fetched once on load, and carries the game title, current game name, and connection status. Location is **not** in the header — it appears in the story log as a green location-header on the active room.
+The header bar is 48px tall, polls every 5s, and carries the game title and current game name. Location is **not** in the header — it appears in the story log as a green location-header on the active room.
 
 ## Tabs
 
@@ -83,7 +83,23 @@ State transitions happen on three events: form submission (immediately sets Thin
 
 ## Polling Cadences
 
-Five endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s; the header fetches once on load. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive.
+Six endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: header 5s (which also refreshes the failure banner), story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive.
+
+The story log's poll merges the fragment into the existing DOM (`morph:innerHTML`, the vendored idiomorph extension) instead of replacing it, so an idle poll touches no nodes and a text selection, focus, or scroll position inside the log survives. Each `.log-entry` carries a stable `id` for the morph to match on. The other polled containers keep their `innerHTML` swap.
+
+## Assistive-technology announcements
+
+Because the polled containers are re-rendered wholesale each cycle, a live region on the container itself would re-announce unchanged content. The shell instead carries dedicated live regions, each written only when its value changes (the four announcers are visually hidden):
+
+| Region | Announced content | Politeness |
+|---|---|---|
+| `#status-announcer` | the status label on a phase change (Ready / Thinking... / Generating narration... / Quantifying scene...) | `role="status"` (polite) |
+| `#status-error-announcer` | a generation error's short line, never the raw text behind its disclosure | `role="alert"` (assertive) |
+| `#narration-announcer` | the text of a story-log entry the poll has not shown before | `role="status"` (polite) |
+| `#options-announcer` | a changed option set | `role="status"` (polite) |
+| `#text-check-result` | a read-only text-check result, in place | `role="status"` (polite) |
+
+The client tracks the entry ids the story log has already shown, so only a newly appended narration is announced; an unchanged poll announces nothing. `#restore-notice` (the swipe-restore confirmation) and the failure banner own their own announcements.
 
 ## Edit, Delete, Swipe, Retrigger Flows
 
@@ -91,14 +107,14 @@ All four flows operate on the **last entry** in the story log. Conditional visib
 
 ### Edit Flow
 
-1. The user clicks the edit (✎) button on an entry. JavaScript in the static shell (`showEditForm`) replaces the entry's text span with a textarea carrying the raw markdown from `data-raw-text`, swaps the action buttons for Save/Cancel, and **pauses story-log polling** by writing `hx-trigger="none"` on `#story-log` and calling `htmx.process()`.
+1. The user clicks the edit (✎) button on an entry. JavaScript in the static shell (`showEditForm`) replaces the entry's text span with a textarea carrying the raw markdown from `data-raw-text`, swaps the action buttons for Save/Cancel, disables every other entry's Edit button, and **pauses story-log polling** by writing `hx-trigger="none"` on `#story-log` and calling `htmx.process()`.
 2. The user edits the text and clicks Save. JavaScript submits the new raw text to the history-edit endpoint.
-3. JavaScript **resumes polling** (restores the original `hx-trigger` value) and triggers `htmx:refresh` on `#story-log`. Cancel does the same without the submission.
+3. JavaScript **resumes polling** (restores the original `hx-trigger` value). Cancel does the same without the submission.
 4. The next poll re-renders the entry with the new text.
 
 The pause prevents the polling refresh from racing the user's edit.
 
-The textarea height is auto-resized on input. The save/cancel buttons replace the action-button cluster only for the entry being edited; other entries are unaffected.
+The textarea height is auto-resized on input. The save/cancel buttons replace the action-button cluster only for the entry being edited. The other entries' Edit buttons are disabled while the edit is open; cancel, Escape, and a failed save re-enable them at once, and a successful save leaves them disabled until the resumed poll re-renders the log.
 
 ### Delete Flow
 
@@ -108,14 +124,14 @@ The textarea height is auto-resized on input. The save/cancel buttons replace th
 
 ### Swipe Flow
 
-Swipes exist on the **last entry only**. The control row holds: a left arrow (◀, disabled on the first swipe), a counter (`active_swipe_index + 1 / swipe_count`), and a right arrow (▶). Clicking ◀ or ▶ submits to the swipe-switch endpoint with the target swipe index. On success, JavaScript replaces `#story-log` innerHTML with the response and refreshes the visual sidebar and header — the sidebar and header reflect game state, and switching swipes restores the `snapshot_id` of the target swipe, so both must re-render to match. Clicking ▶ when on the latest swipe submits to the new-swipe endpoint; JavaScript transitions the submit button to "Stop" / status to "Thinking..." immediately, then refreshes `#story-log` on response.
+Swipes exist on the **last entry only**. The control row holds: a left arrow (◀, disabled on the first swipe), a counter (`active_swipe_index + 1 / swipe_count`), and a right arrow (▶). Clicking ◀ or ▶ submits to the swipe-switch endpoint with the target swipe index. On success, JavaScript replaces `#story-log` innerHTML with the response. Switching swipes restores the `snapshot_id` of the target swipe, so the visual sidebar's own 5s poll picks up the restored game state; the header shows only the game name, which a swipe does not change. Clicking ▶ when on the latest swipe submits to the new-swipe endpoint; JavaScript transitions the submit button to "Stop" / status to "Thinking..." immediately, and the story log's 2s poll renders the response.
 
 ### Retrigger Flow
 
 The retrigger (♻) button appears on the last entry only when `show_retrigger` is true.
 
 1. The user clicks the retrigger button. JavaScript submits to the retrigger endpoint and immediately transitions the button to "Stop" / status to "Thinking...".
-2. On response, JavaScript triggers `htmx:refresh` on `#story-log`.
+2. On response, the story log's 2s poll renders the retriggered entry.
 
 Retrigger re-runs the trigger narration for the previous turn.
 
@@ -141,7 +157,7 @@ New-game names are auto-generated as `{WorldName}_{YYYY-MM-DD}_{N}` (underscores
 
 ## Document References
 
-- [`./http_routes.md`](./http_routes.md) — full HTTP route topology (52 routes; machine-generated).
+- [`./http_routes.md`](./http_routes.md) — full HTTP route topology (56 routes; machine-generated).
 - [`./ui_design.md`](./ui_design.md) — design tokens (colors, typography, spacing), component specs, and the per-button/swipe-control visibility rules.
 - [`../narrative/narration_system.md#llm-call-logging--forensics`](../narrative/narration_system.md#llm-call-logging--forensics) — LLM Messages tab forensics + the 50-row `llm_messages` cap.
 - [`../game_flow.md#text-check-branch`](../game_flow.md#text-check-branch) — text-check preflight, settings, and preview UI.

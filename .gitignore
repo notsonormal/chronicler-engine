@@ -252,6 +252,10 @@ context.md
 mutants.out/*
 .pi-herdsman/
 
+# Chromium crash dumps left by the managed browser at the repo root (~27 MB each).
+# Root-anchored and digits-only so the rule never matches a `core.rs`.
+/core.[0-9]*
+
 # Turbo-agent proxy (tools/turbo-agent) regenerable state
 tools/turbo-agent/.venv/
 tools/turbo-agent/.turbo-agent/

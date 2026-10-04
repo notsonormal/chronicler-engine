@@ -29,7 +29,7 @@ This doc carries the token tables verbatim because the tables are the curated to
 | `--color-accent-blue-cyan` | `#38bdf8` | Event headers, style issue tags |
 | `--color-accent-orange` | `#ffb347` | Dialogue text, retry hover, quantifier badge |
 | `--color-accent-yellow` | `#ffff00` | System text, Thinking status, capitalization tags |
-| `--color-accent-red` | `#ff4444` | Error status, Disconnected status, danger buttons |
+| `--color-accent-red` | `#ff4444` | Error status, danger buttons |
 | `--color-accent-pink` | `#ff6b6b` | Speaker names (default), delete hover, grammar tags |
 | `--color-button-gradient-start` | `#2a2a2a` | Generic button gradient top (unused at runtime) |
 | `--color-button-gradient-end` | `#1a1a1a` | Generic button gradient bottom (unused at runtime) |
@@ -48,7 +48,7 @@ This doc carries the token tables verbatim because the tables are the curated to
 | `--font-family` | `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif` | All text |
 | `--font-size-base` | `14px` | Body text, input, buttons, action buttons |
 | `--font-size-small` | `12px` | NPC labels, status, connection details |
-| `--font-size-xs` | `11px` | Connection status, badges |
+| `--font-size-xs` | `11px` | Badges |
 | `--font-size-sender` | `13px` | Speaker name above each log entry |
 
 ### Spacing
@@ -83,9 +83,8 @@ This doc carries the token tables verbatim because the tables are the curated to
 - Height: `--header-height`
 - Background: `--color-bg-header`
 - Border-bottom: 1px solid `--color-border`
-- Contains: game title (left), current game name, connection status, and reset button (right)
+- Contains: the game title and the current game name
 - Location is **not** in the header — it appears in the story log as the active-room location header
-- Reset button (`.btn-reset-small`): `background: none` with a 1px `--color-accent-red` border, `--color-accent-red` text, `border-radius: 4px`, `padding: 4px 8px`, `font-size: 16px`; hover adds a `rgba(255, 68, 68, 0.15)` background and a `0 0 6px rgba(255, 68, 68, 0.25)` glow
 
 ### Tab Bar
 
@@ -121,14 +120,24 @@ This doc carries the token tables verbatim because the tables are the curated to
 - Weight: bold
 - Display: inline with timestamp
 
-### Connection Status
+### Panel Save Model
 
-- Font size: `--font-size-xs`
-- Padding: `2px var(--spacing-sm)`
-- Border radius: `3px`
-- States:
-  - **Connected**: `--color-accent-green` text, `rgba(0, 255, 0, 0.1)` background
-  - **Disconnected**: `--color-accent-red` text, `rgba(255, 68, 68, 0.1)` background
+Save timing is a per-region behavioural contract owned by the specs; this doc
+carries only the visible state each region shows:
+
+- **Instant controls** carry inline feedback and no Save button; the Text Check
+  card's `Saved` label is the exemplar.
+- **World posture** selects sit in a labelled `<fieldset>` ("Posture — saves
+  automatically") with its own `#world-posture-status` status target.
+- **On Save** regions (text fields and JSON blobs) use the standard Save /
+  Cancel button pair.
+
+The per-region contracts live in [`../../../specs/settings.md`](../../../specs/settings.md)
+(Text Check auto-save; connection Add/Edit), [`../../../specs/games.md`](../../../specs/games.md)
+(per-game posture, mode, and preset auto-save), and
+[`../../../specs/worlds.md`](../../../specs/worlds.md) (world posture auto-save;
+world details Save). [`../../../specs/browser_worlds.md`](../../../specs/browser_worlds.md)
+checks the posture change wiring.
 
 ### Main Container (Game Tab)
 
@@ -351,12 +360,37 @@ Replaces the action area when text-check preflight surfaces issues.
 
 When the action area contains a `.text-check-preview`, the parent `.action-area` expands: `height: auto; min-height: var(--action-area-height); align-items: flex-start; padding-top/bottom: var(--spacing-md)`.
 
+### Panel Layout and Viewports
+
+Every dashboard panel renders in one centered content column. The four
+management panels do not scroll internally; the tab body supplies the scroll.
+
+- Content column: `width: 100%`, `max-width: 960px`, `margin: 0 auto`,
+  `padding: 24px`. Applies to `.settings-panel`, `.prompt-presets-panel`,
+  `.worlds-panel`, and `.games-panel`.
+- Scroll region: the active `.tab-content` (`#settings-tab`, `#worlds-tab`,
+  `#prompt-presets-tab`, `#games-tab` use `overflow-y: auto`). The panels have
+  no `overflow-y` of their own, so the scrollbar sits at the viewport edge.
+- Tab bar: `.tab-bar` scrolls horizontally (`overflow-x: auto`) and each
+  `.tab` does not shrink, so the tabs keep their width and the bar scrolls
+  when they do not fit.
+- Worlds: the edit form uses the same card frame as the world list, so the
+  text inset does not change between the two views.
+
+Supported viewports, desktop-first:
+
+| Range | Support |
+|---|---|
+| ≥ 1024×700 | Fully supported |
+| 768–1024 | Best-effort |
+| Phone (< 768px) | Out of scope (the existing `@media (max-width: 768px)` rules stay) |
+
 ### Settings Panel
 
-- Padding: `var(--spacing-md)` (16px)
-- Max-width: `800px`
+- Padding: `24px`
+- Max-width: `960px`, centered (`margin: 0 auto`)
 - Display: flex column, gap `var(--spacing-md)`
-- `overflow-y: auto`
+- Scrolls with the tab body (`#settings-tab`)
 
 ### Connection Cards
 

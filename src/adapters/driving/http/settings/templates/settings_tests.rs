@@ -1,8 +1,8 @@
 use askama::Template;
 
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
-use crate::adapters::driving::http::settings::templates::SettingsTemplate;
+use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode, TextCheckSettings};
+use crate::adapters::driving::http::settings::templates::{SettingsTemplate, TextCheckCardTemplate};
 
 #[test]
 fn test_settings_template_renders_connections() {
@@ -117,4 +117,29 @@ fn test_quantifier_badge_renders() {
     let html = template.render().unwrap();
 
     assert!(html.contains(r#"<span class="badge quantifier">Quantifier</span>"#));
+}
+
+#[test]
+fn test_text_check_card_disabled_mode_renders_the_checkbox_unchecked() {
+    let settings = AppSettings {
+        text_check: TextCheckSettings {
+            mode: TextCheckMode::Disabled,
+            enable_auto_check: true,
+            ignored_words: Vec::new(),
+        },
+        ..AppSettings::default()
+    };
+
+    let html = TextCheckCardTemplate::from_settings(&settings, "")
+        .render()
+        .unwrap();
+
+    assert!(
+        !html.contains(r#"name="enable_auto_check" value="true" checked"#),
+        "Disabled mode must render the check box unchecked even when the stored pair is inconsistent: {html}"
+    );
+    assert!(
+        html.contains("disabled"),
+        "Disabled mode must render the check box disabled: {html}"
+    );
 }

@@ -124,3 +124,45 @@ fn test_sqlite_empty_list() {
     let list = storage.list_latest_llm_messages(50).unwrap();
     assert!(list.is_empty());
 }
+
+fn message(agent: &str, model: &str, error: Option<&str>, created_offset_secs: i64) -> LlmMessage {
+    LlmMessage {
+        id: 0,
+        agent_name: agent.to_string(),
+        backend_name: "Mock".to_string(),
+        model_name: model.to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: error.map(str::to_string),
+        created_at: Utc::now() + chrono::Duration::seconds(created_offset_secs),
+    }
+}
+
+#[test]
+fn test_sqlite_latest_llm_message_per_agent_returns_each_roles_newest() {
+    let storage = create_storage();
+    storage
+        .save_llm_message(&message("narrator", "old-model", Some("old failure"), -20))
+        .unwrap();
+    storage
+        .save_llm_message(&message("narrator", "new-model", None, -5))
+        .unwrap();
+    storage
+        .save_llm_message(&message("quantifier", "q-model", Some("q failure"), -10))
+        .unwrap();
+
+    let latest = storage.latest_llm_message_per_agent().unwrap();
+
+    assert_eq!(latest.len(), 2, "one row per distinct agent");
+    assert_eq!(latest[0].agent_name, "quantifier");
+    assert_eq!(latest[0].error_message.as_deref(), Some("q failure"));
+    assert_eq!(latest[1].agent_name, "narrator");
+    assert_eq!(latest[1].model_name, "new-model");
+    assert!(
+        latest[1].error_message.is_none(),
+        "the newer narrator success must mask the older failure"
+    );
+}

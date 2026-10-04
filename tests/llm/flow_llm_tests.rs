@@ -79,11 +79,15 @@ mod tests {
             let llm_result = wait_for_llm_idle(port, Duration::from_secs(180)).await;
             let status_after = wait_for_status_ready_or_error(&page).await;
 
-            println!("Smoke test: LLM idle={llm_result:?}, status='{status_after}'");
+            println!(
+                "Smoke test: LLM idle={llm_result:?}, status='{}'",
+                status_after.text
+            );
 
             assert!(
-                status_after.contains("Ready") || status_after.contains("Error"),
-                "Status should be Ready or Error after LLM completes. Got: {status_after}"
+                status_after.is_terminal(),
+                "Status should be Ready or show an error disclosure after LLM completes. Got: {}",
+                status_after.text
             );
 
             verify_llm_messages_logged(port).await;
@@ -100,20 +104,22 @@ mod tests {
             send_action(&page, "Look around the room").await;
             let result_a = wait_for_llm_idle(port, Duration::from_secs(180)).await;
             let status_a = wait_for_status_ready_or_error(&page).await;
-            println!("Step 1: idle={result_a:?}, status='{status_a}'");
+            println!("Step 1: idle={result_a:?}, status='{}'", status_a.text);
 
             send_action(&page, "Describe what you see in detail").await;
             let result_b = wait_for_llm_idle(port, Duration::from_secs(180)).await;
             let status_b = wait_for_status_ready_or_error(&page).await;
-            println!("Step 2: idle={result_b:?}, status='{status_b}'");
+            println!("Step 2: idle={result_b:?}, status='{}'", status_b.text);
 
             assert!(
-                status_a.contains("Ready") || status_a.contains("Error"),
-                "Step 1 should complete. Got: {status_a}"
+                status_a.is_terminal(),
+                "Step 1 should complete with Ready or an error disclosure. Got: {}",
+                status_a.text
             );
             assert!(
-                status_b.contains("Ready") || status_b.contains("Error"),
-                "Step 2 should complete. Got: {status_b}"
+                status_b.is_terminal(),
+                "Step 2 should complete with Ready or an error disclosure. Got: {}",
+                status_b.text
             );
 
             let entries = count_log_entries(&page).await;

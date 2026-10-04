@@ -172,6 +172,11 @@ pub struct GamesPanelTemplate {
                 {% for opt in impersonate_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
             </select>
         </label>
+        <label>Options
+            <select name="options_preset_id" id="game-options-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+                {% for opt in options_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
+            </select>
+        </label>
         {% endmatch %}
     </div>
 </div>
@@ -186,8 +191,7 @@ pub struct GamePostureTemplate {
     pub system_options: Vec<SelectOptionView>,
     pub quantifier_options: Vec<SelectOptionView>,
     pub impersonate_options: Vec<SelectOptionView>,
-    /// Set when the preset library failed to load: the picker row renders
-    /// this message instead of the three selects.
+    pub options_options: Vec<SelectOptionView>,
     pub preset_load_error: Option<String>,
 }
 
@@ -197,6 +201,7 @@ impl GamePostureTemplate {
         system_presets: &[PromptPreset],
         quantifier_presets: &[PromptPreset],
         impersonate_presets: &[PromptPreset],
+        options_presets: &[PromptPreset],
     ) -> Self {
         Self {
             game_id: game.id,
@@ -217,6 +222,10 @@ impl GamePostureTemplate {
                 impersonate_presets,
                 game.narrator_mode,
                 &game.active_impersonate_prompt_preset_id,
+            ),
+            options_options: SelectOptionView::every_preset(
+                options_presets,
+                &game.active_options_prompt_preset_id,
             ),
             preset_load_error: None,
         }

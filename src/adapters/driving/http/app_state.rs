@@ -77,7 +77,11 @@ impl AppState {
             .game_view_query
             .get_current_game_display_name()
             .unwrap_or_else(|_| "Unknown".to_string());
-        render_header_unlocked(game_name)
+        let roles = self
+            .game_view_query
+            .role_health()
+            .map_err(|e| EngineError::Config(Self::render_error_context("header", e)))?;
+        render_header_unlocked(game_name, &roles)
     }
 
     pub fn render_story_log(&self) -> Result<String> {

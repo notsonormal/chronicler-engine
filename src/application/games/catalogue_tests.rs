@@ -6,6 +6,7 @@ use crate::application::errors::ApplicationError;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::message_service::MessageService;
 use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::domain::model::game::PresetSelection;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarratorMode, NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::MessageType;
@@ -545,9 +546,12 @@ fn test_switch_mode_same_mode_is_a_noop() {
     catalogue
         .set_preset_selection(
             id,
-            "system_custom",
-            "quantifier_default",
-            "impersonate_default",
+            PresetSelection::new(
+                "system_custom",
+                "quantifier_default",
+                "impersonate_default",
+                "options_default",
+            ),
         )
         .unwrap();
 
@@ -575,9 +579,12 @@ fn test_set_preset_selection_updates_ids() {
     let game = catalogue
         .set_preset_selection(
             id,
-            "system_if_default",
-            "quantifier_default",
-            "impersonate_default",
+            PresetSelection::new(
+                "system_if_default",
+                "quantifier_default",
+                "impersonate_default",
+                "options_default",
+            ),
         )
         .expect("set_preset_selection should succeed");
     assert_eq!(game.active_system_prompt_preset_id, "system_if_default");
@@ -592,8 +599,15 @@ fn test_set_preset_selection_rejects_unknown_preset() {
     let id = catalogue.current_game_id();
     seed_library(storage.as_ref());
 
-    let result =
-        catalogue.set_preset_selection(id, "no_such", "quantifier_default", "impersonate_default");
+    let result = catalogue.set_preset_selection(
+        id,
+        PresetSelection::new(
+            "no_such",
+            "quantifier_default",
+            "impersonate_default",
+            "options_default",
+        ),
+    );
     assert!(
         matches!(result, Err(ApplicationError::Validation(ref msg)) if msg.contains("Preset not found")),
         "Expected preset-not-found validation error, got {result:?}"
@@ -609,9 +623,12 @@ fn test_set_preset_selection_rejects_mode_disallowed_preset() {
     // system_if_default is IF-only; the game is in Novel mode.
     let result = catalogue.set_preset_selection(
         id,
-        "system_if_default",
-        "quantifier_default",
-        "impersonate_default",
+        PresetSelection::new(
+            "system_if_default",
+            "quantifier_default",
+            "impersonate_default",
+            "options_default",
+        ),
     );
     assert!(
         matches!(result, Err(ApplicationError::Validation(ref msg)) if msg.contains("not allowed")),
@@ -633,9 +650,12 @@ fn test_set_preset_selection_accepts_unchanged_stored_ids() {
     let game = catalogue
         .set_preset_selection(
             id,
-            "system_default",
-            "quantifier_default",
-            "impersonate_default",
+            PresetSelection::new(
+                "system_default",
+                "quantifier_default",
+                "impersonate_default",
+                "options_default",
+            ),
         )
         .expect("unchanged stored ids must pass without a library");
     assert_eq!(game.active_system_prompt_preset_id, "system_default");

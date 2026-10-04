@@ -50,6 +50,11 @@
                 <option value="impersonate_default" selected>Default</option>
             </select>
         </label>
+        <label>Options
+            <select name="options_preset_id" hx-post="/games/1/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML">
+                <option value="options_default" selected>Default</option>
+            </select>
+        </label>
         
     </div>
 </div>

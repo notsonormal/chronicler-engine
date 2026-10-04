@@ -1,6 +1,8 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! LLM message storage
 
+use std::collections::BTreeMap;
+
 use crate::error::EngineError;
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::llm_message::DbLlmMessage;
@@ -85,5 +87,61 @@ impl Storage {
                 Ok(data.llm_messages[start..].to_vec())
             }
         })
+    }
+
+    pub fn latest_llm_message_per_agent(&self) -> Result<Vec<LlmMessage>, EngineError> {
+        self.with_backend_mut("latest_llm_message_per_agent", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id, agent_name, backend_name, model_name, system_prompt, user_prompt,
+                                raw_request_json, raw_response_json, parsed_response, error_message, created_at
+                         FROM llm_messages m
+                         WHERE id = (
+                             SELECT id FROM llm_messages
+                             WHERE agent_name = m.agent_name
+                             ORDER BY created_at DESC, id DESC
+                             LIMIT 1
+                         )
+                         ORDER BY created_at ASC, id ASC",
+                    )
+                    .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+
+                let rows = stmt
+                    .query_map([], DbLlmMessage::from_row)
+                    .map_err(|e| EngineError::Config(format!("Failed to query LLM messages: {e}")))?;
+
+                let mut messages = Vec::new();
+                for row in rows {
+                    let db_msg = row.map_err(|e| {
+                        EngineError::Config(format!("Failed to read LLM message row: {e}"))
+                    })?;
+                    messages.push(LlmMessage::try_from(&db_msg)?);
+                }
+                Ok(messages)
+            }
+            Backend::InMemory(data) => {
+                Ok(Self::newest_message_per_agent(&data.llm_messages))
+            }
+        })
+    }
+
+    fn newest_message_per_agent(messages: &[LlmMessage]) -> Vec<LlmMessage> {
+        let mut newest: BTreeMap<&str, (usize, &LlmMessage)> = BTreeMap::new();
+        for (index, msg) in messages.iter().enumerate() {
+            let replace = match newest.get(msg.agent_name.as_str()) {
+                Some((current_index, current)) => {
+                    (&current.created_at, *current_index) < (&msg.created_at, index)
+                }
+                None => true,
+            };
+            if replace {
+                newest.insert(msg.agent_name.as_str(), (index, msg));
+            }
+        }
+        let mut rows: Vec<(usize, &LlmMessage)> = newest.into_values().collect();
+        rows.sort_by(|a, b| a.1.created_at.cmp(&b.1.created_at).then(a.0.cmp(&b.0)));
+        rows.into_iter().map(|(_, msg)| msg.clone()).collect()
     }
 }

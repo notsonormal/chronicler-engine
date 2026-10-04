@@ -31,6 +31,30 @@ pub struct Game {
     pub options_always_on: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresetSelection {
+    pub system_id: String,
+    pub quantifier_id: String,
+    pub impersonate_id: String,
+    pub options_id: String,
+}
+
+impl PresetSelection {
+    pub fn new(
+        system_id: impl Into<String>,
+        quantifier_id: impl Into<String>,
+        impersonate_id: impl Into<String>,
+        options_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            system_id: system_id.into(),
+            quantifier_id: quantifier_id.into(),
+            impersonate_id: impersonate_id.into(),
+            options_id: options_id.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct NewGame {
     pub world_name: String,

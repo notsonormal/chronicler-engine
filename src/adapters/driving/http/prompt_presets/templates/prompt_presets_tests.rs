@@ -34,6 +34,8 @@ fn test_prompt_presets_template_renders_system_presets() {
         active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
         active_impersonate: mode_ids("default", "default"),
+        options_presets: vec![],
+        active_options: String::new(),
     };
 
     let html = template.render().unwrap();
@@ -57,6 +59,8 @@ fn test_prompt_presets_template_shows_active_badge() {
         active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
         active_impersonate: mode_ids("default", "default"),
+        options_presets: vec![],
+        active_options: String::new(),
     };
 
     let html = template.render().unwrap();
@@ -80,6 +84,8 @@ fn test_prompt_presets_template_shows_default_badge() {
         active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
         active_impersonate: mode_ids("default", "default"),
+        options_presets: vec![],
+        active_options: String::new(),
     };
 
     let html = template.render().unwrap();
@@ -95,6 +101,8 @@ fn test_prompt_presets_template_has_add_forms() {
         active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
         active_impersonate: mode_ids("default", "default"),
+        options_presets: vec![],
+        active_options: String::new(),
     };
 
     let html = template.render().unwrap();
@@ -119,6 +127,8 @@ fn test_prompt_presets_template_truncates_preview() {
         active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
         active_impersonate: mode_ids("default", "default"),
+        options_presets: vec![],
+        active_options: String::new(),
     };
 
     let html = template.render().unwrap();

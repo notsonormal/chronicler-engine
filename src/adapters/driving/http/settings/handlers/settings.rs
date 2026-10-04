@@ -8,7 +8,9 @@ use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::connections::{
     connection_card_html, connection_edit_form_html,
 };
-use crate::adapters::driving::http::settings::templates::settings::SettingsTemplate;
+use crate::adapters::driving::http::settings::templates::settings::{
+    SettingsTemplate, TextCheckCardTemplate,
+};
 use crate::adapters::driving::http::utils::error::{error_response, render_error};
 use crate::adapters::driving::http::utils::handler_helpers::{
     generate_storage_id, opt_string, render_template,
@@ -22,12 +24,6 @@ pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
         Ok(settings) => render_template(SettingsTemplate::from_settings(&settings)),
         Err(e) => Html(render_error(&e.to_string())),
     }
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct SettingsForm {
-    pub narration_connection_id: String,
-    pub quantifier_connection_id: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -48,41 +44,26 @@ pub struct TextCheckForm {
     pub enable_auto_check: bool,
 }
 
-pub async fn save_settings_handler(
-    State(app_state): State<AppState>,
-    Form(form): Form<SettingsForm>,
-) -> Html<String> {
-    let outcome = app_state.settings_service.update_settings(|settings| {
-        settings.narration_connection_id = form.narration_connection_id;
-        settings.quantifier_connection_id = form.quantifier_connection_id;
-        settings.narration_connection()?;
-        settings.quantifier_connection()?;
-        Ok(())
-    });
-
-    match outcome {
-        Ok(()) => Html("Settings saved!".to_string()),
-        Err(e) => Html(render_error(&e.to_string())),
-    }
-}
-
 pub async fn save_text_check_handler(
     State(app_state): State<AppState>,
     Form(form): Form<TextCheckForm>,
 ) -> Html<String> {
+    let mode = match form.check_mode.as_str() {
+        "spell" => TextCheckMode::Spell,
+        "grammar" => TextCheckMode::Grammar,
+        "spell_grammar" => TextCheckMode::SpellGrammar,
+        _ => TextCheckMode::Disabled,
+    };
+
     let outcome = app_state.settings_service.update_settings(|settings| {
-        settings.text_check.mode = match form.check_mode.as_str() {
-            "spell" => TextCheckMode::Spell,
-            "grammar" => TextCheckMode::Grammar,
-            "spell_grammar" => TextCheckMode::SpellGrammar,
-            _ => TextCheckMode::Disabled,
-        };
-        settings.text_check.enable_auto_check = form.enable_auto_check;
-        Ok(())
+        settings
+            .text_check
+            .set_mode_and_auto_check(mode, form.enable_auto_check);
+        Ok(settings.clone())
     });
 
     match outcome {
-        Ok(()) => Html("Text check settings saved!".to_string()),
+        Ok(updated) => render_template(TextCheckCardTemplate::from_settings(&updated, "Saved")),
         Err(e) => Html(render_error(&e.to_string())),
     }
 }

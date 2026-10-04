@@ -1,13 +1,9 @@
-//! HTTP E2E tests for the settings endpoints: panel rendering and POST /settings.
-
-use std::sync::Arc;
+//! HTTP E2E tests for the settings endpoints: panel rendering and the text-check auto-save.
 
 use axum::body::Body;
 use axum::http::{self, Request, StatusCode};
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::Storage;
-use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
 use chronicler_engine::test_support::body_text;
@@ -104,146 +100,76 @@ async fn test_settings_panel_renders_full_surface() {
     assert!(body.contains(r#"name="enable_auto_check""#));
 }
 
-// [docs/specs/settings.md] SCENARIO: 20.2
+// [docs/specs/settings.md] SCENARIO: 20.12
 #[tokio::test]
-async fn test_post_settings_switches_narrator() {
+async fn test_text_check_autosave_stores_mode_and_check_before_sending() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = post_form_request(
-        "/settings",
-        "narration_connection_id=openrouter-euryale&quantifier_connection_id=openrouter-gpt-4o-mini",
+        "/settings/text-check",
+        "check_mode=spell&enable_auto_check=true",
     );
     let response = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
-    assert_eq!(body, "Settings saved!");
+    assert!(
+        body.contains(r#"id="text-check-card"#),
+        "the auto-save must return the re-rendered card: {body}"
+    );
+    assert!(
+        body.contains("Saved"),
+        "the card must carry its own save feedback: {body}"
+    );
 
     let panel = get_body(&app, "/fragment/settings").await;
     assert!(
-        connection_card(&panel, "openrouter-euryale")
-            .contains(r#"<span class="badge">Narrator</span>"#),
-        "the switched narrator should render its badge: {panel}"
+        panel.contains(r#"<option value="spell" selected>"#),
+        "the stored mode must render selected: {panel}"
     );
     assert!(
-        !connection_card(&panel, "openrouter-gpt-4o-mini")
-            .contains(r#"<span class="badge">Narrator</span>"#),
-        "the previous narrator should no longer render the Narrator badge: {panel}"
+        panel.contains(r#"name="enable_auto_check" value="true" checked"#),
+        "the stored check-before-sending must render checked: {panel}"
     );
 }
 
-// [docs/specs/settings.md] SCENARIO: 20.3
+// [docs/specs/settings.md] SCENARIO: 20.13
 #[tokio::test]
-async fn test_post_settings_switches_quantifier() {
+async fn test_text_check_disabled_clears_check_before_sending() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = post_form_request(
-        "/settings",
-        "narration_connection_id=openrouter-gpt-4o-mini&quantifier_connection_id=ollama-gemma-4-26B",
+        "/settings/text-check",
+        "check_mode=disabled&enable_auto_check=true",
     );
     let response = app.clone().oneshot(req).await.unwrap();
-
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert_eq!(body, "Settings saved!");
 
     let panel = get_body(&app, "/fragment/settings").await;
     assert!(
-        !connection_card(&panel, "openrouter-gpt-4o-mini")
-            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
-        "the previous quantifier should no longer render the Quantifier badge: {panel}"
+        panel.contains(r#"<option value="disabled" selected>"#),
+        "the stored mode must render Disabled selected: {panel}"
     );
     assert!(
-        connection_card(&panel, "ollama-gemma-4-26B")
-            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
-        "the switched quantifier should render its badge: {panel}"
+        !panel.contains(r#"name="enable_auto_check" value="true" checked"#),
+        "a Disabled mode must clear check-before-sending: {panel}"
     );
-}
 
-// [docs/specs/settings.md] SCENARIO: 20.4
-#[tokio::test]
-async fn test_post_settings_switches_both_connections() {
-    let _guard = SettingsTestGuard::new();
-    let app = TestAppBuilder::default_app();
-
-    let req = post_form_request(
-        "/settings",
-        "narration_connection_id=openrouter-euryale&quantifier_connection_id=ollama-gemma-4-26B",
-    );
-    let response = app.clone().oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert_eq!(body, "Settings saved!");
-
-    let panel = get_body(&app, "/fragment/settings").await;
+    let start = panel
+        .find(r#"name="enable_auto_check""#)
+        .expect("the check box must render");
+    let end = start + panel[start..].find('>').unwrap_or(0);
+    let tag = &panel[start..end];
     assert!(
-        connection_card(&panel, "openrouter-euryale")
-            .contains(r#"<span class="badge">Narrator</span>"#),
-        "the switched narrator should render its badge: {panel}"
+        tag.contains("disabled"),
+        "the check box must be disabled: {tag}"
     );
     assert!(
-        connection_card(&panel, "ollama-gemma-4-26B")
-            .contains(r#"<span class="badge quantifier">Quantifier</span>"#),
-        "the switched quantifier should render its badge: {panel}"
+        !tag.contains("checked"),
+        "the check box must be cleared: {tag}"
     );
-}
-
-// [docs/specs/settings.md] SCENARIO: 20.5
-#[tokio::test]
-async fn test_post_settings_rejects_unknown_connection_id() {
-    let _guard = SettingsTestGuard::new();
-    let (app, app_state) = TestAppBuilder::default_test().build_with_state();
-
-    let req = post_form_request(
-        "/settings",
-        "narration_connection_id=not-a-connection&quantifier_connection_id=openrouter-gpt-4o-mini",
-    );
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains("error-message"));
-    assert!(body.contains("is not in the connections list"));
-
-    let stored = app_state.settings().expect("settings read should succeed");
-    assert_eq!(stored.narration_connection_id, "openrouter-gpt-4o-mini");
-}
-
-// [docs/specs/settings.md] SCENARIO: 20.6
-#[tokio::test]
-async fn test_post_settings_missing_field_returns_422() {
-    let _guard = SettingsTestGuard::new();
-    let app = TestAppBuilder::default_app();
-
-    let req = post_form_request("/settings", "narration_connection_id=openrouter-euryale");
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-}
-
-// [docs/specs/settings.md] SCENARIO: 20.7
-#[tokio::test]
-async fn test_post_settings_reports_save_failure() {
-    let _guard = SettingsTestGuard::new();
-    let storage = Arc::new(Storage::new_in_memory().with_failure(
-        "update_settings",
-        TestOverride::internal("settings save failure"),
-    ));
-    let app = TestAppBuilder::default_test().storage(storage).build();
-
-    let req = post_form_request(
-        "/settings",
-        "narration_connection_id=openrouter-euryale&quantifier_connection_id=openrouter-gpt-4o-mini",
-    );
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains("error-message"));
-    assert!(body.contains("settings save failure"));
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.8

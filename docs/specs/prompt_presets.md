@@ -259,6 +259,26 @@ Then the response is 200
 And the response body is `<div class="error-message">Cannot delete default presets</div>`
 ```
 
+#### Scenario 21.37: Delete a preset referenced as a mode default is refused
+
+```gherkin
+Given a fresh app state with a non-default system preset referenced as the Interactive Fiction bundle's system default
+When the client POST /prompt-presets/{id}/delete
+Then the response is 200
+And the response body contains "Preset is a mode default; change the default before deleting"
+And the preset is not deleted
+```
+
+#### Scenario 21.38: Delete the active settings-level Options preset is refused
+
+```gherkin
+Given a fresh app state with a non-default Options preset set as the settings-level Options default
+When the client POST /prompt-presets/{id}/delete
+Then the response is 200
+And the response body contains "Preset is the default Options preset; change the default before deleting"
+And the preset is not deleted
+```
+
 ### POST /prompt-presets/{id}/duplicate — duplicate
 
 #### Scenario 21.21: Duplicate a preset → panel re-renders with the copy
@@ -406,4 +426,34 @@ When the client POST /prompt-presets/{beta_id} with name "Alpha"
 Then the response is a 400
 And the body names "Alpha" and says a system preset with that name already exists
 And the preset named "Beta" is unchanged
+```
+
+### Options prompts — mode-agnostic
+
+Options prompts have no `ModePresetBundle` slot, so the panel's Options
+section is mode-agnostic: each card carries one Set Active button and
+activating it writes the settings-level default
+(`active_options_prompt_preset_id`). A game-level selection still takes
+precedence at resolution time.
+
+#### Scenario 21.35: The panel renders the Options Prompts section
+
+```gherkin
+Given a fresh app state with a seeded Options preset named "Custom Options"
+When the client GET /fragment/prompt-presets
+Then the response is 200
+And the body contains an "Options Prompts" heading
+And the body contains an "Add Options Prompt Preset" toggle whose form posts preset_type "options"
+And the body contains one card per seeded Options preset
+And that card offers a single "Set Active" button and no mode-specific activation buttons
+```
+
+#### Scenario 21.36: Activating an Options preset sets the settings-level default
+
+```gherkin
+Given a fresh app state with a seeded Options preset that is not the settings-level Options default
+When the client POST /prompt-presets/{id}/activate
+Then the response is 200
+And the re-rendered Options card carries the "Active" badge and hides its "Set Active" button
+And the stored settings-level Options default is that preset's id
 ```

@@ -267,8 +267,16 @@ async fn test_world_edit_form_renders_posture_selects_http() {
         "the edit form must render, not the create form: {html}"
     );
     assert!(
-        html.contains(r#"class="form-group posture-group""#),
+        html.contains(r#"class="posture-group""#),
         "the posture group must render: {html}"
+    );
+    assert!(
+        html.contains("Posture — saves automatically"),
+        "the posture group must be labelled as auto-saving: {html}"
+    );
+    assert!(
+        html.contains("Cancel applies to the details fields only"),
+        "the form must state Cancel's scope: {html}"
     );
 
     for name in ["narrator_mode", "narrative_perspective", "narrative_tense"] {

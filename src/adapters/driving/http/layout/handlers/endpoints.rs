@@ -1,20 +1,24 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Fragment endpoints
 
-use axum::{extract::State, response::Html};
+use axum::body::Body;
+use axum::{extract::State, response::Html, response::Response};
 
-use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::utils::error::{
+    error_disclosure, generation_error_summary, raw_error_detail,
+};
 use crate::adapters::driving::http::utils::fragment::render_fragment;
+use crate::adapters::driving::http::AppState;
 
-pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
+pub async fn header_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(&state, |s| s.render_header(), "header_fragment")
 }
 
-pub async fn story_log_fragment(State(state): State<AppState>) -> Html<String> {
+pub async fn story_log_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(&state, |s| s.render_story_log(), "story_log_fragment")
 }
 
-pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Html<String> {
+pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(
         &state,
         |s| s.render_visual_sidebar(),
@@ -22,15 +26,15 @@ pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Html<Stri
     )
 }
 
-pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String> {
+pub async fn action_area_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(&state, |s| s.render_action_area(), "action_area_fragment")
 }
 
-pub async fn options_dock_fragment(State(state): State<AppState>) -> Html<String> {
+pub async fn options_dock_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(&state, |s| s.render_options_dock(), "options_dock_fragment")
 }
 
-pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html<String> {
+pub async fn character_headshots_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(
         &state,
         |s| s.render_character_headshots(),
@@ -38,7 +42,7 @@ pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html
     )
 }
 
-pub async fn llm_messages_fragment(State(state): State<AppState>) -> Html<String> {
+pub async fn llm_messages_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(&state, |s| s.render_llm_messages(), "llm_messages_fragment")
 }
 
@@ -67,7 +71,11 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
         "generating_status_handler: is_generating={is_gen}, status={status:?}, phase={phase:?}",
     );
     if let Some(err) = status.error_message() {
-        Html(format!("<span class=\"status error\">Error: {err}</span>"))
+        Html(error_disclosure(
+            "status-error-popover",
+            &generation_error_summary(err),
+            &raw_error_detail(err),
+        ))
     } else if is_gen {
         Html(phase.as_endpoint_str().to_string())
     } else {

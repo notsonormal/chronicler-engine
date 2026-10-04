@@ -1,7 +1,7 @@
 # Keep DOM state and focus through in-place swaps
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -174,3 +174,32 @@ then fix the docs that describe them as working.
   names.
 - `python build.py` is green, the user reviews the diff, and the work is
   committed through `/commit-and-push`.
+
+## Answer
+
+Resolved. Four pieces, one root cause — a swap replacing the node that held focus,
+selection or the poll trigger.
+
+1. **Story-log morph.** Vendored idiomorph (`assets/idiomorph-ext.min.js`, 0BSD) with
+   `<body hx-ext="morph">` and `#story-log` `hx-swap="morph:innerHTML"`; each `.log-entry`
+   gained `id="entry-{{ entry.id }}"` so morph matches on identity, including the
+   50-entry cap's routine removal. `#story-log` gained `tabindex="0"` and an accessible
+   name; it is deliberately not `role="log"` (announcing is 47).
+2. **Edit lock.** While an edit is open every other `.edit-btn` is disabled; the lock is
+   released on cancel, Escape and a failed save, and held across a successful save until
+   the resumed poll re-renders. `pausePolling` saves the trigger only when
+   `originalTrigger` is null, and `showEditForm` no-ops while `editState` is set
+   (ticket 38's option C).
+3. **Focus after swaps.** Verified already implemented by 46 (commit `0a2e3bcc`): stable
+   ids on the posture selects, and a before/after-settle manager for `.worlds-panel`,
+   `.prompt-presets-panel` and `.preset-card`. Not duplicated.
+4. **Dead events.** The six `htmx.trigger(..., "htmx:refresh")` calls and the
+   `action-area-refresh` listener were deleted, and
+   `docs/diataxis/reference/frontend/dashboard.md` corrected.
+
+Tests: tier 2 `tests/browser/stub/story_log.rs` (30.11–30.17); tier 3 focus paths were
+pre-existing and verified (27.2, 29.3, 28.2). Standards-8b (replacing fixed sleeps with a
+bounded wait) landed in 47's test file.
+
+`python build.py` is green (1566 integration, 62 browser). Uncommitted, pending review
+and `/commit-and-push`.

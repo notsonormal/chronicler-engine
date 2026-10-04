@@ -8,9 +8,8 @@ use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
 use crate::adapters::driving::http::settings::handlers::{
     add_connection_handler, connection_card_fragment, delete_connection_handler,
-    edit_connection_form, edit_connection_handler, save_settings_handler, save_text_check_handler,
-    set_narrator_handler, set_quantifier_handler, settings_panel, ConnectionForm, SettingsForm,
-    TextCheckForm,
+    edit_connection_form, edit_connection_handler, save_text_check_handler, set_narrator_handler,
+    set_quantifier_handler, settings_panel, ConnectionForm, TextCheckForm,
 };
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
@@ -42,31 +41,6 @@ async fn test_settings_panel_returns_html() {
 }
 
 #[tokio::test]
-async fn test_save_settings_handler_updates_ids() {
-    let app_state = make_test_app_state();
-    let ids: Vec<String> = app_state
-        .settings()
-        .expect("settings read should succeed")
-        .connections
-        .iter()
-        .take(2)
-        .map(|c| c.id.clone())
-        .collect();
-    let form = SettingsForm {
-        narration_connection_id: ids[0].clone(),
-        quantifier_connection_id: ids[1].clone(),
-    };
-
-    let response = save_settings_handler(axum::extract::State(app_state.clone()), Form(form)).await;
-
-    assert!(response.0.contains("Settings saved!"));
-
-    let settings = app_state.settings().expect("settings read should succeed");
-    assert_eq!(settings.narration_connection_id, ids[0]);
-    assert_eq!(settings.quantifier_connection_id, ids[1]);
-}
-
-#[tokio::test]
 async fn test_save_text_check_handler_spell_mode() {
     let app_state = make_test_app_state();
     let form = TextCheckForm {
@@ -77,7 +51,8 @@ async fn test_save_text_check_handler_spell_mode() {
     let response =
         save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
-    assert!(response.0.contains("Text check settings saved!"));
+    assert!(response.0.contains(r#"id="text-check-card"#));
+    assert!(response.0.contains("Saved"));
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Spell);
@@ -92,10 +67,8 @@ async fn test_save_text_check_handler_grammar_mode() {
         enable_auto_check: false,
     };
 
-    let response =
+    let _response =
         save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
-
-    assert!(response.0.contains("Text check settings saved!"));
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Grammar);
@@ -131,6 +104,34 @@ async fn test_save_text_check_handler_unknown_mode_defaults_to_disabled() {
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Disabled);
+}
+
+#[tokio::test]
+async fn test_save_text_check_handler_disabled_clears_and_disables_checkbox() {
+    let app_state = make_test_app_state();
+    let form = TextCheckForm {
+        check_mode: "disabled".into(),
+        enable_auto_check: true,
+    };
+
+    let response =
+        save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
+
+    let settings = app_state.settings().expect("settings read should succeed");
+    assert_eq!(settings.text_check.mode, TextCheckMode::Disabled);
+    assert!(!settings.text_check.enable_auto_check);
+    assert!(
+        !response
+            .0
+            .contains(r#"name="enable_auto_check" value="true" checked"#),
+        "the disabled card must render the check box unchecked: {}",
+        response.0
+    );
+    assert!(
+        response.0.contains("disabled"),
+        "the disabled card must render the check box disabled: {}",
+        response.0
+    );
 }
 
 #[tokio::test]

@@ -1,7 +1,7 @@
 # Panel consistency and Options presets
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -82,3 +82,39 @@ the Settings/Worlds panels.
   them.
 - `python build.py` is green, the user reviews the diff, then commit through
   `/commit-and-push`.
+
+## Answer
+
+Resolved. Theme 4 plus the Options-preset wiring.
+
+- **Save model (option E, hybrid by control type).** Instant-with-feedback: connection
+  Set-as-Narrator/Quantifier/Delete, Text Check mode + check-before-sending, World
+  Narrator Mode/Perspective/Tense. On Save: connection Add/Edit and World details. The
+  Text Check pair is coupled (Disabled clears and disables the box) and lost its Save
+  button and the `#settings-status` "saved!" line. The World posture selects stay
+  auto-saving in a labelled group separate from the details form, whose Cancel scope is
+  stated on the page; submitting details clears the group's stale "Saved". `POST
+  /settings` and `save_settings_handler` were deleted with their tests.
+- **Layout (option A1).** One centered 960px/24px column for every panel; the tab body is
+  the only scroll region (inner scroll boxes removed from Games, Prompt Presets, Worlds);
+  Worlds' form and list share one card frame; the tab bar scrolls horizontally below
+  1024px. Viewports declared in `ui_design.md` (>=1024x700 supported, 768-1024
+  best-effort, phone out of scope).
+- **Options presets (option C).** An "Options Prompts" section in the Prompt Presets tab
+  (list/view/edit/activate; activation sets the settings-level default) and a fourth
+  Options select in the Games picker. The second seed is reachable.
+
+Review follow-ups applied: `SelectOptionView`'s two constructors share one `(missing)`
+tail (`every_preset`); `role_effect` uses the `AGENT_*` constants; `PresetType::Options`
+is compared as the enum; the world posture selects are single-sourced in Rust with a
+create/edit flag; the text-check invariant is single-sourced on
+`TextCheckSettings::effective_enable_auto_check`; `set_preset_selection` takes a
+`PresetSelection`; `ui_design.md`'s Panel Save Model defers behaviour to the specs. The
+active-Options-default delete refusal was kept (it mirrors the mode-default guard) and
+given tier-1 coverage (21.37/21.38).
+
+Tests: tier 1 `settings.rs` (20.12/20.13), `games_config.rs` (20.11), `prompt_presets.rs`
+(21.35–21.38); unit `catalogue_tests.rs`, `settings_tests.rs`.
+
+`python build.py` is green (1566 integration, 62 browser). Uncommitted, pending review
+and `/commit-and-push`.

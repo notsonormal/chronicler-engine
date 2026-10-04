@@ -2,11 +2,13 @@
 //! Worlds templates
 
 use askama::Template;
+use crate::adapters::driving::http::utils::response::html_escape;
 use crate::adapters::driving::http::utils::template_helpers::select_options_html;
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
-use crate::domain::model::world::WorldCard;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::scenario::StartingScenario;
+use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::world::WorldCard;
 
 pub struct WorldRowView {
     pub key: String,
@@ -70,7 +72,7 @@ impl WorldsPanelTemplate {
 <div class="world-form-container">
     <h2>{% if is_edit %}Edit World{% else %}Create New World{% endif %}</h2>
 
-    <form hx-post="{{ form_action }}" hx-target=".worlds-panel" hx-swap="outerHTML" enctype="application/x-www-form-urlencoded">
+    <form hx-post="{{ form_action }}" hx-target=".worlds-panel" hx-swap="outerHTML" enctype="application/x-www-form-urlencoded"{% if is_edit %} hx-on::before-request="clearPostureStatus()"{% endif %}>
         <label>Key: <input type="text" name="key" value="{{ key }}" {% if is_readonly %}readonly{% endif %} required /></label>
 
         <label>Name: <input type="text" name="name" value="{{ name }}" required /></label>
@@ -81,26 +83,12 @@ impl WorldsPanelTemplate {
 
         <label>Default Room Image: <input type="text" name="default_room_image" value="{{ default_room_image }}" /></label>
 
-        <div class="form-group posture-group">
-            <label>Narrator Mode:
-                <select name="narrator_mode" {% if is_edit %}hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML"{% endif %}>
-                    {{ narrator_mode_options }}
-                </select>
-            </label>
-            <label>Perspective:
-                <select name="narrative_perspective" {% if is_edit %}hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML"{% endif %}>
-                    <option value="second" {% if narrative_perspective == "second" %}selected{% endif %}>Second person</option>
-                    <option value="third" {% if narrative_perspective == "third" %}selected{% endif %}>Third person</option>
-                </select>
-            </label>
-            <label>Tense:
-                <select name="narrative_tense" {% if is_edit %}hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML"{% endif %}>
-                    <option value="past" {% if narrative_tense == "past" %}selected{% endif %}>Past</option>
-                    <option value="present" {% if narrative_tense == "present" %}selected{% endif %}>Present</option>
-                </select>
-            </label>
-            <span id="world-posture-status"></span>
-        </div>
+        {% if !is_edit %}
+        <fieldset class="posture-group">
+            <legend>Posture</legend>
+            {{ posture_selects }}
+        </fieldset>
+        {% endif %}
 
         <div class="form-group">
             <label class="checkbox-label"><input type="checkbox" name="options_always_on" value="true" {% if options_always_on %}checked{% endif %} /> Auto-generate options after each turn</label>
@@ -118,7 +106,18 @@ impl WorldsPanelTemplate {
             <button type="submit" class="btn-primary">{{ submit_text }}</button>
             <button type="button" class="btn-cyan" hx-get="/fragment/worlds" hx-target=".worlds-panel" hx-swap="outerHTML">Cancel</button>
         </div>
+        {% if is_edit %}
+        <p class="form-scope-note">Cancel applies to the details fields only. Posture saves automatically.</p>
+        {% endif %}
     </form>
+
+    {% if is_edit %}
+    <fieldset class="posture-group" id="world-posture-group">
+        <legend>Posture — saves automatically</legend>
+        {{ posture_selects }}
+        <span id="world-posture-status"></span>
+    </fieldset>
+    {% endif %}
 </div>
 </div>
 "##,
@@ -133,7 +132,7 @@ pub struct WorldFormTemplate {
     pub default_room_image: String,
     pub map_json: String,
     pub scenarios_json: String,
-    pub narrator_mode_options: SafeHtml,
+    pub posture_selects: SafeHtml,
     pub narrative_perspective: String,
     pub narrative_tense: String,
     pub options_always_on: bool,
@@ -173,6 +172,8 @@ impl WorldFormTemplate {
             )
         };
 
+        let auto_save_key = if is_edit { Some(w.key.as_str()) } else { None };
+
         Self {
             is_edit,
             key: w.key.clone(),
@@ -182,9 +183,12 @@ impl WorldFormTemplate {
             default_room_image: w.default_room_image.clone().unwrap_or_default(),
             map_json: map_json_str,
             scenarios_json: scenarios_json_str,
-            narrator_mode_options: select_options_html(SelectOptionView::narrator_modes(
+            posture_selects: Self::posture_selects_html(
                 w.narrator_mode,
-            )),
+                w.narrative_perspective.as_str(),
+                w.narrative_tense.as_str(),
+                auto_save_key,
+            ),
             options_always_on: w.options_always_on,
             narrative_perspective: w.narrative_perspective.as_str().to_string(),
             narrative_tense: w.narrative_tense.as_str().to_string(),
@@ -203,5 +207,59 @@ impl WorldFormTemplate {
             }
             .to_string(),
         }
+    }
+
+    fn posture_selects_html(
+        narrator_mode: NarratorMode,
+        perspective: &str,
+        tense: &str,
+        auto_save_key: Option<&str>,
+    ) -> SafeHtml {
+        let hx = auto_save_key
+            .map(|key| {
+                format!(
+                    r##" hx-post="/worlds/{}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML""##,
+                    html_escape(key)
+                )
+            })
+            .unwrap_or_default();
+        let narrator_options = select_options_html(SelectOptionView::narrator_modes(narrator_mode));
+        let perspective_options = select_options_html(Self::option_set(
+            &[("second", "Second person"), ("third", "Third person")],
+            perspective,
+        ));
+        let tense_options = select_options_html(Self::option_set(
+            &[("past", "Past"), ("present", "Present")],
+            tense,
+        ));
+
+        SafeHtml::new(format!(
+            r##"<label>Narrator Mode:
+                <select name="narrator_mode"{hx}>
+                    {narrator_options}
+                </select>
+            </label>
+            <label>Perspective:
+                <select name="narrative_perspective"{hx}>
+                    {perspective_options}
+                </select>
+            </label>
+            <label>Tense:
+                <select name="narrative_tense"{hx}>
+                    {tense_options}
+                </select>
+            </label>"##
+        ))
+    }
+
+    fn option_set(values: &[(&str, &str)], selected: &str) -> Vec<SelectOptionView> {
+        values
+            .iter()
+            .map(|(value, label)| SelectOptionView {
+                value: (*value).to_string(),
+                label: (*label).to_string(),
+                selected: *value == selected,
+            })
+            .collect()
     }
 }

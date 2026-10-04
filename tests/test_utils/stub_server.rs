@@ -21,7 +21,9 @@ use axum::Router;
 use chrono::{TimeZone, Utc};
 
 use chronicler_engine::adapters::driving::http::builders::headers::add_status_swap_headers;
-use chronicler_engine::adapters::driving::http::utils::error::render_error;
+use chronicler_engine::adapters::driving::http::utils::error::{
+    error_disclosure, generation_error_summary, raw_error_detail, render_error,
+};
 use chronicler_engine::domain::model::llm_message::LlmMessage;
 use chronicler_engine::domain::model::state::message_types::{MessageEntry, MessageType};
 
@@ -33,12 +35,34 @@ use super::CONFIG_PATH;
 const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
-const FIXTURE_HEADER: &str = include_str!("stub_fixtures/header.html");
 const FIXTURE_SETTINGS: &str = include_str!("stub_fixtures/settings.html");
 const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.html");
 const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
 const FIXTURE_ACTION_AREA: &str = include_str!("stub_fixtures/action_area.html");
+
+fn header_html(degraded: bool) -> String {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::HeaderTemplate;
+
+    let header = HeaderTemplate {
+        game_name: "Test Realm_2026-09-17_1".to_string(),
+    }
+    .render()
+    .expect("render header");
+
+    let banner = if degraded {
+        error_disclosure(
+            "failure-banner-popover",
+            "Quantifier failed — using fallback NPC IDs",
+            "<div class=\"error-role degraded\"><span class=\"error-role-name\">Quantifier</span>
+             <span class=\"error-role-backend\">Mock mock</span></div>",
+        )
+    } else {
+        String::new()
+    };
+    format!("{header}<div id=\"failure-banner-degraded\" hx-swap-oob=\"true\">{banner}</div>")
+}
 
 /// The canned narration the story-log stub serves.
 const NARRATIVE_TEXT: &str = "Welcome to the Test World, Test Player! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine.\n\nThe tavern around you is warm and inviting. Wooden beams stretch across the ceiling, and a crackling fire in the hearth casts dancing shadows on the walls. The smell of fresh bread and mulled cider fills the air.\n\nBehind the bar, the bartender wipes down a mug and glances your way. \"First time in the Test Realm?\" he asks with a knowing smile. \"Don't worry, everyone here is friendly. Mostly.\"\n\nA merchant in the corner adjusts her pack and catches your eye. \"If you're heading north to the village square, mind the cobblestones. They get slippery after dark,\" she advises.\n\nYou take a moment to gather your bearings. The road ahead promises adventure, but for now, the warmth of the tavern offers a brief respite.";
@@ -106,17 +130,21 @@ const CANNED_OPTIONS: [&str; 3] = [
     "Step outside into the night air",
 ];
 
+const CANNED_OPTIONS_ALT: [&str; 2] = ["Search the cellar", "Call for the innkeeper"];
+
 /// Render the options dock through the shipped template — a pure `vm → HTML`
 /// render needing no `AppState`. Askama escapes the texts.
-fn options_dock_html() -> String {
+fn options_dock_html(alternate: bool) -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::OptionsDockTemplate;
     use chronicler_engine::adapters::driving::http::view_models::OptionsDockViewModel;
 
-    let vm = OptionsDockViewModel::new(
-        CANNED_OPTIONS.iter().map(|o| o.to_string()).collect(),
-        false,
-    );
+    let options: Vec<String> = if alternate {
+        CANNED_OPTIONS_ALT.iter().map(|o| o.to_string()).collect()
+    } else {
+        CANNED_OPTIONS.iter().map(|o| o.to_string()).collect()
+    };
+    let vm = OptionsDockViewModel::new(options, false);
     OptionsDockTemplate::new(vm)
         .render()
         .expect("render options dock")
@@ -183,13 +211,19 @@ struct StubState {
     /// The dock carries the canned set until a switch restores a Swipe with
     /// no set of its own.
     dock_options_live: std::sync::atomic::AtomicBool,
+    dock_options_alt: std::sync::atomic::AtomicBool,
+    newest_narration: std::sync::Mutex<Option<String>>,
+    extra_oldest: std::sync::atomic::AtomicBool,
+    save_succeeds: std::sync::atomic::AtomicBool,
+    header_degraded: std::sync::atomic::AtomicBool,
+    polls_failing: std::sync::atomic::AtomicBool,
 }
 
 /// A running stub server. Dropping it shuts the server down and releases
 /// the port lock.
 pub struct StubServer {
     addr: SocketAddr,
-    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    shutdown: Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     state: Arc<StubState>,
 }
 
@@ -211,6 +245,12 @@ impl StubServer {
             two_swipes: std::sync::atomic::AtomicBool::new(false),
             switched: std::sync::atomic::AtomicBool::new(false),
             dock_options_live: std::sync::atomic::AtomicBool::new(true),
+            dock_options_alt: std::sync::atomic::AtomicBool::new(false),
+            newest_narration: std::sync::Mutex::new(None),
+            extra_oldest: std::sync::atomic::AtomicBool::new(false),
+            save_succeeds: std::sync::atomic::AtomicBool::new(false),
+            header_degraded: std::sync::atomic::AtomicBool::new(false),
+            polls_failing: std::sync::atomic::AtomicBool::new(false),
         });
         let app = stub_router(Arc::clone(&state));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
@@ -227,8 +267,19 @@ impl StubServer {
         });
         Self {
             addr,
-            shutdown: Some(tx),
+            shutdown: Arc::new(std::sync::Mutex::new(Some(tx))),
             state,
+        }
+    }
+
+    pub fn stop(&self) {
+        if let Some(tx) = self
+            .shutdown
+            .lock()
+            .expect("stub shutdown lock poisoned")
+            .take()
+        {
+            let _ = tx.send(());
         }
     }
 
@@ -263,6 +314,96 @@ impl StubServer {
         StubSwipeHandle {
             state: Arc::clone(&self.state),
         }
+    }
+
+    pub fn story_log_handle(&self) -> StubStoryLogHandle {
+        StubStoryLogHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    pub fn options_handle(&self) -> StubOptionsHandle {
+        StubOptionsHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    pub fn save_handle(&self) -> StubSaveHandle {
+        StubSaveHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    pub fn failure_handle(&self) -> StubFailureHandle {
+        StubFailureHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct StubStoryLogHandle {
+    state: Arc<StubState>,
+}
+
+impl StubStoryLogHandle {
+    pub fn set_extra_oldest(&self, present: bool) {
+        self.state
+            .extra_oldest
+            .store(present, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn append_narration(&self, text: &str) {
+        *self
+            .state
+            .newest_narration
+            .lock()
+            .expect("stub narration lock poisoned") = Some(text.to_string());
+    }
+}
+
+#[derive(Clone)]
+pub struct StubOptionsHandle {
+    state: Arc<StubState>,
+}
+
+impl StubOptionsHandle {
+    pub fn serve_alternate_set(&self, alternate: bool) {
+        self.state
+            .dock_options_alt
+            .store(alternate, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[derive(Clone)]
+pub struct StubSaveHandle {
+    state: Arc<StubState>,
+}
+
+impl StubSaveHandle {
+    pub fn set_save_succeeds(&self, succeeds: bool) {
+        self.state
+            .save_succeeds
+            .store(succeeds, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[derive(Clone)]
+pub struct StubFailureHandle {
+    state: Arc<StubState>,
+}
+
+impl StubFailureHandle {
+    pub fn set_header_degraded(&self, degraded: bool) {
+        self.state
+            .header_degraded
+            .store(degraded, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn set_polls_failing(&self, failing: bool) {
+        self.state
+            .polls_failing
+            .store(failing, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -328,7 +469,12 @@ impl StubRetriggerHandle {
 
 impl Drop for StubServer {
     fn drop(&mut self) {
-        if let Some(tx) = self.shutdown.take() {
+        let sender = self
+            .shutdown
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        if let Some(tx) = sender {
             let _ = tx.send(());
         }
         release_port_lock(self.addr.port());
@@ -341,14 +487,8 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/action/check", post(action_check))
         .route("/action/confirm", post(action_confirm))
         .route("/check-text", post(check_text))
-        // Client-side failure recovery: the save, retry and retrigger paths
-        // are raw `fetch`, so their failure handling is stub-tier behaviour
-        // with no htmx swap. These routes always answer 500; no stub-tier test
-        // drives a successful save/retry/retrigger through the client JS.
-        .route(
-            "/history/:id",
-            post(|| async { client_failure("Stub save failure") }),
-        )
+        .route("/games/:id/posture", post(failing_posture_save))
+        .route("/history/:id", post(save_message))
         .route(
             "/swipe/new",
             post(|| async { client_failure("Stub retry failure") }),
@@ -358,7 +498,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         // log shapes and the dock drop a switch test observes.
         .route("/message/:id/swipe/:index", post(switch_swipe))
         .route("/status/generating", get(status_generating))
-        .route("/fragment/header", get(|| async { Html(FIXTURE_HEADER) }))
+        .route("/fragment/header", get(header_fragment))
         .route("/fragment/story-log", get(story_log_fragment))
         .route(
             "/fragment/visual-sidebar",
@@ -389,6 +529,10 @@ fn stub_router(state: Arc<StubState>) -> Router {
         // production.
         .nest_service("/assets", tower_http::services::ServeDir::new("assets"))
         .nest_service("/data", tower_http::services::ServeDir::new("data"))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            fail_polls_middleware,
+        ))
         .with_state(state)
 }
 
@@ -396,15 +540,75 @@ fn stub_router(state: Arc<StubState>) -> Router {
 /// switch test enables, or the settled shape a switch restores.
 async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     use std::sync::atomic::Ordering::SeqCst;
-    if state.two_swipes.load(SeqCst) {
+    let mut entries = if state.two_swipes.load(SeqCst) {
         if state.switched.load(SeqCst) {
-            Html(story_log_html(&restored_swipe_entries()))
+            restored_swipe_entries()
         } else {
-            Html(story_log_html(&two_swipe_entries()))
+            two_swipe_entries()
         }
+    } else if state.extra_oldest.load(SeqCst) {
+        story_log_entries_with_extra_oldest()
     } else {
-        Html(story_log_html(&default_story_log_entries()))
+        default_story_log_entries()
+    };
+    if let Some(text) = state
+        .newest_narration
+        .lock()
+        .expect("stub narration lock poisoned")
+        .clone()
+    {
+        entries.push(MessageEntry {
+            id: 4,
+            text,
+            message_type: MessageType::Narration,
+            timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 9, 0).unwrap(),
+            ..Default::default()
+        });
     }
+    Html(story_log_html(&entries))
+}
+
+fn story_log_entries_with_extra_oldest() -> Vec<MessageEntry> {
+    let mut entries = default_story_log_entries();
+    entries.insert(
+        0,
+        MessageEntry {
+            id: 3,
+            text: "An older turn the poll will drop.".to_string(),
+            message_type: MessageType::Narration,
+            timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 6, 0).unwrap(),
+            ..Default::default()
+        },
+    );
+    entries
+}
+
+async fn fail_polls_middleware(
+    State(state): State<Arc<StubState>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response<Body> {
+    use std::sync::atomic::Ordering::SeqCst;
+    let path = request.uri().path().to_string();
+    let is_poll = path.starts_with("/fragment/") || path == "/status/generating";
+    if is_poll && state.polls_failing.load(SeqCst) {
+        let mut response = (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            render_error("poll failed"),
+        )
+            .into_response();
+        response
+            .headers_mut()
+            .insert("HX-Reswap", axum::http::HeaderValue::from_static("none"));
+        return response;
+    }
+    next.run(request).await
+}
+
+async fn header_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    use std::sync::atomic::Ordering::SeqCst;
+    Html(header_html(state.header_degraded.load(SeqCst)))
 }
 
 /// A scripted Message with two Swipes at `active_swipe_index`.
@@ -444,7 +648,7 @@ async fn switch_swipe(State(state): State<Arc<StubState>>) -> Html<String> {
 async fn options_dock_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.dock_options_live.load(SeqCst) {
-        Html(options_dock_html())
+        Html(options_dock_html(state.dock_options_alt.load(SeqCst)))
     } else {
         Html(String::new())
     }
@@ -514,9 +718,11 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
     let body = match status {
         StubStatus::Idle => "idle".to_string(),
         StubStatus::Phase(phase) => phase,
-        StubStatus::Error(message) => {
-            format!(r#"<span class="status error">Error: {message}</span>"#)
-        }
+        StubStatus::Error(message) => error_disclosure(
+            "status-error-popover",
+            &generation_error_summary(&message),
+            &raw_error_detail(&message),
+        ),
     };
     (
         StatusCode::OK,
@@ -538,6 +744,15 @@ async fn action_confirm() -> Response<Body> {
         .into_response();
     add_status_swap_headers(&mut response);
     response
+}
+
+async fn failing_posture_save() -> Response<Body> {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        render_error("Failed to save posture"),
+    )
+        .into_response()
 }
 
 /// Render the read-only check result through the engine's own template, so the
@@ -590,6 +805,17 @@ async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body>
         .retrigger_requests
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     client_failure("Stub retrigger failure")
+}
+
+async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
+    if state
+        .save_succeeds
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        (StatusCode::OK, "").into_response()
+    } else {
+        client_failure("Stub save failure")
+    }
 }
 
 /// A canned 500 for a raw-fetch route whose only stub-tier use is the client

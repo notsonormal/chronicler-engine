@@ -5,7 +5,7 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
-use chronicler_engine::test_support::TestAppBuilder;
+use chronicler_engine::test_support::{TestAppBuilder, TestPromptPreset};
 
 use crate::support::http_assertions::assert_option_selected;
 use crate::support::http_requests::post_form;
@@ -53,7 +53,7 @@ async fn test_presets_save_failure_surfaces_500_error_span_http() {
     let resp = post_form(
         &app,
         &format!("/games/{id}/presets"),
-        "system_preset_id=system_default&quantifier_preset_id=quantifier_default&impersonate_preset_id=impersonate_default",
+        "system_preset_id=system_default&quantifier_preset_id=quantifier_default&impersonate_preset_id=impersonate_default&options_preset_id=options_default",
     )
     .await;
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
@@ -133,4 +133,55 @@ async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
         .expect("the active game must still exist");
     assert_eq!(game.narrative_tense.as_str(), "present");
     assert_eq!(game.narrative_perspective.as_str(), "third");
+}
+
+// [docs/specs/games.md] SCENARIO: 20.11
+#[tokio::test]
+async fn test_options_preset_selection_persists_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let id = state.game_catalogue.current_game_id();
+
+    state
+        .prompt_preset_service
+        .save_preset(&TestPromptPreset::options(
+            "options_custom",
+            "Custom Options",
+        ))
+        .expect("save an options preset");
+
+    let current = state
+        .game_catalogue
+        .current_game()
+        .expect("current_game should succeed")
+        .expect("the active game must exist");
+    let body = format!(
+        "system_preset_id={}&quantifier_preset_id={}&impersonate_preset_id={}&options_preset_id=options_custom",
+        current.active_system_prompt_preset_id,
+        current.active_quantifier_prompt_preset_id,
+        current.active_impersonate_prompt_preset_id,
+    );
+
+    let resp = post_form(&app, &format!("/games/{id}/presets"), &body).await;
+    assert!(
+        resp.status().is_success(),
+        "the options selection should persist"
+    );
+    let body = axum::body::to_bytes(resp.into_body(), 16384).await.unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(
+        html.contains(r#"id="game-posture-controls"#),
+        "the response must be the re-rendered posture fragment: {html}"
+    );
+    assert_option_selected(
+        &html,
+        "options_custom",
+        "the re-rendered Options select must select the chosen preset",
+    );
+
+    let game = state
+        .game_catalogue
+        .current_game()
+        .expect("current_game should succeed")
+        .expect("the active game must still exist");
+    assert_eq!(game.active_options_prompt_preset_id, "options_custom");
 }

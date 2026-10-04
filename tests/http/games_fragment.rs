@@ -49,6 +49,7 @@ async fn test_games_fragment_renders_posture_controls_http() {
         "system_preset_id",
         "quantifier_preset_id",
         "impersonate_preset_id",
+        "options_preset_id",
     ] {
         assert!(
             html.contains(&format!(r#"<select name="{name}""#)),

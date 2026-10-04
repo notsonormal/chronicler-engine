@@ -160,8 +160,18 @@ And the body contains id="game-posture-controls"
 And the narrator_mode select renders "novel" selected
 And the narrative_perspective select renders "third" selected
 And the narrative_tense select renders "past" selected
-And the system_preset_id, quantifier_preset_id, and impersonate_preset_id selects are rendered
+And the system_preset_id, quantifier_preset_id, impersonate_preset_id, and options_preset_id selects are rendered
 And the selects auto-save to /games/{active_game_id}/mode, /posture, and /presets
+```
+
+#### Scenario 20.11: The per-game Options selector persists the chosen Options preset
+
+```gherkin
+Given #game-posture-controls is rendered for the active game
+When the client POST /games/{game_id}/presets with options_preset_id set to a different Options preset
+Then the response status is "200 OK"
+And the response body re-renders id="game-posture-controls" with that Options preset selected
+And the active game's Options preset is the chosen one
 ```
 
 #### Scenario 20.9: The games fragment lists only the games other than the active one

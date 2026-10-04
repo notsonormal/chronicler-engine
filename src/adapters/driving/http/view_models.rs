@@ -9,6 +9,9 @@ use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::application::ports::text_checker::CheckResult;
+use crate::adapters::driving::http::utils::error::{
+    error_disclosure, generation_error_summary, raw_error_detail,
+};
 use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
 #[allow(private_interfaces)]
@@ -69,9 +72,23 @@ impl SelectOptionView {
     /// plus the stored selection (even when disallowed or absent from the
     /// library) so the browser never silently substitutes another preset.
     pub fn presets(presets: &[PromptPreset], mode: NarratorMode, selected_id: &str) -> Vec<Self> {
+        Self::from_presets(
+            presets
+                .iter()
+                .filter(|p| p.allows(mode) || p.id == selected_id),
+            selected_id,
+        )
+    }
+
+    pub fn every_preset(presets: &[PromptPreset], selected_id: &str) -> Vec<Self> {
+        Self::from_presets(presets.iter(), selected_id)
+    }
+
+    fn from_presets<'a>(
+        presets: impl Iterator<Item = &'a PromptPreset>,
+        selected_id: &str,
+    ) -> Vec<Self> {
         let mut options: Vec<Self> = presets
-            .iter()
-            .filter(|p| p.allows(mode) || p.id == selected_id)
             .map(|p| Self {
                 value: p.id.clone(),
                 label: p.name.clone(),
@@ -211,13 +228,12 @@ impl From<&LlmMessage> for LlmMessageView {
 pub struct ActionAreaViewModel {
     pub is_disabled: bool,
     pub status_class: String,
-    pub status_text: String,
+    pub status_html: SafeHtml,
 }
 
 impl ActionAreaViewModel {
     pub fn new(status: &GenerationStatus, phase: &GenerationPhase) -> Self {
         let is_disabled = status.is_generating();
-        let error_msg = status.error_message().unwrap_or_default().to_string();
         let status_class = if is_disabled {
             "status thinking".to_string()
         } else if status.error_message().is_some() {
@@ -225,18 +241,25 @@ impl ActionAreaViewModel {
         } else {
             "status ready".to_string()
         };
-        let status_text = if is_disabled {
-            phase.display_text().to_string()
-        } else if !error_msg.is_empty() {
-            error_msg.clone()
+        let status_html = SafeHtml::new(if let Some(raw) = status.error_message() {
+            error_disclosure(
+                "status-error-popover",
+                &generation_error_summary(raw),
+                &raw_error_detail(raw),
+            )
+        } else if is_disabled {
+            format!(
+                "<span class=\"status thinking\">{}</span>",
+                phase.display_text()
+            )
         } else {
-            "Ready".to_string()
-        };
+            "<span class=\"status ready\">Ready</span>".to_string()
+        });
 
         Self {
             is_disabled,
             status_class,
-            status_text,
+            status_html,
         }
     }
 }

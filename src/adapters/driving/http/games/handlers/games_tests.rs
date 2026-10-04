@@ -163,6 +163,7 @@ async fn test_update_game_presets_handler_saves_selection() {
             system_preset_id: "custom_sys".into(),
             quantifier_preset_id: "quantifier_default".into(),
             impersonate_preset_id: "impersonate_default".into(),
+            options_preset_id: "options_default".into(),
         }),
     )
     .await;
@@ -188,6 +189,7 @@ async fn test_update_game_presets_handler_unknown_preset_returns_error_span() {
             system_preset_id: "no_such".into(),
             quantifier_preset_id: "quantifier_default".into(),
             impersonate_preset_id: "impersonate_default".into(),
+            options_preset_id: "options_default".into(),
         }),
     )
     .await;

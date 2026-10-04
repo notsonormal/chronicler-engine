@@ -102,17 +102,17 @@
         </div>
         <button type="submit" class="btn-primary">Add Connection</button>
     </form>
-    <span id="settings-status"></span>
 
     <h2>Text Check</h2>
-    <div class="connection-card">
+    <div class="connection-card" id="text-check-card">
         <div class="card-header">
             <span class="card-title">Spell &amp; Grammar Check</span>
+            <span class="text-check-status"></span>
         </div>
         <div class="card-details">
             Check player input for spelling and grammar issues before sending to the LLM.
         </div>
-        <form hx-post="/settings/text-check" hx-target="#settings-status" hx-swap="innerHTML">
+        <form class="text-check-form" hx-post="/settings/text-check" hx-trigger="change" hx-target="#text-check-card" hx-swap="outerHTML">
             <div class="form-group">
                 <label for="check_mode">Check Mode</label>
                 <select name="check_mode" id="check_mode">
@@ -124,12 +124,9 @@
             </div>
             <div class="form-group">
                 <label class="checkbox-label">
-                    <input type="checkbox" name="enable_auto_check" value="true" checked />
+                    <input type="checkbox" name="enable_auto_check" value="true" disabled />
                     Check before sending to LLM
                 </label>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">Save</button>
             </div>
         </form>
     </div>

@@ -1,7 +1,7 @@
 # Redesign the error and health display
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 08
 
 ## Question
@@ -132,3 +132,37 @@ The model is quiet by default.
   header). Add or change a scenario only if the spec is incomplete or wrong.
 - `python build.py` is green, the user reviews the diff, then commit through
   `/commit-and-push`.
+
+## Answer
+
+Resolved. The header's hardcoded `Connected` is deleted; a banner appears only when
+there is something to say, and a failure never swaps into the region it describes.
+
+- **Banner.** Server-rendered in `/fragment/header` (which gained a 5s poll) from the
+  newest `llm_messages` row per role; client-owned "unreachable" via a body-level
+  `htmx:sendError`/`htmx:responseError` listener. `role="status"` while degraded,
+  `role="alert"` while unreachable. A Details control opens an anchored popover with
+  each role's last error and backend/model; raw text is never rendered inline.
+- **Failed requests.** A failed poll answers non-2xx with `HX-Reswap: none` and keeps
+  last-good content; a failed action writes the shared short-message + anchored-popover
+  fragment into its own inline slot; a dead server synthesises the same fragment.
+  `render_fragment`/`render_error` were reworked so a failure no longer returns 200 as
+  the region's replacement.
+- **Status error.** One clamped line with a mapped short message; raw text only in the
+  anchored popover. `#status-display` is fixed at 240px so the command input's width and
+  the action area's height do not change when the error appears.
+
+Review follow-ups applied: `role_health` now reads each role's true newest attempt
+(`Storage::latest_llm_message_per_agent`, SQLite + in-memory) instead of scanning the
+newest 50 globally; a reachable server's failed action is never reported unreachable
+(polls are detected by `hx-trigger` containing `every`); an open Details popover survives
+a poll with focus retained; the ignored LLM suite's status assertion was updated to the
+terminal-state contract; role ids come from the `AGENT_*` constants; `status_html` is a
+`SafeHtml`.
+
+Tests: tier 1 `tests/http/failure_display.rs` (38.1–38.4); tier 2
+`tests/browser/stub/dashboard.rs` (16.18–16.27); unit `templates_tests.rs` /
+`endpoints_tests.rs`. The toast is retained until [54](54-retire-toast-and-route-callers.md).
+
+`python build.py` is green (1566 integration, 62 browser). Uncommitted, pending review
+and `/commit-and-push`.

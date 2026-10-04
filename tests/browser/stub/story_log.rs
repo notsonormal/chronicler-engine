@@ -338,6 +338,7 @@ async fn test_edit_textarea_fits_content_and_takes_focus() {
 #[tokio::test]
 async fn test_escape_cancels_edit() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        install_story_poll_counter(&page).await;
         let original_text = narration_text(&page).await;
         assert!(!original_text.is_empty(), "Should have original text");
 
@@ -362,9 +363,6 @@ async fn test_escape_cancels_edit() {
             "Escape should restore the original text"
         );
 
-        // The keyboard must stay on the entry: focus returns to the restored
-        // edit button, and its stable id keeps it there when the resumed 2s
-        // poll replaces the entry.
         assert!(
             wait_for_condition_async(
                 Duration::from_millis(500),
@@ -385,26 +383,13 @@ async fn test_escape_cancels_edit() {
             "Escape must put focus on the entry's edit button"
         );
 
-        page.evaluate::<(), ()>(
-            r#"() => { window.__entryBefore = document.querySelector('.log-entry.narration'); }"#,
-            None,
-        )
-        .await
-        .unwrap();
-        let replaced = wait_for_condition_async(
+        let polled = wait_for_condition_async(
             Duration::from_millis(4000),
             Duration::from_millis(20),
-            || async {
-                page.evaluate::<(), bool>(
-                    r#"() => document.querySelector('.log-entry.narration') !== window.__entryBefore"#,
-                    None,
-                )
-                .await
-                .unwrap_or(false)
-            },
+            || async { story_poll_count(&page).await >= 1.0 },
         )
         .await;
-        assert!(replaced, "the resumed poll never replaced the log entry");
+        assert!(polled, "the resumed poll never ran after Escape");
         assert!(
             wait_for_condition_async(
                 Duration::from_millis(1000),
@@ -422,7 +407,7 @@ async fn test_escape_cancels_edit() {
                 },
             )
             .await,
-            "the poll replacement must keep focus on the entry's edit button"
+            "the resumed poll must keep focus on the entry's edit button"
         );
     })
     .await;
@@ -594,6 +579,481 @@ async fn test_failed_retrigger_posts_to_retrigger_and_recovers() {
             assert!(
                 !disabled,
                 "a failed retrigger should re-enable the Send button"
+            );
+        }
+    })
+    .await;
+}
+
+async fn story_poll_count(page: &playwright_rs::Page) -> f64 {
+    page.evaluate::<(), f64>("(() => window.__storyPolls || 0)()", None)
+        .await
+        .unwrap_or(0.0)
+}
+
+async fn install_story_poll_counter(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"(() => {
+            window.__storyPolls = 0;
+            document.body.addEventListener('htmx:afterRequest', (evt) => {
+                const elt = evt.detail && evt.detail.elt;
+                if (elt && elt.id === 'story-log') window.__storyPolls += 1;
+            });
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+async fn arm_save_completion(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"(() => {
+            window.__saveDone = false;
+            const original = window.fetch;
+            window.fetch = function (input, init) {
+                const request = original.call(this, input, init);
+                if (String(input).includes('/history/')) {
+                    return request.then((response) => {
+                        window.__saveDone = true;
+                        return response;
+                    });
+                }
+                return request;
+            };
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+async fn wait_for_save_completion(page: &playwright_rs::Page) -> bool {
+    wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(10),
+        || async {
+            page.evaluate::<(), bool>("(() => window.__saveDone === true)()", None)
+                .await
+                .unwrap_or(false)
+        },
+    )
+    .await
+}
+
+const OTHER_EDIT_LOCKED: &str = r#"(() => {
+    const other = document.querySelector('.log-entry.input .edit-btn');
+    return !!other && other.disabled;
+})()"#;
+
+// A morph keeps an unchanged entry's nodes, so a selection inside the log is
+// not collapsed by the poll. An innerHTML swap replaces the selected node
+// within one cycle and the selection is lost.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.11
+#[tokio::test]
+async fn test_text_selection_survives_the_poll() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        install_story_poll_counter(&page).await;
+
+        let selected = page
+            .evaluate::<(), String>(
+                r#"(() => {
+                    const text = document.querySelector('.log-entry.narration .text');
+                    const range = document.createRange();
+                    range.selectNodeContents(text);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    window.__selectedNode = text;
+                    return selection.toString();
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(!selected.is_empty(), "the test must create a selection");
+
+        let polled = wait_for_condition_async(
+            Duration::from_secs(8),
+            Duration::from_millis(50),
+            || async { story_poll_count(&page).await >= 2.0 },
+        )
+        .await;
+        assert!(polled, "the story log must poll at least twice");
+
+        let (still_selected, same_node) = page
+            .evaluate::<(), (bool, bool)>(
+                r#"(() => {
+                    const selection = window.getSelection();
+                    const text = document.querySelector('.log-entry.narration .text');
+                    return [
+                        !!selection && selection.toString().length > 0,
+                        text === window.__selectedNode,
+                    ];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            still_selected,
+            "a text selection in the log must survive the poll"
+        );
+        assert!(
+            same_node,
+            "an idle poll must not replace the entry the selection is in"
+        );
+    })
+    .await;
+}
+
+// Focus on a control that has no stable id would fall to the body on an
+// innerHTML swap; a morph leaves the node in place.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.12
+#[tokio::test]
+async fn test_entry_focus_survives_the_poll() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        install_story_poll_counter(&page).await;
+
+        page.locator(".log-entry.input .check-btn")
+            .await
+            .focus()
+            .await
+            .unwrap();
+        page.evaluate::<(), ()>(
+            "(() => { window.__focused = document.activeElement; })()",
+            None,
+        )
+        .await
+        .unwrap();
+
+        let polled = wait_for_condition_async(
+            Duration::from_secs(8),
+            Duration::from_millis(50),
+            || async { story_poll_count(&page).await >= 2.0 },
+        )
+        .await;
+        assert!(polled, "the story log must poll at least twice");
+
+        let (focused, same_node) = page
+            .evaluate::<(), (bool, bool)>(
+                r#"(() => {
+                    const btn = document.querySelector('.log-entry.input .check-btn');
+                    return [document.activeElement === btn, btn === window.__focused];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(focused, "focus inside a log entry must survive the poll");
+        assert!(
+            same_node,
+            "an idle poll must not replace the focused control"
+        );
+    })
+    .await;
+}
+
+// The log is a scroll container, so making it focusable lets a keyboard user
+// arrow-scroll the narrative.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.13
+#[tokio::test]
+async fn test_story_log_is_keyboard_scrollable() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        let (focusable, label, overflows) = page
+            .evaluate::<(), (bool, String, bool)>(
+                r#"(() => {
+                    const log = document.getElementById('story-log');
+                    return [
+                        log.getAttribute('tabindex') === '0',
+                        log.getAttribute('aria-label') || '',
+                        log.scrollHeight > log.clientHeight,
+                    ];
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(focusable, "#story-log must be focusable");
+        assert!(!label.is_empty(), "#story-log must have an accessible name");
+        assert!(
+            overflows,
+            "the canned log must overflow its container for the scroll check"
+        );
+
+        page.locator("#story-log").await.focus().await.unwrap();
+        let focused = page
+            .evaluate::<(), bool>("(() => document.activeElement.id === 'story-log')()", None)
+            .await
+            .unwrap();
+        assert!(focused, "focusing #story-log must put the keyboard on it");
+
+        let before = page
+            .evaluate::<(), f64>(
+                "(() => document.getElementById('story-log').scrollTop)()",
+                None,
+            )
+            .await
+            .unwrap();
+        // Press until the browser's native arrow-key scroll moves the log; a
+        // single synthetic key can be consumed while focus settles.
+        let scrolled = wait_for_condition_async(
+            Duration::from_secs(3),
+            Duration::from_millis(50),
+            || async {
+                page.keyboard().press("ArrowDown", None).await.unwrap();
+                page.evaluate::<(), f64>(
+                    "(() => document.getElementById('story-log').scrollTop)()",
+                    None,
+                )
+                .await
+                .unwrap_or(0.0)
+                    > before
+            },
+        )
+        .await;
+        assert!(scrolled, "ArrowDown must scroll the focused log");
+    })
+    .await;
+}
+
+// The 50-entry cap drops the oldest entry on a routine turn, so the morph's
+// removal matching has to keep every surviving entry's nodes.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.14
+#[tokio::test]
+async fn test_poll_removal_keeps_the_surviving_entries() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let story = stub.story_log_handle();
+        async move {
+            story.set_extra_oldest(true);
+            let grew = wait_for_condition_async(
+                Duration::from_secs(8),
+                Duration::from_millis(50),
+                || async {
+                    page.evaluate::<(), f64>(
+                        "(() => document.querySelectorAll('#story-log .log-entry').length)()",
+                        None,
+                    )
+                    .await
+                    .unwrap_or(0.0)
+                        >= 3.0
+                },
+            )
+            .await;
+            assert!(grew, "the poll must render the extra oldest entry");
+
+            page.evaluate::<(), ()>(
+                r#"(() => {
+                    window.__survivors = Array.from(
+                        document.querySelectorAll('#story-log .log-entry'),
+                    ).slice(1);
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+            story.set_extra_oldest(false);
+            let shrank = wait_for_condition_async(
+                Duration::from_secs(8),
+                Duration::from_millis(50),
+                || async {
+                    page.evaluate::<(), f64>(
+                        "(() => document.querySelectorAll('#story-log .log-entry').length)()",
+                        None,
+                    )
+                    .await
+                    .unwrap_or(0.0)
+                        <= 2.0
+                },
+            )
+            .await;
+            assert!(shrank, "the poll must drop the extra oldest entry");
+
+            let kept = page
+                .evaluate::<(), bool>(
+                    r#"(() => {
+                        const now = Array.from(
+                            document.querySelectorAll('#story-log .log-entry'),
+                        );
+                        const before = window.__survivors || [];
+                        return now.length === before.length
+                            && now.every((el, i) => el === before[i]);
+                    })()"#,
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(
+                kept,
+                "a morph must keep the surviving entries' nodes when one is dropped"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_story_log.md] SCENARIO: 30.15
+#[tokio::test]
+async fn test_edit_locks_the_other_entries_edit_controls() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        enter_narration_edit(&page).await;
+
+        let locked = page
+            .evaluate::<(), bool>(OTHER_EDIT_LOCKED, None)
+            .await
+            .unwrap();
+        assert!(
+            locked,
+            "the other entries' Edit controls must be disabled during an edit"
+        );
+
+        // Cancel and read in the same tick: the resumed poll is async.
+        let unlocked = page
+            .evaluate::<(), bool>(
+                r#"(() => {
+                    document.querySelector('.log-entry.narration .cancel-btn').click();
+                    const other = document.querySelector('.log-entry.input .edit-btn');
+                    return !!other && !other.disabled;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            unlocked,
+            "cancel must re-enable the other entries' Edit controls immediately"
+        );
+
+        wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
+    })
+    .await;
+}
+
+// [docs/specs/browser_story_log.md] SCENARIO: 30.16
+#[tokio::test]
+async fn test_failed_save_releases_the_edit_lock() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        arm_save_completion(&page).await;
+        enter_narration_edit(&page).await;
+        assert!(
+            page.evaluate::<(), bool>(OTHER_EDIT_LOCKED, None)
+                .await
+                .unwrap(),
+            "the other entries' Edit controls must be disabled during an edit"
+        );
+
+        page.locator(".log-entry.narration .save-btn")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        assert!(
+            wait_for_save_completion(&page).await,
+            "the failed save request never completed"
+        );
+
+        let unlocked = page
+            .evaluate::<(), bool>(
+                r#"(() => {
+                    const other = document.querySelector('.log-entry.input .edit-btn');
+                    return !!other && !other.disabled;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            unlocked,
+            "a failed save must re-enable the other entries' Edit controls"
+        );
+    })
+    .await;
+}
+
+// The lock outlives a successful save: the entry still shows its textarea until
+// the resumed poll re-renders it, and releasing earlier lets a second editor
+// open on that stale textarea.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.17
+#[tokio::test]
+async fn test_successful_save_holds_the_edit_lock_until_the_poll() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let save = stub.save_handle();
+        async move {
+            save.set_save_succeeds(true);
+            arm_save_completion(&page).await;
+            page.evaluate::<(), ()>(
+                r#"(() => {
+                    window.__earlyUnlock = false;
+                    const observer = new MutationObserver(() => {
+                        const other = document.querySelector('.log-entry.input .edit-btn');
+                        if (
+                            document.querySelector('#edit-textarea')
+                            && other
+                            && !other.disabled
+                        ) {
+                            window.__earlyUnlock = true;
+                        }
+                    });
+                    observer.observe(document.getElementById('story-log'), {
+                        subtree: true,
+                        childList: true,
+                        attributes: true,
+                    });
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+            enter_narration_edit(&page).await;
+            assert!(
+                page.evaluate::<(), bool>(OTHER_EDIT_LOCKED, None)
+                    .await
+                    .unwrap(),
+                "the other entries' Edit controls must be disabled during an edit"
+            );
+
+            page.locator(".log-entry.narration .save-btn")
+                .await
+                .click(None)
+                .await
+                .unwrap();
+            assert!(
+                wait_for_save_completion(&page).await,
+                "the successful save request never completed"
+            );
+
+            let rerendered = wait_for_condition_async(
+                Duration::from_secs(6),
+                Duration::from_millis(50),
+                || async {
+                    page.evaluate::<(), bool>(
+                        r#"(() => {
+                            const other = document.querySelector('.log-entry.input .edit-btn');
+                            return !document.querySelector('#edit-textarea')
+                                && !!other
+                                && !other.disabled;
+                        })()"#,
+                        None,
+                    )
+                    .await
+                    .unwrap_or(false)
+                },
+            )
+            .await;
+            assert!(
+                rerendered,
+                "the resumed poll must re-render the log and re-enable the Edit controls"
+            );
+
+            let early_unlock = page
+                .evaluate::<(), bool>("(() => window.__earlyUnlock === true)()", None)
+                .await
+                .unwrap();
+            assert!(
+                !early_unlock,
+                "a successful save must hold the edit lock until the poll re-renders the log"
             );
         }
     })

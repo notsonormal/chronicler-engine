@@ -117,6 +117,14 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 [Migrate tier-1 tests to observe through legal read seams](issues/61-migrate-tier-1-test-reads.md): resolved — every raw `GameState` read and storage observation read in `tests/http/` now goes through `GET /status/generating`, `GameViewQuery`, `MessageService`, `GameCatalogue`, `SettingsService` or `PromptPresetService`, with no production seam added. The scenario message's swipe is asserted through `load_messages`, and the initial snapshot by a new application-tier test on `save_message_and_snapshot` (mutation-proven), so both dropped assertions stay covered.
 
+63 [Redesign the error and health display](issues/63-redesign-error-health-display.md): resolved — a banner for degraded roles and an unreachable server, failed requests keep their region, and the generation error clamps to one line with the raw text in an anchored popover; `role_health` reads each role's true newest attempt; tier 1 `failure_display.rs` 38.1–38.4, tier 2 16.18–16.27.
+
+65 [Keep DOM state and focus through in-place swaps](issues/65-keep-dom-state-through-swaps.md): resolved — the story-log poll morphs (vendored idiomorph, per-entry ids), an open edit locks every other Edit control, the dead `htmx:refresh`/`action-area-refresh` calls are gone, and the focus-restore manager was verified already shipped by 46; tier 2 30.11–30.17.
+
+67 [Panel consistency and Options presets](issues/67-panel-consistency-and-options-presets.md): resolved — hybrid save model, coupled Text Check pair, single-column layout with declared viewports, and an Options Prompts section plus a per-game Options select; `POST /settings` deleted; tier 1 20.11–20.13, 21.35–21.38.
+
+47 [Announce dynamic state changes to assistive technology](issues/47-announce-state-changes-to-at.md): resolved — hidden live regions written only on change (polite phases/options/narration, assertive generation error), with the story-log announcement scoped to the changed entry; tier 2 16.23/16.24.
+
 ## Not yet specified
 
 - **Other snapshot-restore paths.** [Reset the generation status and the options dock when a swipe switch restores a snapshot](issues/43-reset-status-and-dock-on-swipe-switch.md) landed the swipe case only, where the snapshot was written mid-generation; its normalisation does not touch the other restore paths. Retrigger and history revert restore snapshots by different paths and may show the same stuck status. Unverified; [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md) drove the failure path only and did not surface it.

@@ -11,7 +11,7 @@ use axum::{
 
 use crate::adapters::driving::http::AppState;
 use crate::application::errors::ApplicationError;
-use crate::domain::model::game::Game;
+use crate::domain::model::game::{Game, PresetSelection};
 use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 
@@ -138,6 +138,7 @@ pub struct GamePresetsForm {
     pub system_preset_id: String,
     pub quantifier_preset_id: String,
     pub impersonate_preset_id: String,
+    pub options_preset_id: String,
 }
 
 /// Per-game mode-switch action: set mode, retarget presets to the new
@@ -179,9 +180,12 @@ pub async fn update_game_presets_handler(
 ) -> Response {
     let result = state.game_catalogue.set_preset_selection(
         id,
-        &form.system_preset_id,
-        &form.quantifier_preset_id,
-        &form.impersonate_preset_id,
+        PresetSelection::new(
+            form.system_preset_id,
+            form.quantifier_preset_id,
+            form.impersonate_preset_id,
+            form.options_preset_id,
+        ),
     );
     render_posture_result(&state, result)
 }
@@ -209,15 +213,25 @@ fn posture_controls_html(state: &AppState, game: &Game) -> String {
         state
             .prompt_preset_service
             .list_presets(PresetType::Impersonate),
+        state
+            .prompt_preset_service
+            .list_presets(PresetType::Options),
     );
-    let (system, quantifier, impersonate, preset_load_error) = match presets {
-        (Ok(system), Ok(quantifier), Ok(impersonate)) => (system, quantifier, impersonate, None),
-        (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
-            (Vec::new(), Vec::new(), Vec::new(), Some(e.to_string()))
+    let (system, quantifier, impersonate, options, preset_load_error) = match presets {
+        (Ok(system), Ok(quantifier), Ok(impersonate), Ok(options)) => {
+            (system, quantifier, impersonate, options, None)
         }
+        (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => (
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Some(e.to_string()),
+        ),
     };
 
-    let mut template = GamePostureTemplate::from_game(game, &system, &quantifier, &impersonate);
+    let mut template =
+        GamePostureTemplate::from_game(game, &system, &quantifier, &impersonate, &options);
     template.preset_load_error = preset_load_error;
     template.render().unwrap_or_default()
 }
