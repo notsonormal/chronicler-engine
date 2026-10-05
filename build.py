@@ -42,9 +42,9 @@ agents sharing a checkout pass ``--no-fmt`` so ``cargo fmt`` cannot rewrite each
 The full gate also removes linked worktrees that are safe to lose: clean, pushed, and with no
 live process inside (``scripts/remove_worktrees.py``). It warns and continues if that fails.
 
-``--cleanup`` removes stale port locks and build artifacts for a target
-dir. Tests are already concurrency-safe: they allocate ports dynamically from
-3010-3050 using file-based locking (``tests/test_utils/server.rs``).
+``--cleanup`` deletes this checkout's whole cargo target dir (the next build is cold) and the
+machine-wide port-lock dir ``<tmp>/chronicler_test_ports`` that every checkout's tests share.
+Do not run it while another checkout is testing.
 
 A full gate takes about 2 minutes on a warm target dir, about 15 on a cold unseeded one, plus any
 wait for the build lock. Use a tool timeout of at least 1200 seconds. ``--coverage`` takes longer.
@@ -672,7 +672,8 @@ def parse_args(argv=None):
         "--cleanup",
         action="store_true",
         dest="cleanup",
-        help="Remove stale port locks and build artifacts for a target dir",
+        help="Delete this checkout's target dir and the machine-wide test port-lock dir. "
+        "Do not run while another checkout is testing.",
     )
     parser.add_argument(
         "--diagnostic-benchmark",

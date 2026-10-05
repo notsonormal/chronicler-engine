@@ -30,11 +30,13 @@ Every finding from the [2026-10-04 reflect sweep](assets/findings.md) (F01–F35
 - [Decide what you will do differently](issues/01-decide-your-process-changes.md) — no new habits; F16, F17, F18 and the six `[01]` default-drops are dropped; F25 becomes an automated-test gap ([Close the browser-test gap for stuck DOM states](issues/04-browser-test-gap-stuck-dom-states.md)).
 - [Decide which mechanisms to build](issues/02-decide-mechanisms-to-build.md) — build four: [Prune worktrees safely](issues/05-safe-worktree-prune.md), [Give the pre-commit hook a non-destructive path](issues/06-pre-commit-hook-non-destructive-path.md), [Isolate the UI investigator's probe server](issues/07-isolated-probe-server.md), [Record contention and effect size in benchmark reports](issues/08-benchmark-contention-effect-size.md); F15 applied as `/core.[0-9]*`; F07, F08, F09, F10, F11, F20, F21, F23, F24, F30 dropped; F28 absorbed into the benchmark fields.
 - [Close the browser-test gap for stuck DOM states](issues/04-browser-test-gap-stuck-dom-states.md) — A19's three stuck-state bugs (plus two adjacent) all have browser tests now, closed via dashboard-ui-review 27/42/43/65; one same-class gap left — a stale `Generating` with no live slot — graduated to [Recover a dashboard stuck on Generating with no live generation](issues/09-recover-stuck-generating.md).
+- [Yes/no on placing nine facts where they are read](issues/03-yes-no-fact-placement.md) — two yeses applied: an `AGENTS.md` pointer to `CODING_STANDARDS.md` (F01) and the real `--cleanup` scope in `build.py` (F14); F02, F03, F04, F05, F06, F27 and F35 dropped.
 - [Prune worktrees safely](issues/05-safe-worktree-prune.md) — built `scripts/remove_worktrees.py`, run with `--apply` by every full gate (`build.py remove-worktrees`, best-effort); removes only clean, pushed trees at least 24h old with no live process inside, using plain `git worktree remove`.
+- [Give the pre-commit hook a non-destructive path](issues/06-pre-commit-hook-non-destructive-path.md) — built `scripts/precommit_regenerate.py`: the hook compares prose outside each file's pinned generated-block markers against the index; foreign prose aborts untouched, in-block leftovers regenerate and stage, and any abort after generation restores the files.
 
 ## Not yet specified
 
-- **Fact placements from ticket 03.** Graduates from ticket 03. Sized case by case.
+_Nothing yet._
 
 ## Out of scope
 

@@ -32,7 +32,9 @@ The chronicler_engine project has a pre-commit hook that regenerates four genera
 
 The hook stages them itself, precisely so you do not have to commit twice — this is by design.
 
-The hook aborts, naming the file, only when one of those four already had unstaged changes before it ran. The generated files carry hand-written prose beside their generated blocks, so the hook cannot re-stage the file without sweeping that prose into the commit. Stage or stash the file, then commit again — Git reuses the previous commit message automatically:
+The hook aborts, naming the file, only when one of those four has changes **outside** its generated block — hand-written prose the commit would sweep in — or no longer carries the expected block markers. Uncommitted changes *inside* a generated block are the hook's own leftover output: it regenerates the block and stages the file without aborting.
+
+Stage or stash the prose edit, then commit again — Git reuses the previous commit message automatically:
 
 ```bash
 git add <file>
