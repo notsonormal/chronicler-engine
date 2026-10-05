@@ -151,11 +151,6 @@ Updated BEFORE code per chronicler-dev-workflow:
 2. `docs/system/agent_system.md` — quantifier emits `destination_id` + `destination_name`. Update examples.
 3. `docs/reference/quantifier_prompt.md` — new output format documented.
 4. `docs/system/navigation.md` — `attempt_semantic_walk` new signature (matches by id only; name used for drift path).
-5. `docs/CHANGELOG.md` — under "Unreleased":
-   - Split quantifier `movement.destination` into `destination_id` + `destination_name`.
-   - Updated `data/prompt_presets/quantifier/default.json` to emit new format.
-   - `StatePatch::Scene` field split for independent id/name merging.
-   - BREAKING for LLM log format: old `{"destination": "..."}` JSON no longer parsed; `build.py --cleanup` recommended to wipe stale `llm_messages` rows (not required — old rows are raw text, not parsed at runtime).
 
 No ADR for this subplan — field shape convention, not architectural decision. The mapless-worlds ADR-027 lands in Subplan C.
 

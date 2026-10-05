@@ -5,7 +5,7 @@ roles which determine which rules apply:
 
   STANDARD  — canonical spec docs (reference/explanation/how-to/tutorials
               under docs/diataxis/). All rules enforced.
-  TRANSIENT — historical or forward-looking docs (CHANGELOG, plans). Exempt
+  TRANSIENT — historical or forward-looking docs (plans). Exempt
               from all checks; they may reference anything historically.
   EXCLUDED  — auto-generated indexes, archives, process notes
               (AGENTS.md, _PILOT_NOTES.md). Exempt from all checks.
@@ -199,13 +199,6 @@ GENERATED_DOC_PATHS: set[str] = {
     "reference/coding_standards/guardrails.md",  # generate_guardrails_doc.py
 }
 
-# Transient file paths: exempt because they are historical or forward-looking
-# logs, not canonical specs.
-TRANSIENT_FILE_PATHS: tuple[str, ...] = (
-    "CHANGELOG.md",
-    "plans",
-)
-
 # Standard dir names. docs/diataxis/ uses reference/explanation/how-to/
 # (and tutorials/ once content earns it).
 STANDARD_DIR_NAMES: set[str] = {
@@ -278,7 +271,7 @@ def classify_file(path: Path, docs_root: Path) -> str:
     Classification rules (first match wins):
       1. File name in EXCLUDED_FILE_NAMES  → EXCLUDED
       2. Any path segment in EXCLUDED_DIR_NAMES → EXCLUDED
-      3. First segment is 'plans' OR path is 'CHANGELOG.md' → TRANSIENT
+      3. First segment is 'plans' → TRANSIENT
       4. First segment in STANDARD_DIR_NAMES → STANDARD
       5. Otherwise → EXCLUDED (unrecognized top-level doc — be permissive)
     """
@@ -298,8 +291,6 @@ def classify_file(path: Path, docs_root: Path) -> str:
 
     first = parts[0]
     if first == "plans":
-        return "TRANSIENT"
-    if rel.as_posix() == "CHANGELOG.md":
         return "TRANSIENT"
 
     if first in STANDARD_DIR_NAMES:

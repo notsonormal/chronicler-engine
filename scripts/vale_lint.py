@@ -3,7 +3,7 @@
 Thin wrapper around `vale` (https://vale.sh) that:
   - Loads the .vale.ini config
   - Restricts scope to STANDARD docs (mirrors scripts/validate_docs.py)
-  - Skips TRANSIENT (plans/, CHANGELOG.md) and EXCLUDED paths
+  - Skips TRANSIENT (plans/, old-docs/) and EXCLUDED paths
   - Supports single-file, multi-file, --all, --json, and --fix modes
 
 Vale itself is responsible for rule evaluation. This wrapper owns:
@@ -58,7 +58,6 @@ TRANSIENT_DIR_NAMES: set[str] = {"plans", "old-docs"}
 EXCLUDED_FILE_NAMES: set[str] = {
     "AGENTS.md",
     "README.md",
-    "CHANGELOG.md",
 }
 
 
@@ -69,7 +68,7 @@ def is_in_scope(md_file: Path) -> bool:
     """Return True if md_file is a STANDARD doc (in scope for Vale).
 
     Mirrors validate_docs.py classify_file() — drops TRANSIENT (plans/,
-    old-docs/, CHANGELOG.md) and EXCLUDED (auto-indexes, templates, AGENTS.md).
+    old-docs/) and EXCLUDED (auto-indexes, templates, AGENTS.md).
     """
     try:
         rel = md_file.resolve().relative_to(DOCS_ROOT.resolve())

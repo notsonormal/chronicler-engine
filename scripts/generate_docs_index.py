@@ -18,13 +18,6 @@ MARKER_END = "<!-- AUTO-INDEX END -->"
 DOCS_DIR: Path = Path(__file__).resolve().parent.parent / "docs"
 README_PATH: Path = DOCS_DIR / "AGENTS.md"
 
-# Files in docs/ excluded from the auto-index because they don't fit the
-# "documentation discoverable by type" pattern (e.g. release logs, migration
-# journals — reference material, not discovery material). Silent skip.
-EXCLUDED_FROM_NAV: set[str] = {
-    "CHANGELOG.md",
-}
-
 
 def extract_h1(md_path: Path) -> str | None:
     """Extract the first H1 heading from a markdown file."""
@@ -44,8 +37,6 @@ def discover_docs() -> dict[str, list[tuple[str, str]]]:
     groups: dict[str, list[tuple[str, str]]] = {}
     for md_path in sorted(DOCS_DIR.rglob("*.md")):
         if md_path.name.lower() == "agents.md":
-            continue
-        if md_path.name in EXCLUDED_FROM_NAV:
             continue
         rel = md_path.relative_to(DOCS_DIR)
         # Index scope: only docs/diataxis/. Other top-level dirs
