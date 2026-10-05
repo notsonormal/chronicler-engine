@@ -39,6 +39,9 @@ agents sharing a checkout pass ``--no-fmt`` so ``cargo fmt`` cannot rewrite each
 
     python build.py --target-dir target/agent2 --no-fmt
 
+The full gate also removes linked worktrees that are safe to lose: clean, pushed, and with no
+live process inside (``scripts/remove_worktrees.py``). It warns and continues if that fails.
+
 ``--cleanup`` removes stale port locks and build artifacts for a target
 dir. Tests are already concurrency-safe: they allocate ports dynamically from
 3010-3050 using file-based locking (``tests/test_utils/server.rs``).
@@ -439,6 +442,15 @@ REGISTRY: dict[str, StepSpec] = {
             help="Install or update git hooks; differing hooks are backed up first.",
         ),
         StepSpec(
+            "remove-worktrees",
+            "Removing worktrees that are safe to remove...",
+            "python scripts/remove_worktrees.py --apply",
+            help=(
+                "Remove linked worktrees that are clean, pushed, and have no live process"
+                " inside; every other tree is refused with a reason."
+            ),
+        ),
+        StepSpec(
             "fmt",
             "Formatting...",
             "cargo fmt",
@@ -567,7 +579,8 @@ REGISTRY: dict[str, StepSpec] = {
     ]
 }
 
-# Full-gate step order. "HOOKS" expands to the git-hook install step, "COPY"
+# Full-gate step order. "HOOKS" expands to the git-hook install step,
+# "WORKTREES" to the best-effort worktree removal, "COPY"
 # to the deployment-asset copy step, "TESTS" to the composite test step
 # (coverage/timings variants), and "REPORT" to the coverage report (or the
 # skip note when coverage is off).
@@ -577,6 +590,7 @@ REGISTRY: dict[str, StepSpec] = {
 # otherwise a guardrail failure only surfaces after the full suite has run.
 GATE_ORDER = [
     "HOOKS",
+    "WORKTREES",
     "fmt",
     "validate-data",
     "clippy",
@@ -1122,7 +1136,7 @@ class GateStep(NamedTuple):
     itself (the note is not a counted step, matching the original behavior).
     """
 
-    kind: str  # "cmd" | "copy" | "tests" | "coverage_report" | "note" | "hooks"
+    kind: str  # "cmd" | "copy" | "tests" | "coverage_report" | "note" | "hooks" | "worktrees"
     label: str
     cmd: str = ""
     check: bool = True
@@ -1139,6 +1153,9 @@ def _plan_gate_steps(args) -> list[GateStep]:
     for name in GATE_ORDER:
         if name == "HOOKS":
             plan.append(GateStep("hooks", "Installing git hooks..."))
+            continue
+        if name == "WORKTREES":
+            plan.append(GateStep("worktrees", REGISTRY["remove-worktrees"].label))
             continue
         if name == "COPY":
             plan.append(GateStep("copy", "Copying data and assets for deployment..."))
@@ -1244,6 +1261,9 @@ def _execute_gate_plan(plan, args, cargo_env, record):
                     "    Warning: git hook installation failed; "
                     "the build continues without it."
                 )
+        elif step.kind == "worktrees":
+            counter.next(step.label)
+            _run_remove_worktrees(cargo_env)
         elif step.kind == "note":
             counter.next(step.label)
         elif step.kind == "duplicates":
@@ -1263,6 +1283,16 @@ def _run_duplicates_report(cargo_env):
     rc = run(REGISTRY["duplicates"].cmd, check=False, env=cargo_env)
     if rc != 0:
         both_print("    Warning: duplicate check did not complete (report-only step).")
+
+
+def _run_remove_worktrees(cargo_env):
+    """Remove safe-to-lose worktrees without ever failing the gate.
+
+    Housekeeping like hook install: a failed removal warns and the build continues.
+    """
+    rc = run(REGISTRY["remove-worktrees"].cmd, check=False, env=cargo_env)
+    if rc != 0:
+        both_print("    Warning: worktree removal did not complete; the build continues.")
 
 
 def _copy_deployment_assets(args):

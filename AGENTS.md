@@ -299,6 +299,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
   - `prepare_review_bundle.py` — Assemble a review bundle (stat, per-area patches, untracked/deleted lists) under tmp/.
   - `refine_character_json.py` — Split character card descriptions into structured personality/scenario/description fields.
+  - `remove_worktrees.py` — Remove linked git worktrees, but only ones that are safe to lose.
   - `target_seed.py` — Seed a cold cargo target dir with dependency artifacts from a warm sibling checkout.
   - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
   - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
