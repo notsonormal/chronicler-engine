@@ -1,7 +1,7 @@
 # Recover a dashboard stuck on Generating with no live generation
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -66,3 +66,74 @@ Options to weigh:
   decision records why it cannot and what the player is told instead.
 - Any implementation the decision adopts is graduated into its own ticket on this map.
 - `python build.py` is green for any change made here.
+
+## Answer
+
+Resolved 2026-10-06. The class-level recovery: **the page-visible generating answer
+comes from the live generation registry, not the persisted record.** `GET /status/generating`
+answers a phase only while the current game holds a generating slot, and `idle` otherwise.
+The GET stays read-only; the persisted status is still healed by the action path.
+
+### Decisions
+
+1. The submit button stays disabled while a generation is live. Recovery removes the stale
+   status, not the double-submit guard ticket 42/43 built.
+2. Recovery is silent — no control, no message. A stale status is an artifact, not something
+   the player manages.
+3. Coverage must hold for every writer: narration, options, retrigger, retry, arrival and
+   game switch — not just the reproduced narration path.
+4. No source-level prevention. `GenerationGuard::Drop` stays registry-only; the pipeline stays
+   the sole persister. The state stays recoverable rather than prevented, and `SIGKILL` is
+   already covered by the boot heal in `bootstrap/wiring.rs`.
+5. `heal_stale` extends to `/options`, retrigger, retry and game switch, so any request that
+   touches a game repairs a stale record.
+6. `docs/diataxis/explanation/two-state-channels.md` is repaired: "the atomic" becomes the
+   registry, and "on the next `process_action`" is scoped to the paths that actually heal.
+7. Acceptance bar follows `tests/STRATEGY.md`'s placement rule: the poll's answer is
+   `curl`-observable, so tier 1; the client's reaction is pure-client, so tier 2, and the
+   client half presses a real Enter because no test ever has and `requestSubmit()` does not
+   reproduce the disabled-default-button block A19 recorded.
+8. One implementation ticket carries both halves.
+
+### Rejected alternatives, with cost
+
+- **Poll heals and persists.** Cost: a GET becomes a writer, breaking the documented
+  single-writer rule; and the heal can race a generation start, since the persisted
+  `Generating` is written before `try_claim` claims the slot, so a just-started turn's status
+  could be reset live.
+- **Poll reports a `stale` marker; the client auto-POSTs `/status/reset-generating`.** Cost:
+  a new client state, and a production caller for a test-only endpoint.
+- **Let the client submit while generating; the server answers `ConcurrentGeneration`.**
+  Cost: re-opens the mid-generation submit 42/43 closed; the rejected answer renders a
+  `.status.wait` span that has no CSS rule and no test.
+- **An explicit recovery control with a watchdog.** Cost: a new client state and a timeout,
+  for a state the player should never have to manage.
+- **Fix the panic path so it cannot strand.** Cost: `Drop` is synchronous and deliberately
+  owns no persistence, and it cannot cover `SIGKILL`, which boot heal already handles.
+- **A tier-3 end-to-end test.** Cost: no mechanism exists to seed a stale persisted status
+  against a live server — no mutating debug route, and the engine holds its SQLite file open
+  with the repo warning against a second writer. The placement rule also files the client half
+  down to tier 2.
+
+### Facts the decision rests on (re-checked 2026-10-06)
+
+- `generating_status_handler` is read-only and registry-blind, but `AppState` owns
+  `generation_gate`, so the registry is already reachable from the handler.
+- `heal_stale` has exactly two `src/` call sites: boot (`wiring.rs`) and the free-action path
+  (`action.rs`, `FreeAction`/`Guide`/`Impersonate` only). `/options`, retrigger and retry never
+  call it, and there is no heal on game switch.
+- `GenerationGuard::Drop` frees only the registry slot; `gate.rs` states the persisted status
+  is reset separately so the gate owns no persistence.
+- `TestAppBuilder::generation_status(Generating, phase)` seeds a persisted `Generating` with
+  **no** live slot, after boot — the tier-1 seam. `is_generating(true)` is the slot-claiming
+  sibling.
+- `tests/http/requires_migration/fragment.rs::test_generating_status_variants` asserts
+  `narrating` for a persisted `Generating` with no slot, i.e. the pre-decision contract; it
+  must flip. `REQUIRES_MIGRATION_TEST_COUNT` is 83.
+- No test presses a real Enter to submit the command form; the helpers use `requestSubmit()`
+  or `click()`.
+
+### Graduated
+
+- [Recover a stale Generating from the live registry](11-recover-stale-generating.md)
+- [Decide the fate of the invariant test the recovery doc claims](12-doc-claimed-invariant-test.md)

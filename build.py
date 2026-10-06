@@ -32,8 +32,8 @@ Concurrent builds:
 Cargo compile and test steps queue on a machine-wide lock (``scripts/build_slot.py``), so builds
 from different checkouts run one at a time. A cold target dir is seeded from a warm sibling
 (``scripts/target_seed.py``); cargo links with the toolchain's lld (``scripts/lld-linker.sh``).
-The lock does not cover ``cargo fmt``, the Python checks, ``cargo llvm-cov report`` or
-``--diagnostic-benchmark``. A step waits up to 30 minutes for it, then runs anyway.
+The lock does not cover ``cargo fmt``, the Python checks or ``cargo llvm-cov report``.
+A step waits up to 30 minutes for it, then runs anyway.
 Each script's docstring lists its ``CHRONICLER_*`` switches. Use one target dir per checkout;
 agents sharing a checkout pass ``--no-fmt`` so ``cargo fmt`` cannot rewrite each other's sources::
 
@@ -618,7 +618,6 @@ _GATE_ONLY_FLAGS = (
     "llm_only",
     "no_fmt",
     "cleanup",
-    "diagnostic_benchmark",
     "test_timings",
 )
 
@@ -674,12 +673,6 @@ def parse_args(argv=None):
         dest="cleanup",
         help="Delete this checkout's target dir and the machine-wide test port-lock dir. "
         "Do not run while another checkout is testing.",
-    )
-    parser.add_argument(
-        "--diagnostic-benchmark",
-        action="store_true",
-        dest="diagnostic_benchmark",
-        help="Run the diagnostic signal quality benchmark and generate a report",
     )
     parser.add_argument(
         "--test-timings",
@@ -1576,18 +1569,6 @@ def run_cleanup(args, record):
     both_print("=== Cleanup Complete ===")
 
 
-def run_diagnostic(args, record):
-    """Diagnostic benchmark mode."""
-    both_print("=== Diagnostic Benchmark Mode ===")
-    benchmark_script = Path(__file__).parent / "scripts" / "diagnostic_benchmark.py"
-    if benchmark_script.exists():
-        run(f'python "{benchmark_script}"')
-    else:
-        both_print(f"ERROR: Benchmark script not found: {benchmark_script}")
-        sys.exit(1)
-    both_print("=== Diagnostic Benchmark Complete ===")
-
-
 def run_llm_only(args, record):
     """LLM-only mode: build, then run only the slow LLM tests."""
     check_rust_version()
@@ -1695,8 +1676,6 @@ def main():
             _pending_exec = run_server(args, record)
         elif args.command:
             run_step(args, record)
-        elif args.diagnostic_benchmark:
-            run_diagnostic(args, record)
         elif args.cleanup:
             run_cleanup(args, record)
         elif args.llm_only:

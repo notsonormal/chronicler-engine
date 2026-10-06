@@ -375,7 +375,7 @@ class MainRunTests(unittest.TestCase):
     @staticmethod
     def _run_args():
         return SimpleNamespace(
-            command="run", cleanup=False, diagnostic_benchmark=False, llm_only=False
+            command="run", cleanup=False, llm_only=False
         )
 
     def _run_main(self, run_server):
@@ -784,7 +784,6 @@ class NextestEpilogueTests(unittest.TestCase):
         gate_args = SimpleNamespace(
             command=None,
             cleanup=False,
-            diagnostic_benchmark=False,
             llm_only=False,
         )
         with mock.patch.object(
@@ -845,7 +844,6 @@ class MainStampTests(unittest.TestCase):
         gate_args = SimpleNamespace(
             command=None,
             cleanup=False,
-            diagnostic_benchmark=False,
             llm_only=False,
         )
         with mock.patch.dict(

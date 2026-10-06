@@ -6,7 +6,7 @@ argument-hint: "[port] [world]"
 
 # Chronicler UI Investigator
 
-Drive the running Chronicler dashboard and capture evidence for an expectation the caller supplies. This skill captures; the caller judges. Defaults: port 3000, world `redmist_estate`.
+Drive a Chronicler dashboard and capture evidence for an expectation the caller supplies. This skill captures; the caller judges. Defaults: port 3001, world `redmist_estate`.
 
 ## Prerequisites
 
@@ -19,17 +19,21 @@ Drive the running Chronicler dashboard and capture evidence for an expectation t
 
 ### 1. Serve
 
+A probe must never be pointed at the live dashboard: a realistic turn there fires an LLM call and mutates the active game. Always start the probe's own server, against its own database, on its own port:
+
 ```bash
-python build.py run -- --world redmist_estate --port 3000
-curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/   # 200 → reuse this server
+python build.py run --target-dir tmp/probe-server -- --world redmist_estate --port 3001
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/   # 200 → reuse this probe server
 ```
+
+The server's DB is `<exe dir>/chronicler_<port>.db` (`src/bootstrap/run.rs`), so this writes `tmp/probe-server/debug/chronicler_3001.db`. Drive only the server this step started, on the port passed here — the live dashboard keeps its own DB. Integration tests allocate their own ports from 3010–3050 (`tests/test_config.json`), so keep the probe outside that band. The first run into a new target dir is a cold build; later runs are warm. A concurrent probe needs its own port and its own `--target-dir`.
 
 Done when `/` returns 200. A dead session can leave the port bound — check before starting a second engine. For how `python build.py run` works, see the repo-root [ENVIRONMENT.md](../../../ENVIRONMENT.md).
 
 ### 2. Drive
 
 ```javascript
-chrome_devtools_navigate(url="http://127.0.0.1:3000")
+chrome_devtools_navigate(url="http://127.0.0.1:3001")
 ```
 
 `chrome_devtools_evaluate` awaits the promise it is given, so poll inside it for dynamic content:
