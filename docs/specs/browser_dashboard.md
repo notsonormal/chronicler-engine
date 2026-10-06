@@ -248,3 +248,15 @@ Then the disclosure is still open
 And focus is still in its Details control
 And the banner is still up
 ```
+
+#### Scenario 16.28: The status poll leaves generating and re-enables Send
+
+```gherkin
+Given the dashboard is loaded and the status poll reports a generation phase
+Then #status-display shows a generating state
+And #submit-btn is disabled
+When the status poll reports idle
+Then #status-display returns to Ready
+And #submit-btn is enabled
+And pressing Enter in #command-form input[name="command"] submits the form
+```

@@ -6,6 +6,7 @@ pub use test_utils::settings_guard::SettingsTestGuard;
 pub use test_utils::TEST_PERSONA;
 
 mod actions;
+mod dashboard;
 mod failure_display;
 mod games_config;
 mod games_create;

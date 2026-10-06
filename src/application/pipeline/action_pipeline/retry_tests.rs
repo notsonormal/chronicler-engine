@@ -427,8 +427,6 @@ async fn test_retry_event_trigger_narration_fails() {
         state.narrative.input_buffer.status
     );
 
-    // The System message logged by the failed trigger continuation must
-    // survive in history, not be lost to a fresh state load on the error path.
     let has_system_msg = state.narrative.history.iter().any(|m| {
         m.message_type == MessageType::System && m.text().contains("Trigger narration failed")
     });
@@ -568,9 +566,7 @@ async fn test_retry_event_continuation_happy_path() {
     );
 }
 
-/// Event-only retry is a narration-producing turn: the offered set follows
-/// the same turn-end rewrite rule as ordinary turns. Toggle on + options
-/// agent registered — the stale set is replaced with a fresh one.
+/// Event-only retry is a narration-producing turn, so it gets the ordinary turn-end options rewrite.
 #[test]
 fn test_retry_event_continuation_rewrites_options_when_enabled() {
     let (app, storage) = make_app(Some(tagged_options_provider()));
@@ -629,8 +625,7 @@ fn test_retry_event_continuation_rewrites_options_when_enabled() {
     assert!(options.contains(&"Search the desk".to_string()));
 }
 
-/// Same rewrite rule with the toggle off: the stale set must clear (no
-/// system failure message — a cleared set with the toggle off is normal).
+/// A toggle-off event retry clears the set silently — a cleared set is the normal outcome here, not a failure.
 #[test]
 fn test_retry_event_continuation_clears_options_when_disabled() {
     let (app, storage) = make_app(None);
@@ -758,8 +753,7 @@ async fn test_retry_recovers_after_llm_failure() {
         after_fail.narrative.input_buffer.status
     );
 
-    // Retry operates on the last message; seed a Narration so the test exercises
-    // re-narrate recovery rather than user-regen.
+    // Retry dispatches on the last message; seeding a Narration exercises re-narrate recovery rather than user-regen.
     add_narration_and_save(&app, &storage, "You look around.");
 
     app.pipeline.retry_last_response();
@@ -822,8 +816,6 @@ async fn test_retry_room_not_found_sets_error() {
     );
 }
 
-// Main-retry entry path (no event) with a failing narrator → Error. Distinct from
-// test_retry_event_trigger_narration_fails, which covers the event-retry trigger path.
 #[tokio::test]
 async fn test_retry_llm_error_sets_error() {
     let narrator = Arc::new(MockBackend::default().with_fail());
@@ -1268,8 +1260,6 @@ async fn test_retry_records_missing_snapshot_id() {
 
 #[tokio::test]
 async fn test_retry_returns_internal_error_when_anchor_has_no_snapshot_id() {
-    // anchor message without snapshot_id is a data-integrity
-    // violation → 500 from retry(), with the reason persisted on status.
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
@@ -1331,8 +1321,6 @@ async fn test_retry_returns_internal_error_when_snapshot_row_missing() {
 
 #[tokio::test]
 async fn test_retry_returns_concurrent_generation_when_gate_busy() {
-    // retry() must reject concurrent generation the same way
-    // `process_action` does — Ok(ConcurrentGeneration), no task spawned.
     let (app, storage) = make_test_app_with_storage();
     let _input_id = add_input_and_save(&app, &storage, "test input");
 
@@ -1363,8 +1351,6 @@ async fn test_retry_returns_shutting_down_when_token_cancelled() {
         "retry() should return Ok(ShuttingDown) when token is cancelled, got {result:?}"
     );
 }
-
-// Redo-mode coverage through the public retry() entry: one test per mode.
 
 #[tokio::test]
 async fn test_retry_flow_narration_mode_makes_new_swipe() {
@@ -1484,7 +1470,6 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
         target.impersonated(),
         "the new swipe inherits the stored inputs"
     );
-    // The full tail (the deliberate behavior change): the quantifier ran.
     assert!(
         final_state.scene.quantifier_confidence.is_some(),
         "impersonate redo now runs the full post-narration tail"
@@ -1506,7 +1491,6 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    // A guide-only turn: narration with a guided steering instruction, no Input row.
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
         "room_1",
@@ -1576,10 +1560,7 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         Arc::new(MockBackend::default())
             as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     );
-    // A second room distinguishes the guided Narration's snapshot (room
-    // `marker`) from the older Input's snapshot (the app's starting room). The
-    // redo prompt renders `Current Location: <room name>`, so the room name
-    // proves which snapshot the redo reconstructed from.
+    // The second room identifies which snapshot the redo used: the prompt renders `Current Location: <room name>`.
     let data = TestDataBuilder::default_test()
         .room(Room {
             id: "marker".to_string(),
@@ -1596,7 +1577,6 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    // History carries an older player input, then a guided turn.
     let _ = add_input_and_save(&app, &storage, "the older player input");
     let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
         &storage,
@@ -1626,9 +1606,7 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         final_state.narrative.input_buffer.status
     );
 
-    // The redo's prompt must carry the empty input the original guided
-    // generation used — not the older turn's player input. Forensics land on
-    // the recorder's storage (the pipeline is rebound to the builder's).
+    // Forensics land on the recorder's own storage; only the pipeline's storage is rebound to the builder's.
     let forensics = forensics_storage
         .list_latest_llm_messages(10)
         .expect("list llm forensics");
@@ -1636,9 +1614,6 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         .iter()
         .find(|m| m.agent_name.contains("narrator"))
         .expect("narrator forensics recorded");
-    // The guided Narration is the anchor, so the redo reconstructs from its
-    // snapshot — the prompt's room is `Marker Room`. Under the old anchoring
-    // (older Input) it would render the starting room's name instead.
     assert!(
         narrator_call
             .user_prompt
@@ -1646,10 +1621,7 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         "guided redo must reconstruct from the guided Narration's snapshot; prompt was: {}",
         narrator_call.user_prompt
     );
-    // The current-turn <PlayerInput> block must be empty — the older turn's
-    // input must not leak into it. Assert on the last block directly so the
-    // check does not depend on the exact tag/newline layout; the older input
-    // text still appears legitimately inside <ConversationHistory>.
+    // The older input still appears legitimately inside <ConversationHistory>, so assert on the last <PlayerInput> block rather than searching the whole prompt.
     let prompt = &narrator_call.user_prompt;
     let start = prompt
         .rfind("<PlayerInput>")
@@ -1725,7 +1697,6 @@ async fn test_retry_flow_user_regen_mode_stays_tail_less() {
         MessageType::Input,
         "the target keeps its Input type"
     );
-    // No tail: a plain user input never gets one.
     assert!(
         final_state.scene.quantifier_confidence.is_none(),
         "user-regen redo must stay tail-less"
@@ -1770,10 +1741,6 @@ async fn test_retry_flow_event_mode_continues_trigger() {
     );
     app.shutdown_token.cancel();
 }
-
-// These cover retry_user_regen's own `Err(e) => finalize_phase_error` and
-// cancellation arms — the shared-prefix failures themselves are covered in
-// narration_generation_tests.rs.
 
 fn assert_error_status(app: &AppState, expected_substring: &str) {
     let state = app.message_service.load_or_fresh();
@@ -1887,9 +1854,6 @@ async fn test_retry_user_regen_cancelled() {
 async fn test_retry_renarrate_with_no_input_persists_error() {
     let (app, storage) = make_test_app_with_storage();
 
-    // History has no Input anywhere: a plain Narration anchor plus an event
-    // Narration on top. Retry resolves to ReNarrate (event mode), truncates to
-    // the plain-Narration anchor, and finds no input text.
     let mut state = app.message_service.load_or_fresh();
     state.add_message("You look around.".to_string(), MessageType::Narration);
     let anchor_snapshot =
@@ -1926,9 +1890,7 @@ async fn test_retry_renarrate_with_no_input_persists_error() {
 
 #[tokio::test]
 async fn test_retry_returns_internal_error_when_no_anchor_message() {
-    // Reachable no-anchor shape: an event-flagged Input passes the Input
-    // check but leaves find_retry_anchor_msg's event path (rposition of the
-    // last non-event message) with no match.
+    // An event-flagged Input passes the Input check but leaves find_retry_anchor_msg's event path with no match — the reachable no-anchor shape.
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh();
@@ -1992,4 +1954,36 @@ async fn test_retry_returns_internal_error_when_snapshot_load_errors() {
         "retry() should return ApplicationError::internal when the snapshot load errors, got {result:?}"
     );
     assert_error_status(&app, "simulated load_by_id failure");
+}
+
+#[test]
+fn test_retry_heals_stale_status_before_validation_error() {
+    let (app, storage) = make_test_app_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    storage
+        .save_snapshot(
+            &crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+                &state,
+            ),
+        )
+        .expect("save stale snapshot should succeed");
+
+    let result = app.pipeline.retry(&app.generation_gate);
+
+    assert!(
+        result.is_err(),
+        "retry should fail with no input to retry, got {result:?}"
+    );
+    let (status, _) = app
+        .game_view_query
+        .get_generating_status()
+        .expect("get_generating_status should succeed");
+    assert_eq!(
+        status,
+        GenerationStatus::Idle,
+        "stale Generating should be healed before the validation error returns"
+    );
 }

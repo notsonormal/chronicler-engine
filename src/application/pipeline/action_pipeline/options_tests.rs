@@ -11,8 +11,12 @@ use crate::application::agents::options::OptionsAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::action::Action;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::test_support::{make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder};
+use crate::test_support::{
+    make_test_pipeline_app_with_storage as make_test_app_with_storage,
+    make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder,
+};
 
 const TAGGED_RESPONSE: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -77,9 +81,7 @@ fn system_messages_contain(app: &crate::adapters::driving::http::AppState, needl
         .any(|entry| entry.message_type == MessageType::System && entry.text.contains(needle))
 }
 
-/// The seeded test app reloads with an empty messages table (the snapshot
-/// excludes messages), so on-demand tests run one narration turn first to
-/// create real scene history.
+/// Seeded apps reload with an empty messages table (snapshots exclude messages), so tests needing scene history run a narration turn first.
 
 #[test]
 fn test_always_on_generates_options_after_narration_turn() {
@@ -96,8 +98,6 @@ fn test_always_on_generates_options_after_narration_turn() {
 
 #[test]
 fn test_always_on_no_agent_clears_set_and_surfaces_message() {
-    // Registry has no options agent; the always-on rewrite must still run —
-    // clear the stale set and surface the unavailable-agent system message.
     let (app, storage) = make_app(None);
     set_always_on(&storage, true);
     set_prior_options(&app, &["Stale option"]);
@@ -147,9 +147,6 @@ fn test_toggle_off_clears_set_after_turn() {
 
 #[test]
 fn test_world_toggle_does_not_enable_always_on_for_running_game() {
-    // The effective toggle is the GAME row's value, inherited from the
-    // world at game creation. Flipping the world row afterwards must not
-    // retroactively enable always-on for an existing game.
     let (app, storage) = make_app(Some(tagged_options_provider()));
     let world = storage
         .get_world("test")
@@ -173,10 +170,7 @@ fn test_world_toggle_does_not_enable_always_on_for_running_game() {
 
 #[test]
 fn test_unreadable_game_row_falls_back_to_world_toggle() {
-    // Resolution is game-row-first: a readable game row wins even when the
-    // world row disagrees, and only an unreadable row falls back to the
-    // world's default. Pinned at the resolution level because a turn with a
-    // failing get_game dies before it reaches the rewrite.
+    // Pinned at the resolution level: a turn with a failing get_game dies before it reaches the rewrite.
     let (app, storage) = make_app(Some(tagged_options_provider()));
     let world = storage
         .get_world("test")
@@ -245,10 +239,7 @@ async fn test_process_options_replaces_set() {
 
 #[tokio::test]
 async fn test_process_options_during_shutdown_returns_shutting_down() {
-    // The token is consulted at claim time (claim_and_spawn's first guard);
-    // a cancelled token must refuse the claim without touching the set or
-    // the gate. The mid-refresh Cancelled branch (game-id switch) has no
-    // deterministic seam, so the claim-time guard is the covered path.
+    // The mid-refresh Cancelled branch (game-id switch) has no deterministic seam, so the claim-time guard is the covered path.
     let (app, _storage) = make_app(Some(tagged_options_provider()));
     app.pipeline
         .execute_action_with_inputs("look".to_string(), false, None);
@@ -280,8 +271,6 @@ async fn test_process_options_during_shutdown_returns_shutting_down() {
 
 #[test]
 fn test_process_options_empty_history_rejected() {
-    // A freshly seeded app has no persisted message rows, so scene history
-    // does not exist yet — /options must be rejected before any claim.
     let (app, _storage) = make_app(Some(tagged_options_provider()));
 
     let state = app.message_service.load_or_fresh();
@@ -341,4 +330,36 @@ async fn test_no_options_agent_surfaces_unavailable_message() {
         &app,
         "Options agent is not available"
     ));
+}
+
+#[test]
+fn test_process_options_heals_stale_status_before_validation_error() {
+    let (app, storage) = make_test_app_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    storage
+        .save_snapshot(
+            &crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+                &state,
+            ),
+        )
+        .expect("save stale snapshot should succeed");
+
+    let result = app.pipeline.process_options(&app.generation_gate);
+
+    assert!(
+        result.is_err(),
+        "process_options should fail with no scene to ground options in, got {result:?}"
+    );
+    let (status, _) = app
+        .game_view_query
+        .get_generating_status()
+        .expect("get_generating_status should succeed");
+    assert_eq!(
+        status,
+        GenerationStatus::Idle,
+        "stale Generating should be healed before the validation error returns"
+    );
 }

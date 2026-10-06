@@ -12,8 +12,6 @@ use chronicler_engine::TestAppBuilder;
 
 use chronicler_engine::domain::model::message::{Message, Swipe};
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
-use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
-use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
@@ -24,8 +22,8 @@ use crate::TEST_PERSONA;
 
 #[tokio::test]
 async fn test_basic_fragments_return_html() {
-    // The story-log fragment renders entries only — the shell owns the
-    // `#story-log` container — so seed one entry to give it something to show.
+    // The fragment renders entries only — the shell owns `#story-log` — so it needs
+    // a seeded entry.
     let app = TestAppBuilder::default_test()
         .log("You look around.", MessageType::Narration)
         .build();
@@ -179,36 +177,6 @@ async fn test_character_headshots_fragment() {
     assert!(
         body.contains("headshot"),
         "Expected headshot in fragment: {body}"
-    );
-}
-
-#[tokio::test]
-async fn test_generating_status_variants() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/status/generating").await;
-    assert!(body.contains("idle"), "Default status should be idle");
-
-    let body = fetch_body(
-        &TestAppBuilder::default_test()
-            .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
-            .build(),
-        "/status/generating",
-    )
-    .await;
-    assert!(
-        body.contains("narrating"),
-        "Narrating status should contain 'narrating'"
-    );
-
-    let body = fetch_body(
-        &TestAppBuilder::default_test()
-            .generation_status(GenerationStatus::Generating, GenerationPhase::Quantifying)
-            .build(),
-        "/status/generating",
-    )
-    .await;
-    assert!(
-        body.contains("quantifying"),
-        "Quantifying status should contain 'quantifying'"
     );
 }
 

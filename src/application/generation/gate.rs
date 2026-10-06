@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! GenerationGate — per-game slot orchestration. Generation truth is persisted `GenerationStatus` only.
+//! GenerationGate — per-game slot orchestration. The registry is the live "is generating" truth; the persisted `GenerationStatus` carries the durable phase.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -40,8 +40,7 @@ impl GenerationGate {
             .wrapping_add(1)
     }
 
-    /// Reset a stale persisted `Generating` status when no slot owns this game.
-    /// Mutates `state`; caller must persist if it proceeds.
+    /// Mutates `state`; the caller persists the reset.
     pub fn heal_stale(&self, game_id: u64, state: &mut GameState) {
         if !state.narrative.input_buffer.status.is_generating() {
             return;
@@ -114,9 +113,8 @@ impl GenerationGate {
         release_owned_slot(&self.registry, game_id, generation_id);
     }
 
-    /// Release any active generation slot for the given game and return its
-    /// generation id. This is the caller-driven reset path; the persisted status
-    /// is reset separately by the pipeline so the gate does not own persistence.
+    /// The persisted status is reset separately by the pipeline, so the gate does
+    /// not own persistence.
     pub fn release_generation_slot_for_game(&self, game_id: u64) -> Option<u64> {
         let mut registry = self.registry.write().unwrap_or_else(|p| {
             tracing::warn!(

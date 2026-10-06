@@ -95,6 +95,9 @@ pub async fn switch_game_handler(
     Path(id): Path<u64>,
 ) -> Result<Response, ApplicationError> {
     state.game_catalogue.switch_game(id)?;
+    // Repairs a stale persisted `Generating` for the newly current game, so a
+    // panicked turn cannot strand the dashboard.
+    state.pipeline.heal_stale_status(&state.generation_gate)?;
     Ok(ok_refresh())
 }
 
@@ -157,7 +160,6 @@ pub async fn switch_game_mode_handler(
     render_posture_result(&state, game)
 }
 
-/// Auto-save a game's perspective and tense (plain posture override).
 pub async fn update_game_posture_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
@@ -172,7 +174,6 @@ pub async fn update_game_posture_handler(
     render_posture_result(&state, result)
 }
 
-/// Auto-save the game's per-game preset selection (the picker).
 pub async fn update_game_presets_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,

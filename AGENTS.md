@@ -193,7 +193,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Game lifecycle orchestration and read-side queries.
       - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
     - **generation/**
-      - `gate.rs` — GenerationGate — per-game slot orchestration. Generation truth is persisted `GenerationStatus` only.
+      - `gate.rs` — GenerationGate — per-game slot orchestration. The registry is the live "is generating" truth; the persisted `GenerationStatus` carries the durable phase.
       - `guard.rs` — Generation guard logic
       - `mod.rs` — Generation gating and per-game slot orchestration.
       - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
@@ -425,5 +425,7 @@ Read `.pi/extensions/pi-permission-system/config.json` to see allowed permission
 Don't commit without explict approval, even if commiting is allowed in the permissions config. Normal git commands are fine but destructive git commands should be avoided in general. 
 
 ## Subagents and delegation extra rules
+
+Prefer single long running subagents over multiple smaller subagents because it's more expensive to load up twice the context. This is a preference, some workflows/skills specificially use multiple subagents, such as some code review workflows or when implementing multiple wayfinder tickets at once.
 
 Only create `scout` subagents if the current model is Anthropic (e.g. Opus or Sonnet). With a non-Anthropic model, read all the information you need in the current session. This rule is specific to `scout` subagents only.

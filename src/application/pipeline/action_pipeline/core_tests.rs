@@ -778,7 +778,6 @@ fn test_pipeline_persists_input_before_narration() {
 
 #[test]
 fn load_or_fresh_unchanged_on_world_data_missing() {
-    // `build_fresh_initial_state` fetches world data only as fallback.
     let storage = {
         let base = Storage::new_in_memory();
         let id = base
@@ -1358,4 +1357,30 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         .iter()
         .any(|e| e.message_type == MessageType::Narration);
     assert!(has_narration, "Main narration should be preserved");
+}
+
+#[test]
+fn test_switch_game_heals_stale_status_for_the_current_game() {
+    let (app, storage) = make_test_app_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    storage
+        .save_snapshot(&GameStateSnapshot::from_game_state(&state))
+        .expect("save stale snapshot should succeed");
+
+    app.pipeline
+        .heal_stale_status(&app.generation_gate)
+        .expect("heal_stale_status should succeed");
+
+    let (status, _) = app
+        .game_view_query
+        .get_generating_status()
+        .expect("get_generating_status should succeed");
+    assert_eq!(
+        status,
+        GenerationStatus::Idle,
+        "game switch should heal the stale record for the game now current"
+    );
 }

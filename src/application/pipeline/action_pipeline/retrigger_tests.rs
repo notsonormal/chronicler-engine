@@ -163,8 +163,6 @@ async fn test_retrigger_event_emits_error_on_world_fetch_failure() {
 
 #[tokio::test]
 async fn test_retrigger_returns_concurrent_generation_when_gate_busy() {
-    // retrigger() must reject concurrent generation the same way
-    // `process_action` does — Ok(ConcurrentGeneration), no task spawned.
     let (app, storage) = TestAppBuilder::default_test()
         .last_trigger(crate::test_support::TestStoredTriggerContext::standard())
         .log("Main narration", MessageType::Narration)
@@ -196,5 +194,37 @@ async fn test_retrigger_returns_shutting_down_when_token_cancelled() {
     assert!(
         matches!(result, Ok(ProcessActionResult::ShuttingDown)),
         "retrigger() should return Ok(ShuttingDown) when token is cancelled, got {result:?}"
+    );
+}
+
+#[test]
+fn test_retrigger_heals_stale_status_before_validation_error() {
+    let (app, storage) = make_test_app_with_storage();
+
+    let mut state = app.message_service.load_or_fresh();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    storage
+        .save_snapshot(
+            &crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+                &state,
+            ),
+        )
+        .expect("save stale snapshot should succeed");
+
+    let result = app.pipeline.retrigger(&app.generation_gate);
+
+    assert!(
+        result.is_err(),
+        "retrigger should fail with no trigger context, got {result:?}"
+    );
+    let (status, _) = app
+        .game_view_query
+        .get_generating_status()
+        .expect("get_generating_status should succeed");
+    assert_eq!(
+        status,
+        GenerationStatus::Idle,
+        "stale Generating should be healed before the validation error returns"
     );
 }

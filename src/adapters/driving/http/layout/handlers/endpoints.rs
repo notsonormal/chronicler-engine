@@ -66,7 +66,12 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
             Default::default()
         }
     };
-    let is_gen = status.is_generating();
+    // The live registry, not the persisted record, answers "is something
+    // generating?". A persisted `Generating` with no slot is a stale artifact
+    // from a panic; the poll reports `idle` so the page unblocks. The
+    // persisted phase still supplies the phase name while a slot is live.
+    let game_id = state.game_catalogue.current_game_id();
+    let is_gen = state.generation_gate.is_busy(game_id);
     tracing::debug!(
         "generating_status_handler: is_generating={is_gen}, status={status:?}, phase={phase:?}",
     );

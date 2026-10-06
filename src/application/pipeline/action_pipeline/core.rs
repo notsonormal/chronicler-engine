@@ -126,6 +126,26 @@ impl ActionPipeline {
         Ok(())
     }
 
+    fn heal_stale_if_changed(
+        &self,
+        generation_gate: &GenerationGate,
+        game_id: u64,
+        game_state: &mut GameState,
+    ) -> Result<(), EngineError> {
+        let before = game_state.narrative.input_buffer.status.clone();
+        generation_gate.heal_stale(game_id, game_state);
+        if game_state.narrative.input_buffer.status != before {
+            self.message_service.save_state(game_state)?;
+        }
+        Ok(())
+    }
+
+    pub fn heal_stale_status(&self, generation_gate: &GenerationGate) -> Result<(), EngineError> {
+        let game_id = self.storage.current_game_id();
+        let mut game_state = self.message_service.load_or_fresh();
+        self.heal_stale_if_changed(generation_gate, game_id, &mut game_state)
+    }
+
     pub(super) fn claim_and_spawn<E, BeforeClaim, PreSpawn, SpawnTask>(
         &self,
         generation_gate: &GenerationGate,
@@ -145,6 +165,9 @@ impl ActionPipeline {
         let mut game_state = self.message_service.load_or_fresh();
         let game_id = self.storage.current_game_id();
 
+        // Heal before validating or claiming, so a panicked turn cannot strand the page.
+        self.heal_stale_if_changed(generation_gate, game_id, &mut game_state)?;
+
         before_claim(game_id, &mut game_state)?;
 
         let (started_game_id, started_generation_id, claim_result) =
@@ -159,9 +182,8 @@ impl ActionPipeline {
             }
         }
 
-        // `pre_spawn` runs after the slot is claimed but before the spawn task
-        // (and its guard) starts. On failure no `guard` drops, so release the
-        // slot manually to keep the registry in sync with the returned `Err`.
+        // On `pre_spawn` failure no `guard` drops, so release the claimed slot
+        // manually to keep the registry in sync with the returned `Err`.
         if let Err(e) = pre_spawn() {
             generation_gate.release_generation_slot(started_game_id, started_generation_id);
             return Err(e);
@@ -335,9 +357,8 @@ impl ActionPipeline {
             }
         }
 
-        // Always-on options trigger: non-impersonate narration turns rewrite
-        // the offered set at turn end (impersonate output IS the player
-        // acting).
+        // Non-impersonate turns rewrite the offered set at turn end;
+        // impersonate output is the player acting.
         if !impersonated {
             let options_enabled = run.resolve_options_always_on(&outcome.bundle.world);
             self.rewrite_options_after_turn(
@@ -478,10 +499,8 @@ impl ActionPipeline {
     }
 
     pub(crate) fn log_cancellation(&self, outcome: Result<(), PhaseError>) {
-        // Non-Cancelled errors are persisted inside `retry_event_continuation` and
-        // `run_from_input` via `finalize_phase_error(&run, Some(&mut state), e)`,
-        // preserving in-flight state — e.g. the System message from a failed
-        // trigger continuation. Cancelled is reset by `handle_cancellation`.
+        // Non-Cancelled errors are persisted by `finalize_phase_error`, which
+        // preserves in-flight state.
         if let Err(PhaseError::Cancelled) = outcome {
             tracing::debug!("Pipeline cancelled");
         }
@@ -546,9 +565,8 @@ impl ActionPipeline {
         if let Some(target) = state.narrative.retry_target.take() {
             state.narrative.history.append(target);
         }
-        // An event-only retry is a narration-producing turn: the offered set
-        // follows the same turn-end rewrite rule (impersonation is not a
-        // concept here — retries never are).
+        // An event-only retry is a narration turn and never an impersonation,
+        // so the offered set follows the same turn-end rewrite rule.
         let options_enabled = run.resolve_options_always_on(&world);
         self.rewrite_options_after_turn(state, &map, &persona, &npcs_map, options_enabled);
         run.phase_finalize(state);

@@ -7,7 +7,9 @@ Interview the user relentlessly until you reach a shared understanding. Map this
 
 For clarity, write in Simplified Technical English (STE).
 
-Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled — the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Ask a maximum of 3 questions. Then wait for the user's answers before the next round.
+Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled — the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Ask a maximum of 5 questions. Then wait for the user's answers before the next round.
+
+Each round must carry all the context needed to answer its questions. Restate information you already gave when a question needs it. Assume the user has not read the preceding code or markdown files.
 
 Each question should be formatted like so:
 

@@ -33,10 +33,6 @@ impl ActionPipeline {
         self.claim_and_spawn(
             generation_gate,
             move |game_id, game_state| {
-                generation_gate.heal_stale(game_id, game_state);
-
-                self.message_service.save_state(game_state)?;
-
                 let game = self.storage.require_game(game_id)?;
                 let _persona = self.storage.require_persona(&game.persona_key)?;
                 if !input.is_empty() {

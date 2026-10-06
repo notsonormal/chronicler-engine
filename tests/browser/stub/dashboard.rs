@@ -1,9 +1,7 @@
 //! Stub-browser tests for dashboard chrome: the error toast, the action-area state machine, and the read-only text-check result. Tagged against `docs/specs/browser_dashboard.md`.
 
-// The engine's failing action route answers 500, so htmx fires
-// `htmx:beforeSwap` with `isError` on its own. The stub's Error outcome serves
-// that 500, and its `/status/generating` serves the spans the status poll
-// swaps; no test dispatches either event by hand.
+// The engine's failing action route answers 500, so htmx fires `htmx:beforeSwap`
+// with `isError` on its own; no test dispatches either event by hand.
 
 use std::time::Duration;
 
@@ -11,12 +9,10 @@ use playwright_rs::AriaRole;
 
 use super::*;
 
-/// Submit `command` through the shipped command form. Unlike `send_action`,
-/// this does not wait for the status span: a 500 is not swapped, so the status
-/// stays Ready and the error toast is the observable outcome. The form is
-/// submitted directly rather than by clicking Send: the failure path leaves
-/// Send locked until the next idle poll, and a second error must land inside
-/// the first toast's 5s timer.
+/// Unlike `send_action`, submits directly rather than clicking Send — the failure
+/// path leaves Send locked until the next idle poll — and does not wait for the
+/// status span: a 500 is not swapped, so a second error must land inside the
+/// first toast's 5s timer.
 async fn submit_command(page: &playwright_rs::Page, command: &str) {
     fill_command_input(page, command).await;
     page.evaluate::<(), ()>(
@@ -30,8 +26,7 @@ async fn submit_command(page: &playwright_rs::Page, command: &str) {
     .unwrap();
 }
 
-/// Wait until the toast displays `text`, so a timer measurement starts from the
-/// toast actually being up.
+/// A timer measurement must start when the toast is actually up, not when the submit returns.
 async fn wait_for_toast_text(page: &playwright_rs::Page, text: &str) {
     let expected = text.to_string();
     let shown = wait_for_condition_async(Duration::from_secs(3), Duration::from_millis(50), || {
@@ -42,8 +37,6 @@ async fn wait_for_toast_text(page: &playwright_rs::Page, text: &str) {
     assert!(shown, "toast never displayed {expected:?}");
 }
 
-/// Stash the command form and status display node identities on the page, so a
-/// test can prove a swap did not replace them.
 async fn stash_action_area_nodes(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
@@ -56,8 +49,7 @@ async fn stash_action_area_nodes(page: &playwright_rs::Page) {
     .unwrap();
 }
 
-/// True when the live command form / status display are the stashed nodes
-/// (node identity, not the id string a replacement would also carry).
+/// Node identity, not the id string a replacement would also carry.
 async fn action_area_nodes_unchanged(page: &playwright_rs::Page) -> (bool, bool) {
     page.evaluate::<(), (bool, bool)>(
         r#"(() => {
@@ -74,8 +66,6 @@ async fn action_area_nodes_unchanged(page: &playwright_rs::Page) -> (bool, bool)
     .unwrap()
 }
 
-/// Submit a command the auto-check intercepts and wait for the preview in
-/// `#action-preview`.
 async fn submit_intercepted_command(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
@@ -91,8 +81,7 @@ async fn submit_intercepted_command(page: &playwright_rs::Page) {
     wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
 }
 
-/// Submit an intercepted command even while the primary button is disabled: the
-/// player can still submit the form mid-generation.
+/// The player can still submit the form while the primary button is disabled mid-generation.
 async fn submit_intercepted_command_direct(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
@@ -108,7 +97,6 @@ async fn submit_intercepted_command_direct(page: &playwright_rs::Page) {
     wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
 }
 
-/// Confirm the intercepted preview; the client closes it.
 async fn confirm_text_check_preview(page: &playwright_rs::Page) {
     page.locator(".text-check-preview .btn-original")
         .await
@@ -120,7 +108,6 @@ async fn confirm_text_check_preview(page: &playwright_rs::Page) {
     wait_for_status_generating(page).await;
 }
 
-/// Read the live Send button's disabled state and label.
 async fn read_submit_button(page: &playwright_rs::Page) -> (bool, String) {
     page.evaluate::<(), (bool, String)>(
         r#"(() => {
@@ -134,7 +121,6 @@ async fn read_submit_button(page: &playwright_rs::Page) -> (bool, String) {
     .unwrap()
 }
 
-/// True while `selector`'s element is the page's focused element.
 async fn active_element_is(page: &playwright_rs::Page, selector: &str) -> bool {
     page.evaluate::<String, bool>(
         r#"(selector) => {
@@ -151,8 +137,6 @@ async fn active_element_is(page: &playwright_rs::Page, selector: &str) -> bool {
 #[tokio::test]
 async fn test_error_toast_on_action_failure() {
     with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
-        // The server's 500 body is the engine's error render, so the toast text
-        // is distinguishably the server's, not the submitted command echoed.
         submit_command(&page, "Internal server error").await;
         let expected = "Error: Failed to process action: Internal server error";
         wait_for_toast_text(&page, expected).await;
@@ -180,10 +164,9 @@ async fn test_newer_error_keeps_toast_visible() {
         submit_command(&page, "Second failure").await;
         wait_for_toast_text(&page, "Error: Failed to process action: Second failure").await;
 
-        // Poll across the window in which the first toast's 5s timer fires but
-        // the second's 7.5s timer does not. A single read 3.5s after the second
-        // toast appeared is load-sensitive: a slow submit shifts the read past
-        // the second timer and the toast has already hidden.
+        // Poll across the window in which the first toast's 5s timer fires but the
+        // second's 7.5s timer does not: a single read 3.5s after the second toast
+        // appeared is load-sensitive and can land past the second timer.
         let window_end = std::time::Instant::now() + Duration::from_millis(3500);
         while std::time::Instant::now() < window_end {
             let (visible, text) = read_error_toast(&page).await;
@@ -207,15 +190,13 @@ async fn test_primary_button_locks_and_unlocks_after_confirm() {
     with_stub_page(StubActionOutcome::Pending, |page, stub| {
         let status = stub.status_handle();
         async move {
-            // Keep the stub generating, so no poll can unlock the button
-            // before the assertion reads it.
+            // Keep the stub generating so no poll unlocks the button before the assertion reads it.
             status.set(StubStatus::Phase("narrating".to_string()));
             stash_action_area_nodes(&page).await;
 
             submit_intercepted_command(&page).await;
             confirm_text_check_preview(&page).await;
 
-            // The confirm's status span locks the button as a generating indicator.
             let (disabled, label) = read_submit_button(&page).await;
             assert!(
                 disabled,
@@ -237,8 +218,7 @@ async fn test_primary_button_locks_and_unlocks_after_confirm() {
                 "confirming the preview replaced #status-display"
             );
 
-            // Return the stub to idle, so the next 5s poll clears the status and
-            // the button must follow it back to Send.
+            // The next 5s poll clears the status; the button follows it back to Send.
             status.set(StubStatus::Idle);
             wait_for_status_ready(&page).await;
             let (disabled, label) = read_submit_button(&page).await;
@@ -264,8 +244,7 @@ async fn test_status_error_reaches_toast_after_confirm() {
             submit_intercepted_command(&page).await;
             confirm_text_check_preview(&page).await;
 
-            // The next poll reports a failed generation; its fragment lands in
-            // the same #status-display the confirm swapped the pending span into.
+            // The error fragment lands in the #status-display the confirm already swapped.
             status.set(StubStatus::Error("narration failed".to_string()));
             assert!(
                 wait_for_condition_async(
@@ -282,9 +261,8 @@ async fn test_status_error_reaches_toast_after_confirm() {
                 "#error-notification should show the status error, got {text:?}"
             );
 
-            // A Ready poll clears lastStatusError; wait for it, then for the first
-            // toast's 5s hide timer to run out, so visibility alone proves the
-            // second show call.
+            // A Ready poll clears lastStatusError; waiting out the first toast's 5s
+            // hide timer makes later visibility prove the second show call.
             status.set(StubStatus::Idle);
             wait_for_status_ready(&page).await;
             assert!(
@@ -297,8 +275,8 @@ async fn test_status_error_reaches_toast_after_confirm() {
                 "toast should have hidden before the dedupe check"
             );
 
-            // The Ready status reset the dedupe, so the SAME error must toast
-            // again. If the dedupe state leaked, the repeat stays hidden.
+            // A Ready status reset the dedupe, so the same error must toast again;
+            // leaked dedupe state would keep the repeat hidden.
             status.set(StubStatus::Error("narration failed".to_string()));
             assert!(
                 wait_for_condition_async(
@@ -416,8 +394,8 @@ async fn test_preview_opens_beside_status_display() {
             status.set(StubStatus::Phase("narrating".to_string()));
             wait_for_status_generating(&page).await;
 
-            // The primary button is a disabled generating indicator now, so
-            // submit the form directly (the player's Enter path).
+            // The button is a disabled generating indicator here, so submit the form
+            // directly (the player's Enter path).
             submit_intercepted_command_direct(&page).await;
 
             assert!(
@@ -463,8 +441,7 @@ async fn test_preview_opens_beside_status_display() {
 #[tokio::test]
 async fn test_clean_log_entry_check_can_be_dismissed() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // Drive the shipped check function directly with a clean text and an
-        // entry id; the stub keys the clean outcome on the text.
+        // Drive checkText directly: the stub keys the clean outcome on the text.
         page.evaluate::<(), ()>(
             "(() => { window.checkText('look at the castle', '2'); })()",
             None,
@@ -1463,6 +1440,61 @@ async fn test_new_narration_and_options_are_announced_once() {
                 live_region_changes(&page, "options-announcer").await,
                 1,
                 "a later poll must not re-announce the options"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.28
+#[tokio::test]
+async fn test_status_poll_leaves_generating_and_enter_submits() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let status = stub.status_handle();
+        let action = stub.action_handle();
+        async move {
+            status.set(StubStatus::Phase("narrating".to_string()));
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(8),
+                    Duration::from_millis(100),
+                    || async { read_submit_button(&page).await.0 },
+                )
+                .await,
+                "the poll's phase should lock Send"
+            );
+            let status_text = page
+                .locator("#status-display")
+                .await
+                .inner_text()
+                .await
+                .unwrap_or_default();
+            assert!(
+                !status_text.contains("Ready"),
+                "the display should leave Ready, got {status_text:?}"
+            );
+
+            // The button's label belongs to 16.9; this test owns the poll-driven transition.
+            status.set(StubStatus::Idle);
+            wait_for_status_ready(&page).await;
+            let (disabled, _) = read_submit_button(&page).await;
+            assert!(!disabled, "Send should unlock once the poll reports idle");
+
+            // No other test presses Enter: `requestSubmit()` does not reproduce the
+            // disabled-default-button block a real Enter hits.
+            let before = action.count();
+            fill_command_input(&page, "look around").await;
+            let input = page.locator(r#"#command-form input[name="command"]"#).await;
+            input.focus().await.unwrap();
+            input.press("Enter", None).await.unwrap();
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(5),
+                    Duration::from_millis(50),
+                    || async { action.count() > before },
+                )
+                .await,
+                "a real Enter should submit the command form"
             );
         }
     })

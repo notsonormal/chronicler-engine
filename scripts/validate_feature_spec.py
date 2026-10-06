@@ -37,31 +37,19 @@ TEST_DIRS = [
 ]
 
 # Heading-style scenario declarations: `#### Scenario 1.1: Title`.
-# Captures the scenario ID (digits.digits).
 SCENARIO_RE = re.compile(r"^#{1,6}\s+Scenario\s+(\d+\.\d+)\b")
 
 SCENARIO_COMMENT_RE = re.compile(
     r"^\s*//\s*\[([^\]]+)\]\s*SCENARIO:\s*(\d+\.\d+)\s*$"
 )
 
-# `#[test]` or `#[tokio::test]` (any attr starting with `#[test`).
 TEST_ATTR_RE = re.compile(r"^\s*#\[(tokio::)?test\b")
 
-# How many lines ahead of a // SCENARIO: comment we'll look for a #[test]
-# attribute before declaring the comment orphan.
+# Lines after a // SCENARIO: comment to search for its #[test] attribute.
 COMMENT_LOOKAHEAD = 5
 
-# ---------------------------------------------------------------------------
-# Mandatory SCENARIO-tag rule (contract: tests/STRATEGY.md "SCENARIO tags").
-#
-# Every #[test] / #[tokio::test] under tests/http/ and tests/browser/ must
-# carry a `// [spec] SCENARIO: N.N` tag. Each exemption below is declared
-# with its reason. The surface-consistency rule (same STRATEGY.md section)
-# is checked in find_surface_violations: `browser_*.md` specs are tagged
-# only from tests/browser/, and non-`browser_*` specs never from
-# tests/browser/.
+# Mandatory SCENARIO-tag rule; contract: tests/STRATEGY.md "SCENARIO tags".
 
-# Directories exempt from the tag rule (matched by path prefix).
 TAG_EXEMPT_DIRS = {
     Path("tests/http/requires_migration"): (
         "legacy quarantine — untagged e2e tests pending spec migration; "
@@ -69,7 +57,6 @@ TAG_EXEMPT_DIRS = {
     ),
 }
 
-# Whole files exempt from the tag rule.
 TAG_EXEMPT_FILES = {
     Path("tests/browser/stub/invariants.rs"): (
         "no spec link — computed-style and layout invariants have no HTTP "
@@ -80,7 +67,7 @@ TAG_EXEMPT_FILES = {
 # Pins the requires_migration quarantine: the count may only go down.
 # Migration cleanups lower it deliberately; a new test in the folder fails
 # the gate.
-REQUIRES_MIGRATION_TEST_COUNT = 83
+REQUIRES_MIGRATION_TEST_COUNT = 82
 
 
 def parse_spec_scenarios(spec_path: Path) -> set[str]:
@@ -243,10 +230,8 @@ def main() -> int:
         print(f"No spec files found in {SPECS_DIR}", file=sys.stderr)
         return 2
 
-    # Coverage is keyed by (spec_path, scenario_id) so the same ID declared
-    # in two specs is tracked as two distinct scenarios. The duplicate-ID
-    # check is no longer needed: colliding IDs in different specs are simply
-    # two keys that must each be covered.
+    # Keyed by (spec_path, scenario_id): the same ID in two specs is two keys
+    # that must each be covered.
     declared: set[tuple[str, str]] = set()
     for spec in spec_files:
         spec_rel = str(spec.relative_to(ENGINE_ROOT))
@@ -259,8 +244,6 @@ def main() -> int:
     test_files = sorted(
         f for test_dir in TEST_DIRS for f in test_dir.rglob("*.rs")
     )
-    # One read per file: coverage, untagged, and surface all consume the same
-    # prepared scans.
     scans = [
         (path, path.relative_to(ENGINE_ROOT), scan_test_file(path))
         for path in test_files

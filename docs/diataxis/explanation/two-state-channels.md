@@ -5,7 +5,7 @@ title: Two State Channels
 
 ## The two signals
 
-The engine carries two representations of generation state. One answers "is something generating right now?" on a hot path that runs many times per second. The other answers "what was the durable generation phase when this state was committed?" after a panic, restart, or debug inspection. The two signals serve different consumers and carry different cost profiles, so the engine keeps both and maintains their consistency with an explicit invariant.
+The engine carries two representations of generation state. One answers "is something generating right now?" on a hot path that runs many times per second. The other answers "what was the durable generation phase when this state was committed?" after a panic, restart, or debug inspection. The two signals serve different consumers and carry different cost profiles, so the engine keeps both, and recovery repairs the stale direction of their disagreement.
 
 ## Channel A — the persisted status
 
@@ -23,16 +23,20 @@ The registry is process-local by design. The engine's deployment contract is one
 
 The two signals answer different questions for different code paths:
 
-- **UI display** reads the persisted status (via the polled status fragment). The UI shows the correct state even when a tab was loaded before a crash or when the page renders from a stale snapshot.
-- **Spawn-side concurrency gating** reads the atomic. Handlers reject double-spawn attempts on an O(1) check that does not contend with the storage layer.
-- **Self-healing recovery** reads the persisted status. On the next `process_action` after a panic, the engine compares persisted status against the atomic; disagreement (persisted says `Generating`, atomic says `false`) is evidence of a mid-flight crash, and the engine resets the persisted status to `Idle`.
-- **Cross-process coordination** is supported by the persisted status only. The atomic cannot coordinate across processes because each process holds its own; the deployment contract is one process per database.
+- **UI display** reads the polled status fragment. The fragment's "is something generating?" answer comes from the registry, so a stale persisted `Generating` cannot lock the page; the persisted status still supplies the phase name and the error fragment.
+- **Spawn-side concurrency gating** reads the registry. Handlers reject double-spawn attempts on an O(1) check that does not contend with the storage layer.
+- **Self-healing recovery** compares the persisted status against the registry. The engine heals on boot, and on the next entry point after a panic: free action, options refresh, retrigger, retry, or game switch. When the persisted status says `Generating` and the registry holds no slot, the engine treats the previous run as a mid-flight crash. It resets the status to `Idle`.
+- **Cross-process coordination** is supported by the persisted status only. The registry cannot coordinate across processes because each process holds its own; the deployment contract is one process per database.
 
-## The single-writer rule
+## Who writes each channel
 
-The two signals are kept coherent by restricting who may write each one. Only the registry claim/release path mutates both representations, and it does so under the same write-lock scope so no observer sees them disagree. `GenerationGuard::Drop` is a second writer for the registry slot release only — the RAII panic-safety fallback. The persisted status's `true` transitions are owned solely by the action path in `ActionPipeline`. All other code paths treat both signals as read-only.
+Each channel has several writers, and the two writes of one generation are sequential rather than atomic. `GenerationGate::try_claim` inserts the registry slot under the registry write lock, releases that lock, and only then writes the persisted `Generating`. `GenerationGuard::Drop` releases the slot and leaves the persisted status to the pipeline's finalize, cancellation, and error paths.
 
-An invariant contract test verifies the rule: after any mutation, the registry state agrees with the persisted status (`GenerationGate` has a generating slot for the current game iff `state.narrative.input_buffer.status == Generating`). Drift between the two representations fails the test suite rather than shipping. If the test is ever deleted or weakened, the invariant degrades from machine-checked to convention only.
+Arrival narration takes a second path. `ArrivalTaskContext` sets the persisted `Generating` in memory, but its only save runs after the status is already `Idle` or `Error`, so the persisted record never shows arrival as live. Arrival also takes no registry slot.
+
+The two channels therefore disagree in two windows. A live slot can sit beside a persisted `Idle` while a generation finishes, because the pipeline writes `Idle` before its guard drops. A persisted `Generating` can sit beside no slot after a panic or a kill, because one path writes the status and another path releases the slot.
+
+Agreement between the two channels is a convention, not a tested invariant. No test asserts that a live slot and a persisted `Generating` always coincide, because they do not. Recovery repairs the stale direction only: `GenerationGate::heal_stale` resets a persisted `Generating` that no slot owns, and the boot path applies the same heal before the server starts.
 
 ## Document References
 
