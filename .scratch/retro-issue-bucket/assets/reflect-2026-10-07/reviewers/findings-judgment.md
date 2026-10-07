@@ -1,0 +1,49 @@
+# Reflect reviewer output
+
+Session: `01a117fd-0a3d-73da-bf97-dc0367797fb7`
+
+---
+
+1. **Principle:** The session that does a wayfinder ticket's work owns the ticket's state transition — claim must match what is actually implemented, and Status/Answer must be written when the work lands, or resolution degrades into cross-session log archaeology.
+ **Evidence:** 10-05 18:53 — "So I'm confused why you claimed one ticket and then implemented another" (`2026-10-05T18-28-57-528Z_01a10d53`); 10-07 17:42 — "Can you search through the sessions for tickets … 68-split-settings-sub-tabs.md and … 70-remove-story-log-check.md. I'm pretty sure they have been completed they so should be set the resolved and answered based on what happened in those sessions" (`2026-10-07T17-42-04-051Z_01a11775`), retro finding "68/70 stayed `claimed` after `6916556a`; answers were rebuilt from logs".
+ **Routing:** `.agents/skills/wayfinder/SKILL.md` — "Work through the map" / claim section: add the rule that the working session (or the coordinator, immediately post-merge) writes Status + Answer in the same change set, and that a claim left unimplemented must be released, not carried.
+
+2. **Principle:** Only grill a person on levers that person can actually pull; if the lever is a skill body or script behaviour, propose that edit as the question instead of asking the user to change habits the text will never enforce.
+ **Evidence:** 10-04 21:16 — "I feel like a lot of the questions on grilling me on things that I can't control? Like, doesn't no point in a grilling section on exactly what I want to happen, unless I can meaningfully make a change. A lot of behaviour comes from skills and how LLMs read those skills" (`2026-10-04T20-19-50-115Z_01a10892`); 10-05 20:30 — "That's already part of the code review skills, so what are you suggesting?" (`2026-10-05T20-20-39-466Z_01a10db9`).
+ **Routing:** `.agents/skills/grilling/SKILL.md` — question-format section: add a lever-ownership test per question (can the answerer enforce the change? if not, name the skill/script edit the answer would translate into).
+
+3. **Principle:** A grilling question must stand alone — restate the concrete fact/behaviour at stake instead of citing opaque tracker IDs the answerer can't see.
+ **Evidence:** 10-04 21:26 — "Q4 -> What is F17 and F18? Q5 -> A. Q6 -> Drop All" (`2026-10-04T21-19-55-746Z_01a108c9`); 10-04 21:28 — "Q4 -> I don't understand what the problem you want to solve here is" (`2026-10-04T21-28-58-576Z_01a108d1`).
+ **Routing:** `.agents/skills/grilling/SKILL.md` — "Each round must carry all the context needed to answer its questions" needs an explicit "no finding/ticket IDs without the finding's content inline" rule.
+
+4. **Principle:** Match a delegated agent's brief to its tool grants before writing it — a question requiring command execution (git log/show, script runs) is unanswerable for a read-only file-inspection role, and the scout burns a whole session on workarounds before saying so.
+ **Evidence:** 10-06 17:33–17:36 — scout/bench-facts brief demanded `git log --follow` + `git show` archaeology; scout: "this session exposes only `read`/`ls`/`find`/`grep`/`ask_owner` — no shell… Q4 is not recoverable with the tools I have" (`2026-10-06T17-33-33-982Z_01a11247`); same admission in `2026-10-05T18-54-45-249Z_01a10d6b` ("I have no bash/git tool in this role") and `2026-10-05T20-35-18-848Z_01a10dc7` ("this role has no shell tool").
+ **Routing:** `.agents/skills/wayfinder/SKILL.md` — scout/delegation stage: before dispatch, verify each evidence source in the brief against the role's tool grants; grant shell or re-scope the question down.
+
+5. **Principle:** A comment-removal pass's scope is the comment lines the change set adds, not every comment in the files it touches — otherwise each pass re-classifies hundreds of pre-existing lines as unrelated churn, or worse, an agent without prior context sweeps whole files.
+ **Evidence:** 10-07 17:43 — "The finder's `--uncommitted` mode lists all comments in touched files (236), including 170+ pre-existing build.py docstrings… I scoped to the comments actually added/changed by the uncommitted diff, matching the prior pass's method (`tmp/added_comments*.txt` + `apply_comment_deletions.py`)" (`2026-10-07T17-40-59-420Z_01a11774`); same improvised narrowing 10-04 21:44 (`2026-10-04T21-44-24-585Z_01a108e0`, `git diff -U0` scope) and 10-04 21:26 ("I audited the 311 comment lines actually added by the current uncommitted diff", `2026-10-04T21-16-51-774Z_01a108c6`).
+ **Routing:** `.agents/skills/chronicler-comment-fixer/SKILL.md` — §1 "Pick the finder mode that matches the request. Its output is the scope" currently names no added-lines narrowing; add it (three sessions reinvented it independently).
+
+6. **Principle:** On a checkout shared by concurrent sessions, stage scoped paths per workstream and attribute unstaged files to their owning session/ticket before staging — the skill's default `git add -A` sweep-in nearly committed another session's in-flight work and did commit a foreign workstream once.
+ **Evidence:** 10-04 22:20 — commit report: "A concurrent session's work is in commit 3. The `.scratch/architecture-deepening/` edits (18 min old, another session was doing t…" (`2026-10-04T22-17-09-784Z_01a108fe`); 10-05 18:53 — "What I left out: `.scratch/agent-workflow-friction/issues/03-yes-no-fact-placement.md`. Another session has claimed that ticket and has uncommitted edits in it" (`2026-10-05T18-28-57-528Z_01a10d53`); the same session also split three workstreams into three commits, repeating 10-07 17:47 ("Three scoped commits").
+ **Routing:** `.agents/skills/commit-and-push/SKILL.md` — Step 3 (`git add -A`) needs a shared-checkout rule: check `.scratch` claim state, split mixed workstreams into separate commits, and name what was left out.
+
+7. **Principle:** Prose may carry a number only when the generator that knows the truth writes it into the doc; a hand-updated count rots silently and turns into review noise every time the truth moves.
+ **Evidence:** 10-07 20:00 — "I just noticed that this was changed from 56 to 57. We shouldn't be manually counting and updating like this. Remove the number unless the number itself is automatically generated somehow" (`2026-10-07T17-47-57-035Z_01a1177a`); preceded by reviewer "Route-count drift (P3) — 56 → 57 routes (build's freshness check now passes)" (`2026-10-07T19-25-11-297Z_01a117d3`) and the earlier 52→56 correction (10-04 22:03).
+ **Routing:** `.agents/skills/chronicler-docs-hygiene/SKILL.md` — add a machine-recomputable-numbers check to its drift phases.
+
+8. **Principle:** A removal sweep's reference search covers skill files too — `.agents/skills/` bodies rot exactly like docs, and the skill files aren't in any doc-review's default scope.
+ **Evidence:** 10-06 23:10 — spec reviewer: "**Stale live reference to the removed route** — `.agents/skills/chronicler-ui-investigator/SKILL.md:81`: '`/check-text` standalone text check…' This is the only remaining reference to the route outside `.scratch/`/`old-docs/`" (`2026-10-06T23-05-37-248Z_01a11377`).
+ **Routing:** `.agents/skills/chronicler-docs-hygiene/SKILL.md` — its description scopes to `docs/diataxis/`; widen stale-reference sweeps to `.agents/skills/`.
+
+9. **Principle:** A rewrite of instructions-for-agents is validated by running the artifact from a clean context and comparing outcomes, not by the author re-reading it — the authoring session supplies assumptions the text doesn't carry.
+ **Evidence:** 10-04 21:43 — "Yes. Fix the skill and then create a subagent to run the updated skill. That way it will run without this context and you can check the results" (`2026-10-04T21-28-09-907Z_01a108d1`); the fresh subagent then reported 310 classified / 235 deleted where the author-context pass had kept them.
+ **Routing:** `.agents/skills/writing-for-agents/SKILL.md` — completion-criterion section: add "validate a skill edit with a fresh-context run" as the step's completion test.
+
+10. **Principle:** When a wayfinder map fans out several parallel implementation tickets, coordinator-level conventions (which shared counters may not be touched concurrently, when the full gate runs, whether worktree commits are allowed) live once in the map Notes — per-brief re-authoring drifts and contradicts itself.
+ **Evidence:** 10-07 17:47 — retro findings "Two tickets both lowered `REQUIRES_MIGRATION_TEST_COUNT`" and "t68 ran the full gate 5 times, t70 twice" (retro session thinking: "8 full `python build.py` gate runs… after each small follow-up edit… re-ran the full gate rather than a focused step", `2026-10-07T17-42-04-051Z_01a11775`); 10-07 20:00 — "You can commit onto worktrees, they will be deleted afterwards. But the changes should sit uncommited in dashboard-ui-issues-2 after everything is done" vs the t68/t70 briefs' "Do NOT commit, do NOT stage" (`2026-10-07T17-47-57-035Z_01a1177a`).
+ **Routing:** `.agents/skills/wayfinder/SKILL.md` — map Notes/delegation stage: require these three conventions in map Notes before fanning out.
+
+11. **Principle:** Before trimming always-loaded context, attribute its lines to generator vs hand-written authorship — the generated share bounds the achievable reduction, so prose-only pruning can be near-wasted effort.
+ **Evidence:** 10-06 22:17 — "Honest headline: V1 and V2 barely reduce the real context load, because ~300 of the 430 lines are the generator-owned Structure block. They fix prose quality, not sprawl. Only V3 attacks the dominant cost" (`2026-10-06T22-04-25-419Z_01a1133f`).
+ **Routing:** `.agents/skills/writing-for-agents/SKILL.md` — pruning/sprawl levers: add a "measure the generated share first" step.

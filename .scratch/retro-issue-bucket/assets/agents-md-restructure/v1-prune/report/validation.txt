@@ -1,0 +1,22 @@
+$ git diff --stat
+ AGENTS.md           | 77 +++++++++++++++--------------------------------------
+ CODING_STANDARDS.md |  8 ++++++
+ 2 files changed, 29 insertions(+), 56 deletions(-)
+
+$ python scripts/generate_structure_index.py
+  Updated STRUCTURE section in AGENTS.md
+  Structure index regenerated successfully
+exit=0
+
+$ python scripts/validate_docs.py
+
+============================================================
+Scanned 25 file(s)
+Summary: 0 error(s), 0 warning(s) across 0 file(s)
+
+============================================================
+Scanned 420 file(s)
+Summary: 0 error(s), 0 warning(s) across 0 file(s)
+
+PASS
+exit=0

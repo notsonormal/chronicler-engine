@@ -1,0 +1,614 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 514d8cd2..6ea91f2e 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -3,429 +3,24 @@
+ ## Overview
+ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
+ 
+-## Structure
+-<!-- AUTO-STRUCTURE START -->
+-- **src/**
+-  - `error.rs` — Error types and result aliases
+-  - **adapters/**
+-    - **driven/**
+-      - `mod.rs` — Driven adapters: outbound external systems (storage, LLM providers, text check)
+-      - **llm/**
+-        - `mod.rs` — LLM driven adapters: provider implementations and HTTP transport
+-        - **providers/**
+-          - `deepseek.rs` — DeepSeek LLM provider
+-          - `mock.rs` — Mock LLM provider for testing
+-          - `mod.rs` — LLM provider implementations
+-          - `ollama.rs` — Ollama LLM provider
+-          - `openrouter.rs` — OpenRouter LLM provider
+-        - **transport/**
+-          - `mod.rs` — LLM client interface
+-          - **utils/**
+-            - `client.rs` — LLM client implementation
+-            - `mod.rs` — LLM transport implementation helpers.
+-            - `request.rs` — LLM request building
+-            - `response.rs` — LLM response parsing
+-      - **storage/**
+-        - `characters.rs` — Character storage backend operations
+-        - `core.rs` — Storage backend and core abstractions
+-        - `db.rs` — SQLite database connection pool
+-        - `games.rs` — Game storage operations
+-        - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
+-        - `llm_messages.rs` — LLM message storage
+-        - `messages.rs` — Message storage operations
+-        - `mod.rs` — Storage layer and database access
+-        - `personas.rs` — Persona storage operations
+-        - `presets.rs` — Preset storage operations
+-        - `settings.rs` — Settings storage operations
+-        - `snapshots.rs` — Snapshot storage operations
+-        - `swipes.rs` — Swipe data storage
+-        - `test_support.rs` — Test infrastructure types for storage failure injection
+-        - `worlds.rs` — World storage backend operations
+-        - **mappers/**
+-          - `llm_message.rs` — LLM message mapper
+-          - `message.rs` — Message mapper
+-          - `mod.rs` — Row-to-domain object mapping
+-          - `state_snapshot.rs` — State snapshot mapper
+-        - **models/**
+-          - `character.rs` — Character database model
+-          - `game.rs` — Game database model
+-          - `game_state_snapshot.rs` — Game state snapshot model
+-          - `llm_message.rs` — LLM message database model
+-          - `map.rs` — Database row struct for the `maps` table
+-          - `message.rs` — Database row struct for the `messages` table
+-          - `mod.rs` — Database schema entity definitions
+-          - `persona.rs` — Persona database model
+-          - `prompt_preset.rs` — Prompt preset model
+-          - `settings.rs` — Settings database model
+-          - `swipe.rs` — Database row struct for the `swipes` table
+-          - `world.rs` — Database row struct for the `worlds` table
+-        - **utils/**
+-          - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
+-          - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
+-      - **text_check/**
+-        - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
+-        - `mod.rs` — Text checking and validation
+-      - **utils/**
+-        - `harper.rs` — Harper text-check adapter boundary helpers.
+-        - `mock.rs` — Mock LLM provider utilities.
+-        - `mod.rs` — Driven-adapter shared utilities.
+-    - **driving/**
+-      - `mod.rs` — Driving adapters: HTTP and CLI interfaces
+-      - **http/**
+-        - `app_state.rs` — Application state and HTTP fragment rendering.
+-        - `error.rs` — HTTP driving adapter — maps application `ApplicationError` to axum `Response`.
+-        - `mod.rs` — HTTP server and API endpoints
+-        - `templates.rs` — Template rendering utilities
+-        - `view_models.rs` — View models decouple templates from domain types.
+-        - **action/**
+-          - `mod.rs` — Action route handlers.
+-          - **handlers/**
+-            - `actions.rs` — Action fragment handlers
+-            - `mod.rs` — Action route handlers.
+-        - **bootstrap/**
+-          - `mod.rs` — HTTP bootstrap — server bring-up
+-          - `server.rs` — Server implementation
+-        - **builders/**
+-          - `connections.rs` — LLM-connection card + edit-form HTML builders.
+-          - `forms.rs` — Form field HTML builders.
+-          - `headers.rs` — Header fragment + status-swap header builders.
+-          - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
+-          - `presets.rs` — Prompt-preset card + form HTML builders.
+-          - `router.rs` — HTTP router composition.
+-        - **chat_window/**
+-          - `mod.rs` — Chat window HTTP handlers.
+-          - **handlers/**
+-            - `chat_window.rs` — Chat window HTTP request handlers.
+-            - `mod.rs` — Chat window route handlers.
+-        - **debug/**
+-          - `mod.rs` — Debug HTTP handlers.
+-          - **handlers/**
+-            - `debug.rs` — Debug utilities and endpoints
+-            - `mod.rs` — Debug route handlers.
+-        - **games/**
+-          - `mod.rs` — Games module.
+-          - **handlers/**
+-            - `games.rs` — Games fragment handlers
+-            - `mod.rs` — Games route handlers.
+-          - **templates/**
+-            - `games.rs` — Games templates
+-            - `mod.rs` — Games askama templates.
+-        - **history/**
+-          - `mod.rs` — History route handlers.
+-          - **handlers/**
+-            - `history.rs` — History fragment handlers
+-            - `mod.rs` — History route handlers.
+-        - **layout/**
+-          - `mod.rs` — Layout module (route handlers).
+-          - **handlers/**
+-            - `endpoints.rs` — Fragment endpoints
+-            - `mod.rs` — Layout route handlers (partials + status endpoints).
+-        - **prompt_presets/**
+-          - `mod.rs` — Prompt presets module.
+-          - **handlers/**
+-            - `mod.rs` — Prompt presets route handlers.
+-            - `prompt_presets.rs` — Prompt preset handlers
+-          - **templates/**
+-            - `mod.rs` — Prompt presets askama templates.
+-            - `prompt_presets.rs` — Prompt preset templates
+-        - **settings/**
+-          - `mod.rs` — Settings module.
+-          - **handlers/**
+-            - `mod.rs` — Settings route handlers.
+-            - `settings.rs` — Settings handlers
+-          - **templates/**
+-            - `mod.rs` — Settings askama templates.
+-            - `settings.rs` — Settings templates
+-        - **utils/**
+-          - `error.rs` — Error rendering helpers for HTTP fragments.
+-          - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
+-          - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
+-          - `mod.rs` — HTTP utility modules.
+-          - `response.rs` — HTTP response helpers
+-          - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`
+-          - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
+-          - `view_models.rs` — View-model helpers shared between template code and tests.
+-        - **worlds/**
+-          - `mod.rs` — Worlds module.
+-          - **handlers/**
+-            - `mod.rs` — Worlds route handlers.
+-            - `worlds.rs` — Worlds management handlers
+-          - **templates/**
+-            - `mod.rs` — Worlds askama templates.
+-            - `worlds.rs` — Worlds templates
+-  - **application/**
+-    - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
+-    - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
+-    - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
+-    - `message_service.rs` — Game-state lifecycle seam for message history and snapshots.
+-    - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
+-    - `prompt_preset_service.rs` — Prompt preset service — prompt preset persistence orchestration at the application layer.
+-    - `settings_service.rs` — Settings service — settings persistence orchestration at the application layer.
+-    - `text_check_service.rs` — TextCheckService orchestrator for text checking
+-    - `world_catalogue.rs` — World catalogue — world CRUD orchestration at the application layer.
+-    - **agents/**
+-      - `mod.rs` — Agent registry and trait definitions
+-      - `registry.rs` — Runtime agent lookup and lifecycle
+-      - `trait_def.rs` — Agent trait definitions
+-      - **options/**
+-        - `agent.rs` — Options agent implementation.
+-        - `mod.rs` — Options agent system — generates the pickable next-action option set.
+-        - `prompt.rs` — Options prompt construction
+-        - `types.rs` — Options agent type definitions
+-        - **utils/**
+-          - `mod.rs` — Options agent shared helpers
+-          - `orchestration.rs` — Options orchestration — LLM call + result processing + entry point.
+-          - `parser.rs` — Options output parsing — accepts both seeded prompt shapes.
+-      - **quantifier/**
+-        - `agent.rs` — Quantifier agent implementation.
+-        - `mod.rs` — Quantifier agent system
+-        - `prompt.rs` — Quantifier prompt construction
+-        - `types.rs` — Quantifier type definitions
+-        - **utils/**
+-          - `mod.rs` — Quantifier utility modules.
+-          - `orchestration.rs` — Quantifier orchestration — LLM call + result processing + entry point.
+-          - `parser.rs` — Quantifier response parsing helpers.
+-    - **debug/**
+-      - `dto.rs` — DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
+-      - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint.
+-    - **games/**
+-      - `catalogue.rs` — GameCatalogue — game-lifecycle storage orchestration.
+-      - `mod.rs` — Game lifecycle orchestration and read-side queries.
+-      - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
+-    - **generation/**
+-      - `gate.rs` — GenerationGate — per-game slot orchestration. The registry is the live "is generating" truth; the persisted `GenerationStatus` carries the durable phase.
+-      - `guard.rs` — Generation guard logic
+-      - `mod.rs` — Generation gating and per-game slot orchestration.
+-      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
+-    - **pipeline/**
+-      - `mod.rs` — Action pipeline for processing game actions
+-      - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.
+-      - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
+-      - `pipeline_run.rs` — PipelineRun and its phase implementations for the action pipeline.
+-      - **action_pipeline/**
+-        - `action.rs` — Action entry path for the pipeline.
+-        - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
+-        - `mod.rs` — ActionPipeline type-split: the struct and all its inherent impls.
+-        - `options.rs` — Options pipeline slice — on-demand entry, agent dispatch, and the
+-        - `retrigger.rs` — Retrigger entry path for the pipeline.
+-        - `retry.rs` — Retry entry path for the pipeline.
+-    - **ports/**
+-      - `llm_provider.rs` — LLM provider port (transport-only)
+-      - `mod.rs` — Application ports: outbound interfaces (driven port traits)
+-      - `text_checker.rs` — TextChecker port trait and CheckResult DTO
+-    - **prompting/**
+-      - `assembler.rs` — Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
+-      - `mod.rs` — Prompt construction orchestration
+-      - `prompt_merge.rs` — Prompt merge helper for models that ignore the system role.
+-      - `sanitize.rs` — LLM input/output sanitization
+-      - `token_budget.rs` — Token budget management
+-      - `types.rs` — Prompt type definitions
+-      - **builders/**
+-        - `mod.rs` — Narrative prompt builder modules.
+-        - `sections.rs` — Multi-stage prompt builder.
+-      - **utils/**
+-        - `context.rs` — Prompt context fitting — message budget enforcement.
+-        - `mod.rs` — Narrative prompt utility modules.
+-  - **bootstrap/**
+-    - `init_game.rs` — Game state initialization and arrival narration spawning
+-    - `load.rs` — Game data seeding and initialization routines
+-    - `logging.rs` — Logging setup and configuration
+-    - `run.rs` — Main entry point and runtime execution
+-    - `wiring.rs` — Composition root for application orchestrators
+-  - **domain/**
+-    - **model/**
+-      - `action.rs` — Action enum and semantic command types (slash-command steering entry)
+-      - `agent.rs` — Agent definitions and behavior types
+-      - `character.rs` — Character sheet data and NPC card definitions
+-      - `game.rs` — Game state and session management
+-      - `llm_backend.rs` — LLM backend provider types
+-      - `llm_message.rs` — LLM call forensics record DTO
+-      - `map.rs` — Map and location data structures
+-      - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
+-      - `message_history.rs` — Message history tracking
+-      - `mod.rs` — Core data models and domain types
+-      - `prompt_preset.rs` — Prompt preset configurations
+-      - `quantifier.rs` — Quantifier types for narrative evaluation
+-      - `scenario.rs` — Scenario definitions and world data
+-      - `settings.rs` — Settings and configuration types
+-      - `template.rs` — Template placeholder substitution for author-controlled text fields.
+-      - `trigger.rs` — Trigger conditions and event types
+-      - `world.rs` — World model definitions
+-      - **state/**
+-        - `game_state.rs` — Main game state and builder
+-        - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
+-        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/` (`core.rs` orchestration, `phases.rs` implementations).
+-        - `message_types.rs` — Message type and entry definitions
+-        - `mod.rs` — Game state representations (submodule declarations)
+-        - `movement.rs` — Player movement state
+-        - `narrative_state.rs` — Narrative state with history and input buffer
+-        - `scene_state.rs` — Current scene NPCs and quantifier confidence
+-        - `trigger_context.rs` — Stored trigger snapshot context
+-      - **utils/**
+-        - `game_name.rs` — Game name generation with date-based disambiguation.
+-        - `mod.rs` — Domain model utility modules.
+-        - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings/preset services and preset storage.
+-        - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.
+-        - `settings_defaults.rs` — Serde default-fn-pointers for `AppSettings` fields. Cannot become methods — `#[serde(default = "...")]` requires a fn path.
+-        - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.
+-        - `xml.rs` — XML string formatting utilities.
+-  - **test_support/**
+-    - `context.rs` — Builds `WiredApp` instances for integration tests.
+-    - `env_guard.rs` — `ApiKeyEnvGuard` — serializes tests that mutate API-key environment variables.
+-    - `fixtures.rs` — Test fixtures shared between unit and integration tests.
+-    - `http.rs` — HTTP response helpers for unit tests that call handlers directly.
+-    - `quantifier.rs` — Quantifier test utilities
+-    - `test_app_builder.rs` — Test application builder for HTTP and integration tests.
+-    - `test_data_builder.rs` — Test data bundle builder for integration tests.
+-  - **utils/**
+-    - `cli.rs` — Command-line interface definitions
+-    - `settings.rs` — Application settings and configuration
+-- `build.py` — Full build, validate, and test for Chronicler Engine.
+-- **scripts/**
+-  - `build_slot.py` — Machine-wide build slot: one cargo compile or test step at a time across all checkouts.
+-  - `check_python_docstrings.py` — Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings.
+-  - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.
+-  - `coverage_summary.py` — Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON.
+-  - `extract_http_routes.py` — Generate `docs/diataxis/reference/frontend/http_routes.md` from `router.rs`.
+-  - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
+-  - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
+-  - `generate_docs_index.py` — Generate an auto-updating index for docs/AGENTS.md.
+-  - `generate_guardrails_doc.py` — Generate `docs/diataxis/reference/coding_standards/guardrails.md` from coding-standards sources.
+-  - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
+-  - `generate_tests_structure_index.py` — Generate tests/AGENTS.md structure index from module summaries.
+-  - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.
+-  - `install_git_hooks.py` — Install git hooks from scripts/git-hooks/ to .git/hooks/.
+-  - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
+-  - `precommit_regenerate.py` — Regenerate the four generated index files for the git pre-commit hook.
+-  - `prepare_review_bundle.py` — Assemble a review bundle (stat, per-area patches, untracked/deleted lists) under tmp/.
+-  - `refine_character_json.py` — Split character card descriptions into structured personality/scenario/description fields.
+-  - `remove_worktrees.py` — Remove linked git worktrees, but only ones that are safe to lose.
+-  - `target_seed.py` — Seed a cold cargo target dir with dependency artifacts from a warm sibling checkout.
+-  - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
+-  - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
+-  - `validate_docs.py` — Validate markdown docs + DOC anchors under docs/.
+-  - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
+-<!-- AUTO-STRUCTURE END -->
+-
+-## Your Responsibility
+-
+-You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task, as this could interfere with other work going on in the repository at the same time. 
+-
+-However, during code reviews you should not make code changes to fix problems.
+-
+-## Communication
+-
+-Label epistemic status when it matters: known, inferred, or guessed.
+-
+-If you don't know something, say "I don't know" instead of inventing an answer.
+-
+-When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
+-
+-### Decision Making
+-
+-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+-
+-Before implementing (e.g. during planning):
+-
+-- **State your assumptions explicitly.** If uncertain or something is unclear, stop, name what's confusing, and ask.
+-- **If an instruction contradicts what you see, say so before acting.** Do not silently work around the mismatch or proceed as if the instruction were accurate.
+-- **If multiple interpretations exist, present them** — Don't pick silently unless obvious.
+-- **Hold a reasoned position.** Push back when a simpler approach exists, and if the user pushes back while your reasoning still holds, say why.
+-- **Surface hidden trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
+-
+-These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+-
+-### Progress updates
+-Before your first tool call, one sentence on what you're about to do. While working, update only when you find something important or change direction not before each tool call. When done, lead with the outcome: first sentence answers "what happened" or "what did you find", detail after.
+-
+-## The Test-First Philosophy
+-
+-A comprehensive suite of unit and integration tests is the ultimate source of truth for behavior. Read a component's tests in `tests/` before its source; before fixing a bug, find or create a failing test case — and never rationalize a failure away. Integration tests go in `tests/`; the failure-handling protocol lives in `tests/AGENTS.md`.
+-
+-Avoid **analysis paralysis**: when reasoning stops converging, act instead — read, run, or write a test, check the UI directly in the browser, or add logging and diagnostics to the production code.
+-
+-## Documentation Index
+-
+-`docs/AGENTS.md` is an autogenerated catalogue of `docs/diataxis/`; `tests/AGENTS.md` does the same for integration test files. Read them when searching docs or tests. The pre-commit hook regenerates and stages all generated indexes (these two, the Structure section above, and the guardrails doc) on every commit — never hand-edit the generated blocks. Without the hook, regenerate via the `scripts/generate_*_index.py` scripts.
+-
+-`CODING_STANDARDS.md` holds the implementation, code-comment, code-review and testing rules. Read it before writing or reviewing code.
+-
+-## Development Loop
+-
+-Temporary files should be written into tmp folders e.g. `tmp`.
+-
+-Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
+-
+-`build.py` writes logs to both standard output and to the `logs/` folder. A standard build takes about 2 minutes once the target dir is warm. A cold one takes far longer.
+-
+-Use the Pi bash tool with a timeout of 1200 seconds when calling `build.py`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
+-
+-```bash
+-tail -n 10 "$(ls -t logs/build_*.log | head -1)"
+-```  
+-
+-### Commands
+-
+-#### Iteration (use these while fixing)
+-All build actions go through `build.py`. Every run writes `logs/build_*.log`, stamped with the pi session id so the `mrn-context` extension attributes the log to the session that ran it.
+-
+-```bash
+-python build.py fmt                             # Format sources (rewrites files in place)
+-python build.py check                           # Fast compile check across all targets (no lint)
+-python build.py clippy                          # ~10s — fix warnings here
+-python build.py unit                            # Run the unit tests
+-python build.py architecture                    # Run the architecture tests
+-python build.py guardrails                      # Run the guardrails tests
+-python build.py test-pattern "action_pipeline::options_tests" # Run tests whose name matches a substring, across all test binaries
+-python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s)
+-python build.py browser                         # Only the browser/Playwright binary (~1 min)
+-python build.py validate-docs                   # Validate markdown docs
+-python build.py run                             # Run the dev server (see ENVIRONMENT.md)
+-```
+-
+-Almost every full-gate step is also a subcommand — see `python build.py --help`. Only the packaging, test-suite, and coverage-report phases stay gate-internal. `--target-dir` works on either side of the subcommand; all other top-level flags are full-gate only.
+-
+-#### Final Validation (run once before considering done)
+-
+-```bash
+-python build.py # Full gate: fmt + clippy + guardrails + tests (~2 min warm)
+-```
+-
+-A majority of the time taken by `build.py` is the browser tests. Running the full suite just before running the `build.py` is inefficient. Either run a targeted step (`python build.py test-pattern <pattern>`) or skip them and run `build.py` straight away.
+-
+-## Concurrent Builds
+-
+-Use one target dir per checkout and never switch, because a new dir starts cold. In a git worktree, run `python build.py` with no extra flags. Agents that share one checkout run `python build.py --target-dir target/<name> --no-fmt`. The `build.py` docstring has the details.
+-
+-`ENVIRONMENT.md`: read it when a build or test run is slow, waits for the build slot, or runs out of memory.
+-
+-Cold worktree builds compile the whole dependency tree into a fresh target dir;
+-`scripts/sccache-wrapper.sh` (wired as `rustc-wrapper` in `.cargo/config.toml`)
+-routes that through sccache, so the second build onward reuses the artifacts.
+-Check it with `sccache --show-stats`.
+-
+-## Agent Skills
+-
+-### Issue tracker
+-
+-Local markdown under `.scratch/` (per `docs/agents/issue-tracker.md`). No `gh` CLI dependency.
+-
+-### Triage labels
+-
+-Five canonical role strings, used as `Status:` lines in local-markdown files (per `docs/agents/triage-labels.md`).
+-
+-### Domain docs
+-
+-Single-context: one `CONTEXT.md` glossary at the repo root (per `docs/agents/domain.md`).
+-
+-## Permissions System
+-
+-Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
+-
+-Don't commit without explict approval, even if commiting is allowed in the permissions config. Normal git commands are fine but destructive git commands should be avoided in general. 
+-
+-## Subagents and delegation extra rules
+-
+-Prefer single long running subagents over multiple smaller subagents because it's more expensive to load up twice the context. This is a preference, some workflows/skills specificially use multiple subagents, such as some code review workflows or when implementing multiple wayfinder tickets at once.
+-
+-Only create `scout` subagents if the current model is Anthropic (e.g. Opus or Sonnet). With a non-Anthropic model, read all the information you need in the current session. This rule is specific to `scout` subagents only.
+\ No newline at end of file
++## Every-run guardrails
++- Repository health outranks the current task: a green build matters more than this task succeeding.
++- Never delete or revert unknown or untracked files, even when they block you.
++- During code reviews, change no code; report findings only.
++- Never commit without explicit approval.
++- Never circumvent the permission system; never edit its config without approval.
++
++## Where to read next
++
++| Doc | Holds | Reach it when |
++| --- | --- | --- |
++| `docs/agents/README.md` | Agent-process router. | Orient yourself on how to work here. |
++| `docs/agents/development-loop.md` | Working norms, build loop, commands, concurrent builds. | Building, testing, or iterating. |
++| `docs/agents/permissions.md` | Permission rules and approval boundaries. | Touching git, config, or permission-gated actions. |
++| `docs/agents/delegation.md` | Subagent choice and sizing. | Delegating to a subagent. |
++| `docs/agents/documentation.md` | Doc index and generated-index rules. | Writing docs or committing. |
++| `tests/AGENTS.md` | Test structure, tiers, failure handling. | Writing, running, or debugging tests. |
++| `CODING_STANDARDS.md` | Coding-rules router. | Writing or reviewing code. |
++| `CONTEXT.md` | Domain glossary. | Naming a domain concept. |
++| `ENVIRONMENT.md` | Build-environment limits and diagnostics. | Builds slow, blocked, or out of memory. |
++| `STRUCTURE.md` | Generated source-tree index. | Finding a module's file or summary. |
+diff --git a/CODING_STANDARDS.md b/CODING_STANDARDS.md
+index 2f78c525..5de35d5e 100644
+--- a/CODING_STANDARDS.md
++++ b/CODING_STANDARDS.md
+@@ -1,36 +1,14 @@
+ # Coding Standards
+ 
+-## Implementation
+-
+-Do not preserve backward compatibility unless the user asks for it.
+-
+-Symbols (functions, types, variables) must use verbose, domain-aligned names that map 1-to-1 with concepts in the `docs/` (where such symbols are present).
+-
+-HTTP form structs (`axum::extract::Form` payloads) must deserialize from partial urlencoded bodies: mark fields a legacy poster may omit with `#[serde(default)]`, and encode checkbox groups as one boolean field per value.
+-
+-## Code comments
+-
+-Every file in `src/` (excluding `*_tests.rs` unit tests and `src/test_support/*.rs`) has:
+- - Line 1: `//! [DOC: docs/diataxis/reference/<area>/<name>.md]` (links to reference documentation; `reference/` only — no `explanation/`, `how-to/`, or `tutorials/` targets). `src/test_support/*.rs` files must NOT carry a DOC anchor — the structure guardrail exempts them.
+- - Line 2: `//! Human-readable summary` (used for auto-generating Structure section; required for `src/test_support/*.rs` too)
+-   Function-level anchors removed.
+-
+-Never write comments that paraphrase what the code does. If the code isn't clear, rename the symbols rather than comment. Comments explain the WHY only when non-obvious: a hidden constraint, behavior that would surprise a reader.
+-
+-Never reference the task in code comments ("used by X flow", "added for issue Y", "TODO from review"). Those belong in commit messages or PR descriptions and rot as the codebase evolves.
+-
+-## Code Reviews
+-
+-Do not try to compile, build or test the code when doing code reviews. Unless the review explicitly calls for it (e.g. the `test-police` review). 
+-
+-During code reviews, avoid vague architectural critiques and focus on actionable changes.
+-
+-## Testing
+-
+-Read `tests/AGENTS.md` and `tests/STRATEGY.md` when writing or reviewing tests; test-writing patterns live in `docs/diataxis/reference/coding_standards/unit_test_standards.md` and `integration_test_standards.md`.
+-
+-Tautological tests are considered harmful.
+-
+-## Documentation
+-
+-Read `docs/AGENTS.md` when writing or reviewing documentation.
+\ No newline at end of file
++Coding rules are split by branch. Read the rule for the branch you are on:
++
++| Branch | Rule doc | Reach it when |
++| --- | --- | --- |
++| Implementation | `docs/diataxis/reference/coding_standards/implementation.md` | Writing production code. |
++| Code comments | `docs/diataxis/reference/coding_standards/code_comments.md` | Adding or reviewing file comments or DOC anchors. |
++| Code reviews | `docs/diataxis/reference/coding_standards/code_reviews.md` | Reviewing a change. |
++| Tests | `docs/diataxis/reference/coding_standards/testing.md` | Writing or reviewing tests. |
++| Unit test standards | `docs/diataxis/reference/coding_standards/unit_test_standards.md` | Shaping a `*_tests.rs` unit test. |
++| Integration test standards | `docs/diataxis/reference/coding_standards/integration_test_standards.md` | Shaping a test under `tests/`. |
++
++Read `tests/AGENTS.md` and `tests/STRATEGY.md` before writing or reviewing tests. Read `docs/AGENTS.md` before writing or reviewing documentation.
+diff --git a/docs/AGENTS.md b/docs/AGENTS.md
+index 665db21a..e1c811a9 100644
+--- a/docs/AGENTS.md
++++ b/docs/AGENTS.md
+@@ -35,7 +35,7 @@ Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-d
+ ## Folder Structure
+ 
+ <!-- AUTO-INDEX START -->
+-*Index last generated: 2026-10-04 00:31 UTC*
++*Index last generated: 2026-10-06 22:14 UTC*
+ 
+ ### `docs/diataxis/explanation/`
+ 
+@@ -57,7 +57,10 @@ Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-d
+ 
+ ### `docs/diataxis/reference/coding_standards/`
+ 
++- [Code Comments](./diataxis/reference/coding_standards/code_comments.md)
++- [Code Reviews](./diataxis/reference/coding_standards/code_reviews.md)
+ - [Guardrails](./diataxis/reference/coding_standards/guardrails.md)
++- [Implementation](./diataxis/reference/coding_standards/implementation.md)
+ - [Integration Test Standards](./diataxis/reference/coding_standards/integration_test_standards.md)
+ - [Testing](./diataxis/reference/coding_standards/testing.md)
+ - [Unit Test Standards](./diataxis/reference/coding_standards/unit_test_standards.md)
+diff --git a/docs/diataxis/reference/coding_standards/testing.md b/docs/diataxis/reference/coding_standards/testing.md
+index b59a1732..ec96c4d4 100644
+--- a/docs/diataxis/reference/coding_standards/testing.md
++++ b/docs/diataxis/reference/coding_standards/testing.md
+@@ -27,6 +27,10 @@ Diagnostics on failure land in `tmp/screenshots/` (PNG) and `tmp/test_diagnostic
+ 
+ Tests poll for conditions rather than `sleep`. The polling helpers live in `tests/test_utils/wait.rs` — that file is the list and the contract. Each helper retries until its condition is met or a per-helper timeout fires; browser and HTTP tests synchronize through them.
+ 
++## Test Quality
++
++Tautological tests are considered harmful.
++
+ ## Document References
+ 
+ - [`./unit_test_standards.md`](./unit_test_standards.md) — canonical eight-pattern form for `*_tests.rs` unit tests, with four cross-cutting patterns (XSS regression is Cross-cutting B).
+diff --git a/scripts/generate_structure_index.py b/scripts/generate_structure_index.py
+index 1933429f..a21499bc 100644
+--- a/scripts/generate_structure_index.py
++++ b/scripts/generate_structure_index.py
+@@ -1,4 +1,4 @@
+-"""Generate AGENTS.md structure index from module summaries."""
++"""Generate the STRUCTURE.md source index from module summaries."""
+ 
+ from __future__ import annotations
+ 
+@@ -11,7 +11,8 @@ def extract_module_info(filepath: Path) -> tuple[str, str] | None:
+ 
+     Accepts two shapes:
+       - `//! [DOC: ...]` on line 1 + `//! summary` on line 2 (anchor style)
+-      - `//! summary` on line 1 (anchor-less, e.g. src/test_support/ per AGENTS.md)
++      - `//! summary` on line 1 (anchor-less, e.g. src/test_support/, which the
++        structure guardrail exempts)
+ 
+     Returns (filename, summary) or None if not a valid module.
+     """
+@@ -134,13 +135,13 @@ def main() -> int:
+     engine_dir = Path(__file__).parent.parent
+     src_dir = engine_dir / "src"
+     scripts_dir = engine_dir / "scripts"
+-    agents_md = engine_dir / "AGENTS.md"
++    structure_md = engine_dir / "STRUCTURE.md"
+ 
+-    if not agents_md.exists():
+-        print(f"AGENTS.md not found: {agents_md}")
++    if not structure_md.exists():
++        print(f"STRUCTURE.md not found: {structure_md}")
+         return 1
+ 
+-    content = agents_md.read_text(encoding="utf-8")
++    content = structure_md.read_text(encoding="utf-8")
+ 
+     rust_bullets = build_bullet_structure(src_dir)
+     python_bullets = build_python_bullets(scripts_dir, engine_dir)
+@@ -166,10 +167,10 @@ def main() -> int:
+     if structure_match:
+         old_structure = structure_match.group(0)
+         new_content = content.replace(old_structure, new_structure)
+-        agents_md.write_text(new_content, encoding="utf-8")
+-        print("  Updated STRUCTURE section in AGENTS.md")
++        structure_md.write_text(new_content, encoding="utf-8")
++        print("  Updated STRUCTURE section in STRUCTURE.md")
+     else:
+-        print("  Warning: Could not find STRUCTURE section in AGENTS.md")
++        print("  Warning: Could not find STRUCTURE section in STRUCTURE.md")
+         return 1
+ 
+     print("  Structure index regenerated successfully")
+diff --git a/scripts/precommit_regenerate.py b/scripts/precommit_regenerate.py
+index d4f24155..392e2405 100644
+--- a/scripts/precommit_regenerate.py
++++ b/scripts/precommit_regenerate.py
+@@ -20,7 +20,7 @@ from typing import Mapping, Sequence
+ # (path, expected marker keys in file order). The keys mirror the four generators;
+ # a file without exactly these pairs is treated as foreign and left alone.
+ GENERATED_FILES: tuple[tuple[str, tuple[str, ...]], ...] = (
+-    ("AGENTS.md", ("AUTO-STRUCTURE",)),
++    ("STRUCTURE.md", ("AUTO-STRUCTURE",)),
+     ("tests/AGENTS.md", ("AUTO-STRUCTURE-TESTS",)),
+     ("docs/AGENTS.md", ("AUTO-INDEX",)),
+     (

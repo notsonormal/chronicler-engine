@@ -1,0 +1,360 @@
+# Chronicler Engine Knowledge Base
+
+## Overview
+Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
+
+## Structure
+<!-- AUTO-STRUCTURE START -->
+- **src/**
+  - `error.rs` — Error types and result aliases
+  - **adapters/**
+    - **driven/**
+      - `mod.rs` — Driven adapters: outbound external systems (storage, LLM providers, text check)
+      - **llm/**
+        - `mod.rs` — LLM driven adapters: provider implementations and HTTP transport
+        - **providers/**
+          - `deepseek.rs` — DeepSeek LLM provider
+          - `mock.rs` — Mock LLM provider for testing
+          - `mod.rs` — LLM provider implementations
+          - `ollama.rs` — Ollama LLM provider
+          - `openrouter.rs` — OpenRouter LLM provider
+        - **transport/**
+          - `mod.rs` — LLM client interface
+          - **utils/**
+            - `client.rs` — LLM client implementation
+            - `mod.rs` — LLM transport implementation helpers.
+            - `request.rs` — LLM request building
+            - `response.rs` — LLM response parsing
+      - **storage/**
+        - `characters.rs` — Character storage backend operations
+        - `core.rs` — Storage backend and core abstractions
+        - `db.rs` — SQLite database connection pool
+        - `games.rs` — Game storage operations
+        - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
+        - `llm_messages.rs` — LLM message storage
+        - `messages.rs` — Message storage operations
+        - `mod.rs` — Storage layer and database access
+        - `personas.rs` — Persona storage operations
+        - `presets.rs` — Preset storage operations
+        - `settings.rs` — Settings storage operations
+        - `snapshots.rs` — Snapshot storage operations
+        - `swipes.rs` — Swipe data storage
+        - `test_support.rs` — Test infrastructure types for storage failure injection
+        - `worlds.rs` — World storage backend operations
+        - **mappers/**
+          - `llm_message.rs` — LLM message mapper
+          - `message.rs` — Message mapper
+          - `mod.rs` — Row-to-domain object mapping
+          - `state_snapshot.rs` — State snapshot mapper
+        - **models/**
+          - `character.rs` — Character database model
+          - `game.rs` — Game database model
+          - `game_state_snapshot.rs` — Game state snapshot model
+          - `llm_message.rs` — LLM message database model
+          - `map.rs` — Database row struct for the `maps` table
+          - `message.rs` — Database row struct for the `messages` table
+          - `mod.rs` — Database schema entity definitions
+          - `persona.rs` — Persona database model
+          - `prompt_preset.rs` — Prompt preset model
+          - `settings.rs` — Settings database model
+          - `swipe.rs` — Database row struct for the `swipes` table
+          - `world.rs` — Database row struct for the `worlds` table
+        - **utils/**
+          - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
+          - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
+      - **text_check/**
+        - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
+        - `mod.rs` — Text checking and validation
+      - **utils/**
+        - `harper.rs` — Harper text-check adapter boundary helpers.
+        - `mock.rs` — Mock LLM provider utilities.
+        - `mod.rs` — Driven-adapter shared utilities.
+    - **driving/**
+      - `mod.rs` — Driving adapters: HTTP and CLI interfaces
+      - **http/**
+        - `app_state.rs` — Application state and HTTP fragment rendering.
+        - `error.rs` — HTTP driving adapter — maps application `ApplicationError` to axum `Response`.
+        - `mod.rs` — HTTP server and API endpoints
+        - `templates.rs` — Template rendering utilities
+        - `view_models.rs` — View models decouple templates from domain types.
+        - **action/**
+          - `mod.rs` — Action route handlers.
+          - **handlers/**
+            - `actions.rs` — Action fragment handlers
+            - `mod.rs` — Action route handlers.
+        - **bootstrap/**
+          - `mod.rs` — HTTP bootstrap — server bring-up
+          - `server.rs` — Server implementation
+        - **builders/**
+          - `connections.rs` — LLM-connection card + edit-form HTML builders.
+          - `forms.rs` — Form field HTML builders.
+          - `headers.rs` — Header fragment + status-swap header builders.
+          - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
+          - `presets.rs` — Prompt-preset card + form HTML builders.
+          - `router.rs` — HTTP router composition.
+        - **chat_window/**
+          - `mod.rs` — Chat window HTTP handlers.
+          - **handlers/**
+            - `chat_window.rs` — Chat window HTTP request handlers.
+            - `mod.rs` — Chat window route handlers.
+        - **debug/**
+          - `mod.rs` — Debug HTTP handlers.
+          - **handlers/**
+            - `debug.rs` — Debug utilities and endpoints
+            - `mod.rs` — Debug route handlers.
+        - **games/**
+          - `mod.rs` — Games module.
+          - **handlers/**
+            - `games.rs` — Games fragment handlers
+            - `mod.rs` — Games route handlers.
+          - **templates/**
+            - `games.rs` — Games templates
+            - `mod.rs` — Games askama templates.
+        - **history/**
+          - `mod.rs` — History route handlers.
+          - **handlers/**
+            - `history.rs` — History fragment handlers
+            - `mod.rs` — History route handlers.
+        - **layout/**
+          - `mod.rs` — Layout module (route handlers).
+          - **handlers/**
+            - `endpoints.rs` — Fragment endpoints
+            - `mod.rs` — Layout route handlers (partials + status endpoints).
+        - **prompt_presets/**
+          - `mod.rs` — Prompt presets module.
+          - **handlers/**
+            - `mod.rs` — Prompt presets route handlers.
+            - `prompt_presets.rs` — Prompt preset handlers
+          - **templates/**
+            - `mod.rs` — Prompt presets askama templates.
+            - `prompt_presets.rs` — Prompt preset templates
+        - **settings/**
+          - `mod.rs` — Settings module.
+          - **handlers/**
+            - `mod.rs` — Settings route handlers.
+            - `settings.rs` — Settings handlers
+          - **templates/**
+            - `mod.rs` — Settings askama templates.
+            - `settings.rs` — Settings templates
+        - **utils/**
+          - `error.rs` — Error rendering helpers for HTTP fragments.
+          - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
+          - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
+          - `mod.rs` — HTTP utility modules.
+          - `response.rs` — HTTP response helpers
+          - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`
+          - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
+          - `view_models.rs` — View-model helpers shared between template code and tests.
+        - **worlds/**
+          - `mod.rs` — Worlds module.
+          - **handlers/**
+            - `mod.rs` — Worlds route handlers.
+            - `worlds.rs` — Worlds management handlers
+          - **templates/**
+            - `mod.rs` — Worlds askama templates.
+            - `worlds.rs` — Worlds templates
+  - **application/**
+    - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
+    - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
+    - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
+    - `message_service.rs` — Game-state lifecycle seam for message history and snapshots.
+    - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
+    - `prompt_preset_service.rs` — Prompt preset service — prompt preset persistence orchestration at the application layer.
+    - `settings_service.rs` — Settings service — settings persistence orchestration at the application layer.
+    - `text_check_service.rs` — TextCheckService orchestrator for text checking
+    - `world_catalogue.rs` — World catalogue — world CRUD orchestration at the application layer.
+    - **agents/**
+      - `mod.rs` — Agent registry and trait definitions
+      - `registry.rs` — Runtime agent lookup and lifecycle
+      - `trait_def.rs` — Agent trait definitions
+      - **options/**
+        - `agent.rs` — Options agent implementation.
+        - `mod.rs` — Options agent system — generates the pickable next-action option set.
+        - `prompt.rs` — Options prompt construction
+        - `types.rs` — Options agent type definitions
+        - **utils/**
+          - `mod.rs` — Options agent shared helpers
+          - `orchestration.rs` — Options orchestration — LLM call + result processing + entry point.
+          - `parser.rs` — Options output parsing — accepts both seeded prompt shapes.
+      - **quantifier/**
+        - `agent.rs` — Quantifier agent implementation.
+        - `mod.rs` — Quantifier agent system
+        - `prompt.rs` — Quantifier prompt construction
+        - `types.rs` — Quantifier type definitions
+        - **utils/**
+          - `mod.rs` — Quantifier utility modules.
+          - `orchestration.rs` — Quantifier orchestration — LLM call + result processing + entry point.
+          - `parser.rs` — Quantifier response parsing helpers.
+    - **debug/**
+      - `dto.rs` — DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
+      - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint.
+    - **games/**
+      - `catalogue.rs` — GameCatalogue — game-lifecycle storage orchestration.
+      - `mod.rs` — Game lifecycle orchestration and read-side queries.
+      - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
+    - **generation/**
+      - `gate.rs` — GenerationGate — per-game slot orchestration. The registry is the live "is generating" truth; the persisted `GenerationStatus` carries the durable phase.
+      - `guard.rs` — Generation guard logic
+      - `mod.rs` — Generation gating and per-game slot orchestration.
+      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
+    - **pipeline/**
+      - `mod.rs` — Action pipeline for processing game actions
+      - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.
+      - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
+      - `pipeline_run.rs` — PipelineRun and its phase implementations for the action pipeline.
+      - **action_pipeline/**
+        - `action.rs` — Action entry path for the pipeline.
+        - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
+        - `mod.rs` — ActionPipeline type-split: the struct and all its inherent impls.
+        - `options.rs` — Options pipeline slice — on-demand entry, agent dispatch, and the
+        - `retrigger.rs` — Retrigger entry path for the pipeline.
+        - `retry.rs` — Retry entry path for the pipeline.
+    - **ports/**
+      - `llm_provider.rs` — LLM provider port (transport-only)
+      - `mod.rs` — Application ports: outbound interfaces (driven port traits)
+      - `text_checker.rs` — TextChecker port trait and CheckResult DTO
+    - **prompting/**
+      - `assembler.rs` — Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
+      - `mod.rs` — Prompt construction orchestration
+      - `prompt_merge.rs` — Prompt merge helper for models that ignore the system role.
+      - `sanitize.rs` — LLM input/output sanitization
+      - `token_budget.rs` — Token budget management
+      - `types.rs` — Prompt type definitions
+      - **builders/**
+        - `mod.rs` — Narrative prompt builder modules.
+        - `sections.rs` — Multi-stage prompt builder.
+      - **utils/**
+        - `context.rs` — Prompt context fitting — message budget enforcement.
+        - `mod.rs` — Narrative prompt utility modules.
+  - **bootstrap/**
+    - `init_game.rs` — Game state initialization and arrival narration spawning
+    - `load.rs` — Game data seeding and initialization routines
+    - `logging.rs` — Logging setup and configuration
+    - `run.rs` — Main entry point and runtime execution
+    - `wiring.rs` — Composition root for application orchestrators
+  - **domain/**
+    - **model/**
+      - `action.rs` — Action enum and semantic command types (slash-command steering entry)
+      - `agent.rs` — Agent definitions and behavior types
+      - `character.rs` — Character sheet data and NPC card definitions
+      - `game.rs` — Game state and session management
+      - `llm_backend.rs` — LLM backend provider types
+      - `llm_message.rs` — LLM call forensics record DTO
+      - `map.rs` — Map and location data structures
+      - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
+      - `message_history.rs` — Message history tracking
+      - `mod.rs` — Core data models and domain types
+      - `prompt_preset.rs` — Prompt preset configurations
+      - `quantifier.rs` — Quantifier types for narrative evaluation
+      - `scenario.rs` — Scenario definitions and world data
+      - `settings.rs` — Settings and configuration types
+      - `template.rs` — Template placeholder substitution for author-controlled text fields.
+      - `trigger.rs` — Trigger conditions and event types
+      - `world.rs` — World model definitions
+      - **state/**
+        - `game_state.rs` — Main game state and builder
+        - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
+        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/` (`core.rs` orchestration, `phases.rs` implementations).
+        - `message_types.rs` — Message type and entry definitions
+        - `mod.rs` — Game state representations (submodule declarations)
+        - `movement.rs` — Player movement state
+        - `narrative_state.rs` — Narrative state with history and input buffer
+        - `scene_state.rs` — Current scene NPCs and quantifier confidence
+        - `trigger_context.rs` — Stored trigger snapshot context
+      - **utils/**
+        - `game_name.rs` — Game name generation with date-based disambiguation.
+        - `mod.rs` — Domain model utility modules.
+        - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings/preset services and preset storage.
+        - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.
+        - `settings_defaults.rs` — Serde default-fn-pointers for `AppSettings` fields. Cannot become methods — `#[serde(default = "...")]` requires a fn path.
+        - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.
+        - `xml.rs` — XML string formatting utilities.
+  - **test_support/**
+    - `context.rs` — Builds `WiredApp` instances for integration tests.
+    - `env_guard.rs` — `ApiKeyEnvGuard` — serializes tests that mutate API-key environment variables.
+    - `fixtures.rs` — Test fixtures shared between unit and integration tests.
+    - `http.rs` — HTTP response helpers for unit tests that call handlers directly.
+    - `quantifier.rs` — Quantifier test utilities
+    - `test_app_builder.rs` — Test application builder for HTTP and integration tests.
+    - `test_data_builder.rs` — Test data bundle builder for integration tests.
+  - **utils/**
+    - `cli.rs` — Command-line interface definitions
+    - `settings.rs` — Application settings and configuration
+- `build.py` — Full build, validate, and test for Chronicler Engine.
+- **scripts/**
+  - `build_slot.py` — Machine-wide build slot: one cargo compile or test step at a time across all checkouts.
+  - `check_python_docstrings.py` — Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings.
+  - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.
+  - `coverage_summary.py` — Print a coverage summary (overall + low-coverage files) from cargo-llvm-cov JSON.
+  - `extract_http_routes.py` — Generate `docs/diataxis/reference/frontend/http_routes.md` from `router.rs`.
+  - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
+  - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
+  - `generate_docs_index.py` — Generate an auto-updating index for docs/AGENTS.md.
+  - `generate_guardrails_doc.py` — Generate `docs/diataxis/reference/coding_standards/guardrails.md` from coding-standards sources.
+  - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
+  - `generate_tests_structure_index.py` — Generate tests/AGENTS.md structure index from module summaries.
+  - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.
+  - `install_git_hooks.py` — Install git hooks from scripts/git-hooks/ to .git/hooks/.
+  - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
+  - `precommit_regenerate.py` — Regenerate the four generated index files for the git pre-commit hook.
+  - `prepare_review_bundle.py` — Assemble a review bundle (stat, per-area patches, untracked/deleted lists) under tmp/.
+  - `refine_character_json.py` — Split character card descriptions into structured personality/scenario/description fields.
+  - `remove_worktrees.py` — Remove linked git worktrees, but only ones that are safe to lose.
+  - `target_seed.py` — Seed a cold cargo target dir with dependency artifacts from a warm sibling checkout.
+  - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
+  - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
+  - `validate_docs.py` — Validate markdown docs + DOC anchors under docs/.
+  - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
+<!-- AUTO-STRUCTURE END -->
+
+## Guardrails
+
+- Repository health outranks the current task. A working repository — the build passing — matters more than your task succeeding.
+- Keep every file you did not create. Leave unknown and untracked files in place.
+- During a code review, report findings and leave the code unchanged.
+- Commit only with explicit approval.
+- Follow the permission system in `.pi/extensions/pi-permission-system/config.json`. Recommend a permission change at the end of a task; apply it only with explicit user approval.
+
+## Pointers
+
+| Doc | Holds | Reach it when |
+|---|---|---|
+| `CODING_STANDARDS.md` | Implementation, code-comment, code-review, and testing rules | You write or review production code |
+| `tests/AGENTS.md` | Test placement, failure protocol, Test-First Philosophy, test seams | A test fails, or you write or review one |
+| `docs/AGENTS.md` | Docs catalogue, Diátaxis conventions, generated-index and pre-commit rules | You write, edit, or review a doc |
+| `docs/agents/development-loop.md` | Build commands, final validation, log tailing, target dirs | You build, format, lint, or start the dev server |
+| `ENVIRONMENT.md` | Build limits, measured build cost, slow-build diagnosis | A build is slow, waits for the slot, or hits the memory limit |
+| `docs/agents/permissions.md` | Permission scope and the rules for changing it | Your task needs git, an install, or a config change |
+| `docs/agents/delegation.md` | Subagent count and model rules | You delegate work to a subagent |
+| `docs/agents/issue-tracker.md` | `.scratch/` issue layout and wayfinding operations | You file, fetch, or resolve an issue |
+| `docs/agents/triage-labels.md` | The five canonical triage `Status:` strings | You apply a triage label |
+| `docs/agents/domain.md` | How an engineering skill consumes the domain docs | You explore the codebase with an engineering skill |
+| `CONTEXT.md` | Engine glossary — the source of truth for term meanings | You name a domain concept in a title, proposal, or test |
+
+## Communication
+
+Label epistemic status when it matters: known, inferred, or guessed. Say "I don't know" instead of inventing an answer.
+
+When you respond to feedback or analysis, say whether you agree or disagree first. Then say what you changed.
+
+### Decision Making
+
+State your assumptions explicitly. When something is unclear, stop and ask.
+
+When an instruction contradicts the code you see, say so before you act.
+
+When multiple interpretations exist, present all of them. Pick silently only when one is obvious.
+
+Hold a reasoned position. Push back when a simpler approach exists. When the user pushes back and your reasoning still holds, say why.
+
+When a change carries architectural implications the user did not ask about, name the trade-off in your response. Examples: a new dependency, an async pattern, a data structure with a different complexity.
+
+These rules bias toward caution over speed. Use judgment on a trivial task.
+
+### Progress updates
+
+Before your first tool call, state in one sentence what you are about to do.
+
+While you work, update only on an important find or a change of direction.
+
+When you finish, lead with the outcome: the first sentence answers "what happened" or "what did you find".

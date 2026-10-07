@@ -30,7 +30,7 @@ Three `agent_delegate` calls, one seat each, read-only. Pass the session file pa
 |---|---|---|
 | Judgment | `judge-glm` | `references/judgment-reviewer.md` |
 | Tooling | `reviewer` | `references/tooling-reviewer.md` |
-| Divergent | `judge-mimo` | `references/divergent-reviewer.md` |
+| Divergent | `judge-kimi` | `references/divergent-reviewer.md` |
 
 Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return findings in their reply.
 
