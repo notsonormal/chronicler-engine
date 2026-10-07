@@ -468,7 +468,13 @@ class CargoEnvTests(unittest.TestCase):
     def test_no_target_dir_keeps_env_clean(self):
         env = build._cargo_env_for(SimpleNamespace(target_dir=None))
         self.assertNotIn("CARGO_TARGET_DIR", env)
-        self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "fail")
+        # `leak` names a passing-but-leaking test without the PASS flood.
+        self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "leak")
+
+    def test_test_timings_restores_pass_level(self):
+        # The timing report needs PASS lines, which the leak level suppresses.
+        env = build._cargo_env_for(SimpleNamespace(target_dir=None, test_timings=True))
+        self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "pass")
 
 
 class GatePlanTests(unittest.TestCase):
@@ -684,6 +690,15 @@ class NextestSummaryLineTests(unittest.TestCase):
             "nextest: 9 passed, 1 failed, 3 skipped, 2 leaky",
         )
 
+    def test_flaky_count_is_kept(self):
+        output = (
+            "     Summary [  60.628s] 30 tests run: 28 passed, 1 flaky, 1 failed, 0 skipped\n"
+        )
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 28 passed, 1 failed, 1 flaky",
+        )
+
     def test_last_summary_line_wins(self):
         output = (
             "     Summary [   1.000s] 2 tests run: 1 passed, 1 failed\n"
@@ -724,10 +739,12 @@ class NextestStashTests(unittest.TestCase):
     def setUp(self):
         build._NextestSummary.lines = []
         build._NextestSummary.label = ""
+        build._NextestLeaks.lines = []
 
     def tearDown(self):
         build._NextestSummary.lines = []
         build._NextestSummary.label = ""
+        build._NextestLeaks.lines = []
 
     @staticmethod
     def _fake_process(out, returncode):
@@ -766,6 +783,32 @@ class NextestStashTests(unittest.TestCase):
             self._run_silenced("error: could not compile\n", 101)
         self.assertEqual(build._NextestSummary.lines, [])
 
+    def test_run_names_a_leaky_test(self):
+        build._NextestSummary.label = "Running browser tests..."
+        self._run_silenced(
+            "        LEAK [   1.229s] ( 2/63) chronicler_engine::browser behaviour::test_x\n"
+            "     Summary [ 130.000s] 63 tests run: 63 passed (1 leaky), 0 skipped\n",
+            0,
+        )
+        self.assertEqual(
+            build._NextestLeaks.lines,
+            [
+                (
+                    "Running browser tests...",
+                    "LEAK",
+                    "chronicler_engine::browser behaviour::test_x",
+                )
+            ],
+        )
+
+    def test_run_ignores_pass_lines(self):
+        self._run_silenced(
+            "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x\n"
+            "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped\n",
+            0,
+        )
+        self.assertEqual(build._NextestLeaks.lines, [])
+
 
 class NextestEpilogueTests(unittest.TestCase):
     """The epilogue prints the one-liner directly before the build banner."""
@@ -773,10 +816,12 @@ class NextestEpilogueTests(unittest.TestCase):
     def setUp(self):
         build._NextestSummary.lines = []
         build._NextestSummary.label = ""
+        build._NextestLeaks.lines = []
 
     def tearDown(self):
         build._NextestSummary.lines = []
         build._NextestSummary.label = ""
+        build._NextestLeaks.lines = []
 
     @staticmethod
     def _run_main(printed):
@@ -827,6 +872,22 @@ class NextestEpilogueTests(unittest.TestCase):
         printed = []
         self.assertEqual(self._run_main(printed), 0)
         self.assertFalse(any(msg.startswith("nextest:") for msg in printed))
+
+    def test_leaky_test_name_is_printed_before_the_banner(self):
+        printed = []
+        build._NextestLeaks.lines = [
+            (
+                "Running browser tests...",
+                "LEAK",
+                "chronicler_engine::browser behaviour::test_x",
+            )
+        ]
+        self.assertEqual(self._run_main(printed), 0)
+        idx = printed.index(
+            "leak test: chronicler_engine::browser behaviour::test_x  (Running browser tests...)"
+        )
+        self.assertEqual(printed[idx + 1], "=" * 60)
+        self.assertEqual(printed[idx + 2], "=== Build Complete ===")
 
 
 class _MemLog(io.StringIO):

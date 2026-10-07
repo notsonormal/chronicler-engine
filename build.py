@@ -113,6 +113,17 @@ class _NextestSummary:
         )
 
 
+class _NextestLeaks:
+    """nextest LEAK/FLAKY lines, captured so the epilogue can name the test.
+
+    The Summary counts a leak without naming it, and the default status level
+    hides the per-test line. ``lines`` holds
+    ``(step label, status, test name)``.
+    """
+
+    lines: list[tuple[str, str, str]] = []
+
+
 def _set_log_fh(fh):
     """Register the log file handle for the current build run."""
     _LogState.fh = fh
@@ -253,14 +264,12 @@ def get_integration_test_cmd(include_llm=False):
 # nextest per-test result line, e.g.:
 #   "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x"
 #   "        LEAK [   0.229s] ( 2/2) leakprobe::leak leaks_a_child"
+#   "       FLAKY [   0.229s] ( 2/2) leakprobe::leak leaks_a_child"
 # The progress counter is optional: nextest only prints it in some
 # --show-progress modes, and the timing report must survive config drift.
-# LEAK is a passing-but-leaking test, so it must not read as a failure. The
-# gate's NEXTEST_STATUS_LEVEL=fail suppresses live PASS/LEAK lines, and the
-# timing report's --final-status-level does not accept `leak`, so naming a
-# leaking test needs --test-timings or an explicit --status-level leak.
+# LEAK and FLAKY are passing tests, so they must not read as failures.
 _NEXTEST_RESULT_RE = re.compile(
-    r"^\s*(?:PASS|FAIL|SKIP|LEAK)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
+    r"^\s*(?:PASS|FAIL|SKIP|LEAK|FLAKY)\s*\[([^\]]*)\]\s*(?:\([^)]*\))?\s*(\S.*)$"
 )
 
 # nextest final summary line, e.g.:
@@ -295,19 +304,31 @@ def _nextest_summary_line(output: str) -> str | None:
         failed = _summary_count(line, "failed") or "0"
         skipped = _summary_count(line, "skipped")
         leaky = _summary_count(line, "leaky")
+        flaky = _summary_count(line, "flaky")
         rendered = f"nextest: {passed} passed, {failed} failed"
         if skipped and skipped != "0":
             rendered += f", {skipped} skipped"
         if leaky and leaky != "0":
             rendered += f", {leaky} leaky"
+        if flaky and flaky != "0":
+            rendered += f", {flaky} flaky"
     return rendered
 
 
 def _stash_nextest_summary(output: str) -> None:
-    """Capture nextest's final summary line for the closing epilogue."""
+    """Capture nextest's summary line and any leaky/flaky test names."""
     line = _nextest_summary_line(output)
     if line is not None:
         _NextestSummary.lines.append((_NextestSummary.label, line))
+    for raw in output.splitlines():
+        m = _NEXTEST_RESULT_RE.match(raw)
+        if m is None:
+            continue
+        status = raw.strip().split(maxsplit=1)[0]
+        if status in ("LEAK", "FLAKY"):
+            _NextestLeaks.lines.append(
+                (_NextestSummary.label, status, m.group(2).strip())
+            )
 
 
 def _nextest_duration_to_secs(token: str) -> float:
@@ -792,8 +813,15 @@ def _lld_linker_env(host=None, cache_dir=None) -> dict:
 
 
 def _cargo_env_for(args) -> dict:
-    """Cargo environment shared by gate and step runs."""
-    env = {"NEXTEST_STATUS_LEVEL": "fail", **_lld_linker_env()}
+    """Cargo environment shared by gate and step runs.
+
+    ``leak`` prints FAIL/RETRY/SLOW/LEAK lines but suppresses the PASS flood, so
+    a passing-but-leaking test is named instead of only counted. The
+    ``--test-timings`` report needs the PASS lines, so it restores the default
+    level.
+    """
+    status_level = "pass" if getattr(args, "test_timings", False) else "leak"
+    env = {"NEXTEST_STATUS_LEVEL": status_level, **_lld_linker_env()}
     if getattr(args, "target_dir", None):
         env["CARGO_TARGET_DIR"] = str(Path(args.target_dir).resolve())
     return env
@@ -1699,6 +1727,8 @@ def main():
         # an agent tailing stdout gets the verdict without grepping the full log.
         if _NextestSummary.lines:
             both_print(_NextestSummary.line_text())
+        for label, status, name in _NextestLeaks.lines:
+            both_print(f"{status.lower()} test: {name}  ({label})")
 
         both_print("=" * 60)
         both_print("=== Build Complete ===")
