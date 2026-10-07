@@ -10,6 +10,7 @@ mod dashboard;
 mod invariants;
 mod llm_messages;
 mod options;
+mod settings;
 mod slash_menu;
 mod story_log;
 mod swipes;

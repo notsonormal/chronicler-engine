@@ -21,10 +21,6 @@ use crate::adapters::driving::http::worlds;
 pub fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(chat_window::handlers::index_handler))
-        .route(
-            "/check-text",
-            post(chat_window::handlers::check_text_handler),
-        )
         .route("/swipe/new", post(chat_window::handlers::retry_handler))
         .route(
             "/message/:id/swipe/:index",
@@ -148,8 +144,8 @@ pub fn build_router(app_state: AppState) -> Router {
             post(settings::handlers::add_connection_handler),
         )
         .route(
-            "/fragment/connections/:id",
-            get(settings::handlers::connection_card_fragment),
+            "/fragment/connections/new",
+            get(settings::handlers::new_connection_form),
         )
         .route(
             "/fragment/connections/:id/edit",
@@ -164,11 +160,11 @@ pub fn build_router(app_state: AppState) -> Router {
             post(settings::handlers::delete_connection_handler),
         )
         .route(
-            "/connections/:id/set-narrator",
+            "/connections/set-narrator",
             post(settings::handlers::set_narrator_handler),
         )
         .route(
-            "/connections/:id/set-quantifier",
+            "/connections/set-quantifier",
             post(settings::handlers::set_quantifier_handler),
         )
         .route(

@@ -71,9 +71,13 @@ async fn test_set_narrator() {
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
-        .uri("/connections/openrouter-euryale/set-narrator")
+        .uri("/connections/set-narrator")
         .method(http::Method::POST)
-        .body(Body::empty())
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("connection_id=openrouter-euryale"))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
@@ -83,8 +87,8 @@ async fn test_set_narrator() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Narrator"),
-        "Expected Narrator badge on euryale: {body_str}"
+        body_str.contains(r#"<option value="openrouter-euryale" selected>"#),
+        "Expected euryale selected as Narrator: {body_str}"
     );
 }
 
@@ -94,9 +98,13 @@ async fn test_set_quantifier() {
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
-        .uri("/connections/ollama-gemma-4-26B/set-quantifier")
+        .uri("/connections/set-quantifier")
         .method(http::Method::POST)
-        .body(Body::empty())
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("connection_id=ollama-gemma-4-26B"))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
@@ -106,8 +114,8 @@ async fn test_set_quantifier() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Quantifier"),
-        "Expected Quantifier badge on gemma: {body_str}"
+        body_str.contains(r#"<option value="ollama-gemma-4-26B" selected>"#),
+        "Expected gemma selected as Quantifier: {body_str}"
     );
 }
 
@@ -117,14 +125,18 @@ async fn test_set_narrator_not_found() {
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
-        .uri("/connections/nonexistent/set-narrator")
+        .uri("/connections/set-narrator")
         .method(http::Method::POST)
-        .body(Body::empty())
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("connection_id=nonexistent"))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
     assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 1024)
+    let body = axum::body::to_bytes(response.into_body(), 16384)
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
@@ -147,13 +159,13 @@ async fn test_delete_connection() {
     let response = app.oneshot(req).await.unwrap();
 
     assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 1024)
+    let body = axum::body::to_bytes(response.into_body(), 16384)
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.is_empty(),
-        "Expected empty response (HTMX swap delete): '{body_str}'"
+        !body_str.contains(r#"hx-get="/fragment/connections/ollama-gemma-4-26B/edit"#),
+        "Expected the deleted connection to leave the list: '{body_str}'"
     );
 }
 
@@ -170,7 +182,7 @@ async fn test_delete_connection_not_found() {
     let response = app.oneshot(req).await.unwrap();
 
     assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 1024)
+    let body = axum::body::to_bytes(response.into_body(), 16384)
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
@@ -224,48 +236,6 @@ async fn test_edit_connection_not_found() {
         .body(Body::from(
             "conn_name=Updated+Name&conn_provider=openrouter&conn_model=gpt-4o&conn_api_key=&conn_base_url=",
         ))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 1024)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Connection not found"),
-        "Expected error for nonexistent connection: {body_str}"
-    );
-}
-
-#[tokio::test]
-async fn test_connection_card_fragment() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/fragment/connections/openrouter-gpt-4o-mini")
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("openrouter-gpt-4o-mini"),
-        "Expected connection card: {body_str}"
-    );
-}
-
-#[tokio::test]
-async fn test_connection_card_fragment_not_found() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/fragment/connections/nonexistent")
-        .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 

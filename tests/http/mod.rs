@@ -1,4 +1,4 @@
-//! HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, server wiring, and the per-endpoint text-check suite.
+//! HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, and server wiring.
 
 #[path = "../test_utils/mod.rs"]
 mod test_utils;
@@ -25,7 +25,6 @@ mod story_log;
 mod support;
 mod swipe_new;
 mod swipe_switch;
-mod text_check;
 mod visual_sidebar;
 mod worlds;
 

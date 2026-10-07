@@ -86,7 +86,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `mod.rs` — HTTP bootstrap — server bring-up
           - `server.rs` — Server implementation
         - **builders/**
-          - `connections.rs` — LLM-connection card + edit-form HTML builders.
           - `forms.rs` — Form field HTML builders.
           - `headers.rs` — Header fragment + status-swap header builders.
           - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.

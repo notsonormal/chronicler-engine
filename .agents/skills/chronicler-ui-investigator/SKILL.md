@@ -78,7 +78,7 @@ For a broad sweep, delegate to a `generalist` managed agent with the exact `node
 Everything below is **POST**: a GET returns 405, a bodyless POST 415, so send a JSON body with the right content type.
 
 - `/action` submit a player command · `/action/check` text check before submitting · `/action/confirm` confirm a corrected command
-- `/check-text` standalone text check · `/swipe/new` new swipe · `/message/:id/swipe/:index` switch swipe
+- `/swipe/new` new swipe · `/message/:id/swipe/:index` switch swipe
 - `/retrigger` retrigger the last event · `/history/:id` edit a history entry · `/history/delete` delete the last one
 
 A fetch proves an endpoint responds, not that the UI updates — drive the real DOM from `chrome_devtools_evaluate` for click Send, switch swipe and retrigger, and for the slash flows (`/impersonate`, `/guide`, `/options`) that submit through `#slash-menu` (spec `browser_slash_menu.md`). Full route list: `docs/diataxis/reference/frontend/http_routes.md`, generated from `router.rs`.

@@ -23,7 +23,6 @@ async fn story_log_trigger(page: &playwright_rs::Page) -> String {
     .unwrap()
 }
 
-/// The narration entry's current visible text, the value a revert restores.
 async fn narration_text(page: &playwright_rs::Page) -> String {
     page.locator(".log-entry.narration .text")
         .await
@@ -156,7 +155,6 @@ async fn test_failed_save_restores_entry_and_resumes_polling() {
             .unwrap();
         wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
-        // Entering edit mode pauses the log; the recovery must put it back.
         assert_eq!(
             story_log_trigger(&page).await,
             "none",
@@ -287,7 +285,6 @@ async fn test_edit_textarea_fits_content_and_takes_focus() {
 
         let textarea = page.locator("#edit-textarea").await;
 
-        // Content below the 50vh cap fits, so the textarea does not scroll.
         textarea.fill("A short edit.", None).await.unwrap();
         let (short_client, short_scroll, viewport): (f64, f64, f64) = page
             .evaluate::<(), (f64, f64, f64)>(
@@ -305,7 +302,6 @@ async fn test_edit_textarea_fits_content_and_takes_focus() {
              (client height {short_client}, scroll height {short_scroll})"
         );
 
-        // Content past the cap stops at 50vh and scrolls inside the textarea.
         let long_text = "A line of text for the cap check.\n".repeat(120);
         textarea.fill(&long_text, None).await.unwrap();
         let (long_client, long_scroll): (f64, f64) = page
@@ -715,7 +711,7 @@ async fn test_entry_focus_survives_the_poll() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
         install_story_poll_counter(&page).await;
 
-        page.locator(".log-entry.input .check-btn")
+        page.locator(".log-entry.narration .retrigger-btn")
             .await
             .focus()
             .await
@@ -738,7 +734,7 @@ async fn test_entry_focus_survives_the_poll() {
         let (focused, same_node) = page
             .evaluate::<(), (bool, bool)>(
                 r#"(() => {
-                    const btn = document.querySelector('.log-entry.input .check-btn');
+                    const btn = document.querySelector('.log-entry.narration .retrigger-btn');
                     return [document.activeElement === btn, btn === window.__focused];
                 })()"#,
                 None,

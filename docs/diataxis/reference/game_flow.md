@@ -139,9 +139,8 @@ Starting room comes from the active World's Scenario and initializes `movement.c
 Text checking branches before Action dispatch and uses the `TextChecker` port with the in-process `HarperTextChecker` adapter.
 
 - **Pre-flight entry.** Runs when text-check mode is enabled and auto-check is set. No issues dispatches the original Action. Issues render a preview where the player chooses corrected text, original text, or cancellation.
-- **Manual entry.** Runs on explicit UI request whenever text-check mode is enabled and returns the same preview shape.
 - **Settings lifetime.** Mode and auto-check are read per request. Ignored words are merged into Harper's local dictionary when the service is constructed.
-- **Fail-open boundary.** A pre-flight checker failure is logged and dispatches the original Action. Manual checker failures surface as an error response because no Action dispatch is pending.
+- **Fail-open boundary.** A pre-flight checker failure is logged and dispatches the original Action.
 - **Player-consent invariant.** The submitted command remains unchanged until the player's explicit preview choice selects original or corrected text.
 
 Only player command text enters the checker. Result DTO and issue categories are defined by the port in `src/application/ports/text_checker.rs`.

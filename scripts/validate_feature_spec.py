@@ -36,7 +36,6 @@ TEST_DIRS = [
     ENGINE_ROOT / "tests" / "browser",
 ]
 
-# Heading-style scenario declarations: `#### Scenario 1.1: Title`.
 SCENARIO_RE = re.compile(r"^#{1,6}\s+Scenario\s+(\d+\.\d+)\b")
 
 SCENARIO_COMMENT_RE = re.compile(
@@ -45,7 +44,6 @@ SCENARIO_COMMENT_RE = re.compile(
 
 TEST_ATTR_RE = re.compile(r"^\s*#\[(tokio::)?test\b")
 
-# Lines after a // SCENARIO: comment to search for its #[test] attribute.
 COMMENT_LOOKAHEAD = 5
 
 # Mandatory SCENARIO-tag rule; contract: tests/STRATEGY.md "SCENARIO tags".
@@ -67,11 +65,10 @@ TAG_EXEMPT_FILES = {
 # Pins the requires_migration quarantine: the count may only go down.
 # Migration cleanups lower it deliberately; a new test in the folder fails
 # the gate.
-REQUIRES_MIGRATION_TEST_COUNT = 82
+REQUIRES_MIGRATION_TEST_COUNT = 76
 
 
 def parse_spec_scenarios(spec_path: Path) -> set[str]:
-    """Return the set of scenario IDs declared in a spec file."""
     try:
         text = spec_path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -99,8 +96,6 @@ class TestFileScan(NamedTuple):
 
 
 def scan_test_file(test_path: Path) -> TestFileScan:
-    """Read `test_path` once and return its SCENARIO annotations and test
-    attributes. Exits 2 when the file cannot be read."""
     try:
         text = test_path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -129,8 +124,6 @@ FN_NAME_RE = re.compile(r"^\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)")
 
 
 def find_test_fn_name(lines: list[str], attr_index: int) -> str:
-    """Best-effort fn name for the test attribute at 0-based `attr_index`:
-    the first `fn <name>` line within five lines after the attribute."""
     for line in lines[attr_index + 1 : attr_index + 6]:
         m = FN_NAME_RE.match(line)
         if m:
@@ -139,8 +132,6 @@ def find_test_fn_name(lines: list[str], attr_index: int) -> str:
 
 
 def is_tag_exempt(rel: Path) -> bool:
-    """True when the SCENARIO-tag rule does not apply to `rel` (a path
-    relative to ENGINE_ROOT), per the declared exemptions."""
     if rel in TAG_EXEMPT_FILES:
         return True
     return any(rel.is_relative_to(d) for d in TAG_EXEMPT_DIRS)
@@ -149,9 +140,7 @@ def is_tag_exempt(rel: Path) -> bool:
 def find_untagged_tests(
     scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str]]:
-    """Return (path, attr_line, fn name) for every test attribute in a
-    non-exempt file that carries no SCENARIO tag. Pure over the prepared
-    `(path, engine-relative path, scan)` triples — no I/O."""
+    """Pure over the prepared scans — no I/O."""
     violations: list[tuple[Path, int, str]] = []
     for path, rel, scan in scans:
         if is_tag_exempt(rel):
@@ -201,7 +190,6 @@ def find_surface_violations(
 
 
 def count_quarantine_tests() -> int:
-    """Count test attributes in the requires_migration quarantine."""
     total = 0
     for path in sorted(
         (ENGINE_ROOT / "tests" / "http" / "requires_migration").rglob("*.rs")

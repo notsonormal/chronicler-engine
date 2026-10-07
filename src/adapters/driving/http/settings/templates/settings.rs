@@ -3,45 +3,186 @@
 
 use askama::Template;
 
+use crate::application::games::view_query::RoleHealth;
+use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_QUANTIFIER};
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
+use crate::adapters::driving::http::builders::headers::banner_message;
+use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
 use crate::adapters::driving::http::utils::template_helpers::select_options_html;
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
+
+pub struct RoleRowView {
+    pub role: String,
+    pub label: String,
+    pub set_route: String,
+    pub options: Vec<SelectOptionView>,
+    pub health_html: SafeHtml,
+}
+
+impl RoleRowView {
+    fn health_html(health: Option<&RoleHealth>) -> SafeHtml {
+        match health {
+            Some(health) => match &health.last_error {
+                Some(error) => SafeHtml::new(format!(
+                    "<span class=\"role-health degraded\">Degraded</span>{}",
+                    error_disclosure(
+                        &format!("role-health-{}-popover", health.role),
+                        &banner_message(&[health]),
+                        &raw_error_detail(error),
+                    )
+                )),
+                None if health.backend_model.is_some() => SafeHtml::new(
+                    r##"<span class="role-health healthy">Healthy</span>"##.to_string(),
+                ),
+                None => SafeHtml::new(
+                    r##"<span class="role-health unknown">No calls yet</span>"##.to_string(),
+                ),
+            },
+            None => SafeHtml::new(
+                r##"<span class="role-health unknown">No calls yet</span>"##.to_string(),
+            ),
+        }
+    }
+}
 
 #[derive(Template)]
 #[template(
     source = r##"
 <div class="settings-panel">
-    <h2>Connections</h2>
-    {% for conn in connections %}
-    <div class="connection-card">
-        <div class="card-header">
-            <span class="card-title">{{ conn.name }}</span>
-            <div class="card-badges">
-                {% if conn.id == narration_connection_id %}<span class="badge">Narrator</span>{% endif %}
-                {% if conn.id == quantifier_connection_id %}<span class="badge quantifier">Quantifier</span>{% endif %}
+    <div class="settings-subtabs" role="tablist" aria-label="Settings sections">
+        <button class="settings-subtab active" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-subtab="connections">Connections{% if roles_degraded %}<span class="subtab-degraded-dot" aria-hidden="true" title="A role is degraded"></span>{% endif %}</button>
+        <button class="settings-subtab" role="tab" id="subtab-text-check" aria-controls="settings-text-check" aria-selected="false" data-subtab="text-check">Text Check</button>
+    </div>
+    <div class="settings-subtab-panel active" id="settings-connections" role="tabpanel" aria-labelledby="subtab-connections">
+        {% match error %}
+        {% when Some with (message) %}
+        <div class="error-message">{{ message }}</div>
+        {% when None %}
+        {% endmatch %}
+        <h3 class="section-heading">Roles</h3>
+        <div class="role-rows">
+            {% for role in roles %}
+            <div class="role-row" data-role="{{ role.role }}">
+                <label class="role-name" for="role-select-{{ role.role }}">{{ role.label }}</label>
+                <select id="role-select-{{ role.role }}" name="connection_id" class="role-connection-select" hx-post="{{ role.set_route }}" hx-trigger="change" hx-target=".settings-panel" hx-swap="innerHTML">
+                    {% for option in role.options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+                </select>
+                <span class="role-health-slot">{{ role.health_html }}</span>
             </div>
+            {% endfor %}
         </div>
-        <div class="card-details">
-            {{ conn.provider|fmt("{:?}") }} - {{ conn.model }}
+        <h3 class="section-heading">Connections</h3>
+        <div class="connection-list">
+            {% for conn in connections %}
+            <div class="connection-row">
+                <div class="connection-meta">
+                    <span class="connection-name">{{ conn.name }}</span>
+                    <span class="connection-provider">{{ conn.provider|fmt("{:?}") }} - {{ conn.model }}</span>
+                </div>
+                <div class="connection-roles">
+                    {% if conn.id == narration_connection_id %}<span class="badge">Narrator</span>{% endif %}
+                    {% if conn.id == quantifier_connection_id %}<span class="badge quantifier">Quantifier</span>{% endif %}
+                </div>
+                <div class="connection-actions">
+                    <button type="button" hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-cyan">Edit</button>
+                    <button type="button" hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-danger">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
         </div>
-        <div class="card-actions">
-            <button hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="closest .connection-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
-            <button hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
-            {% if conn.id != narration_connection_id %}
-            <button hx-post="/connections/{{ conn.id }}/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Narrator</button>
-            {% endif %}
-            {% if conn.id != quantifier_connection_id %}
-            <button hx-post="/connections/{{ conn.id }}/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Quantifier</button>
-            {% endif %}
+        <div class="connection-add">
+            <button type="button" hx-get="/fragment/connections/new" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Add Connection</button>
         </div>
     </div>
-    {% endfor %}
+    <div class="settings-subtab-panel" id="settings-text-check" role="tabpanel" aria-labelledby="subtab-text-check">
+        {{ text_check_card }}
+    </div>
+</div>
+"##,
+    ext = "html"
+)]
+pub struct SettingsTemplate {
+    pub roles: Vec<RoleRowView>,
+    pub roles_degraded: bool,
+    pub connections: Vec<LlmProviderConfig>,
+    pub narration_connection_id: String,
+    pub quantifier_connection_id: String,
+    pub error: Option<String>,
+    pub text_check_card: SafeHtml,
+}
 
-    <h3>Add Connection</h3>
-    <form hx-post="/connections/add" hx-target=".settings-panel" hx-swap="innerHTML">
+impl SettingsTemplate {
+    /// `error` is a refusal the Connections sub-tab keeps in place; role health drives the sub-tab marker.
+    pub fn from_settings(
+        settings: &AppSettings,
+        roles: &[RoleHealth],
+        error: Option<&str>,
+    ) -> Self {
+        let degraded = roles.iter().any(|health| {
+            matches!(health.role.as_str(), AGENT_NARRATOR | AGENT_QUANTIFIER)
+                && health.last_error.is_some()
+        });
+        Self {
+            roles: Self::role_rows(settings, roles),
+            roles_degraded: degraded,
+            connections: settings.connections.clone(),
+            narration_connection_id: settings.narration_connection_id.clone(),
+            quantifier_connection_id: settings.quantifier_connection_id.clone(),
+            error: error.map(str::to_string),
+            text_check_card: SafeHtml::new(
+                TextCheckCardTemplate::from_settings(settings, "")
+                    .render()
+                    .unwrap_or_default(),
+            ),
+        }
+    }
+
+    /// The Narrator and Quantifier role rows, in that order.
+    fn role_rows(settings: &AppSettings, roles: &[RoleHealth]) -> Vec<RoleRowView> {
+        [
+            (
+                AGENT_NARRATOR,
+                "Narrator",
+                "set-narrator",
+                settings.narration_connection_id.as_str(),
+            ),
+            (
+                AGENT_QUANTIFIER,
+                "Quantifier",
+                "set-quantifier",
+                settings.quantifier_connection_id.as_str(),
+            ),
+        ]
+        .into_iter()
+        .map(|(role, label, route, selected_id)| RoleRowView {
+            role: role.to_string(),
+            label: label.to_string(),
+            set_route: format!("/connections/{route}"),
+            options: settings
+                .connections
+                .iter()
+                .map(|connection| SelectOptionView {
+                    value: connection.id.clone(),
+                    label: connection.name.clone(),
+                    selected: connection.id == selected_id,
+                })
+                .collect(),
+            health_html: RoleRowView::health_html(roles.iter().find(|health| health.role == role)),
+        })
+        .collect()
+    }
+}
+
+#[derive(Template)]
+#[template(
+    source = r##"
+<div class="settings-panel connection-form-page">
+    <button type="button" class="back-link" hx-get="/fragment/settings" hx-target=".settings-panel" hx-swap="innerHTML">&#8249; Connections</button>
+    <h2>{% if editing %}Edit {{ name }}{% else %}Add Connection{% endif %}</h2>
+    <form hx-post="{{ form_action }}" hx-target=".settings-panel" hx-swap="innerHTML">
         <div class="form-group">
             <label for="conn_name">Name</label>
-            <input type="text" id="conn_name" name="conn_name" placeholder="My OpenRouter" />
+            <input type="text" id="conn_name" name="conn_name" value="{{ name }}" placeholder="My OpenRouter" />
         </div>
         <div class="form-group">
             <label for="conn_provider">Provider</label>
@@ -51,51 +192,70 @@ use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
         </div>
         <div class="form-group">
             <label for="conn_model">Model</label>
-            <input type="text" id="conn_model" name="conn_model" placeholder="openai/gpt-4o-mini" />
+            <input type="text" id="conn_model" name="conn_model" value="{{ model }}" placeholder="openai/gpt-4o-mini" />
         </div>
         <div class="form-group">
             <label for="conn_api_key">API Key</label>
-            <input type="password" id="conn_api_key" name="conn_api_key" placeholder="(optional)" />
+            <input type="password" id="conn_api_key" name="conn_api_key" value="{{ api_key }}" placeholder="(optional)" />
         </div>
         <div class="form-group">
             <label for="conn_base_url">Base URL</label>
-            <input type="text" id="conn_base_url" name="conn_base_url" placeholder="(optional)" />
+            <input type="text" id="conn_base_url" name="conn_base_url" value="{{ base_url }}" placeholder="(optional)" />
         </div>
         <div class="form-group">
             <label class="checkbox-label">
-                <input type="checkbox" name="single_user_message" value="true" />
+                <input type="checkbox" name="single_user_message" value="true" {% if single_user_message %}checked{% endif %} />
                 Single User Message (merge system + user for models that ignore system prompts)
             </label>
         </div>
-        <button type="submit" class="btn-primary">Add Connection</button>
+        <div class="inline-error-slot" data-error-slot="connection-form" hidden></div>
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" class="btn-cyan" hx-get="/fragment/settings" hx-target=".settings-panel" hx-swap="innerHTML">Cancel</button>
+        </div>
     </form>
-
-    <h2>Text Check</h2>
-    {{ text_check_card }}
 </div>
 "##,
     ext = "html"
 )]
-pub struct SettingsTemplate {
-    pub connections: Vec<LlmProviderConfig>,
-    pub narration_connection_id: String,
-    pub quantifier_connection_id: String,
+pub struct ConnectionFormTemplate {
+    pub editing: bool,
+    pub name: String,
     pub provider_options: SafeHtml,
-    pub text_check_card: SafeHtml,
+    pub model: String,
+    pub api_key: String,
+    pub base_url: String,
+    pub single_user_message: bool,
+    pub form_action: String,
 }
 
-impl SettingsTemplate {
-    pub(crate) fn from_settings(settings: &AppSettings) -> Self {
+impl ConnectionFormTemplate {
+    pub fn new(connection: Option<&LlmProviderConfig>) -> Self {
+        let provider = connection.map(|conn| match conn.provider {
+            crate::domain::model::llm_backend::LlmBackendType::OpenRouter => "openrouter",
+            crate::domain::model::llm_backend::LlmBackendType::DeepSeek => "deepseek",
+            crate::domain::model::llm_backend::LlmBackendType::Ollama => "ollama",
+            crate::domain::model::llm_backend::LlmBackendType::Mock => "mock",
+        });
         Self {
-            connections: settings.connections.clone(),
-            narration_connection_id: settings.narration_connection_id.clone(),
-            quantifier_connection_id: settings.quantifier_connection_id.clone(),
-            provider_options: select_options_html(SelectOptionView::providers("openrouter")),
-            text_check_card: SafeHtml::new(
-                TextCheckCardTemplate::from_settings(settings, "")
-                    .render()
-                    .unwrap_or_default(),
-            ),
+            editing: connection.is_some(),
+            name: connection.map(|conn| conn.name.clone()).unwrap_or_default(),
+            provider_options: select_options_html(SelectOptionView::providers(
+                provider.unwrap_or("openrouter"),
+            )),
+            model: connection
+                .map(|conn| conn.model.clone())
+                .unwrap_or_default(),
+            api_key: connection
+                .and_then(|conn| conn.api_key.clone())
+                .unwrap_or_default(),
+            base_url: connection
+                .and_then(|conn| conn.base_url.clone())
+                .unwrap_or_default(),
+            single_user_message: connection.is_some_and(|conn| conn.single_user_message),
+            form_action: connection
+                .map(|conn| format!("/connections/{}/edit", conn.id))
+                .unwrap_or_else(|| "/connections/add".to_string()),
         }
     }
 }

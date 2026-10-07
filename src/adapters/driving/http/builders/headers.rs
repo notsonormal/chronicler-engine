@@ -24,7 +24,7 @@ fn role_effect(role: &str) -> Option<&'static str> {
     }
 }
 
-fn banner_message(degraded: &[&RoleHealth]) -> String {
+pub(crate) fn banner_message(degraded: &[&RoleHealth]) -> String {
     degraded
         .iter()
         .map(|r| match role_effect(&r.role) {

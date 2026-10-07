@@ -62,20 +62,6 @@ Then #error-notification becomes visible and displays the error text
 And after the status poll returns Ready, the same error fragment returned again re-shows the notification (the dedupe resets once the status is no longer an error)
 ```
 
-#### Scenario 16.11: A log-entry check renders a read-only result and keeps the command form
-
-```gherkin
-Given the dashboard is loaded with the command form and status display
-When the client checks a log entry that has issues
-Then the result renders in its own element
-And the result is announced to assistive technology
-And the result names the entry it checked and offers a dismiss control
-And the result offers no way to send a turn
-And #command-form and #status-display are the same nodes as before
-When the client dismisses the result
-Then the result element is empty
-```
-
 #### Scenario 16.12: Confirming a preview leaves the command form usable and Ready
 
 ```gherkin
@@ -94,17 +80,6 @@ Given a turn is generating and the status display shows its phase
 When the client submits a command the preview intercepts
 Then the preview is open
 And the status display is still in the document and still shows the phase
-```
-
-#### Scenario 16.14: A clean log-entry check result can be dismissed
-
-```gherkin
-Given the dashboard is loaded with the command form and status display
-When the client checks a log entry with no issues
-Then the result names the entry it checked and reports no issues
-And the result offers a dismiss control
-When the client dismisses the result
-Then the result element is empty
 ```
 
 #### Scenario 16.15: Focus moves into the preview and back to the command input

@@ -1,18 +1,14 @@
-/* Design Tokens */
 :root {
-    /* Colors - Background */
     --color-bg-primary: #0a0a0a;
     --color-bg-secondary: #111;
     --color-bg-tertiary: #0f0f0f;
     --color-bg-header: #1a1a1a;
     --color-border: #333;
 
-    /* Colors - Text */
     --color-text-primary: #e0e0e0;
     --color-text-muted: #888;
     --color-text-placeholder: #555;
 
-    /* Colors - Accents */
     --color-accent-green: #00ff00;
     --color-accent-green-bright: #4ade80;
     --color-accent-cyan: #00ffff;
@@ -22,44 +18,36 @@
     --color-accent-red: #ff4444;
     --color-accent-pink: #ff6b6b;
 
-    /* Colors - Buttons */
     --color-button-gradient-start: #2a2a2a;
     --color-button-gradient-end: #1a1a1a;
     --color-button-border: #555;
 
-    /* Colors - Log Entry Variants */
     --color-log-input: #2a2a2a;
     --color-log-narration: #1a3a3a;
     --color-log-system: #3a3a1a;
 
-    /* Colors - Error Notification */
     --color-error-gradient-start: #ff4444;
     --color-error-gradient-end: #cc0000;
 
-    /* Typography */
     --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-size-base: 14px;
     --font-size-small: 12px;
     --font-size-xs: 11px;
 
-    /* Spacing */
     --spacing-xs: 4px;
     --spacing-sm: 8px;
     --spacing-md: 16px;
     --spacing-lg: 20px;
 
-    /* Sizing */
     --header-height: 48px;
     --action-area-height: 64px;
     --input-height: 40px;
     --button-min-width: 100px;
     --input-min-width: 200px;
 
-    /* Animation */
     --transition-fast: 0.2s;
 }
 
-/* Shared Button Utilities */
 .btn-primary {
     background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
     border: 1px solid var(--color-accent-green);
@@ -103,7 +91,6 @@
     box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
 }
 
-/* Custom Scrollbar - Dark Theme */
 ::-webkit-scrollbar {
     width: 8px;
 }
@@ -121,7 +108,6 @@
     background: rgba(255,255,255,0.35);
 }
 
-/* Firefox scrollbar support + Reset */
 * {
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.2) transparent;
@@ -130,7 +116,6 @@
     padding: 0;
 }
 
-/* Base */
 body {
     font-family: var(--font-family);
     background: var(--color-bg-primary);
@@ -150,7 +135,6 @@ body {
     overflow: hidden;
 }
 
-/* Accessibility helpers */
 .visually-hidden {
     position: absolute;
     width: 1px;
@@ -189,7 +173,6 @@ body {
     }
 }
 
-/* Header */
 .header-bar {
     display: flex;
     align-items: center;
@@ -233,14 +216,12 @@ body {
     background: rgba(255, 68, 68, 0.1);
 }
 
-/* Main Container */
 .main-container {
     display: flex;
     flex: 1;
     overflow: hidden;
 }
 
-/* Story Log - 80% */
 .story-log {
     flex: 4;
     background: var(--color-bg-secondary);
@@ -249,7 +230,6 @@ body {
     overflow-y: auto;
 }
 
-/* Visual Sidebar - 20% */
 .visual-sidebar {
     flex: 1;
     min-width: 0;
@@ -261,7 +241,6 @@ body {
     overflow: hidden;
 }
 
-/* Log Entry Chat Bubbles */
 .log-entry {
     margin-bottom: 12px;
     padding: 10px 14px;
@@ -270,21 +249,18 @@ body {
     overflow-x: hidden;
 }
 
-/* User Input - Right Aligned, Darker Gray */
 .log-entry.input {
     margin-left: auto;
     background: var(--color-log-input);
     border-bottom-right-radius: 4px;
 }
 
-/* AI/Narration - Left Aligned, Dark Cyan */
 .log-entry.narration {
     margin-right: auto;
     background: var(--color-log-narration);
     border-bottom-left-radius: 4px;
 }
 
-/* System - Centered, Yellow */
 .log-entry.system {
     margin-left: auto;
     margin-right: auto;
@@ -293,7 +269,6 @@ body {
     max-width: 70%;
 }
 
-/* Timestamp - Small Gray Above Message */
 .log-entry .timestamp {
     display: block;
     font-size: var(--font-size-xs);
@@ -301,7 +276,6 @@ body {
     margin-bottom: var(--spacing-xs);
 }
 
-/* Message Text */
 .log-entry .text {
     font-size: var(--font-size-base);
     line-height: 1.5;
@@ -317,7 +291,6 @@ body {
     margin-bottom: 0;
 }
 
-/* Preformatted / code blocks from markdown need wrapping too */
 .log-entry .text pre {
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -326,13 +299,11 @@ body {
     overflow-x: auto;
 }
 
-/* Quoted Text */
 .log-entry .text q {
     color: var(--color-accent-red);
     font-style: italic;
 }
 
-/* Type-Specific Colors */
 .log-entry.narration .text {
     color: var(--color-accent-cyan);
 }
@@ -345,7 +316,6 @@ body {
     color: #cccccc;
 }
 
-/* Location Header - Inline with Timestamp */
 .location-header {
     display: inline;
     font-size: 1.1em;
@@ -354,7 +324,6 @@ body {
     margin-right: var(--spacing-xs);
 }
 
-/* Location Timestamp - Inline After Location */
 .location-timestamp {
     display: inline;
     font-size: 1em;
@@ -362,7 +331,6 @@ body {
     color: var(--color-text-muted);
 }
 
-/* Event Header - Inline with Timestamp */
 .event-header {
     display: inline;
     font-size: 1.1em;
@@ -371,7 +339,6 @@ body {
     margin-right: var(--spacing-xs);
 }
 
-/* Event Timestamp - Inline After Event Header */
 .event-timestamp {
     display: inline;
     font-size: 1em;
@@ -379,7 +346,6 @@ body {
     color: var(--color-text-muted);
 }
 
-/* Visual Sidebar Styles */
 .location-header-bar {
     margin-bottom: var(--spacing-sm);
 }
@@ -443,7 +409,6 @@ body {
     font-size: var(--font-size-small);
 }
 
-/* Divider between location image and NPC portraits */
 .npc-portrait-divider {
     width: 100%;
     height: 1px;
@@ -466,7 +431,6 @@ body {
     align-items: flex-start;
 }
 
-/* Action Area */
 .action-area {
     background: var(--color-bg-header);
     border: 1px solid var(--color-border);
@@ -479,7 +443,6 @@ body {
     flex-shrink: 0;
 }
 
-/* Swipe-restore confirmation: a transient line under the action area. */
 .restore-notice {
     min-height: 1em;
     padding: 0 var(--spacing-md);
@@ -524,7 +487,6 @@ body {
     color: var(--color-text-placeholder);
 }
 
-/* Slash-command auto-suggestion menu */
 .slash-menu {
     position: fixed;
     z-index: 1000;
@@ -601,7 +563,6 @@ body {
     box-shadow: none;
 }
 
-/* Status Display */
 .status {
     font-size: var(--font-size-small);
     margin-left: auto;
@@ -641,10 +602,7 @@ body {
     min-width: 0;
 }
 
-/* Options dock — vertical stack of pickable options docked above the input
-   area. Options are part of the input surface, not the last message. The
-   container (#options-dock) self-polls and renders nothing while the option
-   set is empty. */
+/* Options are part of the input surface, not the last message. */
 .options-strip {
     display: flex;
     flex-direction: column;
@@ -721,7 +679,6 @@ body {
     cursor: not-allowed;
 }
 
-/* Tab Bar */
 .tab-bar {
     display: flex;
     background: var(--color-bg-secondary);
@@ -754,7 +711,6 @@ body {
     border-bottom-color: var(--color-accent-green);
 }
 
-/* Tab Content */
 .tab-content {
     display: none;
     flex-direction: column;
@@ -766,12 +722,10 @@ body {
     display: flex;
 }
 
-/* Settings Tab Scrolling */
 #settings-tab {
     overflow-y: auto;
 }
 
-/* LLM Messages Tab Scrolling */
 #llm-messages-tab {
     overflow: hidden;
 }
@@ -783,7 +737,6 @@ body {
     min-height: 0;
 }
 
-/* Settings Panel */
 .settings-panel {
     padding: 24px;
     display: flex;
@@ -792,6 +745,192 @@ body {
     width: 100%;
     max-width: 960px;
     margin: 0 auto;
+}
+
+.settings-subtabs {
+    display: flex;
+    gap: var(--spacing-sm);
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: var(--spacing-md);
+}
+
+.settings-subtab {
+    position: relative;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--color-text-muted);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    cursor: pointer;
+}
+
+.settings-subtab:hover {
+    color: var(--color-text-primary);
+}
+
+.settings-subtab.active {
+    color: var(--color-accent-green);
+    border-bottom-color: var(--color-accent-green);
+}
+
+.subtab-degraded-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-left: 6px;
+    border-radius: 50%;
+    background: var(--color-accent-orange);
+    vertical-align: middle;
+}
+
+.settings-subtab-panel {
+    display: none;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.settings-subtab-panel.active {
+    display: flex;
+}
+
+.section-heading {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--color-text-primary);
+}
+
+.role-rows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.role-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    flex-wrap: wrap;
+}
+
+.role-row .role-name {
+    min-width: 90px;
+    font-weight: bold;
+    color: var(--color-text-primary);
+}
+
+.role-row .role-connection-select {
+    flex: 1 1 220px;
+    min-width: 160px;
+}
+
+.role-health-slot {
+    flex: 0 0 auto;
+    font-size: var(--font-size-small);
+}
+
+.role-health.healthy {
+    color: var(--color-accent-green);
+}
+
+.role-health.degraded {
+    color: var(--color-accent-red);
+}
+
+.role-health.unknown {
+    color: var(--color-text-muted);
+}
+
+.role-row .error-disclosure-message {
+    color: var(--color-accent-red);
+}
+
+.connection-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.connection-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    flex-wrap: wrap;
+}
+
+.connection-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 260px;
+    min-width: 200px;
+}
+
+.connection-meta .connection-name {
+    font-weight: bold;
+    color: var(--color-text-primary);
+}
+
+.connection-meta .connection-provider {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+}
+
+.connection-roles {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.connection-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-left: auto;
+}
+
+.connection-row .badge {
+    font-size: var(--font-size-xs);
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0, 255, 0, 0.12);
+    color: var(--color-accent-green);
+    border: 1px solid rgba(0, 255, 0, 0.25);
+}
+
+.connection-row .badge.quantifier {
+    background: rgba(255, 179, 71, 0.12);
+    color: var(--color-accent-orange);
+    border-color: rgba(255, 179, 71, 0.25);
+}
+
+.connection-add {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.connection-form-page .back-link {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    color: var(--color-accent-cyan);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    padding: 0;
+}
+
+.connection-form-page .form-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
 }
 
 .text-check-status {
@@ -803,9 +942,6 @@ body {
     opacity: 0.5;
 }
 
-/* Settings Buttons — gradient rules moved to .btn-primary, .btn-cyan, .btn-danger utilities */
-
-/* Connection Cards */
 .connection-card {
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border);
@@ -862,51 +998,6 @@ body {
     flex-wrap: wrap;
 }
 
-/* Connection Edit Form (inline) */
-.connection-edit-form {
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-accent-cyan);
-    border-radius: 8px;
-    padding: var(--spacing-md);
-    margin-bottom: var(--spacing-md);
-}
-
-.connection-edit-form .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
-    margin-bottom: var(--spacing-sm);
-}
-
-.connection-edit-form label {
-    font-size: var(--font-size-small);
-    color: var(--color-text-muted);
-}
-
-.connection-edit-form input,
-.connection-edit-form select {
-    background: var(--color-bg-primary);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    color: var(--color-text-primary);
-    padding: var(--spacing-sm);
-    font-family: inherit;
-    font-size: var(--font-size-base);
-}
-
-.connection-edit-form input:focus,
-.connection-edit-form select:focus {
-    outline: none;
-    border-color: var(--color-accent-cyan);
-    box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
-}
-
-.connection-edit-form .form-actions {
-    display: flex;
-    gap: var(--spacing-sm);
-    margin-top: var(--spacing-sm);
-}
-
 .settings-panel .form-group {
     display: flex;
     flex-direction: column;
@@ -939,7 +1030,6 @@ body {
     box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
 }
 
-/* Error Notification */
 .error-notification {
     position: fixed;
     top: 0;
@@ -989,10 +1079,8 @@ body {
     color: white;
 }
 
-/* The shared short-message + anchored-popover error disclosure. One shape for
-   the banner, the status display's clamped generation error and the inline
-   slot a failed action renders into. It never grows its own line: the raw
-   text lives in the popover. */
+/* One shape for the banner, the status display and a failed action's inline
+   slot; the raw text lives in the popover so the line never grows. */
 .error-disclosure {
     display: flex;
     align-items: center;
@@ -1087,7 +1175,6 @@ body {
     display: none;
 }
 
-/* Message Header with Action Buttons */
 .message-header {
     display: flex;
     justify-content: space-between;
@@ -1112,7 +1199,6 @@ body {
     flex-shrink: 0;
 }
 
-/* Action Buttons (Edit, Delete, Check, Retry) */
 .action-btn {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1149,17 +1235,11 @@ body {
     border-color: var(--color-accent-pink);
 }
 
-.action-btn.check-btn:hover:not(:disabled) {
-    color: var(--color-accent-green);
-    border-color: var(--color-accent-green);
-}
-
 .action-btn.retry-btn:hover:not(:disabled) {
     color: var(--color-accent-orange);
     border-color: var(--color-accent-orange);
 }
 
-/* Inline Edit Textarea */
 .edit-textarea {
     width: 100%;
     box-sizing: border-box;
@@ -1174,13 +1254,11 @@ body {
     display: block;
     line-height: 1.5;
     margin: 0;
-    /* Auto-grow (see autoResizeTextarea); cap very long entries so the edit
-       box cannot outgrow the viewport, then scroll inside it. */
+    /* autoResizeTextarea grows this; the cap keeps the box inside the viewport. */
     max-height: 50vh;
     overflow-y: auto;
 }
 
-/* Save/Cancel Buttons */
 .save-btn, .cancel-btn {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1209,7 +1287,6 @@ body {
     color: var(--color-accent-red);
 }
 
-/* Text Check Button */
 .btn-check {
     background: transparent;
     border: 1px solid var(--color-accent-cyan);
@@ -1235,7 +1312,6 @@ body {
     box-shadow: none;
 }
 
-/* Text Check Preview */
 .text-check-preview {
     background: var(--color-bg-header);
     border: 1px solid var(--color-border);
@@ -1353,13 +1429,11 @@ body {
 }
 
 /* An empty element must not add a flex gap. */
-#action-preview:empty,
-#text-check-result:empty {
+#action-preview:empty {
     display: none;
 }
 
-.action-area:has(#action-preview:not(:empty)),
-.action-area:has(#text-check-result:not(:empty)) {
+.action-area:has(#action-preview:not(:empty)) {
     flex-wrap: wrap;
     height: auto;
     min-height: var(--action-area-height);
@@ -1369,84 +1443,10 @@ body {
     padding-bottom: var(--spacing-md);
 }
 
-/* Full-width row so neither squeezes the command form. */
-#action-preview:not(:empty),
-#text-check-result:not(:empty) {
+/* Full-width row so the preview does not squeeze the command form. */
+#action-preview:not(:empty) {
     flex: 1 1 100%;
     min-width: 0;
-}
-
-/* Read-only text-check result */
-.text-check-result-panel {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
-    background: var(--color-bg-primary);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    padding: var(--spacing-sm) var(--spacing-md);
-}
-
-.check-result-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--spacing-sm);
-}
-
-.check-result-owner {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.check-result-dismiss {
-    background: none;
-    border: none;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    font-size: var(--font-size-base);
-    line-height: 1;
-    padding: 2px 6px;
-}
-
-.check-result-dismiss:hover {
-    color: var(--color-text-primary);
-}
-
-.check-result-clean {
-    color: var(--color-accent-green);
-    margin: 0;
-}
-
-.check-result-note {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
-    margin: 0;
-}
-
-.check-result-issues {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-xs);
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-.check-result-corrected {
-    display: flex;
-    gap: var(--spacing-sm);
-    font-size: var(--font-size-sm);
-}
-
-.check-result-corrected .label {
-    color: var(--color-text-muted);
-}
-
-.check-result-corrected .value {
-    color: var(--color-accent-green);
 }
 
 .preview-note {
@@ -1455,7 +1455,6 @@ body {
     margin: 0;
 }
 
-/* Preview editable textarea */
 .preview-edit-textarea {
     width: 100%;
     background: var(--color-bg-primary);
@@ -1481,7 +1480,6 @@ body {
     display: contents;
 }
 
-/* Custom checkbox for dark theme */
 input[type="checkbox"] {
     appearance: none;
     -webkit-appearance: none;
@@ -1531,7 +1529,6 @@ input[type="checkbox"]:focus {
     color: var(--color-text-primary);
 }
 
-/* Responsive Breakpoints */
 @media (max-width: 768px) {
     .main-container {
         flex-direction: column;
@@ -1589,7 +1586,6 @@ input[type="checkbox"]:focus {
         width: auto;
     }
 }
-/* LLM Messages Tab */
 .llm-messages-panel {
     padding: var(--spacing-md);
 }
@@ -1751,17 +1747,14 @@ input[type="checkbox"]:focus {
     font-style: italic;
 }
 
-/* Worlds Tab Scrolling */
 #worlds-tab {
     overflow-y: auto;
 }
 
-/* Prompt Presets Tab Scrolling */
 #prompt-presets-tab {
     overflow-y: auto;
 }
 
-/* Prompt Presets Panel */
 .prompt-presets-panel {
     padding: 24px;
     display: flex;
@@ -1860,7 +1853,6 @@ input[type="checkbox"]:focus {
     flex-wrap: wrap;
 }
 
-/* Prompt Presets add-form disclosure */
 .preset-add-toggle {
     display: inline-flex;
     align-items: center;
@@ -1896,9 +1888,6 @@ input[type="checkbox"]:focus {
     margin-top: var(--spacing-sm);
 }
 
-/* Prompt Presets Buttons — gradient rules moved to .btn-primary, .btn-cyan, .btn-danger utilities */
-
-/* Prompt Presets Forms */
 .prompt-presets-panel .form-group {
     margin-bottom: var(--spacing-sm);
 }
@@ -1941,7 +1930,6 @@ input[type="checkbox"]:focus {
     margin-top: var(--spacing-sm);
 }
 
-/* Swipe controls */
 .swipe-controls {
     display: flex;
     align-items: center;
@@ -2001,7 +1989,6 @@ input[type="checkbox"]:focus {
 }
 
 
-/* Error Messages */
 .error-message {
     color: var(--color-accent-red);
     background: rgba(255, 68, 68, 0.1);

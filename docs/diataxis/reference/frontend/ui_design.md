@@ -276,13 +276,12 @@ The base `.text` style is `font-size: var(--font-size-base); line-height: 1.5; o
 
 ### Per-Entry Action Buttons
 
-Four buttons rendered above each entry's text span. Conditional visibility rules live in `NarrativeLogTemplate::new` (templates.rs).
+Three buttons rendered above each entry's text span. Conditional visibility rules live in `NarrativeLogTemplate::new` (templates.rs).
 
 | Button | Glyph | Visibility rule |
 |---|---|---|
 | Edit | ✎ | always visible on every entry |
 | Delete | 🗑 | last entry, only when more than one entry exists |
-| Check | ✓ | input entries only (spellcheck the user's text) |
 | Retrigger | ♻ | last entry, narration or dialogue, no event continuation, previous turn had a trigger |
 
 Base `.action-btn` style: `background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; color: var(--color-text-muted); cursor: pointer; font-size: 14px; padding: 2px 6px; min-width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; transition: background, border-color, color all on var(--transition-fast)`.
@@ -293,7 +292,6 @@ Default hover deepens the background to `rgba(255, 255, 255, 0.15)` and the bord
 |---|---|
 | Edit | `--color-accent-cyan` |
 | Delete | `--color-accent-pink` |
-| Check | `--color-accent-green` |
 | Retry | `--color-accent-orange` |
 
 The retrigger button uses a separate `.retrigger-btn` class (see Swipe Controls below), not `.action-btn`.
@@ -392,31 +390,40 @@ Supported viewports, desktop-first:
 - Display: flex column, gap `var(--spacing-md)`
 - Scrolls with the tab body (`#settings-tab`)
 
-### Connection Cards
+### Settings Sub-tabs
 
-- Background: `--color-bg-secondary`
-- Border: 1px solid `--color-border`
-- Border-radius: `8px`
-- Padding: `var(--spacing-md)`
-- Margin-bottom: `var(--spacing-md)`
-- Header: flex, space-between, wrap
-  - Title: bold, `1.05em`
-  - Badges: flex row, gap `4px`
-    - **Narrator badge**: green background `rgba(0, 255, 0, 0.12)`, green text, green border
-    - **Quantifier badge**: orange background `rgba(255, 179, 71, 0.12)`, orange text, orange border
-- Details: small text, muted color, line-height 1.5
-- Actions: flex row, gap `var(--spacing-sm)`, wrap
+- Bar: flex row, gap `var(--spacing-sm)`, bottom border `var(--color-border)`
+- Sub-tab: transparent, muted text, `2px` transparent bottom border; `.active` uses `--color-accent-green` text and bottom border
+- Degraded marker (`.subtab-degraded-dot`): 8px orange circle beside the Connections label while a role is degraded
+- Panel (`.settings-subtab-panel`): `display: none`; `.active` is `display: flex`, flex column, gap `var(--spacing-md)`
 
-### Connection Edit Form
+### Role Rows
 
-- Background: `--color-bg-secondary`
-- Border: 1px solid `--color-accent-cyan` (cyan accent)
-- Border-radius: `8px`
-- Padding: `var(--spacing-md)`
-- Form groups: flex column, gap `4px`
-- Labels: small text, muted color
-- Inputs / selects: same styling as command input
-- Focus: cyan border, cyan box-shadow
+- Row: flex, wrap, gap `var(--spacing-sm)`, `--color-bg-secondary` background, `1px solid var(--color-border)` border, `border-radius: 8px`, padding `var(--spacing-sm) var(--spacing-md)`
+- Role name: bold, min-width `90px`
+- Connection select: flex `1 1 220px`, min-width `160px`
+- Health: `.role-health.healthy` green, `.role-health.degraded` red, `.role-health.unknown` muted; a degraded role carries the shared error disclosure
+
+### Connection Rows
+
+- List: flex column, gap `var(--spacing-sm)`
+- Row (`.connection-row`): flex, wrap, gap `var(--spacing-md)`, `--color-bg-secondary` background, `1px solid var(--color-border)` border, `border-radius: 8px`, padding `var(--spacing-sm) var(--spacing-md)`
+- Meta: flex column, name bold and provider/model small muted
+- Role badges: flex row, gap `4px`
+  - **Narrator badge**: green background `rgba(0, 255, 0, 0.12)`, green text, green border
+  - **Quantifier badge**: orange background `rgba(255, 179, 71, 0.12)`, orange text, orange border
+- Actions: flex row, gap `var(--spacing-sm)`, pushed right with `margin-left: auto`
+
+### Connection Form Page
+
+- The shared Add/Edit page is a `.settings-panel` with `.connection-form-page`
+- Back link: transparent, cyan text, no border, aligned to the start
+- Form fields inherit the `.settings-panel` input/select styling; actions are a flex row with gap `var(--spacing-sm)`
+
+### Text Check Card
+
+- The Text Check sub-tab keeps the `.connection-card` frame: `--color-bg-secondary` background, `1px solid var(--color-border)` border, `border-radius: 8px`, padding `var(--spacing-md)`
+- Header: flex, space-between, wrap; title bold `1.05em`
 
 ### Button Utility Classes
 
@@ -424,7 +431,7 @@ Three utility classes provide the gradient+border+text styling for action button
 
 | Class | Gradient | Text/border | Padding | Typical actions |
 |---|---|---|---|---|
-| `.btn-primary` | `#2a5a2a` → `#1a4a1a` (idle) / `#3a6a3a` → `#2a5a2a` (hover) | `--color-accent-green` | `8px 20px`, bold | Save, create, set-narrator, submit |
+| `.btn-primary` | `#2a5a2a` → `#1a4a1a` (idle) / `#3a6a3a` → `#2a5a2a` (hover) | `--color-accent-green` | `8px 20px`, bold | Save, create, add-connection, submit |
 | `.btn-cyan` | `#2a4a5a` → `#1a3a4a` (idle) / `#3a5a6a` → `#2a4a5a` (hover) | `--color-accent-cyan` | `4px 12px`, xs font | Edit, view, switch |
 | `.btn-danger` | `#5a2a2a` → `#4a1a1a` (idle) / `#6a3a3a` → `#5a2a2a` (hover) | `--color-accent-red` | `4px 12px`, xs font | Delete, reset |
 

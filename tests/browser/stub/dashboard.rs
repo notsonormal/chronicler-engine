@@ -1,4 +1,4 @@
-//! Stub-browser tests for dashboard chrome: the error toast, the action-area state machine, and the read-only text-check result. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for dashboard chrome: the error toast and the action-area state machine. Tagged against `docs/specs/browser_dashboard.md`.
 
 // The engine's failing action route answers 500, so htmx fires `htmx:beforeSwap`
 // with `isError` on its own; no test dispatches either event by hand.
@@ -218,7 +218,6 @@ async fn test_primary_button_locks_and_unlocks_after_confirm() {
                 "confirming the preview replaced #status-display"
             );
 
-            // The next 5s poll clears the status; the button follows it back to Send.
             status.set(StubStatus::Idle);
             wait_for_status_ready(&page).await;
             let (disabled, label) = read_submit_button(&page).await;
@@ -297,94 +296,6 @@ async fn test_status_error_reaches_toast_after_confirm() {
     .await;
 }
 
-// [docs/specs/browser_dashboard.md] SCENARIO: 16.11
-#[tokio::test]
-async fn test_log_entry_check_is_read_only_and_dismissable() {
-    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        stash_action_area_nodes(&page).await;
-
-        let clicked = page
-            .evaluate::<(), bool>(
-                r#"(() => {
-                    const btn = document.querySelector('.check-btn');
-                    if (btn) { btn.click(); return true; }
-                    return false;
-                })()"#,
-                None,
-            )
-            .await
-            .unwrap();
-        assert!(clicked, "Should find and click a log-entry check button");
-
-        wait_until_visible(
-            &page,
-            "#text-check-result:not(:empty)",
-            Duration::from_secs(5),
-        )
-        .await;
-
-        let (form_same, status_same) = action_area_nodes_unchanged(&page).await;
-        assert!(form_same, "the text-check result replaced #command-form");
-        assert!(
-            status_same,
-            "the text-check result replaced #status-display"
-        );
-
-        let (text, role, send_buttons, confirm_forms) = page
-            .evaluate::<(), (String, String, usize, usize)>(
-                r#"(() => {
-                    const result = document.getElementById('text-check-result');
-                    const buttons = Array.from(result.querySelectorAll('button'));
-                    const sendButtons = buttons.filter((b) => /Send/.test(b.textContent)).length;
-                    const confirmForms = result.querySelectorAll('form[hx-post="/action/confirm"]').length;
-                    return [result.textContent.trim(), result.getAttribute('role') || '', sendButtons, confirmForms];
-                })()"#,
-                None,
-            )
-            .await
-            .unwrap();
-        assert_eq!(
-            role, "status",
-            "the text-check result must live in a polite live region so it is announced"
-        );
-        assert!(
-            text.contains("Checked entry #2"),
-            "the result should name the entry it checked, got {text:?}"
-        );
-        assert_eq!(
-            send_buttons, 0,
-            "a log-entry check must not offer to send a turn, got {send_buttons} Send button(s)"
-        );
-        assert_eq!(
-            confirm_forms, 0,
-            "a log-entry check must not contain a confirm form"
-        );
-
-        page.locator(".check-result-dismiss")
-            .await
-            .click(None)
-            .await
-            .unwrap();
-        assert!(
-            wait_for_condition_async(
-                Duration::from_secs(3),
-                Duration::from_millis(50),
-                || async {
-                    page.evaluate::<(), bool>(
-                        "(() => document.getElementById('text-check-result').innerHTML.trim() === '')()",
-                        None,
-                    )
-                    .await
-                    .unwrap_or(false)
-                },
-            )
-            .await,
-            "dismissing the result should empty its element"
-        );
-    })
-    .await;
-}
-
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.13
 #[tokio::test]
 async fn test_preview_opens_beside_status_display() {
@@ -433,66 +344,6 @@ async fn test_preview_opens_beside_status_display() {
                 "the status display should still show the in-flight phase, got {status_text:?}"
             );
         }
-    })
-    .await;
-}
-
-// [docs/specs/browser_dashboard.md] SCENARIO: 16.14
-#[tokio::test]
-async fn test_clean_log_entry_check_can_be_dismissed() {
-    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // Drive checkText directly: the stub keys the clean outcome on the text.
-        page.evaluate::<(), ()>(
-            "(() => { window.checkText('look at the castle', '2'); })()",
-            None,
-        )
-        .await
-        .unwrap();
-
-        wait_until_visible(
-            &page,
-            "#text-check-result:not(:empty)",
-            Duration::from_secs(5),
-        )
-        .await;
-
-        let text = page
-            .evaluate::<(), String>(
-                "(() => document.getElementById('text-check-result').textContent.trim())()",
-                None,
-            )
-            .await
-            .unwrap();
-        assert!(
-            text.contains("Checked entry #2"),
-            "a clean result should still name the entry it checked, got {text:?}"
-        );
-        assert!(
-            text.contains("No issues found"),
-            "a clean result should report no issues, got {text:?}"
-        );
-
-        page.locator(".check-result-dismiss")
-            .await
-            .click(None)
-            .await
-            .unwrap();
-        assert!(
-            wait_for_condition_async(
-                Duration::from_secs(3),
-                Duration::from_millis(50),
-                || async {
-                    page.evaluate::<(), bool>(
-                        "(() => document.getElementById('text-check-result').innerHTML.trim() === '')()",
-                        None,
-                    )
-                    .await
-                    .unwrap_or(false)
-                },
-            )
-            .await,
-            "dismissing a clean result should empty its element"
-        );
     })
     .await;
 }

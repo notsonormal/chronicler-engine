@@ -11,7 +11,6 @@ use tower::util::ServiceExt;
 use chronicler_engine::TestAppBuilder;
 
 use chronicler_engine::domain::model::message::{Message, Swipe};
-use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
@@ -621,41 +620,6 @@ async fn test_create_game_with_invalid_world_key() {
 }
 
 #[tokio::test]
-async fn test_check_text_handler_disabled() {
-    let app = TestAppBuilder::default_test()
-        .settings(AppSettings {
-            text_check: TextCheckSettings {
-                mode: TextCheckMode::Disabled,
-                enable_auto_check: true,
-                ignored_words: vec![],
-            },
-            ..Default::default()
-        })
-        .build();
-
-    let req = Request::builder()
-        .uri("/check-text")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=look"))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("disabled"),
-        "Expected disabled message: {body_str}"
-    );
-}
-
-#[tokio::test]
 async fn test_switch_swipe_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
     let app = TestAppBuilder::default_test()
@@ -724,72 +688,6 @@ async fn test_reset_handler_success() {
         hx_refresh,
         Some(&axum::http::HeaderValue::from_static("true")),
         "Reset should trigger HX-Refresh"
-    );
-}
-
-#[tokio::test]
-async fn test_check_text_handler_empty() {
-    let app = TestAppBuilder::default_test()
-        .settings(AppSettings {
-            text_check: TextCheckSettings {
-                mode: TextCheckMode::Spell,
-                enable_auto_check: true,
-                ignored_words: vec![],
-            },
-            ..Default::default()
-        })
-        .build();
-
-    let req = Request::builder()
-        .uri("/check-text")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command="))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "Empty command should return bad request"
-    );
-}
-
-#[tokio::test]
-async fn test_check_text_handler_no_issues() {
-    let app = TestAppBuilder::default_test()
-        .settings(AppSettings {
-            text_check: TextCheckSettings {
-                mode: TextCheckMode::Spell,
-                enable_auto_check: true,
-                ignored_words: vec![],
-            },
-            ..Default::default()
-        })
-        .build();
-
-    let req = Request::builder()
-        .uri("/check-text")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=go+to+the+castle"))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("No issues found"),
-        "Expected no-issues response: {body_str}"
     );
 }
 

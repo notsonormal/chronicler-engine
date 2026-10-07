@@ -2,35 +2,53 @@
 
 Endpoints: 
  - `GET /fragment/settings`
+ - `GET /fragment/connections/new`
+ - `GET /fragment/connections/{id}/edit`
  - `POST /settings/text-check`
  - `POST /connections/add`
  - `POST /connections/{id}/edit`
- - `POST /connections/:id/set-narrator`
+ - `POST /connections/{id}/delete`
+ - `POST /connections/set-narrator`
+ - `POST /connections/set-quantifier`
  - `GET /debug/backend`
 
 ## Scenarios
 
 ### Settings panel
 
-#### Scenario 20.1: Settings panel renders the full surface
+The panel splits into two client-side sub-tabs: **Connections** (default) and
+**Text Check**. The panel loads once, so the selected sub-tab stays until a
+page reload.
+
+#### Scenario 20.1: Settings panel renders the Connections and Text Check sub-tabs
 
 ```gherkin
 Given a fresh app state with the default connections
 When the client GET /fragment/settings
 Then the response is 200
-And the response body contains "<div class=\"settings-panel\">"
-And the body contains a "Connections" heading
-And the body contains one connection-card per connection (name, provider, model)
-And the body contains an "Add Connection" heading
-And the body contains a conn_name input
-And the body contains a conn_provider select (with OpenRouter, DeepSeek, Ollama options)
-And the body contains a conn_model input
-And the body contains a conn_api_key input
-And the body contains a conn_base_url input
-And the body contains a single_user_message checkbox labelled "Single User Message"
-And the body contains a "Text Check" heading
-And the body contains a check_mode select
-And the body contains an enable_auto_check checkbox
+And the body contains a settings panel with a Connections sub-tab and a Text Check sub-tab
+And the Connections sub-tab is the selected one
+And the Connections panel holds a role row for Narrator and a role row for Quantifier, each with a connection select
+And the Connections panel holds one connection row per connection with its name, provider and model, role tags, Edit and Delete
+And the Connections panel offers an Add Connection control
+And the Text Check panel holds the check_mode select and the enable_auto_check checkbox
+And the body contains no "Set as Narrator" or "Set as Quantifier" control
+And the body contains no always-open Add Connection form
+```
+
+#### Scenario 20.16: The role rows report each role's health
+
+```gherkin
+Given a fresh app state with no recorded LLM calls
+When the client GET /fragment/settings
+Then each role row reports "No calls yet"
+When a role's newest recorded call failed
+And the client GET /fragment/settings
+Then that role row reports it as Degraded with a Details disclosure carrying the raw failure text
+And the Connections sub-tab shows a degraded marker
+When a later call for that role succeeds
+And the client GET /fragment/settings
+Then that role row reports Healthy and the degraded marker is gone
 ```
 
 ### POST /settings/text-check — auto-save
@@ -58,16 +76,43 @@ And the stored check-before-sending is disabled
 And a following GET /fragment/settings renders "disabled" selected and the check box cleared and disabled
 ```
 
-### Backend resolution
+### Role rows
 
-#### Scenario 20.8: Switching the narrator takes effect on the next request
+#### Scenario 20.8: Setting the Narrator from its role row takes effect on the next request
 
 ```gherkin
-Given an app state whose narrator connection is the mock connection with model mock-model-a
+Given an app state whose Narrator role uses the mock connection with model mock-model-a
 And a second mock connection with model mock-model-b
-When the client POST /connections/mock-b/set-narrator
-Then the response is 200
+When the client sets the Narrator role to the second connection
+Then the response is 200 and its Narrator role row renders the second connection selected
 And a following GET /debug/backend reports mock-model-b (settings resolve per request, so the switch needs no restart)
+```
+
+#### Scenario 20.14: Setting the Quantifier from its role row takes effect at once
+
+```gherkin
+Given an app state whose Quantifier role uses the mock connection with model mock-model-a
+And a second mock connection with model mock-model-b
+When the client sets the Quantifier role to the second connection
+Then the response is 200 and its Quantifier role row renders the second connection selected
+And the Quantifier role now uses the second connection
+```
+
+### POST /connections/{id}/delete — delete
+
+#### Scenario 20.15: Deleting a connection a role uses is refused
+
+```gherkin
+Given an app state whose Narrator role uses a connection and whose Quantifier role uses another
+And a third connection that no role uses
+When the client deletes the Narrator's connection
+Then the response is 200
+And the body names Narrator and points at the role rows above
+And the connection list still holds the Narrator's connection
+When the client deletes the Quantifier's connection
+Then the body names Quantifier
+When the client deletes the connection no role uses
+Then the connection list no longer holds it
 ```
 
 ### POST /connections/add — create
@@ -99,5 +144,5 @@ And the body says a connection with that name already exists
 Given a fresh app state with a Connection named "Alpha"
 When the client edits that Connection with the same name "Alpha" and a changed model
 Then the response is 200
-And the body contains a Connection card named "Alpha" and the changed model
+And the body contains a Connection row named "Alpha" and the changed model
 ```

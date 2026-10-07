@@ -83,7 +83,7 @@ State transitions happen on three events: form submission (immediately sets Thin
 
 ## Polling Cadences
 
-Six endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: header 5s (which also refreshes the failure banner), story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation only — they do not poll while inactive.
+Six endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: header 5s (which also refreshes the failure banner), story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch once, when the dashboard loads. They do not poll.
 
 The story log's poll merges the fragment into the existing DOM (`morph:innerHTML`, the vendored idiomorph extension) instead of replacing it, so an idle poll touches no nodes and a text selection, focus, or scroll position inside the log survives. Each `.log-entry` carries a stable `id` for the morph to match on. The other polled containers keep their `innerHTML` swap.
 
@@ -97,7 +97,6 @@ Because the polled containers are re-rendered wholesale each cycle, a live regio
 | `#status-error-announcer` | a generation error's short line, never the raw text behind its disclosure | `role="alert"` (assertive) |
 | `#narration-announcer` | the text of a story-log entry the poll has not shown before | `role="status"` (polite) |
 | `#options-announcer` | a changed option set | `role="status"` (polite) |
-| `#text-check-result` | a read-only text-check result, in place | `role="status"` (polite) |
 
 The client tracks the entry ids the story log has already shown, so only a newly appended narration is announced; an unchanged poll announces nothing. `#restore-notice` (the swipe-restore confirmation) and the failure banner own their own announcements.
 

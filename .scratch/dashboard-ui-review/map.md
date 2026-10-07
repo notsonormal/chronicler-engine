@@ -125,11 +125,11 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 47 [Announce dynamic state changes to assistive technology](issues/47-announce-state-changes-to-at.md): resolved — hidden live regions written only on change (polite phases/options/narration, assertive generation error), with the story-log announcement scoped to the changed entry; tier 2 16.23/16.24.
 
+15 [Settings panel: roles, buttons and text-check controls](issues/15-settings-panel-prototype.md): resolved — Settings splits into Connections and Text Check sub-tabs; Narrator and Quantifier get a connection select plus health at the top of Connections (the Set-as buttons and any Options/Trigger rows are out); Add/Edit open one form page; Delete is refused while a role uses the connection; a connection test writes no `llm_messages` row; the story-log ✓ and `POST /check-text` are removed. Graduated [68](issues/68-split-settings-sub-tabs.md), [69](issues/69-add-connection-test.md) and [70](issues/70-remove-story-log-check.md).
+
 ## Not yet specified
 
 - **Other snapshot-restore paths.** [Reset the generation status and the options dock when a swipe switch restores a snapshot](issues/43-reset-status-and-dock-on-swipe-switch.md) landed the swipe case only, where the snapshot was written mid-generation; its normalisation does not touch the other restore paths. Retrigger and history revert restore snapshots by different paths and may show the same stuck status. Unverified; [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md) drove the failure path only and did not surface it.
-- **Implementation of the other decision tickets:**
-  - Settings panel (15)
 - **Structured editing of Map and Scenarios JSON.** [Decide the panel layout convention and supported viewports](issues/19-decide-layout-convention.md) pushed finding 4.8 (raw JSON in plain textareas) here. It is a separate question and can wait for a later pass.
 - **Browser suite cost.** Each stub-tier test launches its own Chromium, and Theme 1/Theme 2 fixes will add several. Check the cost at the final re-review. Decide then whether it needs action.
 - **A validator check for spec prose.** `scripts/validate_feature_spec.py` never reads Givens or Thens. One cheap check might flag dotted identifiers in backticks, such as `narrative.last_trigger`. Its false-hit rate is unknown. It takes shape with [Rewrite the test strategy around one checkable tier-1 rule](issues/32-rewrite-test-strategy.md).

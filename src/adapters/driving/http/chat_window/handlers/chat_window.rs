@@ -1,20 +1,15 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Chat window HTTP request handlers.
 
-use askama::Template;
 use axum::{
     body::Body,
-    extract::{Form, Path, State},
+    extract::{Path, State},
     response::{Html, Response},
 };
-use serde::Deserialize;
 
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::templates::TextCheckResultTemplate;
-use crate::adapters::driving::http::view_models::PreviewIssueView;
-use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok, ok_refresh};
+use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
 use crate::application::errors::{ApplicationError, ProcessActionResult};
-use crate::domain::model::settings::TextCheckMode;
 
 pub async fn index_handler() -> Html<String> {
     Html(include_str!("../../../../../../assets/index.html").to_string())
@@ -70,64 +65,4 @@ pub async fn switch_swipe_handler(
         .switch_swipe(is_generating, message_id, swipe_index)?;
     let html = state.render_story_log()?;
     Ok(ok(html))
-}
-
-#[derive(Deserialize)]
-pub struct CheckTextForm {
-    pub command: String,
-    #[serde(default)]
-    pub entry_id: Option<String>,
-}
-
-fn render_check_result(
-    entry_id: Option<String>,
-    corrected: String,
-    issues: Vec<PreviewIssueView>,
-) -> axum::response::Response<Body> {
-    let template = TextCheckResultTemplate {
-        entry_id,
-        corrected,
-        issues,
-    };
-    match template.render() {
-        Ok(html) => ok(html),
-        Err(e) => internal_error(format!("Template error: {e}")),
-    }
-}
-
-#[allow(clippy::expect_used)]
-pub async fn check_text_handler(
-    State(state): State<AppState>,
-    Form(form): Form<CheckTextForm>,
-) -> axum::response::Response<Body> {
-    let text = form.command.trim().to_string();
-    if text.is_empty() {
-        return bad_request("<span class=\"status error\">Enter text to check</span>");
-    }
-
-    let settings = match state.settings() {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::error!("Failed to read settings for text check: {e}");
-            return bad_request("<span class=\"status error\">Settings unavailable</span>");
-        }
-    };
-
-    if settings.text_check.mode == TextCheckMode::Disabled {
-        return ok("<span class=\"status ready\">Text check is disabled</span>");
-    }
-
-    match state.text_check_service().check_player_input(
-        &text,
-        settings.text_check.mode,
-        &settings.text_check.ignored_words,
-    ) {
-        Ok(Some(result)) => render_check_result(
-            form.entry_id,
-            result.corrected.clone(),
-            PreviewIssueView::from_check_result(&result),
-        ),
-        Ok(None) => render_check_result(form.entry_id, String::new(), vec![]),
-        Err(e) => internal_error(format!("Check failed: {e}")),
-    }
 }

@@ -53,11 +53,6 @@
         ></div>
       </div>
 
-      <!-- Static shell: the command form and status display survive every
-           submit; the send preview and check result render in their own
-           elements. -->
-      <!-- Options dock: sibling bar above the action area (V4 shape); its
-           inner content self-polls and is empty until options exist. -->
       <div
         id="options-dock"
         hx-get="/fragment/options-dock"
@@ -102,12 +97,6 @@
         >
           <span class="status ready">Ready</span>
         </div>
-        <div
-          id="text-check-result"
-          class="text-check-result"
-          role="status"
-          aria-live="polite"
-        ></div>
       </div>
       <div
         id="restore-notice"
@@ -115,9 +104,7 @@
         role="status"
         aria-live="polite"
       ></div>
-      <!-- Hidden live regions for the polled surfaces. Those containers are
-           re-rendered wholesale each cycle, so a live region on them would
-           re-announce unchanged content; these carry only what changed. -->
+      <!-- aria-live on the polled containers would re-announce unchanged content each cycle; these hidden regions carry only what changed. -->
       <div
         id="narration-announcer"
         class="visually-hidden"
@@ -185,8 +172,7 @@
     <script>
       console.log("[HTMX] Initializing...");
 
-      // Action-area state machine. The DOM holds every state except an
-      // in-flight check request, so re-derive it after each swap or poll.
+      // The DOM holds every action-area state except an in-flight check, so re-derive after each swap or poll.
       let checkInFlight = false;
 
       function statusIsGenerating() {
@@ -206,7 +192,6 @@
         return "idle";
       }
 
-      // The disabled button shows a generating indicator; it cannot cancel a turn.
       function applyActionState(state) {
         const btn = document.getElementById("submit-btn");
         const input = document.querySelector('#command-form input[name="command"]');
@@ -234,8 +219,7 @@
         if (input) input.focus();
       }
 
-      // Re-derive after a swap or poll. Focus follows the preview surface, so
-      // it lands in the correction textarea even while a turn runs behind it.
+      // Focus follows the preview surface; it lands in the correction textarea even while a turn runs behind it.
       let previewWasOpen = false;
 
       function syncActionState() {
@@ -249,7 +233,6 @@
         previewWasOpen = open;
       }
 
-      // One writer for the status span: its label and class always travel together.
       function setStatus(label, statusClass) {
         const statusDisplay = document.getElementById("status-display");
         if (statusDisplay) {
@@ -258,8 +241,7 @@
         }
       }
 
-      // The last error text the status display reported, so a poll that keeps
-      // returning the same error toasts once, not every cycle.
+      // Dedupe status errors: a poll returning the same error toasts once, not every cycle.
       let lastStatusError = null;
 
       function writeLiveRegion(id, text) {
@@ -421,7 +403,6 @@
         );
       }
 
-      // htmx:beforeSwap can cancel the swap; show the toast and let it proceed.
       document.body.addEventListener("htmx:beforeSwap", function (evt) {
         if (evt.detail.isError) {
           const response = evt.detail.serverResponse || "";
@@ -506,9 +487,7 @@
         return body.replace(/<[^>]*>/g, "").trim();
       }
 
-      // A polled container carries `every` in `hx-trigger`. Only a poll's
-      // failure implies unreachability: a server that answered is reachable,
-      // so a failed action reports on its own surface instead.
+      // Only a poll's failure implies unreachability: a server that answered is reachable, so a failed action reports on its own surface.
       function isPollRequest(elt) {
         if (!elt || !elt.getAttribute) return false;
         const trigger = elt.getAttribute("hx-trigger") || "";
@@ -544,9 +523,8 @@
 
       document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);
 
-      // The disclosure a swap may replace while it is open. The swap replaces
-      // the node, which would collapse it and drop focus, so this record reopens
-      // it after a swap that keeps the disclosure in the DOM.
+      // A swap replaces the open disclosure node (collapsing it and dropping
+      // focus); this record reopens it when the new DOM still has it.
       let openErrorDetails = null;
 
       function closeErrorPopover(popover) {
@@ -650,12 +628,10 @@
         }
       });
 
-      // Focus policy across in-place swaps. A control that survives the swap in
-      // equivalent form carries a stable id, so htmx restores focus to it (the
-      // posture selects, the LLM row header, the log entry's edit button). A
-      // control replaced by a *different* control (Edit to form, Cancel to
-      // list) cannot use an id, so this manager moves focus to the first usable
-      // control in the swapped region.
+      // htmx restores focus to a stable id that survives the swap (posture
+      // selects, LLM row header, edit button). A control replaced by a different
+      // one (Edit to form, Cancel to list) has no stable id, so this moves focus
+      // to the first usable control in the swapped region.
       const FOCUS_SWAP_TARGETS = ".worlds-panel, .prompt-presets-panel, .preset-card";
       const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";
       let focusedBeforeSwap = null;
@@ -679,8 +655,6 @@
         }
       });
 
-      // One bundle for the edit in progress: the entry id and the pre-edit HTML
-      // each revert restores. Null means no edit is active.
       let editState = null;
       let originalTrigger = null;
 
@@ -759,8 +733,6 @@
             }
           });
 
-          // Lock the entry while editing: the action cluster becomes
-          // save/cancel, and the swipe controls stay put but stop responding.
           const actionsContainer = entry.querySelector(".message-actions");
           if (actionsContainer) {
             editState.actions = actionsContainer.innerHTML;
@@ -954,16 +926,12 @@
         syncActionState();
       }
 
-      // Closing the preview lets the already-swapped status display and the
-      // reconciler drive the rest.
       function closeActionPreview() {
         const preview = document.getElementById("action-preview");
         if (preview) preview.innerHTML = "";
         syncActionState();
       }
 
-      // An option is a pre-written player input: Use submits it through
-      // /action/check, Edit copies it into the input for editing.
       function useOption(btn) {
         const input = commandInput();
         // A generation in flight owns the input: a stale option left over from
@@ -980,57 +948,6 @@
         const optionBtn = btn.closest(".option-item").querySelector(".option-btn");
         input.value = optionBtn.textContent;
         input.focus();
-      }
-
-      function checkCurrentInput() {
-        const input = document.querySelector(
-          '#command-form input[name="command"]',
-        );
-        if (!input || !input.value.trim()) return;
-        checkText(input.value.trim(), null);
-      }
-
-      function htmlUnescape(str) {
-        const textarea = document.createElement("textarea");
-        textarea.innerHTML = str;
-        return textarea.value;
-      }
-
-      function checkText(text, entryId) {
-        const formData = new URLSearchParams();
-        formData.append("command", text);
-        if (entryId !== undefined && entryId !== null && entryId !== "") {
-          formData.append("entry_id", String(entryId));
-        }
-
-        fetch("/check-text", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: formData,
-        })
-          .then((response) => response.text())
-          .then((html) => {
-            const result = document.getElementById("text-check-result");
-            if (result) {
-              result.innerHTML = html;
-              htmx.process(result);
-            }
-          })
-          .catch((err) => {
-            console.error("Text check failed:", err);
-            clearTextCheckResult();
-          });
-      }
-
-      function checkLogText(rawText, entryId) {
-        checkText(htmlUnescape(rawText), entryId);
-      }
-
-      function clearTextCheckResult() {
-        const result = document.getElementById("text-check-result");
-        if (result) {
-          result.innerHTML = "";
-        }
       }
 
       const SLASH_COMMANDS = [
@@ -1109,8 +1026,6 @@
         syncSlashActiveDescendant(input);
       }
 
-      // The combobox points at the active option; the option keeps its visual
-      // highlight class and mirrors it into `aria-selected`.
       function syncSlashActiveDescendant(input) {
         if (slashActiveIndex >= 0 && slashMenu) {
           input.setAttribute("aria-activedescendant", "slash-option-" + slashActiveIndex);
@@ -1207,8 +1122,6 @@
         }
       });
 
-      // Close on form submit, so the suggestion menu does not outlive the
-      // command.
       document.addEventListener("submit", closeSlashMenu, true);
 
       // Close on scroll/resize — the fixed position is stale once the
@@ -1235,6 +1148,27 @@
               .getElementById(btn.dataset.tab + "-tab")
               .classList.add("active");
           });
+        });
+
+        // The Settings panel is swapped as a whole, so its sub-tab buttons are
+        // delegated rather than bound per button.
+        document.addEventListener("click", (event) => {
+          const subtab = event.target.closest(".settings-subtab");
+          if (!subtab) return;
+          const panel = subtab.closest(".settings-panel");
+          if (!panel) return;
+          panel.querySelectorAll(".settings-subtab").forEach((b) => {
+            const selected = b === subtab;
+            b.classList.toggle("active", selected);
+            b.setAttribute("aria-selected", selected ? "true" : "false");
+          });
+          panel
+            .querySelectorAll(".settings-subtab-panel")
+            .forEach((p) => p.classList.remove("active"));
+          const target = panel.querySelector(
+            "#" + subtab.getAttribute("aria-controls"),
+          );
+          if (target) target.classList.add("active");
         });
 
         // Expansion state lives in JS: htmx polls re-render the panel.

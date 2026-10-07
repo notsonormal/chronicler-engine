@@ -21,10 +21,14 @@ use axum::Router;
 use chrono::{TimeZone, Utc};
 
 use chronicler_engine::adapters::driving::http::builders::headers::add_status_swap_headers;
+use chronicler_engine::adapters::driving::http::settings::templates::{
+    ConnectionFormTemplate, SettingsTemplate,
+};
 use chronicler_engine::adapters::driving::http::utils::error::{
     error_disclosure, generation_error_summary, raw_error_detail, render_error,
 };
 use chronicler_engine::domain::model::llm_message::LlmMessage;
+use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
 use chronicler_engine::domain::model::state::message_types::{MessageEntry, MessageType};
 
 use super::server::{get_config_port, release_port_lock};
@@ -35,7 +39,6 @@ use super::CONFIG_PATH;
 const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
-const FIXTURE_SETTINGS: &str = include_str!("stub_fixtures/settings.html");
 const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.html");
 const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
@@ -64,10 +67,8 @@ fn header_html(degraded: bool) -> String {
     format!("{header}<div id=\"failure-banner-degraded\" hx-swap-oob=\"true\">{banner}</div>")
 }
 
-/// The canned narration the story-log stub serves.
 const NARRATIVE_TEXT: &str = "Welcome to the Test World, Test Player! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine.\n\nThe tavern around you is warm and inviting. Wooden beams stretch across the ceiling, and a crackling fire in the hearth casts dancing shadows on the walls. The smell of fresh bread and mulled cider fills the air.\n\nBehind the bar, the bartender wipes down a mug and glances your way. \"First time in the Test Realm?\" he asks with a knowing smile. \"Don't worry, everyone here is friendly. Mostly.\"\n\nA merchant in the corner adjusts her pack and catches your eye. \"If you're heading north to the village square, mind the cobblestones. They get slippery after dark,\" she advises.\n\nYou take a moment to gather your bearings. The road ahead promises adventure, but for now, the warmth of the tavern offers a brief respite.";
 
-/// Render the story log through the shipped `NarrativeLogTemplate`.
 fn story_log_html(entries: &[MessageEntry]) -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::NarrativeLogTemplate;
@@ -77,9 +78,8 @@ fn story_log_html(entries: &[MessageEntry]) -> String {
         .expect("render story log")
 }
 
-/// The canned entry pair every stub test starts from: the player input first,
-/// then the narration last so the template renders its swipe controls and the
-/// retrigger control the stub tests drive.
+/// Player input first, narration last: the template renders swipe/retrigger
+/// controls only on the trailing narration.
 fn default_story_log_entries() -> Vec<MessageEntry> {
     vec![
         MessageEntry {
@@ -100,7 +100,6 @@ fn default_story_log_entries() -> Vec<MessageEntry> {
     ]
 }
 
-/// Render the LLM Messages panel through the shipped `LlmMessagesTemplate`.
 fn llm_messages_html() -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::LlmMessagesTemplate;
@@ -123,7 +122,24 @@ fn llm_messages_html() -> String {
         .expect("render LLM messages")
 }
 
-/// Canned options the rendered dock offers.
+/// Served through the shipped `SettingsTemplate` so a sub-tab or role-row hook
+/// change reaches the fragment.
+fn settings_html() -> String {
+    use askama::Template;
+
+    SettingsTemplate::from_settings(&AppSettings::default(), &[], None)
+        .render()
+        .expect("render settings")
+}
+
+fn connection_form_html(connection: Option<&LlmProviderConfig>) -> String {
+    use askama::Template;
+
+    ConnectionFormTemplate::new(connection)
+        .render()
+        .expect("render connection form")
+}
+
 const CANNED_OPTIONS: [&str; 3] = [
     "Ask the bartender about the Test Realm",
     "Examine the merchant's pack",
@@ -132,8 +148,6 @@ const CANNED_OPTIONS: [&str; 3] = [
 
 const CANNED_OPTIONS_ALT: [&str; 2] = ["Search the cellar", "Call for the innkeeper"];
 
-/// Render the options dock through the shipped template — a pure `vm → HTML`
-/// render needing no `AppState`. Askama escapes the texts.
 fn options_dock_html(alternate: bool) -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::OptionsDockTemplate;
@@ -156,7 +170,6 @@ fn options_dock_html(alternate: bool) -> String {
 /// drive the preview → confirm swap without a real text-check engine.
 const TEXT_CHECK_TRIGGER: &str = "casle";
 
-/// Render the text-check preview through the shipped `TextCheckPreviewTemplate`.
 fn text_check_preview_html() -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::TextCheckPreviewTemplate;
@@ -283,33 +296,28 @@ impl StubServer {
         }
     }
 
-    /// Base URL, e.g. `http://127.0.0.1:3011`.
     pub fn url(&self) -> String {
         format!("http://{}", self.addr)
     }
 
-    /// A cloneable handle to the scripted status.
     pub fn status_handle(&self) -> StubStatusHandle {
         StubStatusHandle {
             state: Arc::clone(&self.state),
         }
     }
 
-    /// A cloneable handle to the retrigger request count.
     pub fn retrigger_handle(&self) -> StubRetriggerHandle {
         StubRetriggerHandle {
             state: Arc::clone(&self.state),
         }
     }
 
-    /// A cloneable handle to the `/action/check` request count.
     pub fn action_handle(&self) -> StubActionHandle {
         StubActionHandle {
             state: Arc::clone(&self.state),
         }
     }
 
-    /// The handle a swipe-switch test scripts the story log and dock with.
     pub fn swipe_handle(&self) -> StubSwipeHandle {
         StubSwipeHandle {
             state: Arc::clone(&self.state),
@@ -407,7 +415,6 @@ impl StubFailureHandle {
     }
 }
 
-/// A cloneable handle to the scripted swipe-switch story log and dock.
 #[derive(Clone)]
 pub struct StubSwipeHandle {
     state: Arc<StubState>,
@@ -423,7 +430,6 @@ impl StubSwipeHandle {
     }
 }
 
-/// A cloneable handle to the scripted status.
 #[derive(Clone)]
 pub struct StubStatusHandle {
     state: Arc<StubState>,
@@ -437,20 +443,17 @@ impl StubStatusHandle {
     }
 }
 
-/// A cloneable handle to the retrigger request count.
 #[derive(Clone)]
 pub struct StubRetriggerHandle {
     state: Arc<StubState>,
 }
 
-/// A cloneable handle to the `/action/check` request count.
 #[derive(Clone)]
 pub struct StubActionHandle {
     state: Arc<StubState>,
 }
 
 impl StubActionHandle {
-    /// How many `POST /action/check` requests the stub has answered.
     pub fn count(&self) -> usize {
         self.state
             .action_requests
@@ -459,7 +462,6 @@ impl StubActionHandle {
 }
 
 impl StubRetriggerHandle {
-    /// How many `POST /retrigger` requests the stub has answered.
     pub fn count(&self) -> usize {
         self.state
             .retrigger_requests
@@ -486,7 +488,6 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/", get(index))
         .route("/action/check", post(action_check))
         .route("/action/confirm", post(action_confirm))
-        .route("/check-text", post(check_text))
         .route("/games/:id/posture", post(failing_posture_save))
         .route("/history/:id", post(save_message))
         .route(
@@ -511,7 +512,18 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route(
             "/fragment/settings",
-            get(|| async { Html(FIXTURE_SETTINGS) }),
+            get(|| async { Html(settings_html()) }),
+        )
+        .route(
+            "/fragment/connections/new",
+            get(|| async { Html(connection_form_html(None)) }),
+        )
+        .route(
+            "/fragment/connections/:id/edit",
+            get(|| async {
+                let settings = AppSettings::default();
+                Html(connection_form_html(Some(&settings.connections[0])))
+            }),
         )
         .route(
             "/fragment/prompt-presets",
@@ -611,7 +623,6 @@ async fn header_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     Html(header_html(state.header_degraded.load(SeqCst)))
 }
 
-/// A scripted Message with two Swipes at `active_swipe_index`.
 fn swipe_script_entries(text: &str, active_swipe_index: usize) -> Vec<MessageEntry> {
     vec![MessageEntry {
         id: 1,
@@ -630,7 +641,6 @@ fn two_swipe_entries() -> Vec<MessageEntry> {
     swipe_script_entries("A tavern by night.", 1)
 }
 
-/// The settled shape a switch restores: the same Message on its first Swipe.
 fn restored_swipe_entries() -> Vec<MessageEntry> {
     swipe_script_entries("A road at dawn.", 0)
 }
@@ -751,49 +761,6 @@ async fn failing_posture_save() -> Response<Body> {
         StatusCode::INTERNAL_SERVER_ERROR,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
         render_error("Failed to save posture"),
-    )
-        .into_response()
-}
-
-/// Render the read-only check result through the engine's own template, so the
-/// canned result cannot drift from the shipped `TextCheckResultTemplate`.
-fn text_check_result_html(entry_id: Option<String>, has_issues: bool) -> String {
-    use askama::Template;
-    use chronicler_engine::adapters::driving::http::templates::TextCheckResultTemplate;
-    use chronicler_engine::adapters::driving::http::view_models::PreviewIssueView;
-
-    let (corrected, issues) = if has_issues {
-        (
-            "look at the castle".to_string(),
-            vec![PreviewIssueView {
-                message: "\"casle\" is a misspelling of \"castle\"".to_string(),
-                kind: "spell".to_string(),
-            }],
-        )
-    } else {
-        (String::new(), vec![])
-    };
-    TextCheckResultTemplate {
-        entry_id,
-        corrected,
-        issues,
-    }
-    .render()
-    .expect("render text check result")
-}
-
-/// The real `POST /check-text` renders into the shell's `#text-check-result`
-/// element; the stub keys the outcome on the canned misspelling.
-async fn check_text(Form(form): Form<HashMap<String, String>>) -> Response<Body> {
-    let command = form.get("command").map(String::as_str).unwrap_or_default();
-    let html = text_check_result_html(
-        form.get("entry_id").cloned(),
-        command.contains(TEXT_CHECK_TRIGGER),
-    );
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        html,
     )
         .into_response()
 }

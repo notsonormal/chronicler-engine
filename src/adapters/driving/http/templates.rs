@@ -22,7 +22,7 @@ pub struct HeaderTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" id="entry-{{ entry.id }}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" id="edit-entry-{{ entry.id }}" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% endif %}{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText, this.closest('.log-entry').dataset.id)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last && entry.show_retrigger %}<button class="action-btn retrigger-btn" onclick="submitRetrigger()" title="Retrigger Event">&#9851;</button>{% endif %}</div></div><span class="text">{{ entry.text }}</span>{% if loop.last && (entry.log_type == "narration" || entry.log_type == "input") %}<div class="swipe-controls"><button class="action-btn swipe-btn" {% if entry.prev_swipe_index.is_none() %}disabled{% else %}onclick="switchSwipe({{ entry.id }}, {{ entry.prev_swipe_index.unwrap() }})"{% endif %} title="Previous swipe">&#9664;</button><span class="swipe-counter">{{ entry.active_swipe_index + 1 }} / {{ entry.swipe_count }}</span><button class="action-btn swipe-btn" {% if entry.next_swipe_index.is_some() %}onclick="switchSwipe({{ entry.id }}, {{ entry.next_swipe_index.unwrap() }})"{% else %}onclick="submitNewSwipe()"{% endif %} title="{% if entry.next_swipe_index.is_some() %}Next swipe{% else %}Retry{% endif %}">&#9654;</button></div>{% endif %}</div>{% endfor %}"##,
+    source = r##"{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" id="entry-{{ entry.id }}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" id="edit-entry-{{ entry.id }}" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% endif %}{% if loop.last && entry.show_retrigger %}<button class="action-btn retrigger-btn" onclick="submitRetrigger()" title="Retrigger Event">&#9851;</button>{% endif %}</div></div><span class="text">{{ entry.text }}</span>{% if loop.last && (entry.log_type == "narration" || entry.log_type == "input") %}<div class="swipe-controls"><button class="action-btn swipe-btn" {% if entry.prev_swipe_index.is_none() %}disabled{% else %}onclick="switchSwipe({{ entry.id }}, {{ entry.prev_swipe_index.unwrap() }})"{% endif %} title="Previous swipe">&#9664;</button><span class="swipe-counter">{{ entry.active_swipe_index + 1 }} / {{ entry.swipe_count }}</span><button class="action-btn swipe-btn" {% if entry.next_swipe_index.is_some() %}onclick="switchSwipe({{ entry.id }}, {{ entry.next_swipe_index.unwrap() }})"{% else %}onclick="submitNewSwipe()"{% endif %} title="{% if entry.next_swipe_index.is_some() %}Next swipe{% else %}Retry{% endif %}">&#9654;</button></div>{% endif %}</div>{% endfor %}"##,
     ext = "html"
 )]
 pub struct NarrativeLogTemplate {
@@ -73,7 +73,7 @@ impl CharacterHeadshotsTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"<div class="action-area" id="action-area"><div id="action-preview" class="action-preview"></div><form id="command-form" hx-post="/action/check" hx-target="#action-preview" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="onCommandBeforeRequest()" hx-on::after-request="onCommandAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" /><button type="submit" id="submit-btn" {% if vm.is_disabled %}disabled{% endif %}><span class="btn-icon">{% if vm.is_disabled %}&#8230;{% else %}&#9654;{% endif %}</span> {% if vm.is_disabled %}Generating&#8230;{% else %}Send{% endif %}</button><div class="inline-error-slot" data-error-slot="action" hidden></div></form><div class="{{ vm.status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)">{{ vm.status_html }}</div><div id="text-check-result" class="text-check-result"></div></div>"##,
+    source = r##"<div class="action-area" id="action-area"><div id="action-preview" class="action-preview"></div><form id="command-form" hx-post="/action/check" hx-target="#action-preview" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="onCommandBeforeRequest()" hx-on::after-request="onCommandAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" /><button type="submit" id="submit-btn" {% if vm.is_disabled %}disabled{% endif %}><span class="btn-icon">{% if vm.is_disabled %}&#8230;{% else %}&#9654;{% endif %}</span> {% if vm.is_disabled %}Generating&#8230;{% else %}Send{% endif %}</button><div class="inline-error-slot" data-error-slot="action" hidden></div></form><div class="{{ vm.status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)">{{ vm.status_html }}</div></div>"##,
     ext = "html"
 )]
 pub struct ActionAreaTemplate {
@@ -86,9 +86,7 @@ impl ActionAreaTemplate {
     }
 }
 
-/// The options dock — vertical stack of pickable options above the command
-/// form. Renders the CURRENT set from game state; an empty set renders an
-/// empty body so the polling container in the action area survives.
+/// Renders the CURRENT option set; an empty set renders an empty body so the polling container in the action area survives.
 #[derive(Template)]
 #[template(
     source = r##"{% if !vm.options.is_empty() %}<div class="options-strip"><div class="options-label"><span>options — pick one, or type your own</span><form class="options-regen-form" hx-post="/action/check" hx-target="#status-display" hx-swap="innerHTML" hx-sync="this:drop"><input type="hidden" name="command" value="/options" /><button type="submit" class="mini-btn" title="Regenerate options" hx-on::before-request="updateToThinking()" {% if vm.is_busy %}disabled{% endif %}>&#9851;</button></form></div>{% for option in vm.options %}<div class="option-item"><button type="button" class="option-btn" onclick="useOption(this)" {% if vm.is_busy %}disabled{% endif %}>{{ option }}</button><button type="button" class="mini-btn" onclick="editOption(this)" title="Edit before send" {% if vm.is_busy %}disabled{% endif %}>&#9998;</button></div>{% endfor %}</div>{% endif %}"##,
@@ -150,20 +148,6 @@ impl TextCheckPreviewTemplate {
             issues: PreviewIssueView::from_check_result(result),
         }
     }
-}
-
-/// The read-only result of a text check on a log entry or the command input.
-/// Unlike the send preview it never offers to submit a turn, because checking a
-/// historical entry must not re-send it.
-#[derive(Template)]
-#[template(
-    source = r##"<div class="text-check-result-panel"><div class="check-result-header"><span class="check-result-owner">{% if entry_id.is_some() %}Checked entry #{{ entry_id.as_ref().unwrap() }}{% else %}Checked text{% endif %}</span><button type="button" class="check-result-dismiss" onclick="clearTextCheckResult()" title="Dismiss" aria-label="Dismiss text-check result">&#10005;</button></div>{% if issues.is_empty() %}<p class="check-result-clean">No issues found</p>{% else %}<p class="check-result-note">Suggestions only — nothing is applied automatically.</p><ul class="check-result-issues">{% for issue in issues %}<li class="issue-tag {{ issue.kind }}">{{ issue.message }}</li>{% endfor %}</ul><div class="check-result-corrected"><span class="label">If you edit it</span><span class="value">{{ corrected }}</span></div>{% endif %}</div>"##,
-    ext = "html"
-)]
-pub struct TextCheckResultTemplate {
-    pub entry_id: Option<String>,
-    pub corrected: String,
-    pub issues: Vec<PreviewIssueView>,
 }
 
 #[derive(Template)]

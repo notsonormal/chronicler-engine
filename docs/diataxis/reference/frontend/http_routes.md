@@ -12,7 +12,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | Method | Path | Handler |
 |--------|------|---------|
 | GET | `/` | `index_handler` |
-| POST | `/check-text` | `check_text_handler` |
 | POST | `/swipe/new` | `retry_handler` |
 | POST | `/message/:id/swipe/:index` | `switch_swipe_handler` |
 | POST | `/retrigger` | `retrigger_handler` |
@@ -81,12 +80,12 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 |--------|------|---------|
 | GET | `/fragment/settings` | `settings_panel` |
 | POST | `/connections/add` | `add_connection_handler` |
-| GET | `/fragment/connections/:id` | `connection_card_fragment` |
+| GET | `/fragment/connections/new` | `new_connection_form` |
 | GET | `/fragment/connections/:id/edit` | `edit_connection_form` |
 | POST | `/connections/:id/edit` | `edit_connection_handler` |
 | POST | `/connections/:id/delete` | `delete_connection_handler` |
-| POST | `/connections/:id/set-narrator` | `set_narrator_handler` |
-| POST | `/connections/:id/set-quantifier` | `set_quantifier_handler` |
+| POST | `/connections/set-narrator` | `set_narrator_handler` |
+| POST | `/connections/set-quantifier` | `set_quantifier_handler` |
 | POST | `/settings/text-check` | `save_text_check_handler` |
 
 ## Prompt presets

@@ -113,30 +113,6 @@ fn test_story_log_template_has_message_actions() {
 }
 
 #[test]
-fn test_story_log_template_input_has_check_button() {
-    let entries = vec![
-        MessageEntry {
-            id: 1,
-            text: "look around".to_string(),
-            message_type: MessageType::Input,
-            timestamp: Utc::now(),
-            ..Default::default()
-        },
-        MessageEntry {
-            id: 2,
-            text: "You look around.".to_string(),
-            message_type: MessageType::Narration,
-            timestamp: Utc::now(),
-            ..Default::default()
-        },
-    ];
-    let template = NarrativeLogTemplate::new(&entries, false);
-    let rendered = template.render().unwrap();
-    assert!(rendered.contains("check-btn"));
-    assert!(rendered.contains("delete-btn"));
-}
-
-#[test]
 fn test_story_log_template_edit_path_hooks() {
     let entries = vec![MessageEntry {
         id: 1,
@@ -197,7 +173,6 @@ fn test_story_log_template_renders_event_header() {
     assert!(rendered.contains("event-timestamp"));
     assert!(rendered.contains("edit-btn"));
     assert!(rendered.contains("delete-btn"));
-    assert!(!rendered.contains("check-btn"));
     assert!(!rendered.contains("retry-btn"));
 }
 

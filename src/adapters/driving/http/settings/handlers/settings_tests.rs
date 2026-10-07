@@ -7,9 +7,9 @@ use axum::extract::Path;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
 use crate::adapters::driving::http::settings::handlers::{
-    add_connection_handler, connection_card_fragment, delete_connection_handler,
-    edit_connection_form, edit_connection_handler, save_text_check_handler, set_narrator_handler,
-    set_quantifier_handler, settings_panel, ConnectionForm, TextCheckForm,
+    add_connection_handler, delete_connection_handler, edit_connection_form,
+    edit_connection_handler, new_connection_form, save_text_check_handler, set_narrator_handler,
+    set_quantifier_handler, settings_panel, ConnectionForm, RoleForm, TextCheckForm,
 };
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
@@ -28,6 +28,20 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     let wired = build_app_graph_for_tests(Arc::clone(&storage), None)
         .expect("build_app_graph_for_tests should succeed");
     AppState::from_wired(wired)
+}
+
+fn mock_connection(id: &str, name: &str) -> LlmProviderConfig {
+    LlmProviderConfig {
+        id: id.into(),
+        name: name.into(),
+        provider: LlmBackendType::Mock,
+        model: "mock-model".into(),
+        api_key: None,
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    }
 }
 
 #[tokio::test]
@@ -135,6 +149,45 @@ async fn test_save_text_check_handler_disabled_clears_and_disables_checkbox() {
 }
 
 #[tokio::test]
+async fn test_new_connection_form_returns_the_add_form() {
+    let app_state = make_test_app_state();
+    let response = new_connection_form(axum::extract::State(app_state)).await;
+
+    assert!(response.0.contains(r#"<h2>Add Connection</h2>"#));
+    assert!(response.0.contains(r#"id="conn_name""#));
+    assert!(response.0.contains("&#8249; Connections"));
+}
+
+#[tokio::test]
+async fn test_edit_connection_form_returns_form() {
+    let mut settings = AppSettings::default();
+    settings
+        .connections
+        .push(mock_connection("test-conn", "Test"));
+    let app_state = make_app_state_with_settings(settings);
+
+    let response =
+        edit_connection_form(axum::extract::State(app_state), Path("test-conn".into())).await;
+
+    assert!(response.0.contains(r#"<h2>Edit Test</h2>"#));
+    assert!(
+        response
+            .0
+            .contains(r#"hx-post="/connections/test-conn/edit""#)
+    );
+}
+
+#[tokio::test]
+async fn test_edit_connection_form_not_found() {
+    let app_state = make_test_app_state();
+
+    let response =
+        edit_connection_form(axum::extract::State(app_state), Path("missing".into())).await;
+
+    assert!(response.0.contains("Connection not found"));
+}
+
+#[tokio::test]
 async fn test_add_connection_handler_adds_connection() {
     let app_state = make_test_app_state();
     let form = ConnectionForm {
@@ -202,86 +255,11 @@ async fn test_add_connection_handler_non_empty_base_url_is_some() {
 }
 
 #[tokio::test]
-async fn test_connection_card_fragment_returns_card() {
-    let mut settings = AppSettings::default();
-    let conn = LlmProviderConfig {
-        id: "test-conn".into(),
-        name: "Test".into(),
-        provider: LlmBackendType::OpenRouter,
-        model: "model".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    };
-    settings.connections.push(conn);
-    let app_state = make_app_state_with_settings(settings);
-
-    let response =
-        connection_card_fragment(axum::extract::State(app_state), Path("test-conn".into())).await;
-
-    assert!(response.0.contains("Test"));
-    assert!(response.0.contains("connection-card"));
-}
-
-#[tokio::test]
-async fn test_connection_card_fragment_not_found() {
-    let app_state = make_test_app_state();
-
-    let response =
-        connection_card_fragment(axum::extract::State(app_state), Path("missing".into())).await;
-
-    assert!(response.0.contains("Connection not found"));
-}
-
-#[tokio::test]
-async fn test_edit_connection_form_returns_form() {
-    let mut settings = AppSettings::default();
-    settings.connections.push(LlmProviderConfig {
-        id: "test-conn".into(),
-        name: "Test".into(),
-        provider: LlmBackendType::DeepSeek,
-        model: "deepseek-chat".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
-    let app_state = make_app_state_with_settings(settings);
-
-    let response =
-        edit_connection_form(axum::extract::State(app_state), Path("test-conn".into())).await;
-
-    assert!(response.0.contains("<div class=\"connection-edit-form\">"));
-    assert!(response.0.contains("Edit Test"));
-}
-
-#[tokio::test]
-async fn test_edit_connection_form_not_found() {
-    let app_state = make_test_app_state();
-
-    let response =
-        edit_connection_form(axum::extract::State(app_state), Path("missing".into())).await;
-
-    assert!(response.0.contains("Connection not found"));
-}
-
-#[tokio::test]
 async fn test_edit_connection_handler_updates_connection() {
     let mut settings = AppSettings::default();
-    settings.connections.push(LlmProviderConfig {
-        id: "test-conn".into(),
-        name: "Old Name".into(),
-        provider: LlmBackendType::OpenRouter,
-        model: "old-model".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
+    settings
+        .connections
+        .push(mock_connection("test-conn", "Old Name"));
     let app_state = make_app_state_with_settings(settings);
 
     let form = ConnectionForm {
@@ -302,7 +280,7 @@ async fn test_edit_connection_handler_updates_connection() {
     let body = body_text(response).await;
 
     assert!(body.contains("New Name"));
-    assert!(body.contains("connection-card"));
+    assert!(body.contains(r#"<div class="connection-row">"#));
 }
 
 #[tokio::test]
@@ -330,30 +308,15 @@ async fn test_edit_connection_handler_not_found() {
 
 #[tokio::test]
 async fn test_delete_connection_handler_removes_connection() {
-    let mut settings = AppSettings::default();
-    settings.connections.clear();
-    settings.connections.push(LlmProviderConfig {
-        id: "conn-1".into(),
-        name: "First".into(),
-        provider: LlmBackendType::OpenRouter,
-        model: "model1".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
-    settings.connections.push(LlmProviderConfig {
-        id: "conn-2".into(),
-        name: "Second".into(),
-        provider: LlmBackendType::DeepSeek,
-        model: "model2".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
+    let settings = AppSettings {
+        connections: vec![
+            mock_connection("conn-1", "First"),
+            mock_connection("conn-2", "Second"),
+        ],
+        narration_connection_id: "conn-2".into(),
+        quantifier_connection_id: "conn-2".into(),
+        ..AppSettings::default()
+    };
     let app_state = make_app_state_with_settings(settings);
 
     let response = delete_connection_handler(
@@ -362,7 +325,7 @@ async fn test_delete_connection_handler_removes_connection() {
     )
     .await;
 
-    assert!(response.0.is_empty());
+    assert!(response.0.contains(r#"<div class="settings-panel">"#));
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.connections.len(), 1);
@@ -370,42 +333,69 @@ async fn test_delete_connection_handler_removes_connection() {
 }
 
 #[tokio::test]
-async fn test_delete_connection_handler_redirects_narrator() {
-    let mut settings = AppSettings::default();
-    settings.connections.clear();
-    settings.narration_connection_id = "conn-1".into();
-    settings.connections.push(LlmProviderConfig {
-        id: "conn-1".into(),
-        name: "First".into(),
-        provider: LlmBackendType::OpenRouter,
-        model: "model1".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
-    settings.connections.push(LlmProviderConfig {
-        id: "conn-2".into(),
-        name: "Second".into(),
-        provider: LlmBackendType::DeepSeek,
-        model: "model2".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
+async fn test_delete_connection_handler_refuses_while_a_role_uses_it() {
+    let settings = AppSettings {
+        connections: vec![
+            mock_connection("conn-1", "First"),
+            mock_connection("conn-2", "Second"),
+        ],
+        narration_connection_id: "conn-1".into(),
+        quantifier_connection_id: "conn-2".into(),
+        ..AppSettings::default()
+    };
     let app_state = make_app_state_with_settings(settings);
 
-    let _response = delete_connection_handler(
+    let response = delete_connection_handler(
         axum::extract::State(app_state.clone()),
         Path("conn-1".into()),
     )
     .await;
 
+    assert!(
+        response.0.contains("Narrator uses this connection"),
+        "the refusal must name the role: {}",
+        response.0
+    );
+    assert!(
+        response.0.contains("role above"),
+        "the refusal must point at the role rows: {}",
+        response.0
+    );
+
     let settings = app_state.settings().expect("settings read should succeed");
-    assert_eq!(settings.narration_connection_id, "conn-2");
+    assert_eq!(settings.connections.len(), 2);
+    assert_eq!(settings.narration_connection_id, "conn-1");
+}
+
+#[tokio::test]
+async fn test_delete_connection_handler_refuses_while_quantifier_uses_it() {
+    let settings = AppSettings {
+        connections: vec![
+            mock_connection("conn-1", "First"),
+            mock_connection("conn-2", "Second"),
+        ],
+        narration_connection_id: "conn-1".into(),
+        quantifier_connection_id: "conn-1".into(),
+        ..AppSettings::default()
+    };
+    let app_state = make_app_state_with_settings(settings);
+
+    let response = delete_connection_handler(
+        axum::extract::State(app_state.clone()),
+        Path("conn-1".into()),
+    )
+    .await;
+
+    assert!(
+        response
+            .0
+            .contains("Narrator and Quantifier use this connection"),
+        "the refusal must name both roles: {}",
+        response.0
+    );
+
+    let settings = app_state.settings().expect("settings read should succeed");
+    assert_eq!(settings.connections.len(), 2);
 }
 
 #[tokio::test]
@@ -420,19 +410,12 @@ async fn test_delete_connection_handler_not_found() {
 
 #[tokio::test]
 async fn test_delete_connection_handler_cannot_delete_last() {
-    let mut settings = AppSettings::default();
-    settings.connections.clear();
-    settings.connections.push(LlmProviderConfig {
-        id: "only-conn".into(),
-        name: "Only".into(),
-        provider: LlmBackendType::OpenRouter,
-        model: "model".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
+    let settings = AppSettings {
+        connections: vec![mock_connection("only-conn", "Only")],
+        narration_connection_id: "only-conn".into(),
+        quantifier_connection_id: "only-conn".into(),
+        ..AppSettings::default()
+    };
     let app_state = make_app_state_with_settings(settings);
 
     let response =
@@ -443,24 +426,22 @@ async fn test_delete_connection_handler_cannot_delete_last() {
 
 #[tokio::test]
 async fn test_set_narrator_handler_updates_id() {
-    let mut settings = AppSettings::default();
-    settings.connections.push(LlmProviderConfig {
-        id: "conn-1".into(),
-        name: "Test".into(),
-        provider: LlmBackendType::OpenRouter,
-        model: "model".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
-    settings.narration_connection_id = "old-conn".into();
+    let settings = AppSettings {
+        connections: vec![
+            mock_connection("conn-1", "First"),
+            mock_connection("conn-2", "Second"),
+        ],
+        narration_connection_id: "conn-2".into(),
+        quantifier_connection_id: "conn-2".into(),
+        ..AppSettings::default()
+    };
     let app_state = make_app_state_with_settings(settings);
 
     let response = set_narrator_handler(
         axum::extract::State(app_state.clone()),
-        Path("conn-1".into()),
+        Form(RoleForm {
+            connection_id: "conn-1".into(),
+        }),
     )
     .await;
 
@@ -474,32 +455,35 @@ async fn test_set_narrator_handler_updates_id() {
 async fn test_set_narrator_handler_not_found() {
     let app_state = make_test_app_state();
 
-    let response =
-        set_narrator_handler(axum::extract::State(app_state), Path("missing".into())).await;
+    let response = set_narrator_handler(
+        axum::extract::State(app_state),
+        Form(RoleForm {
+            connection_id: "missing".into(),
+        }),
+    )
+    .await;
 
     assert!(response.0.contains("Connection not found"));
 }
 
 #[tokio::test]
 async fn test_set_quantifier_handler_updates_id() {
-    let mut settings = AppSettings::default();
-    settings.connections.push(LlmProviderConfig {
-        id: "conn-1".into(),
-        name: "Test".into(),
-        provider: LlmBackendType::OpenRouter,
-        model: "model".into(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
-    });
-    settings.quantifier_connection_id = "old-conn".into();
+    let settings = AppSettings {
+        connections: vec![
+            mock_connection("conn-1", "First"),
+            mock_connection("conn-2", "Second"),
+        ],
+        narration_connection_id: "conn-2".into(),
+        quantifier_connection_id: "conn-2".into(),
+        ..AppSettings::default()
+    };
     let app_state = make_app_state_with_settings(settings);
 
     let response = set_quantifier_handler(
         axum::extract::State(app_state.clone()),
-        Path("conn-1".into()),
+        Form(RoleForm {
+            connection_id: "conn-1".into(),
+        }),
     )
     .await;
 
@@ -513,8 +497,13 @@ async fn test_set_quantifier_handler_updates_id() {
 async fn test_set_quantifier_handler_not_found() {
     let app_state = make_test_app_state();
 
-    let response =
-        set_quantifier_handler(axum::extract::State(app_state), Path("missing".into())).await;
+    let response = set_quantifier_handler(
+        axum::extract::State(app_state),
+        Form(RoleForm {
+            connection_id: "missing".into(),
+        }),
+    )
+    .await;
 
     assert!(response.0.contains("Connection not found"));
 }

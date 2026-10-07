@@ -50,7 +50,6 @@ fn unregister_server_logs(port: u16) {
         .remove(&port);
 }
 
-/// Snapshot of every registered server's log buffers.
 pub fn registered_server_logs() -> Vec<(u16, ServerLogBuffers)> {
     server_log_registry()
         .lock()
@@ -70,7 +69,6 @@ pub fn buffer_text(buffer: &Arc<Mutex<Vec<u8>>>) -> String {
     String::from_utf8_lossy(&bytes).to_string()
 }
 
-/// Last `max_lines` lines of `text`, for failure-output tails.
 pub fn tail_lines(text: &str, max_lines: usize) -> String {
     let lines: Vec<&str> = text.lines().collect();
     let start = lines.len().saturating_sub(max_lines);
@@ -124,8 +122,8 @@ fn take_port_pid(port: u16) -> Option<u32> {
     port_pids().lock().ok().and_then(|mut g| g.remove(&port))
 }
 
-/// Shared HTTP probe client. `reqwest::Client` is internally Arc; one instance
-/// per process avoids rebuilding connection pools on every readiness attempt.
+/// reqwest::Client is internally Arc; one per process avoids rebuilding
+/// connection pools on every readiness attempt.
 static HTTP_PROBE: OnceLock<reqwest::Client> = OnceLock::new();
 
 fn http_probe_client() -> &'static reqwest::Client {
@@ -302,7 +300,8 @@ pub async fn inject_mock_connections(port: u16) {
 
     for action in ["set-narrator", "set-quantifier"] {
         let resp = client
-            .post(format!("{base}/connections/{id}/{action}"))
+            .post(format!("{base}/connections/{action}"))
+            .form(&[("connection_id", id.as_str())])
             .send()
             .await
             .unwrap_or_else(|e| panic!("{action} for {id}: {e}"));
@@ -373,7 +372,6 @@ impl TestConfig {
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {e}"))
     }
 
-    /// Get the backend for a specific test file
     pub fn get_backend(&self, test_name: &str) -> String {
         self.test_specific
             .get(test_name)
@@ -393,14 +391,12 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
         for port in min..=max {
             let lock_path = lock_dir.join(format!("port_{port}.lock"));
 
-            // Try to create lock file exclusively (atomic on most filesystems)
             if std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .open(&lock_path)
                 .is_err()
             {
-                // Lock exists, port reserved by another test
                 continue;
             }
 
@@ -412,14 +408,12 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
                     return Ok(port);
                 }
                 Err(_) => {
-                    // Port not actually available, release lock
                     let _ = std::fs::remove_file(&lock_path);
                     continue;
                 }
             }
         }
 
-        // All ports in range were locked — clean stale locks and retry
         if let Ok(entries) = std::fs::read_dir(&lock_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -490,7 +484,6 @@ impl TestServer {
         Self::start(port, world, persona, use_mock).await
     }
 
-    /// Remove any stale SQLite database for this port before starting.
     fn cleanup_stale_db(port: u16, db_path: &std::path::Path) {
         if db_path.exists() {
             let size = std::fs::metadata(db_path).map(|m| m.len()).unwrap_or(0);
