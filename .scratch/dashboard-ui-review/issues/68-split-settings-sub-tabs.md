@@ -1,7 +1,7 @@
 # Split Settings into Connections and Text Check sub-tabs
 
 Type: task (AFK)
-Status: claimed
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -31,3 +31,20 @@ Implement the layout decided in [Settings panel: roles, buttons and text-check c
 ## Done when
 
 - `python build.py` is green, the user has reviewed the diff, and it is committed through `/commit-and-push`.
+
+## Answer
+
+Implemented as ticket 15's design specifies. Both code-review axes found no material spec gap and no hard standards violation; the comment-fixer and document-review passes ran before the commit.
+
+- **Sub-tabs.** `SettingsTemplate` renders a client-side `role="tablist"` with **Connections** (default) and **Text Check**, reusing ticket 46's tablist/tab/tabpanel pattern. No URL or storage state: the panel loads once, so the selection survives a top-level tab change. An orange `subtab-degraded-dot` shows on Connections while either role is Degraded.
+- **Role rows.** Narrator and Quantifier rows at the top of Connections, each with a live connection `<select>` that applies at once, plus the `role_health` state: Healthy, Degraded (short message plus the shared `error_disclosure` popover), or No calls yet. The Set-as buttons are gone.
+- **Routes.** The selects post `connection_id` to two new body-based routes, `POST /connections/set-narrator` and `POST /connections/set-quantifier`. The per-id routes and `GET /fragment/connections/:id` were deleted as caller-less.
+- **Connection list.** One row per connection: name, provider and model, role tags, Edit and Delete, with room left for ticket 69's Test control. Add and Edit share one `ConnectionFormTemplate` page with a `&#8249; Connections` back link; Save and Cancel return to the list. The inline card-swap edit form and the always-open Add form are removed, and `builders/connections.rs` is deleted.
+- **Delete.** Refused while Narrator or Quantifier uses the connection; the message names the role and points to the role rows. The silent `connections[0]` reassignment is gone; the last-connection refusal stays.
+- **Text Check sub-tab.** The coupled `#text-check-card` is unchanged.
+
+Specs/tests: `docs/specs/settings.md` 20.1 and 20.8 rewritten, 20.14–20.16 added; new `docs/specs/browser_settings.md` 40.1/40.2 with tier-2 `tests/browser/stub/settings.rs`. Tier-1 coverage in `tests/http/settings.rs` and `tests/http/requires_migration/connections.rs`; unit tests in `settings_tests.rs`. The hand-copied stub fixture is deleted: the stub renders through the real templates.
+
+`python build.py` green (1 architecture, 165 guardrails, 1556 integration, 63 browser, 0 failed). Committed as `6916556a` together with ticket 70. The push is still blocked by a GitHub `Internal Server Error`; the commit is local on `dashboard-ui-issues-2` (ahead of origin by 1).
+
+Open review findings, left unfixed per `AGENTS.md`: dead CSS from the card-to-row change (`.connection-card .card-badges`, `.card-actions`, `.badge`, `.badge.quantifier`), the unread `data-subtab` attributes, and a hand-rolled error-message div in `settings/templates/settings.rs` that duplicates `error_fragment()`.

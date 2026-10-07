@@ -1,7 +1,7 @@
 # Remove the story-log ✓ and `POST /check-text`
 
 Type: task (AFK)
-Status: claimed
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -31,3 +31,15 @@ Do **not** remove the check before sending (the action-area `checking → previe
 ## Done when
 
 - `python build.py` is green, the user has reviewed the diff, and it is committed through `/commit-and-push`.
+
+## Answer
+
+Removed the per-entry text check in every mode. The check before sending stays and is now the only text check.
+
+- **Removed.** The `.check-btn` in `NarrativeLogTemplate`; the `#text-check-result` slot in `ActionAreaTemplate`; `TextCheckResultTemplate`; `check_text_handler`, `CheckTextForm` and `render_check_result`; the `POST /check-text` route; the stub server's `/check-text` route and canned result. Client side: `checkText`, `checkLogText`, `checkCurrentInput`, `clearTextCheckResult` and `htmlUnescape`, with their CSS.
+- **Kept.** The pre-send check (`/action/check` then preview then `/action/confirm`), `#action-preview`, and the `#text-check-card` settings.
+- **Specs/docs.** Deleted `docs/specs/text_check.md` (scenario 34.1) and `browser_dashboard.md` 16.11/16.14. Updated `dashboard.md`, `ui_design.md` (the per-entry button table and "Manual entry" bullet) and `game_flow.md` (the fail-open boundary now covers the pre-flight check only). `http_routes.md` regenerated: 55 routes, no `/check-text`.
+- **Tests.** No test for an absence. Deleted `tests/http/text_check.rs` and the quarantined `check-text` tests in `requires_migration/text_check.rs`/`fragment.rs`, the browser 16.11/16.14 tests in `dashboard.rs`, and the story-log check-button unit test. Rewrote tier-2 scenario 30.12 (`story_log.rs`) to focus `.retrigger-btn` instead of `.check-btn`, keeping the same invariant.
+- **Extra scope, reported.** `tests/test_utils/stub_fixtures/action_area.html` (a hand copy) had the element removed to stop drift.
+
+`python build.py` green (1 architecture, 165 guardrails, 1556 integration, 63 browser, 0 failed). Committed as `6916556a` together with ticket 68, which brought the combined quarantine pin to 76 (from 82). The push is still blocked by a GitHub `Internal Server Error`; the commit is local on `dashboard-ui-issues-2`.
