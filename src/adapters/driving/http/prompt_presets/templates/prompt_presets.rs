@@ -42,6 +42,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                     <label for="system-preset-output">Output Format</label>
                     <textarea id="system-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
                 </div>
+                <div class="inline-error-slot" data-error-slot="preset-add-system" hidden></div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary">Add Preset</button>
                 </div>
@@ -76,6 +77,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                     <label for="quantifier-preset-output">Output Format</label>
                     <textarea id="quantifier-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
                 </div>
+                <div class="inline-error-slot" data-error-slot="preset-add-quantifier" hidden></div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary">Add Preset</button>
                 </div>
@@ -114,6 +116,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                     <label for="impersonate-preset-output">Output Format</label>
                     <textarea id="impersonate-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
                 </div>
+                <div class="inline-error-slot" data-error-slot="preset-add-impersonate" hidden></div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary">Add Preset</button>
                 </div>
@@ -152,6 +155,7 @@ use crate::domain::model::prompt_preset::PromptPreset;
                     <label for="options-preset-output">Output Format</label>
                     <textarea id="options-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
                 </div>
+                <div class="inline-error-slot" data-error-slot="preset-add-options" hidden></div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary">Add Preset</button>
                 </div>
@@ -181,17 +185,14 @@ impl PromptPresetsTemplate {
             .collect()
     }
 
-    /// Rendered cards for the System section.
     pub fn system_cards(&self) -> Vec<SafeHtml> {
         Self::cards(&self.system_presets, &self.active_system)
     }
 
-    /// Rendered cards for the Quantifier section.
     pub fn quantifier_cards(&self) -> Vec<SafeHtml> {
         Self::cards(&self.quantifier_presets, &self.active_quantifier)
     }
 
-    /// Rendered cards for the Impersonate section.
     pub fn impersonate_cards(&self) -> Vec<SafeHtml> {
         Self::cards(&self.impersonate_presets, &self.active_impersonate)
     }
@@ -204,7 +205,6 @@ impl PromptPresetsTemplate {
     }
 }
 
-/// The active preset id per narrator mode, for one preset type.
 #[derive(Debug, Clone, Default)]
 pub struct ModeActiveIds {
     pub novel: String,

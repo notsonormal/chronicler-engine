@@ -136,6 +136,11 @@ async fn test_prompt_presets_panel_renders_full_surface() {
             "impersonate add-form must contain input `{field}`: {impersonate_form}"
         );
     }
+    assert!(
+        body.contains(r#"data-error-slot="preset-add-system""#)
+            && body.contains(r#"data-error-slot="preset-add-options""#),
+        "each Add form must carry the inline error slot the client renders into"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.28
@@ -250,6 +255,10 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
     assert!(body.contains(r#"name="output_format""#));
     assert!(body.contains("Save"));
     assert!(body.contains("Cancel"));
+    assert!(
+        body.contains(&format!(r#"data-error-slot="preset-edit-{preset_id}""#)),
+        "the edit form must carry the inline error slot the client renders into"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.5
@@ -376,7 +385,7 @@ async fn test_create_preset_invalid_type_returns_error() {
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(
         body,
@@ -418,7 +427,7 @@ async fn test_create_preset_reports_save_failure() {
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_text(response).await;
     assert!(body.contains(r#"<div class="error-message">Save failed:"#));
 }
@@ -467,7 +476,7 @@ async fn test_update_missing_preset_returns_error() {
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
@@ -499,7 +508,10 @@ async fn test_update_preset_ignores_form_preset_type() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "update must succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "update must succeed: {body}"
+    );
     assert!(body.contains("preset-card"));
 
     let stored = app_state
@@ -524,7 +536,7 @@ async fn test_update_default_preset_returns_error() {
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(
         body,
@@ -570,7 +582,7 @@ async fn test_delete_missing_preset_returns_error() {
         .oneshot(empty_post_request("/prompt-presets/does-not-exist/delete"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
@@ -585,7 +597,7 @@ async fn test_delete_default_preset_returns_error() {
         .oneshot(empty_post_request("/prompt-presets/system_default/delete"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(
         body,
@@ -624,7 +636,7 @@ async fn test_delete_refuses_a_preset_referenced_as_a_mode_default() {
         .oneshot(empty_post_request("/prompt-presets/custom_ref/delete"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert!(
         body.contains("Preset is a mode default; change the default before deleting"),
@@ -665,7 +677,7 @@ async fn test_delete_refuses_the_active_options_default() {
         .oneshot(empty_post_request("/prompt-presets/options_custom/delete"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert!(
         body.contains("Preset is the default Options preset; change the default before deleting"),
@@ -1337,4 +1349,57 @@ async fn test_activate_options_preset_sets_the_settings_default() {
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.active_options_prompt_preset_id, "options_custom");
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.39
+#[tokio::test]
+async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset() {
+    let _guard = SettingsTestGuard::new();
+    let storage = Storage::new_in_memory();
+    let (storage, failures) = storage.with_test_failures();
+    storage
+        .save_preset(&TestPromptPreset::system("original_ref", "Original"))
+        .expect("seed a system preset");
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(storage))
+        .build_service();
+    let app = build_router(app);
+
+    failures.set("save_preset", TestOverride::internal("preset save failure"));
+
+    let response = app
+        .clone()
+        .oneshot(post_form_request(
+            "/prompt-presets/original_ref",
+            "name=Changed&instructions=Updated.&preset_type=system",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "a failed update must answer non-2xx, not a 200 card replacement"
+    );
+    let body = body_text(response).await;
+    assert!(
+        body.contains(r#"<div class="error-message">Update failed:"#),
+        "the failure must reach the client for its inline slot: {body}"
+    );
+    assert!(
+        !body.contains("preset-card"),
+        "a failed update must not swap the card into the response: {body}"
+    );
+
+    failures.clear("save_preset");
+
+    let panel = app
+        .oneshot(get_request("/fragment/prompt-presets"))
+        .await
+        .unwrap();
+    assert_eq!(panel.status(), StatusCode::OK);
+    let panel_body = body_text(panel).await;
+    assert!(
+        panel_body.contains("Original"),
+        "the stored preset must keep its original name: {panel_body}"
+    );
 }

@@ -21,6 +21,7 @@ use axum::Router;
 use chrono::{TimeZone, Utc};
 
 use chronicler_engine::adapters::driving::http::builders::headers::add_status_swap_headers;
+use chronicler_engine::adapters::driving::http::builders::presets::preset_edit_form_html;
 use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate,
 };
@@ -28,7 +29,8 @@ use chronicler_engine::adapters::driving::http::utils::error::{
     error_disclosure, generation_error_summary, raw_error_detail, render_error,
 };
 use chronicler_engine::domain::model::llm_message::LlmMessage;
-use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
+use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::{MessageEntry, MessageType};
 
 use super::server::{get_config_port, release_port_lock};
@@ -138,6 +140,22 @@ fn connection_form_html(connection: Option<&LlmProviderConfig>) -> String {
     ConnectionFormTemplate::new(connection)
         .render()
         .expect("render connection form")
+}
+
+/// The non-default preset the preset-card failure tests edit and delete. Its
+/// card lives in the fixture; its edit form renders through the real builder.
+fn custom_preset() -> PromptPreset {
+    PromptPreset {
+        id: "custom_ref".to_string(),
+        name: "My Custom Prompt".to_string(),
+        role: None,
+        instructions: Some("A custom system prompt for the stub fixture.".to_string()),
+        writing_style: None,
+        output_format: None,
+        allowed_modes: vec![NarratorMode::Novel],
+        is_default: false,
+        preset_type: PresetType::System,
+    }
 }
 
 const CANNED_OPTIONS: [&str; 3] = [
@@ -488,6 +506,28 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/", get(index))
         .route("/action/check", post(action_check))
         .route("/action/confirm", post(action_confirm))
+        .route(
+            "/connections/add",
+            post(|| async { client_refusal("Unknown LLM backend 'bogus_provider'") }),
+        )
+        .route(
+            "/connections/:id/edit",
+            post(|| async { client_refusal("Unknown LLM backend 'bogus_provider'") }),
+        )
+        .route(
+            "/prompt-presets",
+            post(|| async { client_refusal("Invalid preset type") }),
+        )
+        .route(
+            "/prompt-presets/:id",
+            post(|| async { client_failure("preset save failure") }),
+        )
+        .route(
+            "/prompt-presets/:id/delete",
+            post(|| async {
+                client_refusal("Preset is a mode default; change the default before deleting")
+            }),
+        )
         .route("/games/:id/posture", post(failing_posture_save))
         .route("/history/:id", post(save_message))
         .route(
@@ -529,6 +569,10 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/fragment/prompt-presets",
             get(|| async { Html(FIXTURE_PROMPT_PRESETS) }),
         )
+        .route(
+            "/fragment/prompt-presets/:id/edit",
+            get(|| async { Html(preset_edit_form_html(&custom_preset(), "system")) }),
+        )
         .route("/fragment/worlds", get(|| async { Html(FIXTURE_WORLDS) }))
         .route("/fragment/games", get(|| async { Html(FIXTURE_GAMES) }))
         .route(
@@ -548,8 +592,6 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .with_state(state)
 }
 
-/// The scripted story log: the default entry pair, the two-Swipe shape a
-/// switch test enables, or the settled shape a switch restores.
 async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     use std::sync::atomic::Ordering::SeqCst;
     let mut entries = if state.two_swipes.load(SeqCst) {
@@ -792,6 +834,17 @@ fn client_failure(message: &str) -> Response<Body> {
         StatusCode::INTERNAL_SERVER_ERROR,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
         format!("<p>{message}</p>"),
+    )
+        .into_response()
+}
+
+/// A canned 400 refusal for a form route whose stub-tier use is the action's
+/// inline-slot path.
+fn client_refusal(message: &str) -> Response<Body> {
+    (
+        StatusCode::BAD_REQUEST,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        render_error(message),
     )
         .into_response()
 }

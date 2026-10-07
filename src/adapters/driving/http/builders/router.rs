@@ -144,6 +144,14 @@ pub fn build_router(app_state: AppState) -> Router {
             post(settings::handlers::add_connection_handler),
         )
         .route(
+            "/connections/test",
+            post(settings::handlers::test_form_connection_handler),
+        )
+        .route(
+            "/connections/:id/test",
+            post(settings::handlers::test_saved_connection_handler),
+        )
+        .route(
             "/fragment/connections/new",
             get(settings::handlers::new_connection_form),
         )

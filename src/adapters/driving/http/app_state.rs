@@ -14,6 +14,7 @@ use crate::adapters::driving::http::templates::{
 use crate::adapters::driving::http::view_models::{
     ActionAreaViewModel, NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
+use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
@@ -36,6 +37,7 @@ pub struct AppState {
     pub world_catalogue: WorldCatalogue,
     pub persona_catalogue: PersonaCatalogue,
     pub text_check_service: Arc<TextCheckService>,
+    pub connection_test_service: ConnectionTestService,
     pub shutdown_token: CancellationToken,
     pub pipeline: Arc<ActionPipeline>,
     pub generation_gate: GenerationGate,
@@ -52,6 +54,7 @@ impl AppState {
             world_catalogue: wired.world_catalogue,
             persona_catalogue: wired.persona_catalogue,
             text_check_service: wired.text_check_service,
+            connection_test_service: wired.connection_test_service,
             shutdown_token: wired.shutdown_token,
             pipeline: Arc::new(wired.pipeline),
             generation_gate: wired.generation_gate,
@@ -62,6 +65,17 @@ impl AppState {
 
     pub fn settings(&self) -> Result<AppSettings> {
         self.settings_service.get_settings()
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn with_connection_test_provider(
+        mut self,
+        provider_factory: crate::application::connection_test_service::ProviderFactory,
+    ) -> Self {
+        self.connection_test_service = self
+            .connection_test_service
+            .with_provider_factory(provider_factory);
+        self
     }
 
     pub fn text_check_service(&self) -> &TextCheckService {

@@ -6,12 +6,16 @@ use axum::{Form, extract::State, response::Html, response::IntoResponse, respons
 
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::settings::templates::settings::{
-    ConnectionFormTemplate, SettingsTemplate, TextCheckCardTemplate,
+    ConnectionFormTemplate, ConnectionTestResultTemplate, SettingsTemplate, TextCheckCardTemplate,
 };
-use crate::adapters::driving::http::utils::error::{error_response, render_error};
+use crate::adapters::driving::http::utils::error::{
+    action_error_response, action_refusal_response, error_disclosure, raw_error_detail,
+    render_error,
+};
 use crate::adapters::driving::http::utils::handler_helpers::{
     generate_storage_id, opt_string, render_template,
 };
+use crate::application::connection_test_service::ConnectionTestResult;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
 use crate::error::EngineError;
@@ -71,6 +75,23 @@ pub struct ConnectionForm {
     pub conn_base_url: String,
     #[serde(default)]
     pub single_user_message: bool,
+}
+
+impl ConnectionForm {
+    /// `id` is the stored connection id, or empty for testing unsaved form values.
+    fn into_config(self, id: String, provider: LlmBackendType) -> LlmProviderConfig {
+        LlmProviderConfig {
+            id,
+            name: self.conn_name,
+            provider,
+            model: self.conn_model,
+            api_key: opt_string(&self.conn_api_key),
+            base_url: opt_string(&self.conn_base_url),
+            single_user_message: self.single_user_message,
+            max_tokens: None,
+            max_context_tokens: None,
+        }
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -134,26 +155,14 @@ pub async fn add_connection_handler(
 ) -> Response<Body> {
     let provider = match form.conn_provider.as_str().parse::<LlmBackendType>() {
         Ok(p) => p,
-        Err(e) => return Html(render_error(&e.to_string())).into_response(),
+        Err(e) => return action_refusal_response(e.to_string()),
     };
 
-    let id = generate_storage_id("conn");
-
-    let connection = LlmProviderConfig {
-        id,
-        name: form.conn_name,
-        provider,
-        model: form.conn_model,
-        api_key: opt_string(&form.conn_api_key),
-        base_url: opt_string(&form.conn_base_url),
-        single_user_message: form.single_user_message,
-        max_tokens: None,
-        max_context_tokens: None,
-    };
+    let connection = form.into_config(generate_storage_id("conn"), provider);
 
     match app_state.settings_service.add_connection(connection) {
         Ok(_) => render_settings_panel(&app_state, None).into_response(),
-        Err(e) => error_response(e, "Error"),
+        Err(e) => action_error_response(e, "Error"),
     }
 }
 
@@ -164,7 +173,7 @@ pub async fn edit_connection_handler(
 ) -> Response<Body> {
     let provider = match form.conn_provider.as_str().parse::<LlmBackendType>() {
         Ok(p) => p,
-        Err(e) => return Html(render_error(&e.to_string())).into_response(),
+        Err(e) => return action_refusal_response(e.to_string()),
     };
 
     let api_key = opt_string(&form.conn_api_key);
@@ -182,7 +191,87 @@ pub async fn edit_connection_handler(
 
     match outcome {
         Ok(_) => render_settings_panel(&app_state, None).into_response(),
-        Err(e) => error_response(e, "Error"),
+        Err(e) => action_error_response(e, "Error"),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ConnectionTestSurface<'a> {
+    /// A saved connection row, identified by its connection id.
+    SavedConnection(&'a str),
+    /// The shared Add/Edit form, testing values typed before Save.
+    Form,
+}
+
+impl ConnectionTestSurface<'_> {
+    fn popover_id(&self) -> String {
+        match self {
+            Self::SavedConnection(id) => format!("connection-test-{id}-popover"),
+            Self::Form => "connection-test-form-popover".to_string(),
+        }
+    }
+}
+
+/// A 200 keeps htmx's swap inside the result slot, so the connection row or form is never replaced.
+fn connection_test_error(message: &str, surface: ConnectionTestSurface<'_>) -> Html<String> {
+    Html(error_disclosure(
+        &surface.popover_id(),
+        "The connection test failed.",
+        &raw_error_detail(message),
+    ))
+}
+
+fn connection_test_success(result: &ConnectionTestResult) -> Html<String> {
+    render_template(ConnectionTestResultTemplate {
+        backend_name: result.backend_name.clone(),
+        model_name: result.model_name.clone(),
+        elapsed_ms: result.elapsed_ms,
+    })
+}
+
+/// The provider's `complete` is sync (`reqwest::blocking`), so the test runs on
+/// the blocking pool to keep the async runtime free.
+async fn run_connection_test<T>(
+    test: impl FnOnce() -> Result<T, crate::application::errors::ApplicationError> + Send + 'static,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+{
+    match tokio::task::spawn_blocking(test).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(join_error) => Err(format!("The test could not run: {join_error}")),
+    }
+}
+
+pub async fn test_saved_connection_handler(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let service = app_state.connection_test_service.clone();
+    let surface_id = id.clone();
+    let surface = ConnectionTestSurface::SavedConnection(&surface_id);
+    match run_connection_test(move || service.test_saved_connection(&id)).await {
+        Ok(result) => connection_test_success(&result),
+        Err(message) => connection_test_error(&message, surface),
+    }
+}
+
+pub async fn test_form_connection_handler(
+    State(app_state): State<AppState>,
+    Form(form): Form<ConnectionForm>,
+) -> Html<String> {
+    let provider = match form.conn_provider.as_str().parse::<LlmBackendType>() {
+        Ok(p) => p,
+        Err(e) => return connection_test_error(&e.to_string(), ConnectionTestSurface::Form),
+    };
+
+    let connection = form.into_config(String::new(), provider);
+    let service = app_state.connection_test_service.clone();
+    let outcome = run_connection_test(move || service.test_connection(&connection)).await;
+    match outcome {
+        Ok(result) => connection_test_success(&result),
+        Err(message) => connection_test_error(&message, ConnectionTestSurface::Form),
     }
 }
 

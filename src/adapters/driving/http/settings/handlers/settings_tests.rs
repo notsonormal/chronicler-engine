@@ -156,6 +156,12 @@ async fn test_new_connection_form_returns_the_add_form() {
     assert!(response.0.contains(r#"<h2>Add Connection</h2>"#));
     assert!(response.0.contains(r#"id="conn_name""#));
     assert!(response.0.contains("&#8249; Connections"));
+    assert!(
+        response.0.contains(r#"hx-post="/connections/test""#)
+            && response.0.contains(r#"hx-include="closest form""#),
+        "the form must offer a Test control for the typed values: {}",
+        response.0
+    );
 }
 
 #[tokio::test]

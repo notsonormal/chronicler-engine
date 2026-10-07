@@ -131,6 +131,10 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 70 [Remove the story-log ✓ and `POST /check-text`](issues/70-remove-story-log-check.md): resolved — the `.check-btn`, the JS check helpers and `#text-check-result` slot, `TextCheckResultTemplate`, the handler and route, the stub route and the dead CSS are gone in every mode; the pre-send check and `#text-check-card` stay; `text_check.md` and browser 16.11/16.14 deleted, 30.12 retargeted; the combined quarantine pin is 76; commit 6916556a.
 
+64 [Keep failed forms and cards in place](issues/64-keep-failed-requests-in-place.md): resolved — a failed add/edit and a refused delete answer non-2xx, so htmx leaves the panel or card in place and the shared short-message + Details disclosure renders into that surface's inline slot; tier 1 for every path, tier 2 for the connection form and the preset card paths (16.29–16.32); uncommitted on `dashboard-ui-issues-2` pending commit (dev commits `6a91631a` on `wf/t64`, `54371f99` on `wf/t69`).
+
+69 [Add a connection test](issues/69-add-connection-test.md): resolved — a Test control on each Connections row and on the Add/Edit form sends one fixed prompt through a new `ConnectionTestService` that writes no `llm_messages` row, so role health cannot move; success shows the reply time, failure the shared disclosure; tier 1 20.19–20.21 plus unit tests; uncommitted on `dashboard-ui-issues-2` pending commit (dev commits `46c9fbb1`, `54371f99` on `wf/t69`).
+
 ## Not yet specified
 
 - **Other snapshot-restore paths.** [Reset the generation status and the options dock when a swipe switch restores a snapshot](issues/43-reset-status-and-dock-on-swipe-switch.md) landed the swipe case only, where the snapshot was written mid-generation; its normalisation does not touch the other restore paths. Retrigger and history revert restore snapshots by different paths and may show the same stuck status. Unverified; [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md) drove the failure path only and did not surface it.

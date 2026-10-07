@@ -231,7 +231,10 @@ async fn test_update_preset_ignores_form_preset_type() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "update must succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "update must succeed: {body}"
+    );
 
     let stored = app_state
         .prompt_preset_service
@@ -439,7 +442,10 @@ async fn test_activate_writes_novel_slot_for_allowed_preset() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "activation should succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "activation should succeed: {body}"
+    );
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(
@@ -499,7 +505,10 @@ async fn test_activate_with_mode_param_writes_that_modes_slot() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "activation should succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "activation should succeed: {body}"
+    );
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(
@@ -532,7 +541,10 @@ async fn test_card_badges_active_quantifier_default_for_novel() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "activation should succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "activation should succeed: {body}"
+    );
 
     // Refetch the card through the fragment endpoint: the Novel bundle's
     // quantifier slot holds this preset, so the card must badge it and
@@ -568,7 +580,10 @@ async fn test_card_badges_active_impersonate_default_for_if() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "activation should succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "activation should succeed: {body}"
+    );
 
     let card = preset_card_handler(
         axum::extract::State(app_state),
@@ -648,7 +663,10 @@ async fn test_update_preset_sets_allowed_modes_from_form() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "update should succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "update should succeed: {body}"
+    );
 
     let stored = app_state
         .prompt_preset_service
@@ -675,7 +693,10 @@ async fn test_update_preset_preserves_flags_when_form_omits_them() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "update should succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "update should succeed: {body}"
+    );
 
     let stored = app_state
         .prompt_preset_service
@@ -702,7 +723,10 @@ async fn test_save_preset_defaults_to_both_modes_when_form_omits_flags() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(!body.contains("error"), "create should succeed: {body}");
+    assert!(
+        !body.contains("error-message"),
+        "create should succeed: {body}"
+    );
 
     let created = app_state
         .prompt_preset_service

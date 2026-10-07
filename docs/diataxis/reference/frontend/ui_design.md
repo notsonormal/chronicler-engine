@@ -413,12 +413,15 @@ Supported viewports, desktop-first:
   - **Narrator badge**: green background `rgba(0, 255, 0, 0.12)`, green text, green border
   - **Quantifier badge**: orange background `rgba(255, 179, 71, 0.12)`, orange text, orange border
 - Actions: flex row, gap `var(--spacing-sm)`, pushed right with `margin-left: auto`
+- Test control: `.btn-cyan`, posts the saved connection to its test route and swaps the result into the row's `.connection-test-slot`
+- Result slot (`.connection-test-slot`): full-width, hidden while empty; a passing result is `.connection-test-result.success` in green, and a failure carries the shared error disclosure
 
 ### Connection Form Page
 
 - The shared Add/Edit page is a `.settings-panel` with `.connection-form-page`
 - Back link: transparent, cyan text, no border, aligned to the start
 - Form fields inherit the `.settings-panel` input/select styling; actions are a flex row with gap `var(--spacing-sm)`
+- Test control: posts the values typed into the form to `/connections/test` and swaps the result into the form's `.connection-test-slot` (same result and disclosure styles as a connection row)
 
 ### Text Check Card
 

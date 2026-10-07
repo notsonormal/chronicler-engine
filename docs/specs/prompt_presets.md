@@ -157,12 +157,12 @@ And the body contains the preset name "My Quantifier Prompt"
 And the body contains the preview text "Quantify this scene."
 ```
 
-#### Scenario 21.11: Create with an invalid preset_type returns an error fragment
+#### Scenario 21.11: Create with an invalid preset_type answers non-2xx with the failure
 
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets with name="Bad Type" and instructions="Test." and preset_type="invalid"
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Invalid preset type</div>`
 ```
 
@@ -179,13 +179,13 @@ Then the response is 422 Unprocessable Entity (axum Form rejection)
 ```gherkin
 Given an app state whose preset storage fails on save
 When the client POST /prompt-presets with valid name and preset_type="system" fields
-Then the response is 200
-And the response body contains `<div class="error-message">Save failed:` (the error is surfaced in the fragment, not as a HTTP error status)
+Then the response is a 500
+And the response body contains `<div class="error-message">Save failed:` (a non-2xx so htmx leaves the panel in place and the client renders the failure into the form's inline slot)
 ```
 
-The same failure shape applies to `POST /prompt-presets/{id}` (update),
-`POST /{id}/delete`, and `POST /{id}/activate` — 200 with a
-`<div class="error-message">{Update|Delete|Save} failed: …</div>` fragment. Not
+The same failure shape applies to `POST /prompt-presets/{id}` (update) and
+`POST /{id}/delete` — a non-2xx carrying a
+`<div class="error-message">{Update|Delete} failed: …</div>` fragment. Not
 enumerated as separate scenarios; this one covers the shape.
 
 ### POST /prompt-presets/{id} — update
@@ -207,7 +207,7 @@ And the body preserves the stored allowed modes (the form omitted them)
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist with name="Updated" and instructions="Updated." and preset_type="system"
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
@@ -226,8 +226,19 @@ And the stored preset still has preset_type "system" and name "Updated"
 ```gherkin
 Given a fresh app state with a seeded default system preset
 When the client POST /prompt-presets/{default_id} with name="Changed" and instructions="Changed." and preset_type="system"
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Cannot edit default presets</div>`
+```
+
+#### Scenario 21.39: A failed preset edit answers non-2xx and carries the failure
+
+```gherkin
+Given an app state whose preset storage fails on save
+And a seeded non-default system preset named "Original"
+When the client POST /prompt-presets/{id} with name="Changed"
+Then the response is a 500
+And the body carries the update failure text
+And a following GET /fragment/prompt-presets still renders the preset named "Original"
 ```
 
 ### POST /prompt-presets/{id}/delete — delete
@@ -246,7 +257,7 @@ And the response body is empty
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist/delete
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
@@ -255,7 +266,7 @@ And the response body is `<div class="error-message">Preset not found</div>`
 ```gherkin
 Given a fresh app state with a seeded default system preset
 When the client POST /prompt-presets/{default_id}/delete
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Cannot delete default presets</div>`
 ```
 
@@ -264,7 +275,7 @@ And the response body is `<div class="error-message">Cannot delete default prese
 ```gherkin
 Given a fresh app state with a non-default system preset referenced as the Interactive Fiction bundle's system default
 When the client POST /prompt-presets/{id}/delete
-Then the response is 200
+Then the response is a 400
 And the response body contains "Preset is a mode default; change the default before deleting"
 And the preset is not deleted
 ```
@@ -274,7 +285,7 @@ And the preset is not deleted
 ```gherkin
 Given a fresh app state with a non-default Options preset set as the settings-level Options default
 When the client POST /prompt-presets/{id}/delete
-Then the response is 200
+Then the response is a 400
 And the response body contains "Preset is the default Options preset; change the default before deleting"
 And the preset is not deleted
 ```

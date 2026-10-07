@@ -1,7 +1,7 @@
 # Keep failed forms and cards in place
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 63
 
 ## Question
@@ -59,3 +59,34 @@ Both recover only on a page reload.
 - Tests cover the failed add path and both card paths; tier by
   `tests/STRATEGY.md`.
 - `python build.py` is green. Commit after user approval.
+
+## Answer
+
+Resolved. A failed add, a failed edit and a refused delete leave the panel or
+the card in place; the message shows in an inline slot inside it.
+
+- **Mechanism.** The listed actions answer non-2xx — 400 for a refusal, 500 for
+a storage or load failure — so htmx never swaps the region the failure
+describes. The shell's one `htmx:responseError` handler renders the shared
+short-message + Details disclosure (`error_disclosure` / `raw_error_detail`)
+into that surface's `[data-error-slot]`. `error_response` keeps its 200-fragment
+contract for its live callers (`worlds.rs`, `prompt_presets.rs`), so
+`create_world`'s shape is unchanged.
+- **Slots.** Added to the four preset Add forms, the preset edit form and every
+preset card; the connection form's slot already shipped. Refusal logic is
+unchanged: default presets and mode-default references stay refused.
+- **Specs and docs.** `settings.md` 20.17/20.18, `prompt_presets.md` 21.39 plus
+updated statuses, `browser_dashboard.md` 16.29–16.32; `dashboard.md`,
+`ui_design.md`.
+- **Tests.** Tier 1 HTTP for every path (`tests/http/settings.rs`,
+`tests/http/prompt_presets.rs`). Tier 2 stub-browser for the connection form
+(16.29), the preset Add form (16.30) and both preset card paths (16.31, 16.32 —
+added during the review fix). Unit assertions in `prompt_presets_tests.rs`.
+- **Deferred, same class.** `duplicate_preset_handler`, `activate_preset_handler`
+and `create_world_handler` keep their 200 failure shape; none are in this
+ticket's paths.
+- **Build.** Full gate green: architecture 1, guardrails 165, integration 1567
+(2 skipped), browser 68, 0 failed (`logs/build_20261007_195200.log`).
+- **State.** The combined 64+69 change sits uncommitted on
+`dashboard-ui-issues-2` (HEAD `d77eca37`) pending user review. Development
+commits: `6a91631a` on `wf/t64`; `54371f99` on `wf/t69`.

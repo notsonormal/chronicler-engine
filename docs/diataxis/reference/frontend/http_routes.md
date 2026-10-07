@@ -80,6 +80,8 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 |--------|------|---------|
 | GET | `/fragment/settings` | `settings_panel` |
 | POST | `/connections/add` | `add_connection_handler` |
+| POST | `/connections/test` | `test_form_connection_handler` |
+| POST | `/connections/:id/test` | `test_saved_connection_handler` |
 | GET | `/fragment/connections/new` | `new_connection_form` |
 | GET | `/fragment/connections/:id/edit` | `edit_connection_form` |
 | POST | `/connections/:id/edit` | `edit_connection_handler` |

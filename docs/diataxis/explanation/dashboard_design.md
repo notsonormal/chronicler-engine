@@ -75,4 +75,4 @@ The rendering pipeline is Askama with compile-time template validation; template
 - [`../reference/frontend/dashboard.md`](../reference/frontend/dashboard.md) — dashboard as it is: layout, tabs, polling cadences, flows, game management.
 - [`../reference/storage.md#messages`](../reference/storage.md#messages) — the `Message` / `Swipe` aggregate that the swipe and snapshot-restoration flows operate on.
 - [`../reference/frontend/ui_design.md`](../reference/frontend/ui_design.md) — design tokens and component specs that the server-rendered fragments consume.
-- [`../reference/frontend/http_routes.md`](../reference/frontend/http_routes.md) — full HTTP route topology (56 routes, machine-generated).
+- [`../reference/frontend/http_routes.md`](../reference/frontend/http_routes.md) — full HTTP route topology (machine-generated).

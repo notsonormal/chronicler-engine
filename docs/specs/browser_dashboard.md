@@ -235,3 +235,48 @@ Then #status-display returns to Ready
 And #submit-btn is enabled
 And pressing Enter in #command-form input[name="command"] submits the form
 ```
+
+#### Scenario 16.29: A failed connection form keeps its page and renders the failure inline
+
+```gherkin
+Given the Settings panel is showing the shared connection form page
+And the form is the same node as before the submission
+When the client submits the form and the server refuses it
+Then the form page is still in the document
+And the form shows an inline error naming the failure
+And the raw server text is reachable in that error's disclosure
+```
+
+#### Scenario 16.30: A failed preset add keeps the panel and renders the failure inline
+
+```gherkin
+Given the Prompt Presets panel is showing a category's Add form, opened
+And the panel is the same node as before the submission
+When the client submits the Add form and the server refuses it
+Then the Prompt Presets panel is still in the document with its preset cards
+And the Add form shows an inline error naming the failure
+And the raw server text is reachable in that error's disclosure
+```
+
+#### Scenario 16.31: A failed preset edit keeps its card and renders the failure inline
+
+```gherkin
+Given the Prompt Presets panel shows a non-default preset card
+And the client has opened that card's edit form
+And the edit form is the same node as before the submission
+When the client submits the edit form and the server fails the save
+Then the edit form's card is still in the document
+And the card shows an inline error naming the failure
+And the raw server text is reachable in that error's disclosure
+```
+
+#### Scenario 16.32: A refused preset delete keeps its card and renders the failure inline
+
+```gherkin
+Given the Prompt Presets panel shows a non-default preset card
+And the card is the same node as before the submission
+When the client deletes that preset and the server refuses it
+Then the card is still in the document
+And the card shows an inline error naming the refusal
+And the raw server text is reachable in that error's disclosure
+```

@@ -43,7 +43,7 @@ pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
     )
 }
 
-pub(crate) fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String {
+pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String {
     let id = html_escape(&preset.id);
     let name = html_escape(&preset.name);
     let preset_type_escaped = html_escape(preset_type);
@@ -119,6 +119,7 @@ pub(crate) fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) ->
         {writing_style_field}
         {output_format_field}
         {modes_block}
+        <div class="inline-error-slot" data-error-slot="preset-edit-{id}" hidden></div>
         <div class="form-actions">
             <button type="submit" class="btn-primary">Save</button>
             <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Cancel</button>
@@ -138,7 +139,7 @@ pub(crate) fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) ->
 /// so both renderers show the same preview.
 #[derive(Template)]
 #[template(
-    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if is_options %}{% if is_options_active %} active{% endif %}{% else %}{% if is_novel_active || is_if_active %} active{% endif %}{% endif %}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% if is_options %}{% if is_options_active %}<span class="badge primary">Active</span>{% endif %}{% else %}{% if is_novel_active %}<span class="badge primary">Active · {{ self.novel_label() }}</span>{% endif %}{% if is_if_active %}<span class="badge primary">Active · {{ self.interactive_fiction_label() }}</span>{% endif %}{% endif %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="card-actions">{% if is_options %}{% if !is_options_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active</button>{% endif %}{% else %}{% if preset.allows_novel() && !is_novel_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.novel_label() }})</button>{% endif %}{% if preset.allows_interactive_fiction() && !is_if_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.interactive_fiction_label() }})</button>{% endif %}{% endif %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button></div></div>"##,
+    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if is_options %}{% if is_options_active %} active{% endif %}{% else %}{% if is_novel_active || is_if_active %} active{% endif %}{% endif %}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% if is_options %}{% if is_options_active %}<span class="badge primary">Active</span>{% endif %}{% else %}{% if is_novel_active %}<span class="badge primary">Active · {{ self.novel_label() }}</span>{% endif %}{% if is_if_active %}<span class="badge primary">Active · {{ self.interactive_fiction_label() }}</span>{% endif %}{% endif %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% if is_options %}{% if !is_options_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active</button>{% endif %}{% else %}{% if preset.allows_novel() && !is_novel_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.novel_label() }})</button>{% endif %}{% if preset.allows_interactive_fiction() && !is_if_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.interactive_fiction_label() }})</button>{% endif %}{% endif %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button></div></div>"##,
     ext = "html"
 )]
 pub struct PresetCardTemplate {
@@ -171,19 +172,15 @@ impl PresetCardTemplate {
         }
     }
 
-    /// The Novel label every badge and activation button renders.
     pub fn novel_label(&self) -> &'static str {
         NarratorMode::Novel.display_label()
     }
 
-    /// The Interactive Fiction label every badge and activation button renders.
     pub fn interactive_fiction_label(&self) -> &'static str {
         NarratorMode::InteractiveFiction.display_label()
     }
 }
 
-/// The preview both the panel and the single-card endpoints show: 120 chars
-/// with newlines flattened.
 fn truncated_preview(preset: &PromptPreset) -> String {
     preset
         .preview_text()
@@ -193,9 +190,6 @@ fn truncated_preview(preset: &PromptPreset) -> String {
         .replace('\n', " ")
 }
 
-/// The card HTML for the single-card endpoints. A render failure surfaces as
-/// the shared error fragment, exactly as `render_template` renders it, rather
-/// than silently dropping the card.
 pub(crate) fn preset_card_html(preset: &PromptPreset, active: &ModeActiveIds) -> String {
     render_template(PresetCardTemplate::new(preset, active)).0
 }
@@ -204,8 +198,6 @@ pub(crate) fn options_preset_card_html(preset: &PromptPreset, active_options_id:
     render_template(PresetCardTemplate::new_options(preset, active_options_id)).0
 }
 
-/// The card HTML as raw markup for the panel template, which embeds one per
-/// preset in each section.
 pub(crate) fn preset_card_view(preset: &PromptPreset, active: &ModeActiveIds) -> SafeHtml {
     SafeHtml::new(preset_card_html(preset, active))
 }

@@ -21,7 +21,7 @@ flowchart TD
     ERR --> HDR --> TABS --> BODY --> ACT
 ```
 
-The error-notification banner sits fixed at the top of the page and surfaces server-side error responses for 5 seconds before auto-hiding. It is populated by the global HTMX `htmx:beforeSwap` handler in the static shell (see `assets/index.html`).
+The error-notification toast sits fixed at the top of the page and surfaces server-side error responses for 5 seconds before auto-hiding. It is populated by the global HTMX `htmx:beforeSwap` handler in the static shell (see `assets/index.html`). A failed request never replaces the region it describes: a failed poll answers non-2xx with `HX-Reswap: none` and keeps its last good content, and a failed form or card action answers non-2xx so the client renders a short message with the raw server text behind its Details disclosure into that surface's inline error slot (`[data-error-slot]`). The connection test is the exception: it targets its own `.connection-test-slot`, so it answers 200 with either the result or the same disclosure and the client swaps it into that slot, which cannot replace the row or form it reports on.
 
 The header bar is 48px tall, polls every 5s, and carries the game title and current game name. Location is **not** in the header — it appears in the story log as a green location-header on the active room.
 
@@ -154,9 +154,15 @@ A list of the games other than the active one (across all worlds), each with its
 
 New-game names are auto-generated as `{WorldName}_{YYYY-MM-DD}_{N}` (underscores between segments, not spaces) where `{N}` is one greater than the highest existing suffix for that world-and-date base.
 
+## Settings Tab
+
+The Settings tab has two client-side sub-tabs: **Connections** and **Text Check**. The Connections sub-tab holds a Narrator and a Quantifier role row, each with a connection select and that role's health, followed by one row per connection with its name, provider and model, role tags, and Edit, Test and Delete. Add and Edit open one shared form page with a back link to Connections.
+
+A connection's **Test** control sends one short fixed prompt to that connection and shows the result inline in the surface's result slot: a passing reply names the backend and model with the reply time, and a failure renders the shared short-message + Details disclosure. On a connection row it tests the saved values; on the Add/Edit form it tests the values typed into the form before Save. It runs only on a click, and it writes no LLM Messages row, so it never moves role health or the failure banner.
+
 ## Document References
 
-- [`./http_routes.md`](./http_routes.md) — full HTTP route topology (56 routes; machine-generated).
+- [`./http_routes.md`](./http_routes.md) — full HTTP route topology (machine-generated).
 - [`./ui_design.md`](./ui_design.md) — design tokens (colors, typography, spacing), component specs, and the per-button/swipe-control visibility rules.
 - [`../narrative/narration_system.md#llm-call-logging--forensics`](../narrative/narration_system.md#llm-call-logging--forensics) — LLM Messages tab forensics + the 50-row `llm_messages` cap.
 - [`../game_flow.md#text-check-branch`](../game_flow.md#text-check-branch) — text-check preflight, settings, and preview UI.

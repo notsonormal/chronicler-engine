@@ -6,6 +6,8 @@ Endpoints:
  - `GET /fragment/connections/{id}/edit`
  - `POST /settings/text-check`
  - `POST /connections/add`
+ - `POST /connections/test`
+ - `POST /connections/{id}/test`
  - `POST /connections/{id}/edit`
  - `POST /connections/{id}/delete`
  - `POST /connections/set-narrator`
@@ -29,7 +31,7 @@ Then the response is 200
 And the body contains a settings panel with a Connections sub-tab and a Text Check sub-tab
 And the Connections sub-tab is the selected one
 And the Connections panel holds a role row for Narrator and a role row for Quantifier, each with a connection select
-And the Connections panel holds one connection row per connection with its name, provider and model, role tags, Edit and Delete
+And the Connections panel holds one connection row per connection with its name, provider and model, role tags, Edit, Test and Delete
 And the Connections panel offers an Add Connection control
 And the Text Check panel holds the check_mode select and the enable_auto_check checkbox
 And the body contains no "Set as Narrator" or "Set as Quantifier" control
@@ -136,6 +138,16 @@ Then the response is a 400
 And the body says a connection with that name already exists
 ```
 
+#### Scenario 20.17: A failed connection add answers non-2xx and carries the failure
+
+```gherkin
+Given a fresh app state with the default connections
+When the client POST /connections/add with conn_provider="bogus_provider", a name and a model
+Then the response is a 400
+And the body carries the unknown-backend failure text naming "bogus_provider"
+And a following GET /fragment/settings still lists the Connections panel and its connection rows
+```
+
 ### POST /connections/{id}/edit — update
 
 #### Scenario 20.11: Editing a Connection keeps its own name
@@ -145,4 +157,53 @@ Given a fresh app state with a Connection named "Alpha"
 When the client edits that Connection with the same name "Alpha" and a changed model
 Then the response is 200
 And the body contains a Connection row named "Alpha" and the changed model
+```
+
+#### Scenario 20.18: A failed connection edit answers non-2xx and carries the failure
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha"
+When the client edits that Connection with conn_provider="bogus_provider"
+Then the response is a 400
+And the body carries the unknown-backend failure text
+And a following GET /fragment/settings still renders the Connection named "Alpha"
+```
+
+### POST /connections/{id}/test — connection test
+
+The test sends one short fixed prompt to a connection and reports the result
+inline. It runs only on a click and writes no LLM Messages row, so it never
+moves role health or the failure banner.
+
+#### Scenario 20.19: A passing connection test reports the reply time and records nothing
+
+```gherkin
+Given a saved mock connection
+When the client tests that connection
+Then the response is 200
+And the body reports a successful reply naming the connection's model and the reply time
+And the LLM Messages list is still empty
+And no role's health has a backend or a failure
+```
+
+#### Scenario 20.20: A failed connection test renders the error disclosure
+
+```gherkin
+Given a saved connection whose provider fails the test call
+When the client tests that connection
+Then the response is 200
+And the body carries a short failure message with a Details disclosure holding the raw failure text
+And the LLM Messages list is still empty
+```
+
+### POST /connections/test — test the form's values
+
+#### Scenario 20.21: The Add/Edit form tests the typed values before Save
+
+```gherkin
+Given a saved mock connection
+When the client tests the Add/Edit form with a different mock model typed in
+Then the response is 200
+And the body reports a successful reply naming the typed model
+And the saved connections are unchanged
 ```

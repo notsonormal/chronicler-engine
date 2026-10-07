@@ -1175,6 +1175,18 @@ body {
     display: none;
 }
 
+.connection-test-slot:empty {
+    display: none;
+}
+
+.connection-test-result {
+    font-size: var(--font-size-small);
+}
+
+.connection-test-result.success {
+    color: var(--color-accent-green);
+}
+
 .message-header {
     display: flex;
     justify-content: space-between;

@@ -1,7 +1,7 @@
 # Add a connection test
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 68
 
 ## Question
@@ -26,3 +26,35 @@ Add the connection test decided in [Settings panel: roles, buttons and text-chec
 ## Done when
 
 - `python build.py` is green, the user has reviewed the diff, and it is committed through `/commit-and-push`.
+
+## Answer
+
+Resolved. A Test control tests a connection on a click and reports inline.
+
+- **What it does.** Sends one fixed short prompt to a connection and shows the
+backend, the model and the reply time; a failure renders through the shared
+short-message + anchored-popover shape into the surface's result slot.
+- **Where.** On each Connections-list row (the saved values) and on the shared
+Add/Edit form (the values typed before Save).
+- **No recording.** The new `ConnectionTestService`
+(`src/application/connection_test_service.rs`) builds the provider from the
+connection config through an injected factory and calls `LlmProvider::complete`
+directly — never `LlmCallRecorder`. No `llm_messages` row is written, so role
+health and the failure banner cannot move.
+- **Routes.** `POST /connections/:id/test` (row) and `POST /connections/test`
+(form). Both wrap the sync provider call in `tokio::task::spawn_blocking`. A
+test failure answers 200 because its target is its own `.connection-test-slot`,
+so it cannot replace the row or the form.
+- **Blank API key.** Blank means "no key", matching what Save stores, so the test
+cannot pass on credentials Save would discard.
+- **Specs and docs.** `settings.md` 20.19–20.21 and 20.1 extended;
+`http_routes.md` regenerated; `dashboard.md`, `ui_design.md`.
+- **Tests.** Tier 1 (`tests/http/settings.rs`) with the mock provider: pass,
+failure shape, typed form values, no new forensic row and unchanged
+`role_health`. Unit tests in `connection_test_service_tests.rs`. No browser test:
+the server behaviour is tier-1 and the button's `hx-include` is declarative.
+- **Build.** Full gate green: architecture 1, guardrails 165, integration 1567
+(2 skipped), browser 68, 0 failed (`logs/build_20261007_195200.log`).
+- **State.** Uncommitted on `dashboard-ui-issues-2` (HEAD `d77eca37`) pending
+user review, together with ticket 64. Development commits: `46c9fbb1`,
+`54371f99` on `wf/t69`.

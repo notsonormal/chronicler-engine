@@ -4,11 +4,9 @@
 use axum::body::Body;
 use axum::response::{Html, IntoResponse, Response};
 
-use crate::adapters::driving::http::utils::response::{bad_request, html_escape};
+use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error};
 use crate::application::errors::ApplicationError;
 
-/// The one error fragment. Its class carries the styling, and the shell leaves
-/// it in place; every handler failure and refusal renders through it.
 pub(crate) fn error_fragment(message: impl std::fmt::Display) -> String {
     format!(
         "<div class=\"error-message\">{}</div>",
@@ -16,7 +14,6 @@ pub(crate) fn error_fragment(message: impl std::fmt::Display) -> String {
     )
 }
 
-/// The same fragment with the `Error: ` prefix the failure paths carry.
 pub fn render_error(message: &str) -> String {
     error_fragment(format!("Error: {message}"))
 }
@@ -51,17 +48,42 @@ pub fn generation_error_summary(raw: &str) -> String {
     "The last turn failed to generate.".to_string()
 }
 
-/// A failure the panel keeps in place: a 200 carrying the error fragment.
 pub(crate) fn error_fragment_response(message: impl std::fmt::Display) -> Response<Body> {
     Html(error_fragment(message)).into_response()
+}
+
+fn classify_error(error: ApplicationError, prefix: &str) -> Result<String, String> {
+    match error {
+        ApplicationError::Validation(message) => Ok(message),
+        other => Err(format!("{prefix}: {other}")),
+    }
 }
 
 /// A refusal reaches the user as a 400, which the shell shows as a toast and
 /// leaves the panel in place. Other errors keep the in-fragment rendering,
 /// labelled with `prefix` so the failure's origin survives.
 pub(crate) fn error_response(error: ApplicationError, prefix: &str) -> Response<Body> {
-    match error {
-        ApplicationError::Validation(message) => bad_request(render_error(&message)),
-        other => error_fragment_response(format!("{prefix}: {other}")),
+    match classify_error(error, prefix) {
+        Ok(message) => bad_request(render_error(&message)),
+        Err(message) => error_fragment_response(message),
+    }
+}
+
+/// A refused or malformed form action: 400 with the failure for the client's
+/// inline slot. A non-2xx so htmx never swaps the region the failure describes.
+pub(crate) fn action_refusal_response(message: impl std::fmt::Display) -> Response<Body> {
+    bad_request(error_fragment(message))
+}
+
+/// A server-side form action failure: 500 with the failure for the client's
+/// inline slot. A non-2xx so htmx never swaps the region the failure describes.
+pub(crate) fn action_failure_response(message: impl std::fmt::Display) -> Response<Body> {
+    internal_error(error_fragment(message))
+}
+
+pub(crate) fn action_error_response(error: ApplicationError, prefix: &str) -> Response<Body> {
+    match classify_error(error, prefix) {
+        Ok(message) => action_refusal_response(message),
+        Err(message) => action_failure_response(message),
     }
 }

@@ -85,8 +85,10 @@ impl RoleRowView {
                 </div>
                 <div class="connection-actions">
                     <button type="button" hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-cyan">Edit</button>
+                    <button type="button" hx-post="/connections/{{ conn.id }}/test" hx-target="next .connection-test-slot" hx-swap="innerHTML" class="btn-cyan">Test</button>
                     <button type="button" hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-danger">Delete</button>
                 </div>
+                <div class="inline-error-slot connection-test-slot"></div>
             </div>
             {% endfor %}
         </div>
@@ -112,7 +114,6 @@ pub struct SettingsTemplate {
 }
 
 impl SettingsTemplate {
-    /// `error` is a refusal the Connections sub-tab keeps in place; role health drives the sub-tab marker.
     pub fn from_settings(
         settings: &AppSettings,
         roles: &[RoleHealth],
@@ -137,7 +138,6 @@ impl SettingsTemplate {
         }
     }
 
-    /// The Narrator and Quantifier role rows, in that order.
     fn role_rows(settings: &AppSettings, roles: &[RoleHealth]) -> Vec<RoleRowView> {
         [
             (
@@ -211,8 +211,10 @@ impl SettingsTemplate {
         <div class="inline-error-slot" data-error-slot="connection-form" hidden></div>
         <div class="form-actions">
             <button type="submit" class="btn-primary">Save</button>
+            <button type="button" class="btn-cyan" hx-post="/connections/test" hx-include="closest form" hx-target="next .connection-test-slot" hx-swap="innerHTML">Test</button>
             <button type="button" class="btn-cyan" hx-get="/fragment/settings" hx-target=".settings-panel" hx-swap="innerHTML">Cancel</button>
         </div>
+        <div class="inline-error-slot connection-test-slot"></div>
     </form>
 </div>
 "##,
@@ -258,6 +260,17 @@ impl ConnectionFormTemplate {
                 .unwrap_or_else(|| "/connections/add".to_string()),
         }
     }
+}
+
+#[derive(Template)]
+#[template(
+    source = r##"<div class="connection-test-result success">OK &middot; {{ backend_name }} {{ model_name }} &middot; {{ elapsed_ms }} ms</div>"##,
+    ext = "html"
+)]
+pub struct ConnectionTestResultTemplate {
+    pub backend_name: String,
+    pub model_name: String,
+    pub elapsed_ms: u128,
 }
 
 #[derive(Template)]

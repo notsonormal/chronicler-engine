@@ -11,6 +11,7 @@ use crate::adapters::driven::llm::providers::{
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::text_check::HarperTextChecker;
 use crate::application::agents::registry::AgentRegistry;
+use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
@@ -92,6 +93,7 @@ pub struct WiredApp {
     pub persona_catalogue: PersonaCatalogue,
     pub pipeline: ActionPipeline,
     pub text_check_service: Arc<TextCheckService>,
+    pub connection_test_service: ConnectionTestService,
     pub shutdown_token: CancellationToken,
 }
 
@@ -105,6 +107,8 @@ fn build_wired_app(
 
     let settings_service = SettingsService::new(Arc::clone(&storage));
     let prompt_preset_service = PromptPresetService::new(Arc::clone(&storage));
+    let connection_test_service =
+        ConnectionTestService::new(settings_service.clone(), Arc::new(provider_from_config));
     let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
     let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
     let persona_catalogue = PersonaCatalogue::new(Arc::clone(&storage));
@@ -142,6 +146,7 @@ fn build_wired_app(
         persona_catalogue,
         pipeline,
         text_check_service,
+        connection_test_service,
         shutdown_token,
     })
 }

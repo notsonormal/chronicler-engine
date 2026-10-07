@@ -11,14 +11,16 @@ use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{
     options_preset_card_html, preset_card_html, preset_edit_form_html, preset_view_form_html,
 };
-use crate::adapters::driving::http::utils::error::{error_fragment_response, error_response};
+use crate::adapters::driving::http::utils::error::{
+    action_error_response, action_failure_response, action_refusal_response,
+    error_fragment_response, error_response,
+};
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, render_template};
 
 use crate::adapters::driving::http::prompt_presets::templates::prompt_presets::{
     ModeActiveIds, PromptPresetsTemplate,
 };
 
-/// Per-mode active preset ids for the panel, derived from the mode registry.
 fn mode_active_ids(
     settings: &crate::domain::model::settings::AppSettings,
 ) -> (ModeActiveIds, ModeActiveIds, ModeActiveIds) {
@@ -191,7 +193,7 @@ pub async fn save_preset_handler(
 ) -> Response<Body> {
     let preset_type = match PresetType::try_from(form.preset_type.as_str()).ok() {
         Some(pt) => pt,
-        None => return error_fragment_response("Invalid preset type"),
+        None => return action_refusal_response("Invalid preset type"),
     };
 
     // Create forms render no checkboxes; both-false means "flags not
@@ -205,7 +207,7 @@ pub async fn save_preset_handler(
     let preset = form.into_preset(generate_storage_id("preset"), preset_type, allowed_modes);
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
-        return error_response(e, "Save failed");
+        return action_error_response(e, "Save failed");
     }
 
     panel_handler(State(app_state)).await.into_response()
@@ -229,10 +231,14 @@ pub async fn update_preset_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<PresetForm>,
 ) -> Response<Body> {
-    let mut preset = require_preset!(app_state.prompt_preset_service, &id);
+    let mut preset = match app_state.prompt_preset_service.get_preset(&id) {
+        Ok(Some(preset)) => preset,
+        Ok(None) => return action_refusal_response("Preset not found"),
+        Err(e) => return action_failure_response(format!("Load failed: {e}")),
+    };
 
     if preset.is_default {
-        return error_fragment_response("Cannot edit default presets");
+        return action_refusal_response("Cannot edit default presets");
     }
 
     // preset_type is fixed at creation, so the form's hidden input is
@@ -252,12 +258,12 @@ pub async fn update_preset_handler(
     preset.allowed_modes = allowed_modes;
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
-        return error_response(e, "Update failed");
+        return action_error_response(e, "Update failed");
     }
 
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => return error_fragment_response(format!("Load failed: {e}")),
+        Err(e) => return action_failure_response(format!("Load failed: {e}")),
     };
     let novel_bundle = settings
         .mode_preset_registry
@@ -283,10 +289,14 @@ pub async fn delete_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Response<Body> {
-    let preset = require_preset!(app_state.prompt_preset_service, &id);
+    let preset = match app_state.prompt_preset_service.get_preset(&id) {
+        Ok(Some(preset)) => preset,
+        Ok(None) => return action_refusal_response("Preset not found"),
+        Err(e) => return action_failure_response(format!("Load failed: {e}")),
+    };
 
     if preset.is_default {
-        return error_fragment_response("Cannot delete default presets");
+        return action_refusal_response("Cannot delete default presets");
     }
 
     // Refuse presets referenced as any mode's default — deleting one would
@@ -294,22 +304,22 @@ pub async fn delete_preset_handler(
     {
         let settings = match app_state.settings() {
             Ok(s) => s,
-            Err(e) => return error_fragment_response(format!("Load failed: {e}")),
+            Err(e) => return action_failure_response(format!("Load failed: {e}")),
         };
         if settings.mode_preset_registry.references(&id) {
-            return error_fragment_response(
+            return action_refusal_response(
                 "Preset is a mode default; change the default before deleting",
             );
         }
         if settings.active_options_prompt_preset_id == id {
-            return error_fragment_response(
+            return action_refusal_response(
                 "Preset is the default Options preset; change the default before deleting",
             );
         }
     }
 
     if let Err(e) = app_state.prompt_preset_service.delete_preset(&id) {
-        return error_fragment_response(format!("Delete failed: {e}"));
+        return action_failure_response(format!("Delete failed: {e}"));
     }
 
     Html(String::new()).into_response()
@@ -336,8 +346,6 @@ pub async fn duplicate_preset_handler(
     panel_handler(State(app_state)).await.into_response()
 }
 
-/// Query for the activate endpoint. The panel's single activate button sends
-/// no mode; the handler falls back to Novel.
 #[derive(Debug, Default, serde::Deserialize)]
 pub struct ActivateQuery {
     pub mode: Option<String>,

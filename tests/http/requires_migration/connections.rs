@@ -239,7 +239,10 @@ async fn test_edit_connection_not_found() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
+    assert!(
+        !response.status().is_success(),
+        "an unknown connection is refused, not answered as a 200 panel replacement"
+    );
     let body = axum::body::to_bytes(response.into_body(), 1024)
         .await
         .unwrap();
