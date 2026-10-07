@@ -4,6 +4,7 @@ use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
+use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 
 #[tokio::test]
 async fn test_debug_state_endpoint_returns_json() {
@@ -145,7 +146,10 @@ async fn test_debug_is_generating_returns_false_by_default() {
 
 #[tokio::test]
 async fn test_debug_is_generating_reflects_state() {
-    let app = TestAppBuilder::default_test().is_generating(true).build();
+    let app = TestAppBuilder::default_test()
+        .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
+        .is_generating(true)
+        .build();
 
     let req = Request::builder()
         .uri("/debug/is_generating")

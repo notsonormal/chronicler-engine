@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use axum::Router;
 
+use crate::application::errors::ProcessActionResult;
 use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::settings::AppSettings;
@@ -174,11 +175,6 @@ impl TestAppBuilder {
             state.add_message(text, log_type);
         }
 
-        if self.is_generating {
-            state.narrative.input_buffer.status = GenerationStatus::Generating;
-            state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        }
-
         if !self.skip_seeding {
             let snapshot = GameStateSnapshot::from_game_state(&state);
             let _ = storage.save_snapshot(&snapshot);
@@ -195,20 +191,27 @@ impl TestAppBuilder {
             .expect("build_app_graph_for_tests should succeed");
 
         if self.is_generating {
-            let mut state = wired.message_service.load_or_fresh();
-            state.narrative.input_buffer.status = GenerationStatus::Generating;
-            state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-            let _ = wired.message_service.save_state(&state);
-            // Mirror the persisted Generating status into the in-memory gate so
-            // handlers that consult `is_busy` see the same truth.
+            // `try_claim` is the production claim path and also writes a
+            // persisted `Generating`; the persisted channel is re-applied
+            // below, so a bare `is_generating(true)` never leaves it set.
             let game_id = wired.storage.current_game_id();
-            let _ = wired
-                .generation_gate
-                .try_claim(game_id, &mut state, &wired.message_service);
+            let mut claim_state = wired.message_service.load_or_fresh();
+            let claim =
+                wired
+                    .generation_gate
+                    .try_claim(game_id, &mut claim_state, &wired.message_service);
+            assert!(
+                matches!(&claim, Ok((_, _, ProcessActionResult::Started))),
+                "test fixture failed to claim the generation slot: {claim:?}"
+            );
         }
 
-        if let Some((status, phase)) = self.generation.clone() {
+        if self.is_generating || self.generation.is_some() {
             let mut state = wired.message_service.load_or_fresh();
+            let (status, phase) = self
+                .generation
+                .clone()
+                .unwrap_or_else(|| (GenerationStatus::Idle, GenerationPhase::default()));
             state.narrative.input_buffer.status = status;
             state.narrative.input_buffer.phase = phase;
             let _ = wired.message_service.save_state(&state);

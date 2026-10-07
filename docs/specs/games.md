@@ -56,6 +56,17 @@ Then the response status is "400 BAD_REQUEST"
 And the response body mentions "Game not found"
 ```
 
+#### Scenario 18.3: Switching to a game heals a stale generating status
+
+```gherkin
+Given two created games with ids "id1" (active) and "id2"
+And "id2" carries a persisted "Generating" status with no live generation slot
+When the client POST /games/{id2}/switch
+Then the response status is "200 OK"
+And the response has an "HX-Refresh: true" header
+And the active game's persisted status is "idle"
+```
+
 ### Delete
 
 #### Scenario 19.1: Deleting a non-active game returns success

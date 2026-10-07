@@ -6,6 +6,7 @@ use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
+use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use chronicler_engine::test_support::TestPersona;
 
 use crate::support::http_fixtures::seeded_storage_with_initial_game;
@@ -65,5 +66,60 @@ async fn test_switch_game_handler_not_found() {
     assert!(
         body_str.contains("Game not found"),
         "Expected 'Game not found' in error body: {body_str}"
+    );
+}
+
+// [docs/specs/games.md] SCENARIO: 18.3
+#[tokio::test]
+async fn test_switch_game_heals_stale_generating_status() {
+    let (storage, world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
+
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    let initial_id = state.game_catalogue.current_game_id();
+
+    let other_id = storage
+        .create_game(
+            "Test World",
+            &world_key,
+            &persona_key,
+            &TestPersona::standard().sheet.name,
+            "Test World_2026-01-01_1",
+        )
+        .unwrap();
+    assert_ne!(other_id, initial_id);
+
+    // Persisted `Generating` for the other game, with no live registry slot.
+    storage.set_game_id(other_id);
+    let mut stale = state.message_service.load_or_fresh();
+    stale.narrative.input_buffer.status = GenerationStatus::Generating;
+    stale.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state
+        .message_service
+        .save_state(&stale)
+        .expect("saving the stale snapshot should succeed");
+    storage.set_game_id(initial_id);
+
+    let req = Request::builder()
+        .uri(format!("/games/{other_id}/switch"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers().get("HX-Refresh").unwrap(), "true");
+    assert_eq!(state.game_catalogue.current_game_id(), other_id);
+
+    // The registry poll reads `idle` for a game with no slot whether or not
+    // the handler healed it, so assert the persisted channel.
+    let (status, _) = state
+        .game_view_query
+        .get_generating_status()
+        .expect("reading the persisted status should succeed");
+    assert_eq!(
+        status,
+        GenerationStatus::Idle,
+        "switching to a game with a stale persisted Generating must heal the persisted channel"
     );
 }

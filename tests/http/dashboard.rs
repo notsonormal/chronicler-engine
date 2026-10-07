@@ -24,7 +24,6 @@ async fn test_generating_status_answers_from_live_registry() {
         assert_eq!(body, "idle", "stale Generating should answer idle");
     }
 
-    // `is_generating(true)` claims the slot; `generation_status` re-applies the phase.
     for phase in [GenerationPhase::Narrating, GenerationPhase::Quantifying] {
         let expected = phase.as_endpoint_str();
         let body = fetch_generating_status(
