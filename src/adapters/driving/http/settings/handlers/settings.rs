@@ -25,21 +25,13 @@ pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
 }
 
 /// A refusal keeps the Connections sub-tab in place, so its message rides inside the panel rather than replacing it.
-fn render_settings_panel(app_state: &AppState, error: Option<&str>) -> Html<String> {
+fn render_settings_panel(app_state: &AppState, error: Option<&EngineError>) -> Html<String> {
     match app_state.settings() {
         Ok(settings) => match app_state.game_view_query.role_health() {
             Ok(roles) => render_template(SettingsTemplate::from_settings(&settings, &roles, error)),
             Err(e) => Html(render_error(&e.to_string())),
         },
         Err(e) => Html(render_error(&e.to_string())),
-    }
-}
-
-/// The `EngineError` payload without its layer prefix.
-fn refusal_message(error: &EngineError) -> String {
-    match error {
-        EngineError::Validation(message) | EngineError::Config(message) => message.clone(),
-        other => other.to_string(),
     }
 }
 
@@ -301,7 +293,7 @@ pub async fn delete_connection_handler(
 
     match outcome {
         Ok(()) => render_settings_panel(&app_state, None),
-        Err(e) => render_settings_panel(&app_state, Some(&refusal_message(&e))),
+        Err(e) => render_settings_panel(&app_state, Some(&e)),
     }
 }
 
@@ -320,7 +312,7 @@ async fn set_role(
 
     match outcome {
         Ok(()) => render_settings_panel(app_state, None),
-        Err(e) => render_settings_panel(app_state, Some(&refusal_message(&e))),
+        Err(e) => render_settings_panel(app_state, Some(&e)),
     }
 }
 

@@ -7,9 +7,12 @@ use crate::application::games::view_query::RoleHealth;
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_QUANTIFIER};
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
 use crate::adapters::driving::http::builders::headers::banner_message;
-use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
+use crate::adapters::driving::http::utils::error::{
+    error_disclosure, raw_error_detail, refusal_message,
+};
 use crate::adapters::driving::http::utils::template_helpers::select_options_html;
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
+use crate::error::EngineError;
 
 pub struct RoleRowView {
     pub role: String,
@@ -55,8 +58,8 @@ impl RoleRowView {
     </div>
     <div class="settings-subtab-panel active" id="settings-connections" role="tabpanel" aria-labelledby="subtab-connections">
         {% match error %}
-        {% when Some with (message) %}
-        <div class="error-message">{{ message }}</div>
+        {% when Some with (disclosure) %}
+        {{ disclosure }}
         {% when None %}
         {% endmatch %}
         <h3 class="section-heading">Roles</h3>
@@ -109,7 +112,7 @@ pub struct SettingsTemplate {
     pub connections: Vec<LlmProviderConfig>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
-    pub error: Option<String>,
+    pub error: Option<SafeHtml>,
     pub text_check_card: SafeHtml,
 }
 
@@ -117,7 +120,7 @@ impl SettingsTemplate {
     pub fn from_settings(
         settings: &AppSettings,
         roles: &[RoleHealth],
-        error: Option<&str>,
+        error: Option<&EngineError>,
     ) -> Self {
         let degraded = roles.iter().any(|health| {
             matches!(health.role.as_str(), AGENT_NARRATOR | AGENT_QUANTIFIER)
@@ -129,7 +132,13 @@ impl SettingsTemplate {
             connections: settings.connections.clone(),
             narration_connection_id: settings.narration_connection_id.clone(),
             quantifier_connection_id: settings.quantifier_connection_id.clone(),
-            error: error.map(str::to_string),
+            error: error.map(|error| {
+                SafeHtml::new(error_disclosure(
+                    "settings-panel-error",
+                    &refusal_message(error),
+                    &raw_error_detail(&error.to_string()),
+                ))
+            }),
             text_check_card: SafeHtml::new(
                 TextCheckCardTemplate::from_settings(settings, "")
                     .render()

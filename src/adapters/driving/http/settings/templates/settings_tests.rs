@@ -6,6 +6,7 @@ use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMo
 use crate::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate, TextCheckCardTemplate,
 };
+use crate::error::EngineError;
 
 fn two_connection_settings() -> AppSettings {
     AppSettings {
@@ -146,12 +147,39 @@ fn test_healthy_role_renders_healthy() {
 #[test]
 fn test_refusal_message_rides_inside_the_connections_panel() {
     let settings = two_connection_settings();
-    let html =
-        SettingsTemplate::from_settings(&settings, &[], Some("Narrator uses this connection"))
-            .render()
-            .unwrap();
+    let refusal = EngineError::Validation("Narrator uses this connection".to_string());
+    let roles = vec![health(
+        "narrator",
+        Some("Mock mock"),
+        Some("connection refused"),
+    )];
+    let html = SettingsTemplate::from_settings(&settings, &roles, Some(&refusal))
+        .render()
+        .unwrap();
 
-    assert!(html.contains(r#"<div class="error-message">Narrator uses this connection</div>"#));
+    assert!(
+        html.contains(
+            r#"<span class="error-disclosure-message">Narrator uses this connection</span>"#
+        ),
+        "the refusal's short message must be the disclosure's visible text: {html}"
+    );
+    assert!(
+        html.contains(r#"class="error-details-toggle""#),
+        "the refusal must carry the Details toggle: {html}"
+    );
+    assert!(
+        html.contains(
+            r#"<pre class="error-detail-raw">Validation error: Narrator uses this connection</pre>"#
+        ),
+        "the popover must carry the raw failure text: {html}"
+    );
+    for popover_id in ["settings-panel-error", "role-health-narrator-popover"] {
+        assert_eq!(
+            html.matches(&format!(r#"id="{popover_id}""#)).count(),
+            1,
+            "the panel refusal and a role-health disclosure must not share a popover id: {html}"
+        );
+    }
 }
 
 #[test]

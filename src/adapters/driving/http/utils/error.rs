@@ -6,6 +6,7 @@ use axum::response::{Html, IntoResponse, Response};
 
 use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error};
 use crate::application::errors::ApplicationError;
+use crate::error::EngineError;
 
 pub(crate) fn error_fragment(message: impl std::fmt::Display) -> String {
     format!(
@@ -74,6 +75,15 @@ pub(crate) fn error_response(error: ApplicationError, prefix: &str) -> Response<
 /// inline slot. A non-2xx so htmx never swaps the region the failure describes.
 pub(crate) fn action_refusal_response(message: impl std::fmt::Display) -> Response<Body> {
     bad_request(error_fragment(message))
+}
+
+/// The `EngineError` payload without its layer prefix, for the part of a
+/// refusal the user reads before opening the disclosure.
+pub(crate) fn refusal_message(error: &EngineError) -> String {
+    match error {
+        EngineError::Validation(message) | EngineError::Config(message) => message.clone(),
+        other => other.to_string(),
+    }
 }
 
 /// A server-side form action failure: 500 with the failure for the client's
