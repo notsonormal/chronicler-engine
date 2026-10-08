@@ -13,15 +13,14 @@ The static HTML shell defines the tab bar, the active-tab body, the polling cont
 
 ```mermaid
 flowchart TD
-    ERR["error-notification (top, fixed)"]
     HDR["header-bar<br/>(48px, polled once)"]
     TABS["tab-bar<br/>Game | Settings | Prompt Presets | Worlds | Games | LLM Messages"]
     BODY["active tab-content<br/>(flex column)"]
     ACT["action-area (Game tab only, 64px)"]
-    ERR --> HDR --> TABS --> BODY --> ACT
+    HDR --> TABS --> BODY --> ACT
 ```
 
-The error-notification toast sits fixed at the top of the page and surfaces server-side error responses for 5 seconds before auto-hiding. It is populated by the global HTMX `htmx:beforeSwap` handler in the static shell (see `assets/index.html`). A failed request never replaces the region it describes: a failed poll answers non-2xx with `HX-Reswap: none` and keeps its last good content, and a failed form or card action answers non-2xx so the client renders a short message with the raw server text behind its Details disclosure into that surface's inline error slot (`[data-error-slot]`). The connection test is the exception: it targets its own `.connection-test-slot`, so it answers 200 with either the result or the same disclosure and the client swaps it into that slot, which cannot replace the row or form it reports on.
+A failure appears in one of three places: the failure banner under the header, the status display, or the failing region's own error slot. A non-2xx response swaps nothing into the region it describes. A failed poll answers non-2xx with `HX-Reswap: none`, so the region keeps its last good content. A failed form or card action renders a short message into that region's inline error slot (`[data-error-slot]`), with the raw server text behind the Details disclosure. The connection test answers 200 and targets its own `.connection-test-slot`, so the client swaps the result or the same disclosure into that slot, which cannot replace the row or form it reports on.
 
 The header bar is 48px tall, polls every 5s, and carries the game title and current game name. Location is **not** in the header — it appears in the story log as a green location-header on the active room.
 
@@ -119,7 +118,7 @@ The textarea height is auto-resized on input. The save/cancel buttons replace th
 
 1. The user clicks the delete (`#i-trash`) button on the last entry. JavaScript calls `confirm("Delete this message?")` before proceeding.
 2. On confirm, JavaScript submits to the history-delete endpoint.
-3. On a 2xx response, JavaScript fetches the story-log fragment and swaps it into `#story-log`. On a non-2xx response, the response body is shown via the global error notification.
+3. On a 2xx response, JavaScript fetches the story-log fragment and swaps it into `#story-log`. On a non-2xx response, the message renders in the story log's own inline error slot.
 
 ### Swipe Flow
 

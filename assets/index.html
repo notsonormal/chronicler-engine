@@ -69,7 +69,6 @@
       </symbol>
     </svg>
     <a class="skip-link" href="#main-content">Skip to content</a>
-    <div class="error-notification" id="error-notification"></div>
     <div class="header-bar">
       <div
         class="header"
@@ -160,6 +159,13 @@
         class="restore-notice"
         role="status"
         aria-live="polite"
+      ></div>
+      <!-- Outside the polled log, so a poll cannot drop a failure the log reported. -->
+      <div
+        id="story-log-error"
+        class="story-log-error"
+        data-error-slot="story-log"
+        hidden
       ></div>
       <!-- Separate regions so a poll does not re-announce unchanged content every cycle. -->
       <div
@@ -297,8 +303,6 @@
         }
       }
 
-      let lastStatusError = null;
-
       function writeLiveRegion(id, text) {
         const region = document.getElementById(id);
         if (!region || region.textContent === text) return;
@@ -335,17 +339,6 @@
         const statusDisplay = document.getElementById("status-display");
         if (!statusDisplay) return;
         syncActionState();
-        const disclosure = statusDisplay.querySelector(".error-disclosure");
-        if (disclosure) {
-          const raw = statusDisplay.querySelector(".error-detail-raw");
-          const text = (raw ? raw.textContent : disclosure.textContent).trim();
-          if (text !== lastStatusError) {
-            lastStatusError = text;
-            showError("Error: " + text);
-          }
-        } else {
-          lastStatusError = null;
-        }
         announceGenerationError(statusDisplay);
         announceStatusDisplay();
       }
@@ -428,9 +421,6 @@
         applyStatusDisplay();
       }
 
-      // Body-level, so no fragment swap replaces it.
-      const errorNotification = document.getElementById("error-notification");
-
       const noticeClearTimers = new WeakMap();
 
       function scheduleNoticeClear(element, onClear, delayMs) {
@@ -444,25 +434,6 @@
           }, delayMs)
         );
       }
-
-      function showError(message) {
-        if (!errorNotification) return;
-        errorNotification.textContent = message;
-        errorNotification.classList.add("visible");
-        scheduleNoticeClear(
-          errorNotification,
-          () => errorNotification.classList.remove("visible"),
-          5000
-        );
-      }
-
-      document.body.addEventListener("htmx:beforeSwap", function (evt) {
-        if (evt.detail.isError) {
-          const response = evt.detail.serverResponse || "";
-          const text = response.replace(/<[^>]*>/g, "").trim();
-          showError(text || "Request failed");
-        }
-      });
 
       function refreshFailureBanner() {
         const banner = document.getElementById("failure-banner");
@@ -519,12 +490,25 @@
       }
 
       const INLINE_ERROR_CONTAINERS =
-        "form, .settings-card, .world-item, .preset-card, .game-item, .llm-message-card";
+        "form, .settings-card, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .worlds-panel, .games-panel";
 
-      function inlineErrorSlotFor(elt) {
+      // The counter keeps two generated slots from sharing one popover id.
+      let generatedErrorSlots = 0;
+
+      // A failed action needs a region to report in, so a container without a slot
+      // gets one here.
+      function inlineErrorSlotFor(elt, create) {
         if (!elt || !elt.closest) return null;
         const container = elt.closest(INLINE_ERROR_CONTAINERS);
-        return container ? container.querySelector("[data-error-slot]") : null;
+        if (!container) return null;
+        const existing = container.querySelector(":scope > [data-error-slot]");
+        if (existing || !create) return existing;
+        const slot = document.createElement("div");
+        slot.className = "inline-error-slot";
+        slot.dataset.errorSlot = "generated-" + ++generatedErrorSlots;
+        slot.hidden = true;
+        container.appendChild(slot);
+        return slot;
       }
 
       function renderInlineError(slot, message, rawText) {
@@ -534,9 +518,44 @@
         slot.hidden = false;
       }
 
-      function plainResponseText(xhr) {
-        const body = xhr ? xhr.responseText || "" : "";
-        return body.replace(/<[^>]*>/g, "").trim();
+      function clearInlineError(slot) {
+        if (!slot) return;
+        slot.innerHTML = "";
+        slot.hidden = true;
+      }
+
+      function storyLogErrorSlot() {
+        return document.getElementById("story-log-error");
+      }
+
+      function showStoryLogError(message, rawText) {
+        renderInlineError(storyLogErrorSlot(), message, rawText);
+      }
+
+      // The status poll replaces this disclosure on its next cycle.
+      function showStatusError(message, rawText) {
+        const statusDisplay = document.getElementById("status-display");
+        if (!statusDisplay) return;
+        statusDisplay.innerHTML = errorDisclosureHtml(
+          "status-error-popover",
+          message,
+          rawText
+        );
+        applyStatusDisplay();
+      }
+
+      // A server error body is an HTML fragment, so the disclosure shows its text.
+      function plainResponseText(body) {
+        return (body || "").replace(/<[^>]*>/g, "").trim();
+      }
+
+      // A failed fetch reports the server's own words behind the Details disclosure.
+      function throwServerDetail(response) {
+        return response.text().then((body) => {
+          throw new Error(
+            plainResponseText(body) || `The server answered ${response.status}.`
+          );
+        });
       }
 
       // A server that answered is reachable, so only a failed poll marks the engine unreachable.
@@ -547,9 +566,9 @@
       }
 
       document.body.addEventListener("htmx:responseError", function (evt) {
-        const slot = inlineErrorSlotFor(evt.detail.elt);
+        const slot = inlineErrorSlotFor(evt.detail.elt, true);
         if (slot) {
-          renderInlineError(slot, "That action failed.", plainResponseText(evt.detail.xhr));
+          renderInlineError(slot, "That action failed.", plainResponseText(evt.detail.xhr.responseText));
         } else if (isPollRequest(evt.detail.elt)) {
           markUnreachable();
         }
@@ -557,7 +576,7 @@
 
       document.body.addEventListener("htmx:sendError", function (evt) {
         markUnreachable();
-        const slot = inlineErrorSlotFor(evt.detail.elt);
+        const slot = inlineErrorSlotFor(evt.detail.elt, true);
         if (slot) {
           renderInlineError(slot, "The engine is unreachable.", "No response from the server.");
         }
@@ -566,11 +585,7 @@
       document.body.addEventListener("htmx:afterRequest", function (evt) {
         if (!evt.detail.successful) return;
         clearUnreachable();
-        const slot = inlineErrorSlotFor(evt.detail.elt);
-        if (slot) {
-          slot.innerHTML = "";
-          slot.hidden = true;
-        }
+        clearInlineError(inlineErrorSlotFor(evt.detail.elt));
       });
 
       document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);
@@ -834,6 +849,7 @@
 
       function submitEdit() {
         if (editState === null) return;
+        clearInlineError(storyLogErrorSlot());
         const newText = document.getElementById("edit-textarea").value;
         const formData = new URLSearchParams();
         formData.append("text", newText);
@@ -844,17 +860,15 @@
           body: formData,
         })
           .then((response) => {
-            if (!response.ok) {
-              throw new Error(`save failed with status ${response.status}`);
-            }
+            if (!response.ok) return throwServerDetail(response);
             // The lock stays until the resumed poll replaces the entry's
             // controls, so a second editor cannot open on a stale textarea.
             clearEditState();
           })
           .catch((err) => {
             console.error("Failed to save message:", err);
-            showError("Failed to save message");
             revertEdit();
+            showStoryLogError("Failed to save the message.", err.message);
           })
           .finally(() => {
             resumePolling();
@@ -880,15 +894,13 @@
         updateToThinking();
         fetch(url, { method: "POST" })
           .then((response) => {
-            if (!response.ok) {
-              throw new Error(`${failureMessage} (status ${response.status})`);
-            }
+            if (!response.ok) return throwServerDetail(response);
             return response.text();
           })
           .catch((err) => {
             console.error(`${failureMessage}:`, err);
-            showError(failureMessage);
             resetStatusToReady();
+            showStatusError(failureMessage, err.message);
           });
       }
 
@@ -913,12 +925,11 @@
       }
 
       function switchSwipe(messageId, index) {
+        clearInlineError(storyLogErrorSlot());
         fetch(`/message/${messageId}/swipe/${index}`, { method: "POST" })
           .then((response) => {
-            if (response.ok) {
-              return response.text();
-            }
-            throw new Error("Swipe switch failed");
+            if (!response.ok) return throwServerDetail(response);
+            return response.text();
           })
           .then((html) => {
             document.getElementById("story-log").innerHTML = html;
@@ -928,26 +939,24 @@
           })
           .catch((err) => {
             console.error("Swipe switch failed:", err);
-            showError("Failed to switch swipe");
+            showStoryLogError("Failed to switch the swipe.", err.message);
           });
       }
 
       function deleteMessage() {
         if (!confirm("Delete this message?")) return;
+        clearInlineError(storyLogErrorSlot());
         fetch("/history/delete", { method: "POST" })
           .then((response) => {
-            if (response.ok) {
-              htmx.ajax("GET", "/fragment/story-log", {
-                target: "#story-log",
-                swap: "innerHTML",
-              });
-            } else {
-              response.text().then((text) => showError(text));
-            }
+            if (!response.ok) return throwServerDetail(response);
+            htmx.ajax("GET", "/fragment/story-log", {
+              target: "#story-log",
+              swap: "innerHTML",
+            });
           })
           .catch((err) => {
             console.error("Delete failed:", err);
-            showError("Failed to delete message");
+            showStoryLogError("Failed to delete the message.", err.message);
           });
       }
 

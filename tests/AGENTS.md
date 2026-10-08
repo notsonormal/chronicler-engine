@@ -2,7 +2,7 @@
 
 ## Test Strategy
 
-See [`STRATEGY.md`](STRATEGY.md) for the normative placement rule (which of the three UI tiers a test belongs to) and the overlap/SCENARIO-tag conventions.
+Read [`STRATEGY.md`](STRATEGY.md) before placing a test or writing a spec scenario: the tier of every `tests/` directory, the tier-1 **domain outcome** rule, the UI placement rule, and the SCENARIO-tag rules.
 
 ## Failure handling
 
@@ -26,7 +26,7 @@ Every spawned test server tees engine stdout/stderr incrementally to `tmp/test_s
 
 ### Test Mirror Convention
 
-Integration test structure mirrors `src/` paths **within each test binary**. The test **binary** is chosen by fixture weight (architecture/http/browser/llm/storage/infrastructure); inside each binary, file paths mirror `src/` subpaths.
+Integration test structure mirrors `src/` paths **within each test binary**. The tier table in [`STRATEGY.md`](STRATEGY.md) picks the directory; inside it, file paths mirror `src/` subpaths.
 
 Examples:
 - `src/application/pipeline/action_pipeline/core.rs` ↔ `src/application/pipeline/action_pipeline/core_tests.rs` (unit test mirror)
@@ -38,7 +38,7 @@ Examples:
 
 Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep API details there.
 
-- Assert what the narrator was sent → storage-backed recorder (`make_test_recorder_with_storage`, `src/test_support/fixtures.rs`) + `Storage::list_latest_llm_messages`
+- Assert what the narrator was sent → storage-backed recorder (`make_test_recorder_with_storage`, `src/test_support/fixtures.rs`) + `GameViewQuery::list_latest_llm_messages`
 - Inject a storage failure → `Storage::with_failure` + `TestOverride::internal`, exemplar `tests/http/settings.rs`
 - Wire an options agent → `OptionsAgent::with_provider` registered in `AgentRegistry`, exemplar `src/application/pipeline/action_pipeline/options_tests.rs`
 - Observe generated options in the UI → `GET /fragment/options-dock` (`src/adapters/driving/http/builders/router.rs`)
@@ -56,7 +56,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `prompt_presets.rs` — Browser prompt-presets tests: the duplicate → edit → save click chain wiring guard. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
     - **stub/**
-      - `dashboard.rs` — Stub-browser tests for dashboard chrome: the error toast and the action-area state machine. Tagged against `docs/specs/browser_dashboard.md`.
+      - `dashboard.rs` — Stub-browser tests for dashboard chrome: the failure surfaces and the action-area state machine. Tagged against `docs/specs/browser_dashboard.md`.
       - `invariants.rs` — Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Ten checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
       - `llm_messages.rs` — Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row. Tagged against `docs/specs/browser_llm_messages.md`.
       - `mod.rs` — Stub-browser tests: browser-only behaviour against a fake engine.

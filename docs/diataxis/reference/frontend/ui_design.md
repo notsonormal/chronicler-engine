@@ -45,8 +45,7 @@ This doc carries the token tables verbatim because the tables are the curated to
 | `--color-log-input` | `#272727` | User input bubble background |
 | `--color-log-narration` | `#1f1f1f` | Narration bubble background |
 | `--color-log-system` | `#27251c` | System message bubble background |
-| `--color-error-gradient-start` | `#bd5252` | Error notification gradient top |
-| `--color-error-gradient-end` | `#963c3c` | Error notification gradient bottom, unreachable banner |
+| `--color-error-gradient-end` | `#963c3c` | Unreachable failure banner background |
 | `--color-tint-ok` | `color-mix(in srgb, var(--color-accent-ok) 12%, transparent)` | OK badges, save hover |
 | `--color-tint-ok-edge` | `color-mix(in srgb, var(--color-accent-ok) 28%, transparent)` | OK badge border |
 | `--color-tint-orange` | `color-mix(in srgb, var(--color-accent-orange) 12%, transparent)` | Quantifier badge, spell issue tags |
@@ -262,18 +261,6 @@ A position-fixed palette that appears above the command input while the input va
   - **Ready**: `--color-accent-ok`
   - **Thinking**: `--color-accent-yellow`
   - **Error**: `--color-accent-red`
-
-### Error Notification
-
-- Position: fixed top, full width
-- Background: linear-gradient(180deg, `--color-accent-red` 0%, `--color-error-gradient-end` 100%)
-- Color: white
-- Padding: `12px 20px`
-- Box-shadow: `0 2px 8px rgba(0, 0, 0, 0.5)`
-- `z-index: 1000`
-- Hidden by default: `transform: translateY(-100%)`
-- Visible state: `transform: translateY(0)`
-- Auto-hide: 5 seconds
 
 ### Log Entry Bubbles
 

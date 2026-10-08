@@ -83,7 +83,7 @@ Everything below is **POST**: a GET returns 405, a bodyless POST 415, so send a 
 
 A fetch proves an endpoint responds, not that the UI updates — drive the real DOM from `chrome_devtools_evaluate` for click Send, switch swipe and retrigger, and for the slash flows (`/impersonate`, `/guide`, `/options`) that submit through `#slash-menu` (spec `browser_slash_menu.md`). Full route list: `docs/diataxis/reference/frontend/http_routes.md`, generated from `router.rs`.
 
-Selector vocabulary: `docs/specs/browser_*.md`, enforced in `tests/browser/` (`dashboard.rs`, `games.rs`, `options.rs`, `prompt_presets.rs`, `worlds.rs`, plus `stub/`). Tabs switch through `.tab[data-tab="<name>"]`; the `#<name>-tab` id is the hidden content panel, so clicking the id does nothing. Common handles: `.log-entry`, `.edit-btn` / `#edit-textarea` / `.cancel-btn` (edit mode), `.delete-btn`, `#command-form input[name="command"]`, `#status-display`, `#error-notification.visible`, `#slash-menu` / `.slash-suggestion`, `#world-posture-status`.
+Selector vocabulary: `docs/specs/browser_*.md`, enforced in `tests/browser/` (`dashboard.rs`, `games.rs`, `options.rs`, `prompt_presets.rs`, `worlds.rs`, plus `stub/`). Tabs switch through `.tab[data-tab="<name>"]`; the `#<name>-tab` id is the hidden content panel, so clicking the id does nothing. Common handles: `.log-entry`, `.edit-btn` / `#edit-textarea` / `.cancel-btn` (edit mode), `.delete-btn`, `#command-form input[name="command"]`, `#status-display`, `#status-display .error-disclosure`, `#failure-banner`, `[data-error-slot]`, `#slash-menu` / `.slash-suggestion`, `#world-posture-status`.
 
 ## Troubleshooting
 

@@ -36,8 +36,6 @@
     --color-log-narration: #1f1f1f;
     --color-log-system: #27251c;
 
-    /* #c25555 measures only 4.44:1 against white toast text, below the 4.5:1 floor. */
-    --color-error-gradient-start: #bd5252;
     --color-error-gradient-end: #963c3c;
 
     --color-tint-ok: color-mix(in srgb, var(--color-accent-ok) 12%, transparent);
@@ -1065,26 +1063,6 @@ body {
     box-shadow: var(--shadow-focus-ring);
 }
 
-.error-notification {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(180deg, var(--color-error-gradient-start) 0%, var(--color-error-gradient-end) 100%);
-    color: white;
-    padding: 12px 20px;
-    text-align: center;
-    font-weight: bold;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    transform: translateY(-100%);
-    transition: transform 0.3s ease-in-out;
-}
-
-.error-notification.visible {
-    transform: translateY(0);
-}
-
 .failure-banner {
     flex-shrink: 0;
     background: var(--color-bg-secondary);
@@ -1205,6 +1183,18 @@ body {
 }
 
 .inline-error-slot[hidden] {
+    display: none;
+}
+
+/* The story log sits in a column flex parent, so this slot sizes to its text
+   instead of taking the full height .inline-error-slot claims for its row. */
+.story-log-error {
+    flex-shrink: 0;
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-small);
+}
+
+.story-log-error[hidden] {
     display: none;
 }
 

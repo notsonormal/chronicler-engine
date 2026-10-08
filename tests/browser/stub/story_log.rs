@@ -166,10 +166,24 @@ async fn test_failed_save_restores_entry_and_resumes_polling() {
             .await
             .unwrap();
 
-        wait_until_visible(&page, "#error-notification.visible", Duration::from_secs(5)).await;
         assert!(
-            !read_error_toast(&page).await.1.is_empty(),
-            "the failed save should show an error message"
+            wait_for_condition_async(
+                Duration::from_secs(5),
+                Duration::from_millis(50),
+                || async { read_error_disclosure(&page, "#story-log-error").await.0 },
+            )
+            .await,
+            "a failed save should report in the story log's error slot"
+        );
+        let (_, save_message, save_raw) =
+            read_error_disclosure(&page, "#story-log-error").await;
+        assert!(
+            !save_message.is_empty(),
+            "the failed save should show a short failure message"
+        );
+        assert!(
+            save_raw.contains("Stub save failure"),
+            "the server's own text belongs in the disclosure, got {save_raw:?}"
         );
 
         wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
@@ -227,9 +241,30 @@ async fn test_failed_retry_clears_pending_status_and_re_enables_send() {
             .await
             .unwrap();
 
-        // Reading the toast first also guarantees the synchronous recovery ran
-        // before the Send/status assertion below.
-        wait_until_visible(&page, "#error-notification.visible", Duration::from_secs(5)).await;
+        // Reading the disclosure first also guarantees the synchronous recovery
+        // ran before the Send/status assertion below.
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(5),
+                Duration::from_millis(50),
+                || async { read_error_disclosure(&page, "#status-display").await.0 },
+            )
+            .await,
+            "a failed retry should report in the status display"
+        );
+        let (_, message, raw) = read_error_disclosure(&page, "#status-display").await;
+        assert!(
+            message.contains("Failed to generate a new swipe"),
+            "the status display should name the failed action, got {message:?}"
+        );
+        assert!(
+            raw.contains("Stub retry failure"),
+            "the server's own text belongs in the disclosure, got {raw:?}"
+        );
+        assert!(
+            !error_details_open(&page, "#status-display").await,
+            "the raw error text must not be on screen until the client opens Details"
+        );
 
         let (status, disabled) = page
             .evaluate::<(), (String, bool)>(
@@ -248,10 +283,6 @@ async fn test_failed_retry_clears_pending_status_and_re_enables_send() {
         assert!(
             !status.contains("Thinking"),
             "a failed retry should leave the pending status, got {status:?}"
-        );
-        assert!(
-            status.contains("Ready"),
-            "a failed retry should reset the status to Ready, got {status:?}"
         );
         assert!(!disabled, "a failed retry should re-enable the Send button");
     })
@@ -522,12 +553,29 @@ async fn test_failed_retrigger_posts_to_retrigger_and_recovers() {
             .await
             .unwrap();
 
-            // Reading the toast first also guarantees the recovery ran before
+            // Reading the disclosure first also guarantees the recovery ran before
             // the assertions below.
-            wait_until_visible(&page, "#error-notification.visible", Duration::from_secs(5)).await;
             assert!(
-                !read_error_toast(&page).await.1.is_empty(),
-                "the failed retrigger should show an error message"
+                wait_for_condition_async(
+                    Duration::from_secs(5),
+                    Duration::from_millis(50),
+                    || async { read_error_disclosure(&page, "#status-display").await.0 },
+                )
+                .await,
+                "a failed retrigger should report in the status display"
+            );
+            let (_, message, raw) = read_error_disclosure(&page, "#status-display").await;
+            assert!(
+                message.contains("Failed to retrigger the event"),
+                "the status display should name the failed action, got {message:?}"
+            );
+            assert!(
+                raw.contains("Stub retrigger failure"),
+                "the server's own text belongs in the disclosure, got {raw:?}"
+            );
+            assert!(
+                !error_details_open(&page, "#status-display").await,
+                "the raw error text must not be on screen until the client opens Details"
             );
 
             assert_eq!(
@@ -551,8 +599,8 @@ async fn test_failed_retrigger_posts_to_retrigger_and_recovers() {
                 .await
                 .unwrap();
             assert!(
-                status.contains("Ready"),
-                "a failed retrigger should reset the status to Ready, got {status:?}"
+                !status.contains("Thinking"),
+                "a failed retrigger should leave the pending status, got {status:?}"
             );
             assert!(
                 !disabled,
@@ -1028,6 +1076,123 @@ async fn test_successful_save_holds_the_edit_lock_until_the_poll() {
             assert!(
                 !early_unlock,
                 "a successful save must hold the edit lock until the poll re-renders the log"
+            );
+        }
+    })
+    .await;
+}
+
+// The stub answers POST /history/delete with a 500, so the shipped delete click
+// exercises the failure path.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.18
+#[tokio::test]
+async fn test_failed_delete_reports_in_the_story_log_slot() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        page.on_dialog(|dialog| async move { dialog.accept(None).await })
+            .await
+            .unwrap();
+
+        let entries_before = count_log_entries(&page).await;
+        assert!(
+            entries_before > 1,
+            "the fixture must show an entry that carries a delete control"
+        );
+
+        page.locator("#story-log .log-entry:last-child .delete-btn")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(5),
+                Duration::from_millis(50),
+                || async { read_error_disclosure(&page, "#story-log-error").await.0 },
+            )
+            .await,
+            "a failed delete should report in the story log's error slot"
+        );
+        let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
+        assert!(
+            message.contains("Failed to delete the message"),
+            "the slot should name the failed action, got {message:?}"
+        );
+        assert!(
+            raw.contains("Stub delete failure"),
+            "the server's own text belongs in the disclosure, got {raw:?}"
+        );
+        assert_eq!(
+            count_log_entries(&page).await,
+            entries_before,
+            "a failed delete must leave the log as it was"
+        );
+    })
+    .await;
+}
+
+// The stub answers a swipe switch with a 500 once the test asks for the failure
+// path, so the shipped previous-swipe click runs the real client path.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.19
+#[tokio::test]
+async fn test_failed_swipe_switch_reports_in_the_story_log_slot() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let swipe = stub.swipe_handle();
+        async move {
+            swipe.set_two_swipes();
+            swipe.set_switch_failing();
+
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(10),
+                    Duration::from_millis(200),
+                    || async {
+                        page.evaluate::<(), bool>(
+                            r#"() => !!document.querySelector(".swipe-btn[title='Previous swipe']:not([disabled])")"#,
+                            None,
+                        )
+                        .await
+                        .unwrap_or(false)
+                    },
+                )
+                .await,
+                "the two-swipe log must offer a Previous-swipe control"
+            );
+
+            let entries_before = count_log_entries(&page).await;
+
+            page.evaluate::<(), ()>(
+                r#"(() => {
+                    const btn = document.querySelector(".swipe-btn[title='Previous swipe']");
+                    if (btn) btn.click();
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(5),
+                    Duration::from_millis(50),
+                    || async { read_error_disclosure(&page, "#story-log-error").await.0 },
+                )
+                .await,
+                "a failed swipe switch should report in the story log's error slot"
+            );
+            let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
+            assert!(
+                message.contains("Failed to switch the swipe"),
+                "the slot should name the failed action, got {message:?}"
+            );
+            assert!(
+                raw.contains("Stub swipe switch failure"),
+                "the server's own text belongs in the disclosure, got {raw:?}"
+            );
+            assert_eq!(
+                count_log_entries(&page).await,
+                entries_before,
+                "a failed swipe switch must leave the log as it was"
             );
         }
     })

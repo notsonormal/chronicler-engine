@@ -325,15 +325,40 @@ pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
         .len()
 }
 
-/// The error toast's `.visible` state and displayed text.
-pub async fn read_error_toast(page: &playwright_rs::Page) -> (bool, String) {
-    page.evaluate::<(), (bool, String)>(
-        r#"(() => {
-            const el = document.getElementById('error-notification');
-            if (!el) return [false, ''];
-            return [el.classList.contains('visible'), el.textContent || ''];
-        })()"#,
-        None,
+/// `selector` holds an error disclosure: whether it is shown, its short line,
+/// and the raw text behind its Details control.
+pub async fn read_error_disclosure(
+    page: &playwright_rs::Page,
+    selector: &str,
+) -> (bool, String, String) {
+    page.evaluate::<String, (bool, String, String)>(
+        r#"(selector) => {
+            const container = document.querySelector(selector);
+            if (!container) return [false, '', ''];
+            const message = container.querySelector('.error-disclosure-message');
+            const raw = container.querySelector('.error-detail-raw');
+            return [
+                !container.hidden && !!message,
+                message ? message.textContent.trim() : '',
+                raw ? raw.textContent.trim() : '',
+            ];
+        }"#,
+        Some(&selector.to_string()),
+    )
+    .await
+    .unwrap()
+}
+
+/// A test that asserts a short line also checks the raw text stays off screen.
+pub async fn error_details_open(page: &playwright_rs::Page, selector: &str) -> bool {
+    page.evaluate::<String, bool>(
+        r#"(selector) => {
+            const container = document.querySelector(selector);
+            if (!container) return false;
+            const popover = container.querySelector('.error-detail-popover');
+            return !!popover && !popover.hidden;
+        }"#,
+        Some(&selector.to_string()),
     )
     .await
     .unwrap()

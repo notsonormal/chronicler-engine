@@ -1,7 +1,7 @@
-//! Stub-browser tests for dashboard chrome: the error toast and the action-area state machine. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for dashboard chrome: the failure surfaces and the action-area state machine. Tagged against `docs/specs/browser_dashboard.md`.
 
-// The engine's failing action route answers 500, so htmx fires `htmx:beforeSwap`
-// with `isError` on its own; no test dispatches either event by hand.
+// The engine's failing action route answers 500, so htmx fires
+// `htmx:responseError` without a dispatched event.
 
 use std::time::Duration;
 
@@ -11,8 +11,7 @@ use super::*;
 
 /// Unlike `send_action`, submits directly rather than clicking Send — the failure
 /// path leaves Send locked until the next idle poll — and does not wait for the
-/// status span: a 500 is not swapped, so a second error must land inside the
-/// first toast's 5s timer.
+/// status span: a 500 is not swapped.
 async fn submit_command(page: &playwright_rs::Page, command: &str) {
     fill_command_input(page, command).await;
     page.evaluate::<(), ()>(
@@ -24,17 +23,6 @@ async fn submit_command(page: &playwright_rs::Page, command: &str) {
     )
     .await
     .unwrap();
-}
-
-/// A timer measurement must start when the toast is actually up, not when the submit returns.
-async fn wait_for_toast_text(page: &playwright_rs::Page, text: &str) {
-    let expected = text.to_string();
-    let shown = wait_for_condition_async(Duration::from_secs(3), Duration::from_millis(50), || {
-        let expected = expected.clone();
-        async move { read_error_toast(page).await.1 == expected }
-    })
-    .await;
-    assert!(shown, "toast never displayed {expected:?}");
 }
 
 async fn stash_action_area_nodes(page: &playwright_rs::Page) {
@@ -133,57 +121,6 @@ async fn active_element_is(page: &playwright_rs::Page, selector: &str) -> bool {
     .unwrap()
 }
 
-// [docs/specs/browser_dashboard.md] SCENARIO: 16.7
-#[tokio::test]
-async fn test_error_toast_on_action_failure() {
-    with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
-        submit_command(&page, "Internal server error").await;
-        let expected = "Error: Failed to process action: Internal server error";
-        wait_for_toast_text(&page, expected).await;
-
-        let (visible, text) = read_error_toast(&page).await;
-        assert!(
-            visible,
-            "#error-notification should gain the .visible class on a 500 response"
-        );
-        assert_eq!(
-            text, expected,
-            "#error-notification should display the server's response with tags stripped, got {text:?}"
-        );
-    })
-    .await;
-}
-
-// [docs/specs/browser_dashboard.md] SCENARIO: 16.8
-#[tokio::test]
-async fn test_newer_error_keeps_toast_visible() {
-    with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
-        submit_command(&page, "First failure").await;
-        wait_for_toast_text(&page, "Error: Failed to process action: First failure").await;
-        tokio::time::sleep(Duration::from_millis(2500)).await;
-        submit_command(&page, "Second failure").await;
-        wait_for_toast_text(&page, "Error: Failed to process action: Second failure").await;
-
-        // Poll across the window in which the first toast's 5s timer fires but the
-        // second's 7.5s timer does not: a single read 3.5s after the second toast
-        // appeared is load-sensitive and can land past the second timer.
-        let window_end = std::time::Instant::now() + Duration::from_millis(3500);
-        while std::time::Instant::now() < window_end {
-            let (visible, text) = read_error_toast(&page).await;
-            assert!(
-                visible,
-                "toast should stay visible until the second error's own timer fires, got text {text:?}"
-            );
-            assert_eq!(
-                text, "Error: Failed to process action: Second failure",
-                "#error-notification should show the most recent server error, got {text:?}"
-            );
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    })
-    .await;
-}
-
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.9
 #[tokio::test]
 async fn test_primary_button_locks_and_unlocks_after_confirm() {
@@ -236,7 +173,7 @@ async fn test_primary_button_locks_and_unlocks_after_confirm() {
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.10
 #[tokio::test]
-async fn test_status_error_reaches_toast_after_confirm() {
+async fn test_status_error_shows_in_the_status_display_after_confirm() {
     with_stub_page(StubActionOutcome::Pending, |page, stub| {
         let status = stub.status_handle();
         async move {
@@ -249,47 +186,49 @@ async fn test_status_error_reaches_toast_after_confirm() {
                 wait_for_condition_async(
                     Duration::from_secs(8),
                     Duration::from_millis(100),
-                    || async { read_error_toast(&page).await.0 },
+                    || async { read_error_disclosure(&page, "#status-display").await.0 },
                 )
                 .await,
-                "status error should reach the toast after confirming a preview"
-            );
-            let (_, text) = read_error_toast(&page).await;
-            assert_eq!(
-                text, "Error: narration failed",
-                "#error-notification should show the status error, got {text:?}"
+                "the status error should render in the status display after confirming a preview"
             );
 
-            // A Ready poll clears lastStatusError; waiting out the first toast's 5s
-            // hide timer makes later visibility prove the second show call.
+            let (_, message, raw) = read_error_disclosure(&page, "#status-display").await;
+            assert!(
+                !message.is_empty() && !message.contains("narration failed"),
+                "the status display must show a short line, got {message:?}"
+            );
+            assert!(
+                raw.contains("narration failed"),
+                "the raw text belongs behind the Details disclosure, got {raw:?}"
+            );
+            assert!(
+                !error_details_open(&page, "#status-display").await,
+                "the raw text must not be on screen until the client opens Details"
+            );
+            let form_present: bool = page
+                .evaluate::<(), bool>("() => !!document.getElementById('command-form')", None)
+                .await
+                .unwrap();
+            assert!(
+                form_present,
+                "confirming the preview must leave the command form in place"
+            );
+            let (banner_visible, _, _) = read_banner(&page).await;
+            assert!(
+                !banner_visible,
+                "a generation error on a reachable engine must not raise the banner"
+            );
+
             status.set(StubStatus::Idle);
             wait_for_status_ready(&page).await;
             assert!(
                 wait_for_condition_async(
-                    Duration::from_secs(12),
-                    Duration::from_millis(100),
-                    || async { !read_error_toast(&page).await.0 },
+                    Duration::from_secs(5),
+                    Duration::from_millis(50),
+                    || async { !read_error_disclosure(&page, "#status-display").await.0 },
                 )
                 .await,
-                "toast should have hidden before the dedupe check"
-            );
-
-            // A Ready status reset the dedupe, so the same error must toast again;
-            // leaked dedupe state would keep the repeat hidden.
-            status.set(StubStatus::Error("narration failed".to_string()));
-            assert!(
-                wait_for_condition_async(
-                    Duration::from_secs(8),
-                    Duration::from_millis(100),
-                    || async { read_error_toast(&page).await.0 },
-                )
-                .await,
-                "the same error should toast again after a Ready status reset the dedupe"
-            );
-            let (_, text) = read_error_toast(&page).await;
-            assert_eq!(
-                text, "Error: narration failed",
-                "#error-notification should show the status error again, got {text:?}"
+                "returning to Ready must clear the status error"
             );
         }
     })
@@ -573,25 +512,6 @@ async fn error_detail_popover_open(page: &playwright_rs::Page, popover_id: &str)
     .unwrap_or(false)
 }
 
-async fn read_inline_error(page: &playwright_rs::Page, slot: &str) -> (bool, String, String) {
-    page.evaluate::<String, (bool, String, String)>(
-        r#"(selector) => {
-            const slot = document.querySelector(selector);
-            if (!slot) return [false, '', ''];
-            const message = slot.querySelector('.error-disclosure-message');
-            const raw = slot.querySelector('.error-detail-raw');
-            return [
-                !slot.hidden,
-                message ? message.textContent.trim() : '',
-                raw ? raw.textContent.trim() : '',
-            ];
-        }"#,
-        Some(&slot.to_string()),
-    )
-    .await
-    .unwrap()
-}
-
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.18
 #[tokio::test]
 async fn test_failed_poll_keeps_region_and_marks_banner() {
@@ -662,7 +582,7 @@ async fn test_failed_action_renders_inline_slot() {
                 Duration::from_secs(5),
                 Duration::from_millis(50),
                 || async {
-                    read_inline_error(&page, "#command-form [data-error-slot]")
+                    read_error_disclosure(&page, "#command-form [data-error-slot]")
                         .await
                         .0
                 },
@@ -671,7 +591,7 @@ async fn test_failed_action_renders_inline_slot() {
             "a failed action should render into the form's inline slot"
         );
         let (visible, message, raw) =
-            read_inline_error(&page, "#command-form [data-error-slot]").await;
+            read_error_disclosure(&page, "#command-form [data-error-slot]").await;
         assert!(visible, "the inline slot should be shown");
         assert!(
             message.contains("action failed"),
@@ -719,15 +639,30 @@ async fn test_failed_non_poll_action_does_not_raise_unreachable_banner() {
         .await
         .unwrap();
 
-        wait_for_toast_text(&page, "Error: Failed to save posture").await;
-        let (toast_visible, toast_text) = read_error_toast(&page).await;
         assert!(
-            toast_visible,
+            wait_for_condition_async(
+                Duration::from_secs(8),
+                Duration::from_millis(100),
+                || async {
+                    read_error_disclosure(&page, "#game-posture-controls [data-error-slot]").await.0
+                },
+            )
+            .await,
+            "a failed posture save must report in the posture controls' own slot"
+        );
+        let (slot_visible, slot_message, slot_raw) =
+            read_error_disclosure(&page, "#game-posture-controls [data-error-slot]").await;
+        assert!(
+            slot_visible,
             "a failed non-poll action must report on its own surface"
         );
         assert!(
-            toast_text.contains("Failed to save posture"),
-            "the surface must carry the server's failure, got {toast_text:?}"
+            slot_message.contains("action failed"),
+            "the slot carries a short line, got {slot_message:?}"
+        );
+        assert!(
+            slot_raw.contains("Failed to save posture"),
+            "the server's own text belongs in the disclosure, got {slot_raw:?}"
         );
 
         let (banner_visible, role, banner_text) = read_banner(&page).await;
@@ -930,7 +865,7 @@ async fn test_dead_engine_renders_inline_error_for_pending_action() {
                     Duration::from_secs(10),
                     Duration::from_millis(100),
                     || async {
-                        read_inline_error(&page, "#command-form [data-error-slot]")
+                        read_error_disclosure(&page, "#command-form [data-error-slot]")
                             .await
                             .0
                     },
@@ -939,7 +874,7 @@ async fn test_dead_engine_renders_inline_error_for_pending_action() {
                 "a dead engine should still render the form's inline error"
             );
             let (visible, message, raw) =
-                read_inline_error(&page, "#command-form [data-error-slot]").await;
+                read_error_disclosure(&page, "#command-form [data-error-slot]").await;
             assert!(visible, "the inline slot should be shown");
             assert!(
                 message.contains("unreachable"),
@@ -1398,7 +1333,7 @@ async fn wait_for_inline_slot(page: &playwright_rs::Page, slot: &str) -> bool {
     wait_for_condition_async(
         Duration::from_secs(5),
         Duration::from_millis(50),
-        || async { read_inline_error(page, slot).await.0 },
+        || async { read_error_disclosure(page, slot).await.0 },
     )
     .await
 }
@@ -1423,7 +1358,7 @@ async fn test_failed_connection_add_keeps_the_form_and_renders_inline() {
             wait_for_inline_slot(&page, slot).await,
             "a refused connection add should render into the form's inline slot"
         );
-        let (visible, message, raw) = read_inline_error(&page, slot).await;
+        let (visible, message, raw) = read_error_disclosure(&page, slot).await;
         assert!(visible, "the inline slot should be shown");
         assert!(
             message.contains("action failed"),
@@ -1514,7 +1449,7 @@ async fn test_failed_preset_add_keeps_the_panel_and_renders_inline() {
             wait_for_inline_slot(&page, slot).await,
             "a refused preset add should render into the form's inline slot"
         );
-        let (visible, _, raw) = read_inline_error(&page, slot).await;
+        let (visible, _, raw) = read_error_disclosure(&page, slot).await;
         assert!(visible, "the inline slot should be shown");
         assert!(
             raw.contains("Invalid preset type"),
@@ -1576,7 +1511,7 @@ async fn test_failed_preset_edit_keeps_the_card_and_renders_inline() {
             wait_for_inline_slot(&page, slot).await,
             "a failed preset edit should render into the card's inline slot"
         );
-        let (visible, _, raw) = read_inline_error(&page, slot).await;
+        let (visible, _, raw) = read_error_disclosure(&page, slot).await;
         assert!(visible, "the inline slot should be shown");
         assert!(
             raw.contains("preset save failure"),
@@ -1637,7 +1572,7 @@ async fn test_refused_preset_delete_keeps_the_card_and_renders_inline() {
             wait_for_inline_slot(&page, slot).await,
             "a refused preset delete should render into the card's inline slot"
         );
-        let (visible, _, raw) = read_inline_error(&page, slot).await;
+        let (visible, _, raw) = read_error_disclosure(&page, slot).await;
         assert!(visible, "the inline slot should be shown");
         assert!(
             raw.contains("mode default"),
@@ -1660,6 +1595,124 @@ async fn test_refused_preset_delete_keeps_the_card_and_renders_inline() {
         assert!(
             kept,
             "a refused preset delete must leave the card in place"
+        );
+    })
+    .await;
+}
+
+// The two load-only tab panels fetch once per page load, so this test arms the
+// stub and reloads rather than waiting for a poll cycle.
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.33
+#[tokio::test]
+async fn test_failed_panel_load_reports_inside_the_panel() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let url = stub.url();
+        stub.failure_handle().set_panel_loads_failing(true);
+        async move {
+            page.goto(&url, None).await.unwrap();
+
+            for (tab, panel) in [("worlds", ".worlds-panel"), ("games", ".games-panel")] {
+                page.locator(&format!(r#"[data-tab="{tab}"]"#))
+                    .await
+                    .click(None)
+                    .await
+                    .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
+
+                let slot = format!("{panel} [data-error-slot]");
+                assert!(
+                    wait_for_condition_async(
+                        Duration::from_secs(5),
+                        Duration::from_millis(50),
+                        || async { read_error_disclosure(&page, &slot).await.0 },
+                    )
+                    .await,
+                    "a failed {tab} panel load must report inside the panel"
+                );
+                let (_, message, raw) = read_error_disclosure(&page, &slot).await;
+                assert!(
+                    !message.is_empty() && !message.contains("panel load failed"),
+                    "the panel shows a short line, got {message:?}"
+                );
+                assert!(
+                    raw.contains("panel load failed"),
+                    "the server's own text belongs in the disclosure, got {raw:?}"
+                );
+            }
+
+            let (banner_visible, _, _) = read_banner(&page).await;
+            assert!(
+                !banner_visible,
+                "a panel load failure on a reachable engine must not raise the banner"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.34
+#[tokio::test]
+async fn test_failed_row_action_reports_in_the_row() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        page.on_dialog(|dialog| async move { dialog.accept(None).await })
+            .await
+            .unwrap();
+
+        for (tab, row, control, failure) in [
+            (
+                "worlds",
+                ".world-item",
+                ".worlds-list .world-item:first-child .btn-danger",
+                "Stub world delete failure",
+            ),
+            (
+                "games",
+                ".game-item",
+                ".game-item.active .btn-reset-small",
+                "Stub reset failure",
+            ),
+        ] {
+            page.locator(&format!(r#"[data-tab="{tab}"]"#))
+                .await
+                .click(None)
+                .await
+                .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
+
+            let rows_before = page.query_selector_all(row).await.unwrap_or_default().len();
+            page.locator(control)
+                .await
+                .click(None)
+                .await
+                .unwrap_or_else(|e| panic!("click '{control}' failed: {e}"));
+
+            let slot = format!("{row} > [data-error-slot]");
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(5),
+                    Duration::from_millis(50),
+                    || async { read_error_disclosure(&page, &slot).await.0 },
+                )
+                .await,
+                "a failed action in a {tab} row must report in that row"
+            );
+            let (_, message, raw) = read_error_disclosure(&page, &slot).await;
+            assert!(
+                !message.is_empty() && !message.contains(failure),
+                "the row shows a short line, got {message:?}"
+            );
+            assert!(
+                raw.contains(failure),
+                "the server's own text belongs in the disclosure, got {raw:?}"
+            );
+            assert_eq!(
+                page.query_selector_all(row).await.unwrap_or_default().len(),
+                rows_before,
+                "a failed row action must leave the row in place"
+            );
+        }
+
+        assert!(
+            !read_banner(&page).await.0,
+            "a failed row action on a reachable engine must not raise the banner"
         );
     })
     .await;

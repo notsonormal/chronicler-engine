@@ -210,8 +210,8 @@ pub enum StubActionOutcome {
     #[default]
     Pending,
     /// A 500, as a failing engine action would produce. The body is the
-    /// engine's own error render naming the command, so the toast text is the
-    /// server's response rather than the input echoed back.
+    /// engine's own error render naming the command, so the disclosure's raw
+    /// text is the server's response rather than the input echoed back.
     Error,
 }
 
@@ -239,6 +239,10 @@ struct StubState {
     /// Set once `POST /message/:id/swipe/:index` has been answered; the story
     /// log and dock then render the post-switch shapes.
     switched: std::sync::atomic::AtomicBool,
+    switch_fails: std::sync::atomic::AtomicBool,
+    /// The two load-only tab panels fetch once per page load, so a test arms
+    /// this before a reload to drive the panel-load failure path.
+    panel_loads_failing: std::sync::atomic::AtomicBool,
     /// The dock carries the canned set until a switch restores a Swipe with
     /// no set of its own.
     dock_options_live: std::sync::atomic::AtomicBool,
@@ -275,6 +279,8 @@ impl StubServer {
             action_requests: std::sync::atomic::AtomicUsize::new(0),
             two_swipes: std::sync::atomic::AtomicBool::new(false),
             switched: std::sync::atomic::AtomicBool::new(false),
+            switch_fails: std::sync::atomic::AtomicBool::new(false),
+            panel_loads_failing: std::sync::atomic::AtomicBool::new(false),
             dock_options_live: std::sync::atomic::AtomicBool::new(true),
             dock_options_alt: std::sync::atomic::AtomicBool::new(false),
             newest_narration: std::sync::Mutex::new(None),
@@ -431,6 +437,14 @@ impl StubFailureHandle {
             .polls_failing
             .store(failing, std::sync::atomic::Ordering::SeqCst);
     }
+
+    /// Answer `GET /fragment/worlds` and `GET /fragment/games` with a 500, so a
+    /// test can drive the client's panel-load failure path.
+    pub fn set_panel_loads_failing(&self, failing: bool) {
+        self.state
+            .panel_loads_failing
+            .store(failing, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 #[derive(Clone)]
@@ -444,6 +458,14 @@ impl StubSwipeHandle {
     pub fn set_two_swipes(&self) {
         self.state
             .two_swipes
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Make every later swipe switch answer 500, so the shipped switch click
+    /// exercises the client's failure path.
+    pub fn set_switch_failing(&self) {
+        self.state
+            .switch_fails
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
@@ -530,6 +552,20 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route("/games/:id/posture", post(failing_posture_save))
         .route("/history/:id", post(save_message))
+        // The two routes below answer the shipped row controls with a 500, so a
+        // test can drive a row's own error slot rather than the panel's.
+        .route(
+            "/reset",
+            post(|| async { client_failure("Stub reset failure") }),
+        )
+        .route(
+            "/worlds/:key/delete",
+            post(|| async { client_failure("Stub world delete failure") }),
+        )
+        .route(
+            "/history/delete",
+            post(|| async { client_failure("Stub delete failure") }),
+        )
         .route(
             "/swipe/new",
             post(|| async { client_failure("Stub retry failure") }),
@@ -644,6 +680,15 @@ async fn fail_polls_middleware(
 ) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     let path = request.uri().path().to_string();
+    let is_panel_load = path == "/fragment/worlds" || path == "/fragment/games";
+    if is_panel_load && state.panel_loads_failing.load(SeqCst) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            render_error("panel load failed"),
+        )
+            .into_response();
+    }
     let is_poll = path.starts_with("/fragment/") || path == "/status/generating";
     if is_poll && state.polls_failing.load(SeqCst) {
         let mut response = (
@@ -689,11 +734,14 @@ fn restored_swipe_entries() -> Vec<MessageEntry> {
 
 /// The stub answers a swipe switch with the restored log and drops the dock's
 /// option set, mirroring the engine's settled-restore outcome.
-async fn switch_swipe(State(state): State<Arc<StubState>>) -> Html<String> {
+async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
+    if state.switch_fails.load(SeqCst) {
+        return client_failure("Stub swipe switch failure");
+    }
     state.switched.store(true, SeqCst);
     state.dock_options_live.store(false, SeqCst);
-    Html(story_log_html(&restored_swipe_entries()))
+    Html(story_log_html(&restored_swipe_entries())).into_response()
 }
 
 /// The canned dock set until a switch has restored a set-less Swipe.

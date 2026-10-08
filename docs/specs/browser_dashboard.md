@@ -22,25 +22,6 @@ Then #status-display text is not "Ready" within 500ms
 And #status-display text contains one of "Thinking", "Narrating", "Generating", or "Quantifying"
 ```
 
-#### Scenario 16.7: Action failure renders an error toast
-
-```gherkin
-Given the dashboard is loaded and the action form is visible
-When the client submits the command "Internal server error" and the server fails the action with a 500
-Then #error-notification gains the .visible class
-And #error-notification displays the server's rendered error text with HTML tags stripped ("Error: Failed to process action: Internal server error"), not the submitted command
-```
-
-#### Scenario 16.8: A newer error is not hidden by an older error's timer
-
-```gherkin
-Given the dashboard is loaded and #error-notification is hidden
-When the client submits the command "First failure" and the server fails it
-And 2.5 seconds later submits the command "Second failure" and the server fails it
-Then #error-notification is still visible 6 seconds after the first failure
-And #error-notification displays the second failure's rendered server text ("Error: Failed to process action: Second failure")
-```
-
 #### Scenario 16.9: Primary button locks and unlocks with the status after confirming a preview
 
 ```gherkin
@@ -52,14 +33,16 @@ When the status poll reports idle and the status display returns to Ready
 Then the primary button is enabled again with a "Send" label
 ```
 
-#### Scenario 16.10: Status errors still reach the toast after confirming a preview
+#### Scenario 16.10: A status error after confirming a preview shows in the status display
 
 ```gherkin
 Given the client submitted a command the text-check preview intercepted, so the preview is open
 When the client confirms the preview
 And the /status/generating poll returns an error fragment
-Then #error-notification becomes visible and displays the error text
-And after the status poll returns Ready, the same error fragment returned again re-shows the notification (the dedupe resets once the status is no longer an error)
+Then the status display shows the error's short line
+And the command form is still in the document
+And the raw error text is not visible until the client opens the Details disclosure
+And the banner is not raised
 ```
 
 #### Scenario 16.12: Confirming a preview leaves the command form usable and Ready
@@ -279,4 +262,27 @@ When the client deletes that preset and the server refuses it
 Then the card is still in the document
 And the card shows an inline error naming the refusal
 And the raw server text is reachable in that error's disclosure
+```
+
+#### Scenario 16.33: A failed panel load reports inside the panel
+
+```gherkin
+Given the dashboard loads and the Worlds and Games panel fragment loads fail
+When the client opens each of those tabs
+Then that panel shows a short failure message
+And its Details disclosure holds the raw server text
+And the banner is not raised
+```
+
+#### Scenario 16.34: A failed row action reports in the row's own error slot
+
+```gherkin
+Given the Worlds panel shows a world row and the Games panel shows a game row
+When the client confirms that world row's Delete and the server fails it
+Then the world row shows its own short failure message
+And its Details disclosure holds the raw server text
+And the world row is still in the list
+When the client confirms that game row's Reset and the server fails it
+Then the game row shows its own short failure message
+And the banner is not raised
 ```

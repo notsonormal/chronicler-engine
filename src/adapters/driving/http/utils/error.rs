@@ -59,9 +59,10 @@ fn classify_error(error: ApplicationError, prefix: &str) -> Result<String, Strin
     }
 }
 
-/// A refusal reaches the user as a 400, which the shell shows as a toast and
-/// leaves the panel in place. Other errors keep the in-fragment rendering,
-/// labelled with `prefix` so the failure's origin survives.
+/// A refusal reaches the user as a 400, which the shell renders into the
+/// failing surface's inline error slot and leaves the panel in place. Other
+/// errors keep the in-fragment rendering, labelled with `prefix` so the
+/// failure's origin survives.
 pub(crate) fn error_response(error: ApplicationError, prefix: &str) -> Response<Body> {
     match classify_error(error, prefix) {
         Ok(message) => bad_request(render_error(&message)),

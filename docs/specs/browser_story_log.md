@@ -36,7 +36,8 @@ Then #edit-textarea remains in the DOM (polling does not destroy edit state)
 Given edit mode is active (#edit-textarea visible) on a .log-entry
 And the textarea text has been modified
 When the client clicks .save-btn and the save request fails
-Then #error-notification is visible
+Then #story-log-error shows a short failure message
+And its Details disclosure holds the raw server text
 And #edit-textarea is removed from the DOM
 And .log-entry .text inner text is restored to the original
 And the entry's pre-edit action controls are available again
@@ -48,7 +49,8 @@ And #story-log resumes polling
 ```gherkin
 Given the dashboard is idle and #submit-btn is enabled
 When the client clicks the retry swipe button and the retry request fails
-Then #error-notification is visible
+Then #status-display shows a short failure message for the retry
+And the raw error text is not visible until the client opens the Details disclosure
 And #status-display no longer shows "Thinking..."
 And #submit-btn is enabled
 ```
@@ -94,13 +96,14 @@ When the client cancels the edit
 Then the entry's pre-edit action controls are restored immediately
 ```
 
-#### Scenario 30.10: A failed retrigger reports the failure and restores the ready state
+#### Scenario 30.10: A failed retrigger reports the failure and re-enables Send
 
 ```gherkin
 Given the dashboard is idle with Send enabled
 And a retrigger control is available on the last narration
 When the client clicks the retrigger control and the retrigger request fails
-Then #error-notification is visible
+Then #status-display shows a short failure message for the retrigger
+And the raw error text is not visible until the client opens the Details disclosure
 And the client sent the request to the retrigger endpoint
 And #status-display no longer shows "Thinking..."
 And #submit-btn is enabled
@@ -173,4 +176,24 @@ And every other entry's .edit-btn is disabled
 When the client saves the edit and the save request succeeds
 Then the other entries' .edit-btn stays disabled while the entry still shows its editor
 And the resumed poll re-renders the log and enables every .edit-btn
+```
+
+#### Scenario 30.18: A failed delete reports in the story log's error slot
+
+```gherkin
+Given a story log with more than one .log-entry rendered
+When the client deletes the last entry and the server fails the delete
+Then #story-log-error shows a short failure message
+And its Details disclosure holds the raw server text
+And the story log still shows the entries it showed before
+```
+
+#### Scenario 30.19: A failed swipe switch reports in the story log's error slot
+
+```gherkin
+Given a story log whose last entry offers a previous-swipe control
+When the client activates that control and the server fails the switch
+Then #story-log-error shows a short failure message
+And its Details disclosure holds the raw server text
+And the story log still shows the entry it showed before
 ```
