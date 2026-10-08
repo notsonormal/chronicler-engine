@@ -14,6 +14,7 @@ use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::TestMap;
 
 use crate::support::app_wiring::app_with_narrator_and_registry;
+use crate::support::http_assertions::{defined_icons, referenced_icons};
 use crate::support::http_fixtures::if_world;
 use crate::support::http_requests::{fetch_body, post_action, post_action_check, post_form, wait_idle};
 
@@ -23,8 +24,7 @@ const SET_B: &str = "<suggestion>Open the gate</suggestion>\
 <suggestion>Feed the horse</suggestion><suggestion>Climb the tower</suggestion>";
 const NUMBERED: &str = "1. Search the desk\n2. Question the guard\n3. Leave the hall";
 
-/// App wired with an options agent whose backend is the given mock (the
-/// narrator gets a default mock). Built on the default test data.
+/// The narrator gets a default mock; everything else is the default test data.
 fn options_app(options: Arc<MockBackend>) -> (axum::Router, AppState, Arc<Storage>) {
     let mut registry = AgentRegistry::default();
     registry.add_agent(Box::new(OptionsAgent::with_provider(
@@ -52,7 +52,6 @@ fn always_on_world() -> WorldCard {
     }
 }
 
-/// POST /games for the given world key, asserting success.
 async fn create_game(app: &axum::Router, world_key: &str) {
     let body = format!("world_key={world_key}&persona_key=test_player");
     let resp = post_form(app, "/games", &body).await;
@@ -335,8 +334,7 @@ async fn test_options_work_in_if_mode_http() {
     assert!(dock.contains("Search the desk"), "{dock}");
 }
 
-// The Use button (`useOption` in `assets/index.html`) fills the command input
-// with the option's text and calls `form.requestSubmit()`, which POSTs
+// `useOption` fills the command input with the option's text and submits
 // `/action/check` — the same request this test makes, so the persisted message
 // store is the observable outcome of the click.
 // [docs/specs/options.md] SCENARIO: 24.13
@@ -360,8 +358,6 @@ async fn test_using_offered_option_submits_as_input_http() {
         .filter(|m| m.message_type == MessageType::Input)
         .count();
 
-    // The hop the Use button performs: submit the option text through the
-    // command form's own endpoint.
     let resp = post_action_check(&app, "Search the desk").await;
     assert!(
         resp.status().is_success(),
@@ -397,4 +393,32 @@ async fn test_using_offered_option_submits_as_input_http() {
         narrations > 0,
         "the submitted option must narrate; messages were: {messages:?}"
     );
+}
+
+// [docs/specs/options.md] SCENARIO: 24.14
+#[tokio::test]
+async fn test_options_dock_icons_are_defined_by_the_shell() {
+    let (app, state, _storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+
+    let resp = post_action(&app, "/options").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "/options should complete");
+
+    let defined = defined_icons(&fetch_body(&app, "/").await);
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let icons = referenced_icons(&dock);
+    assert!(
+        !icons.is_empty(),
+        "the populated dock must show its controls' icons: {dock}"
+    );
+    for icon in icons {
+        assert!(
+            defined.contains(&icon),
+            "the options dock references icon {icon}, which the shell does not define"
+        );
+    }
 }

@@ -42,7 +42,7 @@ pub struct PersonaRowView {
                         <button type="submit" class="btn-primary">Save</button>
                     </form>
                 </details>
-                <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
+                <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game" aria-label="Reset game"><svg class="icon" aria-hidden="true"><use href="#i-rotate-ccw"/></svg></button>
             </div>
         </div>
         {{ posture_html|safe }}
@@ -121,14 +121,10 @@ pub struct GamesPanelTemplate {
     pub saved_games: Vec<GameRowView>,
     pub worlds: Vec<WorldCard>,
     pub personas: Vec<PersonaRowView>,
-    /// Rendered `GamePostureTemplate`; empty when no game is active.
     /// Pre-rendered because the fragment is also a standalone auto-save target.
     pub posture_html: String,
 }
 
-/// In-game posture override (mode/perspective/tense) + per-game preset
-/// picker for the active game. Every dropdown auto-saves on change and
-/// re-renders this fragment.
 #[derive(Template)]
 #[template(
     source = r##"

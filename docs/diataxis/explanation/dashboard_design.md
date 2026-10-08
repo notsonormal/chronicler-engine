@@ -52,7 +52,7 @@ The split between "what changes per swipe" (story log and sidebar) and "what doe
 
 Submitting with an empty input routes to `continue_narration`, which calls `process_action(String::new())`. The empty string passes through the same action pipeline a typed command uses; the pipeline distinguishes "no player input" from "typed input" and produces a continuation message instead of a fresh narration turn.
 
-The flow is named after SillyTavern's "Continue" button. SillyTavern exposes Continue as a separate UI affordance (a button next to Send); the Chronicler Engine exposes it through the existing Send button's empty-input path. The UI is identical to a typed send — the player types nothing and presses Send, and the engine extends the last narration. The button-state transition (Ready → Stop → Ready) is the same as a typed action.
+The flow is named after SillyTavern's "Continue" button. SillyTavern exposes Continue as a separate UI affordance (a button next to Send); the Chronicler Engine exposes it through the existing Send button's empty-input path. The UI is identical to a typed send — the player types nothing and presses Send, and the engine extends the last narration. The button-state transition (Ready → Generating → Ready) is the same as a typed action.
 
 The continuation produces a new swipe on the last message. The player can then navigate the new swipe with the existing swipe controls; comparing the new continuation to the prior one is the same comparison as comparing two swipes from a typed action's retry.
 
@@ -61,7 +61,7 @@ The continuation produces a new swipe on the last message. The player can then n
 The dashboard is a single `index.html` shell plus a fixed set of fragment endpoints the static shell fetches and polls. Every per-message update, every status poll, every panel content is a server-rendered HTML fragment that HTMX swaps into a target element. The client-side JavaScript is limited to:
 
 - Tab switching (toggle `.active` class)
-- Button-state transitions (Ready ↔ Stop ↔ Error)
+- Button-state transitions (Ready ↔ Generating ↔ Error)
 - Polling-pause for edit / expand modes
 - Swipe, retrigger, edit, delete submissions
 - Text-check preflight orchestration
@@ -69,6 +69,12 @@ The dashboard is a single `index.html` shell plus a fixed set of fragment endpoi
 The inline JavaScript block in `assets/index.html` is several hundred lines of imperative DOM manipulation, scoped to button state and polling pause. The HTMX runtime is vendored at `assets/htmx.min.js` and served with the app's static assets, so a dashboard load needs no external network; everything else is plain ES.
 
 The rendering pipeline is Askama with compile-time template validation; templates are checked at build time against their context structs.
+
+## Palette
+
+The dashboard's palette is built for long prose: narration renders in near-white on a neutral grey bubble, and quoted dialogue renders in amber. The two differ by hue while both stay at body weight. The OK and active states take a blue accent and the error states a red one. A green OK accent reads too close to red for a reader with red/green colour blindness, so the design separates the two by hue rather than by lightness. The same hue then marks every OK state: the active tab, the Send label, focus rings, and the health badges.
+
+The error notification darkens its lightest gradient stop, so white text clears the contrast floor.
 
 ## Document References
 

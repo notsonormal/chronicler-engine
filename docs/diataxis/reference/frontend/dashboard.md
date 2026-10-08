@@ -46,13 +46,13 @@ The Game tab is the only view with three live regions stacked: the **main contai
 
 ### Story Log (80%)
 
-A scrollable list of `MessageEntry` rendered rows. The list polls its fragment endpoint every 2 seconds (see Polling Cadences) and auto-scrolls to the bottom on new content. Each entry carries one of four `log_type` classes (`narration`, `dialogue`, `system`, `input`) that determines bubble styling and text color tokens.
+A scrollable list of `MessageEntry` rendered rows. The list polls its fragment endpoint every 2 seconds (see Polling Cadences) and auto-scrolls to the bottom on new content. Each entry carries one of three `log_type` classes (`narration`, `system`, `input`) that determines bubble styling and text color tokens.
 
 Entry header structure:
 
 - **Location header** — when the entry has a `location_header`, the header is "Room Name - HH:MM" in green (`--color-accent-green-bright`) bold inline.
-- **Event header** — when the entry has an `event_header` (and no location), the header is "Event Name - HH:MM" in cyan (`.event-header`) bold inline.
-- **Plain header** — sender name followed by timestamp; sender is omitted on system entries.
+- **Event header** — when the entry has an `event_header` (and no location), the header is "Event Name - HH:MM" in `--color-accent-blue-cyan` (`.event-header`) bold inline.
+- **Plain header** — the timestamp alone.
 
 ### Visual Sidebar (20%)
 
@@ -69,13 +69,13 @@ The action area is in one of three states:
 
 | State | Submit button | Status display | Input |
 |---|---|---|---|
-| Ready | "Send" (▶ icon), enabled | "Ready" in green | enabled |
-| Thinking | "Stop" (■ icon), disabled | "Thinking..." / "Quantifying scene..." / "Generating event..." in yellow | disabled |
-| Error | "Send" (▶ icon), enabled | last error message, banner shown | enabled |
+| Ready | "Send" (`#i-send` icon), enabled | "Ready" in `--color-accent-ok` | enabled |
+| Thinking | "Generating…" (`#i-loader-circle` icon), disabled | "Thinking..." / "Quantifying scene..." / "Generating event..." / "Generating options..." in `--color-accent-yellow` | disabled |
+| Error | "Send" (`#i-send` icon), enabled | last error message, banner shown | enabled |
 
-State transitions happen on three events: form submission (immediately sets Thinking), `htmx:afterRequest` on the form (immediately resets the form input), and the next status poll (which reads `idle`/`narrating`/`quantifying`/`generating-event` and updates the status display).
+State transitions happen on three events: form submission (immediately sets Thinking), `htmx:afterRequest` on the form (immediately resets the form input), and the next status poll (which reads `idle`/`narrating`/`quantifying`/`generating-event`/`options` and updates the status display).
 
-**Empty-input behavior.** Submitting with an empty input dispatches a continuation request (same path as SillyTavern's "Continue"): the action dispatcher folds an empty command into a continuation. The submit button transitions to "Stop" immediately; the next status poll reads "Thinking...".
+**Empty-input behavior.** Submitting with an empty input dispatches a continuation request (same path as SillyTavern's "Continue"): the action dispatcher folds an empty command into a continuation. The submit button transitions to "Generating…" immediately; the next status poll reads "Thinking...".
 
 **Text-check preflight.** Before the action reaches its endpoint, the form posts to the action-check endpoint, which invokes the configured text checker. If issues are found, the action area is replaced with a preview showing the original text, an editable corrected text textarea, and issue tags (orange = spell, pink = grammar). Three buttons: Send (submit corrected), Send Original (submit original), Cancel (restore action area from `data-original-html`). The submit paths converge on the action-confirm endpoint; the corrected-vs-original distinction is carried by the form payload.
 
@@ -106,7 +106,7 @@ All four flows operate on the **last entry** in the story log. Conditional visib
 
 ### Edit Flow
 
-1. The user clicks the edit (✎) button on an entry. JavaScript in the static shell (`showEditForm`) replaces the entry's text span with a textarea carrying the raw markdown from `data-raw-text`, swaps the action buttons for Save/Cancel, disables every other entry's Edit button, and **pauses story-log polling** by writing `hx-trigger="none"` on `#story-log` and calling `htmx.process()`.
+1. The user clicks the edit (`#i-pencil`) button on an entry. JavaScript in the static shell (`showEditForm`) replaces the entry's text span with a textarea carrying the raw markdown from `data-raw-text`, swaps the action buttons for Save/Cancel, disables every other entry's Edit button, and **pauses story-log polling** by writing `hx-trigger="none"` on `#story-log` and calling `htmx.process()`.
 2. The user edits the text and clicks Save. JavaScript submits the new raw text to the history-edit endpoint.
 3. JavaScript **resumes polling** (restores the original `hx-trigger` value). Cancel does the same without the submission.
 4. The next poll re-renders the entry with the new text.
@@ -117,19 +117,19 @@ The textarea height is auto-resized on input. The save/cancel buttons replace th
 
 ### Delete Flow
 
-1. The user clicks the delete (🗑) button on the last entry. JavaScript calls `confirm("Delete this message?")` before proceeding.
+1. The user clicks the delete (`#i-trash`) button on the last entry. JavaScript calls `confirm("Delete this message?")` before proceeding.
 2. On confirm, JavaScript submits to the history-delete endpoint.
 3. On a 2xx response, JavaScript fetches the story-log fragment and swaps it into `#story-log`. On a non-2xx response, the response body is shown via the global error notification.
 
 ### Swipe Flow
 
-Swipes exist on the **last entry only**. The control row holds: a left arrow (◀, disabled on the first swipe), a counter (`active_swipe_index + 1 / swipe_count`), and a right arrow (▶). Clicking ◀ or ▶ submits to the swipe-switch endpoint with the target swipe index. On success, JavaScript replaces `#story-log` innerHTML with the response. Switching swipes restores the `snapshot_id` of the target swipe, so the visual sidebar's own 5s poll picks up the restored game state; the header shows only the game name, which a swipe does not change. Clicking ▶ when on the latest swipe submits to the new-swipe endpoint; JavaScript transitions the submit button to "Stop" / status to "Thinking..." immediately, and the story log's 2s poll renders the response.
+Swipes exist on the **last entry only**. The control row holds: a previous-swipe button (`#i-chevron-left`, disabled on the first swipe), a counter (`active_swipe_index + 1 / swipe_count`), and a forward button (`#i-chevron-right` when a later swipe exists, `#i-refresh-cw` on the latest swipe). Clicking the previous button or the forward navigation button submits to the swipe-switch endpoint with the target swipe index. On success, JavaScript replaces `#story-log` innerHTML with the response. Switching swipes restores the `snapshot_id` of the target swipe, so the visual sidebar's own 5s poll picks up the restored game state; the header shows only the game name, which a swipe does not change. Clicking the forward button on the latest swipe submits to the new-swipe endpoint; JavaScript transitions the submit button to "Generating…" / status to "Thinking..." immediately, and the story log's 2s poll renders the response.
 
 ### Retrigger Flow
 
-The retrigger (♻) button appears on the last entry only when `show_retrigger` is true.
+The retrigger (`#i-zap`) button appears on the last entry only when `show_retrigger` is true.
 
-1. The user clicks the retrigger button. JavaScript submits to the retrigger endpoint and immediately transitions the button to "Stop" / status to "Thinking...".
+1. The user clicks the retrigger button. JavaScript submits to the retrigger endpoint and immediately transitions the button to "Generating…" / status to "Thinking...".
 2. On response, the story log's 2s poll renders the retriggered entry.
 
 Retrigger re-runs the trigger narration for the previous turn.
@@ -140,7 +140,7 @@ The Games tab hosts three regions: **Active Game**, **New Game**, and **Saved Ga
 
 ### Active Game
 
-Shows the current game name, a world badge (the world the game belongs to), a persona badge (the persona bound to the game), and a reset button (↻). Reset carries an HTMX confirm dialog ("Reset the current game? All progress will be lost."); on confirmation, the current game is deleted and a new game is created with a freshly auto-generated name (see "Name generation" below). When no game is active, the row shows the placeholder "No active game".
+Shows the current game name, a world badge (the world the game belongs to), a persona badge (the persona bound to the game), and a reset button (`#i-rotate-ccw`). Reset carries an HTMX confirm dialog ("Reset the current game? All progress will be lost."); on confirmation, the current game is deleted and a new game is created with a freshly auto-generated name (see "Name generation" below). When no game is active, the row shows the placeholder "No active game".
 
 ### New Game
 

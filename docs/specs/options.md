@@ -114,3 +114,15 @@ When the client POST /action with command="/options"
 And the pipeline returns to idle
 Then the dock renders the generated option set
 ```
+
+### Dock controls
+
+#### Scenario 24.14: The populated dock's controls reference icons the shell defines
+
+```gherkin
+Given a game with scene history and an options agent
+When the client POST /action with command="/options"
+And the pipeline returns to idle
+Then GET /fragment/options-dock shows at least one icon
+And every icon it references is one GET / defines
+```

@@ -1,33 +1,53 @@
 :root {
-    --color-bg-primary: #0a0a0a;
-    --color-bg-secondary: #111;
-    --color-bg-tertiary: #0f0f0f;
-    --color-bg-header: #1a1a1a;
-    --color-border: #333;
+    --color-bg-primary: #121212;
+    --color-bg-secondary: #191919;
+    --color-bg-tertiary: #161616;
+    --color-bg-header: #202020;
+    --color-border: #343434;
 
-    --color-text-primary: #e0e0e0;
-    --color-text-muted: #888;
-    --color-text-placeholder: #555;
+    --color-text-primary: #e6e6e6;
+    --color-text-muted: #a3a3a3;
+    --color-text-placeholder: #858585;
 
-    --color-accent-green: #00ff00;
-    --color-accent-green-bright: #4ade80;
-    --color-accent-cyan: #00ffff;
-    --color-accent-blue-cyan: #38bdf8;
-    --color-accent-orange: #ffb347;
-    --color-accent-yellow: #ffff00;
-    --color-accent-red: #ff4444;
-    --color-accent-pink: #ff6b6b;
+    /* Green against the red error accent is near-identical under red/green colour blindness. */
+    --color-accent-ok: #8ab4f8;
+    --color-accent-green-bright: #a6d6a0;
+    --color-accent-cyan: #9cc9d6;
+    --color-accent-blue-cyan: #8ab4e0;
+    --color-accent-orange: #e8b878;
+    --color-accent-yellow: #dcc888;
+    --color-accent-red: #ea8080;
+    --color-accent-pink: #e8a0a0;
 
     --color-button-gradient-start: #2a2a2a;
-    --color-button-gradient-end: #1a1a1a;
-    --color-button-border: #555;
+    --color-button-gradient-end: #222222;
+    --color-button-border: #4a4a4a;
 
-    --color-log-input: #2a2a2a;
-    --color-log-narration: #1a3a3a;
-    --color-log-system: #3a3a1a;
+    --color-button-primary-start: #283a54;
+    --color-button-primary-end: #202f45;
+    --color-button-cyan-start: #283338;
+    --color-button-cyan-end: #20292d;
+    --color-button-danger-start: #402626;
+    --color-button-danger-end: #321e1e;
+    --color-button-send-start: #2c4466;
+    --color-button-send-end: #243650;
 
-    --color-error-gradient-start: #ff4444;
-    --color-error-gradient-end: #cc0000;
+    --color-log-input: #272727;
+    --color-log-narration: #1f1f1f;
+    --color-log-system: #27251c;
+
+    /* #c25555 measures only 4.44:1 against white toast text, below the 4.5:1 floor. */
+    --color-error-gradient-start: #bd5252;
+    --color-error-gradient-end: #963c3c;
+
+    --color-tint-ok: color-mix(in srgb, var(--color-accent-ok) 12%, transparent);
+    --color-tint-ok-edge: color-mix(in srgb, var(--color-accent-ok) 28%, transparent);
+    --color-tint-orange: color-mix(in srgb, var(--color-accent-orange) 12%, transparent);
+    --color-tint-orange-edge: color-mix(in srgb, var(--color-accent-orange) 28%, transparent);
+    --color-tint-cyan: color-mix(in srgb, var(--color-accent-cyan) 7%, transparent);
+    --color-tint-cyan-strong: color-mix(in srgb, var(--color-accent-cyan) 15%, transparent);
+    --color-tint-red: color-mix(in srgb, var(--color-accent-red) 12%, transparent);
+    --shadow-focus-ring: 0 0 0 2px color-mix(in srgb, var(--color-accent-ok) 30%, transparent);
 
     --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-size-base: 14px;
@@ -49,22 +69,22 @@
 }
 
 .btn-primary {
-    background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
-    border: 1px solid var(--color-accent-green);
+    background: linear-gradient(180deg, var(--color-button-primary-start) 0%, var(--color-button-primary-end) 100%);
+    border: 1px solid var(--color-accent-ok);
     border-radius: 4px;
-    color: var(--color-accent-green);
+    color: var(--color-accent-ok);
     padding: 8px 20px;
     cursor: pointer;
     font-size: var(--font-size-base);
     font-weight: 600;
 }
 .btn-primary:hover {
-    background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.25);
+    background: var(--color-button-primary-start);
+    filter: brightness(1.15);
 }
 
 .btn-cyan {
-    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
+    background: linear-gradient(180deg, var(--color-button-cyan-start) 0%, var(--color-button-cyan-end) 100%);
     border: 1px solid var(--color-accent-cyan);
     border-radius: 4px;
     color: var(--color-accent-cyan);
@@ -73,12 +93,12 @@
     font-size: var(--font-size-xs);
 }
 .btn-cyan:hover {
-    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
+    background: var(--color-button-cyan-start);
+    filter: brightness(1.15);
 }
 
 .btn-danger {
-    background: linear-gradient(180deg, #5a2a2a 0%, #4a1a1a 100%);
+    background: linear-gradient(180deg, var(--color-button-danger-start) 0%, var(--color-button-danger-end) 100%);
     border: 1px solid var(--color-accent-red);
     border-radius: 4px;
     color: var(--color-accent-red);
@@ -87,8 +107,8 @@
     font-size: var(--font-size-xs);
 }
 .btn-danger:hover {
-    background: linear-gradient(180deg, #6a3a3a 0%, #5a2a2a 100%);
-    box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
+    background: var(--color-button-danger-start);
+    filter: brightness(1.15);
 }
 
 ::-webkit-scrollbar {
@@ -125,8 +145,6 @@ body {
     flex-direction: column;
 }
 
-/* The main landmark keeps the body's column layout, so the tab panels fill
-   the space the way they did as direct body children. */
 .main-content {
     display: flex;
     flex-direction: column;
@@ -147,6 +165,38 @@ body {
     border: 0;
 }
 
+/* The symbols must stay referenceable by <use>, so the sprite is zero-sized instead of display:none. */
+.icon-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+.icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+@keyframes icon-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .icon-spin {
+        animation: icon-spin 1s linear infinite;
+    }
+}
+
 .skip-link {
     position: absolute;
     top: -100px;
@@ -155,7 +205,7 @@ body {
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--color-bg-header);
     color: var(--color-text-primary);
-    border: 1px solid var(--color-accent-green);
+    border: 1px solid var(--color-accent-ok);
     border-radius: 4px;
     text-decoration: none;
 }
@@ -196,24 +246,7 @@ body {
 }
 
 .location {
-    color: var(--color-accent-green);
-}
-
-.connection-status {
-    margin-left: auto;
-    font-size: var(--font-size-xs);
-    padding: 2px var(--spacing-sm);
-    border-radius: 3px;
-}
-
-.connection-status.connected {
-    color: var(--color-accent-green);
-    background: rgba(0, 255, 0, 0.1);
-}
-
-.connection-status.disconnected {
-    color: var(--color-accent-red);
-    background: rgba(255, 68, 68, 0.1);
+    color: var(--color-accent-ok);
 }
 
 .main-container {
@@ -300,12 +333,12 @@ body {
 }
 
 .log-entry .text q {
-    color: var(--color-accent-red);
+    color: var(--color-accent-orange);
     font-style: italic;
 }
 
 .log-entry.narration .text {
-    color: var(--color-accent-cyan);
+    color: var(--color-text-primary);
 }
 
 .log-entry.system .text {
@@ -313,7 +346,7 @@ body {
 }
 
 .log-entry.input .text {
-    color: #cccccc;
+    color: var(--color-text-primary);
 }
 
 .location-header {
@@ -446,7 +479,7 @@ body {
 .restore-notice {
     min-height: 1em;
     padding: 0 var(--spacing-md);
-    color: var(--color-accent-green);
+    color: var(--color-accent-ok);
     font-size: var(--font-size-small);
     flex-shrink: 0;
 }
@@ -479,8 +512,8 @@ body {
 }
 
 #command-form input:focus {
-    border-color: var(--color-accent-green);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+    border-color: var(--color-accent-ok);
+    box-shadow: var(--shadow-focus-ring);
 }
 
 #command-form input::placeholder {
@@ -527,10 +560,10 @@ body {
 }
 
 #command-form button {
-    background: linear-gradient(180deg, #00aa00 0%, #006600 100%);
-    border: 1px solid var(--color-accent-green);
+    background: linear-gradient(180deg, var(--color-button-send-start) 0%, var(--color-button-send-end) 100%);
+    border: 1px solid var(--color-accent-ok);
     border-radius: 4px;
-    color: var(--color-accent-green);
+    color: var(--color-accent-ok);
     padding: 8px var(--spacing-md);
     cursor: pointer;
     height: var(--input-height);
@@ -538,29 +571,31 @@ body {
     font-family: inherit;
     font-size: var(--font-size-base);
     font-weight: bold;
-    transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+    transition: background var(--transition-fast), filter var(--transition-fast);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
 }
 
-#command-form button:hover {
-    background: linear-gradient(180deg, #00cc00 0%, #008800 100%);
-    border-color: var(--color-accent-green);
-    box-shadow: 0 0 12px rgba(0, 255, 0, 0.5);
+#command-form button .icon {
+    width: 16px;
+    height: 16px;
 }
 
-#command-form button:active {
-    background: linear-gradient(180deg, #006600 0%, #004400 100%);
-    box-shadow: 0 0 4px rgba(0, 255, 0, 0.3);
+#command-form button:hover:not(:disabled) {
+    background: var(--color-button-send-start);
+    filter: brightness(1.15);
+}
+
+#command-form button:active:not(:disabled) {
+    background: var(--color-button-send-end);
+    filter: none;
 }
 
 #command-form button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    box-shadow: none;
 }
 
 .status {
@@ -571,7 +606,7 @@ body {
 }
 
 .status.ready {
-    color: var(--color-accent-green);
+    color: var(--color-accent-ok);
 }
 
 .status.thinking {
@@ -582,10 +617,7 @@ body {
     color: var(--color-accent-red);
 }
 
-/* A fixed status box keeps the command input's width constant whether the
-   status reads Ready or carries a generation error; the message clamps to one
-   line and the raw text lives in the disclosure's popover, so the action area
-   height does not change either. */
+/* Fixed width: the action area must not resize as the status text changes. */
 #status-display {
     flex: 0 0 240px;
     width: 240px;
@@ -602,7 +634,6 @@ body {
     min-width: 0;
 }
 
-/* Options are part of the input surface, not the last message. */
 .options-strip {
     display: flex;
     flex-direction: column;
@@ -636,7 +667,7 @@ body {
     flex: 1;
     width: 100%;
     text-align: left;
-    background: rgba(0, 255, 255, 0.06);
+    background: var(--color-tint-cyan);
     border: 1px solid var(--color-border);
     border-left: 3px solid var(--color-accent-cyan);
     border-radius: 6px;
@@ -649,7 +680,7 @@ body {
 }
 
 .option-btn:hover:not(:disabled) {
-    background: rgba(0, 255, 255, 0.14);
+    background: var(--color-tint-cyan-strong);
     border-color: var(--color-accent-cyan);
 }
 
@@ -662,11 +693,15 @@ body {
     background: transparent;
     border: 1px solid var(--color-border);
     color: var(--color-text-muted);
-    padding: 2px 8px;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 12px;
-    line-height: 1.4;
 }
 
 .mini-btn:hover:not(:disabled) {
@@ -707,8 +742,8 @@ body {
 }
 
 .tab.active {
-    color: var(--color-accent-green);
-    border-bottom-color: var(--color-accent-green);
+    color: var(--color-accent-ok);
+    border-bottom-color: var(--color-accent-ok);
 }
 
 .tab-content {
@@ -771,17 +806,14 @@ body {
 }
 
 .settings-subtab.active {
-    color: var(--color-accent-green);
-    border-bottom-color: var(--color-accent-green);
+    color: var(--color-accent-ok);
+    border-bottom-color: var(--color-accent-ok);
 }
 
-.subtab-degraded-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
+.subtab-degraded-marker {
+    display: inline-flex;
     margin-left: 6px;
-    border-radius: 50%;
-    background: var(--color-accent-orange);
+    color: var(--color-accent-orange);
     vertical-align: middle;
 }
 
@@ -835,7 +867,7 @@ body {
 }
 
 .role-health.healthy {
-    color: var(--color-accent-green);
+    color: var(--color-accent-ok);
 }
 
 .role-health.degraded {
@@ -900,15 +932,15 @@ body {
     font-size: var(--font-size-xs);
     padding: 2px 8px;
     border-radius: 4px;
-    background: rgba(0, 255, 0, 0.12);
-    color: var(--color-accent-green);
-    border: 1px solid rgba(0, 255, 0, 0.25);
+    background: var(--color-tint-ok);
+    color: var(--color-accent-ok);
+    border: 1px solid var(--color-tint-ok-edge);
 }
 
 .connection-row .badge.quantifier {
-    background: rgba(255, 179, 71, 0.12);
+    background: var(--color-tint-orange);
     color: var(--color-accent-orange);
-    border-color: rgba(255, 179, 71, 0.25);
+    border-color: var(--color-tint-orange-edge);
 }
 
 .connection-add {
@@ -918,6 +950,9 @@ body {
 
 .connection-form-page .back-link {
     align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
     background: transparent;
     border: none;
     color: var(--color-accent-cyan);
@@ -934,7 +969,7 @@ body {
 }
 
 .text-check-status {
-    color: var(--color-accent-green);
+    color: var(--color-accent-ok);
     font-size: var(--font-size-small);
 }
 
@@ -974,15 +1009,15 @@ body {
     font-size: var(--font-size-xs);
     padding: 2px 8px;
     border-radius: 4px;
-    background: rgba(0, 255, 0, 0.12);
-    color: var(--color-accent-green);
-    border: 1px solid rgba(0, 255, 0, 0.25);
+    background: var(--color-tint-ok);
+    color: var(--color-accent-ok);
+    border: 1px solid var(--color-tint-ok-edge);
 }
 
 .connection-card .badge.quantifier {
-    background: rgba(255, 179, 71, 0.12);
+    background: var(--color-tint-orange);
     color: var(--color-accent-orange);
-    border-color: rgba(255, 179, 71, 0.25);
+    border-color: var(--color-tint-orange-edge);
 }
 
 .connection-card .card-details {
@@ -1026,8 +1061,8 @@ body {
 .settings-panel select:focus,
 .settings-panel textarea:focus {
     outline: none;
-    border-color: var(--color-accent-green);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+    border-color: var(--color-accent-ok);
+    box-shadow: var(--shadow-focus-ring);
 }
 
 .error-notification {
@@ -1079,8 +1114,6 @@ body {
     color: white;
 }
 
-/* One shape for the banner, the status display and a failed action's inline
-   slot; the raw text lives in the popover so the line never grows. */
 .error-disclosure {
     display: flex;
     align-items: center;
@@ -1184,7 +1217,7 @@ body {
 }
 
 .connection-test-result.success {
-    color: var(--color-accent-green);
+    color: var(--color-accent-ok);
 }
 
 .message-header {
@@ -1217,10 +1250,10 @@ body {
     border-radius: 4px;
     color: var(--color-text-muted);
     cursor: pointer;
-    font-size: 14px;
-    padding: 2px 6px;
-    min-width: 24px;
+    padding: 0;
+    width: 24px;
     height: 24px;
+    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1247,11 +1280,6 @@ body {
     border-color: var(--color-accent-pink);
 }
 
-.action-btn.retry-btn:hover:not(:disabled) {
-    color: var(--color-accent-orange);
-    border-color: var(--color-accent-orange);
-}
-
 .edit-textarea {
     width: 100%;
     box-sizing: border-box;
@@ -1276,10 +1304,10 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 14px;
-    padding: 2px 6px;
-    min-width: 24px;
+    padding: 0;
+    width: 24px;
     height: 24px;
+    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1288,40 +1316,15 @@ body {
 }
 
 .save-btn:hover {
-    background: rgba(0, 255, 0, 0.15);
-    border-color: var(--color-accent-green);
-    color: var(--color-accent-green);
+    background: var(--color-tint-ok);
+    border-color: var(--color-accent-ok);
+    color: var(--color-accent-ok);
 }
 
 .cancel-btn:hover {
-    background: rgba(255, 68, 68, 0.15);
+    background: var(--color-tint-red);
     border-color: var(--color-accent-red);
     color: var(--color-accent-red);
-}
-
-.btn-check {
-    background: transparent;
-    border: 1px solid var(--color-accent-cyan);
-    border-radius: 4px;
-    color: var(--color-accent-cyan);
-    padding: 8px 14px;
-    cursor: pointer;
-    height: var(--input-height);
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    font-weight: bold;
-    transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.btn-check:hover {
-    background: rgba(0, 255, 255, 0.1);
-    box-shadow: 0 0 12px rgba(0, 255, 255, 0.25);
-}
-
-.btn-check:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    box-shadow: none;
 }
 
 .text-check-preview {
@@ -1346,14 +1349,8 @@ body {
 }
 
 .preview-icon {
-    font-size: 1.2em;
-}
-
-.preview-compare {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-    flex-wrap: wrap;
+    width: 18px;
+    height: 18px;
 }
 
 .preview-original,
@@ -1379,18 +1376,6 @@ body {
     word-break: break-word;
 }
 
-.preview-corrected span {
-    color: var(--color-accent-green);
-    font-weight: 500;
-    word-break: break-word;
-}
-
-.preview-arrow {
-    color: var(--color-text-muted);
-    font-size: 1.2em;
-    flex-shrink: 0;
-}
-
 .preview-issues {
     display: flex;
     flex-wrap: wrap;
@@ -1405,42 +1390,41 @@ body {
 }
 
 .issue-tag.spell {
-    background: rgba(255, 179, 71, 0.12);
+    background: var(--color-tint-orange);
     color: var(--color-accent-orange);
-    border-color: rgba(255, 179, 71, 0.25);
+    border-color: var(--color-tint-orange-edge);
 }
 
 .issue-tag.grammar {
-    background: rgba(255, 107, 107, 0.12);
+    background: color-mix(in srgb, var(--color-accent-pink) 12%, transparent);
     color: var(--color-accent-pink);
-    border-color: rgba(255, 107, 107, 0.25);
+    border-color: color-mix(in srgb, var(--color-accent-pink) 28%, transparent);
 }
 
 .issue-tag.capitalization {
-    background: rgba(255, 255, 0, 0.12);
+    background: color-mix(in srgb, var(--color-accent-yellow) 12%, transparent);
     color: var(--color-accent-yellow);
-    border-color: rgba(255, 255, 0, 0.25);
+    border-color: color-mix(in srgb, var(--color-accent-yellow) 28%, transparent);
 }
 
 .issue-tag.style {
-    background: rgba(56, 189, 248, 0.12);
+    background: color-mix(in srgb, var(--color-accent-blue-cyan) 12%, transparent);
     color: var(--color-accent-blue-cyan);
-    border-color: rgba(56, 189, 248, 0.25);
+    border-color: color-mix(in srgb, var(--color-accent-blue-cyan) 28%, transparent);
 }
 
 .issue-tag.formatting {
-    background: rgba(128, 128, 128, 0.12);
+    background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
     color: var(--color-text-muted);
-    border-color: rgba(128, 128, 128, 0.25);
+    border-color: color-mix(in srgb, var(--color-text-muted) 28%, transparent);
 }
 
 .issue-tag.other {
-    background: rgba(128, 128, 128, 0.12);
+    background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
     color: var(--color-text-muted);
-    border-color: rgba(128, 128, 128, 0.25);
+    border-color: color-mix(in srgb, var(--color-text-muted) 28%, transparent);
 }
 
-/* An empty element must not add a flex gap. */
 #action-preview:empty {
     display: none;
 }
@@ -1455,7 +1439,6 @@ body {
     padding-bottom: var(--spacing-md);
 }
 
-/* Full-width row so the preview does not squeeze the command form. */
 #action-preview:not(:empty) {
     flex: 1 1 100%;
     min-width: 0;
@@ -1484,12 +1467,8 @@ body {
 }
 
 .preview-edit-textarea:focus {
-    border-color: var(--color-accent-green);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
-}
-
-.preview-send-form {
-    display: contents;
+    border-color: var(--color-accent-ok);
+    box-shadow: var(--shadow-focus-ring);
 }
 
 input[type="checkbox"] {
@@ -1508,8 +1487,8 @@ input[type="checkbox"] {
 }
 
 input[type="checkbox"]:checked {
-    background: var(--color-accent-green);
-    border-color: var(--color-accent-green);
+    background: var(--color-accent-ok);
+    border-color: var(--color-accent-ok);
 }
 
 input[type="checkbox"]:checked::after {
@@ -1526,7 +1505,7 @@ input[type="checkbox"]:checked::after {
 
 input[type="checkbox"]:focus {
     outline: none;
-    box-shadow: 0 0 4px rgba(0, 255, 0, 0.3);
+    box-shadow: var(--shadow-focus-ring);
 }
 
 .checkbox-label {
@@ -1566,10 +1545,6 @@ input[type="checkbox"]:focus {
         flex-wrap: wrap;
         height: auto;
         gap: var(--spacing-sm);
-    }
-
-    .connection-status {
-        margin-left: 0;
     }
 
     .action-area {
@@ -1631,7 +1606,7 @@ input[type="checkbox"]:focus {
 }
 
 .llm-message-header:hover {
-    background: #1f1f1f;
+    background: var(--color-bg-header);
 }
 
 .llm-message-agent {
@@ -1810,8 +1785,7 @@ input[type="checkbox"]:focus {
 }
 
 .preset-card.active {
-    border-color: var(--color-accent-green);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.1);
+    border-color: var(--color-accent-ok);
 }
 
 .preset-card .card-header {
@@ -1844,9 +1818,9 @@ input[type="checkbox"]:focus {
 }
 
 .preset-card .badge.primary {
-    background: rgba(0, 255, 0, 0.15);
-    border-color: var(--color-accent-green);
-    color: var(--color-accent-green);
+    background: var(--color-tint-ok);
+    border-color: var(--color-accent-ok);
+    color: var(--color-accent-ok);
 }
 
 .preset-card .preset-preview {
@@ -1876,8 +1850,8 @@ input[type="checkbox"]:focus {
 
 .preset-add-toggle:focus-visible {
     outline: none;
-    border-color: var(--color-accent-cyan);
-    box-shadow: 0 0 0 2px rgba(0, 255, 255, 0.1);
+    border-color: var(--color-accent-ok);
+    box-shadow: var(--shadow-focus-ring);
 }
 
 .preset-add-toggle::-webkit-details-marker {
@@ -1889,11 +1863,16 @@ input[type="checkbox"]:focus {
 }
 
 .preset-add-toggle::before {
-    content: "▸";
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 5px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
 }
 
 .preset-add[open] > .preset-add-toggle::before {
-    content: "▾";
+    transform: rotate(90deg);
 }
 
 .preset-add > form {
@@ -1926,8 +1905,8 @@ input[type="checkbox"]:focus {
 .prompt-presets-panel input[type="text"]:focus,
 .prompt-presets-panel textarea:focus {
     outline: none;
-    border-color: var(--color-accent-cyan);
-    box-shadow: 0 0 0 2px rgba(0, 255, 255, 0.1);
+    border-color: var(--color-accent-ok);
+    box-shadow: var(--shadow-focus-ring);
 }
 
 .prompt-presets-panel textarea {
@@ -1956,11 +1935,8 @@ input[type="checkbox"]:focus {
     background: transparent;
     border: 1px solid var(--color-border);
     color: var(--color-text-muted);
-    padding: 2px 8px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 12px;
-    line-height: 1;
     transition: all 0.15s ease;
 }
 
@@ -1987,11 +1963,8 @@ input[type="checkbox"]:focus {
     background: transparent;
     border: 1px solid var(--color-accent-cyan);
     color: var(--color-accent-cyan);
-    padding: 2px 8px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 12px;
-    line-height: 1;
     transition: all 0.15s ease;
 }
 
@@ -2003,7 +1976,7 @@ input[type="checkbox"]:focus {
 
 .error-message {
     color: var(--color-accent-red);
-    background: rgba(255, 68, 68, 0.1);
+    background: var(--color-tint-red);
     border: 1px solid var(--color-accent-red);
     border-radius: 4px;
     padding: var(--spacing-sm) var(--spacing-md);

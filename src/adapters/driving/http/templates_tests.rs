@@ -110,6 +110,8 @@ fn test_story_log_template_has_message_actions() {
     assert!(rendered.contains("message-actions"));
     assert!(rendered.contains("edit-btn"));
     assert!(rendered.contains("delete-btn"));
+    assert!(rendered.contains(r#"aria-label="Edit""#));
+    assert!(rendered.contains(r#"aria-label="Delete""#));
 }
 
 #[test]
@@ -226,6 +228,7 @@ fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
     let rendered = template.render().unwrap();
     assert!(rendered.contains("retrigger-btn"));
     assert!(rendered.contains("submitRetrigger"));
+    assert!(rendered.contains(r#"aria-label="Retrigger Event""#));
 }
 
 #[test]
@@ -249,7 +252,6 @@ fn test_story_log_template_retrigger_button_hidden_on_event_continuation() {
     ];
     let template = NarrativeLogTemplate::new(&entries, true);
     let rendered = template.render().unwrap();
-    // Last entry is an event continuation, so retrigger should NOT appear
     assert!(!rendered.contains("retrigger-btn"));
 }
 
@@ -286,8 +288,12 @@ fn test_story_log_template_swipe_controls_on_last_narration_with_one_swipe() {
         rendered.contains("submitNewSwipe()"),
         "Right arrow should call submitNewSwipe on latest swipe"
     );
-    assert!(rendered.contains("Previous swipe"));
-    assert!(rendered.contains("Retry"));
+    assert!(rendered.contains(r#"aria-label="Previous swipe""#));
+    assert!(rendered.contains(r#"aria-label="Retry""#));
+    assert!(
+        rendered.contains("#i-refresh-cw") && !rendered.contains("#i-chevron-right"),
+        "with no next swipe the forward control must show the new-swipe icon, not a navigation arrow"
+    );
     assert!(rendered.contains("1 / 1"));
 }
 
@@ -398,6 +404,12 @@ fn test_story_log_template_swipe_navigation_between_existing_swipes() {
         !rendered.contains("submitNewSwipe()"),
         "Right arrow should not call submitNewSwipe when next swipe exists"
     );
+    assert!(rendered.contains(r#"aria-label="Next swipe""#));
+    assert!(
+        rendered.contains("#i-chevron-right") && !rendered.contains("#i-refresh-cw"),
+        "with a next swipe the forward control must show a navigation arrow, not the new-swipe icon"
+    );
+    assert!(!rendered.contains(r#"aria-label="Retry""#));
 }
 
 #[test]
@@ -457,6 +469,10 @@ fn test_action_area_ready() {
     assert!(rendered.contains("id=\"action-area\""));
     assert!(rendered.contains("Ready"));
     assert!(rendered.contains(r#"<span class="status ready">Ready</span>"#));
+    assert!(
+        !rendered.contains("icon-spin"),
+        "an idle Send button must not spin"
+    );
 }
 
 #[test]
@@ -469,6 +485,10 @@ fn test_action_area_thinking() {
     assert!(rendered.contains("Generating narration..."));
     assert!(rendered.contains("disabled"));
     assert!(rendered.contains(r#"<span class="status thinking">Generating narration...</span>"#));
+    assert!(
+        rendered.contains("icon-spin"),
+        "the locked button must carry the spinner while a turn runs"
+    );
 }
 
 #[test]
@@ -601,6 +621,11 @@ fn test_options_dock_renders_escaped_option_rows() {
     assert!(rendered.contains("options — pick one, or type your own"));
     assert!(rendered.contains(r#"value="/options""#));
     assert!(rendered.contains("Open the creaking door"));
+    assert!(rendered.contains(r#"aria-label="Regenerate options""#));
+    assert_eq!(
+        rendered.matches(r#"aria-label="Edit before send""#).count(),
+        2
+    );
     // Askama escapes element content with numeric entities.
     assert!(!rendered.contains("<quietly>"));
     assert!(rendered.contains("&#60;quietly&#62;"));

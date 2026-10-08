@@ -1,6 +1,8 @@
 # Feature Spec: Dashboard
 
-Endpoint: `GET /status/generating` (the dashboard chrome's status poll).
+Endpoints:
+- `GET /status/generating` (the dashboard chrome's status poll)
+- `GET /` (the shell that defines the icons)
 
 ## Scenarios
 
@@ -18,4 +20,14 @@ Then the response body is "narrating"
 Given a game with a live generation slot in phase Quantifying
 When the client requests GET /status/generating
 Then the response body is "quantifying"
+```
+
+#### Scenario 39.2: The shell defines each referenced icon exactly once
+
+```gherkin
+Given a game with at least 2 Messages and a stored trigger
+When the client requests GET / and GET /fragment/story-log, /fragment/games, /fragment/connections/new and /fragment/action-area
+Then the shell defines each icon exactly once
+And every icon the shell or a fragment named above references is one the shell defines
+And each fragment named above shows at least one icon
 ```

@@ -1,16 +1,14 @@
 //! Stub-browser tests for the story log: the client-side edit-mode flow over a canned entry. Tagged against `docs/specs/browser_story_log.md`.
 
-// `showEditForm` is pure client JS over an existing `.log-entry`: it swaps the
-// entry's `.text` for a `#edit-textarea`. The stub serves a canned story-log
-// entry in the real template's shape; the edit behaviour does not depend on the
-// entry's text.
+// The stub serves a canned entry in the real template's shape, so the edit
+// behaviour does not depend on the entry's text.
 
 use std::time::Duration;
 
 use super::*;
 
-/// The `hx-trigger` the story-log poller currently carries. `pausePolling`
-/// writes "none"; `resumePolling` restores the shell's original trigger.
+/// `pausePolling` writes "none"; `resumePolling` restores the shell's original
+/// trigger.
 async fn story_log_trigger(page: &playwright_rs::Page) -> String {
     page.evaluate::<(), String>(
         r#"(() => {
@@ -31,8 +29,8 @@ async fn narration_text(page: &playwright_rs::Page) -> String {
         .unwrap_or_default()
 }
 
-/// Open edit mode on the narration entry (the fixture's first, swipe-bearing
-/// entry) and wait for the textarea.
+/// The fixture's first entry is the narration entry and carries the swipe
+/// controls.
 async fn enter_narration_edit(page: &playwright_rs::Page) {
     page.locator(".log-entry.narration .edit-btn")
         .await
@@ -106,10 +104,8 @@ async fn test_edit_cancel_restores_original() {
     .await;
 }
 
-// The stub polls `/fragment/story-log` every 2s and returns the canned entry,
-// so if `pausePolling` were broken the swap would replace `#story-log`'s
-// innerHTML and destroy the textarea. The test therefore still exercises the
-// pause: only the paused state lets the textarea survive.
+// The stub's 2s poll would replace `#story-log`'s innerHTML and destroy the
+// textarea, so only a working pause lets the textarea persist.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.3
 #[tokio::test]
 async fn test_polling_pauses_during_edit() {
@@ -137,10 +133,8 @@ async fn test_polling_pauses_during_edit() {
     .await;
 }
 
-// The save route fails (stub: 500) so the shipped save click exercises the
-// recovery path: report through the toast, restore the pre-edit entry, and
-// unpause the log. Without the fix the textarea and the `hx-trigger="none"`
-// both survive and the error is silent.
+// The stub answers the save with a 500, so the shipped save click exercises the
+// recovery path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.4
 #[tokio::test]
 async fn test_failed_save_restores_entry_and_resumes_polling() {
@@ -221,9 +215,8 @@ async fn test_failed_save_restores_entry_and_resumes_polling() {
     .await;
 }
 
-// The retry route fails (stub: 500) so the shipped retry click exercises the
-// recovery path: report through the toast and leave the status display no
-// longer stuck on the pending state with Send disabled.
+// The stub answers the retry route with a 500, so the shipped retry click
+// exercises the recovery path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.5
 #[tokio::test]
 async fn test_failed_retry_clears_pending_status_and_re_enables_send() {
@@ -234,8 +227,8 @@ async fn test_failed_retry_clears_pending_status_and_re_enables_send() {
             .await
             .unwrap();
 
-        // The toast is what the fix adds; reading it first also guarantees the
-        // synchronous recovery ran before the Send/status assertion below.
+        // Reading the toast first also guarantees the synchronous recovery ran
+        // before the Send/status assertion below.
         wait_until_visible(&page, "#error-notification.visible", Duration::from_secs(5)).await;
 
         let (status, disabled) = page
@@ -265,9 +258,6 @@ async fn test_failed_retry_clears_pending_status_and_re_enables_send() {
     .await;
 }
 
-// The textarea auto-grows with its content and takes focus on activation.
-// The growth is capped: content below the cap shows no inner scrollbar, and
-// content past it scrolls inside the textarea.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.6
 #[tokio::test]
 async fn test_edit_textarea_fits_content_and_takes_focus() {
@@ -328,8 +318,6 @@ async fn test_edit_textarea_fits_content_and_takes_focus() {
     .await;
 }
 
-// Escape is the keyboard twin of the ✗ button: it must abandon the edit and
-// restore the original text.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.7
 #[tokio::test]
 async fn test_escape_cancels_edit() {
@@ -409,14 +397,13 @@ async fn test_escape_cancels_edit() {
     .await;
 }
 
-// Ctrl+Enter and Cmd+Enter are the keyboard save shortcuts. The stub answers
-// the save with a 500, so a recorded request proves the shortcut reached the
-// shipped `submitEdit`; the surrounding failure recovery is covered by 30.4.
+// The stub answers the save with a 500, so a recorded request proves the
+// shortcut reached the shipped `submitEdit`; the failure recovery is covered by
+// 30.4.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.8
 #[tokio::test]
 async fn test_keyboard_save_shortcuts_submit_edit() {
     with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
-        // Record the save URLs without changing the stub's canned failure.
         page.evaluate::<(), ()>(
             r#"(() => {
                 window.__saveRequests = [];
@@ -440,8 +427,7 @@ async fn test_keyboard_save_shortcuts_submit_edit() {
             textarea.fill(text, None).await.unwrap();
             textarea.press(modifier, None).await.unwrap();
 
-            // The failed save reverts and raises the toast; waiting for the
-            // textarea to go is the observable end of the attempt.
+            // Waiting for the textarea to go is the observable end of the attempt.
             wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
         }
 
@@ -462,9 +448,6 @@ async fn test_keyboard_save_shortcuts_submit_edit() {
     .await;
 }
 
-// While editing, the swipe controls must stop responding and the action
-// cluster becomes save/cancel. Cancel must put the pre-edit controls back
-// immediately, not wait for the resumed poll.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.9
 #[tokio::test]
 async fn test_edit_locks_entry_controls_and_cancel_restores_them() {
@@ -494,8 +477,8 @@ async fn test_edit_locks_entry_controls_and_cancel_restores_them() {
             "the edit control should be replaced while editing"
         );
 
-        // Cancel and read the entry in the same tick: the resumed poll is
-        // async, so this observes `revertEdit`'s synchronous restoration.
+        // Read in the same tick: the resumed poll is async, so this observes
+        // `revertEdit`'s synchronous restoration.
         let (edit_back, retry_enabled): (bool, bool) = page
             .evaluate::<(), (bool, bool)>(
                 r#"(() => {
@@ -522,9 +505,8 @@ async fn test_edit_locks_entry_controls_and_cancel_restores_them() {
     .await;
 }
 
-// The fixture carries the template's retrigger control on its narration entry,
-// and the stub answers `/retrigger` with a 500, so the shipped
-// `submitRetrigger` runs against the real control and the real route shape.
+// The stub answers `/retrigger` with a 500, so the click runs the shipped
+// `submitRetrigger` against the real route shape.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.10
 #[tokio::test]
 async fn test_failed_retrigger_posts_to_retrigger_and_recovers() {
@@ -540,8 +522,8 @@ async fn test_failed_retrigger_posts_to_retrigger_and_recovers() {
             .await
             .unwrap();
 
-            // The toast is the observable end of the recovery; reading it first
-            // also guarantees the recovery ran before the assertions below.
+            // Reading the toast first also guarantees the recovery ran before
+            // the assertions below.
             wait_until_visible(&page, "#error-notification.visible", Duration::from_secs(5)).await;
             assert!(
                 !read_error_toast(&page).await.1.is_empty(),
@@ -642,9 +624,8 @@ const OTHER_EDIT_LOCKED: &str = r#"(() => {
     return !!other && other.disabled;
 })()"#;
 
-// A morph keeps an unchanged entry's nodes, so a selection inside the log is
-// not collapsed by the poll. An innerHTML swap replaces the selected node
-// within one cycle and the selection is lost.
+// An innerHTML swap would replace the node and lose the selection, so the poll
+// must morph.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.11
 #[tokio::test]
 async fn test_text_selection_survives_the_poll() {
@@ -703,8 +684,7 @@ async fn test_text_selection_survives_the_poll() {
     .await;
 }
 
-// Focus on a control that has no stable id would fall to the body on an
-// innerHTML swap; a morph leaves the node in place.
+// An innerHTML swap would drop focus to the body, so the poll must morph.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.12
 #[tokio::test]
 async fn test_entry_focus_survives_the_poll() {
@@ -750,8 +730,7 @@ async fn test_entry_focus_survives_the_poll() {
     .await;
 }
 
-// The log is a scroll container, so making it focusable lets a keyboard user
-// arrow-scroll the narrative.
+// A scroll container needs focus before a keyboard user can arrow-scroll it.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.13
 #[tokio::test]
 async fn test_story_log_is_keyboard_scrollable() {
@@ -791,8 +770,8 @@ async fn test_story_log_is_keyboard_scrollable() {
             )
             .await
             .unwrap();
-        // Press until the browser's native arrow-key scroll moves the log; a
-        // single synthetic key can be consumed while focus settles.
+        // A single synthetic key can be consumed while focus settles, so press
+        // until the native scroll moves the log.
         let scrolled = wait_for_condition_async(
             Duration::from_secs(3),
             Duration::from_millis(50),
@@ -813,8 +792,8 @@ async fn test_story_log_is_keyboard_scrollable() {
     .await;
 }
 
-// The 50-entry cap drops the oldest entry on a routine turn, so the morph's
-// removal matching has to keep every surviving entry's nodes.
+// The 50-entry cap drops the oldest entry, so the morph's removal matching must
+// keep every surviving entry's nodes.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.14
 #[tokio::test]
 async fn test_poll_removal_keeps_the_surviving_entries() {
@@ -904,7 +883,7 @@ async fn test_edit_locks_the_other_entries_edit_controls() {
             "the other entries' Edit controls must be disabled during an edit"
         );
 
-        // Cancel and read in the same tick: the resumed poll is async.
+        // Read in the same tick: the resumed poll is async.
         let unlocked = page
             .evaluate::<(), bool>(
                 r#"(() => {
@@ -967,9 +946,8 @@ async fn test_failed_save_releases_the_edit_lock() {
     .await;
 }
 
-// The lock outlives a successful save: the entry still shows its textarea until
-// the resumed poll re-renders it, and releasing earlier lets a second editor
-// open on that stale textarea.
+// The lock must outlive a successful save: releasing it early would let a
+// second editor open on the stale textarea.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.17
 #[tokio::test]
 async fn test_successful_save_holds_the_edit_lock_until_the_poll() {

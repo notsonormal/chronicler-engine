@@ -46,6 +46,10 @@ From the code review of the merged `43` / `50` / `59` / `61` batch — checked a
 - The display-name default was derived at five sites, and `NewGame` carried a `display_name` beside the `name` it is derived from; the field is gone, both insert paths derive it, the v25 backfill keeps its own call, and the function is `default_display_name` — `display_name_from_key` read like `world_key`.
 - `announceSwipeRestore` repeated `showError`'s pending-clear timer shape; both now use one `scheduleNoticeClear`.
 
+From [Visual identity pass](../66-visual-identity-pass.md):
+- The Games tab's "Rename" is a native `<details>` whose UA `::marker` draws a triangle, while `.preset-add-toggle` hides its marker and draws a CSS triangle — two disclosure cues for the same widget kind.
+- `settings/handlers/settings_tests.rs:176` is unformatted in `HEAD`; a plain `python build.py` rewrites it, adding an unrelated hunk to any diff.
+
 ## Done when
 
 - Each item is fixed, dropped with a reason, or promoted to a ticket.

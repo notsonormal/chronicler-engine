@@ -50,7 +50,7 @@ impl RoleRowView {
     source = r##"
 <div class="settings-panel">
     <div class="settings-subtabs" role="tablist" aria-label="Settings sections">
-        <button class="settings-subtab active" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-subtab="connections">Connections{% if roles_degraded %}<span class="subtab-degraded-dot" aria-hidden="true" title="A role is degraded"></span>{% endif %}</button>
+        <button class="settings-subtab active" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-subtab="connections">Connections{% if roles_degraded %}<span class="subtab-degraded-marker" aria-hidden="true" title="A role is degraded"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"/></svg></span>{% endif %}</button>
         <button class="settings-subtab" role="tab" id="subtab-text-check" aria-controls="settings-text-check" aria-selected="false" data-subtab="text-check">Text Check</button>
     </div>
     <div class="settings-subtab-panel active" id="settings-connections" role="tabpanel" aria-labelledby="subtab-connections">
@@ -177,7 +177,7 @@ impl SettingsTemplate {
 #[template(
     source = r##"
 <div class="settings-panel connection-form-page">
-    <button type="button" class="back-link" hx-get="/fragment/settings" hx-target=".settings-panel" hx-swap="innerHTML">&#8249; Connections</button>
+    <button type="button" class="back-link" hx-get="/fragment/settings" hx-target=".settings-panel" hx-swap="innerHTML"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg> Connections</button>
     <h2>{% if editing %}Edit {{ name }}{% else %}Add Connection{% endif %}</h2>
     <form hx-post="{{ form_action }}" hx-target=".settings-panel" hx-swap="innerHTML">
         <div class="form-group">

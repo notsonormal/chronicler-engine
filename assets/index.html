@@ -6,11 +6,68 @@
     <title>Chronicler Engine</title>
     <script src="/assets/htmx.min.js?v=1"></script>
     <script src="/assets/idiomorph-ext.min.js?v=1"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=4" />
-    <link rel="stylesheet" href="/assets/worlds.css?v=4" />
-    <link rel="stylesheet" href="/assets/games.css?v=1" />
+    <link rel="stylesheet" href="/assets/styles.css?v=6" />
+    <link rel="stylesheet" href="/assets/worlds.css?v=6" />
+    <link rel="stylesheet" href="/assets/games.css?v=3" />
   </head>
   <body hx-ext="morph">
+    <!-- Icons are Lucide (ISC; the Feather-derived ones MIT); licence text in /assets/LICENSE-lucide.txt. -->
+    <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+      <symbol id="i-pencil" viewBox="0 0 24 24">
+        <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+        <path d="m15 5 4 4" />
+      </symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24">
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+        <path d="M3 6h18" />
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      </symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24">
+        <path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" />
+      </symbol>
+      <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+        <path d="M8 16H3v5" />
+      </symbol>
+      <symbol id="i-rotate-ccw" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+      </symbol>
+      <symbol id="i-chevron-left" viewBox="0 0 24 24">
+        <path d="m15 18-6-6 6-6" />
+      </symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24">
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24">
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24">
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </symbol>
+      <symbol id="i-send" viewBox="0 0 24 24">
+        <path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" />
+        <path d="m21.854 2.147-10.94 10.939" />
+      </symbol>
+      <symbol id="i-loader-circle" viewBox="0 0 24 24">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </symbol>
+      <symbol id="i-spell-check" viewBox="0 0 24 24">
+        <path d="m20 15-5.5 5.5L12 18" />
+        <path d="m4 16 6-12 5.115 10.23" />
+        <path d="M6 12h8" />
+      </symbol>
+      <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
+    </svg>
     <a class="skip-link" href="#main-content">Skip to content</a>
     <div class="error-notification" id="error-notification"></div>
     <div class="header-bar">
@@ -83,7 +140,7 @@
             aria-autocomplete="list"
           />
           <button type="submit" id="submit-btn">
-            <span class="btn-icon">&#9654;</span> Send
+            <svg class="icon" aria-hidden="true"><use href="#i-send" /></svg> Send
           </button>
           <div class="inline-error-slot" data-error-slot="action" hidden></div>
         </form>
@@ -104,7 +161,7 @@
         role="status"
         aria-live="polite"
       ></div>
-      <!-- aria-live on the polled containers would re-announce unchanged content each cycle; these hidden regions carry only what changed. -->
+      <!-- Separate regions so a poll does not re-announce unchanged content every cycle. -->
       <div
         id="narration-announcer"
         class="visually-hidden"
@@ -172,7 +229,7 @@
     <script>
       console.log("[HTMX] Initializing...");
 
-      // The DOM holds every action-area state except an in-flight check, so re-derive after each swap or poll.
+      // The DOM carries every action-area state except an in-flight check.
       let checkInFlight = false;
 
       function statusIsGenerating() {
@@ -197,10 +254,10 @@
         const input = document.querySelector('#command-form input[name="command"]');
         if (btn) {
           if (state === "generating") {
-            btn.innerHTML = '<span class="btn-icon">&#8230;</span> Generating…';
+            btn.innerHTML = '<svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"></use></svg> Generating…';
             btn.disabled = true;
           } else {
-            btn.innerHTML = '<span class="btn-icon">&#9654;</span> Send';
+            btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-send"></use></svg> Send';
             btn.disabled = state === "checking";
           }
         }
@@ -219,7 +276,6 @@
         if (input) input.focus();
       }
 
-      // Focus follows the preview surface; it lands in the correction textarea even while a turn runs behind it.
       let previewWasOpen = false;
 
       function syncActionState() {
@@ -241,7 +297,6 @@
         }
       }
 
-      // Dedupe status errors: a poll returning the same error toasts once, not every cycle.
       let lastStatusError = null;
 
       function writeLiveRegion(id, text) {
@@ -376,8 +431,6 @@
       // Body-level, so no fragment swap replaces it.
       const errorNotification = document.getElementById("error-notification");
 
-      // One pending clear per notice element, so a newer notice is never
-      // wiped by an older notice's timer.
       const noticeClearTimers = new WeakMap();
 
       function scheduleNoticeClear(element, onClear, delayMs) {
@@ -411,7 +464,6 @@
         }
       });
 
-      // Unreachable is assertive; a degraded-role banner alone stays polite.
       function refreshFailureBanner() {
         const banner = document.getElementById("failure-banner");
         const degraded = document.getElementById("failure-banner-degraded");
@@ -487,7 +539,7 @@
         return body.replace(/<[^>]*>/g, "").trim();
       }
 
-      // Only a poll's failure implies unreachability: a server that answered is reachable, so a failed action reports on its own surface.
+      // A server that answered is reachable, so only a failed poll marks the engine unreachable.
       function isPollRequest(elt) {
         if (!elt || !elt.getAttribute) return false;
         const trigger = elt.getAttribute("hx-trigger") || "";
@@ -523,8 +575,7 @@
 
       document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);
 
-      // A swap replaces the open disclosure node (collapsing it and dropping
-      // focus); this record reopens it when the new DOM still has it.
+      // A swap replaces the open disclosure node, which collapses it and drops focus.
       let openErrorDetails = null;
 
       function closeErrorPopover(popover) {
@@ -612,8 +663,7 @@
       window.addEventListener("resize", closeAllErrorPopovers);
       window.addEventListener("scroll", closeAllErrorPopovers, true);
 
-      // A swap that replaces an open disclosure must not close it; `afterSettle`
-      // sees the final DOM after out-of-band processing.
+      // `afterSettle` fires on the final DOM after out-of-band processing, so the restore runs on both events.
       document.body.addEventListener("htmx:afterSwap", restoreOpenErrorDetails);
       document.body.addEventListener("htmx:afterSettle", restoreOpenErrorDetails);
 
@@ -628,10 +678,8 @@
         }
       });
 
-      // htmx restores focus to a stable id that survives the swap (posture
-      // selects, LLM row header, edit button). A control replaced by a different
-      // one (Edit to form, Cancel to list) has no stable id, so this moves focus
-      // to the first usable control in the swapped region.
+      // htmx restores focus only to an id that survives the swap, so a control
+      // replaced by a different one (Edit to form, Cancel to list) needs this fallback.
       const FOCUS_SWAP_TARGETS = ".worlds-panel, .prompt-presets-panel, .preset-card";
       const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";
       let focusedBeforeSwap = null;
@@ -661,8 +709,8 @@
       function pausePolling() {
         const storyLog = document.getElementById("story-log");
         if (storyLog) {
-          // Save the real trigger once. A second pause must not overwrite it
-          // with "none", or the resumed poll never comes back.
+          // A second pause would overwrite the saved trigger with "none", so the
+          // poll would never resume.
           if (originalTrigger === null) {
             originalTrigger = storyLog.getAttribute("hx-trigger");
           }
@@ -682,9 +730,8 @@
 
       function autoResizeTextarea(textarea) {
         textarea.style.height = "auto";
-        // `box-sizing: border-box` makes `height` include the border, so add
-        // it back or the content overflows by the border width and the
-        // textarea grows its own scrollbar even when it is big enough.
+        // `box-sizing: border-box` excludes the border from `height`, so add it
+        // back or the textarea overflows and grows its own scrollbar.
         const border = textarea.offsetHeight - textarea.clientHeight;
         textarea.style.height = textarea.scrollHeight + border + "px";
       }
@@ -708,7 +755,7 @@
         if (entry) {
           const textSpan = entry.querySelector(".text");
 
-          // data-raw-text holds the pre-markdown source; .text is rendered.
+          // Edit the markdown source, not the rendered HTML, so a save round-trips the original text.
           const rawText = entry.getAttribute("data-raw-text") || "";
           editState.text = textSpan.innerHTML;
 
@@ -736,7 +783,7 @@
           const actionsContainer = entry.querySelector(".message-actions");
           if (actionsContainer) {
             editState.actions = actionsContainer.innerHTML;
-            actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save">✓</button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel">✗</button>`;
+            actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save" aria-label="Save"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel" aria-label="Cancel"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>`;
           }
           const swipeControls = entry.querySelector(".swipe-controls");
           if (swipeControls) {
@@ -790,8 +837,7 @@
         const newText = document.getElementById("edit-textarea").value;
         const formData = new URLSearchParams();
         formData.append("text", newText);
-        // editState stays set until the outcome is known, so a failure can
-        // restore the entry instead of stranding it in edit mode.
+        // Kept set until the outcome is known, so a failed save can restore the entry.
         fetch(`/history/${editState.id}`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -811,28 +857,25 @@
             revertEdit();
           })
           .finally(() => {
-            // Both outcomes must unpause the log, or it freezes on a failure.
             resumePolling();
           });
       }
 
-      // Raw-fetch failures have no htmx swap to restore the status display;
-      // without this it stays on "Thinking..." with the button stuck as a
-      // generating indicator.
+      // Raw-fetch paths get no htmx swap, so a failure would otherwise leave
+      // "Thinking..." with Send stuck as a generating indicator.
       function resetStatusToReady() {
         setStatus("Ready", "ready");
         applyStatusDisplay();
       }
 
-      // Clears the posture group's "Saved" confirmation, so a failed Update
-      // World cannot sit under green feedback from an earlier auto-save.
+      // A failed Update World must not sit under green feedback from an earlier auto-save.
       function clearPostureStatus() {
         const status = document.getElementById("world-posture-status");
         if (status) status.innerHTML = "";
       }
 
-      // Retry/retrigger run through raw fetch, so a failed request reports its
-      // own error and resets the status the htmx swaps would otherwise restore.
+      // Retry and retrigger run through raw fetch, so the failure path reports
+      // its own error and resets the status the htmx swaps never restored.
       function submitGenerationRequest(url, failureMessage) {
         updateToThinking();
         fetch(url, { method: "POST" })
@@ -857,8 +900,7 @@
         submitGenerationRequest("/retrigger", "Failed to retrigger the event");
       }
 
-      // A restored swipe has no state signal of its own — the counter alone
-      // does not tell the player a snapshot was restored.
+      // A restored swipe leaves no state signal, so the restore is announced explicitly.
       function announceSwipeRestore() {
         const notice = document.getElementById("restore-notice");
         if (!notice) return;
@@ -880,8 +922,7 @@
           })
           .then((html) => {
             document.getElementById("story-log").innerHTML = html;
-            // The restore is a settled state: drop any stale generating label
-            // at once rather than waiting for the next 5s status poll.
+            // The restore is settled: drop any stale generating label without waiting for the 5s poll.
             resetStatusToReady();
             announceSwipeRestore();
           })
@@ -934,9 +975,8 @@
 
       function useOption(btn) {
         const input = commandInput();
-        // A generation in flight owns the input: a stale option left over from
-        // the previous turn must not hijack it. `input.disabled` alone misses
-        // this — the input is only disabled while a text check is in flight.
+        // The input is disabled only during a text check, so a generation in
+        // flight needs the explicit statusIsGenerating() guard.
         if (!input || input.disabled || statusIsGenerating()) return;
         input.value = btn.textContent;
         document.getElementById("command-form").requestSubmit();
@@ -1110,7 +1150,7 @@
         }
       });
 
-      // focusout bubbles, so one document listener covers input blur.
+      // focusout bubbles, unlike blur.
       document.addEventListener("focusout", function (e) {
         if (!slashMenu) return;
         if (e.target === commandInput()) {
@@ -1124,14 +1164,12 @@
 
       document.addEventListener("submit", closeSlashMenu, true);
 
-      // Close on scroll/resize — the fixed position is stale once the
-      // viewport moves.
+      // The menu is position:fixed, so scroll or resize leaves it stale.
       window.addEventListener("scroll", closeSlashMenu, true);
       window.addEventListener("resize", closeSlashMenu);
 
       document.addEventListener("DOMContentLoaded", function () {
-        // A page loaded mid-generation renders a thinking status span; the
-        // reconciler locks Send and reads any error the span already carries.
+        // A page loaded mid-generation renders a thinking status span, so the reconciler must run at load.
         applyStatusDisplay();
 
         document.querySelectorAll(".tab").forEach((btn) => {
@@ -1150,8 +1188,7 @@
           });
         });
 
-        // The Settings panel is swapped as a whole, so its sub-tab buttons are
-        // delegated rather than bound per button.
+        // The Settings panel is swapped as a whole, so the sub-tab buttons cannot be bound per button.
         document.addEventListener("click", (event) => {
           const subtab = event.target.closest(".settings-subtab");
           if (!subtab) return;
@@ -1171,7 +1208,7 @@
           if (target) target.classList.add("active");
         });
 
-        // Expansion state lives in JS: htmx polls re-render the panel.
+        // htmx polls re-render the panel, so expansion state lives in JS.
         const expandedLlmMessages = new Set();
         let llmOriginalTrigger = null;
 

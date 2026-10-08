@@ -1,6 +1,8 @@
 # Feature Spec: Story Log
 
-Endpoint: `POST /history/delete`
+Endpoints:
+- `POST /history/delete`
+- `GET /fragment/story-log`
 
 ## Scenarios
 
@@ -69,4 +71,16 @@ When the client GET /fragment/story-log
 Then the response body contains .log-entry markup
 And the response body contains no id="story-log" declaration
 And the response body contains no class="story-log" declaration
+```
+
+#### Scenario 8.6: Every icon-only control in the story log has an accessible name
+
+```gherkin
+Given a game with at least 2 Messages and a stored trigger
+And the last Message is a Narration with one Swipe
+When the client GET /fragment/story-log
+Then the response shows the Edit, Delete, Retrigger and Swipe controls
+And every button that shows no text has an accessible name
+And a button that has a tooltip is named by the same words
+And every icon in the response is hidden from assistive technology
 ```

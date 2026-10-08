@@ -70,7 +70,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
-    - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the generating status poll. Tagged against `docs/specs/dashboard.md`.
+    - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite and the generating status poll. Tagged against `docs/specs/dashboard.md`.
     - `failure_display.rs` — HTTP E2E tests for the failure display, tagged against `docs/specs/failure_display.md`.
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
@@ -86,7 +86,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).
     - `retrigger.rs` — HTTP E2E tests for the retrigger endpoint (POST /retrigger).
     - `settings.rs` — HTTP E2E tests for the settings endpoints: sub-tabs, role rows, and the text-check auto-save.
-    - `story_log.rs` — HTTP E2E tests for the story-log delete endpoint (POST /history/delete).
+    - `story_log.rs` — HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
     - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.

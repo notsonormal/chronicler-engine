@@ -70,8 +70,8 @@ fn llm_message(agent: &str, error: Option<&str>, created_offset_secs: i64) -> Ll
     }
 }
 
-/// The id of the connection just added through the Settings panel. Added ids
-/// start with `conn-`; the seeded fixture connections carry author-chosen ids.
+/// Added ids start with `conn-`; the seeded fixture connections carry
+/// author-chosen ids.
 fn added_connection_id(panel: &str) -> String {
     let prefix = "hx-get=\"/fragment/connections/";
     let marker = format!("{prefix}conn-");
@@ -83,9 +83,8 @@ fn added_connection_id(panel: &str) -> String {
     panel[start..end].to_string()
 }
 
-/// The `<div class="connection-row">…</div>` slice for connection `id` in the
-/// rendered settings panel. Rows carry no data-id, so the anchor is the
-/// connection's own edit link and the slice ends at the next row.
+/// Rows carry no data-id, so the slice is anchored on the connection's own edit
+/// link and ends at the next row.
 fn connection_row<'a>(panel: &'a str, id: &str) -> &'a str {
     let anchor = format!(r#"hx-get="/fragment/connections/{id}/edit"#);
     card_html_slice(panel, "connection-row", &anchor)
@@ -353,7 +352,7 @@ async fn test_role_rows_show_each_roles_health() {
         2,
         "both role rows must start with no recorded calls: {body}"
     );
-    assert!(!body.contains("subtab-degraded-dot"));
+    assert!(!body.contains("subtab-degraded-marker"));
 
     storage
         .save_llm_message(&llm_message("narrator", Some("connection refused"), -10))
@@ -364,8 +363,12 @@ async fn test_role_rows_show_each_roles_health() {
         "the failed role must degrade: {body}"
     );
     assert!(
-        body.contains("subtab-degraded-dot"),
+        body.contains("subtab-degraded-marker"),
         "the Connections sub-tab must mark the degraded role: {body}"
+    );
+    assert!(
+        body.contains(r##"<use href="#i-triangle-alert""##),
+        "the marker must carry an icon, or a colour-blind reader loses the cue: {body}"
     );
     assert!(
         body.contains(r#"<pre class="error-detail-raw">connection refused</pre>"#),
@@ -380,7 +383,7 @@ async fn test_role_rows_show_each_roles_health() {
         body.contains("Healthy"),
         "a later success must report Healthy: {body}"
     );
-    assert!(!body.contains("subtab-degraded-dot"));
+    assert!(!body.contains("subtab-degraded-marker"));
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.9

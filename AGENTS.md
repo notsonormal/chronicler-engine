@@ -429,3 +429,10 @@ Don't commit without explict approval, even if commiting is allowed in the permi
 Prefer single long running subagents over multiple smaller subagents because it's more expensive to load up twice the context. This is a preference, some workflows/skills specificially use multiple subagents, such as some code review workflows or when implementing multiple wayfinder tickets at once.
 
 Only create `scout` subagents if the current model is Anthropic (e.g. Opus or Sonnet). With a non-Anthropic model, read all the information you need in the current session. This rule is specific to `scout` subagents only.
+
+The latest pi-note gives the current model. For example:
+
+```
+<pi-note> Model: anthropic/claude-opus-5-5 </pi-note>
+<pi-note> Model: opencode-go/deepseek-v4.1-flash </pi-note>
+```

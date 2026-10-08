@@ -7,7 +7,7 @@ title: UI Design
 
 The dashboard's visual language is defined by a small set of CSS custom properties (design tokens) and a structured set of component specifications. Tokens are the source of truth for colors, typography, spacing, sizing, and animation timings; components declare the token-derived styling for each dashboard region. The static stylesheet at `assets/styles.css` is the binding code that consumes both.
 
-This doc carries the token tables verbatim because the tables are the curated token→usage reference — the `--color-accent-green` value itself lives in `assets/styles.css`. Component specs describe structure and visual state in prose; enforced interaction contracts live in the per-region browser specs (`docs/specs/browser_*.md`), and the CSS implementation lives in `assets/styles.css`.
+This doc carries the token tables verbatim because the tables are the curated token→usage reference — the `--color-accent-ok` value itself lives in `assets/styles.css`. Component specs describe structure and visual state in prose; enforced interaction contracts live in the per-region browser specs (`docs/specs/browser_*.md`), and the CSS implementation lives in `assets/styles.css`.
 
 ## Design Tokens
 
@@ -15,31 +15,48 @@ This doc carries the token tables verbatim because the tables are the curated to
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| `--color-bg-primary` | `#0a0a0a` | Main background |
-| `--color-bg-secondary` | `#111` | Story log background |
-| `--color-bg-tertiary` | `#0f0f0f` | Visual sidebar background |
-| `--color-bg-header` | `#1a1a1a` | Header and action area background |
-| `--color-border` | `#333` | All borders |
-| `--color-text-primary` | `#e0e0e0` | Main text |
-| `--color-text-muted` | `#888` | Muted text, inactive tab, swap/swipe controls, NPC portrait labels |
-| `--color-text-placeholder` | `#555` | Placeholder text |
-| `--color-accent-green` | `#00ff00` | Ready status, focus states |
-| `--color-accent-green-bright` | `#4ade80` | Location headers |
-| `--color-accent-cyan` | `#00ffff` | Narration text, edit/save/cancel hover |
-| `--color-accent-blue-cyan` | `#38bdf8` | Event headers, style issue tags |
-| `--color-accent-orange` | `#ffb347` | Dialogue text, retry hover, quantifier badge |
-| `--color-accent-yellow` | `#ffff00` | System text, Thinking status, capitalization tags |
-| `--color-accent-red` | `#ff4444` | Error status, danger buttons |
-| `--color-accent-pink` | `#ff6b6b` | Speaker names (default), delete hover, grammar tags |
+| `--color-bg-primary` | `#121212` | Main background |
+| `--color-bg-secondary` | `#191919` | Story log background |
+| `--color-bg-tertiary` | `#161616` | Visual sidebar background |
+| `--color-bg-header` | `#202020` | Header, action area, LLM card header hover |
+| `--color-border` | `#343434` | All borders |
+| `--color-text-primary` | `#e6e6e6` | Main text, narration and input bubble text |
+| `--color-text-muted` | `#a3a3a3` | Muted text, inactive tab, swipe controls, NPC portrait labels |
+| `--color-text-placeholder` | `#858585` | Placeholder text |
+| `--color-accent-ok` | `#8ab4f8` | Ready status, active tab, Healthy role, primary/Send buttons, focus, Narrator badge |
+| `--color-accent-green-bright` | `#a6d6a0` | Location headers, LLM prompt emphasis |
+| `--color-accent-cyan` | `#9cc9d6` | Option rows, slash commands, back link, retrigger, LLM agent label |
+| `--color-accent-blue-cyan` | `#8ab4e0` | Event headers, style issue tags |
+| `--color-accent-orange` | `#e8b878` | Quoted dialogue, degraded marker, quantifier badge, spell issue tags |
+| `--color-accent-yellow` | `#dcc888` | System text, Thinking status, capitalization tags |
+| `--color-accent-red` | `#ea8080` | Error status, danger buttons, cancel hover |
+| `--color-accent-pink` | `#e8a0a0` | Delete hover, grammar issue tags |
 | `--color-button-gradient-start` | `#2a2a2a` | Generic button gradient top (unused at runtime) |
-| `--color-button-gradient-end` | `#1a1a1a` | Generic button gradient bottom (unused at runtime) |
-| `--color-button-border` | `#555` | Command input border, custom checkbox border |
-| `--color-log-input` | `#2a2a2a` | User input bubble background |
-| `--color-log-narration` | `#1a3a3a` | Narration bubble background |
-| `--color-log-dialogue` | `#3a2a1a` | Dialogue bubble background |
-| `--color-log-system` | `#3a3a1a` | System message bubble background |
-| `--color-error-gradient-start` | `#ff4444` | Error notification gradient top |
-| `--color-error-gradient-end` | `#cc0000` | Error notification gradient bottom |
+| `--color-button-gradient-end` | `#222222` | Generic button gradient bottom (unused at runtime) |
+| `--color-button-border` | `#4a4a4a` | Command input border, custom checkbox border |
+| `--color-button-primary-start` | `#283a54` | `.btn-primary` gradient top |
+| `--color-button-primary-end` | `#202f45` | `.btn-primary` gradient bottom |
+| `--color-button-cyan-start` | `#283338` | `.btn-cyan` gradient top |
+| `--color-button-cyan-end` | `#20292d` | `.btn-cyan` gradient bottom |
+| `--color-button-danger-start` | `#402626` | `.btn-danger` gradient top |
+| `--color-button-danger-end` | `#321e1e` | `.btn-danger` gradient bottom |
+| `--color-button-send-start` | `#2c4466` | Send button gradient top |
+| `--color-button-send-end` | `#243650` | Send button gradient bottom |
+| `--color-log-input` | `#272727` | User input bubble background |
+| `--color-log-narration` | `#1f1f1f` | Narration bubble background |
+| `--color-log-system` | `#27251c` | System message bubble background |
+| `--color-error-gradient-start` | `#bd5252` | Error notification gradient top |
+| `--color-error-gradient-end` | `#963c3c` | Error notification gradient bottom, unreachable banner |
+| `--color-tint-ok` | `color-mix(in srgb, var(--color-accent-ok) 12%, transparent)` | OK badges, save hover |
+| `--color-tint-ok-edge` | `color-mix(in srgb, var(--color-accent-ok) 28%, transparent)` | OK badge border |
+| `--color-tint-orange` | `color-mix(in srgb, var(--color-accent-orange) 12%, transparent)` | Quantifier badge, spell issue tags |
+| `--color-tint-orange-edge` | `color-mix(in srgb, var(--color-accent-orange) 28%, transparent)` | Orange tag border |
+| `--color-tint-cyan` | `color-mix(in srgb, var(--color-accent-cyan) 7%, transparent)` | Option rows |
+| `--color-tint-cyan-strong` | `color-mix(in srgb, var(--color-accent-cyan) 15%, transparent)` | Option row hover |
+| `--color-tint-red` | `color-mix(in srgb, var(--color-accent-red) 12%, transparent)` | Error message, cancel hover |
+| `--shadow-focus-ring` | `0 0 0 2px color-mix(in srgb, var(--color-accent-ok) 30%, transparent)` | Every focus ring |
+
+Every text pair in the palette clears 4.5:1 (WCAG AA) against its least-contrasting background.
 
 ### Typography
 
@@ -49,7 +66,6 @@ This doc carries the token tables verbatim because the tables are the curated to
 | `--font-size-base` | `14px` | Body text, input, buttons, action buttons |
 | `--font-size-small` | `12px` | NPC labels, status, connection details |
 | `--font-size-xs` | `11px` | Badges |
-| `--font-size-sender` | `13px` | Speaker name above each log entry |
 
 ### Spacing
 
@@ -93,7 +109,7 @@ This doc carries the token tables verbatim because the tables are the curated to
 - Border-bottom: 1px solid `--color-border`
 - Padding: `0 var(--spacing-md)` (16px horizontal)
 - Gap: `var(--spacing-sm)` (8px between tabs)
-- Active tab: green text (`--color-accent-green`), green bottom border (`2px solid`)
+- Active tab: `--color-accent-ok` text and bottom border (`2px solid`)
 - Inactive tab: muted text (`--color-text-muted`), transparent border
 - Hover: muted text brightens to primary (`--color-text-primary`)
 
@@ -196,7 +212,7 @@ checks the posture change wiring.
 - Height: `--input-height`
 - Min-width: `var(--input-min-width)`
 - Flex: 1 (consumes remaining width in `#command-form`)
-- Focus: border-color `--color-accent-green`, box-shadow `0 0 8px rgba(0, 255, 0, 0.2)`
+- Focus: border-color `--color-accent-ok`, box-shadow `var(--shadow-focus-ring)`
 - Placeholder color: `--color-text-placeholder`
 
 ### Slash-Command Auto-Suggestion Menu
@@ -222,19 +238,19 @@ A position-fixed palette that appears above the command input while the input va
 
 ### Send Button
 
-Gradients are hardcoded in `#command-form button` (not tokenized), since the send button has its own visual identity distinct from the `.btn-primary` utility class.
+`#command-form button` carries its own gradient tokens, since the send button has a visual identity distinct from the `.btn-primary` utility class.
 
-- Background: linear-gradient(180deg, `#00aa00` 0%, `#006600` 100%) (idle)
-- Border: 1px solid `--color-accent-green`
+- Background: linear-gradient(180deg, `--color-button-send-start` 0%, `--color-button-send-end` 100%) (idle)
+- Border: 1px solid `--color-accent-ok`
 - Border-radius: `4px`
-- Color: `--color-accent-green`
+- Color: `--color-accent-ok`
 - Padding: `8px var(--spacing-md)`
 - Height: `--input-height`, min-width: `--button-min-width`
 - Font: inherit, `--font-size-base`, bold
-- Box-shadow: `0 0 8px rgba(0, 255, 0, 0.3)`
-- Hover: linear-gradient(180deg, `#00cc00` 0%, `#008800` 100%), box-shadow `0 0 12px rgba(0, 255, 0, 0.5)`
-- Active: linear-gradient(180deg, `#006600` 0%, `#004400` 100%), box-shadow `0 0 4px rgba(0, 255, 0, 0.3)`
-- Disabled: `opacity: 0.5; cursor: not-allowed; box-shadow: none`
+- Icon: a 16×16 `.icon` from the sprite — a paper-plane while idle, a spinning `loader-circle` while a turn runs
+- Hover: background `--color-button-send-start`, `filter: brightness(1.15)`
+- Active: background `--color-button-send-end`
+- Disabled: `opacity: 0.5; cursor: not-allowed`
 
 ### Status Display
 
@@ -243,7 +259,7 @@ Gradients are hardcoded in `#command-form button` (not tokenized), since the sen
 - Min-width: `--button-min-width`
 - Text-align: right
 - States:
-  - **Ready**: `--color-accent-green`
+  - **Ready**: `--color-accent-ok`
   - **Thinking**: `--color-accent-yellow`
   - **Error**: `--color-accent-red`
 
@@ -261,30 +277,29 @@ Gradients are hardcoded in `#command-form button` (not tokenized), since the sen
 
 ### Log Entry Bubbles
 
-Per-`log_type` bubble styling, keyed by the `MessageType` enum (`Narration`, `Dialogue`, `System`, `Input`). Each bubble is a `max-width: 85%` rounded rect with `padding: 10px 14px`, `border-radius: 12px`, and a `4px` corner radius on the side opposite the alignment to suggest a chat-bubble tail.
+Per-`log_type` bubble styling, keyed by the `MessageType` enum (`Narration`, `System`, `Input`). Each bubble is a `max-width: 85%` rounded rect with `padding: 10px 14px`, `border-radius: 12px`, and a `4px` corner radius on the side opposite the alignment to suggest a chat-bubble tail.
 
-| Bubble | Background | Text color | Sender color | Alignment |
-|---|---|---|---|---|
-| Input | `--color-log-input` | `#cccccc` (hardcoded) | `--color-text-muted` | right (`margin-left: auto`) |
-| Narration | `--color-log-narration` | `--color-accent-cyan` | `#00cccc` (hardcoded) | left (`margin-right: auto`) |
-| Dialogue | `--color-log-dialogue` | `--color-accent-orange` (italic) | `--color-accent-orange` | left (`margin-right: auto`) |
-| System | `--color-log-system` | `--color-accent-yellow` | (no sender) | centered, max-width 70% |
+| Bubble | Background | Text color | Alignment |
+|---|---|---|---|
+| Input | `--color-log-input` | `--color-text-primary` | right (`margin-left: auto`) |
+| Narration | `--color-log-narration` | `--color-text-primary` | left (`margin-right: auto`) |
+| System | `--color-log-system` | `--color-accent-yellow` | centered, max-width 70% |
 
-The base `.sender` style is `display: block; font-size: var(--font-size-sender); font-weight: bold; color: var(--color-accent-pink); margin-bottom: var(--spacing-xs)`. Dialogue and narration override it to their own bubble colors; input overrides to muted.
+Dialogue is not a bubble of its own: quoted speech renders inside the entry text as `<q>` and takes `--color-accent-orange`, italic.
 
-The base `.text` style is `font-size: var(--font-size-base); line-height: 1.5; overflow-wrap: anywhere; word-wrap: break-word`. Narration, dialogue, system override the text color to their accent; input overrides to `#cccccc`. Quoted text (`<q>`) inside `.text` is `--color-accent-red` italic.
+The base `.text` style is `font-size: var(--font-size-base); line-height: 1.5; overflow-wrap: anywhere; word-wrap: break-word`. Narration and input text use `--color-text-primary`; system uses `--color-accent-yellow`. Quoted text (`<q>`) inside `.text` is `--color-accent-orange` italic.
 
 ### Per-Entry Action Buttons
 
-Three buttons rendered above each entry's text span. Conditional visibility rules live in `NarrativeLogTemplate::new` (templates.rs).
+Three icon-only buttons rendered above each entry's text span. Each draws a `.icon` from the shell sprite and carries both an `aria-label` and a matching `title`. Conditional visibility rules live in `NarrativeLogTemplate::new` (templates.rs).
 
-| Button | Glyph | Visibility rule |
+| Button | Icon | Visibility rule |
 |---|---|---|
-| Edit | ✎ | always visible on every entry |
-| Delete | 🗑 | last entry, only when more than one entry exists |
-| Retrigger | ♻ | last entry, narration or dialogue, no event continuation, previous turn had a trigger |
+| Edit | `#i-pencil` | always visible on every entry |
+| Delete | `#i-trash` | last entry, only when more than one entry exists |
+| Retrigger | `#i-zap` | last entry, narration, no event continuation, previous turn had a trigger |
 
-Base `.action-btn` style: `background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; color: var(--color-text-muted); cursor: pointer; font-size: 14px; padding: 2px 6px; min-width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; transition: background, border-color, color all on var(--transition-fast)`.
+Base `.action-btn` style: `background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; color: var(--color-text-muted); cursor: pointer; padding: 0; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; transition: background, border-color, color all on var(--transition-fast)`.
 
 Default hover deepens the background to `rgba(255, 255, 255, 0.15)` and the border to `rgba(255, 255, 255, 0.25)`. Per-button hover colors override:
 
@@ -292,19 +307,18 @@ Default hover deepens the background to `rgba(255, 255, 255, 0.15)` and the bord
 |---|---|
 | Edit | `--color-accent-cyan` |
 | Delete | `--color-accent-pink` |
-| Retry | `--color-accent-orange` |
 
-The retrigger button uses a separate `.retrigger-btn` class (see Swipe Controls below), not `.action-btn`.
+The retrigger button carries `.action-btn` for its 24×24 box plus `.retrigger-btn` for its cyan colour (see Swipe Controls below).
 
 ### Swipe Controls
 
-Rendered below the last entry's text when `swipe_count > 1`. Container: flex row, gap `8px`, `margin-top: 6px`, `padding-top: 6px`, border-top `1px solid var(--color-border)`, centered.
+Rendered below the last entry's text when the last entry is a Narration or Input. Container: flex row, gap `8px`, `margin-top: 6px`, `padding-top: 6px`, border-top `1px solid var(--color-border)`, centered.
 
-- **Left arrow (◀)**: `.swipe-btn`, switches to previous swipe; disabled on the first swipe (opacity 0.3)
+- **Previous**: `.swipe-btn` with `#i-chevron-left`, switches to the previous swipe; disabled on the first swipe (opacity 0.3)
 - **Counter**: `.swipe-counter` — `font-size: 12px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; min-width: 40px; text-align: center`
-- **Right arrow (▶)**: `.swipe-btn`; when not on the latest swipe, switches to next; when on the latest swipe, generates a new swipe
+- **Forward**: one `.swipe-btn` whose icon and `aria-label` follow `next_swipe_index` — `#i-chevron-right` and `Next swipe` when a later swipe exists, `#i-refresh-cw` and `Retry` on the latest swipe, which generates a new one
 
-`.swipe-btn` base: `background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted); padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1; transition: all 0.15s ease`.
+A swipe button carries `.action-btn` for its 24×24 box and `.swipe-btn` for its transparent ground and border. `.swipe-btn` base: `background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted); border-radius: 4px; cursor: pointer; transition: all 0.15s ease`.
 
 Hover (when not disabled): `background: var(--color-bg-tertiary); color: var(--color-text-primary); border-color: var(--color-accent-cyan)`.
 
@@ -312,9 +326,9 @@ Disabled: `opacity: 0.3; cursor: not-allowed`.
 
 ### Retrigger Button
 
-Uses its own `.retrigger-btn` class (not `.action-btn`), rendered next to the swipe controls when the retrigger visibility rule applies.
+Carries `.retrigger-btn` alongside `.action-btn`, rendered in the entry's action cluster above the text when the retrigger visibility rule applies.
 
-- Base: `background: transparent; border: 1px solid var(--color-accent-cyan); color: var(--color-accent-cyan); padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1; transition: all 0.15s ease`
+- Base: `background: transparent; border: 1px solid var(--color-accent-cyan); color: var(--color-accent-cyan); border-radius: 4px; cursor: pointer; transition: all 0.15s ease`
 - Hover: inverts — `background: var(--color-accent-cyan); color: var(--color-bg-primary)`
 
 ### Inline Edit Textarea
@@ -339,9 +353,10 @@ Replaces the entry's text span when the user clicks Edit.
 
 Replace the entry's action-button cluster while in edit mode. Both share the same base; only hover differs.
 
-- Base: `background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; cursor: pointer; font-size: 14px; padding: 2px 6px; min-width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--color-text-muted)`
-- Save hover: `background: rgba(0, 255, 0, 0.15); border-color: var(--color-accent-green); color: var(--color-accent-green)`
-- Cancel hover: `background: rgba(255, 68, 68, 0.15); border-color: var(--color-accent-red); color: var(--color-accent-red)`
+- Base: `background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; cursor: pointer; padding: 0; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--color-text-muted)`
+- Save hover: `background: var(--color-tint-ok); border-color: var(--color-accent-ok); color: var(--color-accent-ok)`
+- Cancel hover: `background: var(--color-tint-red); border-color: var(--color-accent-red); color: var(--color-accent-red)`
+- Save and Cancel draw `#i-check` and `#i-x` and carry an `aria-label`
 
 ### Text Check Preview
 
@@ -351,10 +366,10 @@ Replaces the action area when text-check preflight surfaces issues.
 - Max-width: `600px`
 - Display: flex column, gap `var(--spacing-sm)`
 - Original text (read-only): label uppercase muted, value strikethrough muted
-- Corrected text (editable textarea): label uppercase muted, value green (`--color-accent-green`), word-break
+- Corrected text (editable textarea): label uppercase muted, value `--color-text-primary`
 - Issue tags: orange (spell), pink (grammar), yellow (capitalization), blue-cyan (style), muted (formatting/other)
 - Three buttons: **Send Corrected**, **Send Original**, **Cancel**
-- The check button itself (`.btn-check`): transparent background, cyan border+text, padding `8px 14px`, height `var(--input-height)`, bold; hover adds a cyan glow
+- Header icon (`.preview-icon`): an 18×18 `#i-spell-check` sprite icon beside the title
 
 When the action area contains a `.text-check-preview`, the parent `.action-area` expands: `height: auto; min-height: var(--action-area-height); align-items: flex-start; padding-top/bottom: var(--spacing-md)`.
 
@@ -393,8 +408,8 @@ Supported viewports, desktop-first:
 ### Settings Sub-tabs
 
 - Bar: flex row, gap `var(--spacing-sm)`, bottom border `var(--color-border)`
-- Sub-tab: transparent, muted text, `2px` transparent bottom border; `.active` uses `--color-accent-green` text and bottom border
-- Degraded marker (`.subtab-degraded-dot`): 8px orange circle beside the Connections label while a role is degraded
+- Sub-tab: transparent, muted text, `2px` transparent bottom border; `.active` uses `--color-accent-ok` text and bottom border
+- Degraded marker (`.subtab-degraded-marker`): a `#i-triangle-alert` sprite icon in `--color-accent-orange` beside the Connections label while a role is degraded, with a `title` tooltip, so the signal is not colour alone
 - Panel (`.settings-subtab-panel`): `display: none`; `.active` is `display: flex`, flex column, gap `var(--spacing-md)`
 
 ### Role Rows
@@ -402,7 +417,7 @@ Supported viewports, desktop-first:
 - Row: flex, wrap, gap `var(--spacing-sm)`, `--color-bg-secondary` background, `1px solid var(--color-border)` border, `border-radius: 8px`, padding `var(--spacing-sm) var(--spacing-md)`
 - Role name: bold, min-width `90px`
 - Connection select: flex `1 1 220px`, min-width `160px`
-- Health: `.role-health.healthy` green, `.role-health.degraded` red, `.role-health.unknown` muted; a degraded role carries the shared error disclosure
+- Health: `.role-health.healthy` `--color-accent-ok`, `.role-health.degraded` `--color-accent-red`, `.role-health.unknown` muted; a degraded role carries the shared error disclosure
 
 ### Connection Rows
 
@@ -410,16 +425,16 @@ Supported viewports, desktop-first:
 - Row (`.connection-row`): flex, wrap, gap `var(--spacing-md)`, `--color-bg-secondary` background, `1px solid var(--color-border)` border, `border-radius: 8px`, padding `var(--spacing-sm) var(--spacing-md)`
 - Meta: flex column, name bold and provider/model small muted
 - Role badges: flex row, gap `4px`
-  - **Narrator badge**: green background `rgba(0, 255, 0, 0.12)`, green text, green border
-  - **Quantifier badge**: orange background `rgba(255, 179, 71, 0.12)`, orange text, orange border
+  - **Narrator badge**: `--color-tint-ok` background, `--color-accent-ok` text, `--color-tint-ok-edge` border
+  - **Quantifier badge**: `--color-tint-orange` background, `--color-accent-orange` text, `--color-tint-orange-edge` border
 - Actions: flex row, gap `var(--spacing-sm)`, pushed right with `margin-left: auto`
 - Test control: `.btn-cyan`, posts the saved connection to its test route and swaps the result into the row's `.connection-test-slot`
-- Result slot (`.connection-test-slot`): full-width, hidden while empty; a passing result is `.connection-test-result.success` in green, and a failure carries the shared error disclosure
+- Result slot (`.connection-test-slot`): full-width, hidden while empty; a passing result is `.connection-test-result.success` in `--color-accent-ok`, and a failure carries the shared error disclosure
 
 ### Connection Form Page
 
 - The shared Add/Edit page is a `.settings-panel` with `.connection-form-page`
-- Back link: transparent, cyan text, no border, aligned to the start
+- Back link: transparent, cyan text, no border, aligned to the start, with a `#i-chevron-left` sprite icon
 - Form fields inherit the `.settings-panel` input/select styling; actions are a flex row with gap `var(--spacing-sm)`
 - Test control: posts the values typed into the form to `/connections/test` and swaps the result into the form's `.connection-test-slot` (same result and disclosure styles as a connection row)
 
@@ -430,22 +445,22 @@ Supported viewports, desktop-first:
 
 ### Button Utility Classes
 
-Three utility classes provide the gradient+border+text styling for action buttons across the dashboard panels. Gradient hex values are hardcoded in the class definitions (NOT tokenized). Context-scoped selectors (`.settings-panel button`, `.prompt-presets-panel button`, `.games-panel button`) apply layout overrides only — gradients come from the utility classes.
+Three utility classes provide the gradient+border+text styling for action buttons across the dashboard panels. Each gradient comes from its own token pair. Context-scoped selectors (`.settings-panel button`, `.prompt-presets-panel button`, `.games-panel button`) apply layout overrides only — gradients come from the utility classes.
 
 | Class | Gradient | Text/border | Padding | Typical actions |
 |---|---|---|---|---|
-| `.btn-primary` | `#2a5a2a` → `#1a4a1a` (idle) / `#3a6a3a` → `#2a5a2a` (hover) | `--color-accent-green` | `8px 20px`, bold | Save, create, add-connection, submit |
-| `.btn-cyan` | `#2a4a5a` → `#1a3a4a` (idle) / `#3a5a6a` → `#2a4a5a` (hover) | `--color-accent-cyan` | `4px 12px`, xs font | Edit, view, switch |
-| `.btn-danger` | `#5a2a2a` → `#4a1a1a` (idle) / `#6a3a3a` → `#5a2a2a` (hover) | `--color-accent-red` | `4px 12px`, xs font | Delete, reset |
+| `.btn-primary` | `--color-button-primary-start` → `--color-button-primary-end` | `--color-accent-ok` | `8px 20px`, bold | Save, create, add-connection, submit |
+| `.btn-cyan` | `--color-button-cyan-start` → `--color-button-cyan-end` | `--color-accent-cyan` | `4px 12px`, xs font | Edit, view, switch |
+| `.btn-danger` | `--color-button-danger-start` → `--color-button-danger-end` | `--color-accent-red` | `4px 12px`, xs font | Delete, reset |
 
-Hover state for each class also adds a colored glow box-shadow in the matching accent (rgba 0.25 alpha).
+Hover state for each class swaps to the start colour, brightened with `filter: brightness(1.15)`, and adds no glow.
 
 ### LLM Messages Panel
 
 - Panel: `flex: 1; overflow-y: auto; padding: var(--spacing-md); min-height: 0`
 - List: flex column, gap `var(--spacing-sm)`
 - Card: `--color-bg-secondary` background, `1px solid var(--color-border)` border, `border-radius: 6px`, `overflow: hidden`
-- Header: flex row, `--color-bg-tertiary` background, gap `var(--spacing-sm)`, padding `var(--spacing-sm) var(--spacing-md)`, hover darkens to `#1f1f1f`
+- Header: flex row, `--color-bg-tertiary` background, gap `var(--spacing-sm)`, padding `var(--spacing-sm) var(--spacing-md)`, hover uses `--color-bg-header`
   - Agent: bold, `--color-accent-cyan`, `--font-size-small`, uppercase, min-width `80px`
   - Model: muted, `--font-size-xs`, flex 1
   - Timestamp: muted, `--font-size-xs`, monospace

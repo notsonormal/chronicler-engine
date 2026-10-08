@@ -103,7 +103,7 @@ fn test_no_calls_yet_health_renders_for_each_role() {
         2,
         "both role rows must report no recorded calls: {html}"
     );
-    assert!(!html.contains("subtab-degraded-dot"));
+    assert!(!html.contains("subtab-degraded-marker"));
 }
 
 #[test]
@@ -118,7 +118,11 @@ fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
         .render()
         .unwrap();
 
-    assert!(html.contains("subtab-degraded-dot"));
+    assert!(html.contains("subtab-degraded-marker"));
+    assert!(
+        html.contains(r##"<use href="#i-triangle-alert""##),
+        "the degraded marker must carry an icon, or the cue is the colour alone: {html}"
+    );
     assert!(html.contains(r#"class="error-disclosure""#));
     assert!(html.contains("error-details-toggle"));
     assert!(
@@ -136,7 +140,7 @@ fn test_healthy_role_renders_healthy() {
         .unwrap();
 
     assert!(html.contains("Healthy"));
-    assert!(!html.contains("subtab-degraded-dot"));
+    assert!(!html.contains("subtab-degraded-marker"));
 }
 
 #[test]
@@ -156,7 +160,7 @@ fn test_connection_form_template_add_and_edit() {
     let add = ConnectionFormTemplate::new(None).render().unwrap();
     assert!(add.contains(r#"<h2>Add Connection</h2>"#));
     assert!(add.contains(r#"hx-post="/connections/add""#));
-    assert!(add.contains("&#8249; Connections"));
+    assert!(add.contains("</svg> Connections</button>"));
     assert!(add.contains(r#"name="conn_name" value=""#));
 
     let edit = ConnectionFormTemplate::new(Some(&settings.connections[0]))

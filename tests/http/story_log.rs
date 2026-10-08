@@ -1,10 +1,14 @@
-//! HTTP E2E tests for the story-log delete endpoint (POST /history/delete).
+//! HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
 
 use axum::http::StatusCode;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::test_support::TestStoredTriggerContext;
 use chronicler_engine::TestAppBuilder;
 
+use crate::support::http_assertions::{
+    icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
+};
 use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_idle};
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
@@ -116,8 +120,6 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
     );
 }
 
-// Mirrors the client's two hops after a delete: POST /history/delete, then
-// re-fetch /fragment/story-log.
 // [docs/specs/story_log.md] SCENARIO: 8.4
 #[tokio::test]
 async fn test_delete_removes_entry_from_fragment_http() {
@@ -145,8 +147,8 @@ async fn test_delete_removes_entry_from_fragment_http() {
     );
 }
 
-// The shell polls this fragment with `hx-swap="innerHTML"` into its own
-// `#story-log`; a second container here would nest on every swap.
+// The shell swaps this fragment into its own `#story-log`, so a second
+// container here would nest on every swap.
 // [docs/specs/story_log.md] SCENARIO: 8.5
 #[tokio::test]
 async fn test_story_log_fragment_declares_no_log_container() {
@@ -167,5 +169,34 @@ async fn test_story_log_fragment_declares_no_log_container() {
     assert!(
         !body.contains(r#"class="story-log""#),
         "fragment must not wrap entries in a .story-log container: {body}"
+    );
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.6
+#[tokio::test]
+async fn test_story_log_icon_buttons_have_accessible_names() {
+    let app = TestAppBuilder::default_test()
+        .last_trigger(TestStoredTriggerContext::standard())
+        .log("look around", MessageType::Input)
+        .log("You look around.", MessageType::Narration)
+        .build();
+
+    let body = fetch_body(&app, "/fragment/story-log").await;
+
+    for control in ["edit-btn", "delete-btn", "retrigger-btn", "swipe-btn"] {
+        assert!(
+            body.contains(control),
+            "the fixture must render {control}, or the check below proves nothing: {body}"
+        );
+    }
+    let unnamed = icon_buttons_without_matching_name(&body);
+    assert!(
+        unnamed.is_empty(),
+        "icon-only buttons need an aria-label equal to their title: {unnamed:?}"
+    );
+    let exposed = svgs_not_hidden_from_assistive_technology(&body);
+    assert!(
+        exposed.is_empty(),
+        "icons must carry aria-hidden=\"true\": {exposed:?}"
     );
 }
