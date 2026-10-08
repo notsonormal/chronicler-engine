@@ -59,6 +59,7 @@ Each script's docstring has its details. These are the reasons and measurements 
 | Scenario | Total | clippy | architecture | guardrails | integration | browser |
 |---|---|---|---|---|---|---|
 | Warm, no Rust change | 97 s | 1 | 4 | 7 | 19 | 60 |
+| Warm default target dir, no Rust change, `--no-browser` (2026-10-08) | 34 s | 1 | 3 | 6 | 17 | skipped |
 | Seeded new worktree, before the test speed-ups | 344 s | 52 | 37 | n/a | 136 | 98 |
 | Seed miss, before the test speed-ups | 728 s | 239 | 242 | n/a | 146 | 81 |
 

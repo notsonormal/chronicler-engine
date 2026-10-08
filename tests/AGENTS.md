@@ -18,7 +18,7 @@ If you're unsure why a test failed, say so and investigate — don't invent expl
 
 ## LLM Testing
 
-`python build.py` runs the fast suite only. LLM tests are `#[ignore]`d by default.
+`python build.py` runs the non-LLM suite only. LLM tests are `#[ignore]`d by default.
 
 ## Engine log tee
 

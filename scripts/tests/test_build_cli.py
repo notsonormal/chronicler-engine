@@ -9,6 +9,7 @@ import io
 import os
 import re
 import socket
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -154,6 +155,25 @@ class ParseArgsTests(unittest.TestCase):
     def test_strict_flag_before_step_rejected(self):
         with self.assertRaises(SystemExit) as ctx:
             build.parse_args(["--strict", "clippy"])
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_no_browser_is_a_gate_flag(self):
+        args = build.parse_args(["--no-browser"])
+        self.assertIsNone(args.command)
+        self.assertTrue(args.no_browser)
+
+    def test_no_browser_rejected_with_step_in_both_orders(self):
+        for argv in (["clippy", "--no-browser"], ["--no-browser", "clippy"]):
+            with self.subTest(argv=argv), self.assertRaises(SystemExit) as ctx:
+                with mock.patch("sys.stderr", new_callable=io.StringIO):
+                    build.parse_args(argv)
+            self.assertEqual(ctx.exception.code, 2)
+
+    def test_no_browser_rejected_with_coverage(self):
+        """Coverage without the browser tier would under-report dashboard code."""
+        with self.assertRaises(SystemExit) as ctx:
+            with mock.patch("sys.stderr", new_callable=io.StringIO):
+                build.parse_args(["--coverage", "--no-browser"])
         self.assertEqual(ctx.exception.code, 2)
 
 
@@ -375,7 +395,7 @@ class MainRunTests(unittest.TestCase):
     @staticmethod
     def _run_args():
         return SimpleNamespace(
-            command="run", cleanup=False, llm_only=False
+            command="run", cleanup=False, llm_only=False, no_browser=False
         )
 
     def _run_main(self, run_server):
@@ -385,6 +405,7 @@ class MainRunTests(unittest.TestCase):
             mock.patch.object(build, "run_server", side_effect=run_server) as server,
             mock.patch.object(build, "run_step") as step,
             mock.patch.object(build, "_append_history"),
+            mock.patch.object(build, "_tree_identity", return_value="abc"),
             mock.patch.object(build, "clean_old_logs"),
             mock.patch("builtins.print"),
             mock.patch("builtins.open", return_value=memlog),
@@ -483,6 +504,7 @@ class GatePlanTests(unittest.TestCase):
     def gate_args(self, **overrides):
         defaults = dict(
             no_fmt=False,
+            no_browser=False,
             coverage=False,
             include_llm=False,
             test_timings=False,
@@ -527,6 +549,15 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn(
             "not binary(browser)", by_label["Running browser tests..."].cmd
         )
+
+    def test_no_browser_drops_only_the_browser_tier(self):
+        plan = build._plan_gate_steps(self.gate_args(no_browser=True))
+        labels = [step.label for step in plan]
+        self.assertNotIn("Running browser tests...", labels)
+        self.assertIn("Running integration tests...", labels)
+        self.assertIn("Running architecture tests...", labels)
+        self.assertIn("Running guardrail tests...", labels)
+        self.assertEqual(len(plan), 18)
 
     def test_no_fmt_prunes_fmt_only(self):
         plan = build._plan_gate_steps(self.gate_args(no_fmt=True))
@@ -739,11 +770,13 @@ class NextestStashTests(unittest.TestCase):
     def setUp(self):
         build._NextestSummary.lines = []
         build._NextestSummary.label = ""
+        build._NextestSummary.sizes = {}
         build._NextestLeaks.lines = []
 
     def tearDown(self):
         build._NextestSummary.lines = []
         build._NextestSummary.label = ""
+        build._NextestSummary.sizes = {}
         build._NextestLeaks.lines = []
 
     @staticmethod
@@ -801,6 +834,30 @@ class NextestStashTests(unittest.TestCase):
             ],
         )
 
+    def test_tier_command_records_its_test_set_size(self):
+        build._NextestSummary.label = "Running integration tests..."
+        fake = self._fake_process(
+            "     Summary [  20.500s] 1570 tests run: 1570 passed, 2 skipped\n", 0
+        )
+        with mock.patch.object(build.subprocess, "Popen", return_value=fake), mock.patch(
+            "builtins.print"
+        ):
+            build.run(build.get_integration_test_cmd())
+        self.assertEqual(
+            build._NextestSummary.sizes,
+            {"Running integration tests...": ("integration", 1572)},
+        )
+        # The epilogue lines keep their (label, text) shape.
+        self.assertEqual(
+            build._NextestSummary.lines,
+            [("Running integration tests...", "nextest: 1570 passed, 0 failed, 2 skipped")],
+        )
+
+    def test_other_command_records_no_size(self):
+        self._run_silenced("     Summary [  1.0s] 1 test run: 1 passed, 0 skipped\n", 0)
+        self.assertEqual(build._NextestSummary.sizes, {})
+        self.assertEqual(len(build._NextestSummary.lines), 1)
+
     def test_run_ignores_pass_lines(self):
         self._run_silenced(
             "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x\n"
@@ -816,25 +873,34 @@ class NextestEpilogueTests(unittest.TestCase):
     def setUp(self):
         build._NextestSummary.lines = []
         build._NextestSummary.label = ""
+        build._NextestSummary.sizes = {}
         build._NextestLeaks.lines = []
 
     def tearDown(self):
         build._NextestSummary.lines = []
         build._NextestSummary.label = ""
+        build._NextestSummary.sizes = {}
         build._NextestLeaks.lines = []
 
     @staticmethod
-    def _run_main(printed):
+    def _run_main(printed, no_browser=False):
         memlog = _MemLog()
         gate_args = SimpleNamespace(
             command=None,
             cleanup=False,
             llm_only=False,
+            no_browser=no_browser,
         )
         with mock.patch.object(
             build, "parse_args", return_value=gate_args
         ), mock.patch.object(build, "run_gate"), mock.patch.object(
             build, "clean_old_logs"
+        ), mock.patch.object(
+            build, "_tree_identity", return_value="abc"
+        ), mock.patch.object(
+            build, "_append_history"
+        ), mock.patch.object(
+            build, "_last_tier_sizes", return_value={}
         ), mock.patch(
             "builtins.print", side_effect=lambda msg="": printed.append(msg)
         ), mock.patch(
@@ -872,6 +938,28 @@ class NextestEpilogueTests(unittest.TestCase):
         printed = []
         self.assertEqual(self._run_main(printed), 0)
         self.assertFalse(any(msg.startswith("nextest:") for msg in printed))
+        self.assertFalse(any(msg.startswith("skipped:") for msg in printed))
+
+    def test_tier_line_carries_the_count_change(self):
+        printed = []
+        build._NextestSummary.lines = [
+            ("Running integration tests...", "nextest: 1563 passed, 0 failed, 2 skipped")
+        ]
+        build._NextestSummary.sizes = {
+            "Running integration tests...": ("integration", 1565)
+        }
+        self.assertEqual(self._run_main(printed), 0)
+        self.assertIn(
+            "nextest: 1563 passed, 0 failed, 2 skipped  (Running integration tests...)"
+            "  tests: 1565 (no earlier record)",
+            printed,
+        )
+
+    def test_no_browser_gate_names_the_skipped_tier(self):
+        printed = []
+        self.assertEqual(self._run_main(printed, no_browser=True), 0)
+        idx = printed.index('skipped: browser tier (run "python build.py browser")')
+        self.assertEqual(printed[idx + 1], "=" * 60)
 
     def test_leaky_test_name_is_printed_before_the_banner(self):
         printed = []
@@ -890,6 +978,204 @@ class NextestEpilogueTests(unittest.TestCase):
         self.assertEqual(printed[idx + 2], "=== Build Complete ===")
 
 
+class TierForCmdTests(unittest.TestCase):
+    """Only the four fixed tier commands record a test-set size."""
+
+    def test_tier_commands_map_to_their_tier(self):
+        expected = {
+            build.REGISTRY["architecture"].cmd: "architecture",
+            build.REGISTRY["guardrails"].cmd: "guardrails",
+            build.get_integration_test_cmd(): "integration",
+            build.get_browser_test_cmd(): "browser",
+        }
+        for cmd, tier in expected.items():
+            with self.subTest(cmd=cmd):
+                self.assertEqual(build._tier_for_cmd(cmd), tier)
+
+    def test_other_test_sets_map_to_none(self):
+        for cmd in (
+            build.get_coverage_cmd(browser_only=False),
+            build.get_coverage_cmd(browser_only=True),
+            build.get_integration_test_cmd(include_llm=True),
+            build._NEXTEST_RUN,
+            build._step_command(build.REGISTRY["test-pattern"], "x"),
+            None,
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(build._tier_for_cmd(cmd))
+
+    def test_summary_size_counts_run_and_skipped(self):
+        self.assertEqual(
+            build._summary_size(
+                "     Summary [  20.5s] 1570 tests run: 1570 passed, 2 skipped\n"
+            ),
+            1572,
+        )
+        self.assertEqual(
+            build._summary_size("     Summary [ 1.0s] 1 test run: 1 passed\n"), 1
+        )
+        self.assertIsNone(build._summary_size("error: could not compile\n"))
+
+
+class JournalTests(unittest.TestCase):
+    """The journal records the tree and per-tier test counts of each run."""
+
+    OLD_HEADER = "timestamp | duration_s | exit_code | args\n"
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = Path(tmp.name) / "build_history.txt"
+
+    def lines(self):
+        return self.path.read_text(encoding="utf-8").splitlines()
+
+    def test_record_has_six_columns(self):
+        build._append_history(
+            self.path, "--no-browser", 51.2, 0, "abc+12345678", "integration=1565"
+        )
+        header, record = self.lines()
+        self.assertEqual(header, build._HISTORY_HEADER)
+        parts = record.split(" | ")
+        self.assertEqual(len(parts), 6)
+        self.assertEqual(parts[3:], ["--no-browser", "abc+12345678", "integration=1565"])
+
+    def test_old_header_is_replaced_not_duplicated(self):
+        old_record = "2026-10-08T19:46:00 | 1.0 | 0 | clippy\n"
+        self.path.write_text(self.OLD_HEADER + old_record, encoding="utf-8")
+        build._append_history(self.path, "clippy", 1.0, 0, "unknown", "-")
+        lines = self.lines()
+        self.assertEqual(lines[0], build._HISTORY_HEADER)
+        self.assertEqual(lines[1], old_record.rstrip("\n"))
+        self.assertEqual(len(lines), 3)
+        self.assertTrue(lines[2].endswith(" | clippy | unknown | -"))
+
+    def test_trim_keeps_the_header(self):
+        with mock.patch.object(build, "_HISTORY_MAX_LINES", 3):
+            for n in range(5):
+                build._append_history(self.path, f"run{n}", 1.0, 0, "abc", "-")
+        lines = self.lines()
+        self.assertEqual(lines[0], build._HISTORY_HEADER)
+        self.assertEqual([line.split(" | ")[3] for line in lines[1:]], ["run3", "run4"])
+
+    def test_last_tier_sizes_takes_each_tiers_newest_record(self):
+        self.path.write_text(
+            build._HISTORY_HEADER + "\n"
+            "2026-10-08T19:00:00 | 1.0 | 0 | clippy\n"
+            "2026-10-08T19:10:00 | 90.0 | 0 | (full gate) | aaa | "
+            "architecture=1 guardrails=165 integration=1572 browser=68\n"
+            "2026-10-08T19:20:00 | 20.0 | 0 | integration | bbb+1234abcd | integration=1565\n"
+            "2026-10-08T19:30:00 | 1.0 | 0 | clippy | bbb | -\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            build._last_tier_sizes(self.path),
+            {
+                "architecture": ("2026-10-08T19:10:00", "aaa", 1),
+                "guardrails": ("2026-10-08T19:10:00", "aaa", 165),
+                "integration": ("2026-10-08T19:20:00", "bbb+1234abcd", 1565),
+                "browser": ("2026-10-08T19:10:00", "aaa", 68),
+            },
+        )
+
+    def test_last_tier_sizes_without_journal_or_tier(self):
+        self.assertEqual(build._last_tier_sizes(self.path), {})
+        self.path.write_text(self.OLD_HEADER + "2026-10-08T19:00:00 | 1.0 | 0 | x\n")
+        self.assertEqual(build._last_tier_sizes(self.path), {})
+
+    def test_tests_column_follows_tier_order(self):
+        sizes = {
+            "Running integration tests...": ("integration", 1565),
+            "Running architecture tests...": ("architecture", 1),
+        }
+        self.assertEqual(build._tests_column(sizes), "architecture=1 integration=1565")
+        self.assertEqual(build._tests_column({}), "-")
+
+
+class SizeSuffixTests(unittest.TestCase):
+    """The epilogue suffix compares a tier's count with its newest record."""
+
+    BASE = ("2026-10-08T19:46:00", "a1b2c3d4e5", 1572)
+
+    def test_decrease(self):
+        self.assertEqual(
+            build._size_suffix(1565, self.BASE),
+            "tests: 1565 (-7 vs 2026-10-08T19:46:00, tree a1b2c3d4e5)",
+        )
+
+    def test_increase(self):
+        self.assertEqual(
+            build._size_suffix(1575, self.BASE),
+            "tests: 1575 (+3 vs 2026-10-08T19:46:00, tree a1b2c3d4e5)",
+        )
+
+    def test_same(self):
+        self.assertEqual(
+            build._size_suffix(1572, self.BASE),
+            "tests: 1572 (same as 2026-10-08T19:46:00, tree a1b2c3d4e5)",
+        )
+
+    def test_no_record(self):
+        self.assertEqual(build._size_suffix(68, None), "tests: 68 (no earlier record)")
+
+
+class TreeIdentityTests(unittest.TestCase):
+    """The tree name is the short HEAD, plus a content digest when dirty."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name)
+        self.git("init", "-q")
+        (self.repo / "a.txt").write_text("one\n")
+        self.git("add", "a.txt")
+        self.git(
+            "-c", "user.email=t@example.com", "-c", "user.name=t",
+            "commit", "-q", "-m", "init",
+        )
+
+    def git(self, *argv):
+        return subprocess.run(
+            ["git", "-C", str(self.repo), *argv], check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    def test_clean_tree_is_the_short_head(self):
+        head = self.git("rev-parse", "--short=10", "HEAD")
+        self.assertEqual(build._tree_identity(self.repo), head)
+
+    def test_tracked_change_adds_a_digest(self):
+        head = self.git("rev-parse", "--short=10", "HEAD")
+        (self.repo / "a.txt").write_text("two\n")
+        self.assertRegex(build._tree_identity(self.repo), rf"^{head}\+[0-9a-f]{{8}}$")
+
+    def test_untracked_file_changes_the_digest(self):
+        (self.repo / "a.txt").write_text("two\n")
+        before = build._tree_identity(self.repo)
+        (self.repo / "new.txt").write_text("x\n")
+        with_new = build._tree_identity(self.repo)
+        self.assertNotEqual(before, with_new)
+        (self.repo / "new.txt").write_text("y\n")
+        self.assertNotEqual(with_new, build._tree_identity(self.repo))
+
+    def test_failed_blob_hash_keeps_a_dirty_name(self):
+        head = self.git("rev-parse", "--short=10", "HEAD")
+        (self.repo / "new.txt").write_text("x\n")
+        real_run = subprocess.run
+
+        def fail_hash_object(argv, **kwargs):
+            if "hash-object" in argv:
+                raise subprocess.CalledProcessError(128, argv)
+            return real_run(argv, **kwargs)
+
+        with mock.patch.object(build.subprocess, "run", side_effect=fail_hash_object):
+            self.assertRegex(build._tree_identity(self.repo), rf"^{head}\+[0-9a-f]{{8}}$")
+
+    def test_outside_a_repo_is_unknown(self):
+        with tempfile.TemporaryDirectory() as plain:
+            with mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": plain}):
+                self.assertEqual(build._tree_identity(Path(plain)), "unknown")
+
+
 class _MemLog(io.StringIO):
     """Log handle that survives main()'s close so tests can read it back."""
 
@@ -906,11 +1192,16 @@ class MainStampTests(unittest.TestCase):
             command=None,
             cleanup=False,
             llm_only=False,
+            no_browser=False,
         )
         with mock.patch.dict(
             os.environ, {"PI_SESSION_ID": "0123abcd-0000-1111-2222-333344445555"}
         ), mock.patch.object(build, "parse_args", return_value=gate_args), mock.patch.object(
             build, "run_gate"
+        ), mock.patch.object(
+            build, "_tree_identity", return_value="abc"
+        ), mock.patch.object(
+            build, "_append_history"
         ), mock.patch.object(
             build, "clean_old_logs"
         ), mock.patch(

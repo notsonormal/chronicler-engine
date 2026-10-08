@@ -6,6 +6,9 @@ Two invocation modes:
 
 - Full gate (default): ``python build.py`` runs fmt, validation, clippy,
   guardrails, the full test suite, and packaging.
+- Gate without the browser tier: ``python build.py --no-browser`` runs the same
+  gate minus the browser (Playwright) tier — the iteration default. The last
+  run before reporting a task done is the bare full gate.
 - Step mode: ``python build.py <step>`` runs one registry step (e.g.
   ``clippy``, ``fmt``, ``test-pattern <pattern>``) with a minimal prelude — no
   asset copy, no SQLite cleanup. ``--target-dir`` is
@@ -24,8 +27,9 @@ step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
 banner with log path). Full output is written to ``logs/build_*.log``; each
 log's first line is a session stamp (see ``_stamp_session_id``). Every
 completed run also appends one pipe-delimited summary line (timestamp,
-duration, exit code, args) to the append-only journal
-``logs/build_history.txt`` — see ``_append_history``.
+duration, exit code, args, tree, per-tier test counts) to the append-only
+journal ``logs/build_history.txt`` — see ``_append_history``. Each test tier's
+epilogue line compares its test count with that tier's newest journal record.
 
 Concurrent builds:
 
@@ -53,6 +57,7 @@ wait for the build lock. Use a tool timeout of at least 1200 seconds. ``--covera
 import argparse
 import contextlib
 import errno
+import hashlib
 import io
 import json
 import os
@@ -99,18 +104,30 @@ class _NextestSummary:
     output; main()'s finally must still print the counts at the tail.
 
     ``label`` names the step the next captured summary belongs to; ``_timed_run``
-    sets it before dispatch.
+    sets it before dispatch. ``sizes`` maps a step label to ``(tier, test-set
+    size)`` for the runs whose command is a known tier (see ``_tier_for_cmd``).
     """
 
     lines: list[tuple[str, str]] = []
     label = ""
+    sizes: dict[str, tuple[str, int]] = {}
 
     @classmethod
-    def line_text(cls) -> str:
-        """Render every captured summary as the epilogue's one-liner block."""
-        return "\n".join(
-            f"{text}  ({label})" if label else text for label, text in cls.lines
-        )
+    def line_text(cls, baselines: dict | None) -> str:
+        """Render every captured summary as the epilogue's one-liner block.
+
+        With ``baselines`` (tier -> journal record, see ``_last_tier_sizes``),
+        a line whose step has a recorded size also gets the count change.
+        """
+        rendered = []
+        for label, text in cls.lines:
+            line = f"{text}  ({label})" if label else text
+            entry = cls.sizes.get(label)
+            if entry is not None and baselines is not None:
+                tier, size = entry
+                line += f"  {_size_suffix(size, baselines.get(tier))}"
+            rendered.append(line)
+        return "\n".join(rendered)
 
 
 class _NextestLeaks:
@@ -315,11 +332,49 @@ def _nextest_summary_line(output: str) -> str | None:
     return rendered
 
 
-def _stash_nextest_summary(output: str) -> None:
-    """Capture nextest's summary line and any leaky/flaky test names."""
+# Test tiers in journal column order. A tier is one fixed nextest command, so
+# a step run and the gate's run of the same tier share one baseline.
+_TIERS = ("architecture", "guardrails", "integration", "browser")
+
+
+def _tier_for_cmd(cmd: str | None) -> str | None:
+    """Return the tier a nextest command runs, or None for any other command.
+
+    Coverage, --include-llm, test-pattern and LLM runs select a different test
+    set, so they map to None and record no size.
+    """
+    commands = {
+        REGISTRY["architecture"].cmd: "architecture",
+        REGISTRY["guardrails"].cmd: "guardrails",
+        get_integration_test_cmd(): "integration",
+        get_browser_test_cmd(): "browser",
+    }
+    return commands.get(cmd)
+
+
+def _summary_size(output: str) -> int | None:
+    """Return the test-set size (tests run + skipped) from nextest's Summary."""
+    size = None
+    for line in output.splitlines():
+        if not _NEXTEST_SUMMARY_RE.match(line):
+            continue
+        run_count = _summary_count(line, "tests? run")
+        skipped = _summary_count(line, "skipped") or "0"
+        if run_count is not None:
+            size = int(run_count) + int(skipped)
+    return size
+
+
+def _stash_nextest_summary(output: str, cmd: str | None = None) -> None:
+    """Capture nextest's summary line, the tier's test-set size, and any
+    leaky/flaky test names."""
     line = _nextest_summary_line(output)
     if line is not None:
         _NextestSummary.lines.append((_NextestSummary.label, line))
+        tier = _tier_for_cmd(cmd)
+        size = _summary_size(output)
+        if tier is not None and size is not None:
+            _NextestSummary.sizes[_NextestSummary.label] = (tier, size)
     for raw in output.splitlines():
         m = _NEXTEST_RESULT_RE.match(raw)
         if m is None:
@@ -385,7 +440,8 @@ def run_with_test_timings(cmd, env=None, check=True):
     _stash_nextest_summary(
         "\n".join(
             (result.stdout or "").splitlines() + (result.stderr or "").splitlines()
-        )
+        ),
+        cmd,
     )
 
     both_print("")
@@ -571,7 +627,10 @@ REGISTRY: dict[str, StepSpec] = {
             "Running integration tests...",
             get_integration_test_cmd(),
             needs_nextest=True,
-            help="Run every test binary except browser, architecture and guardrails (~20s warm).",
+            help=(
+                "Run every test binary except browser, architecture and guardrails,"
+                " the lib unit tests included (~20s warm)."
+            ),
         ),
         StepSpec(
             "browser",
@@ -638,6 +697,7 @@ _GATE_ONLY_FLAGS = (
     "include_llm",
     "llm_only",
     "no_fmt",
+    "no_browser",
     "cleanup",
     "test_timings",
 )
@@ -687,6 +747,15 @@ def parse_args(argv=None):
         action="store_true",
         dest="no_fmt",
         help="Skip cargo fmt (useful for secondary agents to avoid source-file races)",
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        dest="no_browser",
+        help=(
+            "Run the full gate without the browser tier (the iteration default;"
+            " the final run is bare `python build.py`)"
+        ),
     )
     parser.add_argument(
         "--cleanup",
@@ -745,6 +814,10 @@ def parse_args(argv=None):
 
     args = parser.parse_args(argv)
     _reject_gate_flags_with_step(parser, args)
+    if args.coverage and args.no_browser:
+        parser.error(
+            "--no-browser cannot be combined with --coverage: coverage needs the browser tier"
+        )
     return args
 
 
@@ -999,7 +1072,7 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                 _log_write(line)
         # Stash before the check: a checked failure sys.exits below, and the
         # epilogue must still be able to print the pass/fail counts.
-        _stash_nextest_summary(out or "")
+        _stash_nextest_summary(out or "", cmd)
         if check and process.returncode != 0:
             both_print(f"FAILED with code {process.returncode}")
             sys.exit(process.returncode)
@@ -1026,7 +1099,7 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                     continue
                 _log_write(line)
         _stash_nextest_summary(
-            (result.stdout or "") + "\n" + (result.stderr or "")
+            (result.stdout or "") + "\n" + (result.stderr or ""), cmd
         )
         if check and result.returncode != 0:
             both_print(f"FAILED with code {result.returncode}")
@@ -1204,15 +1277,16 @@ def _plan_gate_steps(args) -> list[GateStep]:
                     timings=args.test_timings,
                 )
             )
-            plan.append(
-                GateStep(
-                    "tests",
-                    f"Running browser tests{suffix}{tail}",
-                    browser_cmd,
-                    check=False,
-                    timings=args.test_timings,
+            if not args.no_browser:
+                plan.append(
+                    GateStep(
+                        "tests",
+                        f"Running browser tests{suffix}{tail}",
+                        browser_cmd,
+                        check=False,
+                        timings=args.test_timings,
+                    )
                 )
-            )
             continue
         if name == "REPORT":
             if args.coverage:
@@ -1397,6 +1471,8 @@ def run_gate(args, record):
     _set_target_args(args)
     if args.no_fmt:
         both_print("Skipping formatting (--no-fmt set).")
+    if args.no_browser:
+        both_print("Skipping the browser tier (--no-browser set).")
     plan = _plan_gate_steps(args)
     _execute_gate_plan(plan, args, cargo_env, record)
     _gate_tail(args)
@@ -1628,15 +1704,126 @@ def run_llm_only(args, record):
 
 
 _HISTORY_FILE = Path("logs/build_history.txt")
-_HISTORY_HEADER = "timestamp | duration_s | exit_code | args"
+_HISTORY_HEADER = "timestamp | duration_s | exit_code | args | tree | tests"
 _HISTORY_MAX_LINES = 1000
 
 
-def _append_history(path: Path, args_str: str, duration_sec: float, exit_code: int) -> None:
+def _tree_identity(repo: Path) -> str:
+    """Name the tree a run covers: the short HEAD, plus a content digest when dirty.
+
+    The digest hashes ``git diff HEAD`` and every untracked, non-ignored path
+    with its blob id, so two dirty trees share a name only when their content
+    matches. Returns ``unknown`` when git fails (no git, not a repo, no HEAD).
+    """
+
+    def git(*argv: str, stdin: bytes | None = None) -> bytes:
+        return subprocess.run(
+            ["git", "-C", str(repo), *argv],
+            input=stdin,
+            capture_output=True,
+            check=True,
+        ).stdout
+
+    try:
+        head = git("rev-parse", "--short=10", "HEAD").decode().strip()
+        diff = git("diff", "HEAD", "--binary", "--no-ext-diff", "--no-textconv")
+        untracked = sorted(
+            p
+            for p in git("ls-files", "--others", "--exclude-standard", "-z").split(b"\0")
+            if p
+        )
+        if not diff and not untracked:
+            return head
+        digest = hashlib.sha256(diff)
+        for path in untracked:
+            digest.update(b"\0" + path)
+        hashable = [p for p in untracked if b"\n" not in p]
+        if hashable:
+            # --stdin-paths reads one path per line. A file removed by a
+            # concurrent agent makes it fail; the path list still names the tree.
+            try:
+                blobs = git(
+                    "hash-object", "--stdin-paths", stdin=b"\n".join(hashable) + b"\n"
+                )
+            except subprocess.CalledProcessError:
+                blobs = b"unhashed"
+            digest.update(b"\0" + blobs)
+        return f"{head}+{digest.hexdigest()[:8]}"
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+        return "unknown"
+
+
+def _tests_column(sizes: dict[str, tuple[str, int]]) -> str:
+    """Render the journal ``tests`` column, e.g. ``architecture=1 integration=1565``.
+
+    Tiers appear in ``_TIERS`` order; ``-`` when no tier recorded a size.
+    """
+    by_tier = {tier: size for tier, size in sizes.values()}
+    rendered = " ".join(f"{t}={by_tier[t]}" for t in _TIERS if t in by_tier)
+    return rendered or "-"
+
+
+def _last_tier_sizes(path: Path) -> dict[str, tuple[str, str, int]]:
+    """Return tier -> (timestamp, tree, size) from each tier's newest journal record.
+
+    Read under a shared lock. Records older than the ``tree`` and
+    ``tests`` columns, and ``-`` values, name no tier and are skipped. A missing
+    journal gives an empty result.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            # Shared lock: _append_history truncates and rewrites under LOCK_EX.
+            if fcntl is not None:
+                fcntl.flock(fh, fcntl.LOCK_SH)
+            text = fh.read()
+    except FileNotFoundError:
+        return {}
+    newest: dict[str, tuple[str, str, int]] = {}
+    for raw in text.splitlines()[1:]:
+        parts = raw.split(" | ")
+        if len(parts) < 6 or parts[5].strip() == "-":
+            continue
+        timestamp, tree = parts[0].strip(), parts[4].strip()
+        for token in parts[5].split():
+            tier, _, value = token.partition("=")
+            if tier in _TIERS and value.isdigit():
+                newest[tier] = (timestamp, tree, int(value))
+    return newest
+
+
+def _size_suffix(size: int, baseline: tuple[str, str, int] | None) -> str:
+    """Render a tier's test count against its newest journal record."""
+    if baseline is None:
+        return f"tests: {size} (no earlier record)"
+    timestamp, tree, before = baseline
+    if size == before:
+        return f"tests: {size} (same as {timestamp}, tree {tree})"
+    return f"tests: {size} ({size - before:+d} vs {timestamp}, tree {tree})"
+
+
+def _epilogue_baselines() -> dict | None:
+    """Load the per-tier baselines for the epilogue; None hides the count change."""
+    if not _NextestSummary.sizes:
+        return None
+    try:
+        return _last_tier_sizes(_HISTORY_FILE)
+    except Exception:
+        return None  # Best-effort: the plain nextest line still prints.
+
+
+def _append_history(
+    path: Path,
+    args_str: str,
+    duration_sec: float,
+    exit_code: int,
+    tree: str,
+    tests: str,
+) -> None:
     """Append one run record to the build-history journal, then trim.
 
     One pipe-delimited line per run, columns per ``_HISTORY_HEADER``, newest
-    last so ``tail`` shows recent runs. The trim keeps the header plus the
+    last so ``tail`` shows recent runs. An older header in line 1 is replaced
+    in place; older records keep their shorter column set. The trim keeps the header plus the
     newest records, rewritten in place while still holding the lock — flock
     keeps concurrent agents (shared ``logs/``) from interleaving appends or
     racing the rewrite. Callers treat any failure as ignorable: the journal
@@ -1645,7 +1832,7 @@ def _append_history(path: Path, args_str: str, duration_sec: float, exit_code: i
     args_str = args_str.replace("|", "/").replace("\n", " ").strip()
     line = (
         f"{time.strftime('%Y-%m-%dT%H:%M:%S')} | {duration_sec:.1f} | "
-        f"{exit_code} | {args_str}\n"
+        f"{exit_code} | {args_str} | {tree} | {tests}\n"
     )
     with open(path, "a+", encoding="utf-8") as fh:
         if fcntl is not None:
@@ -1653,7 +1840,9 @@ def _append_history(path: Path, args_str: str, duration_sec: float, exit_code: i
         try:
             fh.seek(0)
             lines = fh.readlines()
-            if not lines or lines[0].rstrip("\n") != _HISTORY_HEADER:
+            if lines and lines[0].startswith("timestamp |"):
+                lines[0] = _HISTORY_HEADER + "\n"
+            else:
                 lines.insert(0, _HISTORY_HEADER + "\n")
             lines.append(line)
             if len(lines) > _HISTORY_MAX_LINES:
@@ -1679,6 +1868,8 @@ def main():
     history_args = " ".join(sys.argv[1:]).strip() or "(full gate)"
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
+    # Taken at the start: an edit made during the run is not covered.
+    tree = _tree_identity(Path.cwd())
 
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
@@ -1691,6 +1882,7 @@ def main():
     record = StepRecord()
 
     exit_code = 0
+    browser_skipped = False
     try:
         both_print("=" * 60)
         both_print("=== Chronicler Engine Build ===")
@@ -1709,6 +1901,7 @@ def main():
         elif args.llm_only:
             run_llm_only(args, record)
         else:
+            browser_skipped = bool(args.no_browser)
             run_gate(args, record)
     except SystemExit as e:
         # Step failure (check=True) re-raises SystemExit. Capture the code so
@@ -1726,9 +1919,11 @@ def main():
         # The pass/fail counts, one line per test tier, right before the banner:
         # an agent tailing stdout gets the verdict without grepping the full log.
         if _NextestSummary.lines:
-            both_print(_NextestSummary.line_text())
+            both_print(_NextestSummary.line_text(_epilogue_baselines()))
         for label, status, name in _NextestLeaks.lines:
             both_print(f"{status.lower()} test: {name}  ({label})")
+        if browser_skipped:
+            both_print('skipped: browser tier (run "python build.py browser")')
 
         both_print("=" * 60)
         both_print("=== Build Complete ===")
@@ -1757,6 +1952,8 @@ def main():
                 history_args,
                 time.time() - _run_start,
                 exit_code,
+                tree,
+                _tests_column(_NextestSummary.sizes),
             )
         except Exception:
             pass  # Best-effort bookkeeping; never fail a run over it.

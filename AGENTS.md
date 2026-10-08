@@ -309,7 +309,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 
 ## Your Responsibility
 
-You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task, as this could interfere with other work going on in the repository at the same time. 
+You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked files) simply because they are not working or otherwise in the way of your specific task, as this could interfere with other work going on in the repository at the same time. 
 
 However, during code reviews you should not make code changes to fix problems.
 
@@ -323,8 +323,6 @@ When responding to user feedback or an analysis, explicitly say whether you agre
 
 ### Decision Making
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
 Before implementing (e.g. during planning):
 
 - **State your assumptions explicitly.** If uncertain or something is unclear, stop, name what's confusing, and ask.
@@ -334,9 +332,6 @@ Before implementing (e.g. during planning):
 - **Surface hidden trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
 
 These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-### Progress updates
-Before your first tool call, one sentence on what you're about to do. While working, update only when you find something important or change direction not before each tool call. When done, lead with the outcome: first sentence answers "what happened" or "what did you find", detail after.
 
 ## The Test-First Philosophy
 
@@ -377,7 +372,7 @@ python build.py unit                            # Run the unit tests
 python build.py architecture                    # Run the architecture tests
 python build.py guardrails                      # Run the guardrails tests
 python build.py test-pattern "action_pipeline::options_tests" # Run tests whose name matches a substring, across all test binaries
-python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s)
+python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s, unit tests included)
 python build.py browser                         # Only the browser/Playwright binary (~1 min)
 python build.py validate-docs                   # Validate markdown docs
 python build.py run                             # Run the dev server (see ENVIRONMENT.md)
@@ -385,13 +380,15 @@ python build.py run                             # Run the dev server (see ENVIRO
 
 Almost every full-gate step is also a subcommand — see `python build.py --help`. Only the packaging, test-suite, and coverage-report phases stay gate-internal. `--target-dir` works on either side of the subcommand; all other top-level flags are full-gate only.
 
-#### Final Validation (run once before considering done)
+#### Final Validation (once, at the end)
 
 ```bash
-python build.py # Full gate: fmt + clippy + guardrails + tests (~2 min warm)
+python build.py              # Full gate: fmt + clippy + guardrails + every test, browser tier included
+python build.py --no-browser # The same gate minus the browser tier
 ```
 
-A majority of the time taken by `build.py` is the browser tests. Running the full suite just before running the `build.py` is inefficient. Either run a targeted step (`python build.py test-pattern <pattern>`) or skip them and run `build.py` straight away.
+Green means the full gate ran on the tree you report. While you iterate, run one step
+(`clippy`, `test-pattern <pattern>`) or `python build.py --no-browser`.
 
 ## Concurrent Builds
 

@@ -21,7 +21,9 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 
 <!-- one line per resolved ticket: gist + link -->
 
-_Nothing yet._
+- **03 — full gate once.** `python build.py --no-browser` is the iteration tier; the bare full gate runs once, at the end; `AGENTS.md` defines "green" as the full gate on the reported tree. [03](./issues/03-run-the-full-gate-once.md)
+- **22 — gate provenance.** A machine stamp: the journal records the tree and per-tier test counts, and the epilogue prints each tier's count change. The commit-report citation stays open. [22](./issues/22-record-gate-provenance.md)
+- **30 — implementation of 03 and 22.** `build.py`, its tests, `AGENTS.md`, `tests/AGENTS.md`, `ENVIRONMENT.md`. [30](./issues/30-gate-no-browser-and-verdict-record.md)
 
 ## Not yet specified
 
@@ -38,7 +40,6 @@ All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect
 
 - [01 — Give ticket resolution an owner after the commit](./issues/01-ticket-resolution-owner-after-commit.md)
 - [02 — Take the quarantine count out of parallel-ticket conflicts](./issues/02-quarantine-pin-parallel-conflicts.md)
-- [03 — Run the full build gate once per change set](./issues/03-run-the-full-gate-once.md)
 - [04 — Stop the hand-copied stub fixtures from drifting](./issues/04-stub-fixture-drift.md)
 - [05 — Decide how a test reads a response body](./issues/05-response-body-reads-in-tests.md)
 - [06 — Decide how the test suite asserts HTML escaping](./issues/06-html-escaping-assertions.md)
@@ -57,7 +58,6 @@ All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect
 - [19 — Add a GitHub-side push-failure path](./issues/19-github-side-push-failure.md)
 - [20 — Read the implementing session before writing a ticket's answer](./issues/20-read-implementing-session-for-answer.md)
 - [21 — Never tell a review axis to skip `tooling.patch`](./issues/21-review-bundle-tooling-patch.md)
-- [22 — Record which gate run covers the committed tree](./issues/22-record-gate-provenance.md)
 - [23 — Make the mutation check unconditional for state-repair tests and fixtures](./issues/23-unconditional-mutation-check.md)
 - [24 — Record adjacent gaps in a research ticket's answer](./issues/24-research-answer-adjacent-gaps.md)
 - [25 — Make the `tdd` skill fire on test-strengthening work](./issues/25-tdd-skill-triggers.md)
