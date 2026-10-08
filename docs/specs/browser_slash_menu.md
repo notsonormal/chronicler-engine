@@ -69,12 +69,3 @@ Then the command input value becomes that suggestion's command followed by a spa
 And #slash-menu is removed from the DOM
 ```
 
-#### Scenario 31.7: The menu reopens after the action-area is re-rendered
-
-```gherkin
-Given the command suggestion menu is open (#slash-menu visible)
-When the #action-area innerHTML is replaced with a fresh command form (mimicking the htmx swap that /action/check performs)
-Then #slash-menu is removed from the DOM
-And a new #command-form input[name="command"] is rendered
-And typing "/" into the new input opens #slash-menu again
-```

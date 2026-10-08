@@ -6,12 +6,8 @@ use std::fmt;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::NarratorMode;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::application::ports::text_checker::CheckResult;
-use crate::adapters::driving::http::utils::error::{
-    error_disclosure, generation_error_summary, raw_error_detail,
-};
 use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
 #[allow(private_interfaces)]
@@ -219,47 +215,6 @@ impl From<&LlmMessage> for LlmMessageView {
             error_message: msg.error_message.clone(),
             raw_request_json: pretty_json(&msg.raw_request_json),
             raw_response_json: pretty_json(&msg.raw_response_json),
-        }
-    }
-}
-
-/// View model for the action area template.
-#[derive(Debug, Clone)]
-pub struct ActionAreaViewModel {
-    pub is_disabled: bool,
-    pub status_class: String,
-    pub status_html: SafeHtml,
-}
-
-impl ActionAreaViewModel {
-    pub fn new(status: &GenerationStatus, phase: &GenerationPhase) -> Self {
-        let is_disabled = status.is_generating();
-        let status_class = if is_disabled {
-            "status thinking".to_string()
-        } else if status.error_message().is_some() {
-            "status error".to_string()
-        } else {
-            "status ready".to_string()
-        };
-        let status_html = SafeHtml::new(if let Some(raw) = status.error_message() {
-            error_disclosure(
-                "status-error-popover",
-                &generation_error_summary(raw),
-                &raw_error_detail(raw),
-            )
-        } else if is_disabled {
-            format!(
-                "<span class=\"status thinking\">{}</span>",
-                phase.display_text()
-            )
-        } else {
-            "<span class=\"status ready\">Ready</span>".to_string()
-        });
-
-        Self {
-            is_disabled,
-            status_class,
-            status_html,
         }
     }
 }

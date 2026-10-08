@@ -1,14 +1,12 @@
 use askama::Template;
 use chrono::Utc;
 
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::adapters::driving::http::templates::{
-    ActionAreaTemplate, HeaderTemplate, NarrativeLogTemplate, OptionsDockTemplate,
-    VisualSidebarTemplate,
+    HeaderTemplate, NarrativeLogTemplate, OptionsDockTemplate, VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
-    ActionAreaViewModel, NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
+    NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
 
 #[test]
@@ -457,70 +455,6 @@ fn test_visual_sidebar_with_npcs() {
     assert!(rendered.contains("npc-portrait"));
     assert!(rendered.contains("Alice"));
     assert!(rendered.contains("Bob"));
-}
-
-#[test]
-fn test_action_area_ready() {
-    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &GenerationStatus::Idle,
-        &GenerationPhase::default(),
-    ));
-    let rendered = template.render().unwrap();
-    assert!(rendered.contains("id=\"action-area\""));
-    assert!(rendered.contains("Ready"));
-    assert!(rendered.contains(r#"<span class="status ready">Ready</span>"#));
-    assert!(
-        !rendered.contains("icon-spin"),
-        "an idle Send button must not spin"
-    );
-}
-
-#[test]
-fn test_action_area_thinking() {
-    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &GenerationStatus::Generating,
-        &GenerationPhase::Narrating,
-    ));
-    let rendered = template.render().unwrap();
-    assert!(rendered.contains("Generating narration..."));
-    assert!(rendered.contains("disabled"));
-    assert!(rendered.contains(r#"<span class="status thinking">Generating narration...</span>"#));
-    assert!(
-        rendered.contains("icon-spin"),
-        "the locked button must carry the spinner while a turn runs"
-    );
-}
-
-#[test]
-fn test_action_area_quantifying() {
-    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &GenerationStatus::Generating,
-        &GenerationPhase::Quantifying,
-    ));
-    let rendered = template.render().unwrap();
-    assert!(rendered.contains("Quantifying scene..."));
-    assert!(rendered.contains("disabled"));
-}
-
-#[test]
-fn test_action_area_generating_event() {
-    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &GenerationStatus::Generating,
-        &GenerationPhase::GeneratingEvent,
-    ));
-    let rendered = template.render().unwrap();
-    assert!(rendered.contains("Generating event..."));
-    assert!(rendered.contains("disabled"));
-}
-
-#[test]
-fn test_action_area_no_exits() {
-    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &GenerationStatus::Idle,
-        &GenerationPhase::default(),
-    ));
-    let rendered = template.render().unwrap();
-    assert!(rendered.contains("command-form"));
 }
 
 #[test]

@@ -76,7 +76,6 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
         "/fragment/story-log",
         "/fragment/games",
         "/fragment/connections/new",
-        "/fragment/action-area",
     ] {
         let icons = referenced_icons(&fetch_body(&app, uri).await);
         assert!(!icons.is_empty(), "{uri} should show at least one icon");

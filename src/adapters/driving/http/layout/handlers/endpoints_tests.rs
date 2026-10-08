@@ -1,5 +1,5 @@
 use crate::adapters::driving::http::layout::handlers::endpoints::{
-    action_area_fragment, character_headshots_fragment, generating_status_handler, header_fragment,
+    character_headshots_fragment, generating_status_handler, header_fragment,
     llm_messages_fragment, reset_generating_handler, story_log_fragment, visual_sidebar_fragment,
 };
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -19,13 +19,6 @@ async fn test_story_log_fragment() {
         .log("You look around.", MessageType::Narration)
         .build_service();
     let result = body_text(story_log_fragment(axum::extract::State(state)).await).await;
-    assert!(!result.is_empty());
-}
-
-#[tokio::test]
-async fn test_action_area_fragment() {
-    let state = TestAppBuilder::default_test().build_service();
-    let result = body_text(action_area_fragment(axum::extract::State(state)).await).await;
     assert!(!result.is_empty());
 }
 

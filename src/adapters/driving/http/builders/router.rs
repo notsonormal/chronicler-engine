@@ -64,10 +64,6 @@ pub fn build_router(app_state: AppState) -> Router {
             get(layout::handlers::visual_sidebar_fragment),
         )
         .route(
-            "/fragment/action-area",
-            get(layout::handlers::action_area_fragment),
-        )
-        .route(
             "/fragment/options-dock",
             get(layout::handlers::options_dock_fragment),
         )

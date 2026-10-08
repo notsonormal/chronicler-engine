@@ -41,15 +41,6 @@ pub enum GenerationPhase {
 }
 
 impl GenerationPhase {
-    pub fn display_text(&self) -> &'static str {
-        match self {
-            Self::Narrating => "Generating narration...",
-            Self::Quantifying => "Quantifying scene...",
-            Self::GeneratingEvent => "Generating event...",
-            Self::Options => "Generating options...",
-        }
-    }
-
     pub fn as_endpoint_str(&self) -> &'static str {
         match self {
             Self::Narrating => "narrating",

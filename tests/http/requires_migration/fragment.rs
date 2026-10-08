@@ -30,7 +30,6 @@ async fn test_basic_fragments_return_html() {
         ("/fragment/header", "class=\"header\""),
         ("/fragment/story-log", "class=\"log-entry"),
         ("/fragment/visual-sidebar", "id=\"visual-sidebar\""),
-        ("/fragment/action-area", "id=\"action-area\""),
     ];
     for (uri, expected) in fragments {
         let body = fetch_body(&app, uri).await;
@@ -51,15 +50,6 @@ async fn test_visual_sidebar_renders_room_image() {
     assert!(
         !body.contains("No Location Image"),
         "Should not show placeholder when image exists: {body}"
-    );
-}
-
-#[tokio::test]
-async fn test_action_area_fragment_returns_html() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/action-area").await;
-    assert!(
-        body.contains("id=\"action-area\""),
-        "Expected action-area id: {body}"
     );
 }
 

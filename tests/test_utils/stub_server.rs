@@ -44,7 +44,6 @@ const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.
 const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.html");
 const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
-const FIXTURE_ACTION_AREA: &str = include_str!("stub_fixtures/action_area.html");
 
 fn header_html(degraded: bool) -> String {
     use askama::Template;
@@ -611,10 +610,6 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route("/fragment/worlds", get(|| async { Html(FIXTURE_WORLDS) }))
         .route("/fragment/games", get(|| async { Html(FIXTURE_GAMES) }))
-        .route(
-            "/fragment/action-area",
-            get(|| async { Html(FIXTURE_ACTION_AREA) }),
-        )
         // Static assets are served from the real `assets/` and `data/`
         // directories, nested exactly as the engine routes them, so the shell's
         // script and stylesheet hrefs and the fragment images resolve as in

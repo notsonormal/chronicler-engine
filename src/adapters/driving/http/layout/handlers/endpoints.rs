@@ -26,10 +26,6 @@ pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Response<
     )
 }
 
-pub async fn action_area_fragment(State(state): State<AppState>) -> Response<Body> {
-    render_fragment(&state, |s| s.render_action_area(), "action_area_fragment")
-}
-
 pub async fn options_dock_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(&state, |s| s.render_options_dock(), "options_dock_fragment")
 }

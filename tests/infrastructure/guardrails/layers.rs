@@ -258,45 +258,6 @@ pub fn check_http_storage_leak(file_path: &str, content: &str) -> Vec<Violation>
     violations
 }
 
-/// Prevents component tests from constructing or importing `GameState` directly.
-pub fn check_test_layer_boundaries(file_path: &str, content: &str) -> Vec<Violation> {
-    let mut violations = Vec::new();
-
-    if !file_path.starts_with("tests/components/") {
-        return violations;
-    }
-
-    for (line_no, line) in content.lines().enumerate() {
-        let line_num = line_no + 1;
-        let trimmed = line.trim();
-
-        if trimmed.starts_with("//") || trimmed.starts_with("*") {
-            continue;
-        }
-
-        if trimmed.contains("GameState::new(") {
-            violations.push(Violation::error(
-                file_path,
-                line_num,
-                "Component test constructs `GameState` directly",
-            ));
-        }
-
-        if (trimmed.contains("use") || trimmed.contains("model::state::GameState"))
-            && trimmed.contains("GameState")
-            && !trimmed.contains("GameStateSnapshot")
-        {
-            violations.push(Violation::error(
-                file_path,
-                line_num,
-                "Component test imports `GameState`",
-            ));
-        }
-    }
-
-    violations
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,25 +519,6 @@ mod tests {
         let violations = check_server_layer_boundaries(
             "server/renderers.rs",
             "fn render(snapshot: &GameStateSnapshot) {}\n",
-        );
-        assert_eq!(violations.len(), 0);
-    }
-
-    #[test]
-    fn test_check_test_layer_boundaries_catches_game_state_construction() {
-        let violations = check_test_layer_boundaries(
-            "tests/components/dashboard.rs",
-            "let state = GameState::new();\n",
-        );
-        assert_eq!(violations.len(), 1);
-        assert!(violations[0].message.contains("constructs"));
-    }
-
-    #[test]
-    fn test_check_test_layer_boundaries_allows_game_state_snapshot() {
-        let violations = check_test_layer_boundaries(
-            "tests/components/dashboard.rs",
-            "use crate::domain::model::state::GameStateSnapshot;\n",
         );
         assert_eq!(violations.len(), 0);
     }

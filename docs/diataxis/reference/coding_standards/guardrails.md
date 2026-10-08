@@ -67,7 +67,6 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | form fields urlencoded safe | Flags collection-typed fields on HTTP form structs. | `tests/infrastructure/guardrails/layers.rs:130` |
 | server layer boundaries | Prevents server-layer files from referencing `GameState` directly. | `tests/infrastructure/guardrails/layers.rs:196` |
 | http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:228` |
-| test layer boundaries | Prevents component tests from constructing or importing `GameState` directly. | `tests/infrastructure/guardrails/layers.rs:262` |
 | test file naming | Rejects unit-test files with the singular `_test.rs` suffix in favor of `_tests.rs`. | `tests/infrastructure/guardrails/location.rs:7` |
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |

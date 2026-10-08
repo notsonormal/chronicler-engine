@@ -7,8 +7,8 @@ use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::view_models::{
-    ActionAreaViewModel, LlmMessageView, MessageEntryView, NpcPortraitView, OptionsDockViewModel,
-    PreviewIssueView, VisualSidebarViewModel,
+    LlmMessageView, MessageEntryView, NpcPortraitView, OptionsDockViewModel, PreviewIssueView,
+    VisualSidebarViewModel,
 };
 
 #[derive(Template)]
@@ -68,21 +68,6 @@ pub struct CharacterHeadshotsTemplate {
 impl CharacterHeadshotsTemplate {
     pub fn new(npc_data: Vec<NpcPortraitView>) -> Self {
         Self { npcs: npc_data }
-    }
-}
-
-#[derive(Template)]
-#[template(
-    source = r##"<div class="action-area" id="action-area"><div id="action-preview" class="action-preview"></div><form id="command-form" hx-post="/action/check" hx-target="#action-preview" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="onCommandBeforeRequest()" hx-on::after-request="onCommandAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" /><button type="submit" id="submit-btn" {% if vm.is_disabled %}disabled{% endif %}>{% if vm.is_disabled %}<svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"/></svg> Generating&#8230;{% else %}<svg class="icon" aria-hidden="true"><use href="#i-send"/></svg> Send{% endif %}</button><div class="inline-error-slot" data-error-slot="action" hidden></div></form><div class="{{ vm.status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)">{{ vm.status_html }}</div></div>"##,
-    ext = "html"
-)]
-pub struct ActionAreaTemplate {
-    pub vm: ActionAreaViewModel,
-}
-
-impl ActionAreaTemplate {
-    pub fn new(vm: ActionAreaViewModel) -> Self {
-        Self { vm }
     }
 }
 

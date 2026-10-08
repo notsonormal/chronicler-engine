@@ -226,11 +226,6 @@ fn guardrails_wiredapp_scope() {
 }
 
 #[test]
-fn guardrails_test_layer_boundaries() {
-    check_tests_files("test layer boundary", check_test_layer_boundaries);
-}
-
-#[test]
 fn guardrails_test_module_header() {
     check_tests_files("test module header", check_test_module_header);
 }

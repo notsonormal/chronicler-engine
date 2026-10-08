@@ -8,11 +8,11 @@ use askama::Template;
 
 use crate::adapters::driving::http::builders::headers::render_header_unlocked;
 use crate::adapters::driving::http::templates::{
-    ActionAreaTemplate, CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrativeLogTemplate,
-    OptionsDockTemplate, VisualSidebarTemplate,
+    CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrativeLogTemplate, OptionsDockTemplate,
+    VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
-    ActionAreaViewModel, NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
+    NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
 use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::catalogue::GameCatalogue;
@@ -134,19 +134,6 @@ impl AppState {
         template
             .render()
             .map_err(|e| EngineError::Template(Self::render_error_context("visual sidebar", e)))
-    }
-
-    pub fn render_action_area(&self) -> Result<String> {
-        let (status, phase) = self
-            .game_view_query
-            .get_generating_status()
-            .map_err(|e| EngineError::Config(Self::render_error_context("action area", e)))?;
-
-        let vm = ActionAreaViewModel::new(&status, &phase);
-        let template = ActionAreaTemplate::new(vm);
-        template
-            .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("action area", e)))
     }
 
     pub fn render_options_dock(&self) -> Result<String> {

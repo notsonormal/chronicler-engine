@@ -26,7 +26,7 @@ Then the response body is "quantifying"
 
 ```gherkin
 Given a game with at least 2 Messages and a stored trigger
-When the client requests GET / and GET /fragment/story-log, /fragment/games, /fragment/connections/new and /fragment/action-area
+When the client requests GET / and GET /fragment/story-log, /fragment/games and /fragment/connections/new
 Then the shell defines each icon exactly once
 And every icon the shell or a fragment named above references is one the shell defines
 And each fragment named above shows at least one icon
