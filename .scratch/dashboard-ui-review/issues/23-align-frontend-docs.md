@@ -1,7 +1,7 @@
 # Align the frontend docs with the dashboard
 
 Type: task (HITL)
-Status: open
+Status: resolved
 Blocked by: 08, 66, 22, 42
 
 ## Question
