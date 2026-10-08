@@ -5,31 +5,35 @@ An interactive fiction engine that runs a player's narrative through an LLM-driv
 ## Language
 
 **Game**:
-A concrete playthrough session bound to one World and one Persona, holding current mutable state, message history (with swipes on the last message), and the generation gate.
+A concrete playthrough session bound to one World and one Persona, holding current mutable state, message history (with swipes on the last message), and the generation gate. It carries a stable generated name and a renameable display name.
 _Avoid_: Session, run, match, playthrough (use Game)
 
+**Display name**:
+The player-facing name of a Game, distinct from its stable generated name. Free text, and changeable by the player.
+_Avoid_: Title, label, nickname
+
 **World**:
-A static, authored template — locations, NPCs, maps, scenarios, global rules. Many Games can share one World. Bound to a Game via a world identifier (a display name is denormalized for display).
+A static, authored template — locations, NPCs, maps, scenarios, global rules. Many Games can share one World, and a Game binds to its World by identifier.
 _Avoid_: Setting, environment, scenario (World is the template; Scenario is a World sub-concept)
 
 **Persona**:
-The player-controlled character for a Game, chosen at game creation. Bound to a Game via a persona identifier (a display name is denormalized for display). Immutable for the life of the Game row. World-independent — personas are global entities, not World properties.
+The player-controlled character for a Game, chosen at game creation and fixed for the life of that Game. A Persona is a global entity, independent of any World.
 _Avoid_: Player character (ambiguous), character (reserved for NPCs), avatar
 
 **Character**:
-An NPC in a World. Triggers and relationships attached as data blobs. Distinct from Persona (player-controlled, game-scoped).
+An NPC in a World. Distinct from Persona, which is player-controlled and Game-scoped.
 _Avoid_: Person, actor, avatar, NPC (use Character)
 
 **Scenario**:
-A World sub-concept — the bundled starting state for a fresh Game (starting room, starting logs, initial NPCs, default scenario id). Lives on the World card, not a top-level entity.
+A World sub-concept: the bundled starting state for a fresh Game — starting room, starting logs, and initial NPCs.
 _Avoid_: Campaign, story, module
 
 **Action**:
-A semantic command issued by the player that enters the action pipeline for resolution.
+A semantic command issued by the player and resolved by the Action Pipeline.
 _Avoid_: Command, input, verb
 
 **Action Pipeline**:
-Ordered sequence of phases that validates and resolves an Action. Trigger evaluation runs **inside** engine commit. Phase methods signal success or one of several failure modes.
+The ordered sequence of phases that validates and resolves an Action.
 _Avoid_: Pipeline, command processor
 
 **Trigger**:
@@ -41,7 +45,7 @@ LLM-generated prose rendered in response to resolved Actions and trigger context
 _Avoid_: Story, text, output
 
 **Quantifier**:
-Post-generation Agent that analyzes narration to detect NPCs in area, player movement, and NPC enter/leave events. Uses a separate LLM connection from the storyteller.
+The post-generation Agent that analyzes narration to detect NPCs in area, player movement, and NPC enter/leave events.
 _Avoid_: Scorer, evaluator
 
 **Agent**:
@@ -49,31 +53,35 @@ A pipeline step that runs at a defined phase. Quantifier is one Agent.
 _Avoid_: Bot, assistant, operator
 
 **Message**:
-A single entry in a Game's conversation history — player input, narration output, event continuation, dialogue, or system log. Each AI-generated Message has its own Swipe set. Only the last Message is swipeable.
+A single entry in a Game's conversation history — player input, narration output, event continuation, or system log. Each AI-generated Message has its own Swipe set.
 _Avoid_: Line, entry, chat
 
 **Swipe**:
-An alternate version of an AI-generated Message, preserving a prior generation non-destructively. Switching swipes restores the corresponding state snapshot. A Swipe stores its generation's player-typed inputs — whether it voiced the player (impersonated) and the steering instruction that shaped it (steering_instruction) — so making a new swipe re-applies them.
+An alternate version of an AI-generated Message, preserving a prior generation non-destructively. A Swipe carries the player-typed inputs of its generation.
 _Avoid_: Variant, version, alternate
 
+**Retry**:
+Redoing the last generation as a new Swipe on the last Message.
+_Avoid_: Regenerate, reroll, resend
+
 **Snapshot**:
-A serialized mutable game sub-state, message-aligned and persisted immediately with its corresponding Message. Every snapshot is immediately valid for restore. Immutable world data lives in Storage only; the orchestrator fetches each field it needs and passes it to the engine function.
+A serialized mutable game sub-state, message-aligned and persisted with its corresponding Message. Every Snapshot is immediately valid for restore.
 _Avoid_: Save, checkpoint, dump
 
 **Guided Generation**:
-A transient slash-command input that steers what the narrator says for one generation. Rendered as the final prompt layer (`<Guide>`). Stored on the Swipe with the generation's other inputs — it never enters history.
+A transient slash-command input that steers what the narrator says for one generation. Stored on the Swipe with the generation's other inputs.
 _Avoid_: hint, nudge
 
 **Impersonate**:
-Forcing the next narration to be written as the player's persona. Uses the impersonate preset (replacing the system preset), drops the `<PlayerCharacter>` layer, and saves the output as an `Input` message — the same type as a typed player line, since impersonate is the player speaking. No auto-narration follows; the impersonated line can be redone as an alternate Swipe.
+Forcing the next narration to be written as the player's Persona — the player speaking rather than the narrator.
 _Avoid_: roleplay as, pose as, pretend (use Impersonate)
 
 **Narrator Mode**:
-Which of two narration stances a Game plays — Novel or Interactive Fiction. Set on the World and inherited at game creation; switchable per game. Switching retargets the system preset and re-renders the perspective and tense controls.
+Which of two narration stances a Game plays — Novel or Interactive Fiction. Set on the World and inherited at game creation; switchable per Game.
 _Avoid_: style, tone, personality, narrator persona
 
 **Options**:
-Pre-written player inputs the engine offers after a non-impersonate narration turn or on demand (`/options`). Using one submits its text as the player's input — an Input message, the same as a typed line.
+Pre-written player inputs the engine offers after a non-impersonate narration turn or on demand (`/options`).
 _Avoid_: suggestions, quick actions, auto-inputs
 
 ## Deprecated Terms
@@ -87,10 +95,7 @@ Don't use. Player direction is transient (Guided Generation); lasting facts go i
 **Replay blob**:
 Don't use. The inputs a Swipe stores about its generation have no name of their own.
 
-**Retry**:
-Don't use for the operation. Redoing the last generation is a new Swipe.
-
 ## Notes
 
 - This glossary is the single source of truth for term meanings.
-- Implementation notes and historical decisions may inform term usage, but they do not override definitions here.
+- Entries define what a term IS, in at most two sentences. Behaviour, implementation details, field names, and storage mechanics belong in `docs/diataxis/` and the source, never here.

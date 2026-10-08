@@ -31,8 +31,6 @@ This doc carries the token tables verbatim because the tables are the curated to
 | `--color-accent-yellow` | `#dcc888` | System text, Thinking status, capitalization tags |
 | `--color-accent-red` | `#ea8080` | Error status, danger buttons, cancel hover |
 | `--color-accent-pink` | `#e8a0a0` | Delete hover, grammar issue tags |
-| `--color-button-gradient-start` | `#2a2a2a` | Generic button gradient top (unused at runtime) |
-| `--color-button-gradient-end` | `#222222` | Generic button gradient bottom (unused at runtime) |
 | `--color-button-border` | `#4a4a4a` | Command input border, custom checkbox border |
 | `--color-button-primary-start` | `#283a54` | `.btn-primary` gradient top |
 | `--color-button-primary-end` | `#202f45` | `.btn-primary` gradient bottom |
@@ -55,7 +53,7 @@ This doc carries the token tables verbatim because the tables are the curated to
 | `--color-tint-red` | `color-mix(in srgb, var(--color-accent-red) 12%, transparent)` | Error message, cancel hover |
 | `--shadow-focus-ring` | `0 0 0 2px color-mix(in srgb, var(--color-accent-ok) 30%, transparent)` | Every focus ring |
 
-Every text pair in the palette clears 4.5:1 (WCAG AA) against its least-contrasting background.
+Every text token clears 4.5:1 (WCAG AA) against the backgrounds it is used on.
 
 ### Typography
 
@@ -98,7 +96,7 @@ Every text pair in the palette clears 4.5:1 (WCAG AA) against its least-contrast
 - Height: `--header-height`
 - Background: `--color-bg-header`
 - Border-bottom: 1px solid `--color-border`
-- Contains: the game title and the current game name
+- Contains: the game title and the current display name
 - Location is **not** in the header — it appears in the story log as the active-room location header
 
 ### Tab Bar
@@ -167,7 +165,6 @@ checks the posture change wiring.
 - Border: 1px solid `--color-border`
 - Padding: `var(--spacing-md)` (16px)
 - `overflow-y: auto`
-- Auto-scrolls to bottom on new content
 
 ### Visual Sidebar
 
@@ -199,6 +196,8 @@ checks the posture change wiring.
 - Border: 1px solid `--color-border` (top and sides only — no bottom border so it sits flush)
 - Padding: `10px var(--spacing-md)`
 - Display: flex, `align-items: center`, `gap: var(--spacing-md)`
+
+The action area expands past its fixed height while the preview is open — see Text Check Preview.
 
 ### Command Input
 
@@ -260,6 +259,7 @@ A position-fixed palette that appears above the command input while the input va
 - States:
   - **Ready**: `--color-accent-ok`
   - **Thinking**: `--color-accent-yellow`
+  - **Still thinking**: `--color-text-primary`
   - **Error**: `--color-accent-red`
 
 ### Log Entry Bubbles
@@ -347,7 +347,7 @@ Replace the entry's action-button cluster while in edit mode. Both share the sam
 
 ### Text Check Preview
 
-Replaces the action area when text-check preflight surfaces issues.
+Renders inside `#action-preview`, above the command form.
 
 - Background: `--color-bg-header`, border `1px solid var(--color-border)`, border-radius `8px`, padding `var(--spacing-md)`
 - Max-width: `600px`
@@ -355,10 +355,10 @@ Replaces the action area when text-check preflight surfaces issues.
 - Original text (read-only): label uppercase muted, value strikethrough muted
 - Corrected text (editable textarea): label uppercase muted, value `--color-text-primary`
 - Issue tags: orange (spell), pink (grammar), yellow (capitalization), blue-cyan (style), muted (formatting/other)
-- Three buttons: **Send Corrected**, **Send Original**, **Cancel**
+- Three controls: **Send with edits** (`.btn-cyan`), **Send Original** (`.btn-primary.btn-original`), **Cancel** (`.btn-cyan.preview-cancel`)
 - Header icon (`.preview-icon`): an 18×18 `#i-spell-check` sprite icon beside the title
 
-When the action area contains a `.text-check-preview`, the parent `.action-area` expands: `height: auto; min-height: var(--action-area-height); align-items: flex-start; padding-top/bottom: var(--spacing-md)`.
+`#action-preview:empty` is `display: none`. While it holds the preview, the parent `.action-area` expands past its fixed height and the preview takes the full row (`.action-area:has(#action-preview:not(:empty))`).
 
 ### Panel Layout and Viewports
 
@@ -462,4 +462,4 @@ Hover state for each class swaps to the start colour, brightened with `filter: b
 
 - [`./dashboard.md`](./dashboard.md) — page layout, tabs, polling cadences, and the per-flow interactions whose visual appearance this doc specifies.
 - [`../game_flow.md#text-check-branch`](../game_flow.md#text-check-branch) — text-check settings and the preview UI's data model.
-- [`../narrative/narration_system.md#llm-call-logging--forensics`](../narrative/narration_system.md#llm-call-logging--forensics) — LLM Messages tab content and the 50-row `llm_messages` cap.
+- [`../../../specs/llm_messages.md`](../../../specs/llm_messages.md) — LLM Messages tab content.

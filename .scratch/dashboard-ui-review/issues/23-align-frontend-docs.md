@@ -28,3 +28,50 @@ Where do `docs/diataxis/reference/frontend/ui_design.md`, `dashboard.md`, `docs/
 
 - The docs match the dashboard.
 - `python build.py` is green. Commit after user approval.
+
+## Answer
+
+The four docs now describe the shipped action area, and `dashboard.md` defines the
+three health state names.
+
+- **`dashboard.md` — Action Area.** Rewritten around the static shell: the four
+  client-derived states (**Checking** → **Generating** → **Preview** → **Idle**,
+  derived in that order) with what each does to the submit button and the command
+  input; the status display as its own poll with its own labels and three change
+  events; the pre-flight path (engine commands skip the check, a disabled check or
+  auto-check dispatches, flagged issues answer into `#action-preview`); the three
+  preview controls **Send with edits** / **Send Original** / **Cancel**, with
+  Cancel calling `closeActionPreview()` and returning focus to the command input;
+  and the `.action-area` expansion while the preview is open. The old text claimed
+  three states, a "Send" button inside the preview, a `data-original-html` restore
+  and an action-area innerHTML swap — all gone.
+- **`dashboard.md` — new "Failure and health states" subsection.** Defines
+  **Healthy** (a role whose newest LLM attempt carries no error), **Degraded** (a
+  role whose newest attempt carries an error: banner, per-role effect, Details
+  disclosure, Settings row label and degraded sub-tab marker) and **Unreachable**
+  (the client got no usable answer for a polled region — a transport failure or a
+  non-2xx poll — and clears it on the next success), plus the role-health label
+  **No calls yet**. These names stay out of `CONTEXT.md`, so this doc is their
+  definition.
+- **`ui_design.md`.** The Action Area entry names the shell's children and the
+  expansion; the Send Button entry names the "Send" / "Generating…" labels; the
+  Text Check Preview entry no longer says it replaces the action area — it renders
+  inside `#action-preview`, above the command form — names the shipped controls
+  (`Send with edits`, `Send Original`, `Cancel`) and states the shipped selector
+  `.action-area:has(#action-preview:not(:empty))` instead of
+  `:has(.text-check-preview)`.
+- **`dashboard_design.md`.** The client-JavaScript list said the button transitions
+  through "Ready ↔ Generating ↔ Error"; the button now transitions
+  Send ⇄ Generating… and locks with the input while a pre-flight check runs. (The
+  "Stop" wording in this file and the `/check-text` line in `game_flow.md` were
+  already fixed by 54/66/70.)
+- **`game_flow.md`.** The Text-Check Branch pre-flight bullet names the preview
+  region and the shipped choices: **Send with edits**, **Send Original**, **Cancel**.
+- **Reset button location (the HITL item).** Already resolved in the tree: the docs
+  follow the code. `dashboard.md`'s Active Game row carries the reset button on the
+  Games tab with its confirm dialog, matching
+  `games/templates/games.rs`'s `hx-post="/reset" hx-confirm="Reset the current game? …"`.
+  No doc claimed a header reset control.
+
+`python build.py validate-docs` is green. The full gate was not run in this session
+(the change is docs-only, plus unrelated dead-code removal from the post-review pass).

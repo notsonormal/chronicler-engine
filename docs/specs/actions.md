@@ -219,7 +219,6 @@ And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="/impersonate hello"
 And the pipeline returns to idle
 Then message_service.load_messages() contains exactly one Input entry
-And message_service.load_messages() contains zero Dialogue entries
 And message_service.load_messages() contains zero Input entries whose text is "/impersonate hello"
 And message_service.load_or_fresh().narrative.input_buffer.status is Idle
 ```

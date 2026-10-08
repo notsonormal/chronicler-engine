@@ -55,6 +55,5 @@ failure shape, typed form values, no new forensic row and unchanged
 the server behaviour is tier-1 and the button's `hx-include` is declarative.
 - **Build.** Full gate green: architecture 1, guardrails 165, integration 1567
 (2 skipped), browser 68, 0 failed (`logs/build_20261007_195200.log`).
-- **State.** Uncommitted on `dashboard-ui-issues-2` (HEAD `d77eca37`) pending
-user review, together with ticket 64. Development commits: `46c9fbb1`,
-`54371f99` on `wf/t69`.
+- **State.** Committed as `6077371b` on `dashboard-ui-issues-2`, together with
+  ticket 64. Development commits: `46c9fbb1`, `54371f99` on `wf/t69`.

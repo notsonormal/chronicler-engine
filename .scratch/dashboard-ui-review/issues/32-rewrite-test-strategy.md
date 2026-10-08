@@ -29,7 +29,7 @@ How should `tests/STRATEGY.md` read, so that an agent placing a test, or writing
 
 ## Answer
 
-`tests/STRATEGY.md` is rewritten around one leading word, **domain outcome**. The user approved the diff. The change is not committed yet.
+`tests/STRATEGY.md` is rewritten around one leading word, **domain outcome**. The user approved the diff, committed as `03405acc`.
 
 - **Term.** A new section, "Domain outcome (the tier-1 rule)", states the decision from [Decide what a tier-1 test may observe](_resolved/31-decide-tier-1-observations.md). A domain outcome is the HTTP response, or stored state read back through a read seam. A read seam is an HTTP GET, or a method on `GameViewQuery`, `MessageService`, `GameCatalogue`, `SettingsService`, `PromptPresetService` or `WorldCatalogue`. The section has a test that a reviewer applies to one line: the line reads the HTTP response or calls a read seam, or it dereferences a `GameState` field or calls `Storage`. It also covers helpers (the rule judges the helper body), arrange steps (seeding through `Storage` is allowed), waits (`wait_idle` may read state) and persistence facts that have no read seam (they belong at the driven-adapter or unit tier). The UI placement rule's step 1 now asks "Is the outcome a domain outcome?". The terms "behavioural authority", "client-observable" and "curl" are gone.
 - **One map.** The tier table has one row per directory: the 13 directories under `tests/` and `src/**/*_tests.rs`. The bold rows are the tiers. The other rows are support code or checks outside the tier model. `tests/AGENTS.md` now points at this table instead of listing binaries.

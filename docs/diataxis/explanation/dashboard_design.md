@@ -22,9 +22,9 @@ Six endpoints carry their own cadence, each tuned to what it carries:
 - **Status display at 5s.** The status pill ("Ready" / "Thinking..." / phase name) changes only on phase transitions, which are themselves paced by LLM round-trip time. A 5s cadence lands once per status transition.
 - **Visual sidebar at 5s.** The sidebar carries the location image and NPC portraits — image data is large compared to text. A 5s cadence matches the rate at which sidebar content can actually change within a turn; a tighter cadence would re-fetch unchanged imagery.
 - **LLM messages at 4s.** The LLM Messages tab is a forensics view for inspecting prompts and responses. A 4s cadence sits between the story log and the sidebar; the player inspects messages deliberately rather than watching them arrive.
-- **Header at 5s.** The header carries the game title and the current game name, which are stable for the duration of a session. The poll also refreshes the failure banner, which follows each role's newest attempt and must update without a reload when a role degrades or recovers.
+- **Header at 5s.** The header carries the game title and the current display name, which change only on a rename or a game switch. The poll also refreshes the failure banner, which follows each role's newest attempt and must update without a reload when a role degrades or recovers.
 
-Per-tab management panels (Settings / Prompt Presets / Worlds / Games) fetch on tab activation and stay still while inactive. They're management panels; once a player has loaded the list they care about, the list is stable until the player triggers a reload.
+Per-tab management panels (Settings / Prompt Presets / Worlds / Games) fetch once when the dashboard loads and then stay still; switching tabs does not refetch panel content. They're management panels; once a player has loaded the list they care about, the list is stable until the player triggers a reload.
 
 The polling mechanism described above is what makes the polling-pause pattern (next section) possible: each request is independent, so pausing is "stop sending requests for a while".
 
@@ -44,15 +44,15 @@ Switching swipes is a `snapshot_id` change: the target swipe was generated from 
 - **Story log.** The message history is part of the snapshot. A swipe switch that rewinds to a previous snapshot rewinds the message history too — earlier messages may differ (the snapshot was taken before they were generated).
 - **Visual sidebar.** The location and NPC portraits depend on the player's current room and the NPCs present, both part of game state. A swipe switch that changes location or NPC presence must refresh the sidebar.
 
-The swipe-switch JavaScript replaces `#story-log` innerHTML with the response and drops any stale generating label at once. The visual sidebar catches up on its own next 5s poll, and the header carries only the game name, which a swipe does not change. The Rust side serves the story-log fragment from the new snapshot's `MessageHistory` and the sidebar fragment from the new snapshot's location and NPC data.
+The swipe-switch JavaScript replaces `#story-log` innerHTML with the response and drops any stale generating label at once. The visual sidebar catches up on its own next 5s poll, and the header carries only the display name, which a swipe does not change. The Rust side serves the story-log fragment from the new snapshot's `MessageHistory` and the sidebar fragment from the new snapshot's location and NPC data.
 
-The split between "what changes per swipe" (story log and sidebar) and "what doesn't" (the header game name) is incidental: the regions are state-dependent, not bound to update together.
+The split between "what changes per swipe" (story log and sidebar) and "what doesn't" (the header display name) is incidental: the regions are state-dependent, not bound to update together.
 
 ## Empty-input continuation
 
 Submitting with an empty input routes to `continue_narration`, which calls `process_action(String::new())`. The empty string passes through the same action pipeline a typed command uses; the pipeline distinguishes "no player input" from "typed input" and produces a continuation message instead of a fresh narration turn.
 
-The flow is named after SillyTavern's "Continue" button. SillyTavern exposes Continue as a separate UI affordance (a button next to Send); the Chronicler Engine exposes it through the existing Send button's empty-input path. The UI is identical to a typed send — the player types nothing and presses Send, and the engine extends the last narration. The button-state transition (Ready → Generating → Ready) is the same as a typed action.
+The flow is named after SillyTavern's "Continue" button. SillyTavern exposes Continue as a separate UI affordance (a button next to Send); the Chronicler Engine exposes it through the existing Send button's empty-input path. The UI is identical to a typed send — the player types nothing and presses Send, and the engine extends the last narration. The button-state transition (Idle → Checking → Generating → Idle) is the same as a typed action.
 
 The continuation produces a new swipe on the last message. The player can then navigate the new swipe with the existing swipe controls; comparing the new continuation to the prior one is the same comparison as comparing two swipes from a typed action's retry.
 
@@ -61,7 +61,7 @@ The continuation produces a new swipe on the last message. The player can then n
 The dashboard is a single `index.html` shell plus a fixed set of fragment endpoints the static shell fetches and polls. Every per-message update, every status poll, every panel content is a server-rendered HTML fragment that HTMX swaps into a target element. The client-side JavaScript is limited to:
 
 - Tab switching (toggle `.active` class)
-- Button-state transitions (Ready ↔ Generating ↔ Error)
+- Button-state transitions (Send ⇄ Generating…, with the input and the button locked while a pre-flight check runs)
 - Polling-pause for edit / expand modes
 - Swipe, retrigger, edit, delete submissions
 - Text-check preflight orchestration
@@ -74,7 +74,7 @@ The rendering pipeline is Askama with compile-time template validation; template
 
 The dashboard's palette is built for long prose: narration renders in near-white on a neutral grey bubble, and quoted dialogue renders in amber. The two differ by hue while both stay at body weight. The OK and active states take a blue accent and the error states a red one. A green OK accent reads too close to red for a reader with red/green colour blindness, so the design separates the two by hue rather than by lightness. The same hue then marks every OK state: the active tab, the Send label, focus rings, and the health badges.
 
-The error notification darkens its lightest gradient stop, so white text clears the contrast floor.
+The unreachable failure banner uses the darkened red stop, so its white text clears the contrast floor.
 
 ## Document References
 

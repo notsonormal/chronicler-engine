@@ -37,6 +37,6 @@ The engine's tags are content labels, not self-referential tags. A self-referent
 
 ## Document References
 
-- `../reference/prompt_system.md` — reference description of the prompt-system machinery (the companion this doc explains).
-- `../reference/system_prompt.md` — the assembled system prompt structure.
-- `../reference/quantifier_prompt.md` — the quantifier as a separate secondary prompt.
+- [`../reference/narrative/prompt_system.md`](../reference/narrative/prompt_system.md) — reference description of the prompt-system machinery (the companion this doc explains).
+- [`../reference/narrative/prompt_system.md#assembled-system-message`](../reference/narrative/prompt_system.md#assembled-system-message) — the assembled system prompt structure.
+- [`../reference/narrative/agent_system.md#quantifier-prompt-architecture`](../reference/narrative/agent_system.md#quantifier-prompt-architecture) — the quantifier as a separate secondary prompt.

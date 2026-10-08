@@ -13,7 +13,7 @@ The static HTML shell defines the tab bar, the active-tab body, the polling cont
 
 ```mermaid
 flowchart TD
-    HDR["header-bar<br/>(48px, polled once)"]
+    HDR["header-bar<br/>(48px, polled every 5s)"]
     TABS["tab-bar<br/>Game | Settings | Prompt Presets | Worlds | Games | LLM Messages"]
     BODY["active tab-content<br/>(flex column)"]
     ACT["action-area (Game tab only, 64px)"]
@@ -22,11 +22,20 @@ flowchart TD
 
 A failure appears in one of three places: the failure banner under the header, the status display, or the failing region's own error slot. A non-2xx response swaps nothing into the region it describes. A failed poll answers non-2xx with `HX-Reswap: none`, so the region keeps its last good content. A failed form or card action renders a short message into that region's inline error slot (`[data-error-slot]`), with the raw server text behind the Details disclosure. The connection test answers 200 and targets its own `.connection-test-slot`, so the client swaps the result or the same disclosure into that slot, which cannot replace the row or form it reports on.
 
-The header bar is 48px tall, polls every 5s, and carries the game title and current game name. Location is **not** in the header — it appears in the story log as a green location-header on the active room.
+The header bar is 48px tall, polls every 5s, and carries the game title and the current display name. Location is **not** in the header — it appears in the story log as a green location-header on the active room.
+
+### Failure and health states
+
+Four state names cover the failure and health displays. Role health comes from the server; the client owns the unreachable state. Two of the four raise the failure banner: Degraded and Unreachable.
+
+- **Healthy** — a role whose newest LLM attempt carries no error.
+- **Degraded** — a role whose newest LLM attempt carries an error. The banner names each degraded role and what its failure cost the turn ("Quantifier failed — using fallback NPC IDs"). The Settings role row and the Connections sub-tab mark the same state. It clears once a later attempt succeeds.
+- **No calls yet** — a role with no recorded LLM attempt.
+- **Unreachable** — the client got no usable answer: the request failed at the transport level, or the polled container answered non-2xx. The client raises the banner itself ("The engine is unreachable. Nothing you do is being saved.") and clears it on the next successful response. A user action that answers non-2xx reports into its own surface's inline error slot; a transport-level failure raises the banner and writes that slot as well.
 
 ## Tabs
 
-Six tabs, one active at a time. Tab switching is client-side JavaScript (`.tab` button toggles `.active` class on `.tab-content` siblings); only the panel-content fetch on first activation is server-rendered HTML.
+Six tabs, one active at a time. Tab switching is client-side JavaScript (`.tab` button toggles `.active` class on `.tab-content` siblings); each management panel fetches once when the dashboard loads, and switching tabs does not refetch panel content.
 
 | Tab | Polling |
 |---|---|
@@ -45,7 +54,7 @@ The Game tab is the only view with three live regions stacked: the **main contai
 
 ### Story Log (80%)
 
-A scrollable list of `MessageEntry` rendered rows. The list polls its fragment endpoint every 2 seconds (see Polling Cadences) and auto-scrolls to the bottom on new content. Each entry carries one of three `log_type` classes (`narration`, `system`, `input`) that determines bubble styling and text color tokens.
+A scrollable list of `MessageEntry` rendered rows. The list polls its fragment endpoint every 2 seconds (see Polling Cadences). Each entry carries one of three `log_type` classes (`narration`, `system`, `input`) that determines bubble styling and text color tokens.
 
 Entry header structure:
 
@@ -59,30 +68,34 @@ A flex column with the **location image** on top (full width, `object-fit: conta
 
 ### Action Area (64px)
 
-A persistent shell at the bottom of the Game tab that is **not** replaced by polling — only its inner form is swapped on action submission. The shell holds:
+A static shell at the bottom of the Game tab. The status display polls itself, and only the text-check preview swaps into `#action-preview`. The shell holds:
 
-- A text input (`name="command"`, `autocomplete="off"`) and a submit button (`#submit-btn`).
+- A command input (`#command-input`, `name="command"`, `autocomplete="off"`) and a submit button (`#submit-btn`).
+- An empty preview region (`#action-preview`) that receives the text-check preview.
 - A status display (`#status-display`) polled every 5 seconds from the status endpoint.
 
-The action area is in one of three states:
+The client derives one of four states from the DOM and applies it to the submit button and the input:
 
-| State | Submit button | Status display | Input |
+| State | Submit button | Input | State holds while |
 |---|---|---|---|
-| Ready | "Send" (`#i-send` icon), enabled | "Ready" in `--color-accent-ok` | enabled |
-| Thinking | "Generating…" (`#i-loader-circle` icon), disabled | "Thinking..." / "Quantifying scene..." / "Generating event..." / "Generating options..." in `--color-accent-yellow` | disabled |
-| Error | "Send" (`#i-send` icon), enabled | last error message, banner shown | enabled |
+| Checking | "Send" (`#i-send` icon), disabled | disabled | a pre-flight text check is in flight |
+| Generating | "Generating…" (`#i-loader-circle` icon, spinning), disabled | enabled | the status display carries a thinking status |
+| Preview | "Send" (`#i-send` icon), enabled | enabled | `#action-preview` holds the preview |
+| Idle | "Send" (`#i-send` icon), enabled | enabled | none of the above |
 
-State transitions happen on three events: form submission (immediately sets Thinking), `htmx:afterRequest` on the form (immediately resets the form input), and the next status poll (which reads `idle`/`narrating`/`quantifying`/`generating-event`/`options` and updates the status display).
+The states are derived in that order, so a check outranks a running generation, which outranks an open preview.
+
+The status display is a region of its own with its own poll. It shows "Ready" in `--color-accent-ok`; a phase label in `--color-accent-yellow` (`Thinking...`, `Generating narration...`, `Quantifying scene...`, `Generating event...`, `Generating options...`); "Still thinking..." in the body text colour, for a rejected concurrent action; or a clamped generation error whose raw text sits behind a Details disclosure. It changes when a response lands in it: the action check's retargeted swap, the status poll (which maps `idle`/`narrating`/`quantifying`/`generating-event`/`options` onto those labels), the new-swipe and retrigger paths, and the form's own `htmx:afterRequest` (which ends the checking state).
 
 **Empty-input behavior.** Submitting with an empty input dispatches a continuation request (same path as SillyTavern's "Continue"): the action dispatcher folds an empty command into a continuation. The submit button transitions to "Generating…" immediately; the next status poll reads "Thinking...".
 
-**Text-check preflight.** Before the action reaches its endpoint, the form posts to the action-check endpoint, which invokes the configured text checker. If issues are found, the action area is replaced with a preview showing the original text, an editable corrected text textarea, and issue tags (orange = spell, pink = grammar). Three buttons: Send (submit corrected), Send Original (submit original), Cancel (restore action area from `data-original-html`). The submit paths converge on the action-confirm endpoint; the corrected-vs-original distinction is carried by the form payload.
+**Text-check preflight.** The command form posts to the action-check endpoint, which invokes the configured text checker. Engine commands skip the check and dispatch at once, as do requests while the check is disabled or auto-check is off. When issues are found, the response renders a preview into `#action-preview`, above the command form: the original text, an editable corrected-text textarea, and issue tags (orange = spell, pink = grammar). Three controls: **Send with edits** (submits the textarea's current value), **Send Original** (submits the original), and **Cancel**, which empties `#action-preview` and returns focus to the command input. Both send controls post to the action-confirm endpoint with the corrected-vs-original distinction carried by the payload, and each clears the preview once its request settles. While the preview is open the parent `.action-area` expands rather than holding its 64px height.
 
-**Slash-command palette.** Typing `/` in the command input opens a fixed-position palette above the input listing the three slash commands (`/impersonate`, `/guide`, `/options`); further typing filters the list, arrow keys move the highlight (wrapping at the ends), Enter or a click populates the input with the highlighted command plus a trailing space without submitting, and Escape, focus loss, scroll, or submit closes it. The palette element is a `<body>` child whose listeners are delegated to `document`, so it survives the action-area innerHTML swap that action submission performs — the input is recreated and the wiring re-binds to it. The interaction contract is enforced by [`../../../specs/browser_slash_menu.md`](../../../specs/browser_slash_menu.md) (scenarios 31.1–31.7).
+**Slash-command palette.** Typing `/` in the command input opens a fixed-position palette above the input listing the three slash commands (`/impersonate`, `/guide`, `/options`); further typing filters the list, arrow keys move the highlight (wrapping at the ends), Enter or a click populates the input with the highlighted command plus a trailing space without submitting, and Escape, focus loss, scroll, or submit closes it. The palette element is a `<body>` child whose listeners are delegated to `document`, so it outlives a re-render of the action-area markup. The interaction contract is enforced by [`../../../specs/browser_slash_menu.md`](../../../specs/browser_slash_menu.md) (scenarios 31.1–31.6).
 
 ## Polling Cadences
 
-Six endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: header 5s (which also refreshes the failure banner), story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch once, when the dashboard loads. They do not poll.
+Six endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: header 5s (which also refreshes the failure banner), story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch once, when the dashboard loads.
 
 The story log's poll merges the fragment into the existing DOM (`morph:innerHTML`, the vendored idiomorph extension) instead of replacing it, so an idle poll touches no nodes and a text selection, focus, or scroll position inside the log survives. Each `.log-entry` carries a stable `id` for the morph to match on. The other polled containers keep their `innerHTML` swap.
 
@@ -139,7 +152,7 @@ The Games tab hosts three regions: **Active Game**, **New Game**, and **Saved Ga
 
 ### Active Game
 
-Shows the current game name, a world badge (the world the game belongs to), a persona badge (the persona bound to the game), and a reset button (`#i-rotate-ccw`). Reset carries an HTMX confirm dialog ("Reset the current game? All progress will be lost."); on confirmation, the current game is deleted and a new game is created with a freshly auto-generated name (see "Name generation" below). When no game is active, the row shows the placeholder "No active game".
+Shows the current display name, a world badge (the world the game belongs to), a persona badge (the persona bound to the game), a rename control, and a reset button (`#i-rotate-ccw`). The rename control opens a disclosure holding a text input seeded with the current display name; saving it posts the new name and reloads the page, so the header and the Games tab both re-render from the renamed row. Reset carries an HTMX confirm dialog ("Reset the current game? All progress will be lost."); on confirmation, the current game is deleted and a new game is created with a freshly auto-generated name (see "Name generation" below). When no game is active, the row shows the placeholder "No active game".
 
 ### New Game
 
@@ -147,11 +160,11 @@ A labelled World selector and Persona selector, populated from worlds and person
 
 ### Saved Games
 
-A list of the games other than the active one (across all worlds), each with its game name, world badge, persona badge, and Switch/Delete affordances. Delete carries a confirm dialog ("Delete this game? This cannot be undone."); the dialog text is per-template, not engine-enforced.
+A list of the games other than the active one (across all worlds), each with its display name, world badge, persona badge, and rename/Switch/Delete affordances. Delete carries a confirm dialog ("Delete this game? This cannot be undone."); the dialog text is per-template, not engine-enforced.
 
 ### Name Generation
 
-New-game names are auto-generated as `{WorldName}_{YYYY-MM-DD}_{N}` (underscores between segments, not spaces) where `{N}` is one greater than the highest existing suffix for that world-and-date base.
+A new game carries two names. The stable generated name is `{WorldName}_{YYYY-MM-DD}_{N}` (underscores between segments, not spaces), where `{N}` is one greater than the highest existing suffix for that world-and-date base; the create path keeps it unique, and a rename never changes it. The display name defaults to the stable name in a readable form (`Redmist Estate — 29 Sep 2026 (1)`), and the player can rename it at any time.
 
 ## Settings Tab
 
@@ -163,7 +176,7 @@ A connection's **Test** control sends one short fixed prompt to that connection 
 
 - [`./http_routes.md`](./http_routes.md) — full HTTP route topology (machine-generated).
 - [`./ui_design.md`](./ui_design.md) — design tokens (colors, typography, spacing), component specs, and the per-button/swipe-control visibility rules.
-- [`../narrative/narration_system.md#llm-call-logging--forensics`](../narrative/narration_system.md#llm-call-logging--forensics) — LLM Messages tab forensics + the 50-row `llm_messages` cap.
+- [`../../../specs/llm_messages.md`](../../../specs/llm_messages.md) — LLM Messages tab forensics.
 - [`../game_flow.md#text-check-branch`](../game_flow.md#text-check-branch) — text-check preflight, settings, and preview UI.
 - [`../narrative/prompt_system.md`](../narrative/prompt_system.md) — Prompt Presets tab content.
 - [`../storage.md#worlds`](../storage.md#worlds) — Worlds tab CRUD + world-game delete dependency.

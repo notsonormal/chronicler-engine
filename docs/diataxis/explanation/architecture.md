@@ -3,7 +3,7 @@ diataxis: explanation
 title: Architecture Overview
 ---
 
-## Why hexagonal
+## The dependency rule
 
 The engine is organised around one rule: **domain and application code never import an adapter**. The rule buys two things and costs one.
 
@@ -64,7 +64,7 @@ flowchart LR
 
 Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::llm_factory`). `Storage` is concrete-by-design — the engine's persistence boundary may call it directly, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
 
-## Why one process
+## The single-process deployment contract
 
 The engine deploys as one process against one SQLite file. The per-game generation registry is process-local; two engines pointed at the same database would race on the gate and lose updates on the registry. The single-process commitment is the deployment contract — horizontal scaling is not on the table, and the architecture is free to use process-local concurrency primitives (RAII guards, registry projections) without paying for cross-process coordination. Restarting the engine is safe because the database is the coordination boundary: the registry's "no generating slot" state is checked against the persisted `GenerationStatus` on the next action, and disagreement heals to `Idle`.
 
@@ -76,13 +76,13 @@ A small set of guarantees follow from the shape above. Each is machine-checked o
 - Single-process deployment — one engine, one database; the gate and registry are process-local.
 - Tokio-only concurrency — `spawn_blocking` for synchronous services; no `std::thread::spawn` anywhere in `src/`.
 - Lock-poison recovery — every `Mutex`/`RwLock` site recovers via `into_inner()`; a panic does not corrupt the lock.
-- Generation self-healing — the registry claim/release path mutates both the process-local slot and the persisted status under one lock; a mid-flight panic leaves the next action with a recoverable `Idle`.
+- Generation self-healing — the registry slot and the persisted status are written in sequence, and recovery resets a persisted `Generating` that no slot owns.
 - One FreeAction at a time — overlapping actions are rejected at the HTTP boundary, matching single-player semantics.
 
 ## Document References
 
-- [`../reference/architecture_system.md`](../reference/architecture_system.md) — eight-tier map; dependency invariant; port inventory.
-- [`../../reference/storage.md`](../../reference/storage.md) — SQLite schema and the eleven tables.
+- [`../reference/architecture_system.md`](../reference/architecture_system.md) — layer structure; dependency invariant; the port traits; the storage direct-access carve-out.
+- [`../reference/storage.md`](../reference/storage.md) — SQLite schema and the eleven tables.
 - [`./two-state-channels.md`](./two-state-channels.md) — why the engine carries two complementary generation-state signals.
 - [`./rust_idioms.md`](./rust_idioms.md) — concrete services + `spawn_blocking` + settings-sharing shape that the hexagonal frame sits inside.
 - [`../reference/coding_standards/guardrails.md`](../reference/coding_standards/guardrails.md) — static guardrails (clippy, arch-lint, syn-based convention tests).

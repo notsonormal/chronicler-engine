@@ -33,4 +33,4 @@ The orchestration layer couples the quantifier call to the NPC reconciliation st
 
 ## Document References
 
-- `../reference/agent_system.md` — reference description of the agent machinery.
+- `../reference/narrative/agent_system.md` — reference description of the agent machinery.

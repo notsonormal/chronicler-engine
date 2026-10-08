@@ -38,7 +38,7 @@ The boundary reading keeps phase functions pure: phases operate on `GameState`, 
 ## Document References
 
 - `../reference/architecture_system.md` — tier map (the canonical home for the settings resolution shape) + invariant identifiers.
-- `../reference/guardrails.md` — INV-NNN *identifiers* (the guarantee for each lives in the invariant contract tests, not the docs).
-- `../reference/llm_processing.md` — LLM transport + the per-call site that reads `max_context_tokens` from settings.
-- `../reference/action_pipeline.md` — pipeline cancellation shape (the in-phase α-check that lives inside the pipeline rather than at the boundary).
-- `../explanation/architecture.md` [§Quality Story](../explanation/architecture.md#quality-story) — the quality attributes the conventions above guarantee.
+- `../reference/coding_standards/guardrails.md` — the static guardrail layers (clippy, arch-lint, syn-based convention tests) that enforce the conventions above.
+- `../reference/narrative/narration_system.md` — LLM connections and their token caps, including the `max_context_tokens` context window.
+- `../reference/game_flow.md` — pipeline cancellation shape (the in-phase α-check that lives inside the pipeline rather than at the boundary).
+- `../explanation/architecture.md` [§Architectural commitments](../explanation/architecture.md#architectural-commitments) — the quality attributes the conventions above guarantee.

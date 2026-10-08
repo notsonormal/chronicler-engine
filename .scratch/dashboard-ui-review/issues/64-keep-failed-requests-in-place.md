@@ -87,6 +87,6 @@ and `create_world_handler` keep their 200 failure shape; none are in this
 ticket's paths.
 - **Build.** Full gate green: architecture 1, guardrails 165, integration 1567
 (2 skipped), browser 68, 0 failed (`logs/build_20261007_195200.log`).
-- **State.** The combined 64+69 change sits uncommitted on
-`dashboard-ui-issues-2` (HEAD `d77eca37`) pending user review. Development
-commits: `6a91631a` on `wf/t64`; `54371f99` on `wf/t69`.
+- **State.** The combined 64+69 change is committed as `6077371b` on
+`dashboard-ui-issues-2`. Development commits: `6a91631a` on `wf/t64`;
+`54371f99` on `wf/t69`.

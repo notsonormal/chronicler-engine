@@ -63,7 +63,7 @@ Every game and every world row can be referred to by multiple tables; the standa
 
 - **`games`** — top-level game session record. Every snapshot and message belongs to a game. The game pins one world and one persona at creation time (the world and persona keys are logical references, not SQL FKs — see Logical References below). Multiple games can exist in the same database. On first startup for a world, a new `games` row is auto-created with a generated name.
 - **`game_state_snapshots`** — frozen point-in-time captures of the mutable game state. Used to load the latest state on server startup and to retry a message by loading the snapshot referenced by a message's `snapshot_id`. **Snapshot invariant:** messages are **not** stored in the snapshot JSON; they live in `messages` and are hydrated after a snapshot load.
-- **`messages`** — chronological narrative history. Each row is one log entry (player input, narration, system message, dialogue), persisted incrementally. There is exactly one message history per game. Messages can be soft-deleted.
+- **`messages`** — chronological narrative history. Each row is one log entry (player input, narration, system message), persisted incrementally. There is exactly one message history per game. Messages can be soft-deleted.
 - **`message_swipes`** — per-message swipe versions. Each row is one alternative generation for a message. Deleting a message removes its swipes; the swipe index is unique per message. Each swipe carries an optional `snapshot_id` referencing `game_state_snapshots.id` that is **not** declared as a SQL FK — see Relationships. A swipe also carries the player-typed inputs of its generation — an impersonation flag and the steering instruction (a guide, or an impersonate direction) — so a retry of that swipe re-applies the same steering.
 
 ### World catalogue cluster
@@ -75,7 +75,7 @@ Every game and every world row can be referred to by multiple tables; the standa
 
 ### Standalone tables
 
-- **`llm_messages`** — forensics log of LLM API calls. **Not game-scoped** and not referenced by any other table. Used for debugging and prompt engineering. Pruned automatically with a default cap of 50 rows.
+- **`llm_messages`** — forensics log of LLM API calls. **Not game-scoped** and not referenced by any other table. Used for debugging and prompt engineering. Pruned automatically to a fixed row cap.
 - **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is a text key (e.g. `system_default`). Carries role, instructions, writing style, and output format. Each preset has an `is_default` flag.
 - **`settings`** — engine settings singleton (exactly one row). Carries the connection list, default narration/quantifier connection IDs, response length, text-check config, agent configs, and active prompt preset IDs. Updated through the settings API; not related to any game or world.
 
@@ -125,14 +125,14 @@ flowchart TD
     settings["settings<br/>singleton row"]
 ```
 
-- **`llm_messages`**, **`prompt_presets`**, **`settings`** — no FK edges to anything. Truly standalone. `settings` is a singleton row; `llm_messages` is pruned automatically (default cap: 50 rows); `prompt_presets` uses text-key IDs.
+- **`llm_messages`**, **`prompt_presets`**, **`settings`** — no FK edges to anything. Truly standalone. `settings` is a singleton row; `llm_messages` is pruned automatically to a fixed row cap; `prompt_presets` uses text-key IDs.
 
 ### Cross-cluster logical references (no SQL FKs)
 
 Several relationships between clusters are **not** SQL foreign keys, either because the target table predates the column (added in a later migration) or because declaring the FK would impose a CASCADE the application semantics don't want. Integrity for these is the application's responsibility:
 
-- **`games.world_key → worlds.key`** (game state → world catalogue) — pins the world a game was created with. Added in migration v12.
-- **`games.persona_key → personas.key`** (game state → world catalogue) — pins the persona a game was created with. Added in migration v13; persona binding moved from world to game in this migration.
+- **`games.world_key → worlds.key`** (game state → world catalogue) — pins the world a game was created with.
+- **`games.persona_key → personas.key`** (game state → world catalogue) — pins the persona a game was created with.
 - **`message_swipes.snapshot_id → game_state_snapshots.id`** (within the game state cluster, shown above) — non-FK so snapshot deletion doesn't cascade to swipes.
 
 ## Migrations
