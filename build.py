@@ -141,6 +141,19 @@ class _NextestLeaks:
     lines: list[tuple[str, str, str]] = []
 
 
+class _CompileErrors:
+    """rustc/clippy errors from failed commands, re-printed at the epilogue.
+
+    Cargo output goes only to the log, so without this a failed compile shows
+    an agent the step name but not the cause. ``lines`` holds rendered errors,
+    deduplicated (``--all-targets`` reports one error once per target), in
+    first-seen order. The epilogue prints the first ``LIMIT``.
+    """
+
+    LIMIT = 5
+    lines: list[str] = []
+
+
 def _set_log_fh(fh):
     """Register the log file handle for the current build run."""
     _LogState.fh = fh
@@ -386,6 +399,30 @@ def _stash_nextest_summary(output: str, cmd: str | None = None) -> None:
             )
 
 
+# A rustc or clippy diagnostic header: "error[E0599]: ..." or "error: ...".
+_COMPILE_ERROR_RE = re.compile(r"^error(?:\[E\d{4}\])?: ")
+# Cargo's closing lines restate the failure and carry no cause.
+_COMPILE_ERROR_NOISE = ("error: could not compile", "error: aborting due to")
+
+
+def _stash_compile_errors(output: str) -> None:
+    """Capture each compiler error header with its ``--> file:line:col``."""
+    lines = output.splitlines()
+    for i, raw in enumerate(lines):
+        if not _COMPILE_ERROR_RE.match(raw) or raw.startswith(_COMPILE_ERROR_NOISE):
+            continue
+        rendered = raw.strip()
+        for follow in lines[i + 1 : i + 4]:
+            stripped = follow.strip()
+            if stripped.startswith("--> "):
+                rendered += f"  ({stripped[4:]})"
+                break
+            if not stripped:
+                break
+        if rendered not in _CompileErrors.lines:
+            _CompileErrors.lines.append(rendered)
+
+
 def _nextest_duration_to_secs(token: str) -> float:
     """Convert a nextest duration token (e.g. "18.645s", "1m23s") to seconds."""
     token = token.strip()
@@ -469,6 +506,9 @@ def run_with_test_timings(cmd, env=None, check=True):
     both_print("---")
 
     if result.returncode != 0:
+        _stash_compile_errors(
+            (result.stdout or "") + "\n" + (result.stderr or "")
+        )
         both_print(f"FAILED with code {result.returncode}")
         if check:
             sys.exit(result.returncode)
@@ -1073,6 +1113,8 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
         # Stash before the check: a checked failure sys.exits below, and the
         # epilogue must still be able to print the pass/fail counts.
         _stash_nextest_summary(out or "", cmd)
+        if process.returncode != 0:
+            _stash_compile_errors(out or "")
         if check and process.returncode != 0:
             both_print(f"FAILED with code {process.returncode}")
             sys.exit(process.returncode)
@@ -1101,6 +1143,10 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
         _stash_nextest_summary(
             (result.stdout or "") + "\n" + (result.stderr or ""), cmd
         )
+        if result.returncode != 0:
+            _stash_compile_errors(
+                (result.stdout or "") + "\n" + (result.stderr or "")
+            )
         if check and result.returncode != 0:
             both_print(f"FAILED with code {result.returncode}")
             sys.exit(result.returncode)
@@ -1924,6 +1970,13 @@ def main():
             both_print(f"{status.lower()} test: {name}  ({label})")
         if browser_skipped:
             both_print('skipped: browser tier (run "python build.py browser")')
+        if _CompileErrors.lines:
+            shown = _CompileErrors.lines[: _CompileErrors.LIMIT]
+            both_print(
+                f"compile errors (first {len(shown)} of {len(_CompileErrors.lines)}):"
+            )
+            for line in shown:
+                both_print(f"  {line}")
 
         both_print("=" * 60)
         both_print("=== Build Complete ===")

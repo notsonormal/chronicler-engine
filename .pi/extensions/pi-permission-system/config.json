@@ -4,7 +4,7 @@
     "path": {
       "*.env": "deny",
       "*.env.*": "deny",
-      "*.env.example": "allow"      
+      "*.env.example": "allow"
     },
    "write": {
       "*": "allow",
@@ -16,8 +16,30 @@
    },
     "bash": {
       "*": "allow",
-      "timeout": "deny",
-      "timeout *": "deny"      
+      "timeout": {
+        "action": "deny",
+        "reason": "Do not use the timeout command. Set the timeout parameter of the bash tool instead"
+      },
+      "timeout *": {
+        "action": "deny",
+        "reason": "Do not use the timeout command. Set the timeout parameter of the bash tool instead"
+      },
+      "grep * . *": {
+        "action": "deny",
+        "reason": "Repo-root grep walks target/ (~10 GB) and hangs. Use rg (skips target/ via .gitignore) or grep a subdirectory such as src/ or tests/"
+      },
+      "grep * ./ *": {
+        "action": "deny",
+        "reason": "Repo-root grep walks target/ (~10 GB) and hangs. Use rg (skips target/ via .gitignore) or grep a subdirectory such as src/ or tests/"
+      },
+      "grep * /workspace/chronicler-engine *": {
+        "action": "deny",
+        "reason": "Repo-root grep walks target/ (~10 GB) and hangs. Use rg (skips target/ via .gitignore) or grep a subdirectory such as src/ or tests/"
+      },
+      "grep * /workspace/chronicler-engine/ *": {
+        "action": "deny",
+        "reason": "Repo-root grep walks target/ (~10 GB) and hangs. Use rg (skips target/ via .gitignore) or grep a subdirectory such as src/ or tests/"
+      }
     }
   }
 }

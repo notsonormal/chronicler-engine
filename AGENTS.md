@@ -392,8 +392,6 @@ Green means the full gate ran on the tree you report. While you iterate, run one
 
 ## Concurrent Builds
 
-Use one target dir per checkout and never switch, because a new dir starts cold. In a git worktree, run `python build.py` with no extra flags. Agents that share one checkout run `python build.py --target-dir target/<name> --no-fmt`. The `build.py` docstring has the details.
-
 `ENVIRONMENT.md`: read it when a build or test run is slow, waits for the build slot, or runs out of memory.
 
 Cold worktree builds compile the whole dependency tree into a fresh target dir;

@@ -65,3 +65,4 @@ All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect
 - [27 — Give every review finding an evidence class](./issues/27-review-finding-evidence-class.md)
 - [28 — Add a usage-evidence phase to `chronicler-docs-hygiene`](./issues/28-docs-hygiene-usage-evidence.md)
 - [29 — Cover Python in the comment finder's full sweep](./issues/29-comment-finder-python-coverage.md)
+- [31 — Skip the browser tier when its inputs have not changed since a green run](./issues/31-skip-browser-tier-on-unchanged-inputs.md) (from the 2026-10-09 retro of session `01a12280`)
