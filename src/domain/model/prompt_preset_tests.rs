@@ -202,36 +202,9 @@ fn serde_missing_allowed_modes_defaults_to_all_modes() {
 }
 
 #[test]
-fn bundle_slot_maps_each_preset_type_to_its_field() {
-    use crate::domain::model::settings::ModePresetBundle;
-
-    let bundle = ModePresetBundle {
-        system_prompt_preset_id: "sys".into(),
-        quantifier_prompt_preset_id: "quant".into(),
-        impersonate_prompt_preset_id: "imp".into(),
-        ..Default::default()
-    };
-
-    assert_eq!(PresetType::System.bundle_slot(&bundle), "sys");
-    assert_eq!(PresetType::Quantifier.bundle_slot(&bundle), "quant");
-    assert_eq!(PresetType::Impersonate.bundle_slot(&bundle), "imp");
-}
-
-#[test]
-fn set_bundle_slot_writes_only_its_own_field() {
-    use crate::domain::model::settings::ModePresetBundle;
-
-    let mut bundle = ModePresetBundle::default();
-    PresetType::Quantifier.set_bundle_slot(&mut bundle, "new_q".into());
-
-    let untouched = ModePresetBundle::default();
-    assert_eq!(bundle.quantifier_prompt_preset_id, "new_q");
-    assert_eq!(
-        bundle.system_prompt_preset_id,
-        untouched.system_prompt_preset_id
-    );
-    assert_eq!(
-        bundle.impersonate_prompt_preset_id,
-        untouched.impersonate_prompt_preset_id
-    );
+fn preset_type_marks_options_as_mode_agnostic() {
+    assert!(PresetType::System.is_mode_tagged());
+    assert!(PresetType::Quantifier.is_mode_tagged());
+    assert!(PresetType::Impersonate.is_mode_tagged());
+    assert!(!PresetType::Options.is_mode_tagged());
 }

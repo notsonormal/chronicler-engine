@@ -6,6 +6,7 @@ use axum::response::{Html, IntoResponse, Response};
 
 use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error};
 use crate::application::errors::ApplicationError;
+use crate::domain::model::state::generation_status::GenerationFailureKind;
 use crate::error::EngineError;
 
 pub(crate) fn error_fragment(message: impl std::fmt::Display) -> String {
@@ -32,21 +33,20 @@ pub fn raw_error_detail(raw: &str) -> String {
     format!("<pre class=\"error-detail-raw\">{}</pre>", html_escape(raw))
 }
 
-pub fn generation_error_summary(raw: &str) -> String {
-    let lower = raw.to_lowercase();
-    if lower.contains("llm") || lower.contains("connection") || lower.contains("backend") {
-        return "The language model could not be reached.".to_string();
+/// The one-line status-display sentence for a classified failure. The raw
+/// text belongs in the details disclosure, never here.
+pub fn generation_failure_summary(kind: GenerationFailureKind) -> &'static str {
+    match kind {
+        GenerationFailureKind::Unreachable => "The language model could not be reached.",
+        GenerationFailureKind::PromptTooLong => {
+            "The last turn was too long for the language model."
+        }
+        GenerationFailureKind::UnreadableAnswer => "The language model's answer could not be read.",
+        GenerationFailureKind::SaveFailed => "The last turn could not be saved.",
+        GenerationFailureKind::SceneMissing => "The current scene could not be found.",
+        GenerationFailureKind::PresetMissing => "The active prompt preset is missing.",
+        GenerationFailureKind::Other => "The last turn failed to generate.",
     }
-    if lower.contains("save") {
-        return "The last turn could not be saved.".to_string();
-    }
-    if lower.contains("room") || lower.contains("scene") {
-        return "The current scene could not be found.".to_string();
-    }
-    if lower.contains("preset") {
-        return "The active prompt preset is missing.".to_string();
-    }
-    "The last turn failed to generate.".to_string()
 }
 
 pub(crate) fn error_fragment_response(message: impl std::fmt::Display) -> Response<Body> {
@@ -57,17 +57,6 @@ fn classify_error(error: ApplicationError, prefix: &str) -> Result<String, Strin
     match error {
         ApplicationError::Validation(message) => Ok(message),
         other => Err(format!("{prefix}: {other}")),
-    }
-}
-
-/// A refusal reaches the user as a 400, which the shell renders into the
-/// failing surface's inline error slot and leaves the panel in place. Other
-/// errors keep the in-fragment rendering, labelled with `prefix` so the
-/// failure's origin survives.
-pub(crate) fn error_response(error: ApplicationError, prefix: &str) -> Response<Body> {
-    match classify_error(error, prefix) {
-        Ok(message) => bad_request(render_error(&message)),
-        Err(message) => error_fragment_response(message),
     }
 }
 

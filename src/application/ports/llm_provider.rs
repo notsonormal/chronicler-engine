@@ -1,14 +1,15 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! LLM provider port (transport-only)
 
-use crate::error::EngineError;
+use crate::domain::model::agent::Role;
 use crate::domain::model::llm_message::LlmMessage;
+use crate::error::EngineError;
 
-pub const AGENT_NARRATOR: &str = "narrator";
-pub const AGENT_QUANTIFIER: &str = "quantifier";
-pub const AGENT_TRIGGER: &str = "trigger";
+pub const AGENT_NARRATOR: &str = Role::Narrator.agent_name();
+pub const AGENT_QUANTIFIER: &str = Role::Quantifier.agent_name();
+pub const AGENT_TRIGGER: &str = Role::Trigger.agent_name();
 pub const AGENT_DIALOGUE: &str = "dialogue";
-pub const AGENT_OPTIONS: &str = "options";
+pub const AGENT_OPTIONS: &str = Role::Options.agent_name();
 
 #[derive(Debug)]
 pub struct LlmCallResult {

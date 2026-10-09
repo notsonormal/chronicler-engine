@@ -3,8 +3,8 @@
 use std::str::FromStr;
 
 use crate::domain::model::settings::{
-    AppSettings, NarrativePerspective, NarrativeTense, NarratorMode, TextCheckMode,
-    TextCheckSettings,
+    AppSettings, ModePresetRegistry, NarrativePerspective, NarrativeTense, NarratorMode,
+    TextCheckMode, TextCheckSettings,
 };
 
 #[test]
@@ -302,4 +302,134 @@ fn text_check_set_mode_and_auto_check_normalises_the_pair() {
 
     settings.set_mode_and_auto_check(TextCheckMode::Grammar, true);
     assert!(settings.enable_auto_check);
+}
+
+#[test]
+fn active_preset_id_reads_the_slot_for_its_type_and_mode() {
+    use crate::domain::model::prompt_preset::PresetType;
+
+    let mut settings = AppSettings::default();
+    settings.set_active_preset(PresetType::System, NarratorMode::Novel, "sys_n".into());
+    settings.set_active_preset(
+        PresetType::System,
+        NarratorMode::InteractiveFiction,
+        "sys_if".into(),
+    );
+    settings.set_active_preset(PresetType::Quantifier, NarratorMode::Novel, "quant".into());
+    settings.set_active_preset(
+        PresetType::Impersonate,
+        NarratorMode::InteractiveFiction,
+        "imp_if".into(),
+    );
+
+    assert_eq!(
+        settings.active_preset_id(PresetType::System, NarratorMode::Novel),
+        "sys_n"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::System, NarratorMode::InteractiveFiction),
+        "sys_if"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::Quantifier, NarratorMode::Novel),
+        "quant"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::Impersonate, NarratorMode::InteractiveFiction),
+        "imp_if"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::Quantifier, NarratorMode::InteractiveFiction),
+        "quantifier_default",
+        "an untouched slot keeps its per-mode default"
+    );
+}
+
+#[test]
+fn set_active_preset_touches_only_its_own_slot() {
+    use crate::domain::model::prompt_preset::PresetType;
+
+    let mut settings = AppSettings::default();
+    settings.set_active_preset(
+        PresetType::Quantifier,
+        NarratorMode::InteractiveFiction,
+        "new_q".into(),
+    );
+
+    assert_eq!(
+        settings.active_preset_id(PresetType::Quantifier, NarratorMode::InteractiveFiction),
+        "new_q"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::Quantifier, NarratorMode::Novel),
+        "quantifier_default"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::System, NarratorMode::Novel),
+        "system_default"
+    );
+}
+
+#[test]
+fn options_slot_ignores_the_narrator_mode() {
+    use crate::domain::model::prompt_preset::PresetType;
+
+    let mut settings = AppSettings::default();
+    settings.set_active_preset(PresetType::Options, NarratorMode::Novel, "opt".into());
+
+    assert_eq!(
+        settings.active_preset_id(PresetType::Options, NarratorMode::Novel),
+        "opt"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::Options, NarratorMode::InteractiveFiction),
+        "opt",
+        "an Options preset serves both modes from the one settings slot"
+    );
+    assert_eq!(settings.active_options_prompt_preset_id, "opt");
+}
+
+#[test]
+fn active_preset_id_falls_back_when_the_mode_has_no_bundle() {
+    use crate::domain::model::prompt_preset::PresetType;
+
+    let settings = AppSettings {
+        mode_preset_registry: ModePresetRegistry(Vec::new()),
+        active_options_prompt_preset_id: "opt_custom".into(),
+        ..AppSettings::default()
+    };
+
+    assert_eq!(
+        settings.active_preset_id(PresetType::System, NarratorMode::InteractiveFiction),
+        "system_if_default"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::Impersonate, NarratorMode::Novel),
+        "impersonate_default"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::Options, NarratorMode::Novel),
+        "opt_custom",
+        "the Options slot never consults the mode registry"
+    );
+}
+
+#[test]
+fn set_active_preset_adds_a_bundle_for_an_absent_mode() {
+    use crate::domain::model::prompt_preset::PresetType;
+
+    let mut settings = AppSettings::default();
+    settings.mode_preset_registry.0.clear();
+    settings.set_active_preset(PresetType::System, NarratorMode::Novel, "sys_n".into());
+
+    assert_eq!(settings.mode_preset_registry.0.len(), 1);
+    assert_eq!(
+        settings.active_preset_id(PresetType::System, NarratorMode::Novel),
+        "sys_n"
+    );
+    assert_eq!(
+        settings.active_preset_id(PresetType::System, NarratorMode::InteractiveFiction),
+        "system_if_default",
+        "the other mode still falls back to its own default"
+    );
 }

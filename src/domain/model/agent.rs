@@ -5,6 +5,39 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::model::state::game_state::GameState;
 
+/// A role the failure banner and the Settings role rows report on. A role's
+/// health is its newest LLM attempt across every game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// Writes the turn's narration.
+    Narrator,
+    /// Evaluates the turn and patches narrative state.
+    Quantifier,
+    /// Offers the pickable next actions.
+    Options,
+    /// Fires the configured trigger conditions.
+    Trigger,
+}
+
+impl Role {
+    pub const ALL: [Role; 4] = [
+        Role::Narrator,
+        Role::Quantifier,
+        Role::Options,
+        Role::Trigger,
+    ];
+
+    /// The `agent_name` this role's LLM Messages rows carry.
+    pub const fn agent_name(self) -> &'static str {
+        match self {
+            Role::Narrator => "narrator",
+            Role::Quantifier => "quantifier",
+            Role::Options => "options",
+            Role::Trigger => "trigger",
+        }
+    }
+}
+
 /// The registry's dispatch axis — agents declare the pipeline position
 /// where they run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

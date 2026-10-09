@@ -3,14 +3,12 @@
 
 use std::sync::Arc;
 
+use crate::adapters::driven::storage::llm_messages::LLM_MESSAGE_RETENTION_LIMIT;
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
-use crate::application::ports::llm_provider::{
-    AGENT_NARRATOR, AGENT_OPTIONS, AGENT_QUANTIFIER, AGENT_TRIGGER,
-};
+use crate::domain::model::agent::Role;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::application::message_service::MessageService;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageEntry;
 use crate::error::EngineError;
 
@@ -18,8 +16,7 @@ use crate::application::debug::DebugStateView;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoleHealth {
-    pub role: String,
-    pub label: String,
+    pub role: Role,
     pub backend_model: Option<String>,
     pub last_error: Option<String>,
 }
@@ -133,10 +130,12 @@ impl GameViewQuery {
         let dynamic_rooms: Vec<String> =
             game_state.movement.dynamic_rooms.keys().cloned().collect();
 
-        let last_error = match &game_state.narrative.input_buffer.status {
-            GenerationStatus::Error(msg) => Some(msg.clone()),
-            _ => None,
-        };
+        let last_error = game_state
+            .narrative
+            .input_buffer
+            .status
+            .failure()
+            .map(|failure| failure.raw.clone());
 
         Ok(DebugStateView {
             current_room_id: game_state.movement.current_room_id.clone(),
@@ -189,37 +188,26 @@ impl GameViewQuery {
     }
 
     pub fn role_health(&self) -> Result<Vec<RoleHealth>, ApplicationError> {
-        const ROLES: [(&str, &str); 4] = [
-            (AGENT_NARRATOR, "Narrator"),
-            (AGENT_QUANTIFIER, "Quantifier"),
-            (AGENT_OPTIONS, "Options"),
-            (AGENT_TRIGGER, "Trigger"),
-        ];
-
-        let messages = self.storage.latest_llm_message_per_agent()?;
-        let health = ROLES
+        // Retention keeps the whole table inside one window, so reading it
+        // whole sees every role's newest attempt however long ago it ran.
+        let messages = self
+            .storage
+            .list_latest_llm_messages(LLM_MESSAGE_RETENTION_LIMIT)?;
+        let health = Role::ALL
             .iter()
-            .map(|(role, label)| {
-                let newest = messages.iter().find(|m| m.agent_name == *role);
+            .map(|role| {
+                let newest = messages
+                    .iter()
+                    .filter(|message| message.agent_name == role.agent_name())
+                    .max_by_key(|message| (message.created_at, message.id));
                 RoleHealth {
-                    role: (*role).to_string(),
-                    label: (*label).to_string(),
+                    role: *role,
                     backend_model: newest.map(|m| format!("{} {}", m.backend_name, m.model_name)),
                     last_error: newest.and_then(|m| m.error_message.clone()),
                 }
             })
             .collect();
         Ok(health)
-    }
-
-    pub fn get_generating_status(
-        &self,
-    ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-        let game_state = self.message_service.load_or_fresh();
-        Ok((
-            game_state.narrative.input_buffer.status.clone(),
-            game_state.narrative.input_buffer.phase.clone(),
-        ))
     }
 
     pub fn active_quantifier_prompt(&self) -> String {

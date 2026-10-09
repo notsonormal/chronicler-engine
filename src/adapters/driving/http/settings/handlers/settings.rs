@@ -5,17 +5,19 @@ use axum::body::Body;
 use axum::{Form, extract::State, response::Html, response::IntoResponse, response::Response};
 
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::builders::headers::role_label;
 use crate::adapters::driving::http::settings::templates::settings::{
     ConnectionFormTemplate, ConnectionTestResultTemplate, SettingsTemplate, TextCheckCardTemplate,
 };
 use crate::adapters::driving::http::utils::error::{
-    action_error_response, action_refusal_response, error_disclosure, raw_error_detail,
-    render_error,
+    action_error_response, action_failure_response, action_refusal_response, error_disclosure,
+    raw_error_detail, render_error,
 };
 use crate::adapters::driving::http::utils::handler_helpers::{
     generate_storage_id, opt_string, render_template,
 };
 use crate::application::connection_test_service::ConnectionTestResult;
+use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
 use crate::error::EngineError;
@@ -38,10 +40,10 @@ fn render_settings_panel(app_state: &AppState, error: Option<&EngineError>) -> H
 fn roles_using(settings: &AppSettings, connection_id: &str) -> Vec<&'static str> {
     let mut roles = Vec::new();
     if settings.narration_connection_id == connection_id {
-        roles.push("Narrator");
+        roles.push(role_label(Role::Narrator));
     }
     if settings.quantifier_connection_id == connection_id {
-        roles.push("Quantifier");
+        roles.push(role_label(Role::Quantifier));
     }
     roles
 }
@@ -101,7 +103,7 @@ pub struct RoleForm {
 pub async fn save_text_check_handler(
     State(app_state): State<AppState>,
     Form(form): Form<TextCheckForm>,
-) -> Html<String> {
+) -> Response<Body> {
     let mode = match form.check_mode.as_str() {
         "spell" => TextCheckMode::Spell,
         "grammar" => TextCheckMode::Grammar,
@@ -117,8 +119,10 @@ pub async fn save_text_check_handler(
     });
 
     match outcome {
-        Ok(updated) => render_template(TextCheckCardTemplate::from_settings(&updated, "Saved")),
-        Err(e) => Html(render_error(&e.to_string())),
+        Ok(updated) => {
+            render_template(TextCheckCardTemplate::from_settings(&updated, "Saved")).into_response()
+        }
+        Err(e) => action_failure_response(format!("Save failed: {e}")),
     }
 }
 

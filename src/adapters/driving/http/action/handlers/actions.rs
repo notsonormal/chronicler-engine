@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::application::errors::ProcessActionResult;
 use crate::domain::model::action::Action;
-use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::headers::add_status_swap_headers;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
@@ -84,8 +83,7 @@ pub async fn action_check_handler(
         }
     };
 
-    if settings.text_check.mode == TextCheckMode::Disabled || !settings.text_check.enable_auto_check
-    {
+    if !settings.text_check.effective_enable_auto_check() {
         return dispatch_with_status_headers(&state, command).await;
     }
 

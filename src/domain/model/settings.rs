@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::model::agent::AgentConfig;
 use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::utils::settings_defaults;
 use crate::error::EngineError;
 
@@ -98,6 +99,29 @@ pub struct ModePresetBundle {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModePresetRegistry(pub Vec<ModePresetBundle>);
 
+impl ModePresetBundle {
+    /// `preset_type`'s id in this bundle. `None` for [`PresetType::Options`],
+    /// which has no bundle slot.
+    pub fn slot(&self, preset_type: PresetType) -> Option<&str> {
+        match preset_type {
+            PresetType::System => Some(&self.system_prompt_preset_id),
+            PresetType::Quantifier => Some(&self.quantifier_prompt_preset_id),
+            PresetType::Impersonate => Some(&self.impersonate_prompt_preset_id),
+            PresetType::Options => None,
+        }
+    }
+
+    /// The writable form of [`Self::slot`].
+    pub fn slot_mut(&mut self, preset_type: PresetType) -> Option<&mut String> {
+        match preset_type {
+            PresetType::System => Some(&mut self.system_prompt_preset_id),
+            PresetType::Quantifier => Some(&mut self.quantifier_prompt_preset_id),
+            PresetType::Impersonate => Some(&mut self.impersonate_prompt_preset_id),
+            PresetType::Options => None,
+        }
+    }
+}
+
 impl Default for ModePresetRegistry {
     fn default() -> Self {
         Self(vec![
@@ -108,12 +132,16 @@ impl Default for ModePresetRegistry {
 }
 
 impl ModePresetRegistry {
+    /// The stored bundle for `mode`, or `None` when the list has no entry for
+    /// it.
+    pub fn stored_bundle(&self, mode: NarratorMode) -> Option<&ModePresetBundle> {
+        self.0.iter().find(|bundle| bundle.mode == mode)
+    }
+
     /// The bundle for `mode`, or the constructed default when the list has
     /// no entry for it.
     pub fn bundle_for(&self, mode: NarratorMode) -> ModePresetBundle {
-        self.0
-            .iter()
-            .find(|b| b.mode == mode)
+        self.stored_bundle(mode)
             .cloned()
             .unwrap_or_else(|| settings_defaults::default_bundle_for_mode(mode))
     }
@@ -232,18 +260,21 @@ impl Default for TextCheckSettings {
 }
 
 impl TextCheckSettings {
-    /// Disabled mode can never carry auto-check, so the invariant lives here: a
-    /// legacy row storing the inconsistent pair (`mode: Disabled` with
-    /// `enable_auto_check: true`) still reads false, and the write path
-    /// normalises through the same predicate.
+    /// Disabled mode can never carry auto-check, so the invariant lives in
+    /// [`Self::normalised_auto_check`]: a legacy row storing the inconsistent
+    /// pair (`mode: Disabled` with `enable_auto_check: true`) still reads false,
+    /// and the write path normalises through the same rule.
     pub fn effective_enable_auto_check(&self) -> bool {
-        self.enable_auto_check && !matches!(self.mode, TextCheckMode::Disabled)
+        self.normalised_auto_check(self.enable_auto_check)
     }
 
     pub fn set_mode_and_auto_check(&mut self, mode: TextCheckMode, requested_auto_check: bool) {
         self.mode = mode;
-        self.enable_auto_check = requested_auto_check;
-        self.enable_auto_check = self.effective_enable_auto_check();
+        self.enable_auto_check = self.normalised_auto_check(requested_auto_check);
+    }
+
+    fn normalised_auto_check(&self, requested_auto_check: bool) -> bool {
+        requested_auto_check && !matches!(self.mode, TextCheckMode::Disabled)
     }
 }
 
@@ -406,6 +437,32 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
+    /// The id the active slot for `preset_type` holds in `mode`. Options presets
+    /// are mode-agnostic, so `mode` is ignored for [`PresetType::Options`].
+    pub fn active_preset_id(&self, preset_type: PresetType, mode: NarratorMode) -> &str {
+        if !preset_type.is_mode_tagged() {
+            return &self.active_options_prompt_preset_id;
+        }
+        self.mode_preset_registry
+            .stored_bundle(mode)
+            .and_then(|bundle| bundle.slot(preset_type))
+            .unwrap_or_else(|| settings_defaults::default_preset_id(preset_type, mode))
+    }
+
+    /// Points `preset_type`'s active slot in `mode` at `id`. Options presets are
+    /// mode-agnostic, so they write the settings-level default instead.
+    pub fn set_active_preset(&mut self, preset_type: PresetType, mode: NarratorMode, id: String) {
+        if !preset_type.is_mode_tagged() {
+            self.active_options_prompt_preset_id = id;
+            return;
+        }
+        let mut bundle = self.mode_preset_registry.bundle_for(mode);
+        if let Some(slot) = bundle.slot_mut(preset_type) {
+            *slot = id;
+            self.mode_preset_registry.set_bundle(bundle);
+        }
+    }
+
     pub fn find_connection(&self, id: &str) -> Option<&LlmProviderConfig> {
         self.connections.iter().find(|c| c.id == id)
     }

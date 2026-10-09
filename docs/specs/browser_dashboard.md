@@ -147,6 +147,7 @@ Then the error is gone
 Given a role is degraded
 When the header poll carries the degraded-role banner
 Then the banner is visible and reports itself as status
+And the banner names the role, its failure effect, and the banner's engine-wide scope
 And its Details control opens the anchored disclosure
 And that disclosure names each role with its backend and model
 ```
@@ -285,4 +286,15 @@ And the world row is still in the list
 When the client confirms that game row's Reset and the server fails it
 Then the game row shows its own short failure message
 And the banner is not raised
+```
+
+#### Scenario 16.35: A refused connection edit keeps its page and renders the failure inline
+
+```gherkin
+Given the Settings panel is showing a saved connection's Edit form page
+And the form page is the same node as before the submission
+When the client submits the form and the server refuses it
+Then the form page is still in the document
+And the form shows an inline error naming the failure
+And the raw server text is reachable in that error's disclosure
 ```

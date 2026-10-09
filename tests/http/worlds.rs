@@ -304,6 +304,12 @@ async fn test_world_edit_form_renders_posture_selects_http() {
         html.contains(r#"id="world-posture-status""#),
         "the posture status target must be rendered: {html}"
     );
+    // The slot a failed create or update reports into, so the client keeps the
+    // panel the failure describes.
+    assert!(
+        html.contains(r#"data-error-slot="world-form""#),
+        "the world form must carry its own error slot: {html}"
+    );
     assert!(
         html.contains(r#"hx-post="/worlds/posture_world/posture""#),
         "the posture selects must auto-save to this world: {html}"
@@ -388,8 +394,8 @@ async fn test_world_create_existing_key_is_refused_http() {
 }
 
 // A storage failure is not a client refusal: the create handler answers the
-// shared error fragment with a 200, unlike the duplicate-key refusal's 400 and
-// the posture endpoint's 500 on the same storage seam.
+// shared error fragment with a 500, so the client reports it in the world
+// form's own slot rather than swapping it into the panel it describes.
 // [docs/specs/worlds.md] SCENARIO: 25.9
 #[tokio::test]
 async fn test_world_create_storage_failure_renders_error_fragment_http() {
@@ -416,8 +422,8 @@ async fn test_world_create_storage_failure_renders_error_fragment_http() {
 
     assert_eq!(
         resp.status(),
-        http::StatusCode::OK,
-        "a storage failure is rendered in-fragment with a 200, not a 500"
+        http::StatusCode::INTERNAL_SERVER_ERROR,
+        "a storage failure answers non-2xx so the client keeps the panel in place"
     );
     let body = response_body(resp).await;
     assert!(

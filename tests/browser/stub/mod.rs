@@ -6,11 +6,16 @@
 #[allow(unused_imports)]
 pub use super::*;
 
+mod announcements;
 mod dashboard;
+mod failure_display;
+mod form_failures;
 mod invariants;
 mod llm_messages;
 mod options;
 mod settings;
 mod slash_menu;
 mod story_log;
+mod story_log_edit;
+mod support;
 mod swipes;

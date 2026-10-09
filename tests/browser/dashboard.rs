@@ -2,8 +2,6 @@
 
 use std::time::Duration;
 
-use playwright_rs::expect;
-
 use super::*;
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.5
@@ -59,13 +57,6 @@ async fn test_status_updates_during_generation() {
         TEST_PERSONA,
         |page, _port| async move {
             send_action(&page, "wait").await;
-
-            let status_locator = page.locator("#status-display").await;
-            let _ = expect(status_locator)
-                .with_timeout(Duration::from_millis(500))
-                .not()
-                .to_contain_text("Ready")
-                .await;
 
             let status_text = page
                 .locator("#status-display")

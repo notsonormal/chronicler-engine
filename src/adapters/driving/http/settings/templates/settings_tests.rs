@@ -1,6 +1,7 @@
 use askama::Template;
 
 use crate::application::games::view_query::RoleHealth;
+use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode, TextCheckSettings};
 use crate::adapters::driving::http::settings::templates::{
@@ -41,10 +42,9 @@ fn two_connection_settings() -> AppSettings {
     }
 }
 
-fn health(role: &str, backend: Option<&str>, error: Option<&str>) -> RoleHealth {
+fn health(role: Role, backend: Option<&str>, error: Option<&str>) -> RoleHealth {
     RoleHealth {
-        role: role.to_string(),
-        label: role.to_string(),
+        role,
         backend_model: backend.map(str::to_string),
         last_error: error.map(str::to_string),
     }
@@ -111,7 +111,7 @@ fn test_no_calls_yet_health_renders_for_each_role() {
 fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
     let settings = two_connection_settings();
     let roles = vec![health(
-        "narrator",
+        Role::Narrator,
         Some("Mock mock"),
         Some("connection refused"),
     )];
@@ -124,8 +124,15 @@ fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
         html.contains(r##"<use href="#i-triangle-alert""##),
         "the degraded marker must carry an icon, or the cue is the colour alone: {html}"
     );
-    assert!(html.contains(r#"class="error-disclosure""#));
+    assert!(
+        html.contains(r#"class="error-disclosure""#),
+        "the row must carry the shared disclosure: {html}"
+    );
     assert!(html.contains("error-details-toggle"));
+    assert!(
+        html.contains("Narrator failed — the turn was left unnarrated"),
+        "the row's message must name the role's failure once, without the header's engine-wide suffix: {html}"
+    );
     assert!(
         html.contains(r#"<pre class="error-detail-raw">connection refused</pre>"#),
         "the raw failure text must be reachable in the disclosure: {html}"
@@ -135,7 +142,7 @@ fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
 #[test]
 fn test_healthy_role_renders_healthy() {
     let settings = two_connection_settings();
-    let roles = vec![health("quantifier", Some("Mock mock"), None)];
+    let roles = vec![health(Role::Quantifier, Some("Mock mock"), None)];
     let html = SettingsTemplate::from_settings(&settings, &roles, None)
         .render()
         .unwrap();
@@ -149,7 +156,7 @@ fn test_refusal_message_rides_inside_the_connections_panel() {
     let settings = two_connection_settings();
     let refusal = EngineError::Validation("Narrator uses this connection".to_string());
     let roles = vec![health(
-        "narrator",
+        Role::Narrator,
         Some("Mock mock"),
         Some("connection refused"),
     )];

@@ -45,7 +45,7 @@ impl SettingsService {
                 settings.connections.push(connection.clone());
                 Ok(settings.clone())
             })
-            .map_err(Self::settings_error_to_application)
+            .map_err(ApplicationError::from_engine_error)
     }
 
     /// Apply `edit` to the connection with `id`, refusing a name already used
@@ -72,7 +72,7 @@ impl SettingsService {
                 Self::ensure_connection_name_available(settings, &name, Some(id))?;
                 Ok((updated, is_narrator, is_quantifier))
             })
-            .map_err(Self::settings_error_to_application)
+            .map_err(ApplicationError::from_engine_error)
     }
 
     fn ensure_connection_name_available(
@@ -95,13 +95,6 @@ impl SettingsService {
                 "A connection named '{}' already exists",
                 name.trim()
             )))
-        }
-    }
-
-    fn settings_error_to_application(error: EngineError) -> ApplicationError {
-        match error {
-            EngineError::Validation(message) => ApplicationError::Validation(message),
-            other => ApplicationError::Engine(other),
         }
     }
 }

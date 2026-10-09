@@ -34,7 +34,7 @@ async fn wait_for_swipe_counter(page: &playwright_rs::Page, expected: &str) {
 async fn option_item_count(page: &playwright_rs::Page) -> usize {
     page.query_selector_all("#options-dock .option-item")
         .await
-        .unwrap_or_default()
+        .expect("the options dock query should succeed")
         .len()
 }
 

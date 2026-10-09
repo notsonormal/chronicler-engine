@@ -99,14 +99,12 @@ And the stored World keeps its name, description, and map
 
 ### World creation storage failures
 
-#### Scenario 25.9: A storage failure during world creation renders the error fragment with a 200
-
-A storage failure is not a client refusal, so it keeps the panel's in-fragment rendering: the create handler answers 200 carrying the shared error fragment rather than a 500.
+#### Scenario 25.9: A storage failure during world creation renders the error fragment with a 500
 
 ```gherkin
 Given a storage that rejects world creation
 When the client POST /worlds with a valid World form
-Then the response status is "200 OK" (not a 500)
+Then the response status is "500 Internal Server Error"
 And the body carries the error fragment naming the storage failure
 ```
 

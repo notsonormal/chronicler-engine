@@ -11,7 +11,9 @@ use crate::application::errors::ApplicationError;
 use crate::application::errors::ProcessActionResult;
 use crate::domain::model::map::Room;
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{
+    GenerationFailureKind, GenerationPhase, GenerationStatus,
+};
 use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
 use crate::application::agents::registry::AgentRegistry;
@@ -209,7 +211,7 @@ async fn test_retry_no_snapshot() {
 
     let state = app.message_service.load_or_fresh();
     assert!(
-        matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("Retry failed: no anchor message")),
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref failure) if failure.raw.contains("Retry failed: no anchor message")),
         "Should record retry error when no anchor message exists, got {:?}",
         state.narrative.input_buffer.status
     );
@@ -340,7 +342,7 @@ async fn test_retry_event_storage_error_on_pre_event() {
     assert!(
         matches!(
             state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref msg) if msg.contains("simulated load_by_id failure"),
+            GenerationStatus::Error(ref failure) if failure.raw.contains("simulated load_by_id failure"),
         ),
         "Should set error status on storage failure, got {:?}",
         state.narrative.input_buffer.status
@@ -357,7 +359,7 @@ async fn test_retry_event_missing_trigger_context() {
 
     let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error on TriggerMissing, got {other:?}"),
     };
     assert!(
@@ -421,7 +423,7 @@ async fn test_retry_event_trigger_narration_fails() {
     assert!(
         matches!(
             state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref msg) if msg.contains("Trigger narration failed"),
+            GenerationStatus::Error(ref failure) if failure.raw.contains("Trigger narration failed"),
         ),
         "Should set error status when trigger narration fails, got {:?}",
         state.narrative.input_buffer.status
@@ -743,12 +745,7 @@ async fn test_retry_recovers_after_llm_failure() {
         .execute_action_with_inputs("look".to_string(), false, None);
     let after_fail = app.message_service.load_or_fresh();
     assert!(
-        after_fail
-            .narrative
-            .input_buffer
-            .status
-            .error_message()
-            .is_some(),
+        after_fail.narrative.input_buffer.status.failure().is_some(),
         "First action should fail, got {:?}",
         after_fail.narrative.input_buffer.status
     );
@@ -810,7 +807,7 @@ async fn test_retry_room_not_found_sets_error() {
     let state = app.message_service.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref msg) if msg.contains("Room not found")),
+            GenerationStatus::Error(ref failure) if failure.raw.contains("Room not found")),
         "Expected 'Room not found' error, got {:?}",
         state.narrative.input_buffer.status
     );
@@ -868,8 +865,10 @@ async fn test_retry_empty_narration_sets_error() {
     let state = app.message_service.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref msg) if msg.contains("empty")),
-        "Expected 'empty' in error message, got {:?}",
+            GenerationStatus::Error(ref failure)
+                if failure.raw.contains("empty")
+                    && failure.kind == GenerationFailureKind::UnreadableAnswer),
+        "Expected an unreadable-answer failure, got {:?}",
         state.narrative.input_buffer.status
     );
 }
@@ -997,7 +996,7 @@ async fn test_retry_event_empty_continuation_triggers_error() {
     app.pipeline.retry_last_response();
     let state = app.message_service.load_or_fresh();
     assert!(
-        matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref failure) if failure.raw.contains("empty response")),
         "Should set error status when continuation text is empty, got {:?}",
         state.narrative.input_buffer.status
     );
@@ -1083,7 +1082,7 @@ async fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
 
     let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error on world fetch failure, got {other:?}"),
     };
     assert!(
@@ -1123,7 +1122,7 @@ async fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
 
     let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error on persona fetch failure, got {other:?}"),
     };
     assert!(
@@ -1160,7 +1159,7 @@ async fn retry_records_canonical_game_not_found_when_game_missing() {
 
     let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error, got {other:?}"),
     };
     assert!(
@@ -1249,7 +1248,7 @@ async fn test_retry_records_missing_snapshot_id() {
 
     let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error on missing snapshot, got {other:?}"),
     };
     assert!(
@@ -1280,7 +1279,7 @@ async fn test_retry_returns_internal_error_when_anchor_has_no_snapshot_id() {
     let state = app.message_service.load_or_fresh();
     assert!(
         matches!(state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref msg) if msg.contains("no snapshot_id")),
+            GenerationStatus::Error(ref failure) if failure.raw.contains("no snapshot_id")),
         "Should persist Error status indicating the snapshot is missing, got {:?}",
         state.narrative.input_buffer.status
     );
@@ -1310,7 +1309,7 @@ async fn test_retry_returns_internal_error_when_snapshot_row_missing() {
 
     let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error on missing snapshot, got {other:?}"),
     };
     assert!(
@@ -1745,7 +1744,7 @@ async fn test_retry_flow_event_mode_continues_trigger() {
 fn assert_error_status(app: &AppState, expected_substring: &str) {
     let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error, got {other:?}"),
     };
     assert!(
@@ -1977,12 +1976,12 @@ fn test_retry_heals_stale_status_before_validation_error() {
         result.is_err(),
         "retry should fail with no input to retry, got {result:?}"
     );
-    let (status, _) = app
-        .game_view_query
-        .get_generating_status()
-        .expect("get_generating_status should succeed");
+    let persisted = app
+        .message_service
+        .load_expecting_valid_state()
+        .expect("the healed snapshot should load");
     assert_eq!(
-        status,
+        persisted.narrative.input_buffer.status,
         GenerationStatus::Idle,
         "stale Generating should be healed before the validation error returns"
     );

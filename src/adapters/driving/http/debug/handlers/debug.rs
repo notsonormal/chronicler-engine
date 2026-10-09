@@ -23,11 +23,10 @@ pub async fn debug_state_handler(
 }
 
 pub async fn debug_is_generating_handler(State(state): State<AppState>) -> String {
-    state
-        .game_view_query
-        .get_generating_status()
-        .map(|(status, _)| status.is_generating().to_string())
-        .unwrap_or_else(|_| "false".to_string())
+    // The generation registry is the live truth; the persisted status is a
+    // record that can disagree with it.
+    let game_id = state.game_catalogue.current_game_id();
+    state.generation_gate.is_busy(game_id).to_string()
 }
 
 pub async fn debug_backend_handler(State(state): State<AppState>) -> Json<DebugBackendResponse> {

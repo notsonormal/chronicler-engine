@@ -2,6 +2,8 @@
 
 use std::sync::{Arc, Barrier};
 
+use chrono::{TimeZone, Utc};
+
 use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::db::DbPool;
@@ -89,24 +91,55 @@ fn test_list_presets_quantifier_only() {
 }
 
 #[test]
-fn test_list_presets_ordered_by_updated_at_desc() {
+fn test_list_presets_keeps_the_insertion_order() {
+    // `PromptPreset` carries no timestamps, so the in-memory backend has no
+    // `updated_at` to order by and lists the library in insertion order.
     let storage = create_storage();
-    let first = make_system_preset("first", "First");
-    storage.save_preset(&first).unwrap();
-    // NOTE: Sleeps are intentional: SQLite stores timestamps with millisecond
-    // precision, so ordering by updated_at requires distinct timestamps.
-    std::thread::sleep(std::time::Duration::from_millis(15));
-    let second = make_system_preset("second", "Second");
-    storage.save_preset(&second).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(15));
-    let third = make_system_preset("third", "Third");
-    storage.save_preset(&third).unwrap();
+    storage
+        .save_preset(&make_system_preset("first", "First"))
+        .unwrap();
+    storage
+        .save_preset(&make_system_preset("second", "Second"))
+        .unwrap();
+    storage
+        .save_preset(&make_system_preset("third", "Third"))
+        .unwrap();
 
     let presets = storage.list_presets(PresetType::System).unwrap();
 
-    assert_eq!(presets.len(), 3, "Should have 3 presets");
     let ids: Vec<_> = presets.iter().map(|p| p.id.as_str()).collect();
-    assert!(ids.contains(&"first") && ids.contains(&"second") && ids.contains(&"third"));
+    assert_eq!(ids, ["first", "second", "third"]);
+}
+
+#[test]
+fn test_sqlite_list_presets_ordered_by_updated_at_desc() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone(), 1);
+
+    // Explicit timestamps in the stored format (RFC 3339), inserted oldest
+    // last, so only the query's `ORDER BY updated_at DESC` can order them.
+    let ordered = [
+        ("oldest", Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()),
+        ("middle", Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap()),
+        ("newest", Utc.with_ymd_and_hms(2026, 1, 3, 0, 0, 0).unwrap()),
+    ];
+    {
+        let conn = pool.conn();
+        for (id, updated_at) in ordered.iter().rev() {
+            conn.execute(
+                "INSERT INTO prompt_presets
+                 (id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at, allowed_modes)
+                 VALUES (?1, ?1, 'system', NULL, NULL, NULL, NULL, 0, ?2, ?2, '[]')",
+                rusqlite::params![id, updated_at.to_rfc3339()],
+            )
+            .expect("test setup: raw insert must succeed");
+        }
+    }
+
+    let presets = storage.list_presets(PresetType::System).unwrap();
+
+    let ids: Vec<_> = presets.iter().map(|p| p.id.as_str()).collect();
+    assert_eq!(ids, ["newest", "middle", "oldest"]);
 }
 
 #[test]

@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
+use crate::error::Result;
 use crate::domain::model::utils::name_is_available;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::error::{EngineError, Result};
 
 #[derive(Clone)]
 pub struct PromptPresetService {
@@ -40,14 +40,7 @@ impl PromptPresetService {
     pub fn save_preset(&self, preset: &PromptPreset) -> std::result::Result<(), ApplicationError> {
         self.storage
             .save_preset(preset)
-            .map_err(Self::preset_error_to_application)
-    }
-
-    fn preset_error_to_application(error: EngineError) -> ApplicationError {
-        match error {
-            EngineError::Validation(message) => ApplicationError::Validation(message),
-            other => ApplicationError::Engine(other),
-        }
+            .map_err(ApplicationError::from_engine_error)
     }
 
     pub fn delete_preset(&self, id: &str) -> Result<()> {

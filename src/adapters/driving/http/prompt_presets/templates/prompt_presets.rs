@@ -3,9 +3,10 @@
 
 use askama::Template;
 
-use crate::adapters::driving::http::builders::presets::{options_card_view, preset_card_view};
+use crate::adapters::driving::http::builders::presets::preset_card_view;
 use crate::adapters::driving::http::view_models::SafeHtml;
 use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::settings::AppSettings;
 
 #[derive(Template)]
 #[template(
@@ -171,42 +172,32 @@ pub struct PromptPresetsTemplate {
     pub quantifier_presets: Vec<PromptPreset>,
     pub impersonate_presets: Vec<PromptPreset>,
     pub options_presets: Vec<PromptPreset>,
-    pub active_system: ModeActiveIds,
-    pub active_quantifier: ModeActiveIds,
-    pub active_impersonate: ModeActiveIds,
-    pub active_options: String,
+    /// The card partial owns the active-slot lookup, so the template needs the
+    /// settings the panel was rendered from rather than a pre-resolved ids list.
+    pub settings: AppSettings,
 }
 
 impl PromptPresetsTemplate {
-    fn cards(presets: &[PromptPreset], active: &ModeActiveIds) -> Vec<SafeHtml> {
+    fn cards(presets: &[PromptPreset], settings: &AppSettings) -> Vec<SafeHtml> {
         presets
             .iter()
-            .map(|preset| preset_card_view(preset, active))
+            .map(|preset| preset_card_view(preset, settings))
             .collect()
     }
 
     pub fn system_cards(&self) -> Vec<SafeHtml> {
-        Self::cards(&self.system_presets, &self.active_system)
+        Self::cards(&self.system_presets, &self.settings)
     }
 
     pub fn quantifier_cards(&self) -> Vec<SafeHtml> {
-        Self::cards(&self.quantifier_presets, &self.active_quantifier)
+        Self::cards(&self.quantifier_presets, &self.settings)
     }
 
     pub fn impersonate_cards(&self) -> Vec<SafeHtml> {
-        Self::cards(&self.impersonate_presets, &self.active_impersonate)
+        Self::cards(&self.impersonate_presets, &self.settings)
     }
 
     pub fn options_cards(&self) -> Vec<SafeHtml> {
-        self.options_presets
-            .iter()
-            .map(|preset| options_card_view(preset, &self.active_options))
-            .collect()
+        Self::cards(&self.options_presets, &self.settings)
     }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct ModeActiveIds {
-    pub novel: String,
-    pub interactive_fiction: String,
 }

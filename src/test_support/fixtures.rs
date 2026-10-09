@@ -629,6 +629,29 @@ pub fn dummy_message(text: &str) -> Message {
     Message::new(text, MessageType::Input, None, None)
 }
 
+/// A forensics record for a role's newest attempt, `created_offset_secs` away
+/// from now (negative for the past), so a test can order two attempts.
+pub fn llm_message(
+    agent: &str,
+    model: &str,
+    error: Option<&str>,
+    created_offset_secs: i64,
+) -> LlmMessage {
+    LlmMessage {
+        id: 0,
+        agent_name: agent.to_string(),
+        backend_name: "Mock".to_string(),
+        model_name: model.to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: error.map(str::to_string),
+        created_at: chrono::Utc::now() + chrono::Duration::seconds(created_offset_secs),
+    }
+}
+
 pub fn dummy_swipe(text: &str) -> Swipe {
     Swipe {
         text: text.to_string(),

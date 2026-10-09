@@ -47,10 +47,19 @@ Then each role row reports "No calls yet"
 When a role's newest recorded call failed
 And the client GET /fragment/settings
 Then that role row reports it as Degraded with a Details disclosure carrying the raw failure text
-And the Connections sub-tab shows a degraded marker
+And the Connections sub-tab shows a degraded marker whose tooltip names the engine-wide scope
 When a later call for that role succeeds
 And the client GET /fragment/settings
 Then that role row reports Healthy and the degraded marker is gone
+```
+
+#### Scenario 20.23: A failed Settings panel load reports the failure inside the panel
+
+```gherkin
+Given a fresh app state whose settings cannot be read
+When the client GET /fragment/settings
+Then the body carries the read failure text
+And the body carries no Settings panel
 ```
 
 ### POST /settings/text-check — auto-save
@@ -76,6 +85,16 @@ When the client POST /settings/text-check with check_mode="disabled" and the che
 Then the response is a 200
 And the stored check-before-sending is disabled
 And a following GET /fragment/settings renders "disabled" selected and the check box cleared and disabled
+```
+
+#### Scenario 20.22: A failed text-check save keeps the card
+
+```gherkin
+Given a fresh app state whose settings cannot be saved
+When the client POST /settings/text-check
+Then the response is a 500
+And the body carries the save failure text
+And the body carries no Text Check card
 ```
 
 ### Role rows
@@ -146,6 +165,18 @@ When the client POST /connections/add with conn_provider="bogus_provider", a nam
 Then the response is a 400
 And the body carries the unknown-backend failure text naming "bogus_provider"
 And a following GET /fragment/settings still lists the Connections panel and its connection rows
+```
+
+### GET /fragment/connections/{id}/edit — edit form
+
+#### Scenario 20.24: The connection Edit form reports an unknown connection inside the panel
+
+```gherkin
+Given a fresh app state
+When the client GET /fragment/connections/does-not-exist/edit
+Then the response is a 200
+And the body says the connection was not found
+And the body carries no connection form
 ```
 
 ### POST /connections/{id}/edit — update

@@ -65,8 +65,13 @@ async fn test_save_text_check_handler_spell_mode() {
     let response =
         save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
-    assert!(response.0.contains(r#"id="text-check-card"#));
-    assert!(response.0.contains("Saved"));
+    let body = body_text(response).await;
+    assert!(body.contains(r#"id="text-check-card"#));
+    assert!(body.contains("Saved"));
+    assert!(
+        body.contains(r#"data-error-slot="text-check-card""#),
+        "the card must carry the slot a failed save reports into: {body}"
+    );
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Spell);
@@ -134,17 +139,14 @@ async fn test_save_text_check_handler_disabled_clears_and_disables_checkbox() {
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Disabled);
     assert!(!settings.text_check.enable_auto_check);
+    let body = body_text(response).await;
     assert!(
-        !response
-            .0
-            .contains(r#"name="enable_auto_check" value="true" checked"#),
-        "the disabled card must render the check box unchecked: {}",
-        response.0
+        !body.contains(r#"name="enable_auto_check" value="true" checked"#),
+        "the disabled card must render the check box unchecked: {body}"
     );
     assert!(
-        response.0.contains("disabled"),
-        "the disabled card must render the check box disabled: {}",
-        response.0
+        body.contains("disabled"),
+        "the disabled card must render the check box disabled: {body}"
     );
 }
 

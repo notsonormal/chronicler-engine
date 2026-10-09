@@ -6,7 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 use askama::Template;
 
-use crate::adapters::driving::http::builders::headers::render_header_unlocked;
+use crate::adapters::driving::http::builders::headers::header_fragment_html;
 use crate::adapters::driving::http::templates::{
     CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrativeLogTemplate, OptionsDockTemplate,
     VisualSidebarTemplate,
@@ -95,7 +95,7 @@ impl AppState {
             .game_view_query
             .role_health()
             .map_err(|e| EngineError::Config(Self::render_error_context("header", e)))?;
-        render_header_unlocked(game_name, &roles)
+        header_fragment_html(game_name, &roles)
     }
 
     pub fn render_story_log(&self) -> Result<String> {
@@ -141,12 +141,13 @@ impl AppState {
             .game_view_query
             .get_current_options()
             .map_err(|e| EngineError::Config(Self::render_error_context("options dock", e)))?;
-        let (status, _phase) = self
-            .game_view_query
-            .get_generating_status()
-            .map_err(|e| EngineError::Config(Self::render_error_context("options dock", e)))?;
+        // The generation registry, not the persisted status, answers "is
+        // something generating?": the record can lag the live slot.
+        let is_busy = self
+            .generation_gate
+            .is_busy(self.game_catalogue.current_game_id());
 
-        let vm = OptionsDockViewModel::new(options, status.is_generating());
+        let vm = OptionsDockViewModel::new(options, is_busy);
         let template = OptionsDockTemplate::new(vm);
         template
             .render()

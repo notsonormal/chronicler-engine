@@ -1,13 +1,18 @@
 use askama::Template;
 
+use crate::adapters::driving::http::prompt_presets::templates::PromptPresetsTemplate;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::adapters::driving::http::prompt_presets::templates::{ModeActiveIds, PromptPresetsTemplate};
+use crate::domain::model::settings::{AppSettings, NarratorMode};
 
-fn mode_ids(novel: &str, interactive_fiction: &str) -> ModeActiveIds {
-    ModeActiveIds {
-        novel: novel.into(),
-        interactive_fiction: interactive_fiction.into(),
-    }
+fn settings_with_active_system(novel: &str, interactive_fiction: &str) -> AppSettings {
+    let mut settings = AppSettings::default();
+    settings.set_active_preset(PresetType::System, NarratorMode::Novel, novel.into());
+    settings.set_active_preset(
+        PresetType::System,
+        NarratorMode::InteractiveFiction,
+        interactive_fiction.into(),
+    );
+    settings
 }
 
 #[test]
@@ -30,12 +35,9 @@ fn test_prompt_presets_template_renders_system_presets() {
             },
         ],
         quantifier_presets: vec![],
-        active_system: mode_ids("custom-1", "default"),
-        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate: mode_ids("default", "default"),
         options_presets: vec![],
-        active_options: String::new(),
+        settings: settings_with_active_system("custom-1", "default"),
     };
 
     let html = template.render().unwrap();
@@ -55,12 +57,9 @@ fn test_prompt_presets_template_shows_active_badge() {
             ..Default::default()
         }],
         quantifier_presets: vec![],
-        active_system: mode_ids("custom-1", "default"),
-        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate: mode_ids("default", "default"),
         options_presets: vec![],
-        active_options: String::new(),
+        settings: settings_with_active_system("custom-1", "default"),
     };
 
     let html = template.render().unwrap();
@@ -80,12 +79,9 @@ fn test_prompt_presets_template_shows_default_badge() {
             ..Default::default()
         }],
         quantifier_presets: vec![],
-        active_system: mode_ids("other", "other"),
-        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate: mode_ids("default", "default"),
         options_presets: vec![],
-        active_options: String::new(),
+        settings: settings_with_active_system("other", "other"),
     };
 
     let html = template.render().unwrap();
@@ -97,12 +93,9 @@ fn test_prompt_presets_template_has_add_forms() {
     let template = PromptPresetsTemplate {
         system_presets: vec![],
         quantifier_presets: vec![],
-        active_system: mode_ids("default", "default"),
-        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate: mode_ids("default", "default"),
         options_presets: vec![],
-        active_options: String::new(),
+        settings: AppSettings::default(),
     };
 
     let html = template.render().unwrap();
@@ -123,12 +116,9 @@ fn test_prompt_presets_template_truncates_preview() {
             ..Default::default()
         }],
         quantifier_presets: vec![],
-        active_system: mode_ids("default", "default"),
-        active_quantifier: mode_ids("default", "default"),
         impersonate_presets: vec![],
-        active_impersonate: mode_ids("default", "default"),
         options_presets: vec![],
-        active_options: String::new(),
+        settings: AppSettings::default(),
     };
 
     let html = template.render().unwrap();

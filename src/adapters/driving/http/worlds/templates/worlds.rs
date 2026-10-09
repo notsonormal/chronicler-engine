@@ -106,6 +106,7 @@ impl WorldsPanelTemplate {
             <button type="submit" class="btn-primary">{{ submit_text }}</button>
             <button type="button" class="btn-cyan" hx-get="/fragment/worlds" hx-target=".worlds-panel" hx-swap="outerHTML">Cancel</button>
         </div>
+        <div class="inline-error-slot" data-error-slot="world-form" hidden></div>
         {% if is_edit %}
         <p class="form-scope-note">Cancel applies to the details fields only. Posture saves automatically.</p>
         {% endif %}
@@ -133,8 +134,6 @@ pub struct WorldFormTemplate {
     pub map_json: String,
     pub scenarios_json: String,
     pub posture_selects: SafeHtml,
-    pub narrative_perspective: String,
-    pub narrative_tense: String,
     pub options_always_on: bool,
     pub form_action: String,
     pub is_readonly: bool,
@@ -190,8 +189,6 @@ impl WorldFormTemplate {
                 auto_save_key,
             ),
             options_always_on: w.options_always_on,
-            narrative_perspective: w.narrative_perspective.as_str().to_string(),
-            narrative_tense: w.narrative_tense.as_str().to_string(),
             form_action: if is_edit {
                 format!("/worlds/{}", w.key)
             } else {

@@ -11,7 +11,9 @@ use crate::domain::model::quantifier::{
     QuantifierParseResult, QuantifierResult,
 };
 use crate::domain::model::state::game_state::{FreeActionContext, GameState, GameStateBuilder};
-use crate::domain::model::state::generation_status::{GenerationStatus, InputBuffer};
+use crate::domain::model::state::generation_status::{
+    GenerationFailure, GenerationFailureKind, GenerationStatus, InputBuffer,
+};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::scene_state::SceneState;
 use crate::domain::model::trigger::{
@@ -32,18 +34,19 @@ fn test_generation_state_status() {
 
     assert_eq!(buf.status, GenerationStatus::Idle);
     assert!(!buf.status.is_generating());
-    assert!(buf.status.error_message().is_none());
+    assert!(buf.status.failure().is_none());
 
-    buf.status = GenerationStatus::Error("LLM Error: 429 Too Many Requests".to_string());
-    assert_eq!(
-        buf.status,
-        GenerationStatus::Error("LLM Error: 429 Too Many Requests".to_string())
+    let failure = GenerationFailure::new(
+        GenerationFailureKind::Other,
+        "LLM Error: 429 Too Many Requests",
     );
-    assert!(buf.status.error_message().is_some());
+    buf.status = GenerationStatus::Error(failure.clone());
+    assert_eq!(buf.status, GenerationStatus::Error(failure));
+    assert!(buf.status.failure().is_some());
 
     buf.status = GenerationStatus::Generating;
     assert!(buf.status.is_generating());
-    assert!(buf.status.error_message().is_none());
+    assert!(buf.status.failure().is_none());
 }
 
 #[test]

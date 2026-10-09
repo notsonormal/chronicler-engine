@@ -14,7 +14,8 @@ Endpoints:
 ```gherkin
 Given an active Game whose newest Quantifier attempt carries an error message
 When the client GET /fragment/header
-Then the response carries a failure banner naming the Quantifier
+Then the response carries a failure banner naming the Quantifier and its failure effect
+And the banner states that role health covers every game
 And the banner's Details disclosure lists each role with the backend and model of its newest attempt
 And the raw failure text is reachable only inside that disclosure
 When a later Quantifier attempt succeeds and the client GET /fragment/header again
@@ -51,4 +52,13 @@ Given a Game whose last generation failed with a raw transport message
 When the client GET /status/generating
 Then the response carries one short user-facing line
 And the raw transport message is reachable only inside the response's disclosure
+```
+
+#### Scenario 38.5: A failure kind picks its own clamped line
+
+```gherkin
+Given a Game whose last generation failed because its active prompt preset is missing
+When the client GET /status/generating
+Then the response carries the missing-preset line, not the line for an unnamed failure
+And the raw text naming the missing preset is reachable only inside the response's disclosure
 ```

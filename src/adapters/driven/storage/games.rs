@@ -6,7 +6,6 @@ use crate::domain::model::game::{Game, NewGame};
 use crate::domain::model::settings::{
     AppSettings, ModePresetBundle, NarrativePerspective, NarrativeTense, NarratorMode,
 };
-use crate::domain::model::utils::game_name::default_display_name;
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
 
@@ -41,6 +40,8 @@ impl Storage {
         })
     }
 
+    /// A convenience for tests and fixtures: the legacy defaults a bare game
+    /// carries, written through the same path as a catalogue-created game.
     pub fn create_game(
         &self,
         world_name: &str,
@@ -49,35 +50,20 @@ impl Storage {
         persona_name: &str,
         name: &str,
     ) -> Result<u64, EngineError> {
-        self.with_backend_mut("create_game", |backend| match backend {
-            Backend::Sqlite { pool } => {
-                pool.insert_game(world_name, world_key, persona_key, persona_name, name)
-            }
-            Backend::InMemory(data) => {
-                let id = data.next_game_id;
-                data.next_game_id += 1;
-                let now = chrono::Utc::now();
-                data.games.push(Game {
-                    id,
-                    world_name: world_name.to_string(),
-                    world_key: world_key.to_string(),
-                    persona_key: persona_key.to_string(),
-                    persona_name: persona_name.to_string(),
-                    name: name.to_string(),
-                    display_name: default_display_name(name),
-                    created_at: now,
-                    updated_at: now,
-                    narrator_mode: NarratorMode::Novel,
-                    narrative_perspective: NarrativePerspective::Third,
-                    narrative_tense: NarrativeTense::Past,
-                    active_system_prompt_preset_id: "system_default".to_string(),
-                    active_quantifier_prompt_preset_id: "quantifier_default".to_string(),
-                    active_impersonate_prompt_preset_id: "impersonate_default".to_string(),
-                    active_options_prompt_preset_id: "options_default".to_string(),
-                    options_always_on: false,
-                });
-                Ok(id)
-            }
+        self.create_game_from_request(&NewGame {
+            world_name: world_name.to_string(),
+            world_key: world_key.to_string(),
+            persona_key: persona_key.to_string(),
+            persona_name: persona_name.to_string(),
+            name: name.to_string(),
+            narrator_mode: NarratorMode::Novel,
+            narrative_perspective: NarrativePerspective::Third,
+            narrative_tense: NarrativeTense::Past,
+            system_prompt_preset_id: "system_default".to_string(),
+            quantifier_prompt_preset_id: "quantifier_default".to_string(),
+            impersonate_prompt_preset_id: "impersonate_default".to_string(),
+            options_prompt_preset_id: "options_default".to_string(),
+            options_always_on: false,
         })
     }
 
@@ -95,7 +81,7 @@ impl Storage {
                     persona_key: request.persona_key.clone(),
                     persona_name: request.persona_name.clone(),
                     name: request.name.clone(),
-                    display_name: default_display_name(&request.name),
+                    display_name: request.display_name(),
                     created_at: now,
                     updated_at: now,
                     narrator_mode: request.narrator_mode,

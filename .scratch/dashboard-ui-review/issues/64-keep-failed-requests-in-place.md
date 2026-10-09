@@ -84,7 +84,9 @@ updated statuses, `browser_dashboard.md` 16.29–16.32; `dashboard.md`,
 added during the review fix). Unit assertions in `prompt_presets_tests.rs`.
 - **Deferred, same class.** `duplicate_preset_handler`, `activate_preset_handler`
 and `create_world_handler` keep their 200 failure shape; none are in this
-ticket's paths.
+ticket's paths. Closed later by
+[71](71-close-review-findings.md): all three answer non-2xx and
+`error_response` is deleted.
 - **Build.** Full gate green: architecture 1, guardrails 165, integration 1567
 (2 skipped), browser 68, 0 failed (`logs/build_20261007_195200.log`).
 - **State.** The combined 64+69 change is committed as `6077371b` on

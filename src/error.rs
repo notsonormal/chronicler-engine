@@ -119,6 +119,11 @@ pub enum EngineError {
     #[error("World not found: {0}")]
     WorldNotFound(String),
 
+    /// The active prompt preset is absent from the preset library; the id names
+    /// the slot's stored value.
+    #[error("Prompt preset not found: {0}")]
+    PresetNotFound(String),
+
     /// A world with this key already exists; the user-facing create path refuses to replace it.
     #[error("A world with key '{0}' already exists")]
     WorldAlreadyExists(String),

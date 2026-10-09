@@ -730,7 +730,7 @@ async fn test_duplicate_missing_preset_returns_error() {
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
@@ -787,7 +787,7 @@ async fn test_activate_missing_preset_returns_error() {
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
@@ -820,7 +820,7 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
         .oneshot(empty_post_request("/prompt-presets/if-only/activate"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(
         body,

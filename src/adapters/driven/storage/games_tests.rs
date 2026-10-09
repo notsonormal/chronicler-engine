@@ -224,6 +224,7 @@ fn test_create_game_persists_a_readable_display_name_sqlite() {
         )
         .unwrap();
     let game = storage.get_game(id).unwrap().unwrap();
+    assert_eq!(game.name, "Redmist Estate_2026-09-29_1");
     assert_eq!(game.display_name, "Redmist Estate — 29 Sep 2026 (1)");
 }
 

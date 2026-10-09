@@ -20,17 +20,22 @@ use axum::routing::{get, post};
 use axum::Router;
 use chrono::{TimeZone, Utc};
 
-use chronicler_engine::adapters::driving::http::builders::headers::add_status_swap_headers;
+use chronicler_engine::adapters::driving::http::builders::headers::{
+    add_status_swap_headers, header_fragment_html,
+};
 use chronicler_engine::adapters::driving::http::builders::presets::preset_edit_form_html;
 use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate,
 };
 use chronicler_engine::adapters::driving::http::utils::error::{
-    error_disclosure, generation_error_summary, raw_error_detail, render_error,
+    error_disclosure, generation_failure_summary, raw_error_detail, render_error,
 };
+use chronicler_engine::application::games::view_query::RoleHealth;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::llm_message::LlmMessage;
 use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig, NarratorMode};
+use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 use chronicler_engine::domain::model::state::message_types::{MessageEntry, MessageType};
 
 use super::server::{get_config_port, release_port_lock};
@@ -45,27 +50,20 @@ const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.
 const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
 
+/// The header the engine would render, degraded Quantifier and all, so the
+/// banner and its disclosure cannot drift from the shipped composition.
 fn header_html(degraded: bool) -> String {
-    use askama::Template;
-    use chronicler_engine::adapters::driving::http::templates::HeaderTemplate;
-
-    let header = HeaderTemplate {
-        game_name: "Test Realm_2026-09-17_1".to_string(),
-    }
-    .render()
-    .expect("render header");
-
-    let banner = if degraded {
-        error_disclosure(
-            "failure-banner-popover",
-            "Quantifier failed — using fallback NPC IDs",
-            "<div class=\"error-role degraded\"><span class=\"error-role-name\">Quantifier</span>
-             <span class=\"error-role-backend\">Mock mock</span></div>",
-        )
+    let roles = if degraded {
+        vec![RoleHealth {
+            role: Role::Quantifier,
+            backend_model: Some("Mock mock".to_string()),
+            last_error: Some("fallback NPC IDs used".to_string()),
+        }]
     } else {
-        String::new()
+        Vec::new()
     };
-    format!("{header}<div id=\"failure-banner-degraded\" hx-swap-oob=\"true\">{banner}</div>")
+
+    header_fragment_html("Test Realm_2026-09-17_1".to_string(), &roles).expect("render header")
 }
 
 const NARRATIVE_TEXT: &str = "Welcome to the Test World, Test Player! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine.\n\nThe tavern around you is warm and inviting. Wooden beams stretch across the ceiling, and a crackling fire in the hearth casts dancing shadows on the walls. The smell of fresh bread and mulled cider fills the air.\n\nBehind the bar, the bartender wipes down a mug and glances your way. \"First time in the Test Realm?\" he asks with a knowing smile. \"Don't worry, everyone here is friendly. Mostly.\"\n\nA merchant in the corner adjusts her pack and catches your eye. \"If you're heading north to the village square, mind the cobblestones. They get slippery after dark,\" she advises.\n\nYou take a moment to gather your bearings. The road ahead promises adventure, but for now, the warmth of the tavern offers a brief respite.";
@@ -223,7 +221,8 @@ pub enum StubStatus {
     Idle,
     /// The engine is generating; the poll answers the phase name.
     Phase(String),
-    /// A failed generation; the poll answers the error fragment.
+    /// A failed generation; the poll answers the error fragment, clamped to
+    /// the sentence for an unclassified failure over this raw text.
     Error(String),
 }
 
@@ -317,6 +316,10 @@ impl StubServer {
         {
             let _ = tx.send(());
         }
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
     }
 
     pub fn url(&self) -> String {
@@ -520,6 +523,19 @@ impl Drop for StubServer {
         }
         release_port_lock(self.addr.port());
     }
+}
+
+/// Waits until `addr` refuses connections, so a test that stopped its stub can
+/// rely on the next request failing instead of on a fixed sleep.
+pub async fn wait_until_port_closed(addr: SocketAddr) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        if tokio::net::TcpStream::connect(addr).await.is_err() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("{addr} still accepts connections 5s after its stub stopped");
 }
 
 fn stub_router(state: Arc<StubState>) -> Router {
@@ -813,10 +829,10 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
     let body = match status {
         StubStatus::Idle => "idle".to_string(),
         StubStatus::Phase(phase) => phase,
-        StubStatus::Error(message) => error_disclosure(
+        StubStatus::Error(raw) => error_disclosure(
             "status-error-popover",
-            &generation_error_summary(&message),
-            &raw_error_detail(&message),
+            generation_failure_summary(GenerationFailureKind::Other),
+            &raw_error_detail(&raw),
         ),
     };
     (

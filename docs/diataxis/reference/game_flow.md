@@ -30,7 +30,7 @@ flowchart TD
 
 ## Granular Status Phases
 
-`GenerationStatus` carries the coarse state (`Idle`, `Generating`, or `Error`). While it is `Generating`, `GenerationPhase` supplies the UI-facing stage.
+`GenerationStatus` carries the coarse state (`Idle`, `Generating`, or `Error`). While it is `Generating`, `GenerationPhase` supplies the UI-facing stage. `Error` carries a `GenerationFailure`: `kind` is the `GenerationFailureKind` the HTTP layer renders as a one-line sentence, and `raw` is the classified text behind the details disclosure. `GenerationFailure::from_engine_error` derives the kind from a typed `EngineError`, so no caller matches on message text.
 
 | Phase | Display text | Endpoint value | Active work |
 |---|---|---|---|

@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::settings::{ModePresetBundle, NarratorMode};
+use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::utils::xml::wrap_xml;
@@ -28,23 +28,11 @@ impl PresetType {
         }
     }
 
-    pub fn bundle_slot(self, bundle: &ModePresetBundle) -> &str {
-        match self {
-            PresetType::System => &bundle.system_prompt_preset_id,
-            PresetType::Quantifier => &bundle.quantifier_prompt_preset_id,
-            PresetType::Impersonate => &bundle.impersonate_prompt_preset_id,
-            PresetType::Options => "",
-        }
-    }
-
-    /// Writes `id` into this type's slot in `bundle`.
-    pub fn set_bundle_slot(self, bundle: &mut ModePresetBundle, id: String) {
-        match self {
-            PresetType::System => bundle.system_prompt_preset_id = id,
-            PresetType::Quantifier => bundle.quantifier_prompt_preset_id = id,
-            PresetType::Impersonate => bundle.impersonate_prompt_preset_id = id,
-            PresetType::Options => {}
-        }
+    /// Whether this type holds one active slot per narrator mode. Options
+    /// presets serve both modes from a single settings-level slot, so
+    /// `allowed_modes` does not gate their activation.
+    pub fn is_mode_tagged(self) -> bool {
+        !matches!(self, PresetType::Options)
     }
 }
 

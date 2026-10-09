@@ -11,7 +11,9 @@ use super::core::ActionPipeline;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{
+    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+};
 use crate::domain::model::state::message_types::MessageType;
 
 /// How a retry should reinterpret the last message.
@@ -58,27 +60,37 @@ impl ActionPipeline {
         let messages = match self.message_service.load_messages() {
             Ok(m) => m,
             Err(e) => {
-                self.persist_generation_error(format!("Retry failed: {e}"));
+                self.persist_generation_error(
+                    GenerationFailure::from_engine_error(&e).with_context("Retry failed"),
+                );
                 return;
             }
         };
 
         let Some(target) = self.resolve_retry_target(&messages) else {
-            self.persist_generation_error("Retry failed: no anchor message");
+            self.persist_generation_error(GenerationFailure::new(
+                GenerationFailureKind::Other,
+                "Retry failed: no anchor message",
+            ));
             return;
         };
 
         let snapshot = match self.storage.load_snapshot_by_id(target.snapshot_id) {
             Ok(Some(s)) => s,
             Ok(None) => {
-                self.persist_generation_error(format!(
-                    "Retry failed: no snapshot found for id {}",
-                    target.snapshot_id
+                self.persist_generation_error(GenerationFailure::new(
+                    GenerationFailureKind::Other,
+                    format!(
+                        "Retry failed: no snapshot found for id {}",
+                        target.snapshot_id
+                    ),
                 ));
                 return;
             }
             Err(e) => {
-                self.persist_generation_error(format!("Retry failed: {e}"));
+                self.persist_generation_error(
+                    GenerationFailure::from_engine_error(&e).with_context("Retry failed"),
+                );
                 return;
             }
         };
@@ -98,7 +110,10 @@ impl ActionPipeline {
                     match state.narrative.history.last_input_text() {
                         Some(text) => text,
                         None => {
-                            self.persist_generation_error("Retry failed: no input to retry");
+                            self.persist_generation_error(GenerationFailure::new(
+                                GenerationFailureKind::Other,
+                                "Retry failed: no input to retry",
+                            ));
                             return;
                         }
                     }
@@ -190,27 +205,37 @@ impl ActionPipeline {
     fn check_retry_anchor(&self) -> Result<(), ApplicationError> {
         let messages = self.message_service.load_messages()?;
         let Some((_, anchor_msg)) = self.message_service.find_retry_anchor_msg(&messages) else {
-            self.persist_generation_error("Retry failed: no anchor message");
+            self.persist_generation_error(GenerationFailure::new(
+                GenerationFailureKind::Other,
+                "Retry failed: no anchor message",
+            ));
             return Err(ApplicationError::internal(
                 "Retry failed: no anchor message",
             ));
         };
         let Some(snapshot_id) = anchor_msg.snapshot_id() else {
             let msg = "Retry failed: anchor message has no snapshot_id";
-            self.persist_generation_error(msg);
+            self.persist_generation_error(GenerationFailure::new(
+                GenerationFailureKind::Other,
+                msg,
+            ));
             return Err(ApplicationError::internal(msg));
         };
         match self.storage.load_snapshot_by_id(snapshot_id) {
             Ok(Some(_)) => Ok(()),
             Ok(None) => {
                 let msg = format!("Retry failed: no snapshot found for id {snapshot_id}");
-                self.persist_generation_error(msg.clone());
+                self.persist_generation_error(GenerationFailure::new(
+                    GenerationFailureKind::Other,
+                    msg.clone(),
+                ));
                 Err(ApplicationError::internal(msg))
             }
             Err(e) => {
-                let msg = format!("Retry failed: {e}");
-                self.persist_generation_error(msg.clone());
-                Err(ApplicationError::internal(msg))
+                self.persist_generation_error(
+                    GenerationFailure::from_engine_error(&e).with_context("Retry failed"),
+                );
+                Err(ApplicationError::internal(format!("Retry failed: {e}")))
             }
         }
     }
@@ -223,7 +248,10 @@ impl ActionPipeline {
             Self::finalize_phase_error(
                 &run,
                 Some(&mut state),
-                PhaseError::NarratorFailed("Retry failed: missing user-regen target".to_string()),
+                PhaseError::NarratorFailed(GenerationFailure::new(
+                    GenerationFailureKind::Other,
+                    "Retry failed: missing user-regen target",
+                )),
             );
             return Ok(());
         };

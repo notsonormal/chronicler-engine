@@ -730,7 +730,7 @@ async fn test_switch_swipe_handler_concurrent() {
     let storage = Arc::new(Storage::new_in_memory());
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .is_generating(true)
+        .claim_generation_slot()
         .build();
 
     let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();

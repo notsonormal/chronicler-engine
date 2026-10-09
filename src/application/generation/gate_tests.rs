@@ -106,8 +106,14 @@ fn test_reset_generating_status_sets_idle() {
         .release_generation_slot_for_game(game_id);
     let result = app.pipeline.reset_persisted_status();
     assert!(result.is_ok());
-    let (status, _) = app.game_view_query.get_generating_status().unwrap();
-    assert_eq!(status, GenerationStatus::Idle);
+    let persisted = app
+        .message_service
+        .load_expecting_valid_state()
+        .expect("the reset snapshot should load");
+    assert_eq!(
+        persisted.narrative.input_buffer.status,
+        GenerationStatus::Idle
+    );
 }
 
 #[test]
@@ -133,7 +139,16 @@ fn test_boot_heal_resets_stale_generating_status() {
         .expect("build_test_wired_app should succeed");
     let app = AppState::from_wired(wired);
 
-    let (status, phase) = app.game_view_query.get_generating_status().unwrap();
-    assert_eq!(status, GenerationStatus::Idle);
-    assert_eq!(phase, GenerationPhase::default());
+    let persisted = app
+        .message_service
+        .load_expecting_valid_state()
+        .expect("the healed snapshot should load");
+    assert_eq!(
+        persisted.narrative.input_buffer.status,
+        GenerationStatus::Idle
+    );
+    assert_eq!(
+        persisted.narrative.input_buffer.phase,
+        GenerationPhase::default()
+    );
 }

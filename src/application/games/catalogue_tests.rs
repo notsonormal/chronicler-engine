@@ -641,6 +641,68 @@ fn test_set_preset_selection_rejects_mode_disallowed_preset() {
 }
 
 #[test]
+fn test_set_preset_selection_rejects_unknown_options_preset() {
+    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+    seed_library(storage.as_ref());
+
+    let result = catalogue.set_preset_selection(
+        id,
+        PresetSelection::new(
+            "system_default",
+            "quantifier_default",
+            "impersonate_default",
+            "no_such_options",
+        ),
+    );
+    assert!(
+        matches!(result, Err(ApplicationError::Validation(ref msg)) if msg.contains("Preset not found: no_such_options")),
+        "Expected preset-not-found validation error, got {result:?}"
+    );
+
+    let stored = storage.get_game(id).unwrap().expect("game persisted");
+    assert_eq!(stored.active_options_prompt_preset_id, "options_default");
+}
+
+#[test]
+fn test_set_preset_selection_ignores_an_options_presets_allowed_modes() {
+    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
+    let id = catalogue.current_game_id();
+    seed_library(storage.as_ref());
+    storage
+        .save_preset(&PromptPreset {
+            id: "options_novel_only".to_string(),
+            name: "Options Novel Only".to_string(),
+            role: None,
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            allowed_modes: vec![NarratorMode::Novel],
+            is_default: false,
+            preset_type: PresetType::Options,
+        })
+        .expect("test setup: save_preset must succeed");
+
+    // One settings-level slot serves both modes, so an IF game may hold an
+    // options preset whose allowed_modes name only Novel.
+    catalogue
+        .switch_mode(id, NarratorMode::InteractiveFiction)
+        .unwrap();
+    let game = catalogue
+        .set_preset_selection(
+            id,
+            PresetSelection::new(
+                "system_if_default",
+                "quantifier_default",
+                "impersonate_default",
+                "options_novel_only",
+            ),
+        )
+        .expect("an options preset's allowed_modes must not gate the selection");
+    assert_eq!(game.active_options_prompt_preset_id, "options_novel_only");
+}
+
+#[test]
 fn test_set_preset_selection_accepts_unchanged_stored_ids() {
     let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
     let id = catalogue.current_game_id();

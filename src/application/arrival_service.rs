@@ -12,7 +12,7 @@ use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::state::generation_status::GenerationStatus;
+use crate::domain::model::state::generation_status::{GenerationFailure, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
@@ -177,7 +177,7 @@ impl ArrivalTaskContext {
             }
             Err(e) => {
                 state.narrative.input_buffer.status =
-                    GenerationStatus::Error(format!("LLM Error: {e}"));
+                    GenerationStatus::Error(GenerationFailure::from_engine_error(&e));
             }
         }
 

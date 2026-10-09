@@ -14,3 +14,5 @@ pub mod trigger_context;
 mod game_state_snapshot_tests;
 #[cfg(test)]
 mod game_state_tests;
+#[cfg(test)]
+mod generation_status_tests;

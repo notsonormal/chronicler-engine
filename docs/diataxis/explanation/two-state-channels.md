@@ -23,7 +23,7 @@ The registry is process-local by design. The engine's deployment contract is one
 
 The two signals answer different questions for different code paths:
 
-- **UI display** reads the polled status fragment. The fragment's "is something generating?" answer comes from the registry, so a stale persisted `Generating` cannot lock the page; the persisted status still supplies the phase name and the error fragment.
+- **UI display** reads the registry. The status fragment, the options dock and `GET /debug/is_generating` all answer "is something generating?" with `GenerationGate::is_busy` for the current game, so a stale persisted `Generating` cannot lock the page; the persisted status still supplies the phase name and the failure the fragment renders.
 - **Spawn-side concurrency gating** reads the registry. Handlers reject double-spawn attempts on an O(1) check that does not contend with the storage layer.
 - **Self-healing recovery** compares the persisted status against the registry. The engine heals on boot, and on the next entry point after a panic: free action, options refresh, retrigger, retry, or game switch. When the persisted status says `Generating` and the registry holds no slot, the engine treats the previous run as a mid-flight crash. It resets the status to `Idle`.
 - **Cross-process coordination** is supported by the persisted status only. The registry cannot coordinate across processes because each process holds its own; the deployment contract is one process per database.

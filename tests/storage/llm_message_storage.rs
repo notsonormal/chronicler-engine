@@ -2,7 +2,9 @@
 
 use chrono::Utc;
 use chronicler_engine::domain::model::llm_message::LlmMessage;
+use chronicler_engine::adapters::driven::storage::llm_messages::LLM_MESSAGE_RETENTION_LIMIT;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::test_support::fixtures::llm_message;
 
 use crate::fixtures::create_test_storage;
 
@@ -125,44 +127,47 @@ fn test_sqlite_empty_list() {
     assert!(list.is_empty());
 }
 
-fn message(agent: &str, model: &str, error: Option<&str>, created_offset_secs: i64) -> LlmMessage {
-    LlmMessage {
-        id: 0,
-        agent_name: agent.to_string(),
-        backend_name: "Mock".to_string(),
-        model_name: model.to_string(),
-        system_prompt: String::new(),
-        user_prompt: String::new(),
-        raw_request_json: String::new(),
-        raw_response_json: String::new(),
-        parsed_response: String::new(),
-        error_message: error.map(str::to_string),
-        created_at: Utc::now() + chrono::Duration::seconds(created_offset_secs),
-    }
-}
-
+// The reader that derives per-agent health folds one whole window, so the
+// window must cover every agent, not just the agents of its newest rows.
 #[test]
-fn test_sqlite_latest_llm_message_per_agent_returns_each_roles_newest() {
+fn test_sqlite_whole_window_holds_every_roles_newest_attempt() {
     let storage = create_storage();
     storage
-        .save_llm_message(&message("narrator", "old-model", Some("old failure"), -20))
+        .save_llm_message(&llm_message(
+            "narrator",
+            "old-model",
+            Some("old failure"),
+            -20,
+        ))
         .unwrap();
     storage
-        .save_llm_message(&message("narrator", "new-model", None, -5))
+        .save_llm_message(&llm_message("narrator", "new-model", None, -15))
         .unwrap();
     storage
-        .save_llm_message(&message("quantifier", "q-model", Some("q failure"), -10))
+        .save_llm_message(&llm_message("quantifier", "q-model", Some("q failure"), -5))
         .unwrap();
 
-    let latest = storage.latest_llm_message_per_agent().unwrap();
+    let window = storage
+        .list_latest_llm_messages(LLM_MESSAGE_RETENTION_LIMIT)
+        .unwrap();
 
-    assert_eq!(latest.len(), 2, "one row per distinct agent");
-    assert_eq!(latest[0].agent_name, "quantifier");
-    assert_eq!(latest[0].error_message.as_deref(), Some("q failure"));
-    assert_eq!(latest[1].agent_name, "narrator");
-    assert_eq!(latest[1].model_name, "new-model");
+    assert_eq!(window.len(), 3, "retention keeps every saved row");
     assert!(
-        latest[1].error_message.is_none(),
-        "the newer narrator success must mask the older failure"
+        window
+            .iter()
+            .any(|m| m.agent_name == "narrator" && m.model_name == "new-model"),
+        "the narrator's newer attempt must be in the window"
+    );
+    assert!(
+        window.iter().any(
+            |m| m.agent_name == "narrator" && m.error_message.as_deref() == Some("old failure")
+        ),
+        "the narrator's superseded attempt stays in the window"
+    );
+    assert!(
+        window.iter().any(
+            |m| m.agent_name == "quantifier" && m.error_message.as_deref() == Some("q failure")
+        ),
+        "a role whose newest row is not the window's newest row must still be in it"
     );
 }

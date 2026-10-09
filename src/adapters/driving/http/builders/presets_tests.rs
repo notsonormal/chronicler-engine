@@ -1,23 +1,31 @@
 use crate::adapters::driving::http::builders::presets::{
     preset_card_html, preset_edit_form_html, preset_view_form_html,
 };
-use crate::adapters::driving::http::prompt_presets::templates::ModeActiveIds;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::test_support::TestPromptPreset;
 
-fn mode_ids(novel: &str, interactive_fiction: &str) -> ModeActiveIds {
-    ModeActiveIds {
-        novel: novel.into(),
-        interactive_fiction: interactive_fiction.into(),
-    }
+/// Settings whose system slots hold the given preset ids, one per mode.
+fn settings_with_active_system(novel: &str, interactive_fiction: &str) -> AppSettings {
+    let mut settings = AppSettings::default();
+    settings.set_active_preset(PresetType::System, NarratorMode::Novel, novel.into());
+    settings.set_active_preset(
+        PresetType::System,
+        NarratorMode::InteractiveFiction,
+        interactive_fiction.into(),
+    );
+    settings
+}
+
+fn inactive_system_slots() -> AppSettings {
+    settings_with_active_system("", "")
 }
 
 #[test]
 fn test_preset_card_html_default_preset() {
     let preset =
         TestPromptPreset::system_default_with_instructions("default", "Default", "System prompt.");
-    let html = preset_card_html(&preset, &mode_ids("", ""));
+    let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(html.contains("Default"));
     assert!(html.contains(r#"badge">Default</span>"#));
     assert!(html.contains("View</button>"));
@@ -34,7 +42,7 @@ fn test_preset_card_html_non_default_preset() {
         instructions: Some("Custom prompt.".into()),
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("", ""));
+    let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(html.contains("Custom"));
     assert!(!html.contains(r#"badge">Default</span>"#));
     assert!(html.contains("Edit</button>"));
@@ -50,7 +58,7 @@ fn test_preset_card_html_active_preset() {
         instructions: Some("Active prompt.".into()),
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("active-1", ""));
+    let html = preset_card_html(&preset, &settings_with_active_system("active-1", ""));
     assert!(html.contains(r#"badge primary">Active · Novel</span>"#));
     assert!(!html.contains("Set Active (Novel)</button>"));
     assert!(html.contains("Set Active (Interactive Fiction)</button>"));
@@ -64,7 +72,7 @@ fn test_preset_card_html_active_in_if_mode_only() {
         instructions: Some("IF prompt.".into()),
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("", "active-if"));
+    let html = preset_card_html(&preset, &settings_with_active_system("", "active-if"));
     assert!(html.contains(r#"badge primary">Active · Interactive Fiction</span>"#));
     assert!(!html.contains(r#"badge primary">Active · Novel</span>"#));
     assert!(html.contains("Set Active (Novel)</button>"));
@@ -80,7 +88,7 @@ fn test_preset_card_html_disallowed_mode_has_no_activate_button() {
         allowed_modes: vec![NarratorMode::Novel],
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("", ""));
+    let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(html.contains("Set Active (Novel)</button>"));
     assert!(!html.contains("Set Active (Interactive Fiction)</button>"));
 }
@@ -95,7 +103,7 @@ fn test_preset_card_html_default_and_active_preset() {
         is_default: true,
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("default-active", ""));
+    let html = preset_card_html(&preset, &settings_with_active_system("default-active", ""));
     assert!(html.contains(r#"badge">Default</span>"#));
     assert!(html.contains(r#"badge primary">Active · Novel</span>"#));
     assert!(!html.contains("Set Active (Novel)</button>"));
@@ -113,7 +121,7 @@ fn test_preset_card_html_no_instructions_uses_empty_preview() {
         name: "No Instructions".into(),
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("", ""));
+    let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(html.contains("No Instructions"));
     assert!(html.contains("class=\"card-details preset-preview\">"));
 }
@@ -126,7 +134,7 @@ fn test_preset_card_html_inactive_preset() {
         instructions: Some("Inactive prompt.".into()),
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("", ""));
+    let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(!html.contains("Active · Novel</span>"));
     assert!(!html.contains("Active · Interactive Fiction</span>"));
     assert!(html.contains("Set Active (Novel)</button>"));
@@ -142,7 +150,7 @@ fn test_preset_card_html_preview_truncates() {
         instructions: Some(long_text.clone()),
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("", ""));
+    let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(html.contains(&"a".repeat(120)));
     assert!(!html.contains(&"a".repeat(121)));
 }
@@ -155,7 +163,7 @@ fn test_preset_card_html_escapes_special_chars() {
         instructions: Some(r#"Say "hello" & goodbye."#.into()),
         ..Default::default()
     };
-    let html = preset_card_html(&preset, &mode_ids("", ""));
+    let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(!html.contains("<b>Name</b>"));
     // Askama escapes to numeric entities: `<` => `&#60;`, `>` => `&#62;`,
     // `"` => `&#34;`, `&` => `&#38;`.

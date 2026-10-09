@@ -173,58 +173,36 @@ impl GameCatalogue {
     }
 
     /// Set the game's per-game preset selection (the picker). Each id must
-    /// exist in the library; a mode-disallowed preset is accepted only when
-    /// unchanged, so the stored selection is never silently invalidated.
+    /// exist in the library; a mode-tagged preset that disallows the game's
+    /// mode is accepted only when unchanged, so the stored selection is never
+    /// silently invalidated.
     pub fn set_preset_selection(
         &self,
         id: u64,
         selection: PresetSelection,
     ) -> Result<Game, ApplicationError> {
         let mut game = self.require_game(id)?;
-        let selections = [
-            (
-                selection.system_id.as_str(),
-                game.active_system_prompt_preset_id.clone(),
-            ),
-            (
-                selection.quantifier_id.as_str(),
-                game.active_quantifier_prompt_preset_id.clone(),
-            ),
-            (
-                selection.impersonate_id.as_str(),
-                game.active_impersonate_prompt_preset_id.clone(),
-            ),
-        ];
-        for (new_id, current_id) in selections {
+        for (preset_type, new_id) in selection.slots() {
             // An unchanged stored id is a no-op slot: it skips validation so
             // saving the form never fails on a stale or deleted selection.
-            if new_id == current_id {
+            if new_id == game.active_preset_id(preset_type) {
                 continue;
             }
             let preset = self.storage.get_preset(new_id)?.ok_or_else(|| {
                 ApplicationError::validation(format!("Preset not found: {new_id}"))
             })?;
-            if !preset.allows(game.narrator_mode) {
+            // Options presets serve both modes from one slot, so their
+            // allowed_modes never gate the selection.
+            if preset_type.is_mode_tagged() && !preset.allows(game.narrator_mode) {
                 return Err(ApplicationError::validation(format!(
                     "Preset not allowed for {} mode",
                     game.narrator_mode.as_str()
                 )));
             }
         }
-        if selection.options_id != game.active_options_prompt_preset_id {
-            self.storage
-                .get_preset(&selection.options_id)?
-                .ok_or_else(|| {
-                    ApplicationError::validation(format!(
-                        "Preset not found: {}",
-                        selection.options_id
-                    ))
-                })?;
+        for (preset_type, new_id) in selection.slots() {
+            game.set_active_preset_id(preset_type, new_id.to_string());
         }
-        game.active_system_prompt_preset_id = selection.system_id;
-        game.active_quantifier_prompt_preset_id = selection.quantifier_id;
-        game.active_impersonate_prompt_preset_id = selection.impersonate_id;
-        game.active_options_prompt_preset_id = selection.options_id;
         self.storage.update_game_config(&game)?;
         Ok(game)
     }

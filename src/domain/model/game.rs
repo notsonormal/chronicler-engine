@@ -4,7 +4,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
+use crate::domain::model::utils::game_name::default_display_name;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Game {
@@ -31,6 +33,27 @@ pub struct Game {
     pub options_always_on: bool,
 }
 
+impl Game {
+    /// The preset id this game's active slot for `preset_type` holds.
+    pub fn active_preset_id(&self, preset_type: PresetType) -> &str {
+        match preset_type {
+            PresetType::System => &self.active_system_prompt_preset_id,
+            PresetType::Quantifier => &self.active_quantifier_prompt_preset_id,
+            PresetType::Impersonate => &self.active_impersonate_prompt_preset_id,
+            PresetType::Options => &self.active_options_prompt_preset_id,
+        }
+    }
+
+    pub fn set_active_preset_id(&mut self, preset_type: PresetType, id: String) {
+        match preset_type {
+            PresetType::System => self.active_system_prompt_preset_id = id,
+            PresetType::Quantifier => self.active_quantifier_prompt_preset_id = id,
+            PresetType::Impersonate => self.active_impersonate_prompt_preset_id = id,
+            PresetType::Options => self.active_options_prompt_preset_id = id,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PresetSelection {
     pub system_id: String,
@@ -53,6 +76,17 @@ impl PresetSelection {
             options_id: options_id.into(),
         }
     }
+
+    /// The four slots paired with their type, so a rule over the selection
+    /// covers every preset type in one pass.
+    pub fn slots(&self) -> [(PresetType, &str); 4] {
+        [
+            (PresetType::System, self.system_id.as_str()),
+            (PresetType::Quantifier, self.quantifier_id.as_str()),
+            (PresetType::Impersonate, self.impersonate_id.as_str()),
+            (PresetType::Options, self.options_id.as_str()),
+        ]
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -72,4 +106,12 @@ pub struct NewGame {
     pub impersonate_prompt_preset_id: String,
     pub options_prompt_preset_id: String,
     pub options_always_on: bool,
+}
+
+impl NewGame {
+    /// The player-facing label written with the row. Every storage backend
+    /// reads it, so the naming rule has one home.
+    pub fn display_name(&self) -> String {
+        default_display_name(&self.name)
+    }
 }

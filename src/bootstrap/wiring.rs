@@ -124,14 +124,8 @@ fn build_wired_app(
     );
 
     // Boot heal: a crash/restart may have left the current game persisted as Generating.
-    let current_game_id = storage.current_game_id();
-    let mut boot_state = message_service.load_or_fresh();
-    let pre_heal = boot_state.narrative.input_buffer.status.clone();
-    generation_gate.heal_stale(current_game_id, &mut boot_state);
-    if boot_state.narrative.input_buffer.status != pre_heal {
-        if let Err(e) = message_service.save_state(&boot_state) {
-            tracing::warn!("boot heal: failed to persist healed status: {e}");
-        }
+    if let Err(e) = pipeline.heal_stale_status(&generation_gate) {
+        tracing::warn!("boot heal: failed to persist healed status: {e}");
     }
 
     Ok(WiredApp {

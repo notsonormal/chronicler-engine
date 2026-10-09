@@ -28,7 +28,7 @@ pub struct TestAppBuilder {
     storage: Option<Arc<Storage>>,
     pipeline: Option<ActionPipeline>,
     skip_seeding: bool,
-    is_generating: bool,
+    claim_generation_slot: bool,
 }
 
 impl TestAppBuilder {
@@ -44,7 +44,7 @@ impl TestAppBuilder {
             storage: None,
             pipeline: None,
             skip_seeding: false,
-            is_generating: false,
+            claim_generation_slot: false,
         }
     }
 
@@ -98,8 +98,8 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn is_generating(mut self, value: bool) -> Self {
-        self.is_generating = value;
+    pub fn claim_generation_slot(mut self) -> Self {
+        self.claim_generation_slot = true;
         self
     }
 
@@ -190,10 +190,11 @@ impl TestAppBuilder {
         let wired = build_app_graph_for_tests(Arc::clone(&storage), pipeline_override)
             .expect("build_app_graph_for_tests should succeed");
 
-        if self.is_generating {
+        if self.claim_generation_slot {
             // `try_claim` is the production claim path and also writes a
-            // persisted `Generating`; the persisted channel is re-applied
-            // below, so a bare `is_generating(true)` never leaves it set.
+            // persisted `Generating`; a later `generation_status` overrides
+            // that record, which is how a test scripts a busy slot against a
+            // stale persisted status.
             let game_id = wired.storage.current_game_id();
             let mut claim_state = wired.message_service.load_or_fresh();
             let claim =
@@ -206,12 +207,8 @@ impl TestAppBuilder {
             );
         }
 
-        if self.is_generating || self.generation.is_some() {
+        if let Some((status, phase)) = self.generation.clone() {
             let mut state = wired.message_service.load_or_fresh();
-            let (status, phase) = self
-                .generation
-                .clone()
-                .unwrap_or_else(|| (GenerationStatus::Idle, GenerationPhase::default()));
             state.narrative.input_buffer.status = status;
             state.narrative.input_buffer.phase = phase;
             let _ = wired.message_service.save_state(&state);

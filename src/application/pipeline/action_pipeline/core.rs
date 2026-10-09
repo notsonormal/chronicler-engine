@@ -18,7 +18,9 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::{ActionResult, FreeActionContext, GameState};
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{
+    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+};
 
 use crate::application::errors::ProcessActionResult;
 use crate::application::generation::gate::GenerationGate;
@@ -384,15 +386,21 @@ impl ActionPipeline {
         state: Option<&mut GameState>,
         e: PhaseError,
     ) {
-        let msg = match e {
-            PhaseError::NarratorFailed(msg) => msg,
-            PhaseError::FetchFailed(msg) => msg,
+        let failure = match e {
+            PhaseError::NarratorFailed(failure) => failure,
+            PhaseError::FetchFailed(failure) => failure,
             PhaseError::PersistFailed { label, source } => {
                 tracing::error!("{label}: {source}");
-                source.to_string()
+                PipelineRun::save_failure(label, &source)
             }
-            PhaseError::TriggerMissing => "Retry failed: missing trigger context".to_string(),
-            PhaseError::SnapshotMissing => "World data unavailable for current game".to_string(),
+            PhaseError::TriggerMissing => GenerationFailure::new(
+                GenerationFailureKind::Other,
+                "Retry failed: missing trigger context",
+            ),
+            PhaseError::SnapshotMissing => GenerationFailure::new(
+                GenerationFailureKind::Other,
+                "World data unavailable for current game",
+            ),
             PhaseError::Cancelled => {
                 unreachable!("Cancelled must be handled before calling finalize_phase_error")
             }
@@ -400,7 +408,7 @@ impl ActionPipeline {
 
         match state {
             Some(state) => {
-                state.narrative.input_buffer.status = GenerationStatus::Error(msg);
+                state.narrative.input_buffer.status = GenerationStatus::Error(failure);
                 state.narrative.input_buffer.phase = GenerationPhase::default();
                 if let Err(e) = run
                     .pipeline
@@ -410,7 +418,7 @@ impl ActionPipeline {
                     tracing::error!("Failed to persist error state: {e}");
                 }
             }
-            None => run.pipeline.persist_generation_error(msg),
+            None => run.pipeline.persist_generation_error(failure),
         }
     }
 
@@ -489,9 +497,9 @@ impl ActionPipeline {
         result
     }
 
-    pub(crate) fn persist_generation_error(&self, message: impl Into<String>) {
+    pub(crate) fn persist_generation_error(&self, failure: GenerationFailure) {
         let mut state = self.message_service.load_or_fresh();
-        state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
+        state.narrative.input_buffer.status = GenerationStatus::Error(failure);
         state.narrative.input_buffer.phase = GenerationPhase::default();
         if let Err(e) = self.message_service.save_state(&state) {
             tracing::error!("Critical: failed to persist generation error state: {e}");
@@ -531,7 +539,7 @@ impl ActionPipeline {
                 Self::finalize_phase_error(
                     &run,
                     Some(state),
-                    PhaseError::FetchFailed(e.to_string()),
+                    PhaseError::FetchFailed(GenerationFailure::from_engine_error(&e)),
                 );
                 return Ok(());
             }

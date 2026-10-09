@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::{EngineError, LlmFailure, NarrativeFailure};
+
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationStatus {
     /// No generation running; input buffer is empty or consumed.
@@ -10,8 +12,8 @@ pub enum GenerationStatus {
     Idle,
     /// Generation in progress; `phase` tracks sub-stage.
     Generating,
-    /// Generation failed; payload is the user-facing error message.
-    Error(String),
+    /// Generation failed; the payload classifies the failure.
+    Error(GenerationFailure),
 }
 
 impl GenerationStatus {
@@ -19,11 +21,83 @@ impl GenerationStatus {
         matches!(self, Self::Generating)
     }
 
-    pub fn error_message(&self) -> Option<&str> {
+    pub fn failure(&self) -> Option<&GenerationFailure> {
         match self {
-            Self::Error(msg) => Some(msg),
+            Self::Error(failure) => Some(failure),
             _ => None,
         }
+    }
+}
+
+/// What went wrong in a failed generation, coarse enough for the status
+/// display to name it in one line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GenerationFailureKind {
+    /// No answer arrived: a timeout, a transport failure, or a non-2xx response.
+    Unreachable,
+    /// The assembled prompt exceeded the active connection's context budget.
+    PromptTooLong,
+    /// An answer arrived but could not be used: unparseable, empty, or rejected
+    /// by narration post-processing.
+    UnreadableAnswer,
+    /// The turn could not be persisted.
+    SaveFailed,
+    /// The room the turn ran in is gone from the map.
+    SceneMissing,
+    /// The game's active preset is not in the library it names.
+    PresetMissing,
+    /// Anything the other kinds do not name.
+    Other,
+}
+
+/// A failed generation: `kind` drives the one-line status sentence and `raw`
+/// is the classified error text behind the details disclosure.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GenerationFailure {
+    pub kind: GenerationFailureKind,
+    pub raw: String,
+}
+
+impl GenerationFailure {
+    /// A failure the call site names itself, for a condition with no typed
+    /// `EngineError` behind it.
+    pub fn new(kind: GenerationFailureKind, raw: impl Into<String>) -> Self {
+        Self {
+            kind,
+            raw: raw.into(),
+        }
+    }
+
+    /// Classifies a typed engine error so no call site matches on message text.
+    pub fn from_engine_error(error: &EngineError) -> Self {
+        let kind = match error {
+            EngineError::Llm(
+                LlmFailure::Timeout | LlmFailure::Network { .. } | LlmFailure::Http { .. },
+            ) => GenerationFailureKind::Unreachable,
+            EngineError::ContextOverflow { .. }
+            | EngineError::Narrative(NarrativeFailure::PromptBuild { .. }) => {
+                GenerationFailureKind::PromptTooLong
+            }
+            EngineError::Llm(LlmFailure::ParseError { .. } | LlmFailure::EmptyResponse)
+            | EngineError::Narrative(NarrativeFailure::Generation { .. }) => {
+                GenerationFailureKind::UnreadableAnswer
+            }
+            EngineError::Database(_) | EngineError::Io(_) => GenerationFailureKind::SaveFailed,
+            EngineError::RoomNotFound(_) => GenerationFailureKind::SceneMissing,
+            EngineError::PresetNotFound(_) => GenerationFailureKind::PresetMissing,
+            _ => GenerationFailureKind::Other,
+        };
+        Self {
+            kind,
+            raw: error.to_string(),
+        }
+    }
+
+    /// Prefixes `raw` with the pipeline step that failed, so the disclosure
+    /// keeps the context the classified error alone does not carry.
+    pub fn with_context(mut self, context: impl std::fmt::Display) -> Self {
+        self.raw = format!("{context}: {}", self.raw);
+        self
     }
 }
 

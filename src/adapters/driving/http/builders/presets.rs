@@ -4,12 +4,11 @@
 use askama::Template;
 
 use crate::adapters::driving::http::builders::forms::{textarea_field, textarea_field_readonly};
-use crate::adapters::driving::http::prompt_presets::templates::ModeActiveIds;
 use crate::adapters::driving::http::utils::handler_helpers::render_template;
 use crate::adapters::driving::http::utils::response::html_escape;
 use crate::adapters::driving::http::view_models::SafeHtml;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::settings::{AppSettings, NarratorMode};
 
 pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
     let id = html_escape(&preset.id);
@@ -129,55 +128,73 @@ pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String
     )
 }
 
-/// The card every preset listing renders: the panel loop and the single-card
-/// endpoints both go through this partial, so an edit-refreshed card is
-/// identical to the same card in the panel.
-///
-/// `active` carries the active preset ids for the preset's own type slot, so an
-/// active quantifier or impersonate default badges exactly like an active
-/// system default. `preview` is pre-truncated (120 chars, newlines flattened)
-/// so both renderers show the same preview.
+/// The card every preset listing renders, so an edit-refreshed card is
+/// identical to the same card in the panel. `preview` is pre-truncated (120
+/// chars, newlines flattened); `active_badges` and `activate_buttons` are the
+/// card's slice of the settings' active slots.
 #[derive(Template)]
 #[template(
-    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if is_options %}{% if is_options_active %} active{% endif %}{% else %}{% if is_novel_active || is_if_active %} active{% endif %}{% endif %}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% if is_options %}{% if is_options_active %}<span class="badge primary">Active</span>{% endif %}{% else %}{% if is_novel_active %}<span class="badge primary">Active · {{ self.novel_label() }}</span>{% endif %}{% if is_if_active %}<span class="badge primary">Active · {{ self.interactive_fiction_label() }}</span>{% endif %}{% endif %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% if is_options %}{% if !is_options_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active</button>{% endif %}{% else %}{% if preset.allows_novel() && !is_novel_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=novel" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.novel_label() }})</button>{% endif %}{% if preset.allows_interactive_fiction() && !is_if_active %}<button hx-post="/prompt-presets/{{ preset.id }}/activate?mode=interactive_fiction" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active ({{ self.interactive_fiction_label() }})</button>{% endif %}{% endif %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button></div></div>"##,
+    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if !self.active_badges.is_empty() %} active{% endif %}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% for badge in self.active_badges %}<span class="badge primary">{{ badge }}</span>{% endfor %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% for (label, mode_query) in self.activate_buttons %}<button hx-post="/prompt-presets/{{ preset.id }}/activate{{ mode_query }}" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">{{ label }}</button>{% endfor %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button></div></div>"##,
     ext = "html"
 )]
 pub struct PresetCardTemplate {
     pub preset: PromptPreset,
     pub preview: String,
-    pub is_novel_active: bool,
-    pub is_if_active: bool,
-    pub is_options: bool,
-    pub is_options_active: bool,
+    pub active_badges: Vec<String>,
+    /// Each entry pairs the button's label with the mode query appended to its
+    /// activate route (empty for the mode-agnostic Options slot).
+    pub activate_buttons: Vec<(String, String)>,
 }
 
 impl PresetCardTemplate {
-    pub fn new(preset: &PromptPreset, active: &ModeActiveIds) -> Self {
-        let is_novel_active = preset.id == active.novel;
-        let is_if_active = preset.id == active.interactive_fiction;
+    pub fn from_settings(preset: &PromptPreset, settings: &AppSettings) -> Self {
+        let (active_badges, activate_buttons) = if preset.preset_type.is_mode_tagged() {
+            mode_slot_actions(preset, settings)
+        } else {
+            options_slot_actions(preset, settings)
+        };
         Self {
             preset: preset.clone(),
             preview: truncated_preview(preset),
-            is_novel_active,
-            is_if_active,
-            is_options: preset.preset_type == PresetType::Options,
-            is_options_active: false,
+            active_badges,
+            activate_buttons,
         }
     }
+}
 
-    pub fn new_options(preset: &PromptPreset, active_options_id: &str) -> Self {
-        Self {
-            is_options_active: preset.id == active_options_id,
-            ..Self::new(preset, &ModeActiveIds::default())
+/// The badges and activation buttons a mode-tagged preset earns from its
+/// per-mode slots.
+fn mode_slot_actions(
+    preset: &PromptPreset,
+    settings: &AppSettings,
+) -> (Vec<String>, Vec<(String, String)>) {
+    let mut active_badges = Vec::new();
+    let mut activate_buttons = Vec::new();
+    for mode in [NarratorMode::Novel, NarratorMode::InteractiveFiction] {
+        let is_active = settings.active_preset_id(preset.preset_type, mode) == preset.id;
+        if is_active {
+            active_badges.push(format!("Active · {}", mode.display_label()));
+        } else if preset.allows(mode) {
+            activate_buttons.push((
+                format!("Set Active ({})", mode.display_label()),
+                format!("?mode={}", mode.as_str()),
+            ));
         }
     }
+    (active_badges, activate_buttons)
+}
 
-    pub fn novel_label(&self) -> &'static str {
-        NarratorMode::Novel.display_label()
-    }
-
-    pub fn interactive_fiction_label(&self) -> &'static str {
-        NarratorMode::InteractiveFiction.display_label()
+/// The same for an Options preset, whose single settings-level slot serves both
+/// modes, so its `allowed_modes` flags do not gate the button.
+fn options_slot_actions(
+    preset: &PromptPreset,
+    settings: &AppSettings,
+) -> (Vec<String>, Vec<(String, String)>) {
+    let is_active = settings.active_preset_id(preset.preset_type, NarratorMode::Novel) == preset.id;
+    if is_active {
+        (vec!["Active".to_string()], Vec::new())
+    } else {
+        (Vec::new(), vec![("Set Active".to_string(), String::new())])
     }
 }
 
@@ -190,18 +207,10 @@ fn truncated_preview(preset: &PromptPreset) -> String {
         .replace('\n', " ")
 }
 
-pub(crate) fn preset_card_html(preset: &PromptPreset, active: &ModeActiveIds) -> String {
-    render_template(PresetCardTemplate::new(preset, active)).0
+pub(crate) fn preset_card_html(preset: &PromptPreset, settings: &AppSettings) -> String {
+    render_template(PresetCardTemplate::from_settings(preset, settings)).0
 }
 
-pub(crate) fn options_preset_card_html(preset: &PromptPreset, active_options_id: &str) -> String {
-    render_template(PresetCardTemplate::new_options(preset, active_options_id)).0
-}
-
-pub(crate) fn preset_card_view(preset: &PromptPreset, active: &ModeActiveIds) -> SafeHtml {
-    SafeHtml::new(preset_card_html(preset, active))
-}
-
-pub(crate) fn options_card_view(preset: &PromptPreset, active_options_id: &str) -> SafeHtml {
-    SafeHtml::new(options_preset_card_html(preset, active_options_id))
+pub(crate) fn preset_card_view(preset: &PromptPreset, settings: &AppSettings) -> SafeHtml {
+    SafeHtml::new(preset_card_html(preset, settings))
 }

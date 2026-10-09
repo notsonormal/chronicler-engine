@@ -11,7 +11,9 @@ use crate::domain::model::map::Room;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{
+    GenerationFailureKind, GenerationPhase, GenerationStatus,
+};
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
@@ -95,7 +97,7 @@ fn test_pipeline_returns_error_on_narration_failure() {
             .narrative
             .input_buffer
             .status
-            .error_message()
+            .failure()
             .is_some(),
         "State should reflect error status via GenerationStatus::Error"
     );
@@ -131,7 +133,7 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
             .narrative
             .input_buffer
             .status
-            .error_message()
+            .failure()
             .is_some(),
         "State should reflect error status via GenerationStatus::Error"
     );
@@ -401,12 +403,7 @@ fn test_pipeline_trigger_empty_continuation() {
     );
     let reloaded = app.message_service.load_or_fresh();
     assert!(
-        reloaded
-            .narrative
-            .input_buffer
-            .status
-            .error_message()
-            .is_some(),
+        reloaded.narrative.input_buffer.status.failure().is_some(),
         "Expected error status after trigger empty response, got: {:?}",
         reloaded.narrative.input_buffer.status
     );
@@ -470,7 +467,7 @@ fn test_pipeline_trigger_complete_failure() {
     );
     let reloaded = app.message_service.load_or_fresh();
     let status_msg = match &reloaded.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error after trigger failure, got {other:?}"),
     };
     assert!(
@@ -896,7 +893,7 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     );
     let final_state = app.message_service.load_or_fresh();
     let msg = match &final_state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error, got {other:?}"),
     };
     assert!(
@@ -948,13 +945,19 @@ fn test_pipeline_room_not_found_sets_error_status() {
         .run_from_input(state, "look".to_string(), false, None);
 
     let final_state = app.message_service.load_or_fresh();
-    let msg = match &final_state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+    let failure = match &final_state.narrative.input_buffer.status {
+        GenerationStatus::Error(failure) => failure,
         other => panic!("expected Error status, got {other:?}"),
     };
     assert!(
-        msg.contains("Room not found"),
-        "expected 'Room not found' in error message, got: {msg}"
+        failure.raw.contains("Room not found"),
+        "expected 'Room not found' in error message, got: {}",
+        failure.raw
+    );
+    assert_eq!(
+        failure.kind,
+        GenerationFailureKind::SceneMissing,
+        "a missing room must classify as a missing scene"
     );
 }
 
@@ -988,7 +991,7 @@ fn test_pipeline_phase_stays_narrating_on_narration_failure() {
             .narrative
             .input_buffer
             .status
-            .error_message()
+            .failure()
             .is_some(),
         "Status should be Error after narration failure"
     );
@@ -1016,7 +1019,7 @@ fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
 
     let final_state = app.message_service.load_or_fresh();
     let msg = match &final_state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected Error status, got {other:?}"),
     };
     assert!(
@@ -1374,12 +1377,12 @@ fn test_switch_game_heals_stale_status_for_the_current_game() {
         .heal_stale_status(&app.generation_gate)
         .expect("heal_stale_status should succeed");
 
-    let (status, _) = app
-        .game_view_query
-        .get_generating_status()
-        .expect("get_generating_status should succeed");
+    let persisted = app
+        .message_service
+        .load_expecting_valid_state()
+        .expect("the healed snapshot should load");
     assert_eq!(
-        status,
+        persisted.narrative.input_buffer.status,
         GenerationStatus::Idle,
         "game switch should heal the stale record for the game now current"
     );

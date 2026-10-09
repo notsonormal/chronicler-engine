@@ -9,6 +9,7 @@ use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind};
 use crate::domain::model::state::message_types::MessageType;
 
 use super::phase_error::PhaseError;
@@ -56,17 +57,22 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
             Ok(bundle) => bundle,
             Err(e) => {
                 tracing::error!("narration_generation: {e}");
-                return Err(PhaseError::FetchFailed(e.to_string()));
+                return Err(PhaseError::FetchFailed(
+                    GenerationFailure::from_engine_error(&e),
+                ));
             }
         };
 
         let Some(room) = Self::resolve_room(state, &bundle.map) else {
-            return Err(self.run.set_error(state, "Room not found".to_string()));
+            return Err(self.run.set_error(
+                state,
+                GenerationFailure::new(GenerationFailureKind::SceneMissing, "Room not found"),
+            ));
         };
 
         let (preset, response_length) = match self.resolve_preset_choice() {
             Ok(p) => p,
-            Err(msg) => return Err(self.run.set_error(state, msg)),
+            Err(failure) => return Err(self.run.set_error(state, failure)),
         };
 
         let (user_message, message_type) = match &self.inputs.impersonate {
@@ -101,7 +107,7 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
         let (narration_text, backend_name, model_name) =
             match self.run.call_narrator(&context, &preset, &response_length) {
                 Ok(triple) => triple,
-                Err(msg) => return Err(self.run.set_error(state, msg)),
+                Err(failure) => return Err(self.run.set_error(state, failure)),
             };
 
         self.run.check_game_unchanged(started_for)?;
@@ -134,15 +140,15 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
             })
     }
 
-    fn resolve_preset_choice(&self) -> Result<(PromptPreset, String), String> {
+    fn resolve_preset_choice(&self) -> Result<(PromptPreset, String), GenerationFailure> {
         // First run and redo alike resolve the game's current active preset —
         // a preset is game configuration, not swipe data.
-        let settings = self
-            .run
-            .pipeline
-            .storage
-            .get_settings()
-            .map_err(|e| format!("Failed to read settings: {e}"))?;
+        let settings = self.run.pipeline.storage.get_settings().map_err(|e| {
+            GenerationFailure::new(
+                GenerationFailureKind::Other,
+                format!("Failed to read settings: {e}"),
+            )
+        })?;
         let (preset_id, kind) = match self.inputs.impersonate.as_ref() {
             Some(_) => (
                 self.run

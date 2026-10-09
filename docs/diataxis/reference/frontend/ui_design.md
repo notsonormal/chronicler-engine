@@ -396,7 +396,7 @@ Supported viewports, desktop-first:
 
 - Bar: flex row, gap `var(--spacing-sm)`, bottom border `var(--color-border)`
 - Sub-tab: transparent, muted text, `2px` transparent bottom border; `.active` uses `--color-accent-ok` text and bottom border
-- Degraded marker (`.subtab-degraded-marker`): a `#i-triangle-alert` sprite icon in `--color-accent-orange` beside the Connections label while a role is degraded, with a `title` tooltip, so the signal is not colour alone
+- Degraded marker (`.subtab-degraded-marker`): a `#i-triangle-alert` sprite icon in `--color-accent-orange` beside the Connections label while a role is degraded, with a `title` tooltip that reads "A role is degraded (engine-wide role health)", so the signal is not colour alone and the scope is not lost
 - Panel (`.settings-subtab-panel`): `display: none`; `.active` is `display: flex`, flex column, gap `var(--spacing-md)`
 
 ### Role Rows

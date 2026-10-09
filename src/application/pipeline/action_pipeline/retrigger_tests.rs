@@ -150,7 +150,7 @@ async fn test_retrigger_event_emits_error_on_world_fetch_failure() {
 
     let state = app.message_service.load_or_fresh();
     let msg = match &state.narrative.input_buffer.status {
-        GenerationStatus::Error(m) => m.clone(),
+        GenerationStatus::Error(failure) => failure.raw.clone(),
         other => {
             panic!("expected GenerationStatus::Error on retrigger fetch failure, got {other:?}")
         }
@@ -218,12 +218,12 @@ fn test_retrigger_heals_stale_status_before_validation_error() {
         result.is_err(),
         "retrigger should fail with no trigger context, got {result:?}"
     );
-    let (status, _) = app
-        .game_view_query
-        .get_generating_status()
-        .expect("get_generating_status should succeed");
+    let persisted = app
+        .message_service
+        .load_expecting_valid_state()
+        .expect("the healed snapshot should load");
     assert_eq!(
-        status,
+        persisted.narrative.input_buffer.status,
         GenerationStatus::Idle,
         "stale Generating should be healed before the validation error returns"
     );

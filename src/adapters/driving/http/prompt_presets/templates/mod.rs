@@ -3,7 +3,7 @@
 
 pub mod prompt_presets;
 
-pub use self::prompt_presets::{ModeActiveIds, PromptPresetsTemplate};
+pub use self::prompt_presets::PromptPresetsTemplate;
 
 #[cfg(test)]
 mod prompt_presets_tests;

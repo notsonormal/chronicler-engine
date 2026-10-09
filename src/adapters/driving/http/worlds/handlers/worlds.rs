@@ -13,7 +13,7 @@ use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, Narra
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
 
-use crate::adapters::driving::http::utils::error::{error_response, render_error};
+use crate::adapters::driving::http::utils::error::{action_error_response, render_error};
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok};
 use crate::adapters::driving::http::utils::view_mappers::games_per_world;
 use crate::adapters::driving::http::worlds::templates::worlds::{
@@ -128,7 +128,7 @@ pub async fn create_world_handler(
                     .unwrap_or_default(),
             )
         }
-        Err(e) => error_response(e, "Failed to create world"),
+        Err(e) => action_error_response(e, "Failed to create world"),
     }
 }
 

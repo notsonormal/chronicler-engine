@@ -1,6 +1,6 @@
-//! Unit tests for StatePatch merge semantics
+//! Unit tests for StatePatch merge semantics and the Role agent names
 
-use crate::domain::model::agent::{Confidence, StatePatch};
+use crate::domain::model::agent::{Confidence, Role, StatePatch};
 
 fn scene_patch(
     npc_ids: Vec<&str>,
@@ -12,6 +12,16 @@ fn scene_patch(
         movement_destination: destination.map(String::from),
         confidence,
     }
+}
+
+#[test]
+fn test_role_agent_names_are_the_recorded_names() {
+    // A forensic LlmMessage row stores one of these names, so they are a
+    // storage contract that a variant rename must not move.
+    assert_eq!(
+        Role::ALL.map(Role::agent_name),
+        ["narrator", "quantifier", "options", "trigger"]
+    );
 }
 
 #[test]

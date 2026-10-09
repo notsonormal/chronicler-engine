@@ -353,12 +353,12 @@ fn test_process_options_heals_stale_status_before_validation_error() {
         result.is_err(),
         "process_options should fail with no scene to ground options in, got {result:?}"
     );
-    let (status, _) = app
-        .game_view_query
-        .get_generating_status()
-        .expect("get_generating_status should succeed");
+    let persisted = app
+        .message_service
+        .load_expecting_valid_state()
+        .expect("the healed snapshot should load");
     assert_eq!(
-        status,
+        persisted.narrative.input_buffer.status,
         GenerationStatus::Idle,
         "stale Generating should be healed before the validation error returns"
     );

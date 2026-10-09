@@ -4,9 +4,9 @@
 use askama::Template;
 
 use crate::application::games::view_query::RoleHealth;
-use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_QUANTIFIER};
+use crate::domain::model::agent::Role;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
-use crate::adapters::driving::http::builders::headers::banner_message;
+use crate::adapters::driving::http::builders::headers::{role_failure_sentence, role_label};
 use crate::adapters::driving::http::utils::error::{
     error_disclosure, raw_error_detail, refusal_message,
 };
@@ -29,8 +29,8 @@ impl RoleRowView {
                 Some(error) => SafeHtml::new(format!(
                     "<span class=\"role-health degraded\">Degraded</span>{}",
                     error_disclosure(
-                        &format!("role-health-{}-popover", health.role),
-                        &banner_message(&[health]),
+                        &format!("role-health-{}-popover", health.role.agent_name()),
+                        &role_failure_sentence(health.role),
                         &raw_error_detail(error),
                     )
                 )),
@@ -53,8 +53,8 @@ impl RoleRowView {
     source = r##"
 <div class="settings-panel">
     <div class="settings-subtabs" role="tablist" aria-label="Settings sections">
-        <button class="settings-subtab active" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-subtab="connections">Connections{% if roles_degraded %}<span class="subtab-degraded-marker" aria-hidden="true" title="A role is degraded"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"/></svg></span>{% endif %}</button>
-        <button class="settings-subtab" role="tab" id="subtab-text-check" aria-controls="settings-text-check" aria-selected="false" data-subtab="text-check">Text Check</button>
+        <button class="settings-subtab active" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true">Connections{% if roles_degraded %}<span class="subtab-degraded-marker" aria-hidden="true" title="A role is degraded (engine-wide role health)"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"/></svg></span>{% endif %}</button>
+        <button class="settings-subtab" role="tab" id="subtab-text-check" aria-controls="settings-text-check" aria-selected="false">Text Check</button>
     </div>
     <div class="settings-subtab-panel active" id="settings-connections" role="tabpanel" aria-labelledby="subtab-connections">
         {% match error %}
@@ -123,8 +123,7 @@ impl SettingsTemplate {
         error: Option<&EngineError>,
     ) -> Self {
         let degraded = roles.iter().any(|health| {
-            matches!(health.role.as_str(), AGENT_NARRATOR | AGENT_QUANTIFIER)
-                && health.last_error.is_some()
+            matches!(health.role, Role::Narrator | Role::Quantifier) && health.last_error.is_some()
         });
         Self {
             roles: Self::role_rows(settings, roles),
@@ -150,22 +149,20 @@ impl SettingsTemplate {
     fn role_rows(settings: &AppSettings, roles: &[RoleHealth]) -> Vec<RoleRowView> {
         [
             (
-                AGENT_NARRATOR,
-                "Narrator",
+                Role::Narrator,
                 "set-narrator",
                 settings.narration_connection_id.as_str(),
             ),
             (
-                AGENT_QUANTIFIER,
-                "Quantifier",
+                Role::Quantifier,
                 "set-quantifier",
                 settings.quantifier_connection_id.as_str(),
             ),
         ]
         .into_iter()
-        .map(|(role, label, route, selected_id)| RoleRowView {
-            role: role.to_string(),
-            label: label.to_string(),
+        .map(|(role, route, selected_id)| RoleRowView {
+            role: role.agent_name().to_string(),
+            label: role_label(role).to_string(),
             set_route: format!("/connections/{route}"),
             options: settings
                 .connections
@@ -309,6 +306,7 @@ pub struct ConnectionTestResultTemplate {
                 Check before sending to LLM
             </label>
         </div>
+        <div class="inline-error-slot" data-error-slot="text-check-card" hidden></div>
     </form>
 </div>
 "##,

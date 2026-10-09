@@ -42,6 +42,10 @@ fn opening_tag_end(markup: &str) -> usize {
     panic!("an opening tag must close: {markup}");
 }
 
+/// The rendered text of `markup`, read by dropping everything between `<` and
+/// `>`: a text node that contains a literal angle bracket is therefore read
+/// wrong. Rendered fragments cannot carry one — the templates escape `<` and
+/// `>` — so the fixtures this reads never trip the assumption.
 fn visible_text(markup: &str) -> String {
     let mut text = String::new();
     let mut inside_tag = false;

@@ -9,28 +9,42 @@ use crate::adapters::driving::http::templates::HeaderTemplate;
 use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
 use crate::adapters::driving::http::utils::response::html_escape;
 use crate::application::games::view_query::RoleHealth;
-use crate::application::ports::llm_provider::{
-    AGENT_NARRATOR, AGENT_OPTIONS, AGENT_QUANTIFIER, AGENT_TRIGGER,
-};
+use crate::domain::model::agent::Role;
 use crate::error::{EngineError, Result};
 
-fn role_effect(role: &str) -> Option<&'static str> {
+pub fn role_label(role: Role) -> &'static str {
     match role {
-        AGENT_NARRATOR => Some("the turn was left unnarrated"),
-        AGENT_QUANTIFIER => Some("using fallback NPC IDs"),
-        AGENT_OPTIONS => Some("showing no options"),
-        AGENT_TRIGGER => Some("skipping the trigger"),
-        _ => None,
+        Role::Narrator => "Narrator",
+        Role::Quantifier => "Quantifier",
+        Role::Options => "Options",
+        Role::Trigger => "Trigger",
     }
 }
 
-pub(crate) fn banner_message(degraded: &[&RoleHealth]) -> String {
+pub fn role_failure_effect(role: Role) -> &'static str {
+    match role {
+        Role::Narrator => "the turn was left unnarrated",
+        Role::Quantifier => "using fallback NPC IDs",
+        Role::Options => "showing no options",
+        Role::Trigger => "skipping the trigger",
+    }
+}
+
+/// The sentence one failed role contributes to the failure banner and to its
+/// own Settings row. Role health covers every game, so a failure can outlive
+/// the game it came from until the role's next call succeeds.
+pub fn role_failure_sentence(role: Role) -> String {
+    format!(
+        "{} failed — {}",
+        role_label(role),
+        role_failure_effect(role)
+    )
+}
+
+fn banner_message(degraded: &[&RoleHealth]) -> String {
     degraded
         .iter()
-        .map(|r| match role_effect(&r.role) {
-            Some(effect) => format!("{} failed — {effect}", r.label),
-            None => format!("{} failed", r.label),
-        })
+        .map(|r| role_failure_sentence(r.role))
         .collect::<Vec<_>>()
         .join("; ")
 }
@@ -53,13 +67,15 @@ fn banner_detail(roles: &[RoleHealth]) -> String {
             };
             format!(
                 "<div class=\"{class}\"><div class=\"error-role-header\"><span class=\"error-role-name\">{name}</span><span class=\"error-role-backend\">{backend}</span></div>{body}</div>",
-                name = html_escape(&r.label),
+                name = html_escape(role_label(r.role)),
             )
         })
         .collect()
 }
 
-pub(crate) fn render_header_unlocked(game_name: String, roles: &[RoleHealth]) -> Result<String> {
+/// The header fragment plus the out-of-band failure banner it swaps in. The
+/// banner names each degraded role and states that role health is engine-wide.
+pub fn header_fragment_html(game_name: String, roles: &[RoleHealth]) -> Result<String> {
     let template = HeaderTemplate { game_name };
     let header = template
         .render()
@@ -69,11 +85,8 @@ pub(crate) fn render_header_unlocked(game_name: String, roles: &[RoleHealth]) ->
     let banner = if degraded.is_empty() {
         String::new()
     } else {
-        error_disclosure(
-            "failure-banner-popover",
-            &banner_message(&degraded),
-            &banner_detail(roles),
-        )
+        let summary = format!("{} (engine-wide role health)", banner_message(&degraded));
+        error_disclosure("failure-banner-popover", &summary, &banner_detail(roles))
     };
 
     Ok(format!(

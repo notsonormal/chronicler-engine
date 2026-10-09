@@ -23,6 +23,16 @@ impl ApplicationError {
         Self::Engine(EngineError::Internal(InternalError::new(msg)))
     }
 
+    /// Lifts an engine error, keeping a domain refusal on the variant the HTTP
+    /// layer renders as a user-facing rejection. Distinct from the `From`
+    /// impl, which keeps every engine error on `Engine` for a `?` conversion.
+    pub fn from_engine_error(error: EngineError) -> Self {
+        match error {
+            EngineError::Validation(message) => Self::Validation(message),
+            other => Self::Engine(other),
+        }
+    }
+
     /// Returns true for validation errors and `EngineError::WorldHasGames`.
     /// `WorldHasGames` surfaces as user-actionable (e.g. cannot delete world with active games).
     pub fn is_user_displayable(&self) -> bool {

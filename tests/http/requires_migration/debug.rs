@@ -148,7 +148,7 @@ async fn test_debug_is_generating_returns_false_by_default() {
 async fn test_debug_is_generating_reflects_state() {
     let app = TestAppBuilder::default_test()
         .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
-        .is_generating(true)
+        .claim_generation_slot()
         .build();
 
     let req = Request::builder()

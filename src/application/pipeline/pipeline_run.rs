@@ -10,12 +10,15 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::quantifier::{NpcEventList, QuantifierConfidence, QuantifierResult};
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{
+    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::world::WorldCard;
 use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
+use crate::error::EngineError;
 
 use crate::adapters::driven::storage::worlds::WorldBundle;
 
@@ -66,7 +69,7 @@ impl<'a> PipelineRun<'a> {
         {
             tracing::error!("Failed to save {label}: {source}");
             state.narrative.input_buffer.status =
-                GenerationStatus::Error(format!("Failed to save {label}: {source}"));
+                GenerationStatus::Error(Self::save_failure(label, &source));
             self.persist(state);
             Err(PhaseError::PersistFailed { label, source })
         } else {
@@ -74,9 +77,19 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    pub(super) fn set_error(&self, state: &mut GameState, msg: String) -> PhaseError {
-        state.narrative.input_buffer.status = GenerationStatus::Error(msg.clone());
-        PhaseError::NarratorFailed(msg)
+    /// The classified failure of a save at `label`; the entry path writes the
+    /// same failure `finalize_phase_error` writes from `PersistFailed`.
+    pub(crate) fn save_failure(label: &'static str, source: &EngineError) -> GenerationFailure {
+        GenerationFailure::from_engine_error(source).with_context(format!("Failed to save {label}"))
+    }
+
+    pub(super) fn set_error(
+        &self,
+        state: &mut GameState,
+        failure: GenerationFailure,
+    ) -> PhaseError {
+        state.narrative.input_buffer.status = GenerationStatus::Error(failure.clone());
+        PhaseError::NarratorFailed(failure)
     }
 
     pub(super) fn call_narrator(
@@ -84,7 +97,7 @@ impl<'a> PipelineRun<'a> {
         context: &PromptContext,
         preset: &PromptPreset,
         response_length: &str,
-    ) -> Result<(String, String, String), String> {
+    ) -> Result<(String, String, String), GenerationFailure> {
         let assembled = match self.pipeline.prompt_assembler.assemble(
             context,
             preset,
@@ -92,7 +105,7 @@ impl<'a> PipelineRun<'a> {
             Some(response_length),
         ) {
             Ok(a) => a,
-            Err(e) => return Err(e.llm_error_string()),
+            Err(e) => return Err(GenerationFailure::from_engine_error(&e)),
         };
 
         tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
@@ -103,13 +116,16 @@ impl<'a> PipelineRun<'a> {
             Some(assembled.max_tokens),
         ) {
             Ok(result) => result,
-            Err(e) => return Err(e.llm_error_string()),
+            Err(e) => return Err(GenerationFailure::from_engine_error(&e)),
         };
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;
 
         if narration_text.trim().is_empty() {
-            return Err("LLM Error: empty response".to_string());
+            return Err(GenerationFailure::new(
+                GenerationFailureKind::UnreadableAnswer,
+                "LLM Error: empty response",
+            ));
         }
 
         Ok((
@@ -205,7 +221,11 @@ impl<'a> PipelineRun<'a> {
                     format!("[Trigger narration failed: {e}]"),
                     MessageType::System,
                 );
-                return Err(self.set_error(state, format!("Trigger narration failed: {e}")));
+                return Err(self.set_error(
+                    state,
+                    GenerationFailure::from_engine_error(&e)
+                        .with_context("Trigger narration failed"),
+                ));
             }
         };
         tracing::info!("Pipeline ✓ Trigger complete");
@@ -214,12 +234,21 @@ impl<'a> PipelineRun<'a> {
         self.check_game_unchanged(self.started_for)?;
 
         if continuation_text.trim().is_empty() {
-            return Err(self.set_error(state, "LLM Error: empty response".to_string()));
+            return Err(self.set_error(
+                state,
+                GenerationFailure::new(
+                    GenerationFailureKind::UnreadableAnswer,
+                    "LLM Error: empty response",
+                ),
+            ));
         }
 
         if let Err(e) = state.commit_trigger_narration(trigger, &continuation_text, map, npcs) {
             tracing::error!("Trigger commit failed: {e}");
-            return Err(self.set_error(state, format!("Trigger error: {e}")));
+            return Err(self.set_error(
+                state,
+                GenerationFailure::from_engine_error(&e).with_context("Trigger error"),
+            ));
         }
 
         self.persist_snapshot_or_err(state, "post-trigger snapshot")?;
@@ -270,7 +299,10 @@ impl<'a> PipelineRun<'a> {
         let events = NpcEventList::from_diff(&previous_ids, &new_ids);
         if let Err(e) = state.apply_npc_events(&events.events, map, npcs) {
             tracing::error!("Post-trigger reconcile failed: {e}");
-            return Err(self.set_error(state, format!("Trigger reconcile: {e}")));
+            return Err(self.set_error(
+                state,
+                GenerationFailure::from_engine_error(&e).with_context("Trigger reconcile"),
+            ));
         }
         Ok(())
     }
@@ -378,12 +410,17 @@ impl<'a> PipelineRun<'a> {
         &self,
         preset_id: &str,
         kind: PresetKind,
-    ) -> Result<(PromptPreset, String), String> {
+    ) -> Result<(PromptPreset, String), GenerationFailure> {
         let response_length = self
             .pipeline
             .storage
             .get_settings()
-            .map_err(|e| format!("Failed to read settings: {e}"))?
+            .map_err(|e| {
+                GenerationFailure::new(
+                    GenerationFailureKind::Other,
+                    format!("Failed to read settings: {e}"),
+                )
+            })?
             .response_length
             .clone();
         match self.pipeline.storage.get_preset(preset_id) {
@@ -393,17 +430,22 @@ impl<'a> PipelineRun<'a> {
                     "active {} preset '{preset_id}' not found — defaults not seeded?",
                     kind.label()
                 );
-                Err(format!("Active {} preset not found", kind.label()))
+                Err(GenerationFailure::from_engine_error(
+                    &EngineError::PresetNotFound(preset_id.to_string()),
+                ))
             }
             Err(e) => {
                 tracing::error!("preset storage inaccessible: {e}");
-                Err("Preset storage inaccessible".to_string())
+                Err(GenerationFailure::new(
+                    GenerationFailureKind::Other,
+                    "Preset storage inaccessible",
+                ))
             }
         }
     }
 }
 
-/// Which preset branch a load serves — names the not-found error.
+/// Which preset branch a load serves — names the not-found log line.
 #[derive(Clone, Copy)]
 pub(crate) enum PresetKind {
     /// The active system preset (narration and trigger generations).
@@ -436,13 +478,7 @@ impl<'a> PipelineRun<'a> {
             state.narrative.input_buffer.status
         );
 
-        if state
-            .narrative
-            .input_buffer
-            .status
-            .error_message()
-            .is_none()
-        {
+        if state.narrative.input_buffer.status.failure().is_none() {
             state.narrative.input_buffer.status = GenerationStatus::Idle;
         }
         state.narrative.input_buffer.phase = GenerationPhase::default();

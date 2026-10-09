@@ -113,12 +113,12 @@ async fn test_switch_game_heals_stale_generating_status() {
 
     // The registry poll reads `idle` for a game with no slot whether or not
     // the handler healed it, so assert the persisted channel.
-    let (status, _) = state
-        .game_view_query
-        .get_generating_status()
+    let persisted = state
+        .message_service
+        .load_expecting_valid_state()
         .expect("reading the persisted status should succeed");
     assert_eq!(
-        status,
+        persisted.narrative.input_buffer.status,
         GenerationStatus::Idle,
         "switching to a game with a stale persisted Generating must heal the persisted channel"
     );

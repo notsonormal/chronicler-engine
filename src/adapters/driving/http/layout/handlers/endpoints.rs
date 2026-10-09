@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::{extract::State, response::Html, response::Response};
 
 use crate::adapters::driving::http::utils::error::{
-    error_disclosure, generation_error_summary, raw_error_detail,
+    error_disclosure, generation_failure_summary, raw_error_detail,
 };
 use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::AppState;
@@ -71,11 +71,11 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
     tracing::debug!(
         "generating_status_handler: is_generating={is_gen}, status={status:?}, phase={phase:?}",
     );
-    if let Some(err) = status.error_message() {
+    if let Some(failure) = status.failure() {
         Html(error_disclosure(
             "status-error-popover",
-            &generation_error_summary(err),
-            &raw_error_detail(err),
+            generation_failure_summary(failure.kind),
+            &raw_error_detail(&failure.raw),
         ))
     } else if is_gen {
         Html(phase.as_endpoint_str().to_string())

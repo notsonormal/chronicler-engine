@@ -307,7 +307,7 @@ And the body contains the copy name "Original (Copy)"
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist/duplicate
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
@@ -342,7 +342,7 @@ When the client POST /prompt-presets/{id}/activate?mode=interactive_fiction
 Then the response is 200
 And the response body contains an "Active · Interactive Fiction" badge in that preset's card-badges
 And the Interactive Fiction bundle's system slot holds that preset's id
-And activating the same preset without the mode parameter returns `<div class="error-message">Preset not allowed for novel mode</div>`
+And activating the same preset without the mode parameter answers a 400 with `<div class="error-message">Preset not allowed for novel mode</div>`
 ```
 
 #### Scenario 21.26: Panel gates activation buttons by allowed_modes
@@ -359,7 +359,7 @@ And that preset's card does not contain a "Set Active (Novel)" button
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist/activate
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 

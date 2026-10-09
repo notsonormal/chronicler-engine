@@ -4,17 +4,17 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{self, Request, StatusCode};
-use chrono::Utc;
 use tower::util::ServiceExt;
 
+use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
-use chronicler_engine::domain::model::llm_message::LlmMessage;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
 use chronicler_engine::test_support::body_text;
+use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
@@ -51,22 +51,6 @@ fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
         single_user_message: false,
         max_tokens: None,
         max_context_tokens: None,
-    }
-}
-
-fn llm_message(agent: &str, error: Option<&str>, created_offset_secs: i64) -> LlmMessage {
-    LlmMessage {
-        id: 0,
-        agent_name: agent.to_string(),
-        backend_name: "Mock".to_string(),
-        model_name: "mock".to_string(),
-        system_prompt: String::new(),
-        user_prompt: String::new(),
-        raw_request_json: String::new(),
-        raw_response_json: String::new(),
-        parsed_response: String::new(),
-        error_message: error.map(str::to_string),
-        created_at: Utc::now() + chrono::Duration::seconds(created_offset_secs),
     }
 }
 
@@ -197,6 +181,79 @@ async fn test_text_check_disabled_clears_check_before_sending() {
     assert!(
         !tag.contains("checked"),
         "the check box must be cleared: {tag}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.22
+#[tokio::test]
+async fn test_failed_text_check_save_answers_non_2xx_and_swaps_no_card() {
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory().with_failure(
+        "update_settings",
+        TestOverride::internal("text check save failure"),
+    ));
+    let app = TestAppBuilder::default_test().storage(storage).build();
+
+    let response = app
+        .oneshot(post_form_request(
+            "/settings/text-check",
+            "check_mode=spell&enable_auto_check=true",
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = body_text(response).await;
+    assert!(
+        body.contains("text check save failure"),
+        "the failure must name the storage error: {body}"
+    );
+    assert!(
+        !body.contains(r#"id="text-check-card"#),
+        "a failed save must not answer a card, which the client would swap in: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.23
+#[tokio::test]
+async fn test_failed_settings_panel_load_reports_inside_the_panel() {
+    let _guard = SettingsTestGuard::new();
+    let storage = Arc::new(Storage::new_in_memory());
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+    storage.add_failure(
+        "get_settings",
+        TestOverride::internal("settings read failure"),
+    );
+
+    let body = get_body(&app, "/fragment/settings").await;
+
+    assert!(
+        body.contains("settings read failure"),
+        "a panel that cannot read settings must render the failure: {body}"
+    );
+    assert!(
+        !body.contains(r#"<div class="settings-panel">"#),
+        "the panel must not render a settings panel it could not read: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.24
+#[tokio::test]
+async fn test_unknown_connection_edit_form_reports_inside_the_panel() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let body = get_body(&app, "/fragment/connections/does-not-exist/edit").await;
+
+    assert!(
+        body.contains("Connection not found"),
+        "the panel must report the unknown connection: {body}"
+    );
+    assert!(
+        !body.contains(r#"id="conn_name"#),
+        "an unknown connection must not render an edit form: {body}"
     );
 }
 
@@ -355,7 +412,12 @@ async fn test_role_rows_show_each_roles_health() {
     assert!(!body.contains("subtab-degraded-marker"));
 
     storage
-        .save_llm_message(&llm_message("narrator", Some("connection refused"), -10))
+        .save_llm_message(&llm_message(
+            "narrator",
+            "mock",
+            Some("connection refused"),
+            -10,
+        ))
         .unwrap();
     let body = get_body(&app, "/fragment/settings").await;
     assert!(
@@ -371,12 +433,16 @@ async fn test_role_rows_show_each_roles_health() {
         "the marker must carry an icon, or a colour-blind reader loses the cue: {body}"
     );
     assert!(
+        body.contains(r#"title="A role is degraded (engine-wide role health)""#),
+        "the marker's tooltip must state that role health covers every game: {body}"
+    );
+    assert!(
         body.contains(r#"<pre class="error-detail-raw">connection refused</pre>"#),
         "the raw failure text must be reachable in the disclosure: {body}"
     );
 
     storage
-        .save_llm_message(&llm_message("narrator", None, 0))
+        .save_llm_message(&llm_message("narrator", "mock", None, 0))
         .unwrap();
     let body = get_body(&app, "/fragment/settings").await;
     assert!(

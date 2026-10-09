@@ -523,12 +523,12 @@ fn test_process_action_heals_stale_status_before_validation_error() {
         "process_action should fail when persona is missing, got {result:?}"
     );
 
-    let (status, _) = app
-        .game_view_query
-        .get_generating_status()
-        .expect("get_generating_status should succeed");
+    let persisted = app
+        .message_service
+        .load_expecting_valid_state()
+        .expect("the healed snapshot should load");
     assert_eq!(
-        status,
+        persisted.narrative.input_buffer.status,
         GenerationStatus::Idle,
         "stale Generating status should be healed to Idle before validation error returns"
     );

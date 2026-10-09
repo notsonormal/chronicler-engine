@@ -12,8 +12,9 @@ use axum::{
 use crate::adapters::driving::http::AppState;
 use crate::application::errors::ApplicationError;
 use crate::domain::model::game::{Game, PresetSelection};
-use crate::domain::model::prompt_preset::PresetType;
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
+use crate::error::EngineError;
 
 use crate::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GamesPanelTemplate, PersonaRowView,
@@ -206,33 +207,33 @@ fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError
 /// load failure degrades to an error fragment in the picker row; the posture
 /// controls still render so the auto-saves keep working.
 fn posture_controls_html(state: &AppState, game: &Game) -> String {
-    let presets = (
-        state.prompt_preset_service.list_presets(PresetType::System),
-        state
-            .prompt_preset_service
-            .list_presets(PresetType::Quantifier),
-        state
-            .prompt_preset_service
-            .list_presets(PresetType::Impersonate),
-        state
-            .prompt_preset_service
-            .list_presets(PresetType::Options),
-    );
-    let (system, quantifier, impersonate, options, preset_load_error) = match presets {
-        (Ok(system), Ok(quantifier), Ok(impersonate), Ok(options)) => {
-            (system, quantifier, impersonate, options, None)
-        }
-        (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => (
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Some(e.to_string()),
-        ),
+    let (libraries, preset_load_error) = match load_preset_libraries(state) {
+        Ok(libraries) => (libraries, None),
+        Err(e) => (Default::default(), Some(e.to_string())),
     };
+    let [system, quantifier, impersonate, options] = libraries;
 
     let mut template =
         GamePostureTemplate::from_game(game, &system, &quantifier, &impersonate, &options);
     template.preset_load_error = preset_load_error;
     template.render().unwrap_or_default()
+}
+
+/// The preset libraries the posture picker lists, in
+/// [`GamePostureTemplate::from_game`]'s field order.
+const PRESET_PICKER_TYPES: [PresetType; 4] = [
+    PresetType::System,
+    PresetType::Quantifier,
+    PresetType::Impersonate,
+    PresetType::Options,
+];
+
+fn load_preset_libraries(
+    state: &AppState,
+) -> Result<[Vec<PromptPreset>; PRESET_PICKER_TYPES.len()], EngineError> {
+    let mut libraries: [Vec<PromptPreset>; PRESET_PICKER_TYPES.len()] = Default::default();
+    for (slot, preset_type) in libraries.iter_mut().zip(PRESET_PICKER_TYPES) {
+        *slot = state.prompt_preset_service.list_presets(preset_type)?;
+    }
+    Ok(libraries)
 }

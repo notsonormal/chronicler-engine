@@ -4,32 +4,17 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use chrono::Utc;
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
-use chronicler_engine::domain::model::llm_message::LlmMessage;
-use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use chronicler_engine::domain::model::state::generation_status::{
+    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+};
+use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::test_support::TestAppBuilder;
 
 use crate::support::http_requests::{fetch_body, post_form};
-
-fn llm_message(agent: &str, error: Option<&str>, created_offset_secs: i64) -> LlmMessage {
-    LlmMessage {
-        id: 0,
-        agent_name: agent.to_string(),
-        backend_name: "Mock".to_string(),
-        model_name: "mock".to_string(),
-        system_prompt: String::new(),
-        user_prompt: String::new(),
-        raw_request_json: String::new(),
-        raw_response_json: String::new(),
-        parsed_response: String::new(),
-        error_message: error.map(str::to_string),
-        created_at: Utc::now() + chrono::Duration::seconds(created_offset_secs),
-    }
-}
 
 // [docs/specs/failure_display.md] SCENARIO: 38.1
 #[tokio::test]
@@ -40,6 +25,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
     storage
         .save_llm_message(&llm_message(
             "quantifier",
+            "mock",
             Some("fallback NPC IDs used"),
             -10,
         ))
@@ -55,6 +41,10 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         "the banner must name the role and what the engine did instead: {body}"
     );
     assert!(
+        body.contains("(engine-wide role health)"),
+        "the banner must state that role health covers every game: {body}"
+    );
+    assert!(
         body.contains("error-details-toggle"),
         "the banner must offer the Details disclosure: {body}"
     );
@@ -68,7 +58,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
     );
 
     storage
-        .save_llm_message(&llm_message("quantifier", None, 0))
+        .save_llm_message(&llm_message("quantifier", "mock", None, 0))
         .unwrap();
     let body = fetch_body(&app, "/fragment/header").await;
     assert!(
@@ -113,7 +103,10 @@ async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
 async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
     let state = TestAppBuilder::default_test()
         .generation_status(
-            GenerationStatus::Error("LLM Error: connection refused".to_string()),
+            GenerationStatus::Error(GenerationFailure {
+                kind: GenerationFailureKind::Unreachable,
+                raw: "LLM Error: connection refused".to_string(),
+            }),
             GenerationPhase::Narrating,
         )
         .build_service();
@@ -131,6 +124,37 @@ async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
     assert!(
         !body.contains(r#"<span class="status error">Error: LLM Error"#),
         "the raw transport message must never be rendered inline: {body}"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.5
+#[tokio::test]
+async fn test_missing_preset_failure_clamps_with_the_preset_line() {
+    let state = TestAppBuilder::default_test()
+        .generation_status(
+            GenerationStatus::Error(GenerationFailure {
+                kind: GenerationFailureKind::PresetMissing,
+                raw: "Prompt preset not found: system_default".to_string(),
+            }),
+            GenerationPhase::Narrating,
+        )
+        .build_service();
+    let app = build_router(state);
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The active prompt preset is missing."),
+        "a missing preset must keep its own line, not the general one: {body}"
+    );
+    assert!(
+        !body.contains("The last turn failed to generate."),
+        "the general line belongs to failures no kind names: {body}"
+    );
+    assert!(
+        body.contains(
+            r#"<pre class="error-detail-raw">Prompt preset not found: system_default</pre>"#
+        ),
+        "the missing preset id must be reachable in the disclosure: {body}"
     );
 }
 

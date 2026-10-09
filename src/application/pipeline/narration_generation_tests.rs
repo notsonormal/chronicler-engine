@@ -9,7 +9,9 @@ use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::application::pipeline::PhaseError;
 use crate::application::ports::llm_provider::LlmProvider;
-use crate::domain::model::state::generation_status::GenerationStatus;
+use crate::domain::model::state::generation_status::{
+    GenerationFailure, GenerationFailureKind, GenerationStatus,
+};
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{
     make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder, TestDataBuilder,
@@ -140,10 +142,11 @@ fn test_run_bundle_load_failure_returns_fetch_failed() {
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     match outcome {
-        Err(PhaseError::FetchFailed(msg)) => {
+        Err(PhaseError::FetchFailed(failure)) => {
             assert!(
-                msg.contains("simulated get_world failure"),
-                "unexpected FetchFailed message: {msg}"
+                failure.raw.contains("simulated get_world failure"),
+                "unexpected FetchFailed message: {}",
+                failure.raw
             );
         }
         other => panic!("expected FetchFailed, got {other:?}"),
@@ -160,14 +163,17 @@ fn test_run_room_not_found_sets_error_status() {
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     match outcome {
-        Err(PhaseError::NarratorFailed(msg)) => {
-            assert_eq!(msg, "Room not found");
+        Err(PhaseError::NarratorFailed(failure)) => {
+            assert_eq!(failure.raw, "Room not found");
         }
         other => panic!("expected NarratorFailed, got {other:?}"),
     }
     assert_eq!(
         state.narrative.input_buffer.status,
-        GenerationStatus::Error("Room not found".to_string()),
+        GenerationStatus::Error(GenerationFailure::new(
+            GenerationFailureKind::SceneMissing,
+            "Room not found"
+        )),
         "set_error must record the failure on the in-flight state"
     );
 }
@@ -192,15 +198,19 @@ fn test_run_missing_preset_sets_error_status() {
     let mut state = app.message_service.load_or_fresh();
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
+    let expected_raw = format!("Prompt preset not found: {active_preset_id}");
     match outcome {
-        Err(PhaseError::NarratorFailed(msg)) => {
-            assert_eq!(msg, "Active system preset not found");
+        Err(PhaseError::NarratorFailed(failure)) => {
+            assert_eq!(failure.raw, expected_raw);
         }
         other => panic!("expected NarratorFailed, got {other:?}"),
     }
     assert_eq!(
         state.narrative.input_buffer.status,
-        GenerationStatus::Error("Active system preset not found".to_string()),
+        GenerationStatus::Error(GenerationFailure::new(
+            GenerationFailureKind::PresetMissing,
+            expected_raw,
+        )),
     );
 }
 
@@ -222,10 +232,11 @@ fn test_run_narrator_error_sets_error_status() {
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     match outcome {
-        Err(PhaseError::NarratorFailed(msg)) => {
+        Err(PhaseError::NarratorFailed(failure)) => {
             assert!(
-                msg.contains("configured_failure"),
-                "unexpected narrator error: {msg}"
+                failure.raw.contains("configured_failure"),
+                "unexpected narrator error: {}",
+                failure.raw
             );
         }
         other => panic!("expected NarratorFailed, got {other:?}"),
