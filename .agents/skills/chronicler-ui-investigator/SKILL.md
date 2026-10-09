@@ -11,7 +11,7 @@ Drive a Chronicler dashboard and capture evidence for an expectation the caller 
 ## Prerequisites
 
 - Browser tools: `chrome_devtools_navigate`, `chrome_devtools_evaluate`, `chrome_devtools_screenshot`, `chrome_devtools_list_pages`, `chrome_devtools_select_page`, plus the `chrome_devtools_load` loader. If a capability is missing, call the loader with a task query (`/chrome-devtools enable` activates everything too); if the loader itself is missing, `/reload`.
-- Chrome must already be running. `~/.bashrc` starts it via `/home/node/.pi/start-browser.sh`; run that script and retry when a tool reports an unreachable endpoint, or when a CDP call times out (e.g. `Page.enable` on a wedged page).
+- Chrome must already be running. `~/.bashrc` starts it via `/home/node/.pi/start-browser.sh`. If a tool reports an unreachable endpoint, or `Page.enable` times out on a wedged page, run that script and retry. A `Runtime.evaluate` timeout is different. See the 10 s cap in step 2.
 - No browser tools at all: drive `node scripts/cdp.mjs` (`list`, `shot`, `snap`, `html`, `eval`, `nav`, `click`, `type`) from `bash`, or use the Playwright harness below.
 - [ENVIRONMENT.md](ENVIRONMENT.md) has the rest of the machinery: the extension, viewports, delegated sweeps, and what breaks in this container.
 
@@ -19,14 +19,16 @@ Drive a Chronicler dashboard and capture evidence for an expectation the caller 
 
 ### 1. Serve
 
-A probe must never be pointed at the live dashboard: a realistic turn there fires an LLM call and mutates the active game. Always start the probe's own server, against its own database, on its own port:
+Never point a probe at the live dashboard. A realistic turn there changes the active game. Always start the probe's own server, against its own database, on its own port:
 
 ```bash
-python build.py run --target-dir tmp/probe-server -- --world redmist_estate --port 3001
+python build.py run --target-dir target/ui-investigator -- --world redmist_estate --port 3001
 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/   # 200 → reuse this probe server
 ```
 
-The server's DB is `<exe dir>/chronicler_<port>.db` (`src/bootstrap/run.rs`), so this writes `tmp/probe-server/debug/chronicler_3001.db`. Drive only the server this step started, on the port passed here — the live dashboard keeps its own DB. Integration tests allocate their own ports from 3010–3050 (`tests/test_config.json`), so keep the probe outside that band. The first run into a new target dir is a cold build; later runs are warm. A concurrent probe needs its own port and its own `--target-dir`.
+`build.py run` replaces itself with the server, so start it in the background (`nohup … &`) and poll the `curl` until it returns 200. The DB is `target/ui-investigator/debug/chronicler_3001.db` (see `AGENTS.md`, *Development Loop*). The first run seeds the new target dir from a warm sibling (`scripts/target_seed.py`). Later runs are warm. A full gate builds into `target/debug`, so it does not touch the probe's DB. Integration tests allocate ports 3010–3050 (`tests/test_config.json`), so keep the probe outside that band. A concurrent second probe needs its own port and its own `--target-dir`.
+
+Use the real connections the settings already hold. A turn costs less than a cent, and only a real provider shows real failure shapes (a reasoning-only reply, a 401, a truncated answer). Ollama does not run in this container, so a role on an Ollama connection fails on every turn. Treat that failure as expected, not as a finding.
 
 Done when `/` returns 200. A dead session can leave the port bound — check before starting a second engine. For how `python build.py run` works, see the repo-root [ENVIRONMENT.md](../../../ENVIRONMENT.md).
 
@@ -39,8 +41,10 @@ chrome_devtools_navigate(url="http://127.0.0.1:3001")
 `chrome_devtools_evaluate` awaits the promise it is given, so poll inside it for dynamic content:
 
 ```javascript
-chrome_devtools_evaluate(expression="(async () => { for (let i = 0; i < 40; i++) { if (document.querySelector('#story-log .log-entry')) return 'ready'; await new Promise(r => setTimeout(r, 250)); } return 'timeout'; })()")
+chrome_devtools_evaluate(expression="(async () => { for (let i = 0; i < 30; i++) { if (document.querySelector('#story-log .log-entry')) return 'ready'; await new Promise(r => setTimeout(r, 250)); } return 'not yet'; })()")
 ```
+
+**Each `chrome_devtools_evaluate` call has a fixed 10 s cap** (`Timed out waiting for CDP response: Runtime.evaluate`), and an LLM turn takes longer. Click in one call, then poll in short calls of 8 s or less until the state you want appears. A timed-out call does not stop the page's JS or undo the click. Poll again, and keep the browser running.
 
 For a turn in flight, poll `#status-display` until it reads "Ready" — during generation it reads "Thinking", "Narrating", "Generating" or "Quantifying" (spec 16.6). `/status/generating` returns a bare phase name or `idle`, and `onStatusPoll` maps `idle` to "Ready" in the DOM, so poll the element, not the endpoint.
 
@@ -59,11 +63,22 @@ chrome_devtools_evaluate(expression="(async () => { const paths = ['/fragment/ac
 chrome_devtools_screenshot(savePath="tmp/chronicler-ui.png")
 ```
 
+For a long review, or for a viewport other than the default, use `node scripts/cdp.mjs shot`: see ENVIRONMENT.md's *Long reviews and viewports*.
+
 For a post-plan pass, fetch the full dashboard set instead — `header`, `story-log`, `visual-sidebar`, `options-dock`, `action-area`, `character-headshots`, `settings`, `prompt-presets`, `games`, `worlds`, `llm-messages` — plus `/status/generating`, and confirm each is 200.
 
 `#connection-status` renders server-side and always reads "Connected"; it is not a live socket indicator.
 
-**Done only when you have looked at a shot.** A green test, a DOM dump, a clean engine log and a delegated agent's report are each narrower evidence, and none of them stands in for a shot of the rendered page that you have personally compared against expectations. Write findings to the ticket as they are established, so a dead session costs the shots rather than the analysis. Console messages have no tool equivalent: read the engine log tee, `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`), or the terminal for a hand-started server.
+**Done only when you have looked at a shot.** A green test, a DOM dump, a clean engine log and a delegated agent's report are each narrower evidence, and none of them stands in for a shot of the rendered page that you have personally compared against expectations. Write findings to the ticket as they are established, so a dead session costs the shots rather than the analysis. Console messages have no tool equivalent. A hand-started server writes its log to `logs/chronicler_<date>.<date>.log` under its working directory, for example `logs/chronicler_20261009.2026-10-09.log`. Every server started that day writes to the same file. Filter it by time or by request id. The server's stdout shows only the build. Test servers write `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`).
+
+### 4. Stop
+
+```bash
+pkill -f "[c]hronicler_engine.*--port 3001"                       # the brackets keep pkill from matching its own shell
+curl -s http://127.0.0.1:9222/json/close/<id>                     # <id>: the full page id from chrome_devtools_list_pages
+```
+
+At the end of the review, also stop Chrome with the `pgrep -x chrome` loop in ENVIRONMENT.md. Chrome holds about 2 GB. Done when `curl` to the probe port fails and no tab points at the probe port.
 
 ## Reproducible checks: the Playwright harness
 
@@ -91,6 +106,7 @@ Selector vocabulary: `docs/specs/browser_*.md`, enforced in `tests/browser/` (`d
 |---|---|
 | Status display frozen | `/status/generating`; `#status-display` swaps on its own 5s poll |
 | Capability tool missing | `chrome_devtools_load`; loader missing → `/reload` |
-| Endpoint unreachable, or a CDP call times out | `/home/node/.pi/start-browser.sh`, then retry |
+| Endpoint unreachable, or `Page.enable` times out | `/home/node/.pi/start-browser.sh`, then retry |
+| `Timed out waiting for CDP response: Runtime.evaluate` | The 10 s cap (step 2). The page's JS is still running. Poll again in a short call |
 | Engine won't start | Port already bound. Stop that process or pass `-- --port <other>` |
-| World JSON edits do not appear | The server reads `target/debug/data`, the copy the last full gate wrote. Run `python build.py` to refresh it. |
+| World JSON edits do not appear | The server reads `<target-dir>/debug/data` when a full gate copied it there (see `AGENTS.md`, *Development Loop*). Delete that copy, or run the gate with the same `--target-dir` to refresh it. |

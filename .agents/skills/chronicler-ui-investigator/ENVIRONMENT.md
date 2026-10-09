@@ -48,8 +48,8 @@ The launcher asks for a desktop viewport instead:
 headless=new reserves 143px of window chrome, so the window must be 943px tall to
 yield an 800px viewport. That offset is a fixed constant, not a ratio. Since the UI
 is desktop-first, 1280x800 is the correct default: ad-hoc shots land on the primary
-target rather than an arbitrary one. A responsive sweep overrides it per shot via
-`Emulation.setDeviceMetricsOverride`.
+target rather than an arbitrary one. A responsive sweep overrides it per shot: see
+*Long reviews and viewports* below.
 
 ## Why Chrome cannot start itself
 
@@ -157,12 +157,38 @@ google-chrome` matches nothing.
 ## Vision models and image caps
 
 Providers cap the images one request may carry (`glm-5.3-flash` rejects at 31:
-`Too many images in request`). Long reviews reach that cap fast, so lean on DOM
-dumps for structure and look at shots in small batches. `@getpipher/vision`
+`Too many images in request`). Every `chrome_devtools_screenshot` puts its image
+into the context, so a long review reaches that cap. The ticket-24 re-review took
+33 inline shots and grew to about 315k tokens. Use `cdp.mjs shot` as *Long reviews
+and viewports* shows, and use DOM dumps for structure. `@getpipher/vision`
 is configured (`~/.pi/agent/vision.json`) to delegate image description to
 `deepseek-v4-flash-vision-exp` for text-only primaries, with `glm-5.3-flash` as
 fallback; `opencode-go/deepseek-v4.1-flash`, the current default model, is
 multimodal itself and takes images natively.
+
+## Long reviews and viewports
+
+`scripts/cdp.mjs shot` writes the image to a file and returns only text. `read`
+only the shots you need to look at. Its per-tab daemon holds one CDP session open.
+An `Emulation` override lives as long as that session. A viewport set through
+`evalraw` therefore applies to the next `shot`. The `chrome_devtools_*` tools use
+their own sessions, so they do not see the override (verified for `evaluate`,
+inferred for `screenshot`).
+
+```bash
+node scripts/cdp.mjs list                                   # <t> is the tab id prefix, for example 56B046B9
+node scripts/cdp.mjs evalraw <t> Emulation.setDeviceMetricsOverride \
+  '{"width":1024,"height":700,"deviceScaleFactor":1,"mobile":false}'
+node scripts/cdp.mjs eval <t> "innerWidth+'x'+innerHeight"  # 1024x700
+node scripts/cdp.mjs shot <t> tmp/<review>/30-game-1024x700.png
+node scripts/cdp.mjs evalraw <t> Emulation.clearDeviceMetricsOverride '{}'
+```
+
+Verified 2026-10-09. `eval` reported `1024x700`. The PNG was 1024x700.
+`clearDeviceMetricsOverride` restored the default. While the override was set,
+`chrome_devtools_evaluate` on the same tab still read `1280x856`. The daemon keeps
+the override for its idle life (20 min), so clear it before the next default-size
+`cdp.mjs shot`.
 
 ## Delegated screenshot sweeps
 

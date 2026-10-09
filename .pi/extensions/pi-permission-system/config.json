@@ -39,6 +39,10 @@
       "grep * /workspace/chronicler-engine/ *": {
         "action": "deny",
         "reason": "Repo-root grep walks target/ (~10 GB) and hangs. Use rg (skips target/ via .gitignore) or grep a subdirectory such as src/ or tests/"
+      },
+      "find / *": {
+        "action": "deny",
+        "reason": "find / walks the whole container and takes minutes. Use rg --files, or find on a bounded path such as target/ui-investigator/. For the dev server DB path, see AGENTS.md, Development Loop."
       }
     }
   }
