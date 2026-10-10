@@ -379,6 +379,5 @@ The `sillytavern_chat_window_example.html` file contains a **runtime snapshot** 
 
 ## Document References
 
-- [system/dashboard.md](../system/dashboard.md) — chronicler dashboard HTML structure
-- [system/ui_design.md](../system/ui_design.md) — chronicler UI design tokens + tab styling
-- [system/prompt_system.md](../system/prompt_system.md) — chronicler prompt architecture
+- [dashboard.md](../diataxis/reference/frontend/dashboard.md) — chronicler dashboard regions and states
+- [prompt_system.md](../diataxis/reference/narrative/prompt_system.md) — chronicler prompt architecture

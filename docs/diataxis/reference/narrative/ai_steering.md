@@ -69,4 +69,4 @@ On retry, the engine reads the steering from the retry-target swipe's stored inp
 - [`./narration_system.md`](./narration_system.md) — the Game Master role, the `FreeAction` default, and the continue path.
 - [`../game_flow.md`](../game_flow.md) — the action-pipeline phases, the retry flow, and the re-trigger path.
 - [`../storage.md`](../storage.md) — the `messages` and `message_swipes` tables, the `Swipe` record, and its stored generation inputs.
-- [`../frontend/dashboard.md`](../frontend/dashboard.md) — the slash-command auto-suggestion palette in the command input.
+- [`../frontend/dashboard.md`](../frontend/dashboard.md) — the slash palette in the action area.

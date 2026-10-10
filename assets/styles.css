@@ -1,4 +1,5 @@
 :root {
+    /* Every text colour clears 4.5:1 (WCAG AA) against each background it is used on. */
     --color-bg-primary: #121212;
     --color-bg-secondary: #191919;
     --color-bg-tertiary: #161616;

@@ -275,7 +275,7 @@ The confirm path is the preview's send: it dispatches the checked command
 without swapping a fresh action area back in, so the status display alone
 reflects the running turn.
 
-## Invariants
+## Properties
 
 These properties hold across every `POST /action` and are observable
 through HTTP. Drift indicates a regression even if all scenarios pass.

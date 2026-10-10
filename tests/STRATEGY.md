@@ -65,6 +65,8 @@ dereferences a `GameState` field or calls a `Storage` method to observe state.
 Specs (`docs/specs/`) state what the engine does. An HTTP-observed scenario
 maps to at least one tier-1 test that asserts a domain outcome. A DOM-observed
 scenario (`browser_*.md`) maps to at least one tier-2 or tier-3 test.
+`docs/AGENTS.md` "Where a fact lives" sets what a spec holds and what a
+Diátaxis doc holds.
 
 A scenario can be a single call ("POST /action with empty input → one
 continuation narration"), or a sequence ("POST /action → POST /retry → POST

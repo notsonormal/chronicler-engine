@@ -18,26 +18,31 @@ They might not traditionally be considered documentation, but reading the code a
 
 The specs describe the behaviour a client observes through HTTP and browser interactions, and are enforced by the integration tests (every spec has an associated integration test).
 
-The Diátaxis docs are intended to describe the system in ways the code, tests, and specs cannot — explanation and reference the code, tests, and specs do not carry.
+The code and the specs are the complete record. The Diátaxis docs are selective: they carry what the code, tests and specs cannot.
 
-Coverage is not a goal. A behaviour that only the code defines stays in the code. The code and the specs are the complete record, and the Diátaxis docs are selective.
+### Where a fact lives
 
-The specs are a relatively new introduction. They absorb the behavioural contract that used to live in free-form Diátaxis docs, so the Diátaxis tree can focus on explanation and on reference the specs cannot hold.
+Put each fact in exactly one layer:
 
-## Code Indexer
+| A fact that is… | Lives in |
+|---|---|
+| The purpose of a part, its name, or an invariant: an always-true statement of what owns what ("a swipe switch restores the Snapshot of the target Swipe", "role health is engine-wide", "settings is a singleton row") | Diátaxis Reference |
+| Why the system is that way | Diátaxis Explanation |
+| An event rule at feature level ("when X, then Y"), or a property that every request keeps | A spec scenario, a spec section intro, or a spec's Properties section |
+| Fine-grained behaviour, edge cases, values, copy text, icons, markup, implementation steps | The code and its tests |
 
-Documents should not be code indexers. The principle is that the code is self-documenting and the chronicler engine docs is a layer on top of that. The docs exist because they are more concise and easier to curate than AI-generated code comments.
+In `docs/diataxis/`, a fact has one home per subject: the Reference doc states it, and its Explanation doc gives only the reason. A doc on another subject may restate it in one sentence when its reader needs it.
 
-Docs should not be explaining how the code works, which is what excessive references to modules, classes, methods and types tends to be. Plans (`docs/plans` and `.scratch`) are naturally excluded for this.
+An invariant stays true through the next fix, restyle or copy edit in its area. That is the test for a Reference sentence.
 
-XML/domain markups (e.g. `<ConversationHistory>`, `<PlayerInput>`) are domain tags, not code references — they don't trigger this test.
+**Direction of edits.** A behaviour change edits its spec and its test. A doc in `docs/diataxis/` changes only when a change adds, removes or renames a part, an invariant or a name that the doc states. A Diátaxis doc that needs an edit for most changes in its area copies the code. Rewrite it.
 
-Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-docs-hygiene/SKILL.md` skill.
+**Document References.** List only the paired Reference or Explanation doc of the same subject, and any doc that the body hands a point to. The Folder Structure index below lists every other doc, and each test names its spec. Cite no spec scenario numbers in a Diátaxis doc.
 
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-10-04 00:31 UTC*
+*Index last generated: 2026-10-10 16:50 UTC*
 
 ### `docs/diataxis/explanation/`
 
@@ -68,7 +73,6 @@ Accumulated violations in existing docs: invoke the `.agents/skills/chronicler-d
 
 - [Dashboard](./diataxis/reference/frontend/dashboard.md)
 - [Http Routes](./diataxis/reference/frontend/http_routes.md)
-- [Ui Design](./diataxis/reference/frontend/ui_design.md)
 
 ### `docs/diataxis/reference/narrative/`
 
@@ -119,7 +123,7 @@ Every doc in `docs/diataxis/` is in exactly one of four Diátaxis modes. The mod
 
 For the framework's first principles (two-axis compass, adjacent-mode boundaries, workflow), see `diataxis/explanation/diataxis.md`.
 
-If the content doesn't solve a reader problem under any of these, drop it. If it mixes modes, split it by mode. Canonical splits in this tree: `game_flow.md` ↔ `two-state-channels.md`, `agent_system.md` ↔ `agent_system_design.md`, `storage.md` ↔ `storage_design.md`.
+If the content doesn't solve a reader problem under any of these, drop it. If it mixes modes, split it by mode.
 
 ### Front-matter
 
@@ -151,23 +155,6 @@ Docs in this tree are written deliberately in their Diátaxis mode, not lifted f
 - **Drop** — content doesn't solve a reader problem under the compass test. Apply the test honestly; if nothing registers, drop it.
 
 Nothing should be force-fit. If a piece of content fights the frame, that's a signal — either split, cross-reference, or drop.
-
-### Reference defers to source
-
-Reference docs do **not** restate values that live in code as the authoritative source. This is an explicit carve-out of the no-code-indexer rule (below). Specifically: no column-level DDL, no struct field lists, no function signatures, no migration version numbers, no constants, no caps — when those are the authoritative source in code.
-
-Restating these in markdown is drift-prone duplication — the source changes, the doc rots.
-
-Behaviour defers to source in the same way. Edge cases, ordering rules, and UI details such as focus, scroll and which slot shows an error live in the code. The specs and tests pin the ones that matter. Do not cite spec scenario numbers for them.
-
-What Reference docs **do** carry:
-
-- What each thing is *for* (prose, one paragraph per table/component/endpoint).
-- The invariants the code doesn't say directly ("messages are not stored in the snapshot JSON", "one message history per game", "settings is a singleton row").
-- Relationships and aggregate structure (see "Relationships diagrams" below).
-- The names of the parts a reader looks up: regions, controls, endpoints, polling cadences, state names.
-
-If a reader needs the exact column list, field type, or function signature, they open the source file — one hop. The doc's value is what the source *doesn't* say.
 
 ### Cite symbols, not line numbers
 
@@ -233,7 +220,7 @@ None exist yet. How-to docs are goal-oriented directions for already-competent u
 Mermaid only. The toolchain is already in place; do not introduce a new diagram tool.
 
 - **C4 directives** (`C4Context`, `C4Container`, `C4Component`, `C4Deployment`) — use the `UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="2")` directive for readability.
-- **`flowchart`** — for relationships diagrams (see above) and for runtime/process diagrams (phase sequences, retry flows). Existing `game_flow.md` and `action_pipeline.md` use this style.
+- **`flowchart`** — for relationships diagrams (see above) and for runtime/process diagrams (phase sequences, retry flows). `game_flow.md` uses this style.
 - **`erDiagram`** — avoid; see "Relationships diagrams" above.
 - **`sequenceDiagram`** / **`stateDiagram-v2`** — available if a doc genuinely needs them.
 
@@ -243,7 +230,7 @@ One diagram per cluster, not one diagram for everything. Keep each diagram small
 
 Docs should not be code indexers. The code is self-documenting; the docs are a layer on top, existing because they are more concise and easier to curate than AI-generated code comments. Docs should not explain *how the code works* by exhaustively referencing modules, classes, methods, and types.
 
-**Carve-out**: schema column tables, struct field lists, function signatures, migration version numbers, and constants are code-indexing and are **not** restated in Reference docs — see "Reference defers to source" above. What Reference docs *do* carry (purpose, invariants, relationships, cross-references) is not code-indexing.
+**Values stay in the code.** Column lists, struct field lists, function signatures, migration version numbers, constants and caps are code-indexing. A reader who needs one opens the source file, one hop away. Purpose, names, invariants and relationships ("Where a fact lives" above) are not code-indexing.
 
 **Seam identifiers vs. mechanics leaks.** Not every code reference is code-indexing. The test: *would a reader grep for the name to find the contract the prose is describing?* If yes, the name is a **seam identifier** — keep it. If no, it's a **mechanics leak** — drop it.
 
@@ -251,6 +238,8 @@ Docs should not be code indexers. The code is self-documenting; the docs are a l
 - **Drop** (mechanics leaks): impl-detail references a reader wouldn't navigate to — bare free-function names that label mechanics (`run_migrations()`, `execute_freeaction_impl`, `spawn_pipeline_task`), struct field dumps (a bulleted list of every field on a struct), variant payload type syntax (`Variant(String)` → keep `Variant`), Rust-type leaks in prose (`Option<String>`), code syntax (`chars.div_ceil(4)`, `max_attempts = 2` assignment), constructor forms (`AppSettings::default()` — rephrase to "the engine's default settings").
 
 XML/domain markups (e.g. `<ConversationHistory>`, `<PlayerInput>`) are domain tags, not code references — they don't trigger the code-indexer test.
+
+Plans (`docs/plans` and `.scratch`) are exempt. For accumulated violations in existing docs, invoke the `.agents/skills/chronicler-docs-hygiene/SKILL.md` skill.
 
 ### No negative explaining
 

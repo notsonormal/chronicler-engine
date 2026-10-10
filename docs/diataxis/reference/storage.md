@@ -177,5 +177,5 @@ Two message-specific observations the schema does not say directly:
 
 - [Storage design](../explanation/storage_design.md) — current-understanding rationale for the storage layer, bootstrap flow, seed-as-template pattern, database authority, backend decorator, single-test-layer invariant, and the message-swipe design.
 - [Startup and Bootstrap](./startup.md) — bootstrap boundary, seeding order, schema files, and seed-file invariants.
-- [Dashboard](./frontend/dashboard.md) — worlds management UI and the worlds tab.
+- [Dashboard](./frontend/dashboard.md) — the Worlds panel.
 - [AI Steering](./narrative/ai_steering.md) — a swipe's stored steering inputs as the retry mechanism for guided generation and impersonate.

@@ -252,7 +252,7 @@ And the narrator generation's recorded prompt contains the preset's current inst
 
 ---
 
-## Invariants
+## Properties
 
 These properties hold across every `POST /swipe/new` and are observable
 through HTTP. Drift indicates a regression even if all scenarios pass.

@@ -67,11 +67,7 @@ LLM narration is non-deterministic. The same player input can produce a strong p
 
 ### Per-swipe state binding
 
-A swipe is not alternate text alone. Each `Swipe` carries its own `snapshot_id` pointing at the `GameStateSnapshot` that produced it. When the player navigates to a different swipe, the engine restores the entire world state that produced that swipe's text.
-
-Narration mutates state. The quantifier runs after the narration LLM and detects NPCs and movement; it updates scene state and increments encounter counters. Two different narrations produce two different post-narration states. A model that swapped only the text would leave the world state tied to whichever swipe was generated last — a "ghost state" where the displayed text no longer matches the underlying world.
-
-The per-swipe `snapshot_id` binds each swipe to the state that produced it. Switching swipes rewinds the world to the moment that swipe was committed. Text and state stay coherent because they were captured together. The snapshot reference is deliberately not a SQL FK: declaring it as a FK would cascade snapshot deletion to swipes, which the retry semantics don't want.
+Narration mutates state. The quantifier runs after the narration LLM. It detects NPCs and movement, and it updates the scene state and the encounter counters. Two narrations of one input therefore leave two different game states. Each swipe keeps the Snapshot of the state that its own narration produced, so the text on screen and the world state always come from the same generation. A text-only swipe would show the text of one generation over the state of another: a "ghost state".
 
 ### Last-message-only swiping
 

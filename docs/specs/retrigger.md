@@ -102,7 +102,7 @@ And no retrigger is started (the gate is not claimed)
 
 ---
 
-## Invariants
+## Properties
 
 These properties hold across every `POST /retrigger` and are observable
 through HTTP. Drift indicates a regression even if all scenarios pass.

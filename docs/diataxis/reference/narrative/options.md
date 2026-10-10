@@ -58,6 +58,6 @@ Options work in both narrator modes — the offered set does not depend on who w
 - [`./agent_system.md`](./agent_system.md) — the agent registry and agent lifecycle the options agent joins.
 - [`./narrator_mode.md`](./narrator_mode.md) — narrator modes and posture; options are mode-neutral.
 - [`../game_flow.md`](../game_flow.md) — the pipeline phases and the generation gate the on-demand path claims.
-- [`../frontend/dashboard.md`](../frontend/dashboard.md) — the command palette that lists `/options` and the dashboard areas around the dock.
+- [`../frontend/dashboard.md`](../frontend/dashboard.md) — the options dock and the slash palette that lists `/options`.
 - [`../../../specs/options.md`](../../../specs/options.md) — the HTTP behaviour contract.
 - [`../../../specs/browser_options.md`](../../../specs/browser_options.md) — the browser behaviour contract.

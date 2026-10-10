@@ -24,9 +24,15 @@ The working test for the chronicler tree:
 - `diataxis/reference/narrative/prompt_system.md` — earns its place because it describes something intrinsic to LLM chat engines: how the engine assembles the system/user message split for each call.
 - `diataxis/reference/narrative/agent_system.md` and `diataxis/reference/narrative/narration_system.md` — earn their place because they provide an overarching frame, a way to view the system. This stops different systems from leaking into each other, keeping each focused on its pillar.
 - `diataxis/reference/coding_standards/unit_test_standards.md` and `diataxis/reference/coding_standards/integration_test_standards.md` — earn their place because coding standards need to be consistent across thousands of LLM-generated tests.
-- `diataxis/reference/game_flow.md` — earns its place because it describes a step-by-step flow that's hard to grasp without reading the code end-to-end. (`docs/specs/action_pipeline.md` covers a similar flow but lives under `docs/specs/`; it is a component spec, not a Diátaxis reference doc — do not hold it up as a diátaxis example.)
+- `diataxis/reference/game_flow.md` — earns its place because it describes a step-by-step flow that's hard to grasp without reading the code end-to-end.
 
 The pattern: a doc earns its place when it carries **purpose, invariants, or an overarching frame** the code does not say directly. Re-stating what the code already says — field lists, function signatures, "how the system works" summaries — is the failure mode. That is what the code does, by definition, better.
+
+# Specs and the Diátaxis docs
+
+The specs (`docs/specs/`) hold feature behaviour, so a Diátaxis doc carries only top-level intent: purpose, names and invariants. The table in `docs/AGENTS.md` §Where a fact lives sets which layer holds each kind of fact.
+
+A reference doc organized per component, per control or per flow step mirrors the specs and the code, and changes with every UI or behaviour change. That shape is the failure, even when each sentence is accurate.
 
 # Explanation docs
 
