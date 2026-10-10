@@ -45,6 +45,10 @@ impl OllamaBackend {
         )
     }
 
+    /// Ollama runs a `{{ .Prompt }}` passthrough template, so this backend owns
+    /// turn structure. Gemma 4 can loop in its thinking channel until it spends
+    /// `max_tokens` and returns empty content; the closed channel stops that.
+    /// `sanitize_llm_output` removes any marker that still leaks.
     pub fn preprocess_user_text(&self, text: &str) -> String {
         let m = self.model.to_lowercase();
         if m.contains("gemma-4") || m.contains("gemma4") {

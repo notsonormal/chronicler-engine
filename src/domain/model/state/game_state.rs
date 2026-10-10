@@ -354,6 +354,8 @@ impl GameState {
             .collect();
         let current_npc_ids = ctx.quantifier_result.npcs.npc_ids.clone();
 
+        // Triggers read `times_met` before the encounter events below advance it.
+        // Swapping the two suppresses every first-encounter Trigger.
         let trigger_match =
             next_state
                 .evaluate_triggers(npcs)

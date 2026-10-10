@@ -13,7 +13,7 @@ The assembler's output is two message halves and one shared token budget.
 
 ## Two tiers of NPC awareness
 
-The prompt carries two NPC blocks. `<KnownNpcs>` is a condensed roster of every NPC the player has met: name, an `(in room)` / `(elsewhere)` presence marker, and a short summary. `<NpcsInRoom>` is full character cards for NPCs in the current room only.
+The prompt carries two NPC blocks. `<KnownNpcs>` is a condensed roster of every NPC in the World: name, an `(in room)` / `(elsewhere)` presence marker, and a short summary. `<NpcsInRoom>` is full character cards for NPCs in the current room only.
 
 Full cards carry the detail — description, personality, scenario, relationships — the model needs to write for an NPC the player is currently interacting with. Condensed cards carry enough identity and motivation that the model can reference off-screen characters or write introduction scenes when they walk in. The two tiers serve different needs: full detail for NPCs the model is writing for right now, condensed identity for NPCs that need to remain available.
 
@@ -38,5 +38,3 @@ The engine's tags are content labels, not self-referential tags. A self-referent
 ## Document References
 
 - [`../reference/narrative/prompt_system.md`](../reference/narrative/prompt_system.md) — reference description of the prompt-system machinery (the companion this doc explains).
-- [`../reference/narrative/prompt_system.md#assembled-system-message`](../reference/narrative/prompt_system.md#assembled-system-message) — the assembled system prompt structure.
-- [`../reference/narrative/agent_system.md#quantifier-prompt-architecture`](../reference/narrative/agent_system.md#quantifier-prompt-architecture) — the quantifier as a separate secondary prompt.

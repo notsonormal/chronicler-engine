@@ -17,11 +17,11 @@ The wiring keeps the two paths independent. `AppSettings` carries separate `narr
 
 `BackendSelector` (`UseMain | UseNamed(String)`) is metadata today. The selector is retained on the trait because it carries intent the wiring can honour in future — it is a seam the design has not closed.
 
-## Two phases and the unused `PreGeneration`
+## Execution phases and the unused `PreGeneration`
 
-`ExecutionPhase` has two variants: `PreGeneration` and `PostGeneration`. The pipeline dispatches `PostGeneration` against the agents the registry was built with. `PreGeneration` exists in the enum but no caller asks for it.
+`ExecutionPhase` has three variants: `PreGeneration`, `PostGeneration` and `OptionsGeneration`. The pipeline dispatches `PostGeneration` after every narration and `OptionsGeneration` only at the two gated Options sites. `PreGeneration` exists in the enum but no caller asks for it.
 
-The two-phase split separates post-narration concerns (NPC detection, movement detection — clearly `PostGeneration`, after the narration LLM has spoken) from pre-narration concerns, which the design did not name in advance.
+The phase split separates post-narration concerns (NPC detection, movement detection — clearly `PostGeneration`, after the narration LLM has spoken) from pre-narration concerns, which the design did not name in advance.
 
 ## The quantifier's role
 
