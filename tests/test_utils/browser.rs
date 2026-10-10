@@ -8,7 +8,7 @@ use playwright_rs::Playwright;
 use super::htmx_settle::{await_panel_ready, click_and_settle, install_htmx_settle};
 use super::html::preset_card_html_slice;
 use super::server::{buffer_text, get_config_port, registered_server_logs, tail_lines, TestServer};
-use super::stub_server::{StubActionOutcome, StubServer};
+use super::stub_server::StubServer;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_element_children;
 use super::wait::wait_until_visible;
@@ -124,19 +124,6 @@ impl SharedBrowser {
         wait_for_story_log(&page).await;
         page
     }
-}
-
-pub async fn with_stub_page<F, Fut>(outcome: StubActionOutcome, test_fn: F)
-where
-    F: FnOnce(playwright_rs::Page, &StubServer) -> Fut,
-    Fut: std::future::Future<Output = ()>,
-{
-    let stub = StubServer::start(outcome).await;
-    let browser = SharedBrowser::launch().await;
-    let page = browser.open_page(&stub).await;
-    test_fn(page.clone(), &stub).await;
-    let _ = page.close().await;
-    browser.close().await;
 }
 
 /// A hidden panel's load swap lands before any test arms a baseline, so the wait

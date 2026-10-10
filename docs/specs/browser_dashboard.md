@@ -323,15 +323,12 @@ Then the form shows an inline error saying the engine is unreachable
 And the command input still holds the typed command
 ```
 
-#### Scenario 16.38: The action area makes room for the form's inline error
+#### Scenario 16.38: The engine's recovery clears the form's inline error and the banner
 
 ```gherkin
 Given the dashboard is loaded and the engine has stopped
 When the client submits a command and the form shows its inline error
-Then the action area is taller than its resting height
-And the command row sits below the story log
-And the inline error is fully visible above the bottom of the viewport
-When the engine answers again
+And the engine answers again
 Then the inline error is gone
 And the banner is gone
 ```

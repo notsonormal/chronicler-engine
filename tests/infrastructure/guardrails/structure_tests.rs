@@ -358,7 +358,7 @@ fn test_check_browser_interactions_use_htmx_settle_allows_gated_helpers() {
 
 #[test]
 fn test_check_browser_interactions_use_htmx_settle_exempts_stub_tier() {
-    // `with_stub_page` drives a stub with no htmx swap lifecycle: raw clicks
+    // The stub tier drives a stub with no htmx swap lifecycle: raw clicks
     // are legitimate there. The exemption is by path, not by the absence of a
     // `with_test_page` mention — the content here carries both.
     let content = "with_test_page(a, b, c, |page, _| async move {\n    \

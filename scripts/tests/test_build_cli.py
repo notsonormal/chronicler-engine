@@ -497,6 +497,53 @@ class CargoEnvTests(unittest.TestCase):
         self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "pass")
 
 
+class StubCheckTimingTests(unittest.TestCase):
+    """A stub runner's per-check summary is parsed out of its success output."""
+
+    OUTPUT = """\
+        PASS [   1.834s] (1/2) chronicler_engine::browser stub::games::run_games_checks
+  stderr ───
+    --- Stub checks (2) ---
+        0.902s  [OK]  check_deleting_a_saved_game_keeps_keyboard_focus_in_the_panel
+        3.250s  [FAIL]  check_switch_lands_on_the_game
+        4.152s  total (shared browser)
+
+        PASS [   0.012s] (2/2) chronicler_engine::http story_log::test_delete
+"""
+
+    def test_check_lines_are_attributed_to_their_runner(self):
+        self.assertEqual(
+            build.parse_stub_check_timings(self.OUTPUT.splitlines()),
+            [
+                (
+                    0.902,
+                    "chronicler_engine::browser stub::games::run_games_checks",
+                    "check_deleting_a_saved_game_keeps_keyboard_focus_in_the_panel",
+                    "OK",
+                ),
+                (
+                    3.25,
+                    "chronicler_engine::browser stub::games::run_games_checks",
+                    "check_switch_lands_on_the_game",
+                    "FAIL",
+                ),
+            ],
+        )
+
+    def test_only_the_browser_command_shows_success_output(self):
+        self.assertIn(
+            "--success-output final", build.timed_test_cmd(build.get_browser_test_cmd())
+        )
+        integration = build.timed_test_cmd(build.get_integration_test_cmd())
+        self.assertNotIn("--success-output", integration)
+        self.assertIn("--final-status-level pass", integration)
+
+    def test_output_without_runners_has_no_checks(self):
+        self.assertEqual(
+            build.parse_stub_check_timings(["        PASS [   0.012s] (1/1) x y"]), []
+        )
+
+
 class LldLinkerEnvTests(unittest.TestCase):
     """The linker wrapper is installed at one fixed path, whichever checkout runs the build."""
 

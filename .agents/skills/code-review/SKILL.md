@@ -59,7 +59,7 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 ### 4. Spawn both sub-agents in parallel
 
-Build the bundle both sub-agents read: `python scripts/prepare_review_bundle.py --ref <fixed-point>`. It prints the run directory; pass that path to each sub-agent, with the file names its generated `README.md` lists. The `reviewer` definition has no shell, so the bundle is the only diff they can read.
+Build the bundle both sub-agents read: `python scripts/prepare_review_bundle.py --ref <fixed-point>`. If the work is uncommitted (the fixed point is `HEAD`), use `--uncommitted` instead. Build the bundle after the last edit, and rebuild it if anything changes before the reviewers start. The script prints the run directory; pass that path to each sub-agent, with the file names its generated `README.md` lists. The `reviewer` definition has no shell, so the bundle is the only diff they can read.
 
 Send a single message with two `Agent` tool calls. Use the `reviewer` agent for both.
 

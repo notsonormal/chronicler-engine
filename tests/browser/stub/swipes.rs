@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
+use super::support::poll_now;
 use super::*;
+use super::support::StubRunner;
 
 async fn read_swipe_counter(page: &playwright_rs::Page) -> String {
     page.evaluate::<(), String>(
@@ -54,44 +56,46 @@ async fn wait_for_option_items(page: &playwright_rs::Page, expected: usize) {
 }
 
 // [docs/specs/browser_swipes.md] SCENARIO: 37.1
-#[tokio::test]
-async fn test_switch_swipe_leaves_dashboard_ready_and_drops_options() {
-    with_stub_page(StubActionOutcome::Pending, |page, stub| {
-        let swipe = stub.swipe_handle();
-        let status = stub.status_handle();
-        async move {
-            swipe.set_two_swipes();
-            wait_for_swipe_counter(&page, "2 / 2").await;
-            wait_for_option_items(&page, 3).await;
+async fn check_switch_swipe_leaves_dashboard_ready_and_drops_options(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let swipe = stub.swipe_handle();
+    let status = stub.status_handle();
+    swipe.set_two_swipes();
+    poll_now(&page, "#story-log").await;
+    wait_for_swipe_counter(&page, "2 / 2").await;
+    wait_for_option_items(&page, 3).await;
 
-            // Reproduce the stuck state: the status poll reports a generation
-            // still narrating while the log still offers a switch. Clearing it
-            // must not wait for another poll.
-            status.set(StubStatus::Phase("narrating".to_string()));
-            wait_for_status_generating(&page).await;
+    // Reproduce the stuck state: the status poll reports a generation
+    // still narrating while the log still offers a switch. Clearing it
+    // must not wait for another poll.
+    status.set(StubStatus::Phase("narrating".to_string()));
+    poll_now(&page, "#status-display").await;
+    wait_for_status_generating(&page).await;
 
-            let clicked: bool = page
-                .evaluate::<(), bool>(
-                    r#"(() => {
+    let clicked: bool = page
+        .evaluate::<(), bool>(
+            r#"(() => {
                         const btn = document.querySelector(".swipe-btn[title='Previous swipe']");
                         if (!btn) return false;
                         btn.click();
                         return true;
                     })()"#,
-                    None,
-                )
-                .await
-                .unwrap();
-            assert!(
-                clicked,
-                "the two-swipe log must render a Previous-swipe control"
-            );
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(
+        clicked,
+        "the two-swipe log must render a Previous-swipe control"
+    );
 
-            wait_for_swipe_counter(&page, "1 / 2").await;
+    wait_for_swipe_counter(&page, "1 / 2").await;
 
-            let (status, disabled): (String, bool) = page
-                .evaluate::<(), (String, bool)>(
-                    r#"(() => {
+    let (status, disabled): (String, bool) = page
+        .evaluate::<(), (String, bool)>(
+            r#"(() => {
                         const status = document.getElementById('status-display');
                         const btn = document.getElementById('submit-btn');
                         return [
@@ -99,35 +103,46 @@ async fn test_switch_swipe_leaves_dashboard_ready_and_drops_options() {
                             btn ? btn.disabled : true,
                         ];
                     })()"#,
-                    None,
-                )
-                .await
-                .unwrap();
-            assert!(
-                status.contains("Ready"),
-                "after a switch the status must be Ready, got {status:?}"
-            );
-            assert!(!disabled, "Send must be enabled after a swipe switch");
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(
+        status.contains("Ready"),
+        "after a switch the status must be Ready, got {status:?}"
+    );
+    assert!(!disabled, "Send must be enabled after a swipe switch");
 
-            // The restore is surfaced to the player, not left to the counter.
-            let notice: String = page
-                .evaluate::<(), String>(
-                    r#"(() => {
+    // The restore is surfaced to the player, not left to the counter.
+    let notice: String = page
+        .evaluate::<(), String>(
+            r#"(() => {
                         const el = document.getElementById('restore-notice');
                         return el ? el.textContent.trim() : '';
                     })()"#,
-                    None,
-                )
-                .await
-                .unwrap_or_default();
-            assert!(
-                notice.contains("Restored swipe"),
-                "the restore must be visible to the player, got {notice:?}"
-            );
+            None,
+        )
+        .await
+        .unwrap_or_default();
+    assert!(
+        notice.contains("Restored swipe"),
+        "the restore must be visible to the player, got {notice:?}"
+    );
 
-            // The restored Swipe carries no option set, so the dock empties.
-            wait_for_option_items(&page, 0).await;
-        }
-    })
-    .await;
+    // The restored Swipe carries no option set, so the dock empties on
+    // its next poll.
+    poll_now(&page, "#options-dock").await;
+    wait_for_option_items(&page, 0).await;
+}
+
+#[tokio::test]
+async fn run_swipes_checks() {
+    let mut runner = StubRunner::launch().await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_switch_swipe_leaves_dashboard_ready_and_drops_options,
+        )
+        .await;
+    runner.finish().await;
 }

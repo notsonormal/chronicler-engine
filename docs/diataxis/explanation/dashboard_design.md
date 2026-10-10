@@ -76,6 +76,10 @@ The dashboard's palette is built for long prose: narration renders in near-white
 
 The unreachable failure banner uses the darkened red stop, so its white text clears the contrast floor.
 
+## Text-check preview emphasis
+
+The text-check preview offers three controls at one size: Send with edits, Send Original, and Cancel. The corrections are suggestions that the player opts into, so Send Original keeps the primary colour and Send with edits takes the secondary cyan. The emphasis comes from colour, not size.
+
 ## Document References
 
 - [`../reference/frontend/dashboard.md`](../reference/frontend/dashboard.md) — dashboard as it is: layout, tabs, polling cadences, flows, game management.

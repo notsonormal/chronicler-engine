@@ -227,3 +227,12 @@ When the client confirms the delete and the delete succeeds
 Then the deleted entry is gone from the log
 And the entry that is now last holds keyboard focus on its Edit control
 ```
+
+#### Scenario 30.23: The first load swap leaves the log at its bottom
+
+```gherkin
+Given a story log whose content overflows its container
+When the log's first load swap renders it
+Then #story-log is scrolled to its bottom
+And the newest entry is in view
+```

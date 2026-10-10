@@ -5,15 +5,18 @@ It also enforces the SCENARIO-tag rules of `tests/STRATEGY.md`
 carries a `// [spec] SCENARIO: X.Y` tag, unless an exemption constant
 below spares it, and tags match their observation surface: `browser_*.md`
 specs are tagged only from `tests/browser/`, and non-`browser_*` specs are
-never tagged from `tests/browser/`. `tests/http/requires_migration/` is the
+never tagged from `tests/browser/`. In `tests/browser/stub/` the tag target
+is the `check_*` function a module's `run_*` runner drives, so the tag sits
+on the function the runner calls rather than on a test attribute.
+`tests/http/requires_migration/` is the
 legacy quarantine: untagged by design, count-pinned by
 `REQUIRES_MIGRATION_TEST_COUNT` (the count may only go down).
 
 Exit codes:
     0  all declared scenarios covered, tag rule satisfied
     1  gaps (declared scenario with no test), orphans (annotation with no
-       matching declared scenario), untagged tests, surface mismatches, or
-       a quarantine count above the pin
+       matching declared scenario), untagged tests, unwired stub checks,
+       surface mismatches, or a quarantine count above the pin
     2  parse error (missing dirs, unreadable files, no specs)
 
 Run from anywhere:
@@ -44,9 +47,19 @@ SCENARIO_COMMENT_RE = re.compile(
 
 TEST_ATTR_RE = re.compile(r"^\s*#\[(tokio::)?test\b")
 
+# A stub module's checks carry their scenario tag on the `check_*` function
+# itself: the module's one `run_*` test drives them all through the shared
+# runner, so the tag cannot sit on a test attribute.
+CHECK_FN_RE = re.compile(r"^\s*async\s+fn\s+(check_\w+)")
+
 COMMENT_LOOKAHEAD = 5
 
 # Mandatory SCENARIO-tag rule; contract: tests/STRATEGY.md "SCENARIO tags".
+
+STUB_DIR = Path("tests/browser/stub")
+
+# A runner test drives a module's checks; it observes no scenario of its own.
+RUNNER_FN_RE = re.compile(r"^run_")
 
 TAG_EXEMPT_DIRS = {
     Path("tests/http/requires_migration"): (
@@ -89,10 +102,16 @@ class TestFileScan(NamedTuple):
     untagged, surface) derive their facts from this scan, so each file is
     read exactly once."""
 
-    # (comment line, attribute line, spec path, scenario id), 1-based lines.
+    # (comment line, anchor line, spec path, scenario id), 1-based lines. The
+    # anchor is a test attribute, or a `check_*` function in the stub tier.
     annotations: list[tuple[int, int, str, str]]
     # (1-based attribute line, fn name) for every test attribute.
     attributes: list[tuple[int, str]]
+    # (1-based fn line, fn name) for every `async fn check_*` in the file.
+    checks: list[tuple[int, str]]
+    # Check names that appear in the file on a line other than their own
+    # definition, i.e. that a runner passes to `StubRunner::run`.
+    check_refs: frozenset[str]
 
 
 def scan_test_file(test_path: Path) -> TestFileScan:
@@ -105,6 +124,7 @@ def scan_test_file(test_path: Path) -> TestFileScan:
     lines = text.splitlines()
     annotations: list[tuple[int, int, str, str]] = []
     attributes: list[tuple[int, str]] = []
+    checks: list[tuple[int, str]] = []
 
     for i, line in enumerate(lines):
         m = SCENARIO_COMMENT_RE.match(line)
@@ -114,10 +134,23 @@ def scan_test_file(test_path: Path) -> TestFileScan:
                 if TEST_ATTR_RE.match(lines[j]):
                     annotations.append((i + 1, j + 1, spec_path, scenario_id))
                     break
+                if CHECK_FN_RE.match(lines[j]):
+                    annotations.append((i + 1, j + 1, spec_path, scenario_id))
+                    break
         if TEST_ATTR_RE.match(line):
             attributes.append((i + 1, find_test_fn_name(lines, i)))
+        check = CHECK_FN_RE.match(line)
+        if check:
+            checks.append((i + 1, check.group(1)))
 
-    return TestFileScan(annotations, attributes)
+    defined = {name: line for line, name in checks}
+    check_refs = frozenset(
+        name
+        for name, def_line in defined.items()
+        for i, line in enumerate(lines)
+        if i + 1 != def_line and re.search(rf"\b{name}\b", line)
+    )
+    return TestFileScan(annotations, attributes, checks, check_refs)
 
 
 FN_NAME_RE = re.compile(r"^\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)")
@@ -140,16 +173,44 @@ def is_tag_exempt(rel: Path) -> bool:
 def find_untagged_tests(
     scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str]]:
-    """Pure over the prepared scans — no I/O."""
+    """Pure over the prepared scans — no I/O.
+
+    In the stub tier a `check_*` function is the tag target (the module's
+    `run_*` runner test is exempt: it drives the checks and observes no
+    scenario of its own)."""
     violations: list[tuple[Path, int, str]] = []
     for path, rel, scan in scans:
         if is_tag_exempt(rel):
             continue
         tagged = {attr for _, attr, _, _ in scan.annotations}
+        in_stub = rel.is_relative_to(STUB_DIR)
         for attr_line, fn_name in scan.attributes:
             if attr_line in tagged:
                 continue
+            if in_stub and RUNNER_FN_RE.match(fn_name):
+                continue
             violations.append((path, attr_line, fn_name))
+        if in_stub:
+            for fn_line, fn_name in scan.checks:
+                if fn_line in tagged:
+                    continue
+                violations.append((path, fn_line, fn_name))
+    return violations
+
+
+def find_unwired_checks(
+    scans: list[tuple[Path, Path, TestFileScan]],
+) -> list[tuple[Path, int, str]]:
+    """Return (path, line, fn name) for every stub-tier `check_*` that no
+    runner in its file calls. Its SCENARIO tag would otherwise count as
+    coverage for a check that never runs. Pure over the prepared scans."""
+    violations: list[tuple[Path, int, str]] = []
+    for path, rel, scan in scans:
+        if not rel.is_relative_to(STUB_DIR):
+            continue
+        for fn_line, fn_name in scan.checks:
+            if fn_name not in scan.check_refs:
+                violations.append((path, fn_line, fn_name))
     return violations
 
 
@@ -251,13 +312,15 @@ def main() -> int:
     orphan_count = len(orphans)
     untagged = find_untagged_tests(scans)
     surface = find_surface_violations(scans)
+    unwired = find_unwired_checks(scans)
     quarantine = count_quarantine_tests()
     ratchet_exceeded = quarantine > REQUIRES_MIGRATION_TEST_COUNT
 
     print(
         f"{declared_count} declared, {covered_count} covered, "
         f"{gap_count} gap(s), {orphan_count} orphan(s), "
-        f"{len(untagged)} untagged, {len(surface)} surface mismatch(es), "
+        f"{len(untagged)} untagged, {len(unwired)} unwired, "
+        f"{len(surface)} surface mismatch(es), "
         f"quarantine {quarantine}/{REQUIRES_MIGRATION_TEST_COUNT}"
     )
 
@@ -281,6 +344,14 @@ def main() -> int:
             rel = path.relative_to(ENGINE_ROOT)
             print(f"  {rel}:{lineno}  {fn_name}")
 
+    if unwired:
+        print(
+            "\nUnwired (stub check that no `run_*` runner in its file calls):"
+        )
+        for path, lineno, fn_name in unwired:
+            rel = path.relative_to(ENGINE_ROOT)
+            print(f"  {rel}:{lineno}  {fn_name}")
+
     if surface:
         print(
             "\nSurface mismatches (tag's spec surface does not match its "
@@ -301,6 +372,7 @@ def main() -> int:
         gap_count > 0
         or orphan_count > 0
         or untagged
+        or unwired
         or surface
         or ratchet_exceeded
     ):

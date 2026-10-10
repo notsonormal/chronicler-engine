@@ -438,12 +438,53 @@ def _nextest_duration_to_secs(token: str) -> float:
     return total
 
 
+# One line of a stub runner's per-check summary (`StubRunner::finish` in
+# tests/browser/stub/support.rs), e.g. "  0.902s  [OK]  check_x".
+_STUB_CHECK_RE = re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)s\s+\[(OK|FAIL)\]\s+(check_\w+)\s*$")
+
+
+def parse_stub_check_timings(lines):
+    """Return (secs, runner test, check name, status) for every stub check.
+
+    A runner test holds many checks, so its own nextest duration hides which
+    check is slow. Each check line follows its runner's nextest result line
+    in the success output, so the latest result line names the runner.
+    """
+    checks = []
+    runner = None
+    for line in lines:
+        result = _NEXTEST_RESULT_RE.match(line)
+        if result:
+            runner = result.group(2).strip()
+            continue
+        check = _STUB_CHECK_RE.match(line)
+        if check and runner:
+            checks.append(
+                (float(check.group(1)), runner, check.group(3), check.group(2))
+            )
+    return checks
+
+
+def timed_test_cmd(cmd):
+    """Return `cmd` with the flags the timing report needs.
+
+    The browser command also shows passing tests' output, which carries each
+    stub runner's per-check summary. Other steps keep it hidden: the
+    integration tier's passing output would grow the log about 14 times.
+    """
+    timed = f"{cmd} --final-status-level pass"
+    if f"-E '{_BROWSER_FILTER}'" in cmd:
+        timed += " --success-output final"
+    return timed
+
+
 def run_with_test_timings(cmd, env=None, check=True):
     """Run nextest and print a per-test timing report: slowest tests (top 30)
-    and per-binary totals. Returns the exit code; exits on failure when check=True.
+    and per-binary totals, plus the slowest stub checks inside runner tests.
+    Returns the exit code; exits on failure when check=True.
     """
     both_print(f"$ {cmd}  (with --test-timings)")
-    timed_cmd = f"{cmd} --final-status-level pass"
+    timed_cmd = timed_test_cmd(cmd)
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
@@ -503,6 +544,14 @@ def run_with_test_timings(cmd, env=None, check=True):
         both_print(
             f"    {'':>8}   Sum of measured: {sum(t[0] for t in timings):.2f}s"
         )
+    all_lines = (result.stdout or "").splitlines() + (result.stderr or "").splitlines()
+    stub_checks = parse_stub_check_timings(all_lines)
+    if stub_checks:
+        both_print("")
+        both_print(f"  Slowest stub checks (of {len(stub_checks)}, top 30):")
+        for secs, runner, name, status in sorted(stub_checks, reverse=True)[:30]:
+            runner_fn = runner.rsplit("::", 1)[-1]
+            both_print(f"    {secs:>8.3f}s  [{status}]  {name}  ({runner_fn})")
     both_print("---")
 
     if result.returncode != 0:

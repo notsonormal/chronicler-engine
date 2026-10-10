@@ -1,158 +1,73 @@
-//! Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Eleven checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
+//! Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Twelve checks share one browser through the shared runner; each runs on a fresh page against its own stub server, with panic isolation and a per-check timing summary.
 
-use std::panic::AssertUnwindSafe;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use futures_util::future::FutureExt;
 use playwright_rs::{EmulateMediaOptions, ForcedColors, Page, Viewport};
 
+use super::support::StubRunner;
 use super::*;
 
-struct SubtestReport {
-    name: &'static str,
-    duration: Duration,
-    passed: bool,
-}
-
-async fn run_subtest<Fut>(
-    browser: &SharedBrowser,
-    stub: &StubServer,
-    name: &'static str,
-    check: impl FnOnce(Page) -> Fut,
-) -> SubtestReport
-where
-    Fut: std::future::Future<Output = ()>,
-{
-    let start = Instant::now();
-    let page = browser.open_page(stub).await;
-
-    let result = AssertUnwindSafe(check(page.clone())).catch_unwind().await;
-    let _ = page.close().await;
-
-    SubtestReport {
-        name,
-        duration: start.elapsed(),
-        passed: result.is_ok(),
-    }
-}
-
-fn print_summary(reports: &[SubtestReport]) {
-    eprintln!("--- Invariant subtests ({}) ---", reports.len());
-    for r in reports {
-        let status = if r.passed { "OK" } else { "FAIL" };
-        eprintln!(
-            "  {:>7.3}s  [{status}]  {}",
-            r.duration.as_secs_f64(),
-            r.name
-        );
-    }
-    let total: f64 = reports.iter().map(|r| r.duration.as_secs_f64()).sum();
-    eprintln!("  {total:>7.3}s  total (shared server+browser)");
-}
-
 #[tokio::test]
-async fn test_invariants() {
-    let stub = StubServer::start(StubActionOutcome::Pending).await;
-    let browser = SharedBrowser::launch().await;
-
-    let reports = vec![
-        run_subtest(
-            &browser,
-            &stub,
-            "story_log_scrollable",
-            check_story_log_scrollable,
-        )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "no_horizontal_overflow",
-            check_no_horizontal_overflow,
-        )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "log_entry_text_wraps_within_bubble",
+async fn run_invariants() {
+    let mut runner = StubRunner::launch().await;
+    runner
+        .run(StubActionOutcome::Pending, check_story_log_scrollable)
+        .await;
+    runner
+        .run(StubActionOutcome::Pending, check_no_horizontal_overflow)
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
             check_log_entry_text_wraps_within_bubble,
         )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "command_input_width_is_stable",
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
             check_command_input_width_is_stable,
         )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "element_positioning",
-            check_element_positioning,
-        )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "npc_portraits_horizontal_layout",
+        .await;
+    runner
+        .run(StubActionOutcome::Pending, check_element_positioning)
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
             check_npc_portraits_horizontal_layout,
         )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "npc_portraits_fixed_width",
-            check_npc_portraits_fixed_width,
-        )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "edit_textarea_matches_original_height",
+        .await;
+    runner
+        .run(StubActionOutcome::Pending, check_npc_portraits_fixed_width)
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
             check_edit_textarea_matches_original_height,
         )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "responsive_layout_under_768px",
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
             check_responsive_layout_under_768px,
         )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "root_design_tokens",
-            check_root_design_tokens,
+        .await;
+    runner
+        .run(StubActionOutcome::Pending, check_root_design_tokens)
+        .await;
+    runner
+        .run(StubActionOutcome::Pending, check_forced_colors_focus_ring)
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_action_area_makes_room_for_the_inline_error,
         )
-        .await,
-        run_subtest(
-            &browser,
-            &stub,
-            "forced_colors_focus_ring",
-            check_forced_colors_focus_ring,
-        )
-        .await,
-    ];
-
-    print_summary(&reports);
-    browser.close().await;
-
-    let failed: Vec<&str> = reports
-        .iter()
-        .filter(|r| !r.passed)
-        .map(|r| r.name)
-        .collect();
-    if !failed.is_empty() {
-        panic!(
-            "{} invariant subtest(s) failed: {}",
-            failed.len(),
-            failed.join(", ")
-        );
-    }
+        .await;
+    runner.finish().await;
 }
 
-async fn check_story_log_scrollable(page: Page) {
+async fn check_story_log_scrollable(page: Page, _stub: StubServer) {
     let overflow_y: String = page
         .evaluate::<(), String>(
             "(() => {
@@ -170,7 +85,7 @@ async fn check_story_log_scrollable(page: Page) {
     );
 }
 
-async fn check_no_horizontal_overflow(page: Page) {
+async fn check_no_horizontal_overflow(page: Page, _stub: StubServer) {
     let has_overflow = page
         .evaluate::<(), bool>(
             r#"() => {
@@ -186,7 +101,7 @@ async fn check_no_horizontal_overflow(page: Page) {
     assert!(!has_overflow, "Page should not have horizontal overflow");
 }
 
-async fn check_log_entry_text_wraps_within_bubble(page: Page) {
+async fn check_log_entry_text_wraps_within_bubble(page: Page, _stub: StubServer) {
     let overflows: bool = page
         .evaluate::<(), bool>(
             r#"() => {
@@ -219,7 +134,7 @@ async fn check_log_entry_text_wraps_within_bubble(page: Page) {
 
 /// Mid-turn the label grows to "Generating…": the input keeps its width and the
 /// label stays inside the button.
-async fn check_command_input_width_is_stable(page: Page) {
+async fn check_command_input_width_is_stable(page: Page, _stub: StubServer) {
     let widths: (f64, f64, f64, f64) = page
         .evaluate::<(), (f64, f64, f64, f64)>(
             r#"() => {
@@ -252,7 +167,7 @@ async fn check_command_input_width_is_stable(page: Page) {
     );
 }
 
-async fn check_element_positioning(page: Page) {
+async fn check_element_positioning(page: Page, _stub: StubServer) {
     let header_top = page
         .evaluate::<(), f64>(
             "document.querySelector('.header')?.getBoundingClientRect().top || -1",
@@ -285,7 +200,7 @@ async fn check_element_positioning(page: Page) {
     );
 }
 
-async fn check_npc_portraits_horizontal_layout(page: Page) {
+async fn check_npc_portraits_horizontal_layout(page: Page, _stub: StubServer) {
     let flex_wrap: String = page
         .evaluate::<(), String>(
             r#"(() => {
@@ -319,7 +234,7 @@ async fn check_npc_portraits_horizontal_layout(page: Page) {
     );
 }
 
-async fn check_npc_portraits_fixed_width(page: Page) {
+async fn check_npc_portraits_fixed_width(page: Page, _stub: StubServer) {
     let width: f64 = page
         .evaluate::<(), f64>(
             r#"(() => {
@@ -342,7 +257,7 @@ async fn check_npc_portraits_fixed_width(page: Page) {
 /// Mirrors the `max-height: 50vh` cap `assets/styles.css` puts on `#edit-textarea`.
 const AUTO_GROW_VIEWPORT_HEIGHT_RATIO: f64 = 0.5;
 
-async fn check_edit_textarea_matches_original_height(page: Page) {
+async fn check_edit_textarea_matches_original_height(page: Page, _stub: StubServer) {
     let original_height: f64 = page
         .evaluate::<(), f64>(
             r#"(() => {
@@ -407,7 +322,7 @@ async fn check_edit_textarea_matches_original_height(page: Page) {
     );
 }
 
-async fn check_responsive_layout_under_768px(page: Page) {
+async fn check_responsive_layout_under_768px(page: Page, _stub: StubServer) {
     page.set_viewport_size(Viewport {
         width: 500,
         height: 800,
@@ -441,7 +356,7 @@ async fn check_responsive_layout_under_768px(page: Page) {
     );
 }
 
-async fn check_root_design_tokens(page: Page) {
+async fn check_root_design_tokens(page: Page, _stub: StubServer) {
     let covered: usize = page
         .evaluate::<(), usize>(
             r#"(() => {
@@ -482,7 +397,7 @@ async fn check_root_design_tokens(page: Page) {
 
 /// The forced-colors rule in `assets/styles.css` restores the focus ring that
 /// the field's `outline: none` reset removes.
-async fn check_forced_colors_focus_ring(page: Page) {
+async fn check_forced_colors_focus_ring(page: Page, _stub: StubServer) {
     page.emulate_media(Some(
         EmulateMediaOptions::builder()
             .forced_colors(ForcedColors::Active)
@@ -522,5 +437,56 @@ async fn check_forced_colors_focus_ring(page: Page) {
     assert!(
         ring,
         "forced colors must restore a visible focus ring on the command input"
+    );
+}
+
+/// The client's own inline-error renderer fills the form's slot, so the action
+/// area must grow to hold it: the command row stays below the story log and the
+/// slot stays above the bottom of the viewport.
+async fn check_action_area_makes_room_for_the_inline_error(page: Page, _stub: StubServer) {
+    let (resting_height, grown_height, command_row_overlap, slot_below_viewport): (
+        f64,
+        f64,
+        f64,
+        f64,
+    ) = page
+        .evaluate::<(), (f64, f64, f64, f64)>(
+            r#"() => {
+                    const area = document.getElementById('action-area');
+                    const input = document.getElementById('command-input');
+                    const log = document.getElementById('story-log');
+                    const slot = document.querySelector('#command-form [data-error-slot]');
+                    if (!area || !input || !log || !slot) return [0, 0, 0, 0];
+                    const resting = area.getBoundingClientRect().height;
+                    renderInlineError(
+                        slot,
+                        'The engine is unreachable.',
+                        'No response from the server.',
+                    );
+                    void slot.offsetHeight;
+                    return [
+                        resting,
+                        area.getBoundingClientRect().height,
+                        log.getBoundingClientRect().bottom - input.getBoundingClientRect().top,
+                        slot.getBoundingClientRect().bottom - window.innerHeight,
+                    ];
+                }"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        grown_height > resting_height,
+        "the action area must grow to hold the inline error, got {grown_height} \
+         against a resting {resting_height}"
+    );
+    assert!(
+        command_row_overlap <= 0.0,
+        "the command row must stay below the story log (overlap {command_row_overlap}px)"
+    );
+    assert!(
+        slot_below_viewport <= 0.0,
+        "the inline error must be fully visible (slot bottom {slot_below_viewport}px past the viewport)"
     );
 }

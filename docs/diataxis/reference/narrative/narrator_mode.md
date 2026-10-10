@@ -54,4 +54,4 @@ Steering is mode-agnostic. `/guide` steers content and `/impersonate` voices the
 - [`./prompt_system.md`](./prompt_system.md) — prompt assembly layers; where the posture macros and preset text land.
 - [`./ai_steering.md`](./ai_steering.md) — the transient steering commands and how swipes re-apply them.
 - [`../game_flow.md`](../game_flow.md) — the action pipeline phases, retry flow, and generation gate.
-- [`../../../specs/narrator_mode.md`](../../../specs/narrator_mode.md) — the behaviour contract (scenarios 23.1–23.5): posture inheritance, mode switching, steering availability.
+- [`../../../specs/narrator_mode.md`](../../../specs/narrator_mode.md) — the behaviour contract: posture inheritance, mode switching, steering availability.

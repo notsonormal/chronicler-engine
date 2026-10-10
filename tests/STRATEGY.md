@@ -116,6 +116,16 @@ Place a new UI test by this rule.
 **Tie-breaker: when in doubt, file down.** A test that can be expressed a tier
 lower belongs there.
 
+**Stub-tier shape.** A tier-2 test is an `async fn check_*(page, stub)` that a
+`run_*` runner test passes to `StubRunner::run`. The runner shares one Chromium;
+each check gets its own `StubServer` and page. The SCENARIO tag goes above the
+`check_*` function, and `scripts/validate_feature_spec.py` exempts `run_*`.
+Split a runner when it becomes the longest browser test by a wide margin.
+
+**Layout-only checks.** A check that asserts only computed style, size or
+position goes in `tests/browser/stub/invariants.rs`. It has no spec scenario.
+It puts its markup in place with client-side JS, not through a real failure.
+
 **Check:** review-only.
 
 ### Worked examples

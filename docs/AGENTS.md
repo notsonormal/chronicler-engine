@@ -20,6 +20,8 @@ The specs describe the behaviour a client observes through HTTP and browser inte
 
 The Diátaxis docs are intended to describe the system in ways the code, tests, and specs cannot — explanation and reference the code, tests, and specs do not carry.
 
+Coverage is not a goal. A behaviour that only the code defines stays in the code. The code and the specs are the complete record, and the Diátaxis docs are selective.
+
 The specs are a relatively new introduction. They absorb the behavioural contract that used to live in free-form Diátaxis docs, so the Diátaxis tree can focus on explanation and on reference the specs cannot hold.
 
 ## Code Indexer
@@ -156,11 +158,14 @@ Reference docs do **not** restate values that live in code as the authoritative 
 
 Restating these in markdown is drift-prone duplication — the source changes, the doc rots.
 
+Behaviour defers to source in the same way. Edge cases, ordering rules, and UI details such as focus, scroll and which slot shows an error live in the code. The specs and tests pin the ones that matter. Do not cite spec scenario numbers for them.
+
 What Reference docs **do** carry:
 
 - What each thing is *for* (prose, one paragraph per table/component/endpoint).
 - The invariants the code doesn't say directly ("messages are not stored in the snapshot JSON", "one message history per game", "settings is a singleton row").
 - Relationships and aggregate structure (see "Relationships diagrams" below).
+- The names of the parts a reader looks up: regions, controls, endpoints, polling cadences, state names.
 
 If a reader needs the exact column list, field type, or function signature, they open the source file — one hop. The doc's value is what the source *doesn't* say.
 

@@ -107,8 +107,9 @@
     filter: brightness(1.15);
 }
 
-/* Hierarchy comes from the utility class's colour, not a size jump: a row holding
-   a primary sizes every button in it alike, and rows without one stay compact. */
+/* Hierarchy comes from the utility class's colour, not a size jump: in form,
+   card and game action rows the utility-class buttons render at one size;
+   other rows stay compact. */
 .form-actions .btn-primary,
 .form-actions .btn-cyan,
 .form-actions .btn-danger,
