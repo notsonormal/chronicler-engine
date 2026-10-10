@@ -30,6 +30,9 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
             -10,
         ))
         .unwrap();
+    storage
+        .save_llm_message(&llm_message("narrator", "mock", None, -20))
+        .unwrap();
 
     let body = fetch_body(&app, "/fragment/header").await;
     assert!(
@@ -49,8 +52,22 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         "the banner must offer the Details disclosure: {body}"
     );
     assert!(
-        body.contains("Mock mock") && body.contains("last call succeeded"),
-        "the disclosure must list per-role backend/model and health: {body}"
+        body.contains("Mock mock"),
+        "the disclosure must list per-role backend/model: {body}"
+    );
+    assert!(
+        body.contains(r#"<span class="error-role-ok">last call succeeded</span>"#),
+        "the disclosure must report the Narrator's successful newest attempt as such: {body}"
+    );
+    assert_eq!(
+        body.matches("last call succeeded").count(),
+        1,
+        "only the role with a successful attempt may read as a success: {body}"
+    );
+    assert_eq!(
+        body.matches("No calls yet").count(),
+        2,
+        "the two roles with no recorded attempt must read as no calls: {body}"
     );
     assert!(
         body.contains(r#"<pre class="error-detail-raw">fallback NPC IDs used</pre>"#),
@@ -64,6 +81,86 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
     assert!(
         !body.contains("error-disclosure"),
         "a later success must clear the banner: {body}"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.6
+#[tokio::test]
+async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
+    let (state, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let app = build_router(state);
+
+    let settings = fetch_body(&app, "/fragment/settings").await;
+    for cell_id in [
+        "role-health-narrator",
+        "role-health-quantifier",
+        "subtab-connections-marker",
+    ] {
+        assert!(
+            settings.contains(&format!(r#"id="{cell_id}""#)),
+            "the Settings panel must render the cell '{cell_id}' the header poll refreshes: {settings}"
+        );
+    }
+    assert!(
+        !settings.contains("hx-swap-oob"),
+        "the panel's own cells are not out-of-band swaps: {settings}"
+    );
+
+    let header = fetch_body(&app, "/fragment/header").await;
+    assert!(
+        header.contains(
+            r#"<span class="role-health-slot" id="role-health-narrator" hx-swap-oob="true"><span class="role-health unknown">No calls yet</span>"#
+        ),
+        "a role with no recorded attempt must swap in as no calls: {header}"
+    );
+
+    storage
+        .save_llm_message(&llm_message(
+            "quantifier",
+            "mock",
+            Some("fallback NPC IDs used"),
+            -10,
+        ))
+        .unwrap();
+    storage
+        .save_llm_message(&llm_message("narrator", "mock", None, -20))
+        .unwrap();
+
+    let header = fetch_body(&app, "/fragment/header").await;
+    assert!(
+        header.contains(
+            r#"<span class="role-health-slot" id="role-health-quantifier" hx-swap-oob="true"><span class="role-health degraded">Degraded</span>"#
+        ),
+        "the degraded role's cell must swap in as Degraded: {header}"
+    );
+    assert!(
+        header.contains(
+            r#"<span class="role-health-slot" id="role-health-narrator" hx-swap-oob="true"><span class="role-health healthy">Healthy</span>"#
+        ),
+        "a role whose newest attempt succeeded must swap in as Healthy: {header}"
+    );
+    assert!(
+        header.contains(
+            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"><span class="subtab-degraded-marker""#
+        ),
+        "the Connections sub-tab's warning marker must ride along: {header}"
+    );
+
+    storage
+        .save_llm_message(&llm_message("quantifier", "mock", None, 0))
+        .unwrap();
+    let header = fetch_body(&app, "/fragment/header").await;
+    assert!(
+        header.contains(
+            r#"<span class="role-health-slot" id="role-health-quantifier" hx-swap-oob="true"><span class="role-health healthy">Healthy</span>"#
+        ),
+        "a later success must swap the cell back to Healthy: {header}"
+    );
+    assert!(
+        header.contains(
+            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"></span>"#
+        ),
+        "a recovered role must clear the marker: {header}"
     );
 }
 

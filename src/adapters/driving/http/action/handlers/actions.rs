@@ -23,6 +23,11 @@ pub struct ActionForm {
     pub command: String,
 }
 
+/// `dashboard-action-area.js` keys the wait state on the `.status.wait` class in this
+/// markup.
+pub const CONCURRENT_GENERATION_STATUS: &str =
+    "<span class=\"status wait\">Still thinking...</span>";
+
 async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
     let action_result = state
         .pipeline
@@ -32,9 +37,7 @@ async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
         Ok(ProcessActionResult::Started) => {
             ok("<span class=\"status thinking\">Thinking...</span>")
         }
-        Ok(ProcessActionResult::ConcurrentGeneration) => {
-            ok("<span class=\"status wait\">Still thinking...</span>")
-        }
+        Ok(ProcessActionResult::ConcurrentGeneration) => ok(CONCURRENT_GENERATION_STATUS),
         Ok(ProcessActionResult::ShuttingDown) => {
             service_unavailable(render_error("Server is shutting down"))
         }

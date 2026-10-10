@@ -3,7 +3,10 @@
 
 mod actions;
 
-pub use actions::{action_check_handler, action_confirm_handler, action_handler, ActionForm};
+pub use actions::{
+    action_check_handler, action_confirm_handler, action_handler, ActionForm,
+    CONCURRENT_GENERATION_STATUS,
+};
 
 #[cfg(test)]
 mod actions_tests;

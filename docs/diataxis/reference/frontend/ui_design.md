@@ -243,7 +243,7 @@ A position-fixed palette that appears above the command input while the input va
 - Border-radius: `4px`
 - Color: `--color-accent-ok`
 - Padding: `8px var(--spacing-md)`
-- Height: `--input-height`, min-width: `--button-min-width`
+- Height: `--input-height`, fixed `width: 150px`: the label grows to "Generating…" while a turn runs, and the input beside it must not narrow with the button
 - Font: inherit, `--font-size-base`, bold
 - Icon: a 16×16 `.icon` from the sprite — a paper-plane while idle, a spinning `loader-circle` while a turn runs
 - Hover: background `--color-button-send-start`, `filter: brightness(1.15)`
@@ -355,7 +355,7 @@ Renders inside `#action-preview`, above the command form.
 - Original text (read-only): label uppercase muted, value strikethrough muted
 - Corrected text (editable textarea): label uppercase muted, value `--color-text-primary`
 - Issue tags: orange (spell), pink (grammar), yellow (capitalization), blue-cyan (style), muted (formatting/other)
-- Three controls: **Send with edits** (`.btn-cyan`), **Send Original** (`.btn-primary.btn-original`), **Cancel** (`.btn-cyan.preview-cancel`)
+- Three controls in one row: **Send with edits** (`.btn-cyan`), **Send Original** (`.btn-primary.btn-original`), **Cancel** (`.btn-cyan.preview-cancel`). The emphasis stays on Send Original: the corrections are suggestions the player opts into, so the unedited send keeps the primary colour while all three render at one size (see Button Utility Classes).
 - Header icon (`.preview-icon`): an 18×18 `#i-spell-check` sprite icon beside the title
 
 `#action-preview:empty` is `display: none`. While it holds the preview, the parent `.action-area` expands past its fixed height and the preview takes the full row (`.action-area:has(#action-preview:not(:empty))`).
@@ -439,6 +439,8 @@ Three utility classes provide the gradient+border+text styling for action button
 | `.btn-primary` | `--color-button-primary-start` → `--color-button-primary-end` | `--color-accent-ok` | `8px 20px`, bold | Save, create, add-connection, submit |
 | `.btn-cyan` | `--color-button-cyan-start` → `--color-button-cyan-end` | `--color-accent-cyan` | `4px 12px`, xs font | Edit, view, switch |
 | `.btn-danger` | `--color-button-danger-start` → `--color-button-danger-end` | `--color-accent-red` | `4px 12px`, xs font | Delete, reset |
+
+An action row that holds a primary button (`.form-actions`, `.card-actions`, a game item's `.game-actions`) renders every button in it at the primary's size — `--font-size-base` and `8px 20px` — so the row reads as one rank and the emphasis comes from the utility class's colour. Rows with no primary beside them (a world card's Edit/Delete, a connection row's Edit/Test/Delete) keep the compact xs size.
 
 Hover state for each class swaps to the start colour, brightened with `filter: brightness(1.15)`, and adds no glow.
 

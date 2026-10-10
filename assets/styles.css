@@ -107,6 +107,20 @@
     filter: brightness(1.15);
 }
 
+/* Hierarchy comes from the utility class's colour, not a size jump: a row holding
+   a primary sizes every button in it alike, and rows without one stay compact. */
+.form-actions .btn-primary,
+.form-actions .btn-cyan,
+.form-actions .btn-danger,
+.card-actions .btn-primary,
+.card-actions .btn-cyan,
+.card-actions .btn-danger,
+.game-actions .btn-primary,
+.game-actions .btn-danger {
+    font-size: var(--font-size-base);
+    padding: 8px 20px;
+}
+
 ::-webkit-scrollbar {
     width: 8px;
 }
@@ -563,7 +577,8 @@ body {
     padding: 8px var(--spacing-md);
     cursor: pointer;
     height: var(--input-height);
-    min-width: var(--button-min-width);
+    /* The label grows to "Generating…" while a turn runs; the input must not narrow with it. */
+    width: 150px;
     font-family: inherit;
     font-size: var(--font-size-base);
     font-weight: bold;
@@ -609,11 +624,15 @@ body {
     color: var(--color-accent-yellow);
 }
 
+.status.wait {
+    color: var(--color-text-primary);
+}
+
 .status.error {
     color: var(--color-accent-red);
 }
 
-/* Fixed width: the action area must not resize as the status text changes. */
+/* The action area must not resize as the status text changes. */
 #status-display {
     flex: 0 0 240px;
     width: 240px;
@@ -624,10 +643,17 @@ body {
 #status-display .error-disclosure {
     justify-content: flex-end;
     max-width: 100%;
+    white-space: normal;
 }
 
+/* The clamped failure line wraps inside the fixed column — two lines fit the
+   action area's height — so the sentence reads without opening Details. */
 #status-display .error-disclosure-message {
     min-width: 0;
+    white-space: normal;
+    text-overflow: clip;
+    line-height: 1.4;
+    max-height: 2.8em;
 }
 
 .options-strip {
@@ -1144,7 +1170,8 @@ body {
 }
 
 .error-role-backend,
-.error-role-ok {
+.error-role-ok,
+.error-role-nocalls {
     color: var(--color-text-muted);
     font-size: var(--font-size-xs);
 }
@@ -1344,6 +1371,17 @@ body {
     gap: var(--spacing-xs);
 }
 
+.text-check-preview .form-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+}
+
+.text-check-preview .form-actions form {
+    display: flex;
+}
+
 .issue-tag {
     font-size: var(--font-size-xs);
     padding: 2px 8px;
@@ -1404,6 +1442,15 @@ body {
 #action-preview:not(:empty) {
     flex: 1 1 100%;
     min-width: 0;
+}
+
+/* The form's inline error takes a row of its own, so the area grows to hold it
+   instead of overflowing its fixed height over the story log. */
+.action-area:has(#command-form [data-error-slot]:not([hidden])) {
+    height: auto;
+    min-height: var(--action-area-height);
+    padding-top: var(--spacing-md);
+    padding-bottom: var(--spacing-md);
 }
 
 .preview-note {
@@ -1600,6 +1647,37 @@ input[type="checkbox"]:focus {
     border-radius: 4px;
 }
 
+.llm-message-failure {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-md);
+}
+
+.llm-message-failure-label {
+    color: var(--color-accent-red);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+/* A provider's error body is arbitrary text, so it wraps rather than running past
+   the card's clipped edge. */
+.llm-message-failure-text {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: var(--spacing-sm);
+    margin: 0;
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family);
+    color: var(--color-text-muted);
+    overflow: auto;
+    max-height: 300px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .llm-message-body {
     display: none;
     padding: var(--spacing-md);
@@ -1615,6 +1693,14 @@ input[type="checkbox"]:focus {
     flex-direction: column;
     gap: var(--spacing-sm);
     margin-bottom: var(--spacing-md);
+}
+
+/* The disclosure blocks end the card body, so their trailing gaps would read as
+   an empty region under the last one. */
+.llm-message-body > *:last-child,
+.llm-message-prompts .llm-message-prompt-details:last-child,
+.llm-message-raw details:last-child {
+    margin-bottom: 0;
 }
 
 .llm-message-prompt {

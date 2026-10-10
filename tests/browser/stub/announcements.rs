@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use playwright_rs::AriaRole;
 
+use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
+
 use super::*;
 
 async fn watch_live_region(page: &playwright_rs::Page, region_id: &str) {
@@ -97,7 +99,10 @@ async fn test_status_changes_are_announced_once() {
                 "an unchanged phase must not be re-announced on a later poll"
             );
 
-            status.set(StubStatus::Error("narration failed".to_string()));
+            status.set(StubStatus::Error(
+                GenerationFailureKind::Other,
+                "narration failed".to_string(),
+            ));
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(8),

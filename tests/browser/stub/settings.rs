@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use super::support::wait_until_focused;
 use super::*;
 
 async fn open_settings(page: &playwright_rs::Page) {
@@ -135,6 +136,50 @@ async fn test_add_and_edit_open_the_shared_connection_form_page() {
             .await
             .unwrap();
         wait_until_visible(&page, ".connection-list", Duration::from_secs(5)).await;
+    })
+    .await;
+}
+
+// [docs/specs/browser_settings.md] SCENARIO: 40.3
+#[tokio::test]
+async fn test_settings_panel_swaps_keep_keyboard_focus_in_the_panel() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        open_settings(&page).await;
+
+        let edit = r#".connection-row:has(.connection-name:text-is("openrouter-gpt-4o-mini")) button:has-text('Edit')"#;
+        page.locator(edit).await.focus().await.unwrap();
+        page.locator(edit).await.click(None).await.unwrap();
+        wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
+        assert!(
+            wait_until_focused(&page, "#conn_name", Duration::from_secs(2)).await,
+            "opening the connection form must land focus in its first field"
+        );
+
+        let back = ".connection-form-page .back-link";
+        page.locator(back).await.focus().await.unwrap();
+        page.locator(back).await.click(None).await.unwrap();
+        wait_until_visible(&page, ".connection-list", Duration::from_secs(5)).await;
+        assert!(
+            wait_until_focused(&page, "#role-select-narrator", Duration::from_secs(2)).await,
+            "the back link must land focus back in the Connections view, not on the page body"
+        );
+
+        // The role-change swap re-renders the panel, but htmx restores focus to
+        // the select that came back with the same id.
+        page.locator("#role-select-quantifier")
+            .await
+            .focus()
+            .await
+            .unwrap();
+        page.locator("#role-select-quantifier")
+            .await
+            .select_option("openrouter-euryale", None)
+            .await
+            .unwrap();
+        assert!(
+            wait_until_focused(&page, "#role-select-quantifier", Duration::from_secs(2)).await,
+            "changing a role must keep focus on that role's select"
+        );
     })
     .await;
 }

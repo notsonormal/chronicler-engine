@@ -459,7 +459,6 @@ async fn test_keyboard_save_shortcuts_submit_edit() {
             textarea.fill(text, None).await.unwrap();
             textarea.press(modifier, None).await.unwrap();
 
-            // Waiting for the textarea to go is the observable end of the attempt.
             wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
         }
 
@@ -929,6 +928,57 @@ async fn test_failed_swipe_switch_reports_in_the_story_log_slot() {
                 count_log_entries(&page).await,
                 entries_before,
                 "a failed swipe switch must leave the log as it was"
+            );
+        }
+    })
+    .await;
+}
+
+// The stub answers POST /history/delete with a 200 and drops the served log's
+// last entry, so the shipped delete click runs its success path.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.22
+#[tokio::test]
+async fn test_successful_delete_keeps_focus_in_the_story_log() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let save = stub.save_handle();
+        async move {
+            page.on_dialog(|dialog| async move { dialog.accept(None).await })
+                .await
+                .unwrap();
+            save.set_delete_succeeds(true);
+
+            let entries_before = count_log_entries(&page).await;
+            assert!(
+                entries_before > 1,
+                "the fixture must show an entry that carries a delete control"
+            );
+
+            let delete = "#story-log .log-entry:last-child .delete-btn";
+            page.locator(delete).await.focus().await.unwrap();
+            page.locator(delete).await.click(None).await.unwrap();
+
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(5),
+                    Duration::from_millis(25),
+                    || async {
+                        page.evaluate::<(), bool>(
+                            r#"(() => {
+                                const entries = document.querySelectorAll('#story-log .log-entry');
+                                const last = entries[entries.length - 1];
+                                const active = document.activeElement;
+                                return entries.length === 1
+                                    && !!last && !!active && last.contains(active)
+                                    && active.classList.contains('edit-btn');
+                            })()"#,
+                            None,
+                        )
+                        .await
+                        .unwrap_or(false)
+                    },
+                )
+                .await,
+                "the entry that becomes last must take focus on its Edit control"
             );
         }
     })

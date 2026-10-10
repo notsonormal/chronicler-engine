@@ -1,4 +1,4 @@
-//! Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Ten checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
+//! Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Eleven checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
 
 use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};
@@ -14,11 +14,6 @@ struct SubtestReport {
     passed: bool,
 }
 
-/// Run one invariant check on a fresh page of the shared browser against the
-/// stub.
-///
-/// A panic in `check` is caught so the remaining checks still run; the failure
-/// is recorded and reported at the end. The page is closed afterward.
 async fn run_subtest<Fut>(
     browser: &SharedBrowser,
     stub: &StubServer,
@@ -31,7 +26,6 @@ where
     let start = Instant::now();
     let page = browser.open_page(stub).await;
 
-    // Clone for the check; the original closes the page afterward.
     let result = AssertUnwindSafe(check(page.clone())).catch_unwind().await;
     let _ = page.close().await;
 
@@ -86,6 +80,13 @@ async fn test_invariants() {
         run_subtest(
             &browser,
             &stub,
+            "command_input_width_is_stable",
+            check_command_input_width_is_stable,
+        )
+        .await,
+        run_subtest(
+            &browser,
+            &stub,
             "element_positioning",
             check_element_positioning,
         )
@@ -135,6 +136,7 @@ async fn test_invariants() {
     ];
 
     print_summary(&reports);
+    browser.close().await;
 
     let failed: Vec<&str> = reports
         .iter()
@@ -184,7 +186,6 @@ async fn check_no_horizontal_overflow(page: Page) {
     assert!(!has_overflow, "Page should not have horizontal overflow");
 }
 
-/// Regression test for text overflowing log-entry bubbles.
 async fn check_log_entry_text_wraps_within_bubble(page: Page) {
     let overflows: bool = page
         .evaluate::<(), bool>(
@@ -213,6 +214,41 @@ async fn check_log_entry_text_wraps_within_bubble(page: Page) {
     assert!(
         !overflows,
         "Log entry with <pre><code> content should not overflow horizontally"
+    );
+}
+
+/// Mid-turn the label grows to "Generating…": the input keeps its width and the
+/// label stays inside the button.
+async fn check_command_input_width_is_stable(page: Page) {
+    let widths: (f64, f64, f64, f64) = page
+        .evaluate::<(), (f64, f64, f64, f64)>(
+            r#"() => {
+                const input = document.querySelector('#command-form input[name="command"]');
+                const button = document.querySelector('#command-form button[type="submit"]');
+                const idle = input.getBoundingClientRect().width;
+                applyActionState('generating');
+                const generating = input.getBoundingClientRect().width;
+                const clipped = button.scrollWidth - button.clientWidth;
+                applyActionState('idle');
+                return [idle, generating, clipped, button.getBoundingClientRect().width];
+            }"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        (widths.0 - widths.1).abs() < 0.5,
+        "the command input must not resize while the button reads Generating… \
+         (idle {} against generating {})",
+        widths.0,
+        widths.1
+    );
+    assert!(
+        widths.2 <= 0.5,
+        "the Generating… label must fit the button (overflows by {}px, button {}px)",
+        widths.2,
+        widths.3
     );
 }
 
@@ -303,6 +339,9 @@ async fn check_npc_portraits_fixed_width(page: Page) {
     );
 }
 
+/// Mirrors the `max-height: 50vh` cap `assets/styles.css` puts on `#edit-textarea`.
+const AUTO_GROW_VIEWPORT_HEIGHT_RATIO: f64 = 0.5;
+
 async fn check_edit_textarea_matches_original_height(page: Page) {
     let original_height: f64 = page
         .evaluate::<(), f64>(
@@ -352,14 +391,11 @@ async fn check_edit_textarea_matches_original_height(page: Page) {
 
     assert!(textarea_height > 0.0, "Textarea should have a valid height");
 
-    // The auto-grow stops at half the viewport, so an entry taller than the
-    // cap is shown in a capped, internally scrolling textarea rather than one
-    // matching the original height.
     let viewport_height: f64 = page
         .evaluate::<(), f64>("window.innerHeight", None)
         .await
         .unwrap();
-    let expected_height = original_height.min(viewport_height * 0.5);
+    let expected_height = original_height.min(viewport_height * AUTO_GROW_VIEWPORT_HEIGHT_RATIO);
 
     assert!(
         textarea_height >= expected_height,
@@ -371,10 +407,6 @@ async fn check_edit_textarea_matches_original_height(page: Page) {
     );
 }
 
-/// Responsive layout invariant: `styles.css` declares `@media (max-width: 768px)`
-/// which flips `.main-container` to `flex-direction: column` (desktop is the
-/// default `row`). No other test exercises the responsive rules; this one proves
-/// the @media machinery is wired by reading the computed style at a narrow width.
 async fn check_responsive_layout_under_768px(page: Page) {
     page.set_viewport_size(Viewport {
         width: 500,
@@ -409,8 +441,6 @@ async fn check_responsive_layout_under_768px(page: Page) {
     );
 }
 
-/// Design-token invariant: `:root` declares the core custom-property tokens
-/// used by the UI.
 async fn check_root_design_tokens(page: Page) {
     let covered: usize = page
         .evaluate::<(), usize>(
@@ -450,9 +480,8 @@ async fn check_root_design_tokens(page: Page) {
     );
 }
 
-/// The forced-colors rule in `assets/styles.css` restores the focus ring the
-/// field `outline: none` reset removes. Only a real browser under emulated
-/// forced colors can observe the computed outline.
+/// The forced-colors rule in `assets/styles.css` restores the focus ring that
+/// the field's `outline: none` reset removes.
 async fn check_forced_colors_focus_ring(page: Page) {
     page.emulate_media(Some(
         EmulateMediaOptions::builder()
@@ -462,11 +491,9 @@ async fn check_forced_colors_focus_ring(page: Page) {
     .await
     .expect("Failed to emulate forced colors");
 
-    // Reach the input with real key input: `:focus-visible` matches a keyboard
-    // focus, not a programmatic one. The bound is generous rather than tuned to
-    // the current tab-stop count: the story log is rendered through the shipped
-    // template, so adding a control there (for example the last entry's delete
-    // button) shifts where `#command-input` sits.
+    // `:focus-visible` matches a keyboard focus, not a programmatic one, so the
+    // input has to be reached with real key input. The tab bound is loose: a
+    // control added to the shipped story-log template shifts `#command-input`.
     let mut reached = false;
     for _ in 0..30 {
         page.keyboard().press("Tab", None).await.unwrap();

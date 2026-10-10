@@ -82,6 +82,10 @@ async fn test_failed_connection_add_keeps_the_form_and_renders_inline() {
             "the inline message should name the failed action, got {message:?}"
         );
         assert!(
+            message.contains("Unknown LLM backend"),
+            "the short line should quote the server's own refusal, got {message:?}"
+        );
+        assert!(
             raw.contains("Unknown LLM backend"),
             "the raw refusal belongs in the disclosure, got {raw:?}"
         );

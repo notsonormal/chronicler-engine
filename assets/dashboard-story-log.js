@@ -1,4 +1,4 @@
-// The story log: edit mode, its entry locks, the swipe/retry/delete requests and its own error slot.
+// The story log: edit mode, its entry locks, the swipe/retry/delete requests, the follow-new-entries scroll and its own error slot.
 
 const noticeClearTimers = new WeakMap();
 
@@ -234,19 +234,72 @@ function switchSwipe(messageId, index) {
     });
 }
 
+// The Delete control lives on the last entry, so the swap replaces the node that
+// had focus. The entry that becomes the last one carries the equivalent
+// controls, and the command input is the landing spot for a log left empty.
+function focusAfterLogDelete() {
+  const entries = document.querySelectorAll("#story-log .log-entry");
+  const lastEntry = entries.length ? entries[entries.length - 1] : null;
+  const landing =
+    (lastEntry && lastEntry.querySelector(".edit-btn")) ||
+    document.getElementById("command-input");
+  if (landing) landing.focus();
+}
+
 function deleteMessage() {
   if (!confirm("Delete this message?")) return;
   clearInlineError(storyLogErrorSlot());
   fetch("/history/delete", { method: "POST" })
     .then((response) => {
       if (!response.ok) return throwServerDetail(response);
-      htmx.ajax("GET", "/fragment/story-log", {
-        target: "#story-log",
-        swap: "innerHTML",
-      });
+      return htmx
+        .ajax("GET", "/fragment/story-log", {
+          target: "#story-log",
+          swap: "innerHTML",
+        })
+        .then(() => focusAfterLogDelete());
     })
     .catch((err) => {
       console.error("Delete failed:", err);
       showStoryLogError("Failed to delete the message.", err.message);
     });
 }
+
+// A poll morphs the log in place, so its scroll position survives the swap and
+// a new entry would land below the fold. A swap that adds an entry scrolls the
+// log back to its bottom, but only when the log was already there: a player
+// reading further up keeps their place.
+const STORY_LOG_BOTTOM_SLACK_PX = 8;
+let storyLogSwapStart = null;
+
+function storyLogIsAtBottom(log) {
+  return (
+    log.scrollHeight - log.scrollTop - log.clientHeight <=
+    STORY_LOG_BOTTOM_SLACK_PX
+  );
+}
+
+function storyLogEntryCount(log) {
+  return log.querySelectorAll(".log-entry").length;
+}
+
+document.body.addEventListener("htmx:beforeSwap", function (evt) {
+  const target = evt.detail && evt.detail.target;
+  if (!target || target.id !== "story-log") return;
+  storyLogSwapStart = {
+    atBottom: storyLogIsAtBottom(target),
+    entries: storyLogEntryCount(target),
+  };
+});
+
+document.body.addEventListener("htmx:afterSwap", function (evt) {
+  const start = storyLogSwapStart;
+  storyLogSwapStart = null;
+  const target = evt.detail && (evt.detail.target || evt.detail.elt);
+  if (!start || !target || target.id !== "story-log") return;
+  // An open edit owns the log's position, and the poll is paused for it.
+  if (editState !== null) return;
+  if (!start.atBottom) return;
+  if (storyLogEntryCount(target) <= start.entries) return;
+  target.scrollTop = target.scrollHeight;
+});

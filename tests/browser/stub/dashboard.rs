@@ -2,8 +2,10 @@
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
+
 use super::*;
-use super::support::{active_element_is, read_banner};
+use super::support::{active_element_is, read_banner, read_command_input};
 
 async fn stash_action_area_nodes(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
@@ -17,7 +19,7 @@ async fn stash_action_area_nodes(page: &playwright_rs::Page) {
     .unwrap();
 }
 
-/// Node identity, not the id string a replacement would also carry.
+/// Compares node identity: a swapped-in form or status keeps its id.
 async fn action_area_nodes_unchanged(page: &playwright_rs::Page) -> (bool, bool) {
     page.evaluate::<(), (bool, bool)>(
         r#"(() => {
@@ -148,8 +150,10 @@ async fn test_status_error_shows_in_the_status_display_after_confirm() {
             submit_intercepted_command(&page).await;
             confirm_text_check_preview(&page).await;
 
-            // The error fragment lands in the #status-display the confirm already swapped.
-            status.set(StubStatus::Error("narration failed".to_string()));
+            status.set(StubStatus::Error(
+                GenerationFailureKind::Other,
+                "narration failed".to_string(),
+            ));
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(8),
@@ -212,8 +216,6 @@ async fn test_preview_opens_beside_status_display() {
             status.set(StubStatus::Phase("narrating".to_string()));
             wait_for_status_generating(&page).await;
 
-            // The button is a disabled generating indicator here, so submit the form
-            // directly (the player's Enter path).
             submit_intercepted_command_direct(&page).await;
 
             assert!(
@@ -357,6 +359,38 @@ async fn test_tab_bar_exposes_a_tablist_and_panels() {
     .await;
 }
 
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.39
+#[tokio::test]
+async fn test_active_tab_survives_a_reload() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        page.locator(r#"[data-tab="worlds"]"#)
+            .await
+            .click(None)
+            .await
+            .unwrap();
+
+        page.reload(None).await.expect("reload the dashboard");
+
+        let restored: bool = page
+            .evaluate::<(), bool>(
+                r#"() => {
+                    const worlds = document.querySelector('.tab[data-tab="worlds"]');
+                    return worlds.getAttribute('aria-selected') === 'true'
+                        && document.getElementById('worlds-tab').classList.contains('active')
+                        && !document.getElementById('game-tab').classList.contains('active');
+                }"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            restored,
+            "a reload must land back on the tab the user was on"
+        );
+    })
+    .await;
+}
+
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.17
 #[tokio::test]
 async fn test_dashboard_exposes_landmarks_and_a_labelled_command_input() {
@@ -427,14 +461,13 @@ async fn test_status_poll_leaves_generating_and_enter_submits() {
                 "the display should leave Ready, got {status_text:?}"
             );
 
-            // The button's label belongs to 16.9; this test owns the poll-driven transition.
             status.set(StubStatus::Idle);
             wait_for_status_ready(&page).await;
             let (disabled, _) = read_submit_button(&page).await;
             assert!(!disabled, "Send should unlock once the poll reports idle");
 
-            // No other test presses Enter: `requestSubmit()` does not reproduce the
-            // disabled-default-button block a real Enter hits.
+            // Only a real Enter runs the browser's disabled-default-button check;
+            // `requestSubmit()` bypasses it.
             let before = action.count();
             fill_command_input(&page, "look around").await;
             let input = page.locator(r#"#command-form input[name="command"]"#).await;
@@ -450,6 +483,152 @@ async fn test_status_poll_leaves_generating_and_enter_submits() {
                 "a real Enter should submit the command form"
             );
         }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.36
+#[tokio::test]
+async fn test_confirmed_preview_consumes_the_command_text() {
+    with_stub_page(StubActionOutcome::Pending, |page, _stub| async move {
+        submit_intercepted_command(&page).await;
+        assert_eq!(
+            read_command_input(&page).await,
+            "look at the casle",
+            "an open preview must keep the submitted text in the command input"
+        );
+
+        page.locator(".text-check-preview form .btn-cyan")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
+        assert_eq!(
+            read_command_input(&page).await,
+            "",
+            "Send with edits must consume the command text"
+        );
+
+        submit_intercepted_command_direct(&page).await;
+        page.locator(".text-check-preview .btn-original")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
+        assert_eq!(
+            read_command_input(&page).await,
+            "",
+            "Send Original must consume the command text"
+        );
+
+        submit_intercepted_command_direct(&page).await;
+        page.locator(".text-check-preview .preview-cancel")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
+        assert_eq!(
+            read_command_input(&page).await,
+            "look at the casle",
+            "Cancel must keep the command text"
+        );
+    })
+    .await;
+}
+
+/// The five-second status poll replaces the wait state, so it must be captured
+/// as the swap lands rather than read afterwards.
+async fn record_wait_state(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"(() => {
+            window.__waitSnapshot = null;
+            const record = () => {
+                if (window.__waitSnapshot) return;
+                const display = document.getElementById('status-display');
+                if (!display || !display.classList.contains('wait')) return;
+                const label = display.querySelector('.status.wait') || display;
+                window.__waitSnapshot = [display.className, getComputedStyle(label).color];
+            };
+            new MutationObserver(record).observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributeFilter: ['class'],
+            });
+            record();
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+async fn read_wait_snapshot(page: &playwright_rs::Page) -> Option<(String, String)> {
+    page.evaluate::<(), Option<(String, String)>>("(() => window.__waitSnapshot)()", None)
+        .await
+        .unwrap_or(None)
+}
+
+async fn resolve_palette_colour(page: &playwright_rs::Page, token: &str) -> String {
+    page.evaluate::<String, String>(
+        r#"(token) => {
+            const probe = document.createElement('span');
+            probe.style.color = `var(${token})`;
+            document.body.appendChild(probe);
+            const colour = getComputedStyle(probe).color;
+            probe.remove();
+            return colour;
+        }"#,
+        Some(&token.to_string()),
+    )
+    .await
+    .unwrap()
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.42
+#[tokio::test]
+async fn test_refused_concurrent_send_keeps_the_command_and_shows_the_wait_state() {
+    with_stub_page(StubActionOutcome::Refused, |page, _stub| async move {
+        record_wait_state(&page).await;
+
+        fill_command_input(&page, "look around").await;
+        page.evaluate::<(), ()>(
+            r#"() => document.getElementById('command-form').requestSubmit()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(10),
+                Duration::from_millis(50),
+                || async { read_wait_snapshot(&page).await.is_some() },
+            )
+            .await,
+            "a refused concurrent send must put the status display into its wait state"
+        );
+
+        let (wait_class, wait_colour) = read_wait_snapshot(&page)
+            .await
+            .expect("the wait state must have been recorded");
+        let classes: Vec<&str> = wait_class.split_whitespace().collect();
+        assert!(
+            classes.contains(&"wait") && !classes.contains(&"ready"),
+            "the container must carry the wait state instead of the ready one, got {wait_class:?}"
+        );
+        assert_eq!(
+            wait_colour,
+            resolve_palette_colour(&page, "--color-text-primary").await,
+            "the wait label must be drawn in the palette's body text colour"
+        );
+        assert_eq!(
+            read_command_input(&page).await,
+            "look around",
+            "a command the engine refused must keep the text the player typed"
+        );
     })
     .await;
 }

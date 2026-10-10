@@ -41,7 +41,6 @@ pub async fn goto_with_connection_check(
     Ok(())
 }
 
-/// Launch Chromium browser for UI tests
 pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Browser) {
     let headed = std::env::var("HEADED").map(|v| v == "1").unwrap_or(false);
     let slow_mo = std::env::var("SLOW_MO")
@@ -69,10 +68,13 @@ pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Brows
     (playwright, browser)
 }
 
-/// Run an E2E test with a fully set up browser page.
-///
-/// Handles: port allocation, mock server startup, browser launch, navigation,
-/// and waiting for initial content. Cleans up the browser on completion.
+/// The driver process inherits the test's stdio, so it has to be gone before the
+/// test returns: nextest reports a child that outlives it as a leak.
+async fn close_chrome(playwright: &playwright_rs::Playwright, browser: &playwright_rs::Browser) {
+    let _ = browser.close().await;
+    let _ = playwright.shutdown().await;
+}
+
 pub async fn with_test_page<F, Fut>(config_path: &str, world: &str, persona: &str, test_fn: F)
 where
     F: FnOnce(playwright_rs::Page, u16) -> Fut,
@@ -81,7 +83,7 @@ where
     let port = get_config_port(config_path).expect("Failed to get config port");
     let _server = TestServer::new_with_mock(port, world, persona).await;
 
-    let (_playwright, browser) = launch_chrome().await;
+    let (playwright, browser) = launch_chrome().await;
     let page = browser.new_page().await.unwrap();
 
     goto_with_connection_check(&page, port)
@@ -90,19 +92,16 @@ where
 
     test_fn(page, port).await;
 
-    let _ = browser.close().await;
+    close_chrome(&playwright, &browser).await;
 }
 
-/// A shared Chromium process for the stub-browser tests, so the
-/// browser launch cost is paid once per test binary rather than per test.
-/// Dropping it closes the browser.
+/// Shared per test binary, so the launch cost is paid once rather than per test.
 pub struct SharedBrowser {
     _playwright: playwright_rs::Playwright,
     browser: playwright_rs::Browser,
 }
 
 impl SharedBrowser {
-    /// Launch the shared browser once.
     pub async fn launch() -> Self {
         let (playwright, browser) = launch_chrome().await;
         Self {
@@ -111,8 +110,10 @@ impl SharedBrowser {
         }
     }
 
-    /// Open a fresh page on the stub, with the htmx settle counter installed
-    /// and the shell's initial fragments loaded. The page is the caller's to close.
+    pub async fn close(&self) {
+        close_chrome(&self._playwright, &self.browser).await;
+    }
+
     pub async fn open_page(&self, stub: &StubServer) -> playwright_rs::Page {
         let page = self.browser.new_page().await.unwrap();
         let url = stub.url();
@@ -120,17 +121,11 @@ impl SharedBrowser {
         page.goto(&url, None)
             .await
             .unwrap_or_else(|e| panic!("navigate to stub at {url}: {e}"));
-        // The shell's `load`-triggered fragments settle the story log; wait for
-        // the canned entry so the test starts from the loaded state.
         wait_for_story_log(&page).await;
         page
     }
 }
 
-/// Run a stub-browser check: start a stub (default outcome: pending),
-/// drive one fresh page against it, and tear both down. This is the stub-browser
-/// entry point — the sibling of `with_test_page` for tests that do not need a
-/// real server.
 pub async fn with_stub_page<F, Fut>(outcome: StubActionOutcome, test_fn: F)
 where
     F: FnOnce(playwright_rs::Page, &StubServer) -> Fut,
@@ -141,12 +136,12 @@ where
     let page = browser.open_page(&stub).await;
     test_fn(page.clone(), &stub).await;
     let _ = page.close().await;
+    browser.close().await;
 }
 
-/// Open a tab panel and wait for that panel's own `hx-trigger="load"` swap to
-/// settle. A hidden panel's load swap lands before any test arms a baseline, so
-/// the wait goes through `await_panel_ready`, which searches the whole recorded
-/// target list.
+/// A hidden panel's load swap lands before any test arms a baseline, so the wait
+/// goes through `await_panel_ready`, which searches the whole recorded target
+/// list.
 async fn open_tab(page: &playwright_rs::Page, tab: &str, gate_target: &str) {
     await_panel_ready(page, gate_target)
         .await
@@ -158,26 +153,20 @@ async fn open_tab(page: &playwright_rs::Page, tab: &str, gate_target: &str) {
         .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
 }
 
-/// Open the Worlds tab (`.worlds-panel` load swap awaited).
 pub async fn open_worlds_tab(page: &playwright_rs::Page) {
     open_tab(page, "worlds", ".worlds-panel").await;
     wait_for_element_children(page, "#worlds-tab .world-item", 1).await;
 }
 
-/// Open the Games tab, then wait for the posture fragment's selects.
 pub async fn open_games_tab(page: &playwright_rs::Page) {
     open_tab(page, "games", ".games-panel").await;
     wait_until_visible(page, "#game-posture-controls", Duration::from_millis(5000)).await;
 }
 
-/// Open the Prompt Presets tab (`.prompt-presets-panel` load swap awaited).
 pub async fn open_prompt_presets_tab(page: &playwright_rs::Page) {
     open_tab(page, "prompt-presets", ".prompt-presets-panel").await;
 }
 
-/// Open the edit form for the seeded world "test" and wait for the posture
-/// selects.
-///
 /// The Edit button is scoped to the "Test Realm" world item, not `.first()`:
 /// the engine seeds two worlds, so an unscoped Edit selector matches twice and
 /// strict mode rejects it, and name-scoping is order-independent.
@@ -199,8 +188,7 @@ pub async fn open_world_edit(page: &playwright_rs::Page) {
     .await;
 }
 
-/// Click a preset card's Edit button and wait for that card's swap. The card
-/// carries no `data-id`, so `card_selector` is the caller's stable anchor,
+/// Cards carry no `data-id`, so `card_selector` is the caller's stable anchor,
 /// e.g. `.preset-card:has(.card-title:text-is("My Preset"))`.
 pub async fn open_preset_editor(page: &playwright_rs::Page, card_selector: &str) {
     let edit_selector = format!("{card_selector} button:has-text('Edit')");
@@ -208,9 +196,6 @@ pub async fn open_preset_editor(page: &playwright_rs::Page, card_selector: &str)
     wait_until_visible(page, ".preset-card.edit-form", Duration::from_millis(5000)).await;
 }
 
-/// Create a system preset through the engine's own HTTP API, before the
-/// browser interacts with it — seeding goes through the same `POST
-/// /prompt-presets` route the Create form uses, not a test-only endpoint.
 pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
     let client = reqwest::Client::new();
     let form = [
@@ -241,9 +226,7 @@ pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
     );
 }
 
-/// True when the returned panel HTML carries a card titled `name` with a
-/// duplicate route. Cards carry no `data-id`, so the duplicate button is the
-/// stable anchor.
+/// Cards carry no `data-id`, so the duplicate button is the stable anchor.
 fn preset_card_rendered(body: &str, name: &str) -> bool {
     let title_anchor = format!(r#"<span class="card-title">{name}</span>"#);
     preset_card_html_slice(body, &title_anchor).is_some_and(|card| {
@@ -251,13 +234,10 @@ fn preset_card_rendered(body: &str, name: &str) -> bool {
     })
 }
 
-/// Selector addressing a preset card by its title — cards carry no `data-id`.
 pub fn preset_card_selector(name: &str) -> String {
     format!(r#".preset-card:has(.card-title:text-is("{name}"))"#)
 }
 
-/// Put `command` into the shipped command input. Shared by the helpers that
-/// submit it, so both address the same field.
 pub async fn fill_command_input(page: &playwright_rs::Page, command: &str) {
     let command = command.to_string();
     let _: Result<(), _> = page
@@ -301,8 +281,6 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
     dismiss_text_check_if_present(page).await;
 }
 
-/// Detect and dismiss the text check preview by clicking "Send Original".
-/// Confirming starts the turn the same way the player's own Send would.
 pub async fn dismiss_text_check_if_present(page: &playwright_rs::Page) {
     let locator = page.locator(".text-check-preview .btn-original").await;
     if let Ok(true) = locator.is_visible().await {
@@ -317,7 +295,6 @@ pub async fn dismiss_text_check_if_present(page: &playwright_rs::Page) {
     }
 }
 
-/// Count log entries in story log (instant snapshot)
 pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
     page.query_selector_all("#story-log .log-entry")
         .await
@@ -325,8 +302,7 @@ pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
         .len()
 }
 
-/// `selector` holds an error disclosure: whether it is shown, its short line,
-/// and the raw text behind its Details control.
+/// The tuple is (shown, short line, raw text behind the Details control).
 pub async fn read_error_disclosure(
     page: &playwright_rs::Page,
     selector: &str,
@@ -349,7 +325,6 @@ pub async fn read_error_disclosure(
     .unwrap()
 }
 
-/// A test that asserts a short line also checks the raw text stays off screen.
 pub async fn error_details_open(page: &playwright_rs::Page, selector: &str) -> bool {
     page.evaluate::<String, bool>(
         r#"(selector) => {
@@ -364,10 +339,6 @@ pub async fn error_details_open(page: &playwright_rs::Page, selector: &str) -> b
     .unwrap()
 }
 
-/// Capture failure diagnostics before panicking: screenshot to
-/// `tmp/screenshots/`, DOM dump + per-server engine logs to
-/// `tmp/test_diagnostics/`, and log tails printed into the failure output.
-/// Read these before re-running a failed test.
 pub async fn capture_failure_state(page: &playwright_rs::Page, test_name: &str) {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -398,7 +369,6 @@ pub async fn capture_failure_state(page: &playwright_rs::Page, test_name: &str) 
         Err(e) => println!("⚠️  Failed to get page content: {e}"),
     }
 
-    // Engine output: full buffers to files, a tail into the test output.
     // Locks recover from poisoning so one panicking test cannot break
     // another test's diagnostics.
     let logs = registered_server_logs();

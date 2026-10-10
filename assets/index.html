@@ -124,7 +124,7 @@
           hx-swap="innerHTML"
           hx-sync="this:drop"
           hx-on::before-request="onCommandBeforeRequest()"
-          hx-on::after-request="onCommandAfterRequest()"
+          hx-on::after-request="onCommandAfterRequest(event)"
         >
           <label class="visually-hidden" for="command-input">Command</label>
           <input

@@ -248,3 +248,149 @@ async fn test_poll_removal_keeps_the_surviving_entries() {
     })
     .await;
 }
+
+const STORY_LOG_SCROLL_PROBE: &str = r#"(() => {
+    const log = document.getElementById('story-log');
+    const entries = log.querySelectorAll('.log-entry');
+    const newest = entries[entries.length - 1];
+    const view = log.getBoundingClientRect();
+    const entry = newest ? newest.getBoundingClientRect() : null;
+    return {
+        overflows: log.scrollHeight > log.clientHeight,
+        bottomGap: log.scrollHeight - log.scrollTop - log.clientHeight,
+        scrollTop: log.scrollTop,
+        entries: entries.length,
+        newestInView: !!entry && entry.top < view.bottom && entry.bottom > view.top,
+        newestTailBelowView: !!entry && entry.bottom > view.bottom,
+    };
+})()"#;
+
+#[derive(serde::Deserialize)]
+struct StoryLogScroll {
+    overflows: bool,
+    #[serde(rename = "bottomGap")]
+    bottom_gap: f64,
+    #[serde(rename = "scrollTop")]
+    scroll_top: f64,
+    entries: f64,
+    #[serde(rename = "newestInView")]
+    newest_in_view: bool,
+    #[serde(rename = "newestTailBelowView")]
+    newest_tail_below_view: bool,
+}
+
+async fn read_story_log_scroll(page: &playwright_rs::Page) -> StoryLogScroll {
+    page.evaluate::<(), StoryLogScroll>(STORY_LOG_SCROLL_PROBE, None)
+        .await
+        .unwrap()
+}
+
+/// The follow rule picks up new entries only while the log sits at its bottom.
+async fn scroll_story_log_to_bottom(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        "(() => { const log = document.getElementById('story-log'); log.scrollTop = log.scrollHeight; })()",
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+/// The follow rule leaves a log the player scrolled away from its bottom alone.
+async fn scroll_story_log_to_top(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        "(() => { const log = document.getElementById('story-log'); log.scrollTop = 0; })()",
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+async fn wait_for_story_log_entries(page: &playwright_rs::Page, expected: f64) {
+    let rendered = wait_for_condition_async(
+        Duration::from_secs(8),
+        Duration::from_millis(50),
+        || async {
+            page.evaluate::<(), f64>(
+                "(() => document.querySelectorAll('#story-log .log-entry').length)()",
+                None,
+            )
+            .await
+            .unwrap_or(0.0)
+                >= expected
+        },
+    )
+    .await;
+    assert!(rendered, "the poll must render {expected} entries");
+}
+
+// [docs/specs/browser_story_log.md] SCENARIO: 30.20
+#[tokio::test]
+async fn test_poll_that_appends_an_entry_follows_the_bottom() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let story = stub.story_log_handle();
+        async move {
+            scroll_story_log_to_bottom(&page).await;
+            let before = read_story_log_scroll(&page).await;
+            assert!(
+                before.overflows,
+                "the canned log must overflow its container for the follow check"
+            );
+            assert!(
+                before.bottom_gap <= 8.0,
+                "the test must start with the log at its bottom, gap {} px",
+                before.bottom_gap
+            );
+
+            story.append_narration("A new dawn breaks over the courtyard.");
+            wait_for_story_log_entries(&page, before.entries + 1.0).await;
+
+            let after = read_story_log_scroll(&page).await;
+            assert!(
+                after.bottom_gap <= 8.0,
+                "a poll that appends an entry must scroll the log to its bottom, gap {} px",
+                after.bottom_gap
+            );
+            assert!(
+                after.newest_in_view,
+                "the appended entry must be in view after the poll"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_story_log.md] SCENARIO: 30.21
+#[tokio::test]
+async fn test_poll_that_appends_an_entry_leaves_a_scrolled_up_log_alone() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let story = stub.story_log_handle();
+        async move {
+            scroll_story_log_to_top(&page).await;
+            let before = read_story_log_scroll(&page).await;
+            assert!(
+                before.overflows,
+                "the canned log must overflow its container for the scroll check"
+            );
+            assert!(
+                before.bottom_gap > 8.0,
+                "the test must start with the log scrolled away from its bottom"
+            );
+
+            story.append_narration("A new dawn breaks over the courtyard.");
+            wait_for_story_log_entries(&page, before.entries + 1.0).await;
+
+            let after = read_story_log_scroll(&page).await;
+            assert_eq!(
+                after.scroll_top, before.scroll_top,
+                "a poll must not move a log the player scrolled away from its bottom"
+            );
+            assert!(
+                after.newest_tail_below_view,
+                "the newest entry must stay below the fold for a scrolled-up log \
+                 (scrollTop {} bottomGap {})",
+                after.scroll_top, after.bottom_gap
+            );
+        }
+    })
+    .await;
+}

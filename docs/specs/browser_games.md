@@ -25,3 +25,16 @@ When the client changes the Tense select to "present"
 Then the posture fragment is replaced
 And the Tense select has focus again
 ```
+
+#### Scenario 27.3: Deleting a saved game keeps keyboard focus in the Games panel
+
+```gherkin
+Given the Games tab shows more than one saved game
+And a saved game's Delete control has keyboard focus
+When the client confirms the delete
+Then that game's row is gone from the saved-games list
+And the row that took its place holds keyboard focus on its Switch control
+When the client deletes the last saved game and confirms
+Then no saved-game row remains
+And keyboard focus is inside the Games panel
+```

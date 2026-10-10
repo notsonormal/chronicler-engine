@@ -71,7 +71,7 @@ impl CharacterHeadshotsTemplate {
     }
 }
 
-/// An empty set renders an empty body so the polling container in the action area survives.
+/// An empty set renders an empty body, keeping the action area's polling container alive.
 #[derive(Template)]
 #[template(
     source = r##"{% if !vm.options.is_empty() %}<div class="options-strip"><div class="options-label"><span>options — pick one, or type your own</span><form class="options-regen-form" hx-post="/action/check" hx-target="#status-display" hx-swap="innerHTML" hx-sync="this:drop"><input type="hidden" name="command" value="/options" /><button type="submit" class="mini-btn" title="Regenerate options" aria-label="Regenerate options" hx-on::before-request="updateToThinking()" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"/></svg></button></form></div>{% for option in vm.options %}<div class="option-item"><button type="button" class="option-btn" onclick="useOption(this)" {% if vm.is_busy %}disabled{% endif %}>{{ option }}</button><button type="button" class="mini-btn" onclick="editOption(this)" title="Edit before send" aria-label="Edit before send" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></div>{% endfor %}</div>{% endif %}"##,
@@ -107,11 +107,11 @@ impl OptionsDockTemplate {
         {% for issue in issues %}<span class="issue-tag {{ issue.kind }}">{{ issue.message }}</span>{% endfor %}
     </div>
     <div class="form-actions">
-        <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-on::after-request="closeActionPreview()">
+        <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <input type="hidden" name="command" value="{{ original }}" />
             <button type="submit" class="btn-primary btn-original">Send Original</button>
         </form>
-        <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-include="#corrected-textarea" hx-on::after-request="closeActionPreview()">
+        <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-include="#corrected-textarea" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <button type="submit" class="btn-cyan">Send with edits</button>
         </form>
         <button type="button" class="btn-cyan preview-cancel" onclick="closeActionPreview()">Cancel</button>

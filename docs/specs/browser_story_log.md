@@ -197,3 +197,33 @@ Then #story-log-error shows a short failure message
 And its Details disclosure holds the raw server text
 And the story log still shows the entry it showed before
 ```
+
+#### Scenario 30.20: A poll that appends an entry follows the log's bottom
+
+```gherkin
+Given a story log whose content overflows its container
+And #story-log is scrolled to its bottom
+When a polling cycle appends an entry
+Then #story-log is scrolled to its bottom
+And the appended entry is in view
+```
+
+#### Scenario 30.21: A poll that appends an entry leaves a scrolled-up log alone
+
+```gherkin
+Given a story log whose content overflows its container
+And #story-log is scrolled away from its bottom
+When a polling cycle appends an entry
+Then #story-log keeps the scroll position it had
+And the bottom of the appended entry stays below the fold
+```
+
+#### Scenario 30.22: A successful delete keeps keyboard focus in the log
+
+```gherkin
+Given a story log with more than one .log-entry rendered
+And the last entry's Delete control has keyboard focus
+When the client confirms the delete and the delete succeeds
+Then the deleted entry is gone from the log
+And the entry that is now last holds keyboard focus on its Edit control
+```

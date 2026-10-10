@@ -5,7 +5,6 @@ use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::test_support::TestPromptPreset;
 
-/// Settings whose system slots hold the given preset ids, one per mode.
 fn settings_with_active_system(novel: &str, interactive_fiction: &str) -> AppSettings {
     let mut settings = AppSettings::default();
     settings.set_active_preset(PresetType::System, NarratorMode::Novel, novel.into());
@@ -153,6 +152,48 @@ fn test_preset_card_html_preview_truncates() {
     let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(html.contains(&"a".repeat(120)));
     assert!(!html.contains(&"a".repeat(121)));
+    assert!(
+        html.contains('…'),
+        "a cut preview must be marked with an ellipsis: {html}"
+    );
+}
+
+#[test]
+fn test_preset_card_html_preview_cuts_at_a_word_boundary() {
+    let preset = PromptPreset {
+        id: "test".into(),
+        name: "Test".into(),
+        instructions: Some(format!("{} final words", "word ".repeat(40))),
+        ..Default::default()
+    };
+    let html = preset_card_html(&preset, &inactive_system_slots());
+    assert!(
+        html.contains("word…"),
+        "a cut preview must end on a whole word: {html}"
+    );
+    assert!(
+        !html.contains("wor…"),
+        "a cut preview must not end mid-word: {html}"
+    );
+}
+
+#[test]
+fn test_preset_card_html_preview_keeps_a_short_text_whole() {
+    let preset = PromptPreset {
+        id: "test".into(),
+        name: "Test".into(),
+        instructions: Some("A short instruction.\nOn two lines.".into()),
+        ..Default::default()
+    };
+    let html = preset_card_html(&preset, &inactive_system_slots());
+    assert!(
+        html.contains("A short instruction. On two lines."),
+        "a preview that fits must be shown whole, with newlines flattened: {html}"
+    );
+    assert!(
+        !html.contains('…'),
+        "an uncut preview must not carry an ellipsis: {html}"
+    );
 }
 
 #[test]
@@ -165,8 +206,7 @@ fn test_preset_card_html_escapes_special_chars() {
     };
     let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(!html.contains("<b>Name</b>"));
-    // Askama escapes to numeric entities: `<` => `&#60;`, `>` => `&#62;`,
-    // `"` => `&#34;`, `&` => `&#38;`.
+    // Askama escapes to numeric entities (`&#60;`), not named ones (`&lt;`).
     assert!(html.contains("&#60;b&#62;Name&#60;/b&#62;"));
     assert!(html.contains("&#34;hello&#34;"));
     assert!(html.contains("&#38;"));

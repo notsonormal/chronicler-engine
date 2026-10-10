@@ -68,6 +68,35 @@ function setStatus(label, statusClass) {
   }
 }
 
+// The container's own class colours whatever it holds, and a server-rendered
+// error disclosure replaces the inner span without touching it, so the state is
+// read back off the content instead of being remembered. Only the state classes
+// are touched, so htmx's own transient classes survive.
+const STATUS_STATE_CLASSES = ["ready", "thinking", "wait", "error"];
+
+function statusDisplayState(statusDisplay) {
+  if (statusDisplay.querySelector(".error-disclosure, .status.error")) {
+    return "error";
+  }
+  if (statusIsGenerating()) return "thinking";
+  if (statusDisplay.querySelector(".status.wait")) return "wait";
+  return "ready";
+}
+
+function syncStatusClass() {
+  const statusDisplay = document.getElementById("status-display");
+  if (!statusDisplay) return;
+  statusDisplay.classList.remove(...STATUS_STATE_CLASSES);
+  statusDisplay.classList.add(statusDisplayState(statusDisplay));
+}
+
+// A 200 answer can still refuse the command: the engine reports a generation
+// already in flight as the wait state, and that command was never taken.
+function commandWasRefused() {
+  const statusDisplay = document.getElementById("status-display");
+  return !!statusDisplay && statusDisplayState(statusDisplay) === "wait";
+}
+
 function writeLiveRegion(id, text) {
   const region = document.getElementById(id);
   if (!region || region.textContent === text) return;
@@ -103,6 +132,7 @@ function announceGenerationError(statusDisplay) {
 function applyStatusDisplay() {
   const statusDisplay = document.getElementById("status-display");
   if (!statusDisplay) return;
+  syncStatusClass();
   syncActionState();
   announceGenerationError(statusDisplay);
   announceStatusDisplay();
@@ -202,7 +232,9 @@ document.body.addEventListener("htmx:afterSwap", function (evt) {
   syncActionState();
   const target = evt.detail && (evt.detail.target || evt.detail.elt);
   if (!target || !target.id) return;
-  if (target.id === "story-log") {
+  if (target.id === "status-display") {
+    syncStatusClass();
+  } else if (target.id === "story-log") {
     announceNewNarration();
   } else if (target.id === "options-dock") {
     announceOptions();
@@ -221,15 +253,45 @@ function onCommandBeforeRequest() {
   syncActionState();
 }
 
-function onCommandAfterRequest() {
+// htmx marks a transport failure and a non-2xx answer unsuccessful, so a
+// command the engine never took keeps the text the player typed.
+function requestSucceeded(event) {
+  return !!(event && event.detail && event.detail.successful);
+}
+
+function clearCommandInput() {
+  const form = document.getElementById("command-form");
+  if (form) form.reset();
+}
+
+function onCommandAfterRequest(event) {
   checkInFlight = false;
-  // The preview keeps the flagged command for editing; a dispatched
-  // command has been consumed, so clear the input.
-  if (!previewIsOpen()) {
-    const form = document.getElementById("command-form");
-    if (form) form.reset();
+  // The preview keeps the flagged command for editing, and a dispatched
+  // command has been consumed, so clear the input. A refused one was not.
+  if (requestSucceeded(event) && !previewIsOpen() && !commandWasRefused()) {
+    clearCommandInput();
   }
   syncActionState();
+}
+
+// Both of the preview's send controls post a command the engine consumes.
+function onPreviewSendAfterRequest(event) {
+  if (requestSucceeded(event)) {
+    clearCommandInput();
+  } else {
+    reportConfirmFailure(event);
+  }
+  closeActionPreview();
+}
+
+// A confirm the engine never took reports on the command form's own slot: the
+// preview closes here, and a slot inside it would go with it. htmx fires this
+// request's sendError after this event, on a preview that is already gone.
+function reportConfirmFailure(event) {
+  reportSlotFailure(
+    document.querySelector('#command-form [data-error-slot="action"]'),
+    event && event.detail ? event.detail.xhr : null,
+  );
 }
 
 function closeActionPreview() {

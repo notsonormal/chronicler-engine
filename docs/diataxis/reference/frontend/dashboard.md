@@ -20,7 +20,7 @@ flowchart TD
     HDR --> TABS --> BODY --> ACT
 ```
 
-A failure appears in one of three places: the failure banner under the header, the status display, or the failing region's own error slot. A non-2xx response swaps nothing into the region it describes. A failed poll answers non-2xx with `HX-Reswap: none`, so the region keeps its last good content. A failed form or card action renders a short message into that region's inline error slot (`[data-error-slot]`), with the raw server text behind the Details disclosure. The connection test answers 200 and targets its own `.connection-test-slot`, so the client swaps the result or the same disclosure into that slot, which cannot replace the row or form it reports on.
+A failure appears in one of three places: the failure banner under the header, the status display, or the failing region's own error slot. A non-2xx response swaps nothing into the region it describes. A failed poll answers non-2xx with `HX-Reswap: none`, so the region keeps its last good content. A failed form or card action renders a short message into that region's inline error slot (`[data-error-slot]`), with the raw server text behind the Details disclosure. The short line names the failed action; a 4xx refusal is the explanation the engine wrote for that slot, so it follows the name (a validation failure reads as "That action failed. Invalid map JSON: …" without opening the disclosure). A 5xx keeps the generic line, with the server's own text behind the disclosure. A failure with no response at all (the engine is unreachable) reports the same short line the banner uses, and its slot clears with the banner. The text-check preview's confirm forms report on the command form's own slot instead of one inside the preview: htmx fires a failed request's `afterRequest` before its `sendError`, and the after-request handler closes the preview, so a slot inside it would be gone before the failure could be written. The connection test answers 200 and targets its own `.connection-test-slot`, so the client swaps the result or the same disclosure into that slot, which cannot replace the row or form it reports on.
 
 The header bar is 48px tall, polls every 5s, and carries the game title and the current display name. Location is **not** in the header — it appears in the story log as a green location-header on the active room.
 
@@ -30,17 +30,19 @@ Four state names cover the failure and health displays. Role health comes from t
 
 - **Healthy** — a role whose newest LLM attempt carries no error.
 - **Degraded** — a role whose newest LLM attempt carries an error. Role health is engine-wide: the newest attempt per role covers all games, so a Degraded marker can come from an earlier game until that role's next call succeeds. The banner names each degraded role, what its failure cost the turn, and that scope ("Quantifier failed — using fallback NPC IDs (engine-wide role health)"). The Settings role row and the Connections sub-tab mark the same state.
-- **No calls yet** — a role with no recorded LLM attempt.
-- **Unreachable** — the client got no usable answer: the request failed at the transport level, or the polled container answered non-2xx. The client raises the banner itself ("The engine is unreachable. Nothing you do is being saved.") and clears it on the next successful response. A user action that answers non-2xx reports into its own surface's inline error slot; a transport-level failure raises the banner and writes that slot as well.
+- **No calls yet** — a role with no recorded LLM attempt. The banner's per-role detail and the Settings role row both name it; neither reports a success for a role that never ran.
+- **Unreachable** — the client got no usable answer: the request failed at the transport level, or the polled container answered non-2xx. The client raises the banner itself ("The engine is unreachable. Nothing you do is being saved.") and clears it on the next successful response, together with every inline error slot the failure wrote. A user action that answers non-2xx reports into its own surface's inline error slot; a transport-level failure raises the banner and writes that slot as well.
+
+Role health is refreshed, not fetched once: the header poll (5s) carries an out-of-band swap for each Settings role row's health cell and for the Connections sub-tab's degraded marker, so the banner and the panel cannot contradict each other while the dashboard is open.
 
 ## Tabs
 
-Six tabs, one active at a time. Tab switching is client-side JavaScript (`.tab` button toggles `.active` class on `.tab-content` siblings); each management panel fetches once when the dashboard loads, and switching tabs does not refetch panel content.
+Six tabs, one active at a time. Tab switching is client-side JavaScript (`.tab` button toggles `.active` class on `.tab-content` siblings); each management panel fetches once when the dashboard loads, and switching tabs does not refetch panel content. The active tab is remembered in session storage, so a reload — a rename, a game switch, a new game — returns to the tab the user was on instead of the Game tab. A fresh page (a new browser tab) starts on Game.
 
 | Tab | Polling |
 |---|---|
 | Game (default) | yes (multiple cadences) |
-| Settings | on load |
+| Settings | on load (its role-health cells refresh with the header poll) |
 | Prompt Presets | on load |
 | Worlds | on load |
 | Games | on load |
@@ -55,6 +57,8 @@ The Game tab is the only view with three live regions stacked: the **main contai
 ### Story Log (80%)
 
 A scrollable list of `MessageEntry` rendered rows. The list polls its fragment endpoint every 2 seconds (see Polling Cadences). Each entry carries one of three `log_type` classes (`narration`, `system`, `input`) that determines bubble styling and text color tokens.
+
+The log follows new entries: a poll that appends an entry scrolls the log to its bottom, so the new narration comes into view. The scroll happens only when the log was already at (or within 8px of) its bottom before the swap — a player who scrolled up to read keeps their place, and the new entry lands below the fold. An open edit holds the position: the poll is paused for it, and a swap that lands during one does not scroll. A swap that adds no entry (delete, swipe switch, a re-rendered entry) leaves the position where the browser puts it.
 
 Entry header structure:
 
@@ -85,19 +89,23 @@ The client derives one of four states from the DOM and applies it to the submit 
 
 The states are derived in that order, so a check outranks a running generation, which outranks an open preview.
 
-The status display is a region of its own with its own poll. It shows "Ready" in `--color-accent-ok`; a phase label in `--color-accent-yellow` (`Thinking...`, `Generating narration...`, `Quantifying scene...`, `Generating event...`, `Generating options...`); "Still thinking..." in the body text colour, for a rejected concurrent action; or a clamped generation error whose raw text sits behind a Details disclosure. The clamped line is one sentence per `GenerationFailureKind`, never a reading of the raw text. It changes when a response lands in it: the action check's retargeted swap, the status poll (which maps `idle`/`narrating`/`quantifying`/`generating-event`/`options` onto those labels), the new-swipe and retrigger paths, and the form's own `htmx:afterRequest` (which ends the checking state).
+The status display is a region of its own with its own poll. It shows "Ready" in `--color-accent-ok`; a phase label in `--color-accent-yellow` (`Thinking...`, `Generating narration...`, `Quantifying scene...`, `Generating event...`, `Generating options...`); "Still thinking..." in the body text colour, for a rejected concurrent action; or a clamped generation error in `--color-accent-red` whose raw text sits behind a Details disclosure. The clamped line is one sentence per `GenerationFailureKind`, never a reading of the raw text. It changes when a response lands in it: the action check's retargeted swap, the status poll (which maps `idle`/`narrating`/`quantifying`/`generating-event`/`options` onto those labels), the new-swipe and retrigger paths, and the form's own `htmx:afterRequest` (which ends the checking state).
+
+The container's own class names the state its content is in — `status ready`, `status thinking`, `status wait`, or `status error` — and the client re-derives it from the content after every swap, so a server-rendered error disclosure cannot leave the region in the Ready colour and a refused concurrent action cannot leave it in that colour either. The error state keeps the fixed 240px column and wraps its sentence onto at most two lines, so the clamped line reads without opening Details and the action area keeps its height.
+
+**Command-input lifecycle.** The client clears the command input exactly when a command has been consumed: a 2xx response to the command form that leaves no preview open and that is not the refusal below, and a 2xx response to either preview send control. A preview left open keeps the text for editing, Cancel keeps it, and a failed request keeps it — htmx reports a transport failure and a non-2xx answer as unsuccessful. A 200 that refuses the command because a generation is already in flight (the `wait` state) is not a consumption either: that command was never taken, so the text stays for a retry. A command the engine never took is never lost. The form's own inline error takes a row of its own, so `.action-area` expands to hold it rather than overflowing its 64px height.
 
 **Empty-input behavior.** Submitting with an empty input dispatches a continuation request (same path as SillyTavern's "Continue"): the action dispatcher folds an empty command into a continuation. The submit button transitions to "Generating…" immediately; the next status poll reads "Thinking...".
 
-**Text-check preflight.** The command form posts to the action-check endpoint, which invokes the configured text checker. Engine commands skip the check and dispatch at once, as do requests while the check is disabled or auto-check is off. When issues are found, the response renders a preview into `#action-preview`, above the command form: the original text, an editable corrected-text textarea, and issue tags (orange = spell, pink = grammar). Three controls: **Send with edits** (submits the textarea's current value), **Send Original** (submits the original), and **Cancel**, which empties `#action-preview` and returns focus to the command input. Both send controls post to the action-confirm endpoint with the corrected-vs-original distinction carried by the payload, and each clears the preview once its request settles. While the preview is open the parent `.action-area` expands rather than holding its 64px height.
+**Text-check preflight.** The command form posts to the action-check endpoint, which invokes the configured text checker. Engine commands skip the check and dispatch at once, as do requests while the check is disabled or auto-check is off. When issues are found, the response renders a preview into `#action-preview`, above the command form: the original text, an editable corrected-text textarea, and issue tags (orange = spell, pink = grammar). Three controls: **Send with edits** (submits the textarea's current value), **Send Original** (submits the original), and **Cancel**, which empties `#action-preview` and returns focus to the command input. Both send controls post to the action-confirm endpoint with the corrected-vs-original distinction carried by the payload, and each clears the preview once its request settles and consumes the command input's text. While the preview is open the parent `.action-area` expands rather than holding its 64px height.
 
 **Slash-command palette.** Typing `/` in the command input opens a fixed-position palette above the input listing the three slash commands (`/impersonate`, `/guide`, `/options`); further typing filters the list, arrow keys move the highlight (wrapping at the ends), Enter or a click populates the input with the highlighted command plus a trailing space without submitting, and Escape, focus loss, scroll, or submit closes it. The palette element is a `<body>` child whose listeners are delegated to `document`, so it outlives a re-render of the action-area markup. The interaction contract is enforced by [`../../../specs/browser_slash_menu.md`](../../../specs/browser_slash_menu.md) (scenarios 31.1–31.6).
 
 ## Polling Cadences
 
-Six endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: header 5s (which also refreshes the failure banner), story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch once, when the dashboard loads.
+Six endpoint cadences are declared as `hx-trigger="load, every Ns"` on their containers in `assets/index.html`: header 5s (which also refreshes the failure banner and the Settings role-health cells out of band), story log 2s, options dock 2s, visual sidebar 5s, status display 5s, LLM messages 4s. Per-tab panels (Settings / Prompt Presets / Worlds / Games) fetch once, when the dashboard loads.
 
-The story log's poll merges the fragment into the existing DOM (`morph:innerHTML`, the vendored idiomorph extension) instead of replacing it, so an idle poll touches no nodes and a text selection, focus, or scroll position inside the log survives. Each `.log-entry` carries a stable `id` for the morph to match on. The other polled containers keep their `innerHTML` swap.
+The story log's poll merges the fragment into the existing DOM (`morph:innerHTML`, the vendored idiomorph extension) instead of replacing it, so an idle poll touches no nodes and a text selection, focus, or scroll position inside the log survives. Each `.log-entry` carries a stable `id` for the morph to match on. A poll that appends an entry then scrolls the log to its bottom, unless the player had scrolled up (see Story Log). The other polled containers keep their `innerHTML` swap.
 
 ## Assistive-technology announcements
 
@@ -131,7 +139,7 @@ The textarea height is auto-resized on input. The save/cancel buttons replace th
 
 1. The user clicks the delete (`#i-trash`) button on the last entry. JavaScript calls `confirm("Delete this message?")` before proceeding.
 2. On confirm, JavaScript submits to the history-delete endpoint.
-3. On a 2xx response, JavaScript fetches the story-log fragment and swaps it into `#story-log`. On a non-2xx response, the message renders in the story log's own inline error slot.
+3. On a 2xx response, JavaScript fetches the story-log fragment and swaps it into `#story-log`. On a non-2xx response, the message renders in the story log's own inline error slot. The swap replaces the entry that held the Delete control, so focus moves to the entry that is now last (its Edit control), or to the command input when no entry is left.
 
 ### Swipe Flow
 
@@ -152,7 +160,7 @@ The Games tab hosts three regions: **Active Game**, **New Game**, and **Saved Ga
 
 ### Active Game
 
-Shows the current display name, a world badge (the world the game belongs to), a persona badge (the persona bound to the game), a rename control, and a reset button (`#i-rotate-ccw`). The rename control opens a disclosure holding a text input seeded with the current display name; saving it posts the new name and reloads the page, so the header and the Games tab both re-render from the renamed row. Reset carries an HTMX confirm dialog ("Reset the current game? All progress will be lost."); on confirmation, the current game is deleted and a new game is created with a freshly auto-generated name (see "Name generation" below). When no game is active, the row shows the placeholder "No active game".
+Shows the current display name, a world badge (the world the game belongs to), a persona badge (the persona bound to the game), a rename control, and a reset button (`#i-rotate-ccw`). The rename control opens a disclosure holding a text input seeded with the current display name; the disclosure lays its input and Save beside the summary, so opening it does not grow the row or move the summary off the badges' line. Saving it posts the new name and reloads the page, so the header and the Games tab both re-render from the renamed row; the reload returns to the Games tab (see Tabs). Reset carries an HTMX confirm dialog ("Reset the current game? All progress will be lost."); on confirmation, the current game is deleted and a new game is created with a freshly auto-generated name (see "Name generation" below). When no game is active, the row shows the placeholder "No active game".
 
 ### New Game
 
@@ -160,7 +168,7 @@ A labelled World selector and Persona selector, populated from worlds and person
 
 ### Saved Games
 
-A list of the games other than the active one (across all worlds), each with its display name, world badge, persona badge, and rename/Switch/Delete affordances. Delete carries a confirm dialog ("Delete this game? This cannot be undone."); the dialog text is per-template, not engine-enforced.
+A list of the games other than the active one (across all worlds), each with its display name, world badge, persona badge, and rename/Switch/Delete affordances. Delete carries a confirm dialog ("Delete this game? This cannot be undone."); the dialog text is per-template, not engine-enforced. Deleting the last saved game answers with the list's empty state ("No other saved games."), because the list's own empty state only renders with the whole panel; a delete that leaves a saved game behind answers with an empty body and just removes the row. A confirmed delete removes that row; focus moves to the row that takes its place (its Switch control), or to the panel's first field when no saved game is left.
 
 ### Name Generation
 
@@ -168,7 +176,9 @@ A new game carries two names. The stable generated name is `{WorldName}_{YYYY-MM
 
 ## Settings Tab
 
-The Settings tab has two client-side sub-tabs: **Connections** and **Text Check**. The Connections sub-tab holds a Narrator and a Quantifier role row, each with a connection select and that role's health, followed by one row per connection with its name, provider and model, role tags, and Edit, Test and Delete. Add and Edit open one shared form page with a back link to Connections.
+The Settings tab has two client-side sub-tabs: **Connections** and **Text Check**. The Connections sub-tab holds a Narrator and a Quantifier role row, each with a connection select and that role's health, followed by one row per connection with its name, provider and model, role tags, and Edit, Test and Delete. Add and Edit open one shared form page with a back link to Connections. A role row's health cell (`#role-health-<agent>`) and the sub-tab's degraded marker (`#subtab-connections-marker`) are the targets of the header poll's out-of-band swaps, so the panel's own fetch at load is not the last word on role health.
+
+Every Settings swap that replaces the panel's contents — Edit, Add, the back link, a role change, a refused delete — keeps keyboard focus inside the panel instead of dropping it to the page body: htmx restores a control that survives with its `id` (a role select), and the client otherwise lands on the panel's first form field (the Name field on the form page, the Narrator role select on the list). The Games panel's row swap follows the same rule.
 
 A connection's **Test** control sends one short fixed prompt to that connection and shows the result inline in the surface's result slot: a passing reply names the backend and model with the reply time, and a failure renders the shared short-message + Details disclosure. On a connection row it tests the saved values; on the Add/Edit form it tests the values typed into the form before Save. It runs only on a click, and it writes no LLM Messages row, so it never moves role health or the failure banner.
 

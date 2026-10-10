@@ -10,6 +10,7 @@ mod announcements;
 mod dashboard;
 mod failure_display;
 mod form_failures;
+mod games;
 mod invariants;
 mod llm_messages;
 mod options;

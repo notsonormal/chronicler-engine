@@ -29,9 +29,12 @@ pub struct WorldRowView {
     <ul class="worlds-list">
         {% for world in worlds %}
         <li class="world-item">
-            <strong>{{ world.name }}</strong> {{ world.description }} <em>({{ world.game_count }} {% if world.game_count == 1 %}game{% else %}games{% endif %})</em>
-            <button class="btn-cyan" hx-get="/worlds/{{ world.key }}/edit" hx-target=".worlds-panel" hx-swap="outerHTML">Edit</button>
-            <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+            <div class="world-item-head">
+                <strong>{{ world.name }}</strong> <em>({{ world.game_count }} {% if world.game_count == 1 %}game{% else %}games{% endif %})</em>
+                <button class="btn-cyan" hx-get="/worlds/{{ world.key }}/edit" hx-target=".worlds-panel" hx-swap="outerHTML">Edit</button>
+                <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+            </div>
+            {{ world.description }}
         </li>
         {% endfor %}
     </ul>
@@ -166,8 +169,9 @@ impl WorldFormTemplate {
             (String::new(), String::new())
         } else {
             (
-                r##"{"overworld":{"id":"overworld","name":"Overworld","regions":[]}}"##.to_string(),
-                "[]".to_string(),
+                r##"Example: {"overworld":{"id":"overworld","name":"Overworld","regions":[]}}"##
+                    .to_string(),
+                "Example: []".to_string(),
             )
         };
 

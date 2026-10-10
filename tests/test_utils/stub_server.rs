@@ -1,12 +1,8 @@
 //! Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
 
-// The shell and static assets are real; the story log, the LLM Messages
-// panel, the options dock and the text-check preview render through the
-// engine's own templates, so a hook change in a shipped template reaches the
-// served fragment with no fixture to keep in step. The remaining polled
-// fragments are canned under `tests/test_utils/stub_fixtures/`. The dynamic
-// endpoints answer scripted outcomes a test names up front; `/history/:id`,
-// `/swipe/new` and `/retrigger` always answer 500.
+// Fragments the tests assert on render through the engine's own templates, so a
+// hook change in a shipped template reaches the served fragment with no fixture
+// to keep in step.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -20,6 +16,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use chrono::{TimeZone, Utc};
 
+use chronicler_engine::adapters::driving::http::action::handlers::CONCURRENT_GENERATION_STATUS;
 use chronicler_engine::adapters::driving::http::builders::headers::{
     add_status_swap_headers, header_fragment_html,
 };
@@ -41,8 +38,6 @@ use chronicler_engine::domain::model::state::message_types::{MessageEntry, Messa
 use super::server::{get_config_port, release_port_lock};
 use super::CONFIG_PATH;
 
-/// The shipped dashboard shell, served verbatim so the stub exercises the real
-/// htmx wiring.
 const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
@@ -50,8 +45,6 @@ const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.
 const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
 
-/// The header the engine would render, degraded Quantifier and all, so the
-/// banner and its disclosure cannot drift from the shipped composition.
 fn header_html(degraded: bool) -> String {
     let roles = if degraded {
         vec![RoleHealth {
@@ -77,8 +70,8 @@ fn story_log_html(entries: &[MessageEntry]) -> String {
         .expect("render story log")
 }
 
-/// Player input first, narration last: the template renders swipe/retrigger
-/// controls only on the trailing narration.
+/// The template renders swipe/retrigger controls only on the trailing entry, so
+/// the order of this vec is load-bearing.
 fn default_story_log_entries() -> Vec<MessageEntry> {
     vec![
         MessageEntry {
@@ -121,8 +114,6 @@ fn llm_messages_html() -> String {
         .expect("render LLM messages")
 }
 
-/// Served through the shipped `SettingsTemplate` so a sub-tab or role-row hook
-/// change reaches the fragment.
 fn settings_html() -> String {
     use askama::Template;
 
@@ -139,8 +130,6 @@ fn connection_form_html(connection: Option<&LlmProviderConfig>) -> String {
         .expect("render connection form")
 }
 
-/// The non-default preset the preset-card failure tests edit and delete. Its
-/// card lives in the fixture; its edit form renders through the real builder.
 fn custom_preset() -> PromptPreset {
     PromptPreset {
         id: "custom_ref".to_string(),
@@ -179,10 +168,6 @@ fn options_dock_html(alternate: bool) -> String {
         .expect("render options dock")
 }
 
-/// The command the stub treats as a text check with issues. The real
-/// `POST /action/check` runs the text check before dispatch and returns the
-/// preview for a misspelling; the stub keys on this one token so a test can
-/// drive the preview → confirm swap without a real text-check engine.
 const TEXT_CHECK_TRIGGER: &str = "casle";
 
 fn text_check_preview_html() -> String {
@@ -198,8 +183,6 @@ fn text_check_preview_html() -> String {
     .expect("render text check preview")
 }
 
-/// What `POST /action/check` should answer with. A test names the outcome it
-/// needs; the stub runs no pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StubActionOutcome {
     /// "Thinking..." acknowledgement — the shapes a test uses to observe a
@@ -210,10 +193,11 @@ pub enum StubActionOutcome {
     /// engine's own error render naming the command, so the disclosure's raw
     /// text is the server's response rather than the input echoed back.
     Error,
+    /// A 200 that refuses the command: the engine answers the wait status
+    /// because a generation is already in flight.
+    Refused,
 }
 
-/// What the stub's `GET /status/generating` answers. The real endpoint returns
-/// "idle", a phase name, or the error fragment a failed generation produces.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum StubStatus {
     /// The engine is idle; the poll answers "idle".
@@ -222,8 +206,8 @@ pub enum StubStatus {
     /// The engine is generating; the poll answers the phase name.
     Phase(String),
     /// A failed generation; the poll answers the error fragment, clamped to
-    /// the sentence for an unclassified failure over this raw text.
-    Error(String),
+    /// the sentence the failure kind names, over this raw text.
+    Error(GenerationFailureKind, String),
 }
 
 struct StubState {
@@ -231,29 +215,21 @@ struct StubState {
     status: std::sync::Mutex<StubStatus>,
     retrigger_requests: std::sync::atomic::AtomicUsize,
     action_requests: std::sync::atomic::AtomicUsize,
-    /// The story log is scripted through two variants a swipe-switch test
-    /// drives: the default single-swipe fixture, then a two-swipe one.
     two_swipes: std::sync::atomic::AtomicBool,
-    /// Set once `POST /message/:id/swipe/:index` has been answered; the story
-    /// log and dock then render the post-switch shapes.
     switched: std::sync::atomic::AtomicBool,
     switch_fails: std::sync::atomic::AtomicBool,
-    /// The two load-only tab panels fetch once per page load, so a test arms
-    /// this before a reload to drive the panel-load failure path.
     panel_loads_failing: std::sync::atomic::AtomicBool,
-    /// The dock carries the canned set until a switch restores a Swipe with
-    /// no set of its own.
     dock_options_live: std::sync::atomic::AtomicBool,
     dock_options_alt: std::sync::atomic::AtomicBool,
     newest_narration: std::sync::Mutex<Option<String>>,
     extra_oldest: std::sync::atomic::AtomicBool,
     save_succeeds: std::sync::atomic::AtomicBool,
+    delete_succeeds: std::sync::atomic::AtomicBool,
+    deleted: std::sync::atomic::AtomicBool,
     header_degraded: std::sync::atomic::AtomicBool,
     polls_failing: std::sync::atomic::AtomicBool,
 }
 
-/// A running stub server. Dropping it shuts the server down and releases
-/// the port lock.
 pub struct StubServer {
     addr: SocketAddr,
     shutdown: Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
@@ -261,9 +237,8 @@ pub struct StubServer {
 }
 
 impl StubServer {
-    /// Start the stub on a free port from the shared test port range, resolved
-    /// through `tests/test_config.json` so the stub cannot silently collide
-    /// with real engine servers if the range moves.
+    /// The port comes from `tests/test_config.json` so the stub cannot silently
+    /// collide with real engine servers if the range moves.
     pub async fn start(action_outcome: StubActionOutcome) -> Self {
         let port = get_config_port(CONFIG_PATH).expect("allocate a stub port");
         Self::start_on_port(port, action_outcome).await
@@ -284,22 +259,16 @@ impl StubServer {
             newest_narration: std::sync::Mutex::new(None),
             extra_oldest: std::sync::atomic::AtomicBool::new(false),
             save_succeeds: std::sync::atomic::AtomicBool::new(false),
+            delete_succeeds: std::sync::atomic::AtomicBool::new(false),
+            deleted: std::sync::atomic::AtomicBool::new(false),
             header_degraded: std::sync::atomic::AtomicBool::new(false),
             polls_failing: std::sync::atomic::AtomicBool::new(false),
         });
-        let app = stub_router(Arc::clone(&state));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
             .unwrap_or_else(|e| panic!("bind stub on port {port}: {e}"));
         let addr = listener.local_addr().expect("stub local addr");
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        tokio::spawn(async move {
-            let _ = axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    let _ = rx.await;
-                })
-                .await;
-        });
+        let tx = serve_stub(listener, Arc::clone(&state));
         Self {
             addr,
             shutdown: Arc::new(std::sync::Mutex::new(Some(tx))),
@@ -308,13 +277,14 @@ impl StubServer {
     }
 
     pub fn stop(&self) {
-        if let Some(tx) = self
-            .shutdown
-            .lock()
-            .expect("stub shutdown lock poisoned")
-            .take()
-        {
-            let _ = tx.send(());
+        self.lifecycle_handle().stop();
+    }
+
+    pub fn lifecycle_handle(&self) -> StubLifecycleHandle {
+        StubLifecycleHandle {
+            addr: self.addr,
+            shutdown: Arc::clone(&self.shutdown),
+            state: Arc::clone(&self.state),
         }
     }
 
@@ -376,6 +346,38 @@ impl StubServer {
 }
 
 #[derive(Clone)]
+pub struct StubLifecycleHandle {
+    addr: SocketAddr,
+    shutdown: Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    state: Arc<StubState>,
+}
+
+impl StubLifecycleHandle {
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    pub fn stop(&self) {
+        if let Some(tx) = self
+            .shutdown
+            .lock()
+            .expect("stub shutdown lock poisoned")
+            .take()
+        {
+            let _ = tx.send(());
+        }
+    }
+
+    pub async fn restart(&self) {
+        let listener = tokio::net::TcpListener::bind(self.addr)
+            .await
+            .unwrap_or_else(|e| panic!("rebind stub on {}: {e}", self.addr));
+        let tx = serve_stub(listener, Arc::clone(&self.state));
+        *self.shutdown.lock().expect("stub shutdown lock poisoned") = Some(tx);
+    }
+}
+
+#[derive(Clone)]
 pub struct StubStoryLogHandle {
     state: Arc<StubState>,
 }
@@ -420,6 +422,12 @@ impl StubSaveHandle {
             .save_succeeds
             .store(succeeds, std::sync::atomic::Ordering::SeqCst);
     }
+
+    pub fn set_delete_succeeds(&self, succeeds: bool) {
+        self.state
+            .delete_succeeds
+            .store(succeeds, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 #[derive(Clone)]
@@ -440,8 +448,8 @@ impl StubFailureHandle {
             .store(failing, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Answer `GET /fragment/worlds` and `GET /fragment/games` with a 500, so a
-    /// test can drive the client's panel-load failure path.
+    /// These tab panels fetch once per page load, so arming this has no effect
+    /// until the next reload.
     pub fn set_panel_loads_failing(&self, failing: bool) {
         self.state
             .panel_loads_failing
@@ -455,16 +463,13 @@ pub struct StubSwipeHandle {
 }
 
 impl StubSwipeHandle {
-    /// Script the story log as a Message with two Swipes. The log's 2s poll
-    /// renders it on a later cycle.
+    /// The log's 2s poll renders the new shape on a later cycle.
     pub fn set_two_swipes(&self) {
         self.state
             .two_swipes
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Make every later swipe switch answer 500, so the shipped switch click
-    /// exercises the client's failure path.
     pub fn set_switch_failing(&self) {
         self.state
             .switch_fails
@@ -478,8 +483,7 @@ pub struct StubStatusHandle {
 }
 
 impl StubStatusHandle {
-    /// Set what the next `GET /status/generating` poll answers. The status
-    /// display polls every 5s, so the change lands on a later poll cycle.
+    /// The status display polls every 5s, so a change lands on a later cycle.
     pub fn set(&self, status: StubStatus) {
         *self.state.status.lock().expect("stub status lock poisoned") = status;
     }
@@ -525,8 +529,6 @@ impl Drop for StubServer {
     }
 }
 
-/// Waits until `addr` refuses connections, so a test that stopped its stub can
-/// rely on the next request failing instead of on a fixed sleep.
 pub async fn wait_until_port_closed(addr: SocketAddr) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while std::time::Instant::now() < deadline {
@@ -536,6 +538,22 @@ pub async fn wait_until_port_closed(addr: SocketAddr) {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
     panic!("{addr} still accepts connections 5s after its stub stopped");
+}
+
+fn serve_stub(
+    listener: tokio::net::TcpListener,
+    state: Arc<StubState>,
+) -> tokio::sync::oneshot::Sender<()> {
+    let app = stub_router(state);
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                let _ = rx.await;
+            })
+            .await;
+    });
+    tx
 }
 
 fn stub_router(state: Arc<StubState>) -> Router {
@@ -550,6 +568,11 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route(
             "/connections/:id/edit",
             post(|| async { client_refusal("Unknown LLM backend 'bogus_provider'") }),
+        )
+        // A role change re-renders the whole panel, the way the engine answers it.
+        .route(
+            "/connections/set-quantifier",
+            post(|| async { Html(settings_html()) }),
         )
         .route(
             "/prompt-presets",
@@ -566,9 +589,14 @@ fn stub_router(state: Arc<StubState>) -> Router {
             }),
         )
         .route("/games/:id/posture", post(failing_posture_save))
+        // The real delete answers an empty body, so htmx removes the row the
+        // control sits in.
+        .route(
+            "/games/:id/delete",
+            post(|| async { (StatusCode::OK, "").into_response() }),
+        )
         .route("/history/:id", post(save_message))
-        // The two routes below answer the shipped row controls with a 500, so a
-        // test can drive a row's own error slot rather than the panel's.
+        // A 500 here drives a row's own error slot rather than the panel's.
         .route(
             "/reset",
             post(|| async { client_failure("Stub reset failure") }),
@@ -577,10 +605,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/worlds/:key/delete",
             post(|| async { client_failure("Stub world delete failure") }),
         )
-        .route(
-            "/history/delete",
-            post(|| async { client_failure("Stub delete failure") }),
-        )
+        .route("/history/delete", post(delete_message))
         .route(
             "/swipe/new",
             post(|| async { client_failure("Stub retry failure") }),
@@ -626,10 +651,6 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route("/fragment/worlds", get(|| async { Html(FIXTURE_WORLDS) }))
         .route("/fragment/games", get(|| async { Html(FIXTURE_GAMES) }))
-        // Static assets are served from the real `assets/` and `data/`
-        // directories, nested exactly as the engine routes them, so the shell's
-        // script and stylesheet hrefs and the fragment images resolve as in
-        // production.
         .nest_service("/assets", tower_http::services::ServeDir::new("assets"))
         .nest_service("/data", tower_http::services::ServeDir::new("data"))
         .layer(axum::middleware::from_fn_with_state(
@@ -665,6 +686,9 @@ async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String>
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 9, 0).unwrap(),
             ..Default::default()
         });
+    }
+    if state.deleted.load(SeqCst) {
+        entries.pop();
     }
     Html(story_log_html(&entries))
 }
@@ -733,8 +757,6 @@ fn swipe_script_entries(text: &str, active_swipe_index: usize) -> Vec<MessageEnt
     }]
 }
 
-/// The scripted Message on its second Swipe: the shape a switch test starts
-/// from, whose Previous control switches to the first.
 fn two_swipe_entries() -> Vec<MessageEntry> {
     swipe_script_entries("A tavern by night.", 1)
 }
@@ -755,7 +777,6 @@ async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     Html(story_log_html(&restored_swipe_entries())).into_response()
 }
 
-/// The canned dock set until a switch has restored a set-less Swipe.
 async fn options_dock_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.dock_options_live.load(SeqCst) {
@@ -779,8 +800,6 @@ async fn action_check(
     state
         .action_requests
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    // The real handler runs the text check before dispatch; the stub keys on a
-    // canned misspelling so a test can drive the preview → confirm swap.
     let command = form.get("command").map(String::as_str).unwrap_or_default();
     if command.contains(TEXT_CHECK_TRIGGER) {
         return (
@@ -791,15 +810,21 @@ async fn action_check(
             .into_response();
     }
     match state.action_outcome {
-        // The real `POST /action/check` acknowledgement retargets the status
-        // span rather than replacing the action area: consume the engine's
-        // `add_status_swap_headers` builder so the canned shape cannot drift
-        // from it.
         StubActionOutcome::Pending => {
             let mut response = (
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
                 r#"<span class="status thinking">Thinking...</span>"#,
+            )
+                .into_response();
+            add_status_swap_headers(&mut response);
+            response
+        }
+        StubActionOutcome::Refused => {
+            let mut response = (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                CONCURRENT_GENERATION_STATUS,
             )
                 .into_response();
             add_status_swap_headers(&mut response);
@@ -818,8 +843,6 @@ async fn action_check(
     }
 }
 
-/// The real `/status/generating` poll answer: idle text, a phase name, or the
-/// error fragment a failed generation renders.
 async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body> {
     let status = state
         .status
@@ -829,9 +852,9 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
     let body = match status {
         StubStatus::Idle => "idle".to_string(),
         StubStatus::Phase(phase) => phase,
-        StubStatus::Error(raw) => error_disclosure(
+        StubStatus::Error(kind, raw) => error_disclosure(
             "status-error-popover",
-            generation_failure_summary(GenerationFailureKind::Other),
+            generation_failure_summary(kind),
             &raw_error_detail(&raw),
         ),
     };
@@ -845,8 +868,23 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
 
 /// The real `POST /action/confirm` retargets its status fragment at
 /// `#status-display`; the stub consumes the engine's `add_status_swap_headers`
-/// so the canned shape cannot drift from it.
-async fn action_confirm() -> Response<Body> {
+/// so the canned shape cannot drift from it. An error outcome answers the 500 a
+/// failing engine action produces, so a test can drive a refused confirm.
+async fn action_confirm(
+    State(state): State<Arc<StubState>>,
+    Form(form): Form<HashMap<String, String>>,
+) -> Response<Body> {
+    if state.action_outcome == StubActionOutcome::Error {
+        let command = form.get("command").map(String::as_str).unwrap_or_default();
+        let mut response = (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            render_error(&format!("Failed to process action: {command}")),
+        )
+            .into_response();
+        add_status_swap_headers(&mut response);
+        return response;
+    }
     let mut response = (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
@@ -866,8 +904,6 @@ async fn failing_posture_save() -> Response<Body> {
         .into_response()
 }
 
-/// Counts the request before answering 500, so a test can assert the
-/// retrigger control fired exactly once.
 async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body> {
     state
         .retrigger_requests
@@ -886,8 +922,15 @@ async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
     }
 }
 
-/// A canned 500 for a raw-fetch route whose only stub-tier use is the client
-/// failure-recovery path.
+async fn delete_message(State(state): State<Arc<StubState>>) -> Response<Body> {
+    use std::sync::atomic::Ordering::SeqCst;
+    if !state.delete_succeeds.load(SeqCst) {
+        return client_failure("Stub delete failure");
+    }
+    state.deleted.store(true, SeqCst);
+    (StatusCode::OK, "").into_response()
+}
+
 fn client_failure(message: &str) -> Response<Body> {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -897,8 +940,6 @@ fn client_failure(message: &str) -> Response<Body> {
         .into_response()
 }
 
-/// A canned 400 refusal for a form route whose stub-tier use is the action's
-/// inline-slot path.
 fn client_refusal(message: &str) -> Response<Body> {
     (
         StatusCode::BAD_REQUEST,

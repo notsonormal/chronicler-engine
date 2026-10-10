@@ -54,10 +54,10 @@ Done when the surface under test is on screen.
 
 ```javascript
 // DOM structure — replaces accessibility-tree snapshots
-chrome_devtools_evaluate(expression="(() => ({ title: document.title, sections: [...document.querySelectorAll('[id]')].map(e => e.id).slice(0, 30), storyLogEntries: document.querySelectorAll('#story-log .log-entry').length, actionArea: !!document.querySelector('#action-area'), connectionStatus: document.querySelector('#connection-status')?.textContent }))()")
+chrome_devtools_evaluate(expression="(() => ({ title: document.title, sections: [...document.querySelectorAll('[id]')].map(e => e.id).slice(0, 30), storyLogEntries: document.querySelectorAll('#story-log .log-entry').length, actionArea: !!document.querySelector('#action-area'), statusDisplay: document.querySelector('#status-display')?.textContent.trim() }))()")
 
 // Fragments and status respond from page context, leaving the dashboard loaded
-chrome_devtools_evaluate(expression="(async () => { const paths = ['/fragment/action-area', '/fragment/character-headshots', '/status/generating']; const out = {}; for (const p of paths) { out[p] = (await fetch(p)).status; } return out; })()")
+chrome_devtools_evaluate(expression="(async () => { const paths = ['/fragment/options-dock', '/fragment/character-headshots', '/status/generating']; const out = {}; for (const p of paths) { out[p] = (await fetch(p)).status; } return out; })()")
 
 // Shot — returns the image inline and writes it to savePath (a temp file if omitted)
 chrome_devtools_screenshot(savePath="tmp/chronicler-ui.png")
@@ -65,9 +65,7 @@ chrome_devtools_screenshot(savePath="tmp/chronicler-ui.png")
 
 For a long review, or for a viewport other than the default, use `node scripts/cdp.mjs shot`: see ENVIRONMENT.md's *Long reviews and viewports*.
 
-For a post-plan pass, fetch the full dashboard set instead — `header`, `story-log`, `visual-sidebar`, `options-dock`, `action-area`, `character-headshots`, `settings`, `prompt-presets`, `games`, `worlds`, `llm-messages` — plus `/status/generating`, and confirm each is 200.
-
-`#connection-status` renders server-side and always reads "Connected"; it is not a live socket indicator.
+For a post-plan pass, fetch the full dashboard set instead — `header`, `story-log`, `visual-sidebar`, `options-dock`, `character-headshots`, `settings`, `prompt-presets`, `games`, `worlds`, `llm-messages` — plus `/status/generating`, and confirm each is 200.
 
 **Done only when you have looked at a shot.** A green test, a DOM dump, a clean engine log and a delegated agent's report are each narrower evidence, and none of them stands in for a shot of the rendered page that you have personally compared against expectations. Write findings to the ticket as they are established, so a dead session costs the shots rather than the analysis. Console messages have no tool equivalent. A hand-started server writes its log to `logs/chronicler_<date>.<date>.log` under its working directory, for example `logs/chronicler_20261009.2026-10-09.log`. Every server started that day writes to the same file. Filter it by time or by request id. The server's stdout shows only the build. Test servers write `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`).
 

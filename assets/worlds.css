@@ -22,17 +22,26 @@
     gap: var(--spacing-sm);
 }
 
+/* Every world card uses one layout: the head line holds the name, the game count
+   and the actions, and the description wraps below it, whatever its length. */
 .world-item {
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border);
     border-radius: 6px;
     padding: var(--spacing-md);
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    font-size: var(--font-size-small);
+    color: var(--color-text-primary);
+}
+
+.world-item-head {
+    display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--spacing-sm);
-    font-size: var(--font-size-small);
-    color: var(--color-text-primary);
 }
 
 .world-item strong {
@@ -45,7 +54,7 @@
     font-style: normal;
 }
 
-.world-item .btn-cyan {
+.world-item-head .btn-cyan {
     margin-left: auto;
 }
 
@@ -103,6 +112,13 @@
     color: var(--color-text-muted);
 }
 
+/* Overrides the form's column direction so the checkbox sits beside its text. */
+.world-form-container .checkbox-label {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
 .world-form-container input,
 .world-form-container textarea,
 .world-form-container select {
@@ -140,6 +156,12 @@
     font-size: 12px;
     min-height: 200px;
     line-height: 1.5;
+}
+
+/* Italic keeps the placeholder example from reading as a value the form already holds. */
+.world-form-container .json-editor::placeholder {
+    font-style: italic;
+    color: var(--color-text-placeholder);
 }
 
 .world-form-container .form-actions {

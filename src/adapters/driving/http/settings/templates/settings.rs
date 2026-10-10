@@ -6,7 +6,10 @@ use askama::Template;
 use crate::application::games::view_query::RoleHealth;
 use crate::domain::model::agent::Role;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
-use crate::adapters::driving::http::builders::headers::{role_failure_sentence, role_label};
+use crate::adapters::driving::http::builders::headers::{
+    connections_degraded, connections_degraded_marker, role_health_cell, role_health_cell_id,
+    role_label,
+};
 use crate::adapters::driving::http::utils::error::{
     error_disclosure, raw_error_detail, refusal_message,
 };
@@ -17,35 +20,10 @@ use crate::error::EngineError;
 pub struct RoleRowView {
     pub role: String,
     pub label: String,
+    pub health_cell_id: String,
     pub set_route: String,
     pub options: Vec<SelectOptionView>,
     pub health_html: SafeHtml,
-}
-
-impl RoleRowView {
-    fn health_html(health: Option<&RoleHealth>) -> SafeHtml {
-        match health {
-            Some(health) => match &health.last_error {
-                Some(error) => SafeHtml::new(format!(
-                    "<span class=\"role-health degraded\">Degraded</span>{}",
-                    error_disclosure(
-                        &format!("role-health-{}-popover", health.role.agent_name()),
-                        &role_failure_sentence(health.role),
-                        &raw_error_detail(error),
-                    )
-                )),
-                None if health.backend_model.is_some() => SafeHtml::new(
-                    r##"<span class="role-health healthy">Healthy</span>"##.to_string(),
-                ),
-                None => SafeHtml::new(
-                    r##"<span class="role-health unknown">No calls yet</span>"##.to_string(),
-                ),
-            },
-            None => SafeHtml::new(
-                r##"<span class="role-health unknown">No calls yet</span>"##.to_string(),
-            ),
-        }
-    }
 }
 
 #[derive(Template)]
@@ -53,7 +31,7 @@ impl RoleRowView {
     source = r##"
 <div class="settings-panel">
     <div class="settings-subtabs" role="tablist" aria-label="Settings sections">
-        <button class="settings-subtab active" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true">Connections{% if roles_degraded %}<span class="subtab-degraded-marker" aria-hidden="true" title="A role is degraded (engine-wide role health)"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"/></svg></span>{% endif %}</button>
+        <button class="settings-subtab active" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true">Connections<span class="subtab-marker-slot" id="subtab-connections-marker">{{ degraded_marker }}</span></button>
         <button class="settings-subtab" role="tab" id="subtab-text-check" aria-controls="settings-text-check" aria-selected="false">Text Check</button>
     </div>
     <div class="settings-subtab-panel active" id="settings-connections" role="tabpanel" aria-labelledby="subtab-connections">
@@ -70,7 +48,7 @@ impl RoleRowView {
                 <select id="role-select-{{ role.role }}" name="connection_id" class="role-connection-select" hx-post="{{ role.set_route }}" hx-trigger="change" hx-target=".settings-panel" hx-swap="innerHTML">
                     {% for option in role.options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
                 </select>
-                <span class="role-health-slot">{{ role.health_html }}</span>
+                <span class="role-health-slot" id="{{ role.health_cell_id }}">{{ role.health_html }}</span>
             </div>
             {% endfor %}
         </div>
@@ -108,7 +86,7 @@ impl RoleRowView {
 )]
 pub struct SettingsTemplate {
     pub roles: Vec<RoleRowView>,
-    pub roles_degraded: bool,
+    pub degraded_marker: SafeHtml,
     pub connections: Vec<LlmProviderConfig>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
@@ -122,12 +100,11 @@ impl SettingsTemplate {
         roles: &[RoleHealth],
         error: Option<&EngineError>,
     ) -> Self {
-        let degraded = roles.iter().any(|health| {
-            matches!(health.role, Role::Narrator | Role::Quantifier) && health.last_error.is_some()
-        });
         Self {
             roles: Self::role_rows(settings, roles),
-            roles_degraded: degraded,
+            degraded_marker: SafeHtml::new(connections_degraded_marker(connections_degraded(
+                roles,
+            ))),
             connections: settings.connections.clone(),
             narration_connection_id: settings.narration_connection_id.clone(),
             quantifier_connection_id: settings.quantifier_connection_id.clone(),
@@ -160,20 +137,24 @@ impl SettingsTemplate {
             ),
         ]
         .into_iter()
-        .map(|(role, route, selected_id)| RoleRowView {
-            role: role.agent_name().to_string(),
-            label: role_label(role).to_string(),
-            set_route: format!("/connections/{route}"),
-            options: settings
-                .connections
-                .iter()
-                .map(|connection| SelectOptionView {
-                    value: connection.id.clone(),
-                    label: connection.name.clone(),
-                    selected: connection.id == selected_id,
-                })
-                .collect(),
-            health_html: RoleRowView::health_html(roles.iter().find(|health| health.role == role)),
+        .map(|(role, route, selected_id)| {
+            let health = roles.iter().find(|health| health.role == role);
+            RoleRowView {
+                role: role.agent_name().to_string(),
+                label: role_label(role).to_string(),
+                health_cell_id: role_health_cell_id(role),
+                set_route: format!("/connections/{route}"),
+                options: settings
+                    .connections
+                    .iter()
+                    .map(|connection| SelectOptionView {
+                        value: connection.id.clone(),
+                        label: connection.name.clone(),
+                        selected: connection.id == selected_id,
+                    })
+                    .collect(),
+                health_html: role_health_cell(role, health),
+            }
         })
         .collect()
     }
@@ -301,8 +282,8 @@ pub struct ConnectionTestResultTemplate {
             </select>
         </div>
         <div class="form-group">
-            <label class="checkbox-label">
-                <input type="checkbox" name="enable_auto_check" value="true" {% if enable_auto_check %}checked{% endif %} {% if text_check_disabled %}disabled{% endif %} />
+            <label class="checkbox-label" for="enable_auto_check">
+                <input type="checkbox" id="enable_auto_check" name="enable_auto_check" value="true" {% if enable_auto_check %}checked{% endif %} {% if text_check_disabled %}disabled{% endif %} />
                 Check before sending to LLM
             </label>
         </div>

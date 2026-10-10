@@ -91,9 +91,50 @@ function clearUnreachable() {
   refreshFailureBanner();
 }
 
+// A transport failure's message is false the moment the engine answers again,
+// so every slot it wrote clears with the banner instead of at the surface's
+// next successful request.
+function clearUnreachableSlots() {
+  document
+    .querySelectorAll("[data-error-slot][data-unreachable]")
+    .forEach((slot) => {
+      delete slot.dataset.unreachable;
+      clearInlineError(slot);
+    });
+}
+
 // A server error body is an HTML fragment, so the disclosure shows its text.
 function plainResponseText(body) {
   return (body || "").replace(/<[^>]*>/g, "").trim();
+}
+
+// A refused request (4xx) carries the explanation the engine wrote for this
+// slot, so it leads the short line; any other failure keeps the generic line,
+// with the server's own text behind the disclosure.
+function refusalSummary(body, status) {
+  const detail =
+    status >= 400 && status < 500
+      ? plainResponseText(body).split("\n")[0].trim()
+      : "";
+  return detail ? "That action failed. " + detail : "That action failed.";
+}
+
+// Every failed request reports the same way, wherever its slot sits: the
+// engine's own explanation for a refusal it answered, or the unreachable line
+// the banner carries when nothing answered at all.
+function reportSlotFailure(slot, xhr) {
+  if (xhr && xhr.status !== 0) {
+    renderInlineError(
+      slot,
+      refusalSummary(xhr.responseText, xhr.status),
+      plainResponseText(xhr.responseText)
+    );
+    return;
+  }
+  markUnreachable();
+  if (!slot) return;
+  renderInlineError(slot, "The engine is unreachable.", "No response from the server.");
+  slot.dataset.unreachable = "true";
 }
 
 // A failed fetch reports the server's own words behind the Details disclosure.
@@ -115,24 +156,21 @@ function isPollRequest(elt) {
 document.body.addEventListener("htmx:responseError", function (evt) {
   const slot = inlineErrorSlotFor(evt.detail.elt, true);
   if (slot) {
-    renderInlineError(slot, "That action failed.", plainResponseText(evt.detail.xhr.responseText));
+    reportSlotFailure(slot, evt.detail.xhr);
   } else if (isPollRequest(evt.detail.elt)) {
     markUnreachable();
   }
 });
 
 document.body.addEventListener("htmx:sendError", function (evt) {
-  markUnreachable();
-  const slot = inlineErrorSlotFor(evt.detail.elt, true);
-  if (slot) {
-    renderInlineError(slot, "The engine is unreachable.", "No response from the server.");
-  }
+  reportSlotFailure(inlineErrorSlotFor(evt.detail.elt, true), null);
 });
 
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   if (!evt.detail.successful) return;
   clearUnreachable();
   clearInlineError(inlineErrorSlotFor(evt.detail.elt));
+  clearUnreachableSlots();
 });
 
 document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);

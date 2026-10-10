@@ -5,12 +5,13 @@
 
 use std::time::Duration;
 
-use super::*;
-use super::support::{active_element_is, read_banner};
+use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 
-/// Unlike `send_action`, submits directly rather than clicking Send — the failure
-/// path leaves Send locked until the next idle poll — and does not wait for the
-/// status span: a 500 is not swapped.
+use super::*;
+use super::support::{active_element_is, read_banner, read_command_input};
+
+/// A failed action leaves Send locked until the next idle poll and swaps nothing
+/// on its 500, so this submits the form directly rather than clicking Send.
 async fn submit_command(page: &playwright_rs::Page, command: &str) {
     fill_command_input(page, command).await;
     page.evaluate::<(), ()>(
@@ -291,7 +292,7 @@ async fn test_status_details_popover_survives_a_poll() {
     with_stub_page(StubActionOutcome::Pending, |page, stub| {
         let status = stub.status_handle();
         async move {
-            status.set(StubStatus::Error("narration failed".to_string()));
+            status.set(StubStatus::Error(GenerationFailureKind::Other, "narration failed".to_string()));
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(10),
@@ -493,6 +494,112 @@ async fn test_dead_engine_renders_inline_error_for_pending_action() {
     .await;
 }
 
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.40
+#[tokio::test]
+async fn test_failed_confirm_reports_on_the_command_form_slot() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let lifecycle = stub.lifecycle_handle();
+        let addr = stub.addr();
+        async move {
+            submit_command(&page, "look at the casle").await;
+            wait_until_visible(&page, ".text-check-preview", Duration::from_secs(5)).await;
+
+            lifecycle.stop();
+            wait_until_port_closed(addr).await;
+
+            page.locator(".text-check-preview form .btn-cyan")
+                .await
+                .click(None)
+                .await
+                .unwrap();
+            wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
+
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(10),
+                    Duration::from_millis(100),
+                    || async {
+                        read_error_disclosure(&page, "#command-form [data-error-slot]")
+                            .await
+                            .0
+                    },
+                )
+                .await,
+                "a confirm that cannot reach the engine must report on the command form's slot"
+            );
+            let (visible, message, raw) =
+                read_error_disclosure(&page, "#command-form [data-error-slot]").await;
+            assert!(visible, "the command form's slot should be shown");
+            assert!(
+                message.contains("unreachable"),
+                "the slot should say the engine is unreachable, got {message:?}"
+            );
+            assert!(
+                raw.contains("No response"),
+                "a dead engine's request has no response body, got {raw:?}"
+            );
+            assert_eq!(
+                read_command_input(&page).await,
+                "look at the casle",
+                "a confirm the engine never took must keep the typed command"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.40
+#[tokio::test]
+async fn test_refused_confirm_reports_on_the_command_form_slot() {
+    with_stub_page(StubActionOutcome::Error, |page, _stub| async move {
+        submit_command(&page, "look at the casle").await;
+        wait_until_visible(&page, ".text-check-preview", Duration::from_secs(5)).await;
+
+        page.locator(".text-check-preview form .btn-cyan")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
+
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(10),
+                Duration::from_millis(100),
+                || async {
+                    read_error_disclosure(&page, "#command-form [data-error-slot]")
+                        .await
+                        .0
+                },
+            )
+            .await,
+            "a refused confirm must report on the command form's slot"
+        );
+        let (visible, message, _) =
+            read_error_disclosure(&page, "#command-form [data-error-slot]").await;
+        assert!(visible, "the command form's slot should be shown");
+        assert!(
+            message.contains("action failed"),
+            "the short line names the failed action, got {message:?}"
+        );
+        assert!(
+            !message.contains("Failed to process action"),
+            "a 500's server text stays behind the disclosure, got {message:?}"
+        );
+        let (_, _, raw) = read_error_disclosure(&page, "#command-form [data-error-slot]").await;
+        assert!(
+            raw.contains("Failed to process action"),
+            "the server's own text belongs in the disclosure, got {raw:?}"
+        );
+        assert_eq!(
+            read_command_input(&page).await,
+            "look at the casle",
+            "a refused confirm must keep the typed command"
+        );
+    })
+    .await;
+}
+
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.21
 #[tokio::test]
 async fn test_generation_error_clamps_to_one_line_with_popover() {
@@ -501,7 +608,7 @@ async fn test_generation_error_clamps_to_one_line_with_popover() {
         async move {
             let (input_width, area_height) = measure_action_area(&page).await;
 
-            status.set(StubStatus::Error("narration failed".to_string()));
+            status.set(StubStatus::Error(GenerationFailureKind::Other, "narration failed".to_string()));
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(10),
@@ -595,6 +702,105 @@ async fn test_generation_error_clamps_to_one_line_with_popover() {
                 .await
                 .unwrap();
             assert!(gone, "the error must clear when the status returns to Ready");
+        }
+    })
+    .await;
+}
+
+fn carries_state(class_name: &str, state: &str) -> bool {
+    class_name.split_whitespace().any(|class| class == state)
+}
+
+// The returned tuple: the container's class, its inherited text colour, the
+// palette's error colour, and whether the short line fits the column unclipped.
+async fn read_status_state(page: &playwright_rs::Page) -> (String, String, String, bool) {
+    page.evaluate::<(), (String, String, String, bool)>(
+        r#"() => {
+            const display = document.getElementById('status-display');
+            const text = display.querySelector('.error-disclosure-message, .status');
+            const probe = document.createElement('span');
+            probe.style.color = 'var(--color-accent-red)';
+            document.body.appendChild(probe);
+            const paletteError = getComputedStyle(probe).color;
+            probe.remove();
+            const message = display.querySelector('.error-disclosure-message');
+            let readable = false;
+            if (message) {
+                const box = message.getBoundingClientRect();
+                readable =
+                    box.right <= display.getBoundingClientRect().right + 1 &&
+                    message.scrollWidth <= message.clientWidth + 1 &&
+                    message.scrollHeight <= message.clientHeight + 1;
+            }
+            return [
+                display.className,
+                text ? getComputedStyle(text).color : '',
+                paletteError,
+                readable,
+            ];
+        }"#,
+        None,
+    )
+    .await
+    .unwrap()
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.41
+#[tokio::test]
+async fn test_generation_error_takes_the_error_class_and_reads_without_details() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let status = stub.status_handle();
+        async move {
+            let (ready_class, ready_colour, _, _) = read_status_state(&page).await;
+            assert!(
+                carries_state(&ready_class, "ready") && !carries_state(&ready_class, "error"),
+                "an idle dashboard must carry the ready state, got {ready_class:?}"
+            );
+
+            status.set(StubStatus::Error(
+                GenerationFailureKind::PromptTooLong,
+                "narration failed".to_string(),
+            ));
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(10),
+                    Duration::from_millis(100),
+                    || async { read_status_state(&page).await.0.contains("error") },
+                )
+                .await,
+                "a generation error must put the status display into its error state"
+            );
+
+            let (error_class, error_colour, palette_error, fits) = read_status_state(&page).await;
+            assert!(
+                carries_state(&error_class, "error") && !carries_state(&error_class, "ready"),
+                "the error state must replace the ready state, not sit under it, got {error_class:?}"
+            );
+            assert_ne!(
+                error_colour, ready_colour,
+                "the error must not be drawn in the Ready colour"
+            );
+            assert_eq!(
+                error_colour, palette_error,
+                "the error must be drawn in the palette's error colour"
+            );
+            assert!(
+                fits,
+                "the longest clamped line must be drawn inside the status column, unclipped, without opening Details"
+            );
+
+            status.set(StubStatus::Idle);
+            wait_for_status_ready(&page).await;
+            let (recovered_class, recovered_colour, _, _) = read_status_state(&page).await;
+            assert!(
+                carries_state(&recovered_class, "ready")
+                    && !carries_state(&recovered_class, "error"),
+                "returning to Ready must restore the ready state, got {recovered_class:?}"
+            );
+            assert_ne!(
+                recovered_colour, palette_error,
+                "Ready must not keep the error's colour"
+            );
         }
     })
     .await;
@@ -714,6 +920,133 @@ async fn test_failed_row_action_reports_in_the_row() {
             !read_banner(&page).await.0,
             "a failed row action on a reachable engine must not raise the banner"
         );
+    })
+    .await;
+}
+
+/// The command row's own box against the story log's and the viewport's, so a
+/// test can tell an error slot the area made room for from an overflowing one.
+async fn measure_inline_error_layout(page: &playwright_rs::Page) -> (f64, f64, f64, f64, f64) {
+    page.evaluate::<(), (f64, f64, f64, f64, f64)>(
+        r#"() => {
+            const area = document.getElementById('action-area');
+            const input = document.getElementById('command-input');
+            const log = document.getElementById('story-log');
+            const slot = document.querySelector('#command-form [data-error-slot]');
+            if (!area || !input || !log || !slot) return [0, 0, 0, 0, 0];
+            return [
+                area.getBoundingClientRect().height,
+                input.getBoundingClientRect().top,
+                log.getBoundingClientRect().bottom,
+                slot.getBoundingClientRect().bottom,
+                window.innerHeight,
+            ];
+        }"#,
+        None,
+    )
+    .await
+    .unwrap()
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.37
+#[tokio::test]
+async fn test_dead_engine_keeps_the_typed_command() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let lifecycle = stub.lifecycle_handle();
+        async move {
+            lifecycle.stop();
+            wait_until_port_closed(lifecycle.addr()).await;
+            submit_command(&page, "look around").await;
+
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(10),
+                    Duration::from_millis(100),
+                    || async {
+                        read_error_disclosure(&page, "#command-form [data-error-slot]")
+                            .await
+                            .0
+                    },
+                )
+                .await,
+                "a dead engine should still render the form's inline error"
+            );
+            assert_eq!(
+                read_command_input(&page).await,
+                "look around",
+                "a send that cannot reach the engine must keep the typed command"
+            );
+        }
+    })
+    .await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.38
+#[tokio::test]
+async fn test_action_area_makes_room_for_the_inline_error() {
+    with_stub_page(StubActionOutcome::Pending, |page, stub| {
+        let lifecycle = stub.lifecycle_handle();
+        async move {
+            let (resting_height, _, _, _, _) = measure_inline_error_layout(&page).await;
+            lifecycle.stop();
+            wait_until_port_closed(lifecycle.addr()).await;
+            submit_command(&page, "look around").await;
+
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(10),
+                    Duration::from_millis(100),
+                    || async {
+                        read_error_disclosure(&page, "#command-form [data-error-slot]")
+                            .await
+                            .0
+                    },
+                )
+                .await,
+                "a dead engine should render the form's inline error"
+            );
+            let (area_height, input_top, log_bottom, slot_bottom, viewport_height) =
+                measure_inline_error_layout(&page).await;
+            assert!(
+                area_height > resting_height,
+                "the action area must grow to hold the inline error, got {area_height} \
+                 against a resting {resting_height}"
+            );
+            assert!(
+                input_top >= log_bottom,
+                "the command row must stay below the story log (input top {input_top}, \
+                 log bottom {log_bottom})"
+            );
+            assert!(
+                slot_bottom <= viewport_height,
+                "the inline error must be fully visible (slot bottom {slot_bottom}, \
+                 viewport {viewport_height})"
+            );
+
+            lifecycle.restart().await;
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(10),
+                    Duration::from_millis(100),
+                    || async {
+                        !read_error_disclosure(&page, "#command-form [data-error-slot]")
+                            .await
+                            .0
+                    },
+                )
+                .await,
+                "the engine's recovery must clear the inline error"
+            );
+            assert!(
+                !read_banner(&page).await.0,
+                "the inline error and the banner must clear together"
+            );
+            assert_eq!(
+                read_command_input(&page).await,
+                "look around",
+                "the recovery must not drop the typed command"
+            );
+        }
     })
     .await;
 }
