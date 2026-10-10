@@ -69,8 +69,8 @@ TAG_EXEMPT_DIRS = {
 }
 
 TAG_EXEMPT_FILES = {
-    Path("tests/browser/stub/invariants.rs"): (
-        "no spec link — computed-style and layout invariants have no HTTP "
+    Path("tests/browser/stub/layout.rs"): (
+        "no spec link — computed-style and layout checks have no HTTP "
         "surface; the test code is the definition"
     ),
 }

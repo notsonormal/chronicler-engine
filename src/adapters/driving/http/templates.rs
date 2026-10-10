@@ -106,6 +106,7 @@ impl OptionsDockTemplate {
     <div class="preview-issues">
         {% for issue in issues %}<span class="issue-tag {{ issue.kind }}">{{ issue.message }}</span>{% endfor %}
     </div>
+    {# The corrections are suggestions the player opts into, so Send Original keeps the primary style. #}
     <div class="form-actions">
         <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <input type="hidden" name="command" value="{{ original }}" />

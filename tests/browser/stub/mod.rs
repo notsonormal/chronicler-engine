@@ -11,7 +11,7 @@ mod dashboard;
 mod failure_display;
 mod form_failures;
 mod games;
-mod invariants;
+mod layout;
 mod llm_messages;
 mod options;
 mod settings;

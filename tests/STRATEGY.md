@@ -110,7 +110,7 @@ Place a new UI test by this rule.
    delivers it is not.
 2. **If the server behind this were fake, does the behaviour change?** No →
    tier 2, `tests/browser/stub/`. Pure client behaviour: the slash palette,
-   edit-mode activation, toast handling, DOM rendering invariants.
+   edit-mode activation, toast handling, DOM layout.
 3. Otherwise → **tier 3**, `tests/browser/<surface>.rs`. The test's point is
    the full-stack hop: a click or a `change` whose effect is real server-side
    state, read back through a reload.
@@ -125,7 +125,7 @@ each check gets its own `StubServer` and page. The SCENARIO tag goes above the
 Split a runner when it becomes the longest browser test by a wide margin.
 
 **Layout-only checks.** A check that asserts only computed style, size or
-position goes in `tests/browser/stub/invariants.rs`. It has no spec scenario.
+position goes in `tests/browser/stub/layout.rs`. It has no spec scenario.
 It puts its markup in place with client-side JS, not through a real failure.
 
 **Check:** review-only.

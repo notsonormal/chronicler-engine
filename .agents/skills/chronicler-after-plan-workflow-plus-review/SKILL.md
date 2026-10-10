@@ -12,7 +12,7 @@ Create a task list (using `TaskCreate`) for all these steps.
 1. Verify that the implementation matches the existing plan. This is a post implementation verification so you MUST read the plan and actively check changed files. Any missing deferred, missing or changed features MUST be clearly presented to the user, with the reasoning included.
 2. Archive the recently used plan for the session. The plan might be in `docs/plans`. The archive folder is `old-docs/archived-plans`.
 3. If the plan was created through the skill `/wayfinder` (`.agents/skills/wayfinder/SKILL.md`), it will be associated with a ticket in `.scratch`. Rather than being archived, you need to follow the workflow in the wayfinder skill. 
-4. Update all the documentation in the `docs` folder to match latest changes. Do not update documentation for the sake of updating as this results in sediment. See the skill `/chronicler-docs-hygiene` (`.agents/skills/chronicler-docs-hygiene/SKILL.md`) for standards.
+4. Update the docs in `docs/` that the changes make false. A behaviour change edits its spec in `docs/specs/`. A doc in `docs/diataxis/` changes only when the changes add, remove or rename a part, an invariant or a name that the doc states (`docs/AGENTS.md` §Where a fact lives). Standards: `/chronicler-docs-hygiene` (`.agents/skills/chronicler-docs-hygiene/SKILL.md`).
 5. Update all the unit and integration tests as needed for the latest changes.
 6. Ensure that there is no 'ai slop' or 'hacks' in the code due to repetitive fixes without a cleanup.
 7. Check if there is any duplicated code, any 'bad tests', any implemented or missing features.

@@ -26,11 +26,7 @@ A pause lives only in the browser. A WebSocket design would need pause and resum
 
 ## Palette
 
-The dashboard's palette is built for long prose. Quoted dialogue differs from narration by hue, and both stay at body weight. One accent hue marks every OK and active state, and a second accent hue marks every error state.
-
-## Text-check preview emphasis
-
-The text-check preview offers three controls at one size: Send with edits, Send Original, and Cancel. The corrections are suggestions that the player opts into, so Send Original keeps the primary colour and Send with edits takes the secondary one.
+The dashboard's palette is built for long prose. Quoted dialogue differs from narration by hue, and both stay at body weight.
 
 ## Document References
 

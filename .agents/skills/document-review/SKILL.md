@@ -54,16 +54,28 @@ Verdict per document: keep, rewrite, merge into another doc, or delete.
 
 ## 3. Sections and paragraphs
 
-Classify every section and paragraph in scope as KEEP or DELETE. Keep one only when **both** hold:
+Classify every section and paragraph in scope as KEEP or DELETE. For specs and agent docs, use the test in the Doc types table. For `docs/diataxis/`, first name the kind of fact the unit states, then look up where that kind of fact lives (`docs/AGENTS.md` §Where a fact lives):
 
-1. **It carries purpose, an invariant, or a frame.** It says what a part is *for*, a rule that holds across the system, or a way to view the system that keeps its parts apart. For specs and agent docs, use the test in the Doc types table.
-2. **Nothing else carries it.** The code, a test, a spec scenario or another doc does not already say it. One hop into the source counts as "already says it".
+| The unit states… | It lives in |
+|---|---|
+| The purpose of a part, its name, or an invariant: an always-true relation between named parts — what owns what, what restores what, how many of a part exist, where a part shows | Diátaxis Reference |
+| Why the system is that way | Diátaxis Explanation |
+| An event rule ("when X, then Y") at feature level, or a property that every request to one route keeps | A spec scenario, spec section intro, or spec Properties section |
+| Fine-grained behaviour (a rule inside one part, such as how a function reads its input), edge cases, values, copy text, icons, markup, field lists, steps | The code and its tests |
+
+KEEP a unit when its kind of fact lives in this doc's mode and no other doc on the same subject already states it. DELETE it when its kind of fact lives elsewhere, or when a doc on the same subject already states it. A Reference doc and its Explanation doc share a subject: the Reference doc states the fact, and the Explanation doc gives only the reason. A doc on another subject may restate a fact in one sentence when its reader needs it. A unit that mixes kinds keeps its Reference or Explanation part and loses the rest, values included.
+
+Carriers do not cross kinds:
+
+- A spec scenario that pins one consequence of an invariant does not carry the invariant. "Settings is a singleton row" stays in Reference although a test pins the single row.
+- A code comment, a type, a glossary entry or seed data does not carry an invariant for the reader of the doc. The doc is where a reader finds what owns what without reading every file.
+- In an Explanation doc, the code carries *what* happens, not *why*. Delete an Explanation unit only when another doc already gives the same reason. A reason that is tied to one value (one colour stop, one delay) belongs in a comment beside that value.
 
 The default is DELETE. A doc that earns its place does not make each of its paragraphs earn theirs. "It is accurate" and "it matches the nearby text" are not reasons to keep.
 
-Edge cases, error handling, ordering rules, field lists and UI details live in the code, and the specs pin the ones a client sees (`docs/AGENTS.md` §Reference defers to source).
-
 A paragraph that needs a qualifier to match the code ("when the provider reports them", "only on the narration path") restates the code. Its verdict is DELETE, not a more accurate rewrite.
+
+Document References entries are not units. Keep a link only to the paired Reference or Explanation doc of the same subject, or to a doc that the body hands a point to. DELETE every spec link and every link to a doc that is only related. The index in `docs/AGENTS.md` lists every doc.
 
 **Completion:** every section and paragraph in scope has a verdict and a one-line reason.
 
@@ -95,11 +107,13 @@ On KEEP text only, apply `.agents/skills/unslop/SKILL.md` and this checklist fro
 
 | Level | Finding | Verdict |
 |---|---|---|
-| Doc set | Ticket 08 removed the reasoning-field fallback. `docs/external_applications/marinara_engine.md` still says the engine reads those JSON fields. | Stale. Fix the other doc in the same change. |
+| Doc set | A change removes a fallback in the engine. A doc under `docs/external_applications/` still says the engine uses it. | Stale. Fix the other doc in the same change. |
 | Doc set | A change moves a rule's description to a new doc, but a source file's DOC anchor still points at the old doc. | Stale anchor. Point it at the doc that carries the rule. |
-| Paragraph | "**Only `content` is the answer.** The transport reads one field of a reply … If `finish_reason` is `"length"`, the failure reports a spent `max_tokens` budget …" (`narration_system.md`) | DELETE. `parse_chat_response` and its tests carry the rule. Scenario 38.7 carries the user-facing line. |
-| Paragraph | "Settings is a singleton row." | KEEP. An invariant that no symbol or type states. |
-| Paragraph | A bulleted list of the fields on `GameState`. | DELETE. The struct carries it. |
+| Paragraph | "Settings occupy a singleton row in the `settings` table — the engine's only settings read source." (`storage.md`) | KEEP. An invariant. The schema and the bootstrap code each show part of it, but no one place states it. |
+| Paragraph | "`message_swipes.snapshot_id` … **not a SQL FK**, deliberately." (`storage.md`) | KEEP. The schema shows the missing FK. Only the doc says it is deliberate. |
+| Paragraph | "`llm_messages` is pruned automatically to a fixed row cap." (`storage.md`) | KEEP. It names the rule, not the number. A version that states the cap loses the number. |
+| Paragraph | A bulleted list of the fields on `GameState`. | DELETE. Field lists live in the code. |
+| Paragraph | A Reference paragraph: "When the player clicks Save, the form closes and the list shows the new row." | DELETE. An event rule. A spec scenario carries it, or the code does. |
 
 ## Report
 

@@ -21,13 +21,12 @@ The shell owns only client state:
 
 ## Regions
 
-The page stacks the header, the failure banner, the tab bar, and the body of the active tab. The header shows the display name of the active Game.
+The page has a header, a failure banner, a tab bar, and the body of the active tab. The header shows the display name of the active Game.
 
-The Game tab has four regions:
+The Game tab has four regions: the story log, the visual sidebar, the options dock, and the action area.
 
 - **Story log** — the Game's message history.
 - **Visual sidebar** — the image of the current room and the portraits of the Characters in it.
-- **Options dock** — the offered options.
 - **Action area** — the command input, the text-check preview, and the status display.
 
 Each live region polls its own fragment.
@@ -55,13 +54,11 @@ A swipe switch restores the Snapshot of the target Swipe, so every region shows 
 
 ## Management Panels
 
+The management panels are Settings, Prompt Presets, Worlds, Games, and LLM Messages.
+
 - **Settings** — the LLM connections and the role that each one serves (Narrator, Quantifier) on the Connections sub-tab, and the text-check settings on the Text Check sub-tab.
-- **Prompt Presets** — the prompt presets.
-- **Worlds** — the World templates.
 - **Games** — the active Game, the new-game form, and the saved Games of every World. A Game has a stable generated name and a renameable display name.
 - **LLM Messages** — the record of each LLM call that a role makes, failed calls included.
-
-A panel field either saves when it changes and reports inline, or saves with its form's submit button.
 
 ## Supported Viewports
 
