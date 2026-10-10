@@ -66,3 +66,6 @@ All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect
 - [28 — Add a usage-evidence phase to `chronicler-docs-hygiene`](./issues/28-docs-hygiene-usage-evidence.md)
 - [29 — Cover Python in the comment finder's full sweep](./issues/29-comment-finder-python-coverage.md)
 - [31 — Skip the browser tier when its inputs have not changed since a green run](./issues/31-skip-browser-tier-on-unchanged-inputs.md) (from the 2026-10-09 retro of session `01a12280`)
+- [32 — Let the review bundle take a path list](./issues/32-review-bundle-path-scope.md) (from the 2026-10-10 retro of the ticket-08 session)
+- [33 — Check that user-facing copy in a ticket names controls that exist](./issues/33-check-ui-names-in-ticket-copy.md) (from the 2026-10-10 retro of the ticket-08 session)
+- [34 — Sweep every caller when a change alters what a port returns](./issues/34-sweep-callers-of-a-changed-seam.md) (from the 2026-10-10 retro of the ticket-08 session)

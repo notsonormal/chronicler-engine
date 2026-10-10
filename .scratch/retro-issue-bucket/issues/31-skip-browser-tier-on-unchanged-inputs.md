@@ -1,6 +1,6 @@
 # Skip the browser tier when its inputs have not changed since a green run
 
-Type: grilling
+Type: grilling (HITL)
 Status: open
 Blocked by: —
 
