@@ -13,6 +13,7 @@ use crate::application::errors::ApplicationError;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::settings_service::SettingsService;
 use crate::domain::model::settings::LlmProviderConfig;
+use crate::error::{EngineError, LlmFailure};
 
 pub type ProviderFactory = Arc<dyn Fn(&LlmProviderConfig) -> Arc<dyn LlmProvider> + Send + Sync>;
 
@@ -63,16 +64,24 @@ impl ConnectionTestService {
         connection.check_api_key_available()?;
         let provider = (self.provider_factory)(connection);
         let started = Instant::now();
-        let result = provider.complete(
+        let (backend_name, model_name) = match provider.complete(
             TEST_AGENT_NAME,
             TEST_SYSTEM_PROMPT,
             TEST_USER_PROMPT,
             Some(TEST_MAX_TOKENS),
-        )?;
+        ) {
+            Ok(result) => (result.backend_name, result.model_name),
+            // The probe's budget is tiny, so a reasoning model can spend it all before
+            // answering. The provider still answered, which is all the test checks.
+            Err(EngineError::Llm(LlmFailure::TokenBudgetSpent { .. })) => {
+                (provider.name().to_string(), provider.model().to_string())
+            }
+            Err(error) => return Err(error.into()),
+        };
         Ok(ConnectionTestResult {
             elapsed_ms: started.elapsed().as_millis(),
-            backend_name: result.backend_name,
-            model_name: result.model_name,
+            backend_name,
+            model_name,
         })
     }
 

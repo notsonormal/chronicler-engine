@@ -5,9 +5,21 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum LlmFailure {
-    /// Provider returned 200 OK with empty content; no parseable text to feed downstream.
+    /// The provider answered 200 OK with a blank, null or missing `content`; no answer to feed
+    /// downstream.
     #[error("LLM returned an empty response")]
-    EmptyResponse,
+    EmptyResponse { raw_response: String },
+    /// The model spent its whole output budget before writing an answer (`finish_reason: "length"`
+    /// with an empty `content`). The counts are `None` when the provider reported no `usage`.
+    #[error(
+        "LLM returned no answer after spending its whole token budget{}",
+        LlmFailure::token_counts_suffix(*completion_tokens, *reasoning_tokens)
+    )]
+    TokenBudgetSpent {
+        raw_response: String,
+        completion_tokens: Option<u64>,
+        reasoning_tokens: Option<u64>,
+    },
     /// HTTP response carried a non-2xx status; `status`/`body` captured for forensics and retry decisions.
     #[error("LLM API returned HTTP {status}: {body}")]
     Http { status: u16, body: String },
@@ -64,6 +76,30 @@ impl From<InternalError> for EngineError {
 impl From<LlmFailure> for EngineError {
     fn from(e: LlmFailure) -> Self {
         EngineError::Llm(e)
+    }
+}
+
+impl LlmFailure {
+    pub fn raw_response_body(&self) -> Option<&str> {
+        match self {
+            Self::EmptyResponse { raw_response }
+            | Self::TokenBudgetSpent { raw_response, .. }
+            | Self::ParseError { raw_response, .. } => Some(raw_response),
+            Self::Http { .. } | Self::Network { .. } | Self::Timeout => None,
+        }
+    }
+
+    fn token_counts_suffix(
+        completion_tokens: Option<u64>,
+        reasoning_tokens: Option<u64>,
+    ) -> String {
+        match (completion_tokens, reasoning_tokens) {
+            (Some(completion), Some(reasoning)) => {
+                format!(" ({completion} completion tokens, {reasoning} of them reasoning)")
+            }
+            (Some(completion), None) => format!(" ({completion} completion tokens)"),
+            _ => String::new(),
+        }
     }
 }
 
@@ -171,6 +207,13 @@ impl From<std::io::Error> for EngineError {
 }
 
 impl EngineError {
+    pub fn raw_response_body(&self) -> Option<&str> {
+        match self {
+            EngineError::Llm(failure) => failure.raw_response_body(),
+            _ => None,
+        }
+    }
+
     pub fn llm_error_string(&self) -> String {
         match self {
             EngineError::Llm(LlmFailure::Timeout) => "LLM Error: request timed out".to_string(),
@@ -182,7 +225,17 @@ impl EngineError {
             }) => {
                 format!("LLM Error: unexpected response format (expected {expected_format})")
             }
-            EngineError::Llm(LlmFailure::EmptyResponse) => "LLM Error: empty response".to_string(),
+            EngineError::Llm(LlmFailure::EmptyResponse { .. }) => {
+                "LLM Error: empty response".to_string()
+            }
+            EngineError::Llm(LlmFailure::TokenBudgetSpent {
+                completion_tokens,
+                reasoning_tokens,
+                ..
+            }) => format!(
+                "LLM Error: the model spent its whole token budget before writing an answer{}",
+                LlmFailure::token_counts_suffix(*completion_tokens, *reasoning_tokens)
+            ),
             EngineError::Llm(LlmFailure::Http { status, body }) => {
                 format!("LLM Error: HTTP {status} \u{2014} {body}")
             }

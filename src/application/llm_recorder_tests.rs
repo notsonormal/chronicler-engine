@@ -9,9 +9,36 @@ use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::ports::llm_provider::LlmProvider;
-use crate::error::EngineError;
+use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
+use crate::error::{EngineError, LlmFailure};
 use crate::test_support::{make_noop_save_fn, make_test_recorder_with_storage};
+
+struct BodyFailureProvider {
+    failure: fn() -> LlmFailure,
+}
+
+impl LlmProvider for BodyFailureProvider {
+    fn model(&self) -> &str {
+        "deepseek-v4-flash"
+    }
+
+    fn name(&self) -> &str {
+        "OpenRouter"
+    }
+
+    fn complete(
+        &self,
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        Err(EngineError::Llm((self.failure)()))
+    }
+}
+
+const EMPTY_BODY: &str = r#"{"choices":[{"message":{"content":null,"reasoning":"let me think"},"finish_reason":"stop"}]}"#;
+const SPENT_BODY: &str = r#"{"choices":[{"message":{"content":null},"finish_reason":"length"}]}"#;
 
 const _: fn() = || {
     fn assert<T: Send + Sync>() {}
@@ -74,6 +101,83 @@ fn complete_strips_thought_tags_from_parsed_response() {
     // Parsed response in forensics IS sanitized
     assert!(!saved.parsed_response.contains("<thought>"));
     assert!(saved.parsed_response.contains("Hello, user!"));
+}
+
+#[test]
+fn complete_records_the_raw_body_of_an_empty_response() {
+    let raw_body = EMPTY_BODY;
+    let provider = Arc::new(BodyFailureProvider {
+        failure: || LlmFailure::EmptyResponse {
+            raw_response: EMPTY_BODY.to_string(),
+        },
+    });
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
+
+    let err = recorder
+        .complete("narrator", "system", "user", None)
+        .expect_err("an empty content is a failure, never an answer");
+    assert!(matches!(
+        err,
+        EngineError::Llm(LlmFailure::EmptyResponse { .. })
+    ));
+
+    let saved = storage
+        .list_latest_llm_messages(10)
+        .expect("list should not error")
+        .pop()
+        .expect("a failed attempt must be recorded");
+
+    assert_eq!(saved.backend_name, "OpenRouter");
+    assert_eq!(saved.model_name, "deepseek-v4-flash");
+    assert_eq!(
+        saved.raw_response_json, raw_body,
+        "the stored row must keep the provider body"
+    );
+    assert!(
+        saved.raw_request_json.is_empty(),
+        "the transport returns the request payload only on success"
+    );
+    assert!(
+        saved.parsed_response.is_empty(),
+        "reasoning text must never become the parsed answer"
+    );
+    assert_eq!(
+        saved.error_message.as_deref(),
+        Some("LLM Error: empty response")
+    );
+}
+
+#[test]
+fn complete_records_a_spent_token_budget_for_role_health() {
+    let provider = Arc::new(BodyFailureProvider {
+        failure: || LlmFailure::TokenBudgetSpent {
+            raw_response: SPENT_BODY.to_string(),
+            completion_tokens: Some(2048),
+            reasoning_tokens: Some(2041),
+        },
+    });
+    let storage = Arc::new(Storage::new_in_memory());
+    let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
+
+    recorder
+        .complete("quantifier", "system", "user", None)
+        .expect_err("a spent budget with no content is a failure");
+
+    let saved = storage
+        .list_latest_llm_messages(10)
+        .expect("list should not error")
+        .pop()
+        .expect("a failed attempt must be recorded");
+
+    assert_eq!(saved.raw_response_json, SPENT_BODY);
+    assert_eq!(
+        saved.error_message.as_deref(),
+        Some(
+            "LLM Error: the model spent its whole token budget before writing an answer (2048 completion tokens, 2041 of them reasoning)"
+        ),
+        "role health and the banner read this column"
+    );
 }
 
 #[test]

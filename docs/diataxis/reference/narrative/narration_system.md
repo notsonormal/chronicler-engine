@@ -47,7 +47,7 @@ A FreeAction runs through the engine's phase pipeline: state transition → narr
 
 After main narration, the engine evaluates NPC triggers and may generate a continuation narration. The `StoredTriggerContext` carries the previous-turn snapshot so the diff has a stable input.
 
-## Response Sanitization & Gemma 4 Thinking-Channel Suffix
+## Response Content, Sanitization & Gemma 4 Thinking-Channel Suffix
 
 **Response sanitization.** `LlmCallRecorder::complete()` runs `sanitize_llm_output` on every response before saving forensics and returning the text to the pipeline. The sanitizer strips leaked reasoning artifacts that some chat-template-less models emit:
 

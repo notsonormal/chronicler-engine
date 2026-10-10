@@ -87,9 +87,8 @@ impl LlmCallRecorder {
         Ok(sanitized_result)
     }
 
-    /// A forensics record for a failed attempt. The transport builds the
-    /// request payload and returns it only on success, so a failed row blanks
-    /// `raw_request_json` along with the response columns.
+    /// The transport returns the request payload only on success, so a failed row
+    /// blanks `raw_request_json`.
     fn failed_message(
         agent_name: &str,
         backend_name: &str,
@@ -98,6 +97,7 @@ impl LlmCallRecorder {
         user_prompt: &str,
         error: &EngineError,
     ) -> LlmMessage {
+        let raw_response_json = error.raw_response_body().unwrap_or_default().to_string();
         LlmMessage {
             id: 0,
             agent_name: agent_name.to_string(),
@@ -106,7 +106,7 @@ impl LlmCallRecorder {
             system_prompt: system_prompt.to_string(),
             user_prompt: user_prompt.to_string(),
             raw_request_json: String::new(),
-            raw_response_json: String::new(),
+            raw_response_json,
             parsed_response: String::new(),
             error_message: Some(error.llm_error_string()),
             created_at: chrono::Utc::now(),

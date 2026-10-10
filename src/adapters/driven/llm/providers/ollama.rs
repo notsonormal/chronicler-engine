@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! Ollama LLM provider
 
-use crate::error::{EngineError, LlmFailure};
+use crate::error::EngineError;
 use crate::domain::model::settings::LlmProviderConfig;
 use crate::adapters::driven::llm::transport::call_ollama;
 
@@ -36,17 +36,13 @@ impl OllamaBackend {
             user_text.to_string()
         };
         let user = self.preprocess_user_text(&user);
-        let result = call_ollama(
+        call_ollama(
             &self.base_url,
             &self.model,
             system_prompt,
             &user,
             max_tokens,
-        )?;
-        if result.text.trim().is_empty() {
-            return Err(EngineError::Llm(LlmFailure::EmptyResponse));
-        }
-        Ok(result)
+        )
     }
 
     pub fn preprocess_user_text(&self, text: &str) -> String {

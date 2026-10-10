@@ -71,8 +71,22 @@ fn test_parse_error_is_unreadable_answer() {
 #[test]
 fn test_empty_response_is_unreadable_answer() {
     assert_eq!(
-        kind_of(EngineError::Llm(LlmFailure::EmptyResponse)),
+        kind_of(EngineError::Llm(LlmFailure::EmptyResponse {
+            raw_response: "{}".to_string(),
+        })),
         GenerationFailureKind::UnreadableAnswer
+    );
+}
+
+#[test]
+fn test_spent_token_budget_is_its_own_kind() {
+    assert_eq!(
+        kind_of(EngineError::Llm(LlmFailure::TokenBudgetSpent {
+            raw_response: "{}".to_string(),
+            completion_tokens: Some(2048),
+            reasoning_tokens: Some(2041),
+        })),
+        GenerationFailureKind::TokenBudgetSpent
     );
 }
 

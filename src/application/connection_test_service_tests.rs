@@ -8,10 +8,11 @@ use crate::application::connection_test_service::{
     ConnectionTestService, ConnectionTestResult, ProviderFactory,
 };
 use crate::application::errors::ApplicationError;
-use crate::application::ports::llm_provider::LlmProvider;
+use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::application::settings_service::SettingsService;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::error::{EngineError, LlmFailure};
 
 fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
     LlmProviderConfig {
@@ -35,6 +36,32 @@ fn failing_factory() -> ProviderFactory {
     Arc::new(|_config: &LlmProviderConfig| {
         Arc::new(MockBackend::new().with_fail()) as Arc<dyn LlmProvider>
     })
+}
+
+struct SpentBudgetProvider;
+
+impl LlmProvider for SpentBudgetProvider {
+    fn model(&self) -> &str {
+        "reasoning-model"
+    }
+
+    fn name(&self) -> &str {
+        "OpenRouter"
+    }
+
+    fn complete(
+        &self,
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        Err(EngineError::Llm(LlmFailure::TokenBudgetSpent {
+            raw_response: "{}".to_string(),
+            completion_tokens: Some(8),
+            reasoning_tokens: Some(8),
+        }))
+    }
 }
 
 fn make_service(factory: ProviderFactory) -> (ConnectionTestService, Arc<Storage>) {
@@ -99,6 +126,19 @@ fn test_unknown_connection_is_refused() {
         matches!(error, ApplicationError::Validation(_)),
         "got {error:?}"
     );
+}
+
+#[test]
+fn test_spent_token_budget_still_proves_the_provider_is_reachable() {
+    let (service, _storage) = make_service(Arc::new(|_config: &LlmProviderConfig| {
+        Arc::new(SpentBudgetProvider) as Arc<dyn LlmProvider>
+    }));
+
+    let result =
+        run_saved(&service).expect("a reasoning model that spends the probe budget is reachable");
+
+    assert_eq!(result.backend_name, "OpenRouter");
+    assert_eq!(result.model_name, "reasoning-model");
 }
 
 #[test]

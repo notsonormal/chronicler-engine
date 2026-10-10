@@ -255,6 +255,45 @@ async fn test_missing_preset_failure_clamps_with_the_preset_line() {
     );
 }
 
+// [docs/specs/failure_display.md] SCENARIO: 38.7
+#[tokio::test]
+async fn test_spent_token_budget_clamps_with_its_own_line() {
+    let raw = "LLM returned no answer after spending its whole token budget (2048 completion tokens, 2041 of them reasoning)";
+    let state = TestAppBuilder::default_test()
+        .generation_status(
+            GenerationStatus::Error(GenerationFailure {
+                kind: GenerationFailureKind::TokenBudgetSpent,
+                raw: raw.to_string(),
+            }),
+            GenerationPhase::Narrating,
+        )
+        .build_service();
+    let app = build_router(state);
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The model used its whole token budget before writing an answer — raise Max Tokens or choose a model that does less reasoning."),
+        "a spent token budget must keep its own line: {body}"
+    );
+    assert!(
+        !body.contains("The last turn failed to generate."),
+        "the general line belongs to failures no kind names: {body}"
+    );
+    assert!(
+        !body.contains("The language model's answer could not be read."),
+        "a spent budget is not an unreadable answer: {body}"
+    );
+    assert_eq!(
+        body.matches("spending its whole token budget").count(),
+        1,
+        "the raw text with the token counts belongs in the disclosure only: {body}"
+    );
+    assert!(
+        body.contains(&format!(r#"<pre class="error-detail-raw">{raw}</pre>"#)),
+        "the token counts must be reachable in the disclosure: {body}"
+    );
+}
+
 // [docs/specs/failure_display.md] SCENARIO: 38.4
 #[tokio::test]
 async fn test_failed_user_action_is_not_a_failed_poll() {

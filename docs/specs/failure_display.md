@@ -79,3 +79,12 @@ When the client GET /status/generating
 Then the response carries the missing-preset line, not the line for an unnamed failure
 And the raw text naming the missing preset is reachable only inside the response's disclosure
 ```
+
+#### Scenario 38.7: A spent token budget clamps to its own line with the counts in the disclosure
+
+```gherkin
+Given a Game whose last generation failed because the model spent its whole token budget before writing an answer
+When the client GET /status/generating
+Then the response carries the spent-token-budget line, not the unreadable-answer line or the line for an unnamed failure
+And the raw text naming the completion and reasoning token counts is reachable only inside the response's disclosure
+```

@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! OpenRouter LLM provider
 
-use crate::error::{EngineError, LlmFailure};
+use crate::error::EngineError;
 use crate::domain::model::settings::LlmProviderConfig;
 use crate::adapters::driven::llm::transport::call_openrouter_with_model;
 
@@ -36,12 +36,7 @@ impl OpenRouterBackend {
         } else {
             (system_prompt, user_text.to_string())
         };
-        let result =
-            call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)?;
-        if result.text.trim().is_empty() {
-            return Err(EngineError::Llm(LlmFailure::EmptyResponse));
-        }
-        Ok(result)
+        call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)
     }
 }
 

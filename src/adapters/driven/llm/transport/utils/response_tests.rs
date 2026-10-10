@@ -1,97 +1,24 @@
-use crate::adapters::driven::llm::transport::utils::response::{
-    extract_content_from_response, parse_chat_response,
-};
+//! Unit tests for the transport's "what counts as an answer" rule.
 
-#[test]
-fn test_extract_content_from_content_field() {
-    let json = serde_json::json!({
-        "choices": [{ "message": { "content": "hello world" } }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, Some(("hello world".to_string(), "content")));
+use crate::adapters::driven::llm::transport::utils::response::parse_chat_response;
+use crate::error::{EngineError, LlmFailure};
+
+fn empty_response_body(error: EngineError) -> String {
+    match error {
+        EngineError::Llm(LlmFailure::EmptyResponse { raw_response }) => raw_response,
+        other => panic!("expected EmptyResponse, got: {other:?}"),
+    }
 }
 
-#[test]
-fn test_extract_content_from_reasoning_field() {
-    let json = serde_json::json!({
-        "choices": [{ "message": { "reasoning": "because logic" } }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, Some(("because logic".to_string(), "reasoning")));
-}
-
-#[test]
-fn test_extract_content_from_reasoning_content_field() {
-    let json = serde_json::json!({
-        "choices": [{ "message": { "reasoning_content": "deep thought" } }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(
-        result,
-        Some(("deep thought".to_string(), "reasoning_content"))
-    );
-}
-
-#[test]
-fn test_extract_content_prefers_content_over_reasoning() {
-    let json = serde_json::json!({
-        "choices": [{ "message": { "content": "primary", "reasoning": "secondary" } }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, Some(("primary".to_string(), "content")));
-}
-
-#[test]
-fn test_extract_content_missing_message() {
-    let json = serde_json::json!({ "choices": [{}] });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, None);
-}
-
-#[test]
-fn test_extract_content_missing_choices() {
-    let json = serde_json::json!({});
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, None);
-}
-
-#[test]
-fn test_extract_content_no_content_fields() {
-    let json = serde_json::json!({
-        "choices": [{ "message": { "role": "assistant" } }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, None);
-}
-
-#[test]
-fn test_extract_content_priority_reasoning_content() {
-    let json = serde_json::json!({
-        "choices": [{
-            "message": {
-                "content": null,
-                "reasoning": null,
-                "reasoning_content": "fallback"
-            }
-        }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, Some(("fallback".to_string(), "reasoning_content")));
-}
-
-#[test]
-fn test_extract_content_priority_content() {
-    let json = serde_json::json!({
-        "choices": [{
-            "message": {
-                "content": "main content",
-                "reasoning": "reasoning text",
-                "reasoning_content": "reasoning content field"
-            }
-        }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, Some(("main content".to_string(), "content")));
+fn token_budget_spend(error: EngineError) -> (String, Option<u64>, Option<u64>) {
+    match error {
+        EngineError::Llm(LlmFailure::TokenBudgetSpent {
+            raw_response,
+            completion_tokens,
+            reasoning_tokens,
+        }) => (raw_response, completion_tokens, reasoning_tokens),
+        other => panic!("expected TokenBudgetSpent, got: {other:?}"),
+    }
 }
 
 #[test]
@@ -102,140 +29,183 @@ fn test_parse_chat_response_success_content() {
 }
 
 #[test]
-fn test_parse_chat_response_success_reasoning() {
-    let raw = r#"{"choices":[{"message":{"reasoning":"think"}}]}"#;
-    let result = parse_chat_response(raw, 1);
-    assert_eq!(result.unwrap(), "think");
+fn test_parse_chat_response_keeps_content_verbatim() {
+    let raw = r#"{"choices":[{"message":{"content":"  padded answer  "}}]}"#;
+    assert_eq!(parse_chat_response(raw, 1).unwrap(), "  padded answer  ");
 }
 
 #[test]
-fn test_parse_chat_response_api_error() {
-    let raw = r#"{"error":{"message":"rate limited"}}"#;
-    let result = parse_chat_response(raw, 1);
-    assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("rate limited"));
+fn test_null_content_with_reasoning_is_an_empty_response() {
+    let raw = r#"{"choices":[{"message":{"content":null,"reasoning":"let me think about this"},"finish_reason":"stop"}]}"#;
+    let body = empty_response_body(parse_chat_response(raw, 1).unwrap_err());
+    assert_eq!(body, raw, "the failure must carry the raw body");
 }
 
 #[test]
-fn test_parse_chat_response_api_error_no_message() {
-    let raw = r#"{"error":{}}"#;
-    let result = parse_chat_response(raw, 1);
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("Unknown API error")
-    );
+fn test_null_content_with_reasoning_content_is_an_empty_response() {
+    let raw = r#"{"choices":[{"message":{"content":null,"reasoning_content":"deep thought"},"finish_reason":"stop"}]}"#;
+    let body = empty_response_body(parse_chat_response(raw, 1).unwrap_err());
+    assert_eq!(body, raw);
 }
 
 #[test]
-fn test_parse_chat_response_missing_content() {
-    let raw = r#"{"choices":[{"message":{"role":"assistant"}}]}"#;
-    let result = parse_chat_response(raw, 1);
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to parse LLM response")
-    );
+fn test_empty_string_content_is_an_empty_response() {
+    let raw = r#"{"choices":[{"message":{"content":""},"finish_reason":"stop"}]}"#;
+    let body = empty_response_body(parse_chat_response(raw, 1).unwrap_err());
+    assert_eq!(body, raw);
 }
 
 #[test]
-fn test_parse_chat_response_malformed_json() {
-    let raw = "not json";
-    let result = parse_chat_response(raw, 1);
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to parse LLM response")
-    );
+fn test_whitespace_only_content_is_an_empty_response() {
+    let raw =
+        "{\"choices\":[{\"message\":{\"content\":\"  \\n\\t \"},\"finish_reason\":\"stop\"}]}";
+    let body = empty_response_body(parse_chat_response(raw, 1).unwrap_err());
+    assert_eq!(body, raw);
 }
 
 #[test]
-fn test_parse_chat_response_empty_json() {
-    let raw = "{}";
-    let result = parse_chat_response(raw, 1);
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to parse LLM response")
-    );
+fn test_missing_content_is_an_empty_response() {
+    let raw = r#"{"choices":[{"message":{"role":"assistant"},"finish_reason":"stop"}]}"#;
+    let body = empty_response_body(parse_chat_response(raw, 1).unwrap_err());
+    assert_eq!(body, raw);
 }
 
 #[test]
-fn test_parse_chat_response_api_error_object() {
-    let json = r#"{
-        "error": {
-            "message": "Rate limit exceeded",
-            "type": "rate_limit_error"
+fn test_length_finish_reason_with_empty_content_is_a_spent_token_budget() {
+    let raw = r#"{
+        "choices": [{"message": {"content": null, "reasoning": "thinking..."}, "finish_reason": "length"}],
+        "usage": {"completion_tokens": 2048, "completion_tokens_details": {"reasoning_tokens": 2041}}
+    }"#;
+    let (body, completion_tokens, reasoning_tokens) =
+        token_budget_spend(parse_chat_response(raw, 1).unwrap_err());
+    assert_eq!(body, raw);
+    assert_eq!(completion_tokens, Some(2048));
+    assert_eq!(reasoning_tokens, Some(2041));
+}
+
+#[test]
+fn test_length_finish_reason_without_usage_reports_no_counts() {
+    let raw = r#"{"choices":[{"message":{"content":null},"finish_reason":"length"}]}"#;
+    let (body, completion_tokens, reasoning_tokens) =
+        token_budget_spend(parse_chat_response(raw, 1).unwrap_err());
+    assert_eq!(body, raw);
+    assert_eq!(completion_tokens, None);
+    assert_eq!(reasoning_tokens, None);
+}
+
+#[test]
+fn test_length_finish_reason_with_usage_but_no_reasoning_details() {
+    let raw = r#"{
+        "choices": [{"message": {"content": ""}, "finish_reason": "length"}],
+        "usage": {"completion_tokens": 300}
+    }"#;
+    let (_, completion_tokens, reasoning_tokens) =
+        token_budget_spend(parse_chat_response(raw, 1).unwrap_err());
+    assert_eq!(completion_tokens, Some(300));
+    assert_eq!(reasoning_tokens, None);
+}
+
+#[test]
+fn test_length_finish_reason_with_content_is_an_answer() {
+    let raw = r#"{"choices":[{"message":{"content":"the door creaks"},"finish_reason":"length"}]}"#;
+    assert_eq!(parse_chat_response(raw, 1).unwrap(), "the door creaks");
+}
+
+#[test]
+fn test_missing_finish_reason_with_empty_content_is_an_empty_response() {
+    let raw = r#"{"choices":[{"message":{"content":null}}]}"#;
+    assert!(matches!(
+        parse_chat_response(raw, 1).unwrap_err(),
+        EngineError::Llm(LlmFailure::EmptyResponse { .. })
+    ));
+}
+
+#[test]
+fn test_missing_choices_is_a_parse_error() {
+    let raw = r#"{"id":"gen-1"}"#;
+    match parse_chat_response(raw, 1).unwrap_err() {
+        EngineError::Llm(LlmFailure::ParseError { raw_response, .. }) => {
+            assert_eq!(raw_response, raw);
         }
-    }"#;
-    let result = parse_chat_response(json, 1);
-    assert!(result.is_err());
-
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("LLM") || err_msg.contains("Failed to parse"),
-        "Expected LLM-related error, got: {err_msg}"
-    );
+        other => panic!("expected ParseError, got: {other:?}"),
+    }
 }
 
 #[test]
-fn test_parse_chat_response_empty_choices() {
-    let json = r#"{ "choices": [] }"#;
-    let result = parse_chat_response(json, 1);
-    assert!(result.is_err());
+fn test_empty_choices_is_a_parse_error() {
+    let raw = r#"{"choices":[]}"#;
+    assert!(matches!(
+        parse_chat_response(raw, 1).unwrap_err(),
+        EngineError::Llm(LlmFailure::ParseError { .. })
+    ));
 }
 
 #[test]
-fn test_parse_chat_response_null_message() {
-    let json = r#"{
-        "choices": [{
-            "message": null
-        }]
-    }"#;
-    let result = parse_chat_response(json, 1);
-    assert!(result.is_err());
+fn test_missing_message_is_a_parse_error() {
+    let raw = r#"{"choices":[{"finish_reason":"stop"}]}"#;
+    assert!(matches!(
+        parse_chat_response(raw, 1).unwrap_err(),
+        EngineError::Llm(LlmFailure::ParseError { .. })
+    ));
 }
 
 #[test]
-fn test_parse_chat_response_whitespace_only_input() {
-    // JSON parser strips whitespace before parsing, so whitespace-only is
-    // a malformed-JSON path.
-    let result = parse_chat_response("   \n\t  ", 1);
-    assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Failed to parse"));
+fn test_null_message_is_a_parse_error() {
+    let raw = r#"{"choices":[{"message":null}]}"#;
+    assert!(matches!(
+        parse_chat_response(raw, 1).unwrap_err(),
+        EngineError::Llm(LlmFailure::ParseError { .. })
+    ));
 }
 
 #[test]
-fn test_extract_content_handles_null_content_with_reasoning_fallback() {
-    let json = serde_json::json!({
-        "choices": [{ "message": { "content": null, "reasoning": "thinking" } }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, Some(("thinking".to_string(), "reasoning")));
+fn test_malformed_json_is_a_parse_error() {
+    let raw = "not json";
+    match parse_chat_response(raw, 1).unwrap_err() {
+        EngineError::Llm(LlmFailure::ParseError {
+            raw_response,
+            expected_format,
+        }) => {
+            assert_eq!(raw_response, raw);
+            assert_eq!(expected_format, "valid JSON");
+        }
+        other => panic!("expected ParseError, got: {other:?}"),
+    }
 }
 
 #[test]
-fn test_extract_content_handles_null_content_with_reasoning_content_fallback() {
-    let json = serde_json::json!({
-        "choices": [{ "message": { "content": null, "reasoning_content": "deep" } }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, Some(("deep".to_string(), "reasoning_content")));
+fn test_empty_json_object_is_a_parse_error() {
+    assert!(matches!(
+        parse_chat_response("{}", 1).unwrap_err(),
+        EngineError::Llm(LlmFailure::ParseError { .. })
+    ));
 }
 
 #[test]
-fn test_extract_content_returns_none_when_all_fields_null() {
-    let json = serde_json::json!({
-        "choices": [{ "message": { "content": null, "reasoning": null, "reasoning_content": null } }]
-    });
-    let result = extract_content_from_response(&json);
-    assert_eq!(result, None);
+fn test_whitespace_only_input_is_a_parse_error() {
+    // `parse_chat_response` trims leading whitespace, so whitespace-only input
+    // reaches the malformed-JSON path rather than the empty-content one.
+    assert!(matches!(
+        parse_chat_response("   \n\t  ", 1).unwrap_err(),
+        EngineError::Llm(LlmFailure::ParseError { .. })
+    ));
+}
+
+#[test]
+fn test_api_error_body_is_an_http_failure() {
+    let raw = r#"{"error":{"message":"rate limited"}}"#;
+    match parse_chat_response(raw, 1).unwrap_err() {
+        EngineError::Llm(LlmFailure::Http { status, body }) => {
+            assert_eq!(status, 200);
+            assert_eq!(body, "rate limited");
+        }
+        other => panic!("expected Http, got: {other:?}"),
+    }
+}
+
+#[test]
+fn test_api_error_without_message_names_the_unknown_error() {
+    let raw = r#"{"error":{}}"#;
+    let err = parse_chat_response(raw, 1).unwrap_err();
+    assert!(err.to_string().contains("Unknown API error"), "{err}");
 }
