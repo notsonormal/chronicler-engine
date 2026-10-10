@@ -38,10 +38,9 @@ from different checkouts run one at a time. A cold target dir is seeded from a w
 (``scripts/target_seed.py``); cargo links with the toolchain's lld (``scripts/lld-linker.sh``).
 The lock does not cover ``cargo fmt``, the Python checks or ``cargo llvm-cov report``.
 A step waits up to 30 minutes for it, then runs anyway.
-Each script's docstring lists its ``CHRONICLER_*`` switches. Use one target dir per checkout;
-agents sharing a checkout pass ``--no-fmt`` so ``cargo fmt`` cannot rewrite each other's sources::
+Each script's docstring lists its ``CHRONICLER_*`` switches. Use one target dir per checkout::
 
-    python build.py --target-dir target/agent2 --no-fmt
+    python build.py --target-dir target/agent2
 
 The full gate also removes linked worktrees that are safe to lose: clean, pushed, and with no
 live process inside (``scripts/remove_worktrees.py``). It warns and continues if that fails.
@@ -95,6 +94,21 @@ class _LogState:
     fh = None
 
 
+class _TierSize(NamedTuple):
+    """One step's test-set size, for a run whose command is a known tier."""
+
+    tier: str
+    size: int
+
+
+class _TierRecord(NamedTuple):
+    """A tier's newest test-set size in the build-history journal."""
+
+    timestamp: str
+    tree: str
+    size: int
+
+
 class _NextestSummary:
     """nextest summary lines captured this run, re-printed at the epilogue.
 
@@ -104,13 +118,13 @@ class _NextestSummary:
     output; main()'s finally must still print the counts at the tail.
 
     ``label`` names the step the next captured summary belongs to; ``_timed_run``
-    sets it before dispatch. ``sizes`` maps a step label to ``(tier, test-set
-    size)`` for the runs whose command is a known tier (see ``_tier_for_cmd``).
+    sets it before dispatch. ``sizes`` maps a step label to its ``_TierSize``
+    for the runs whose command is a known tier (see ``_tier_for_cmd``).
     """
 
     lines: list[tuple[str, str]] = []
     label = ""
-    sizes: dict[str, tuple[str, int]] = {}
+    sizes: dict[str, _TierSize] = {}
 
     @classmethod
     def line_text(cls, baselines: dict | None) -> str:
@@ -124,8 +138,7 @@ class _NextestSummary:
             line = f"{text}  ({label})" if label else text
             entry = cls.sizes.get(label)
             if entry is not None and baselines is not None:
-                tier, size = entry
-                line += f"  {_size_suffix(size, baselines.get(tier))}"
+                line += f"  {_size_suffix(entry.size, baselines.get(entry.tier))}"
             rendered.append(line)
         return "\n".join(rendered)
 
@@ -387,22 +400,30 @@ def _stash_nextest_summary(output: str, cmd: str | None = None) -> None:
         tier = _tier_for_cmd(cmd)
         size = _summary_size(output)
         if tier is not None and size is not None:
-            _NextestSummary.sizes[_NextestSummary.label] = (tier, size)
+            _NextestSummary.sizes[_NextestSummary.label] = _TierSize(tier, size)
     for raw in output.splitlines():
         m = _NEXTEST_RESULT_RE.match(raw)
         if m is None:
             continue
         status = raw.strip().split(maxsplit=1)[0]
-        if status in ("LEAK", "FLAKY"):
-            _NextestLeaks.lines.append(
-                (_NextestSummary.label, status, m.group(2).strip())
-            )
+        entry = (_NextestSummary.label, status, m.group(2).strip())
+        # nextest prints a LEAK or FLAKY line live and again in the final list.
+        if status in ("LEAK", "FLAKY") and entry not in _NextestLeaks.lines:
+            _NextestLeaks.lines.append(entry)
 
 
 # A rustc or clippy diagnostic header: "error[E0599]: ..." or "error: ...".
 _COMPILE_ERROR_RE = re.compile(r"^error(?:\[E\d{4}\])?: ")
-# Cargo's closing lines restate the failure and carry no cause.
-_COMPILE_ERROR_NOISE = ("error: could not compile", "error: aborting due to")
+# Cargo's closing lines restate the failure and carry no cause. nextest's
+# "test run failed", "no tests to run" and its "command `cargo test --no-run`
+# exited" wrapper have the same header shape, but they are not compiler errors.
+_COMPILE_ERROR_NOISE = (
+    "error: could not compile",
+    "error: aborting due to",
+    "error: test run failed",
+    "error: no tests to run",
+    "error: command `",
+)
 
 
 def _stash_compile_errors(output: str) -> None:
@@ -443,7 +464,7 @@ def _nextest_duration_to_secs(token: str) -> float:
 _STUB_CHECK_RE = re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)s\s+\[(OK|FAIL)\]\s+(check_\w+)\s*$")
 
 
-def parse_stub_check_timings(lines):
+def _parse_stub_check_timings(lines):
     """Return (secs, runner test, check name, status) for every stub check.
 
     A runner test holds many checks, so its own nextest duration hides which
@@ -465,17 +486,22 @@ def parse_stub_check_timings(lines):
     return checks
 
 
-def timed_test_cmd(cmd):
+def _timed_test_cmd(cmd):
     """Return `cmd` with the flags the timing report needs.
 
-    The browser command also shows passing tests' output, which carries each
-    stub runner's per-check summary. Other steps keep it hidden: the
+    The browser tier also shows passing tests' output, which carries each
+    stub runner's per-check summary. Other commands keep it hidden: the
     integration tier's passing output would grow the log about 14 times.
     """
     timed = f"{cmd} --final-status-level pass"
-    if f"-E '{_BROWSER_FILTER}'" in cmd:
+    if _tier_for_cmd(cmd) == "browser":
         timed += " --success-output final"
     return timed
+
+
+def _combined_output(result) -> str:
+    """Return a captured run's stdout and stderr as one text to scan."""
+    return (result.stdout or "") + "\n" + (result.stderr or "")
 
 
 def run_with_test_timings(cmd, env=None, check=True):
@@ -484,7 +510,7 @@ def run_with_test_timings(cmd, env=None, check=True):
     Returns the exit code; exits on failure when check=True.
     """
     both_print(f"$ {cmd}  (with --test-timings)")
-    timed_cmd = timed_test_cmd(cmd)
+    timed_cmd = _timed_test_cmd(cmd)
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
@@ -504,8 +530,12 @@ def run_with_test_timings(cmd, env=None, check=True):
             for line in stream.splitlines():
                 _log_write(line + "\n")
 
-    timings = []
-    for line in (result.stdout or "").splitlines() + (result.stderr or "").splitlines():
+    output = _combined_output(result)
+    all_lines = output.splitlines()
+    # Keyed by test name: at the `leak` status level every non-PASS result line
+    # (FAIL, LEAK) is printed live and again in the final status list.
+    durations = {}
+    for line in all_lines:
         m = _NEXTEST_RESULT_RE.match(line)
         if not m:
             continue
@@ -514,13 +544,9 @@ def run_with_test_timings(cmd, env=None, check=True):
         # SKIP lines carry no duration measurement.
         if secs == 0.0 and "SKIP" in line:
             continue
-        timings.append((secs, name))
-    _stash_nextest_summary(
-        "\n".join(
-            (result.stdout or "").splitlines() + (result.stderr or "").splitlines()
-        ),
-        cmd,
-    )
+        durations[name] = secs
+    timings = [(secs, name) for name, secs in durations.items()]
+    _stash_nextest_summary(output, cmd)
 
     both_print("")
     both_print("--- Test Timing Report ---")
@@ -544,8 +570,7 @@ def run_with_test_timings(cmd, env=None, check=True):
         both_print(
             f"    {'':>8}   Sum of measured: {sum(t[0] for t in timings):.2f}s"
         )
-    all_lines = (result.stdout or "").splitlines() + (result.stderr or "").splitlines()
-    stub_checks = parse_stub_check_timings(all_lines)
+    stub_checks = _parse_stub_check_timings(all_lines)
     if stub_checks:
         both_print("")
         both_print(f"  Slowest stub checks (of {len(stub_checks)}, top 30):")
@@ -555,9 +580,7 @@ def run_with_test_timings(cmd, env=None, check=True):
     both_print("---")
 
     if result.returncode != 0:
-        _stash_compile_errors(
-            (result.stdout or "") + "\n" + (result.stderr or "")
-        )
+        _stash_compile_errors(output)
         both_print(f"FAILED with code {result.returncode}")
         if check:
             sys.exit(result.returncode)
@@ -726,7 +749,7 @@ REGISTRY: dict[str, StepSpec] = {
             "Running browser tests...",
             get_browser_test_cmd(),
             needs_nextest=True,
-            help="Run only the browser (Playwright) test binary (~1 min warm).",
+            help="Run only the browser (Playwright) test binary (~1.5 min warm).",
         ),
         StepSpec(
             "test-pattern",
@@ -835,7 +858,7 @@ def parse_args(argv=None):
         "--no-fmt",
         action="store_true",
         dest="no_fmt",
-        help="Skip cargo fmt (useful for secondary agents to avoid source-file races)",
+        help="Skip cargo fmt",
     )
     parser.add_argument(
         "--no-browser",
@@ -979,11 +1002,11 @@ def _cargo_env_for(args) -> dict:
 
     ``leak`` prints FAIL/RETRY/SLOW/LEAK lines but suppresses the PASS flood, so
     a passing-but-leaking test is named instead of only counted. The
-    ``--test-timings`` report needs the PASS lines, so it restores the default
-    level.
+    ``--test-timings`` report gets its PASS lines from ``--final-status-level
+    pass`` (see ``_timed_test_cmd``); a live ``pass`` level would print each one
+    twice.
     """
-    status_level = "pass" if getattr(args, "test_timings", False) else "leak"
-    env = {"NEXTEST_STATUS_LEVEL": status_level, **_lld_linker_env()}
+    env = {"NEXTEST_STATUS_LEVEL": "leak", **_lld_linker_env()}
     if getattr(args, "target_dir", None):
         env["CARGO_TARGET_DIR"] = str(Path(args.target_dir).resolve())
     return env
@@ -1189,13 +1212,10 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
                 if _CARGO_PROGRESS_RE.match(line):
                     continue
                 _log_write(line)
-        _stash_nextest_summary(
-            (result.stdout or "") + "\n" + (result.stderr or ""), cmd
-        )
+        output = _combined_output(result)
+        _stash_nextest_summary(output, cmd)
         if result.returncode != 0:
-            _stash_compile_errors(
-                (result.stdout or "") + "\n" + (result.stderr or "")
-            )
+            _stash_compile_errors(output)
         if check and result.returncode != 0:
             both_print(f"FAILED with code {result.returncode}")
             sys.exit(result.returncode)
@@ -1848,18 +1868,18 @@ def _tree_identity(repo: Path) -> str:
         return "unknown"
 
 
-def _tests_column(sizes: dict[str, tuple[str, int]]) -> str:
+def _tests_column(sizes: dict[str, _TierSize]) -> str:
     """Render the journal ``tests`` column, e.g. ``architecture=1 integration=1565``.
 
     Tiers appear in ``_TIERS`` order; ``-`` when no tier recorded a size.
     """
-    by_tier = {tier: size for tier, size in sizes.values()}
+    by_tier = {entry.tier: entry.size for entry in sizes.values()}
     rendered = " ".join(f"{t}={by_tier[t]}" for t in _TIERS if t in by_tier)
     return rendered or "-"
 
 
-def _last_tier_sizes(path: Path) -> dict[str, tuple[str, str, int]]:
-    """Return tier -> (timestamp, tree, size) from each tier's newest journal record.
+def _last_tier_sizes(path: Path) -> dict[str, _TierRecord]:
+    """Return tier -> ``_TierRecord`` from each tier's newest journal record.
 
     Read under a shared lock. Records older than the ``tree`` and
     ``tests`` columns, and ``-`` values, name no tier and are skipped. A missing
@@ -1873,7 +1893,7 @@ def _last_tier_sizes(path: Path) -> dict[str, tuple[str, str, int]]:
             text = fh.read()
     except FileNotFoundError:
         return {}
-    newest: dict[str, tuple[str, str, int]] = {}
+    newest: dict[str, _TierRecord] = {}
     for raw in text.splitlines()[1:]:
         parts = raw.split(" | ")
         if len(parts) < 6 or parts[5].strip() == "-":
@@ -1882,18 +1902,18 @@ def _last_tier_sizes(path: Path) -> dict[str, tuple[str, str, int]]:
         for token in parts[5].split():
             tier, _, value = token.partition("=")
             if tier in _TIERS and value.isdigit():
-                newest[tier] = (timestamp, tree, int(value))
+                newest[tier] = _TierRecord(timestamp, tree, int(value))
     return newest
 
 
-def _size_suffix(size: int, baseline: tuple[str, str, int] | None) -> str:
+def _size_suffix(size: int, baseline: _TierRecord | None) -> str:
     """Render a tier's test count against its newest journal record."""
     if baseline is None:
         return f"tests: {size} (no earlier record)"
-    timestamp, tree, before = baseline
-    if size == before:
-        return f"tests: {size} (same as {timestamp}, tree {tree})"
-    return f"tests: {size} ({size - before:+d} vs {timestamp}, tree {tree})"
+    where = f"{baseline.timestamp}, tree {baseline.tree}"
+    if size == baseline.size:
+        return f"tests: {size} (same as {where})"
+    return f"tests: {size} ({size - baseline.size:+d} vs {where})"
 
 
 def _epilogue_baselines() -> dict | None:

@@ -11,7 +11,6 @@ import socket
 import sys
 import tempfile
 import unittest
-from build_cli_support import _MemLog
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -26,6 +25,8 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build  # noqa: E402
+from build_cli_support import _MemLog  # noqa: E402
+
 
 class RegistryTests(unittest.TestCase):
     """The step registry is the single source of truth for step commands."""
@@ -491,10 +492,11 @@ class CargoEnvTests(unittest.TestCase):
         # `leak` names a passing-but-leaking test without the PASS flood.
         self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "leak")
 
-    def test_test_timings_restores_pass_level(self):
-        # The timing report needs PASS lines, which the leak level suppresses.
+    def test_test_timings_keeps_leak_level(self):
+        # --final-status-level pass supplies the PASS lines; a live pass level
+        # would print each test twice and double the timing report.
         env = build._cargo_env_for(SimpleNamespace(target_dir=None, test_timings=True))
-        self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "pass")
+        self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "leak")
 
 
 class StubCheckTimingTests(unittest.TestCase):
@@ -513,7 +515,7 @@ class StubCheckTimingTests(unittest.TestCase):
 
     def test_check_lines_are_attributed_to_their_runner(self):
         self.assertEqual(
-            build.parse_stub_check_timings(self.OUTPUT.splitlines()),
+            build._parse_stub_check_timings(self.OUTPUT.splitlines()),
             [
                 (
                     0.902,
@@ -530,17 +532,62 @@ class StubCheckTimingTests(unittest.TestCase):
             ],
         )
 
-    def test_only_the_browser_command_shows_success_output(self):
-        self.assertIn(
-            "--success-output final", build.timed_test_cmd(build.get_browser_test_cmd())
+    # Trimmed from a `--test-timings` browser log: nextest's final status list
+    # prints each runner's result line, then its stdout and stderr blocks.
+    REAL_OUTPUT = """\
+     Summary [  95.410s] 27 tests run: 27 passed, 0 skipped
+        PASS [   3.441s] (10/27) chronicler_engine::browser stub::announcements::run_announcements_checks
+  stdout \u2500\u2500\u2500
+
+    running 1 test
+    test stub::announcements::run_announcements_checks ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 3.43s
+
+  stderr \u2500\u2500\u2500
+    --- Stub checks (2) ---
+        0.949s  [OK]  check_status_changes_are_announced_once
+        1.337s  [OK]  check_new_narration_and_options_are_announced_once
+        2.286s  total (shared browser)
+
+        PASS [   8.614s] (11/27) chronicler_engine::browser stub::dashboard::run_dashboard_chrome_checks
+  stdout \u2500\u2500\u2500
+
+    running 1 test
+    test stub::dashboard::run_dashboard_chrome_checks ... ok
+
+  stderr \u2500\u2500\u2500
+    --- Stub checks (1) ---
+        1.897s  [OK]  check_tab_bar_exposes_a_tablist_and_panels
+        1.897s  total (shared browser)
+"""
+
+    def test_real_final_status_list_attributes_each_check(self):
+        announcements = "chronicler_engine::browser stub::announcements::run_announcements_checks"
+        dashboard = "chronicler_engine::browser stub::dashboard::run_dashboard_chrome_checks"
+        self.assertEqual(
+            build._parse_stub_check_timings(self.REAL_OUTPUT.splitlines()),
+            [
+                (0.949, announcements, "check_status_changes_are_announced_once", "OK"),
+                (1.337, announcements, "check_new_narration_and_options_are_announced_once", "OK"),
+                (1.897, dashboard, "check_tab_bar_exposes_a_tablist_and_panels", "OK"),
+            ],
         )
-        integration = build.timed_test_cmd(build.get_integration_test_cmd())
+
+    def test_only_the_browser_tier_shows_success_output(self):
+        self.assertIn(
+            "--success-output final", build._timed_test_cmd(build.get_browser_test_cmd())
+        )
+        integration = build._timed_test_cmd(build.get_integration_test_cmd())
         self.assertNotIn("--success-output", integration)
         self.assertIn("--final-status-level pass", integration)
+        # Coverage also selects the browser binary, but it is not the browser tier.
+        coverage = build._timed_test_cmd(build.get_coverage_cmd(browser_only=True))
+        self.assertNotIn("--success-output", coverage)
 
     def test_output_without_runners_has_no_checks(self):
         self.assertEqual(
-            build.parse_stub_check_timings(["        PASS [   0.012s] (1/1) x y"]), []
+            build._parse_stub_check_timings(["        PASS [   0.012s] (1/1) x y"]), []
         )
 
 

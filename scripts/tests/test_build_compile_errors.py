@@ -16,9 +16,9 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build  # noqa: E402
-from build_cli_support import _MemLog  # noqa: E402
+from build_cli_support import _MemLog, reset_epilogue_state  # noqa: E402
 
-# Captured from logs/build_20261009_211753.log (cargo check --all-targets).
+# Captured from a `cargo check --all-targets` log.
 _E0599_OUTPUT = """\
 error[E0599]: no method named `latest_llm_message_per_agent` found for struct `Storage` in the current scope
    --> tests/storage/llm_message_storage.rs:152:26
@@ -39,22 +39,14 @@ _E0599_RENDERED = (
 )
 
 
-def _reset():
-    build._CompileErrors.lines = []
-    build._NextestSummary.lines = []
-    build._NextestSummary.label = ""
-    build._NextestSummary.sizes = {}
-    build._NextestLeaks.lines = []
-
-
 class StashCompileErrorsTests(unittest.TestCase):
     """_stash_compile_errors keeps each distinct error with its location."""
 
     def setUp(self):
-        _reset()
+        reset_epilogue_state()
 
     def tearDown(self):
-        _reset()
+        reset_epilogue_state()
 
     def test_rustc_error_keeps_header_and_location_without_cargo_noise(self):
         build._stash_compile_errors(_E0599_OUTPUT)
@@ -82,6 +74,16 @@ class StashCompileErrorsTests(unittest.TestCase):
             ["error: linking with `cc` failed: exit status: 1"],
         )
 
+    def test_nextest_failure_wrappers_are_not_compile_errors(self):
+        build._stash_compile_errors(
+            "        FAIL [   1.538s] (1/1) chronicler_engine::browser stub::x\n"
+            "error: test run failed\n"
+            "error: no tests to run\n"
+            "error: command `/usr/bin/cargo '--color=auto' test --no-run"
+            " --message-format json-render-diagnostics` exited with code 101\n"
+        )
+        self.assertEqual(build._CompileErrors.lines, [])
+
     def test_failed_run_stashes_errors_and_passing_run_does_not(self):
         fake = mock.Mock()
         fake.communicate.return_value = (_E0599_OUTPUT, None)
@@ -96,15 +98,33 @@ class StashCompileErrorsTests(unittest.TestCase):
                 build.run("cargo check")
         self.assertEqual(build._CompileErrors.lines, [_E0599_RENDERED])
 
+    def test_failed_captured_run_stashes_errors_from_stderr(self):
+        result = mock.Mock(returncode=101, stdout="", stderr=_E0599_OUTPUT)
+        with mock.patch.object(build.subprocess, "run", return_value=result), mock.patch(
+            "builtins.print"
+        ):
+            rc = build.run("cargo check", check=False, show_output=False)
+        self.assertEqual(rc, 101)
+        self.assertEqual(build._CompileErrors.lines, [_E0599_RENDERED])
+
+    def test_failed_timed_run_stashes_errors_from_stderr(self):
+        result = mock.Mock(returncode=101, stdout="", stderr=_E0599_OUTPUT)
+        with mock.patch.object(build.subprocess, "run", return_value=result), mock.patch(
+            "builtins.print"
+        ):
+            rc = build.run_with_test_timings("cargo nextest run", check=False)
+        self.assertEqual(rc, 101)
+        self.assertEqual(build._CompileErrors.lines, [_E0599_RENDERED])
+
 
 class CompileErrorEpilogueTests(unittest.TestCase):
     """main() prints the captured errors just before the closing banner."""
 
     def setUp(self):
-        _reset()
+        reset_epilogue_state()
 
     def tearDown(self):
-        _reset()
+        reset_epilogue_state()
 
     @staticmethod
     def _run_main(printed):

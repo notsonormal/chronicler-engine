@@ -375,7 +375,7 @@ python build.py architecture                    # Run the architecture tests
 python build.py guardrails                      # Run the guardrails tests
 python build.py test-pattern "action_pipeline::options_tests" # Run tests whose name matches a substring, across all test binaries
 python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s, unit tests included)
-python build.py browser                         # Only the browser/Playwright binary (~1 min)
+python build.py browser                         # Only the browser/Playwright binary
 python build.py validate-docs                   # Validate markdown docs
 python build.py run                             # Run the dev server (see ENVIRONMENT.md)
 ```

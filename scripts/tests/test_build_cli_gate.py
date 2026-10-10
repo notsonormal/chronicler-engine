@@ -257,15 +257,21 @@ class JournalTests(unittest.TestCase):
             "2026-10-08T19:30:00 | 1.0 | 0 | clippy | bbb | -\n",
             encoding="utf-8",
         )
+        newest = build._last_tier_sizes(self.path)
         self.assertEqual(
-            build._last_tier_sizes(self.path),
+            newest,
             {
-                "architecture": ("2026-10-08T19:10:00", "aaa", 1),
-                "guardrails": ("2026-10-08T19:10:00", "aaa", 165),
-                "integration": ("2026-10-08T19:20:00", "bbb+1234abcd", 1565),
-                "browser": ("2026-10-08T19:10:00", "aaa", 68),
+                "architecture": build._TierRecord("2026-10-08T19:10:00", "aaa", 1),
+                "guardrails": build._TierRecord("2026-10-08T19:10:00", "aaa", 165),
+                "integration": build._TierRecord(
+                    "2026-10-08T19:20:00", "bbb+1234abcd", 1565
+                ),
+                "browser": build._TierRecord("2026-10-08T19:10:00", "aaa", 68),
             },
         )
+        # A NamedTuple equals a plain tuple, so check the type as well.
+        for record in newest.values():
+            self.assertIsInstance(record, build._TierRecord)
 
     def test_last_tier_sizes_without_journal_or_tier(self):
         self.assertEqual(build._last_tier_sizes(self.path), {})
@@ -274,8 +280,8 @@ class JournalTests(unittest.TestCase):
 
     def test_tests_column_follows_tier_order(self):
         sizes = {
-            "Running integration tests...": ("integration", 1565),
-            "Running architecture tests...": ("architecture", 1),
+            "Running integration tests...": build._TierSize("integration", 1565),
+            "Running architecture tests...": build._TierSize("architecture", 1),
         }
         self.assertEqual(build._tests_column(sizes), "architecture=1 integration=1565")
         self.assertEqual(build._tests_column({}), "-")
@@ -284,7 +290,7 @@ class JournalTests(unittest.TestCase):
 class SizeSuffixTests(unittest.TestCase):
     """The epilogue suffix compares a tier's count with its newest record."""
 
-    BASE = ("2026-10-08T19:46:00", "a1b2c3d4e5", 1572)
+    BASE = build._TierRecord("2026-10-08T19:46:00", "a1b2c3d4e5", 1572)
 
     def test_decrease(self):
         self.assertEqual(
