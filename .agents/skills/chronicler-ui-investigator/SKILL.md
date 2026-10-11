@@ -88,6 +88,8 @@ For a broad sweep, delegate to a `generalist` managed agent with the exact `node
 
 ## Driving gameplay
 
+Before you drive a feature, read its spec in `docs/specs/<feature>.md`. Its `Given` lines name the state the feature needs, and its error scenarios say when a control is absent on purpose.
+
 Everything below is **POST**: a GET returns 405, a bodyless POST 415, so send a JSON body with the right content type.
 
 - `/action` submit a player command · `/action/check` text check before submitting · `/action/confirm` confirm a corrected command

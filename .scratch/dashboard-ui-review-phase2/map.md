@@ -4,7 +4,7 @@ Labels: wayfinder:map
 
 ## Destination
 
-Every finding in the [2026-10-09 re-review](../dashboard-ui-review/re-review-2026-10-09.md) is fixed, or ruled out of scope with a reason. [Re-review the dashboard after phase 2](issues/07-re-review-after-phase-2.md) finds no new P1/P2, and `python build.py` passes.
+Every finding in the [2026-10-09 re-review](../dashboard-ui-review/re-review-2026-10-09.md) is fixed, or ruled out of scope with a reason. Every finding in the [2026-10-11 re-review](re-review-2026-10-11.md) is fixed, or ruled out of scope with a reason. [Re-review the dashboard after the phase-2 fixes](issues/14-re-review-after-phase-2-fixes.md) finds no new P1/P2, and `python build.py` passes.
 
 This map continues the [dashboard UI review](../dashboard-ui-review/map.md). That map closed with [Final re-review of the dashboard](../dashboard-ui-review/issues/24-final-re-review.md), which found one new P1 and eight new P2s.
 
@@ -21,8 +21,8 @@ This map continues the [dashboard UI review](../dashboard-ui-review/map.md). Tha
 - **Reference docs:** `docs/diataxis/reference/frontend/ui_design.md` (design tokens), `docs/diataxis/reference/frontend/dashboard.md` (including "Failure and health states"), `docs/diataxis/explanation/dashboard_design.md`.
 - **Real LLM calls are fine.** The user prefers the real connections to a stub for review and manual checks; a few calls cost less than a cent.
 - **User data:** review tickets run on a probe server with its own database (`python build.py run -- --world redmist_estate --port <port>` writes `target/debug/chronicler_<port>.db`). Restore any changed setting before the session ends.
-- **Final re-review:** every ticket added to this map must also be added to the `Blocked by:` line of [Re-review the dashboard after phase 2](issues/07-re-review-after-phase-2.md).
-- **Small follow-ups:** issues from code reviews or implementers that don't block a merge go under `## Items` in [Follow up on small issues found in the final re-review](issues/06-follow-up-re-review-p3s.md), with their source ticket, while it is open.
+- **Final re-review:** every ticket added to this map must also be added to the `Blocked by:` line of [Re-review the dashboard after the phase-2 fixes](issues/14-re-review-after-phase-2-fixes.md).
+- **Small follow-ups:** issues from code reviews or implementers that don't block a merge go under `## Items` in [Follow up on small issues found in the phase-2 re-review](issues/13-follow-up-phase-2-re-review-p3s.md), with their source ticket, while it is open.
 - Other agents may work in the repo at the same time. Do not touch unrelated changes.
 
 ## Decisions so far
@@ -36,13 +36,14 @@ This map continues the [dashboard UI review](../dashboard-ui-review/map.md). Tha
 - [Restore focus after Settings, Games and story-log delete swaps](issues/05-restore-focus-settings-games.md) — Settings and Games swaps land focus inside the panel; a story-log delete focuses the new last entry or the command input.
 - [Follow up on small issues found in the final re-review](issues/06-follow-up-re-review-p3s.md) — nine P3s fixed (R4, R11, R13–R15, R17, R18, R24, R25) plus review follow-ups; R5, R12 and R23 dropped with reasons.
 - [Fail a reply that has no content](issues/08-fail-reply-without-content.md) — the transport reads `content` only; `finish_reason: "length"` with no content is the new `TokenBudgetSpent` kind, with token counts in the details.
+- [Re-review the dashboard after phase 2](issues/07-re-review-after-phase-2.md) — every phase-2 fix holds in the running app, and Retrigger and event delete leave no stuck status; new P1 S1 (event Retry fails and rolls the game back) and P2s S2–S4 became tickets 09–12, P3s S5–S8 ticket 13; the gate moved to [Re-review the dashboard after the phase-2 fixes](issues/14-re-review-after-phase-2-fixes.md). [Report](re-review-2026-10-11.md).
 
 ## Not yet specified
 
-- **Other snapshot-restore paths.** Carried from phase 1. [Reset the generation status and the options dock when a swipe switch restores a snapshot](../dashboard-ui-review/issues/_resolved/43-reset-status-and-dock-on-swipe-switch.md) fixed the swipe case only. Retrigger and history revert restore snapshots by other paths and may show the same stuck status. Unverified; the 2026-10-09 re-review could not reach Retrigger because no trigger fired. [Re-review the dashboard after phase 2](issues/07-re-review-after-phase-2.md) forces a trigger to test it.
 - **Structured editing of Map and Scenarios JSON.** Carried from phase 1 (finding 4.8, pushed here by [Decide the panel layout convention and supported viewports](../dashboard-ui-review/issues/_resolved/19-decide-layout-convention.md)). Raw JSON sits in plain textareas. R15 (the placeholder JSON looks like a value) touches the same form. A separate question; it can wait.
 - **Cross-panel staleness (R12).** [Follow up on small issues found in the final re-review](issues/06-follow-up-re-review-p3s.md) dropped a whole-panel refresh, but an out-of-band swap of the echoing counts (as ticket 02 does for role health) is possible. Open.
 - **Truncated replies that do have content.** A `finish_reason: "length"` reply with non-empty `content` still counts as a full answer, so narration can stop mid-sentence. [Decide when a reasoning-only reply counts as an answer](issues/01-decide-reasoning-only-replies.md) kept this out of its rule. Failing it outright could make the quantifier and options roles (small `max_tokens`) fail often.
+- **A Max Tokens control, or a larger default.** No dashboard control sets `max_tokens`, so every call uses 2048, and the default Narrator spent that budget on 2 of 11 calls in the [2026-10-11 re-review](re-review-2026-10-11.md). [Show the whole token-budget failure, remedy included](issues/11-show-the-token-budget-remedy.md) fixes only the wording. Open.
 - **A failed or refused preview confirm loses the corrected text.** The preview closes and the input keeps only the original text. Noted in ticket 06's answer.
 
 ## Out of scope
@@ -55,3 +56,4 @@ Carried from [Final re-review of the dashboard](../dashboard-ui-review/issues/24
 - **`isPollRequest` reports a server-answered 500 as "unreachable".** Scenario 16.18 pins the banner on purpose; only the heuristic and the wording are open.
 - **A "thinking" block in the story log.** Showing reasoning text in its own collapsible block, as SillyTavern does, is a new feature, not a fix for R6. Ruled out by [Decide when a reasoning-only reply counts as an answer](issues/01-decide-reasoning-only-replies.md).
 - **Changing the Quantifier's fallback behaviour.** A backend design question; the banner already reports the fallback.
+- **The Quantifier misses an NPC that a trigger introduces.** In the [2026-10-11 re-review](re-review-2026-10-11.md), the post-event Quantifier detected only Carla while Gabriella spoke, so she got no portrait. Detection quality is a backend question, like the fallback item above.
