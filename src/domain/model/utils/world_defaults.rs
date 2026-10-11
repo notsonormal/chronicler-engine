@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! Serde default-fn-pointers for WorldManifest fields.
 
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};

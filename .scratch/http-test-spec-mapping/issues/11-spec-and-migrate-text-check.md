@@ -15,6 +15,7 @@ Write the spec for the HTTP text-check endpoints and migrate `tests/http/require
 - Update `tests/http/mod.rs` and `tests/http/requires_migration/mod.rs`.
 - Tag each test in `text_check.rs` with `// [docs/specs/text_check.md] SCENARIO: N.N`.
 - Rewrite or drop any test whose assertions no longer match the spec.
+- Add a scenario: when the preview opens, no Action is dispatched until the player picks Send with edits or Send Original. Browser scenario 16.36 pins only the input text. (From `docs/plans/doc-spec-boundary-follow-ups.md`, gap G7.)
 - Run `cargo test --test http`.
 
 ## Output

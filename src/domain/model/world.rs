@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! World model definitions
 
 use serde::{Deserialize, Serialize};

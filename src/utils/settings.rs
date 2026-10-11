@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
+//! [DOC: docs/diataxis/reference/architecture_system.md]
 //! Application settings and configuration
 
 use crate::adapters::driven::storage::Storage;

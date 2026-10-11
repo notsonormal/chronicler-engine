@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! Character sheet data and NPC card definitions
 
 use serde::{Deserialize, Serialize};

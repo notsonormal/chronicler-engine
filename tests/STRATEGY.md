@@ -83,8 +83,9 @@ the frontend or a browser test selects on. A change there breaks the client.
 **Check:** review-only.
 
 **Complete specs.** A spec covers each distinct response its route can
-return: each success shape, each refusal, each error status. Behaviour that a
-spec omits gets no end-to-end coverage. Specs describe the system, not a
+return: each success shape, each refusal, each error status. The rule is per
+route. Fine-grained UI behaviour inside one response stays in the code and its
+tests. Behaviour that a spec omits gets no end-to-end coverage. Specs describe the system, not a
 change to it. **Check:** review-only. `spec-coverage` checks the other
 direction: every tagged test cites a declared scenario.
 

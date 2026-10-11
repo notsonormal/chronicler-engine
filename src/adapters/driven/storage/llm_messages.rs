@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! LLM message storage
 
 use crate::error::EngineError;

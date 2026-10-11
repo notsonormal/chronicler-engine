@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
+//! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! Connection test service — one short provider call that records nothing.
 //!
 //! The test must not pass through `LlmCallRecorder`, which persists every

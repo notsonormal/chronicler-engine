@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/narrative/options.md]
 //! Options pipeline slice — on-demand entry, agent dispatch, and the
 //! always-on turn-end rewrite.
 
