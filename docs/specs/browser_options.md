@@ -35,7 +35,7 @@ And a narration follows it
 
 ```gherkin
 Given the dock shows a generated option set
-And a turn is in flight (the status display is generating)
+And a generation is in flight (the status display is generating)
 When the client clicks an option's Use button
 Then no command is submitted (no POST /action/check)
 ```

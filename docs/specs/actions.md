@@ -256,7 +256,7 @@ When the client POST /action/check with command="/guide look at the casle" (a de
 Then the response contains no text-check preview
 And the guide action is dispatched directly
 And the pipeline returns to idle
-And a narration turn has created scene history
+And a narration message has created scene history
 When the client POST /action/check with command="/options" (an engine command the dispatch layer handles)
 Then the response contains no text-check preview
 And the options action is dispatched directly
@@ -284,7 +284,7 @@ And the pipeline returns to idle
 
 The confirm path is the preview's send: it dispatches the checked command
 without swapping a fresh action area back in, so the status display alone
-reflects the running turn.
+reflects the running generation.
 
 ## Properties
 

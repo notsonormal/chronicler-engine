@@ -26,7 +26,7 @@ And #status-display text contains one of "Thinking", "Narrating", "Generating", 
 
 ```gherkin
 Given the client submitted a command the text-check preview intercepted, so the preview is open
-When the client confirms the preview, so a turn starts
+When the client confirms the preview, so a generation starts
 Then the primary button is disabled and labelled as a generating indicator
 And the command form is the same node as before
 When the status poll reports idle and the status display returns to Ready
@@ -51,7 +51,7 @@ And the banner is not raised
 Given the dashboard is loaded with text check enabled
 When the client submits a misspelled command and the preview opens
 And the client confirms the preview
-Then the turn runs and the status returns to Ready
+Then the Action runs and the status returns to Ready
 And the command form is still in the document
 And the command input accepts and submits a new command with no reload
 ```
@@ -59,7 +59,7 @@ And the command input accepts and submits a new command with no reload
 #### Scenario 16.13: The send preview opens beside the status display
 
 ```gherkin
-Given a turn is generating and the status display shows its phase
+Given a generation is running and the status display shows its phase
 When the client submits a command the preview intercepts
 Then the preview is open
 And the status display is still in the document and still shows the phase
