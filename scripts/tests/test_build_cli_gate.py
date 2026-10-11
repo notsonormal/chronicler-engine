@@ -36,13 +36,13 @@ class GatePlanTests(unittest.TestCase):
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_full_gate_installs_hooks_first_and_has_19_steps(self):
+    def test_full_gate_installs_hooks_first_and_has_18_steps(self):
         plan = build._plan_gate_steps(self.gate_args())
         self.assertEqual(plan[0].kind, "hooks")
         self.assertEqual(plan[0].label, "Installing git hooks...")
         self.assertEqual(plan[1].kind, "worktrees")
         self.assertEqual(plan[2].label, "Formatting...")
-        self.assertEqual(len(plan), 19)
+        self.assertEqual(len(plan), 18)
 
     def test_worktree_removal_is_best_effort(self):
         with mock.patch.object(build, "run", return_value=1) as runner, mock.patch.object(
@@ -77,16 +77,15 @@ class GatePlanTests(unittest.TestCase):
         labels = [step.label for step in plan]
         self.assertNotIn("Running browser tests...", labels)
         self.assertIn("Running integration tests...", labels)
-        self.assertIn("Running architecture tests...", labels)
         self.assertIn("Running guardrail tests...", labels)
-        self.assertEqual(len(plan), 18)
+        self.assertEqual(len(plan), 17)
 
     def test_no_fmt_prunes_fmt_only(self):
         plan = build._plan_gate_steps(self.gate_args(no_fmt=True))
         labels = [step.label for step in plan]
         self.assertNotIn("Formatting...", labels)
         self.assertIn("Installing git hooks...", labels)
-        self.assertEqual(len(plan), 18)
+        self.assertEqual(len(plan), 17)
 
     def test_coverage_mode_swaps_test_and_report_steps(self):
         plan = build._plan_gate_steps(self.gate_args(coverage=True))
@@ -104,12 +103,12 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn("binary(architecture)", cov_cmd)
         self.assertNotIn("binary(guardrails)", cov_cmd)
 
-    def test_architecture_runs_after_asset_copy(self):
+    def test_guardrails_runs_after_asset_copy(self):
         plan = build._plan_gate_steps(self.gate_args())
         labels = [step.label for step in plan]
         self.assertLess(
             labels.index("Copying data and assets for deployment..."),
-            labels.index("Running architecture tests..."),
+            labels.index("Running guardrail tests..."),
         )
 
     def test_llm_note_printed_only_without_include_llm(self):
@@ -168,11 +167,10 @@ class GatePlanTests(unittest.TestCase):
 
 
 class TierForCmdTests(unittest.TestCase):
-    """Only the four fixed tier commands record a test-set size."""
+    """Only the three fixed tier commands record a test-set size."""
 
     def test_tier_commands_map_to_their_tier(self):
         expected = {
-            build.REGISTRY["architecture"].cmd: "architecture",
             build.REGISTRY["guardrails"].cmd: "guardrails",
             build.get_integration_test_cmd(): "integration",
             build.get_browser_test_cmd(): "browser",
@@ -258,10 +256,10 @@ class JournalTests(unittest.TestCase):
             encoding="utf-8",
         )
         newest = build._last_tier_sizes(self.path)
+        # `architecture` is not a tier, so its key in the gate row is skipped.
         self.assertEqual(
             newest,
             {
-                "architecture": build._TierRecord("2026-10-08T19:10:00", "aaa", 1),
                 "guardrails": build._TierRecord("2026-10-08T19:10:00", "aaa", 165),
                 "integration": build._TierRecord(
                     "2026-10-08T19:20:00", "bbb+1234abcd", 1565
@@ -281,9 +279,9 @@ class JournalTests(unittest.TestCase):
     def test_tests_column_follows_tier_order(self):
         sizes = {
             "Running integration tests...": build._TierSize("integration", 1565),
-            "Running architecture tests...": build._TierSize("architecture", 1),
+            "Running guardrail tests...": build._TierSize("guardrails", 163),
         }
-        self.assertEqual(build._tests_column(sizes), "architecture=1 integration=1565")
+        self.assertEqual(build._tests_column(sizes), "guardrails=163 integration=1565")
         self.assertEqual(build._tests_column({}), "-")
 
 

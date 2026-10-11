@@ -7,8 +7,7 @@ Two invocation modes:
 - Full gate (default): ``python build.py`` runs fmt, validation, clippy,
   guardrails, the full test suite, and packaging.
 - Gate without the browser tier: ``python build.py --no-browser`` runs the same
-  gate minus the browser (Playwright) tier — the iteration default. The last
-  run before reporting a task done is the bare full gate.
+  gate minus the browser (Playwright) tier.
 - Step mode: ``python build.py <step>`` runs one registry step (e.g.
   ``clippy``, ``fmt``, ``test-pattern <pattern>``) with a minimal prelude — no
   asset copy, no SQLite cleanup. ``--target-dir`` is
@@ -270,8 +269,9 @@ def require_nextest():
 # verdict.
 _BROWSER_FILTER = "binary(browser)"
 _NON_BROWSER_FILTER = "not binary(browser)"
-# The gate runs architecture and guardrails as their own steps, so this filter
-# drops them. Coverage uses _NON_BROWSER_FILTER to still instrument them.
+# The gate's guardrails step runs the architecture and guardrails binaries,
+# so this filter drops them. Coverage uses _NON_BROWSER_FILTER to still
+# instrument them.
 _INTEGRATION_FILTER = (
     "not binary(browser) and not binary(architecture) and not binary(guardrails)"
 )
@@ -360,7 +360,7 @@ def _nextest_summary_line(output: str) -> str | None:
 
 # Test tiers in journal column order. A tier is one fixed nextest command, so
 # a step run and the gate's run of the same tier share one baseline.
-_TIERS = ("architecture", "guardrails", "integration", "browser")
+_TIERS = ("guardrails", "integration", "browser")
 
 
 def _tier_for_cmd(cmd: str | None) -> str | None:
@@ -370,7 +370,6 @@ def _tier_for_cmd(cmd: str | None) -> str | None:
     set, so they map to None and record no size.
     """
     commands = {
-        REGISTRY["architecture"].cmd: "architecture",
         REGISTRY["guardrails"].cmd: "guardrails",
         get_integration_test_cmd(): "integration",
         get_browser_test_cmd(): "browser",
@@ -715,24 +714,11 @@ REGISTRY: dict[str, StepSpec] = {
             help="Validate markdown docs and DOC anchors under docs/.",
         ),
         StepSpec(
-            "architecture",
-            "Running architecture tests...",
-            f"{_NEXTEST_RUN} --test architecture",
-            needs_nextest=True,
-            help="Run the architecture integration tests.",
-        ),
-        StepSpec(
             "guardrails",
             "Running guardrail tests...",
-            f"{_NEXTEST_RUN} --test guardrails",
+            f"{_NEXTEST_RUN} --test architecture --test guardrails",
             needs_nextest=True,
-            help="Run the guardrail integration tests.",
-        ),
-        StepSpec(
-            "unit",
-            "Running unit tests...",
-            "cargo test --lib",
-            help="Run the Rust unit tests (lib target only).",
+            help="Run the architecture and guardrails test binaries.",
         ),
         StepSpec(
             "integration",
@@ -777,9 +763,10 @@ REGISTRY: dict[str, StepSpec] = {
 # (coverage/timings variants), and "REPORT" to the coverage report (or the
 # skip note when coverage is off).
 #
-# The order is load-bearing: the architecture/guardrail binaries run before
-# the ~2-minute full suite and fail the build immediately (check=True) —
-# otherwise a guardrail failure only surfaces after the full suite has run.
+# The order is load-bearing: the guardrails step (the architecture and
+# guardrails binaries) runs before the ~2-minute full suite and fails the
+# build immediately (check=True) — otherwise a guardrail failure only
+# surfaces after the full suite has run.
 GATE_ORDER = [
     "HOOKS",
     "WORKTREES",
@@ -795,7 +782,6 @@ GATE_ORDER = [
     "validate-docs",
     "DUPLICATES",
     "COPY",
-    "architecture",
     "guardrails",
     "TESTS",
     "REPORT",
@@ -865,8 +851,7 @@ def parse_args(argv=None):
         action="store_true",
         dest="no_browser",
         help=(
-            "Run the full gate without the browser tier (the iteration default;"
-            " the final run is bare `python build.py`)"
+            "Run the full gate without the browser (Playwright) tier"
         ),
     )
     parser.add_argument(
@@ -1869,7 +1854,7 @@ def _tree_identity(repo: Path) -> str:
 
 
 def _tests_column(sizes: dict[str, _TierSize]) -> str:
-    """Render the journal ``tests`` column, e.g. ``architecture=1 integration=1565``.
+    """Render the journal ``tests`` column, e.g. ``guardrails=163 integration=1565``.
 
     Tiers appear in ``_TIERS`` order; ``-`` when no tier recorded a size.
     """

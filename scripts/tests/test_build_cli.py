@@ -44,9 +44,7 @@ class RegistryTests(unittest.TestCase):
             "http-routes-check",
             "guardrails-doc-check",
             "validate-docs",
-            "architecture",
             "guardrails",
-            "unit",
             "integration",
             "test-pattern",
             "run",
@@ -68,11 +66,10 @@ class RegistryTests(unittest.TestCase):
     def test_gate_order_is_stable(self):
         gate_names = [name for name in build.GATE_ORDER if name in build.REGISTRY]
         self.assertEqual(gate_names[0], "fmt")
-        self.assertIn("architecture", gate_names)
         self.assertIn("guardrails", gate_names)
         self.assertLess(
             gate_names.index("validate-docs"),
-            gate_names.index("architecture"),
+            gate_names.index("guardrails"),
             "registry guardrail steps must run after the doc steps",
         )
 
@@ -452,9 +449,7 @@ class StepCommandTests(unittest.TestCase):
         "http-routes-check": "python scripts/extract_http_routes.py --check",
         "guardrails-doc-check": "python scripts/generate_guardrails_doc.py --check",
         "validate-docs": "python scripts/validate_docs.py",
-        "architecture": "cargo nextest run --no-fail-fast --test architecture",
-        "guardrails": "cargo nextest run --no-fail-fast --test guardrails",
-        "unit": "cargo test --lib",
+        "guardrails": "cargo nextest run --no-fail-fast --test architecture --test guardrails",
         "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser) and not binary(architecture) and not binary(guardrails)'",
         "browser": "cargo nextest run --no-fail-fast -E 'binary(browser)'",
         "test-pattern": "cargo nextest run --no-fail-fast",

@@ -25,6 +25,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **22 — gate provenance.** A machine stamp: the journal records the tree and per-tier test counts, and the epilogue prints each tier's count change. The commit-report citation stays open. [22](./issues/22-record-gate-provenance.md)
 - **30 — implementation of 03 and 22.** `build.py`, its tests, `AGENTS.md`, `tests/AGENTS.md`, `ENVIRONMENT.md`. [30](./issues/30-gate-no-browser-and-verdict-record.md)
 - **39 — Development Loop is information only.** A table of commands with coverage and cost; no "done" definition, because the work assignment sets it. Delete `unit`; `guardrails` takes in `architecture`; `fmt` and `check` leave `AGENTS.md`. [39](./issues/39-rethink-the-development-loop-section.md)
+- **48 — implementation of 39.** `unit` and `architecture` subcommands gone (`guardrails` runs both binaries); `AGENTS.md` Development Loop is one command table; DB/data paragraph in `ENVIRONMENT.md`. Two stale pointers left: `.cargo/config.toml` (seed signature) and the permissions `reason` (user edit). [48](./issues/48-trim-build-commands-and-development-loop.md)
 
 ## Not yet specified
 
@@ -72,4 +73,3 @@ All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect
 - [34 — Sweep every caller when a change alters what a port returns](./issues/34-sweep-callers-of-a-changed-seam.md) (from the 2026-10-10 retro of the ticket-08 session)
 - [35 — Lint a spec scenario's shape and vocabulary](./issues/35-lint-spec-scenario-shape.md) (from the 2026-10-11 retro of the doc-spec boundary follow-ups session)
 - [36 — Show the next free scenario number for a spec](./issues/36-next-free-scenario-number.md) (from the 2026-10-11 retro of the doc-spec boundary follow-ups session)
-- [48 — Trim the build commands and make the Development Loop section information only](./issues/48-trim-build-commands-and-development-loop.md) (task; implements 39)

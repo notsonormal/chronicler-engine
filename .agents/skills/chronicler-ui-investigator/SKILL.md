@@ -26,7 +26,7 @@ python build.py run --target-dir target/ui-investigator -- --world redmist_estat
 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/   # 200 → reuse this probe server
 ```
 
-`build.py run` replaces itself with the server, so start it in the background (`nohup … &`) and poll the `curl` until it returns 200. The DB is `target/ui-investigator/debug/chronicler_3001.db` (see `AGENTS.md`, *Development Loop*). The first run seeds the new target dir from a warm sibling (`scripts/target_seed.py`). Later runs are warm. A full gate builds into `target/debug`, so it does not touch the probe's DB. Integration tests allocate ports 3010–3050 (`tests/test_config.json`), so keep the probe outside that band. A concurrent second probe needs its own port and its own `--target-dir`.
+`build.py run` replaces itself with the server, so start it in the background (`nohup … &`) and poll the `curl` until it returns 200. The DB is `target/ui-investigator/debug/chronicler_3001.db` (see `ENVIRONMENT.md`). The first run seeds the new target dir from a warm sibling (`scripts/target_seed.py`). Later runs are warm. A full gate builds into `target/debug`, so it does not touch the probe's DB. Integration tests allocate ports 3010–3050 (`tests/test_config.json`), so keep the probe outside that band. A concurrent second probe needs its own port and its own `--target-dir`.
 
 Use the real connections the settings already hold. A turn costs less than a cent, and only a real provider shows real failure shapes (a reasoning-only reply, a 401, a truncated answer). Ollama does not run in this container, so a role on an Ollama connection fails on every turn. Treat that failure as expected, not as a finding.
 
@@ -109,4 +109,4 @@ Selector vocabulary: `docs/specs/browser_*.md`, enforced in `tests/browser/` (`d
 | Endpoint unreachable, or `Page.enable` times out | `/home/node/.pi/start-browser.sh`, then retry |
 | `Timed out waiting for CDP response: Runtime.evaluate` | The 10 s cap (step 2). The page's JS is still running. Poll again in a short call |
 | Engine won't start | Port already bound. Stop that process or pass `-- --port <other>` |
-| World JSON edits do not appear | The server reads `<target-dir>/debug/data` when a full gate copied it there (see `AGENTS.md`, *Development Loop*). Delete that copy, or run the gate with the same `--target-dir` to refresh it. |
+| World JSON edits do not appear | The server reads `<target-dir>/debug/data` when a full gate copied it there (see `ENVIRONMENT.md`). Delete that copy, or run the gate with the same `--target-dir` to refresh it. |
