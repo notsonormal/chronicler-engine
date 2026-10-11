@@ -69,3 +69,5 @@ All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect
 - [32 — Let the review bundle take a path list](./issues/32-review-bundle-path-scope.md) (from the 2026-10-10 retro of the ticket-08 session)
 - [33 — Check that user-facing copy in a ticket names controls that exist](./issues/33-check-ui-names-in-ticket-copy.md) (from the 2026-10-10 retro of the ticket-08 session)
 - [34 — Sweep every caller when a change alters what a port returns](./issues/34-sweep-callers-of-a-changed-seam.md) (from the 2026-10-10 retro of the ticket-08 session)
+- [35 — Lint a spec scenario's shape and vocabulary](./issues/35-lint-spec-scenario-shape.md) (from the 2026-10-11 retro of the doc-spec boundary follow-ups session)
+- [36 — Show the next free scenario number for a spec](./issues/36-next-free-scenario-number.md) (from the 2026-10-11 retro of the doc-spec boundary follow-ups session)
