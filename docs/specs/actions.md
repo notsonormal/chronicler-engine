@@ -136,7 +136,7 @@ Then the generation status is an error whose text contains "empty"
 And the message history gained no Narration message (no empty narration persisted)
 ```
 
-#### Scenario 2.4: Trigger narration failure preserves the main narration, logs the failure, and reports an error
+#### Scenario 2.4: Trigger narration failure preserves the main narration and reports an error
 
 ```gherkin
 Given a game state with an NPC "npc_1" whose Trigger fires on the first meeting
@@ -145,8 +145,8 @@ And a narrator backend that succeeds for the main prompt but fails for the trigg
 When the client POST /action with command="examine the npc"
 And the pipeline returns to idle
 Then the generation status is an error whose text mentions "Trigger narration failed"
-And the message history still holds the main Narration message (preserved)
-And the message history holds a System message whose text mentions "Trigger narration failed"
+And the message history gained no entry for the failure and still ends in the main Narration
+And the story-log fragment still offers the `.retrigger-btn` control on that Narration
 ```
 
 #### Scenario 2.5: A failed or unparseable quantifier answer still completes the action with the prior NPC set

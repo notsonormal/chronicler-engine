@@ -95,10 +95,72 @@ And message_service.load_or_fresh().narrative.input_buffer.status is Idle
 
 ```gherkin
 Given a game state where the last message is an event Narration
-And movement.current_room_id is any valid room
+And the Action that fired the event moved the player into "room2"
 When the client sends POST /swipe/new
 And the pipeline returns to idle
-Then message_service.load_or_fresh().movement.current_room_id is still "room2" (the quantifier does not re-run; world state is frozen at the pre-event snapshot)
+Then the player is still in "room2" (the Quantifier does not re-run)
+```
+
+#### Scenario 10.4: An event retry after a Retrigger adds a swipe to the retriggered event
+
+```gherkin
+Given a game state whose last message is a non-event Narration
+And a stored trigger context whose continuation narration failed
+When the client sends POST /retrigger
+And the pipeline returns to idle (the event narration is appended)
+And the client sends POST /swipe/new
+And the pipeline returns to idle
+Then the retriggered event Narration has 2 swipes (the retriggered one and the retry's)
+And its new swipe is the active swipe
+And the generation status is Idle
+```
+
+#### Scenario 10.5: An event retry starts from the Snapshot of the Swipe it retries
+
+```gherkin
+Given a game state whose event Narration meets Character Gabriella in its first Swipe
+And a Quantifier backend that leaves Gabriella out of the retry's continuation
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then Gabriella's encounter count is 0 (the first Swipe's encounter does not carry over)
+And the scene holds no Character
+And the event Narration has 2 swipes
+```
+
+#### Scenario 10.6: An event retry after the later Action's Messages are deleted reuses its own trigger context
+
+```gherkin
+Given a game state whose event Narration carries the trigger context of the Trigger that fired it
+And a later Action that fires another Trigger and appends its own event Narration
+And the client deletes that later Action's Messages
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then the event Narration has 2 swipes
+And its new swipe's event header names the first event's own Trigger
+And the generation status is Idle
+```
+
+#### Scenario 10.7: A prior swipe switch does not change what an event retry starts from
+
+```gherkin
+Given a game state whose event Narration meets Character Gabriella in its first Swipe
+And a Quantifier backend that leaves Gabriella out of the retry's continuation
+And the client re-selects that Message's first Swipe
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then Gabriella's encounter count is 0, as it is without the switch
+```
+
+#### Scenario 10.8: An event retry keeps the Swipe's room name
+
+```gherkin
+Given a game state whose event Narration was written after the movement into "room2"
+And that event Narration's Swipe reports the room "Room room2"
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then the event Narration has 2 swipes
+And its new active swipe reports the room "Room room2"
+And the first swipe still reports the room "Room room2"
 ```
 
 ### Retry error cases
@@ -178,12 +240,40 @@ And the original narration's swipes are unchanged (no new swipe appended)
 
 ```gherkin
 Given a game state where the last message is an event Narration
+And the Action that fired the event moved the player into "room2" and marked the trigger fired
 And a narrator backend that fails only for the trigger continuation prompt (main narration succeeds)
 When the client sends POST /swipe/new
 And the pipeline returns to idle
-Then message_service.load_or_fresh().narrative.input_buffer.status is GenerationStatus::Error(msg) where msg contains "Trigger narration failed"
-And message_service.load_messages() contains the main Narration entry (preserved, not removed)
-And message_service.load_messages() contains a System entry whose text mentions "Trigger narration failed"
+Then the generation status is an error whose text mentions "Trigger narration failed"
+And the message history still contains the main Narration entry (preserved, not removed)
+And the message history gained no entry for the failure
+And the player is still in "room2"
+And the event's trigger is still marked as fired
+```
+
+#### Scenario 11.9: A failed retry does not roll the movement back
+
+```gherkin
+Given a game state whose last Action moved the player into "room2"
+And the Snapshot that the retry restores has the player in "room_1"
+And a narrator backend that fails the narration request
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then the generation status is an error
+And the player is still in "room2"
+```
+
+#### Scenario 11.10: A failed retry that wrote its narration keeps the world it wrote
+
+```gherkin
+Given a game state whose last Action left the player in "room_1"
+And a trigger in "room2" that fires when the player enters it
+And a quantifier backend that moves the player into "room2" on the retry
+And a narrator backend that fails only for the trigger continuation prompt (the narration succeeds)
+When the client sends POST /swipe/new
+And the pipeline returns to idle
+Then the generation status is an error whose text mentions "Trigger narration failed"
+And the player is in "room2" (the world the retry's narration was written from)
 ```
 
 ### Concurrency
@@ -278,3 +368,6 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   error (400).
 - **I.8** Retry rejects concurrent generation the same way `process_action`
   does: 200 with a `"Still thinking..."` status, no generation started.
+- **I.9** A failed retry that appended no Swipe leaves the room, the
+  encounters and the fired triggers as the click found them. A failed retry
+  that appended a Swipe keeps the game state that Swipe was written from.

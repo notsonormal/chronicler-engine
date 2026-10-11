@@ -128,7 +128,7 @@ pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String
     )
 }
 
-/// The card every preset listing renders, so an edit-refreshed card matches the panel's.
+/// Shared with the edit-refresh path, so a refreshed card matches the panel's.
 /// `preview` arrives pre-truncated: newlines flattened, a cut marked with an ellipsis.
 #[derive(Template)]
 #[template(
@@ -140,7 +140,7 @@ pub struct PresetCardTemplate {
     pub preview: String,
     pub active_badges: Vec<String>,
     /// Each entry pairs the button's label with the mode query appended to its
-    /// activate route (empty for the mode-agnostic Options slot).
+    /// activate route.
     pub activate_buttons: Vec<(String, String)>,
 }
 
@@ -180,8 +180,7 @@ fn mode_slot_actions(
     (active_badges, activate_buttons)
 }
 
-/// The Options slot is settings-level, so its `allowed_modes` flags do not gate the
-/// button.
+/// The Options slot is settings-level, so the Novel slot decides its button.
 fn options_slot_actions(
     preset: &PromptPreset,
     settings: &AppSettings,
@@ -194,19 +193,24 @@ fn options_slot_actions(
     }
 }
 
-/// The ellipsis stops a cut preview reading as the whole field.
+/// Sentence punctuation directly before the ellipsis would read as the end of the
+/// field rather than a cut, so it goes first — with any space it sat behind.
 fn truncated_preview(preset: &PromptPreset) -> String {
     const MAX_PREVIEW_CHARS: usize = 120;
+    const TRAILING_PUNCTUATION: [char; 6] = ['.', ',', ';', ':', '!', '?'];
     let text = preset.preview_text().replace('\n', " ");
     let text = text.trim();
     if text.chars().count() <= MAX_PREVIEW_CHARS {
         return text.to_string();
     }
     let head: String = text.chars().take(MAX_PREVIEW_CHARS).collect();
-    match head.rsplit_once(' ') {
-        Some((words, _)) => format!("{}…", words.trim_end()),
-        None => format!("{head}…"),
-    }
+    let words = match head.rsplit_once(' ') {
+        Some((words, _)) => words,
+        None => head.as_str(),
+    };
+    let words =
+        words.trim_end_matches(|c: char| c.is_whitespace() || TRAILING_PUNCTUATION.contains(&c));
+    format!("{words}…")
 }
 
 pub(crate) fn preset_card_html(preset: &PromptPreset, settings: &AppSettings) -> String {

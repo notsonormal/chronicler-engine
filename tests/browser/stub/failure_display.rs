@@ -1,11 +1,13 @@
 //! Stub-browser tests for the failure display: the banner, the in-place slots and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
 
-// The engine's failing action route answers 500, so htmx fires
-// `htmx:responseError` without a dispatched event.
+// A failing action route answers 500, so htmx fires `htmx:responseError` with no
+// dispatched event.
 
 use std::time::Duration;
 
+use chronicler_engine::adapters::driving::http::utils::error::generation_failure_summary;
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
+use playwright_rs::Viewport;
 
 use super::*;
 use super::support::{StubRunner, active_element_is, poll_now, read_banner, read_command_input};
@@ -35,6 +37,33 @@ async fn error_detail_popover_open(page: &playwright_rs::Page, popover_id: &str)
     )
     .await
     .unwrap_or(false)
+}
+
+/// The Send control's height and the form's own type size against the inline
+/// error's: the slot draws a message and a Details link, not a second Send
+/// button. Returns (send height, toggle height, send size, toggle size, message
+/// size).
+async fn read_inline_error_sizes(page: &playwright_rs::Page) -> (f64, f64, f64, f64, f64) {
+    page.evaluate::<(), (f64, f64, f64, f64, f64)>(
+        r#"() => {
+            const submit = document.getElementById('submit-btn');
+            const toggle = document.querySelector(
+                '#command-form .inline-error-slot .error-details-toggle');
+            const message = document.querySelector(
+                '#command-form .inline-error-slot .error-disclosure-message');
+            const size = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
+            return [
+                submit ? submit.getBoundingClientRect().height : 0,
+                toggle ? toggle.getBoundingClientRect().height : 0,
+                size(submit),
+                size(toggle),
+                size(message),
+            ];
+        }"#,
+        None,
+    )
+    .await
+    .unwrap()
 }
 
 async fn measure_action_area(page: &playwright_rs::Page) -> (f64, f64) {
@@ -188,6 +217,21 @@ async fn check_failed_action_renders_inline_slot(page: playwright_rs::Page, _stu
     assert!(
         !banner_visible,
         "an action failure with the server up must not raise the banner"
+    );
+
+    let (submit_height, toggle_height, submit_size, toggle_size, message_size) =
+        read_inline_error_sizes(&page).await;
+    assert!(
+        toggle_height > 0.0 && toggle_height < submit_height,
+        "the inline error's Details control must stay a small inline button, not a second \
+         Send button ({toggle_height}px against Send's {submit_height}px)"
+    );
+    assert!(
+        message_size > 0.0
+            && message_size < submit_size
+            && (message_size - toggle_size).abs() < 0.01,
+        "the inline error's message and its Details control share the failure size \
+         ({message_size}px and {toggle_size}px), below the form's own {submit_size}px"
     );
 }
 
@@ -694,8 +738,7 @@ fn carries_state(class_name: &str, state: &str) -> bool {
 // The returned tuple: the container's class, its inherited text colour, the
 // palette's error colour, and whether the short line fits the column unclipped.
 async fn read_status_state(page: &playwright_rs::Page) -> (String, String, String, bool) {
-    page.evaluate::<(), (String, String, String, bool)>(
-        r#"() => {
+    let script = r#"() => {
             const display = document.getElementById('status-display');
             const text = display.querySelector('.error-disclosure-message, .status');
             const probe = document.createElement('span');
@@ -703,14 +746,14 @@ async fn read_status_state(page: &playwright_rs::Page) -> (String, String, Strin
             document.body.appendChild(probe);
             const paletteError = getComputedStyle(probe).color;
             probe.remove();
-            const message = display.querySelector('.error-disclosure-message');
+            // MEASURE_CLAMPED_TEXT
+            const measured = clampedText(display);
             let readable = false;
-            if (message) {
-                const box = message.getBoundingClientRect();
+            if (measured) {
                 readable =
-                    box.right <= display.getBoundingClientRect().right + 1 &&
-                    message.scrollWidth <= message.clientWidth + 1 &&
-                    message.scrollHeight <= message.clientHeight + 1;
+                    measured.overhang <= 1 &&
+                    measured.scrollWidth <= measured.clientWidth + 1 &&
+                    measured.neededHeight <= measured.boxHeight + 1;
             }
             return [
                 display.className,
@@ -718,12 +761,44 @@ async fn read_status_state(page: &playwright_rs::Page) -> (String, String, Strin
                 paletteError,
                 readable,
             ];
-        }"#,
-        None,
-    )
-    .await
-    .unwrap()
+        }"#
+    .replace("// MEASURE_CLAMPED_TEXT", MEASURE_CLAMPED_TEXT);
+    page.evaluate::<(), (String, String, String, bool)>(script.as_str(), None)
+        .await
+        .unwrap()
 }
+
+/// The status column's clamp hides the lines it cuts, so a reader that measures
+/// only the clamp's own box cannot see a clipped sentence. This measures that box,
+/// then lifts the clamp off that same element to measure the height the sentence
+/// really needs — the element keeps its exact width and font, which an offscreen
+/// copy of it would only approximate — and puts the clamp back before returning.
+const MEASURE_CLAMPED_TEXT: &str = r#"
+            const clampedText = (display) => {
+                const text = display.querySelector('.error-disclosure-text');
+                if (!text) return null;
+                const style = getComputedStyle(text);
+                const box = text.getBoundingClientRect();
+                const measured = {
+                    text: text.textContent.trim(),
+                    boxHeight: box.height,
+                    lineHeight: parseFloat(style.lineHeight),
+                    scrollWidth: text.scrollWidth,
+                    clientWidth: text.clientWidth,
+                    overhang: box.right - display.getBoundingClientRect().right,
+                };
+                text.style.display = 'block';
+                text.style.overflow = 'visible';
+                text.style.maxHeight = 'none';
+                text.style.webkitLineClamp = 'none';
+                measured.neededHeight = text.getBoundingClientRect().height;
+                text.style.display = '';
+                text.style.overflow = '';
+                text.style.maxHeight = '';
+                text.style.webkitLineClamp = '';
+                return measured;
+            };
+"#;
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.41
 async fn check_generation_error_takes_the_error_class_and_reads_without_details(
@@ -782,6 +857,145 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
         recovered_colour, palette_error,
         "Ready must not keep the error's colour"
     );
+}
+
+const FAILURE_KINDS: [GenerationFailureKind; 8] = [
+    GenerationFailureKind::Unreachable,
+    GenerationFailureKind::PromptTooLong,
+    GenerationFailureKind::UnreadableAnswer,
+    GenerationFailureKind::TokenBudgetSpent,
+    GenerationFailureKind::SaveFailed,
+    GenerationFailureKind::SceneMissing,
+    GenerationFailureKind::PresetMissing,
+    GenerationFailureKind::Other,
+];
+
+/// A new `GenerationFailureKind` variant makes this match non-exhaustive, so the
+/// clamp check cannot silently skip its sentence.
+fn assert_kind_is_listed(kind: GenerationFailureKind) {
+    match kind {
+        GenerationFailureKind::Unreachable
+        | GenerationFailureKind::PromptTooLong
+        | GenerationFailureKind::UnreadableAnswer
+        | GenerationFailureKind::TokenBudgetSpent
+        | GenerationFailureKind::SaveFailed
+        | GenerationFailureKind::SceneMissing
+        | GenerationFailureKind::PresetMissing
+        | GenerationFailureKind::Other => {}
+    }
+}
+
+/// The status column's own numbers for the line it is drawing: the rendered
+/// text, the box the clamp draws and the height the sentence needs unclamped,
+/// the line height, the horizontal scroll and client widths, and how far past
+/// the column's right edge the box is drawn.
+async fn read_clamped_line(page: &playwright_rs::Page) -> (String, f64, f64, f64, f64, f64, f64) {
+    let script = r#"() => {
+            const display = document.getElementById('status-display');
+            // MEASURE_CLAMPED_TEXT
+            const measured = clampedText(display);
+            if (!measured) return ['', 0, 0, 0, 0, 0, 0];
+            return [
+                measured.text,
+                measured.boxHeight,
+                measured.neededHeight,
+                measured.lineHeight,
+                measured.scrollWidth,
+                measured.clientWidth,
+                measured.overhang,
+            ];
+        }"#
+    .replace("// MEASURE_CLAMPED_TEXT", MEASURE_CLAMPED_TEXT);
+    page.evaluate::<(), (String, f64, f64, f64, f64, f64, f64)>(script.as_str(), None)
+        .await
+        .unwrap()
+}
+
+/// A viewport change reflows asynchronously, so the clamp check waits for the
+/// new width before it measures anything.
+async fn wait_for_viewport_width(page: &playwright_rs::Page, width: u32) {
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(50),
+            || async { (read_viewport_width(page).await - f64::from(width)).abs() < 1.0 },
+        )
+        .await,
+        "the viewport should reflow to {width}px before the check measures"
+    );
+}
+
+async fn read_viewport_width(page: &playwright_rs::Page) -> f64 {
+    page.evaluate::<(), f64>("() => window.innerWidth", None)
+        .await
+        .unwrap_or_default()
+}
+
+/// The status column clamps its sentence to two lines inside fixed widths, so
+/// every failure sentence has to fit at every supported width.
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.43
+async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, stub: StubServer) {
+    let status = stub.status_handle();
+    for (width, height) in [(1280u32, 800u32), (1024, 700)] {
+        page.set_viewport_size(Viewport { width, height })
+            .await
+            .unwrap();
+        wait_for_viewport_width(&page, width).await;
+
+        let (baseline_input, baseline_area) = measure_action_area(&page).await;
+        for kind in FAILURE_KINDS {
+            assert_kind_is_listed(kind);
+            let sentence = generation_failure_summary(kind);
+            status.set(StubStatus::Error(
+                kind,
+                format!("stub raw failure for {kind:?}"),
+            ));
+            poll_now(&page, "#status-display").await;
+            assert!(
+                wait_for_condition_async(
+                    Duration::from_secs(10),
+                    Duration::from_millis(50),
+                    || async { read_clamped_line(&page).await.0 == sentence },
+                )
+                .await,
+                "the {kind:?} line should reach the status display at {width}px"
+            );
+
+            let (text, box_h, needed_h, line_h, scroll_w, client_w, overhang) =
+                read_clamped_line(&page).await;
+            assert_eq!(
+                text, sentence,
+                "the status display must draw the {kind:?} sentence at {width}px"
+            );
+            assert!(
+                needed_h <= box_h + 1.0,
+                "the {kind:?} sentence is clipped at {width}px: it needs {needed_h}px in {box_h}px"
+            );
+            assert!(
+                box_h <= 2.0 * line_h + 1.0,
+                "the {kind:?} sentence must be drawn inside the clamp's two lines at {width}px: \
+                 {box_h}px against {line_h}px a line"
+            );
+            assert!(
+                scroll_w <= client_w + 1.0,
+                "the {kind:?} sentence overflows its column at {width}px: {scroll_w}px in {client_w}px"
+            );
+            assert!(
+                overhang <= 1.0,
+                "the {kind:?} sentence is drawn {overhang}px past the status column at {width}px"
+            );
+
+            let (input_after, area_after) = measure_action_area(&page).await;
+            assert_eq!(
+                input_after, baseline_input,
+                "the command input must not resize for the {kind:?} sentence at {width}px"
+            );
+            assert_eq!(
+                area_after, baseline_area,
+                "the action area must not resize for the {kind:?} sentence at {width}px"
+            );
+        }
+    }
 }
 
 // The two load-only tab panels fetch once per page load, so this test arms the
@@ -886,6 +1100,12 @@ async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _
             page.query_selector_all(row).await.unwrap_or_default().len(),
             rows_before,
             "a failed row action must leave the row in place"
+        );
+        // A failed row action swaps nothing, so the control that asked for it
+        // keeps focus.
+        assert!(
+            active_element_is(&page, control).await,
+            "a failed {tab} action must leave focus on the control that asked for it"
         );
     }
 
@@ -1045,6 +1265,12 @@ async fn run_failure_display_slot_checks() {
         .run(
             StubActionOutcome::Pending,
             check_generation_error_takes_the_error_class_and_reads_without_details,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_every_failure_sentence_reads_in_full,
         )
         .await;
     runner

@@ -179,10 +179,9 @@ impl MessageService {
             .load_snapshot_by_id(snapshot_id)?
             .ok_or_else(|| ApplicationError::internal("Snapshot not found"))?;
 
-        // A Swipe's snapshot is written while its narration still generates,
-        // so it carries `Generating`/`Narrating` and whatever option set the
-        // redo reconstructed from. A restore must leave a settled game: Idle,
-        // with no options (the set is generated per turn, afterwards).
+        // A Swipe's snapshot is written while its narration still generates, so a
+        // restore must settle the game: Idle, no options (the set is regenerated
+        // per turn).
         snapshot.narrative.input_buffer.status = GenerationStatus::Idle;
         snapshot.narrative.input_buffer.phase = GenerationPhase::default();
         snapshot.narrative.current_options.clear();
@@ -228,30 +227,24 @@ impl MessageService {
         &self,
         messages: &'a [Message],
     ) -> Option<(usize, &'a Message)> {
-        if messages.is_empty() {
-            return None;
-        }
-        let is_event = messages
-            .last()
-            .map(|m| m.event_header().is_some())
-            .unwrap_or(false);
-        let anchor_idx = if is_event {
-            messages.iter().rposition(|m| m.event_header().is_none())?
+        let last_input_or_narration_idx =
+            messages.iter().rposition(Message::is_input_or_narration)?;
+        let anchor_idx = if messages[last_input_or_narration_idx]
+            .event_header()
+            .is_some()
+        {
+            // An event continuation re-appends onto the Message it followed.
+            messages[..last_input_or_narration_idx]
+                .iter()
+                .rposition(|m| m.event_header().is_none())?
+        } else if messages[last_input_or_narration_idx].is_guided() {
+            // A guided turn appends no Input row, so its Narration is both the
+            // retry target and the anchor.
+            last_input_or_narration_idx
         } else {
-            // A guided turn appends no Input row: its Narration is the retry
-            // target AND the anchor — the redo must reconstruct from that
-            // turn's own snapshot, not from an older Input's older snapshot.
-            let last_turn_idx = messages.iter().rposition(|m| {
-                m.message_type == MessageType::Narration || m.message_type == MessageType::Input
-            })?;
-            let last_is_guided = messages[last_turn_idx].is_guided();
-            if last_is_guided {
-                last_turn_idx
-            } else {
-                messages
-                    .iter()
-                    .rposition(|m| m.message_type == MessageType::Input)?
-            }
+            messages
+                .iter()
+                .rposition(|m| m.message_type == MessageType::Input)?
         };
         Some((anchor_idx, &messages[anchor_idx]))
     }

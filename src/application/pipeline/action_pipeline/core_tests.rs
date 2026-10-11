@@ -487,10 +487,15 @@ fn test_pipeline_trigger_complete_failure() {
         "Main narration should be preserved after trigger failure, got history: {history_dbg:?}"
     );
     assert!(
-        history_dbg.iter().any(|(t, text)| {
-            *t == MessageType::System && text.contains("Trigger narration failed")
-        }),
-        "Should persist a System message mentioning 'Trigger narration failed', got history: {history_dbg:?}"
+        !history_dbg
+            .iter()
+            .any(|(t, text)| *t == MessageType::System && text.contains("Trigger narration failed")),
+        "a failed trigger must not write its engine error into the story log, got history: {history_dbg:?}"
+    );
+    assert_eq!(
+        history_dbg.last().map(|(t, _)| t.clone()),
+        Some(MessageType::Narration),
+        "the main narration must stay the last entry, got history: {history_dbg:?}"
     );
 }
 

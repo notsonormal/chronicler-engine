@@ -9,7 +9,7 @@ Pi core intentionally does not ship a built-in plan mode; this package provides 
 ## ✨ Features
 
 - Adds `/plan` to enter or manage Plan mode.
-- Adds `--plan` to start a session in Plan mode.
+- Adds `--pi-plan` to start a session in Plan mode.
 - Enables built-in read-only tools by default while Plan mode is active.
 - Disables extension and custom tools by default, with a `/plan tools` selector for explicit user-risk opt-in.
 - Blocks mutating built-in tools and bash commands such as `rm`, `git commit`, dependency installs, redirects, and editor launches.

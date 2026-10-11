@@ -64,6 +64,12 @@ async fn run_layout() {
             check_action_area_makes_room_for_the_inline_error,
         )
         .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_long_status_sentence_clamps_with_a_visible_cut,
+        )
+        .await;
     runner.finish().await;
 }
 
@@ -132,8 +138,6 @@ async fn check_log_entry_text_wraps_within_bubble(page: Page, _stub: StubServer)
     );
 }
 
-/// Mid-turn the label grows to "Generating…": the input keeps its width and the
-/// label stays inside the button.
 async fn check_command_input_width_is_stable(page: Page, _stub: StubServer) {
     let widths: (f64, f64, f64, f64) = page
         .evaluate::<(), (f64, f64, f64, f64)>(
@@ -440,9 +444,107 @@ async fn check_forced_colors_focus_ring(page: Page, _stub: StubServer) {
     );
 }
 
+/// Hiding the rest of a clamped sentence silently would read as the end of the
+/// sentence, so the cut has to be visible and the Details control beside it has
+/// to stay laid out and focusable.
+async fn check_a_long_status_sentence_clamps_with_a_visible_cut(page: Page, _stub: StubServer) {
+    let (
+        line_clamp,
+        text_align,
+        box_height,
+        lines_needed,
+        line_height,
+        toggle_width,
+        toggle_height,
+        toggle_off_column,
+        toggle_focused,
+    ): (String, String, f64, f64, f64, f64, f64, f64, bool) = page
+        .evaluate::<(), (String, String, f64, f64, f64, f64, f64, f64, bool)>(
+            r#"() => {
+                    const display = document.getElementById('status-display');
+                    if (!display) return ['', '', 0, 0, 0, 0, 0, 0, false];
+                    display.innerHTML =
+                        '<div class="error-disclosure">' +
+                        '<span class="error-disclosure-message">' +
+                        '<span class="error-disclosure-text">' +
+                        'The language model could not be reached, and the retry after the ' +
+                        'connection came back did not answer either, so the turn you sent was ' +
+                        'never narrated and nothing in this game has moved on from it.' +
+                        '</span></span>' +
+                        '<button type="button" class="error-details-toggle" ' +
+                        'aria-expanded="false" aria-controls="layout-status-popover">' +
+                        'Details</button>' +
+                        '<div class="error-detail-popover" id="layout-status-popover" hidden>' +
+                        '</div></div>';
+                    const text = display.querySelector('.error-disclosure-text');
+                    const toggle = display.querySelector('.error-details-toggle');
+                    if (!text || !toggle) return ['', '', 0, 0, 0, 0, 0, 0, false];
+                    const style = getComputedStyle(text);
+                    // The clamp fragments the text it cuts, so the height the
+                    // sentence really needs is measured off a clone of it.
+                    const unclamped = document.createElement('div');
+                    unclamped.style.cssText =
+                        'position:absolute;left:-9999px;top:0;white-space:normal;' +
+                        'font-size:' + style.fontSize + ';font-family:' + style.fontFamily +
+                        ';line-height:' + style.lineHeight + ';width:' + text.clientWidth +
+                        'px;';
+                    unclamped.textContent = text.textContent;
+                    document.body.appendChild(unclamped);
+                    const needed = unclamped.getBoundingClientRect().height;
+                    unclamped.remove();
+                    toggle.focus();
+                    return [
+                        style.webkitLineClamp || style.getPropertyValue('-webkit-line-clamp'),
+                        style.textAlign,
+                        text.getBoundingClientRect().height,
+                        needed,
+                        parseFloat(style.lineHeight),
+                        toggle.getBoundingClientRect().width,
+                        toggle.getBoundingClientRect().height,
+                        toggle.getBoundingClientRect().right -
+                            display.getBoundingClientRect().right,
+                        document.activeElement === toggle,
+                    ];
+                }"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        line_clamp, "2",
+        "the status column must clamp a long sentence to two lines"
+    );
+    assert_eq!(
+        text_align, "left",
+        "the clamp draws its ellipsis only for left-aligned text, so the failure line \
+         must not inherit the column's own right alignment"
+    );
+    assert!(
+        box_height <= 2.0 * line_height + 1.0,
+        "the clamp must draw two lines and no more ({box_height}px against {line_height}px a line)"
+    );
+    assert!(
+        lines_needed > box_height + 1.0,
+        "the sentence must need more lines than the clamp draws for this check to mean \
+         anything ({lines_needed}px of text in {box_height}px)"
+    );
+    assert!(
+        toggle_width > 0.0 && toggle_height > 0.0,
+        "the clamp must not collapse the Details control ({toggle_width}x{toggle_height})"
+    );
+    assert!(
+        toggle_off_column <= 2.0,
+        "the Details control must stay inside the status column (off by {toggle_off_column}px)"
+    );
+    assert!(
+        toggle_focused,
+        "the Details control must stay focusable beside the clamped sentence"
+    );
+}
+
 /// The client's own inline-error renderer fills the form's slot, so the action
-/// area must grow to hold it: the command row stays below the story log and the
-/// slot stays above the bottom of the viewport.
+/// area must grow to hold it.
 async fn check_action_area_makes_room_for_the_inline_error(page: Page, _stub: StubServer) {
     let (resting_height, grown_height, command_row_overlap, slot_below_viewport): (
         f64,

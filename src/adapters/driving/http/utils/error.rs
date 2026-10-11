@@ -20,9 +20,11 @@ pub fn render_error(message: &str) -> String {
     error_fragment(format!("Error: {message}"))
 }
 
+/// The short line needs its own block box for the status column's two-line clamp;
+/// the message itself is the disclosure's flex item.
 pub fn error_disclosure(popover_id: &str, message: &str, detail_html: &str) -> String {
     format!(
-        "<div class=\"error-disclosure\"><span class=\"error-disclosure-message\">{message}</span><button type=\"button\" class=\"error-details-toggle\" aria-expanded=\"false\" aria-controls=\"{popover_id}\">Details</button><div class=\"error-detail-popover\" id=\"{popover_id}\" hidden>{detail_html}</div></div>",
+        "<div class=\"error-disclosure\"><span class=\"error-disclosure-message\"><span class=\"error-disclosure-text\">{message}</span></span><button type=\"button\" class=\"error-details-toggle\" aria-expanded=\"false\" aria-controls=\"{popover_id}\">Details</button><div class=\"error-detail-popover\" id=\"{popover_id}\" hidden>{detail_html}</div></div>",
         message = html_escape(message),
         popover_id = html_escape(popover_id),
         detail_html = detail_html,
@@ -33,8 +35,8 @@ pub fn raw_error_detail(raw: &str) -> String {
     format!("<pre class=\"error-detail-raw\">{}</pre>", html_escape(raw))
 }
 
-/// The one-line status-display sentence for a classified failure. The raw
-/// text belongs in the details disclosure, never here.
+/// The 240px status column clamps this sentence to two lines, so any remedy it
+/// names has to be one the dashboard can carry out.
 pub fn generation_failure_summary(kind: GenerationFailureKind) -> &'static str {
     match kind {
         GenerationFailureKind::Unreachable => "The language model could not be reached.",
@@ -42,8 +44,10 @@ pub fn generation_failure_summary(kind: GenerationFailureKind) -> &'static str {
             "The last turn was too long for the language model."
         }
         GenerationFailureKind::UnreadableAnswer => "The language model's answer could not be read.",
+        // The dashboard offers no Max Tokens control, so the one remedy a player
+        // can act on is a different model on the role's connection.
         GenerationFailureKind::TokenBudgetSpent => {
-            "The model used its whole token budget before writing an answer — raise Max Tokens or choose a model that does less reasoning."
+            "The model used its budget on reasoning. Try another model."
         }
         GenerationFailureKind::SaveFailed => "The last turn could not be saved.",
         GenerationFailureKind::SceneMissing => "The current scene could not be found.",
@@ -63,23 +67,21 @@ fn classify_error(error: ApplicationError, prefix: &str) -> Result<String, Strin
     }
 }
 
-/// A refused or malformed form action: 400 with the failure for the client's
-/// inline slot. A non-2xx so htmx never swaps the region the failure describes.
+/// A non-2xx so htmx never swaps the region the failure describes.
 pub(crate) fn action_refusal_response(message: impl std::fmt::Display) -> Response<Body> {
     bad_request(error_fragment(message))
 }
 
-/// The `EngineError` payload without its layer prefix, for the part of a
-/// refusal the user reads before opening the disclosure.
-pub(crate) fn refusal_message(error: &EngineError) -> String {
+pub(crate) fn refusal_message_without_layer_prefix_for_validation_and_config(
+    error: &EngineError,
+) -> String {
     match error {
         EngineError::Validation(message) | EngineError::Config(message) => message.clone(),
         other => other.to_string(),
     }
 }
 
-/// A server-side form action failure: 500 with the failure for the client's
-/// inline slot. A non-2xx so htmx never swaps the region the failure describes.
+/// A non-2xx so htmx never swaps the region the failure describes.
 pub(crate) fn action_failure_response(message: impl std::fmt::Display) -> Response<Body> {
     internal_error(error_fragment(message))
 }

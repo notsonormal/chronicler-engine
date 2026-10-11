@@ -77,8 +77,8 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    /// The classified failure of a save at `label`; the entry path writes the
-    /// same failure `finalize_phase_error` writes from `PersistFailed`.
+    /// Classifies the failure the way `finalize_phase_error` classifies
+    /// `PersistFailed`; the entry path writes this one directly.
     pub(crate) fn save_failure(label: &'static str, source: &EngineError) -> GenerationFailure {
         GenerationFailure::from_engine_error(source).with_context(format!("Failed to save {label}"))
     }
@@ -217,10 +217,6 @@ impl<'a> PipelineRun<'a> {
             Ok(result) => result,
             Err(e) => {
                 tracing::error!("Trigger narration failed: {e}");
-                state.add_message(
-                    format!("[Trigger narration failed: {e}]"),
-                    MessageType::System,
-                );
                 return Err(self.set_error(
                     state,
                     GenerationFailure::from_engine_error(&e)
@@ -379,8 +375,6 @@ impl<'a> PipelineRun<'a> {
         })
     }
 
-    /// Game-first posture for prompt assembly: the game this run started for,
-    /// falling back to the world's posture when that row is unreadable.
     pub(super) fn resolve_posture(
         &self,
         world: &WorldCard,
@@ -394,8 +388,6 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    /// Game-first always-on options toggle for the game this run started for,
-    /// falling back to the world's default when that row is unreadable.
     pub(super) fn resolve_options_always_on(&self, world: &WorldCard) -> bool {
         match self.pipeline.storage.get_game(self.started_for) {
             Ok(Some(game)) => game.options_always_on,
@@ -445,7 +437,6 @@ impl<'a> PipelineRun<'a> {
     }
 }
 
-/// Which preset branch a load serves — names the not-found log line.
 #[derive(Clone, Copy)]
 pub(crate) enum PresetKind {
     /// The active system preset (narration and trigger generations).

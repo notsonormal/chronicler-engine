@@ -178,6 +178,51 @@ fn test_preset_card_html_preview_cuts_at_a_word_boundary() {
 }
 
 #[test]
+fn test_preset_card_html_preview_drops_punctuation_before_the_ellipsis() {
+    let preset = PromptPreset {
+        id: "test".into(),
+        name: "Test".into(),
+        instructions: Some(format!(
+            "{} intelligence. and then more words follow",
+            "filler".repeat(17)
+        )),
+        ..Default::default()
+    };
+    let html = preset_card_html(&preset, &inactive_system_slots());
+    assert!(
+        html.contains(&format!("{} intelligence…", "filler".repeat(17))),
+        "a cut preview must not end on punctuation before its ellipsis: {html}"
+    );
+    assert!(
+        !html.contains(".…"),
+        "the ellipsis must not follow a full stop: {html}"
+    );
+}
+
+#[test]
+fn test_preset_card_html_preview_drops_the_space_a_cut_full_stop_sat_behind() {
+    let preset = PromptPreset {
+        id: "test".into(),
+        name: "Test".into(),
+        instructions: Some(format!(
+            "{}stanza . {} tail",
+            "filler ".repeat(15),
+            "y".repeat(20)
+        )),
+        ..Default::default()
+    };
+    let html = preset_card_html(&preset, &inactive_system_slots());
+    assert!(
+        html.contains(&format!("{}stanza…", "filler ".repeat(15))),
+        "a cut preview must keep its ellipsis on the word it cut at: {html}"
+    );
+    assert!(
+        !html.contains("stanza …"),
+        "the space the cut punctuation sat behind must go too: {html}"
+    );
+}
+
+#[test]
 fn test_preset_card_html_preview_keeps_a_short_text_whole() {
     let preset = PromptPreset {
         id: "test".into(),
@@ -206,7 +251,7 @@ fn test_preset_card_html_escapes_special_chars() {
     };
     let html = preset_card_html(&preset, &inactive_system_slots());
     assert!(!html.contains("<b>Name</b>"));
-    // Askama escapes to numeric entities (`&#60;`), not named ones (`&lt;`).
+    // Askama escapes to numeric entities.
     assert!(html.contains("&#60;b&#62;Name&#60;/b&#62;"));
     assert!(html.contains("&#34;hello&#34;"));
     assert!(html.contains("&#38;"));

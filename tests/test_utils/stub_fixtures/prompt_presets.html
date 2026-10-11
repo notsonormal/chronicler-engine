@@ -64,6 +64,21 @@ You hold the agency to create and shape this fictional simulation. Judge the pla
             </div>
         </div>
 
+        <div class="preset-card">
+            <div class="card-header">
+                <span class="card-title">Second Custom Prompt</span>
+                <div class="card-badges">
+                </div>
+            </div>
+            <div class="card-details preset-preview">A second custom system prompt for the stub fixture.</div>
+            <div class="inline-error-slot" data-error-slot="preset-custom_two" hidden></div>
+            <div class="card-actions">
+                <button hx-get="/fragment/prompt-presets/custom_two/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
+                <button hx-post="/prompt-presets/custom_two/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+                <button hx-post="/prompt-presets/custom_two/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
+            </div>
+        </div>
+
         <details class="preset-add">
             <summary class="btn-cyan preset-add-toggle">Add System Prompt Preset</summary>
             <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">

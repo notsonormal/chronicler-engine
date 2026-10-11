@@ -38,7 +38,8 @@ class ClassifyAreaTests(unittest.TestCase):
             "src/main.rs": "src",
             "tests/foo.rs": "tests",
             "docs/plans/x.md": "docs",
-            "assets/icon.png": "docs",
+            "assets/icon.png": "assets",
+            "assets/dashboard-slash-menu.js": "assets",
             "scripts/build_slot.py": "tooling",
             "build.py": "tooling",
             ".agents/skills/x/SKILL.md": "tooling",
@@ -98,6 +99,7 @@ class BundleCliTests(unittest.TestCase):
             "src/new.py": "brand new source contents\n",
             "tests/new_test.py": "brand new test contents\n",
             "docs/note.md": "brand new doc contents\n",
+            "assets/dashboard-new.js": "brand new asset contents\n",
             "scripts/tool.py": "brand new tool contents\n",
         }
         for path, content in untracked.items():
@@ -113,8 +115,14 @@ class BundleCliTests(unittest.TestCase):
         self.assertIn("brand new source contents", (out / "src.patch").read_text())
         self.assertIn("brand new test contents", (out / "tests.patch").read_text())
         self.assertIn("brand new doc contents", (out / "docs.patch").read_text())
+        self.assertIn("brand new asset contents", (out / "assets.patch").read_text())
         self.assertIn("brand new tool contents", (out / "tooling.patch").read_text())
         self.assertNotIn("brand new source contents", (out / "docs.patch").read_text())
+        self.assertNotIn(
+            "brand new asset contents",
+            (out / "docs.patch").read_text(),
+            "a JS-only change must not read as a docs change",
+        )
 
     def test_deleted_files_are_listed(self):
         (self.repo / "src" / "a.py").unlink()

@@ -21,7 +21,8 @@ from pathlib import Path
 AREAS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("src", "src.patch", ("src/",)),
     ("tests", "tests.patch", ("tests/",)),
-    ("docs", "docs.patch", ("docs/", "assets/")),
+    ("assets", "assets.patch", ("assets/",)),
+    ("docs", "docs.patch", ("docs/",)),
     ("tooling", "tooling.patch", ()),
 )
 DEFAULT_OUT_ROOT = "tmp/review"
@@ -34,7 +35,7 @@ class BundleError(Exception):
 
 
 def classify_area(path: str) -> str:
-    """Return the area name owning a repo-relative path; every path lands in one area."""
+    """Every path lands in one area: unmatched prefixes fall to the last area."""
     posix = path.replace("\\", "/")
     if posix.startswith("./"):
         posix = posix[2:]
@@ -45,7 +46,6 @@ def classify_area(path: str) -> str:
 
 
 def _git(args: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess:
-    """Run a read-only git command in ``cwd`` and capture its output."""
     result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
     if check and result.returncode != 0:
         detail = result.stderr.strip() or f"git {' '.join(args)} failed"
@@ -71,7 +71,6 @@ def _resolve_ref(ref: str, repo_root: Path) -> None:
 
 
 def _is_gitignored(path: Path, repo_root: Path) -> bool:
-    """True when ``path`` sits inside the repo and is covered by a gitignore rule."""
     try:
         rel = path.resolve().relative_to(repo_root.resolve())
     except ValueError:
@@ -200,7 +199,6 @@ def _readme_text(
 
 
 def build_bundle(mode: str, ref: str | None, out_dir: Path, repo_root: Path) -> Path:
-    """Write the bundle for ``mode`` into ``out_dir`` and return that directory."""
     if not _is_gitignored(out_dir, repo_root):
         raise BundleError(
             f"refusing to write outside a gitignored path: {out_dir} "
@@ -252,8 +250,7 @@ def build_bundle(mode: str, ref: str | None, out_dir: Path, repo_root: Path) -> 
         _readme_text(mode, base, ref, head_sha, out_dir, has_commits),
         encoding="utf-8",
     )
-    # Drop the in-progress claim: a completed bundle carries no marker, so a
-    # later run at the same path refuses instead of clearing it.
+    # Dropping the claim is what makes a later run at this path refuse to clear it.
     (out_dir / MARKER_NAME).unlink()
     return out_dir
 

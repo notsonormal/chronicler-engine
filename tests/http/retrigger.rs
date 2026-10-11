@@ -15,7 +15,8 @@ use chronicler_engine::test_support::{
     TestStoredTriggerContext,
 };
 
-use crate::support::http_requests::{fetch_generating_status, post_empty, wait_idle};
+use crate::support::http_assertions::assert_story_log_ends_with_message;
+use crate::support::http_requests::{fetch_body, fetch_generating_status, post_empty, wait_idle};
 
 // [docs/specs/retrigger.md] SCENARIO: 13.1
 #[tokio::test]
@@ -227,8 +228,8 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
         "error should mention 'Trigger narration failed', got: {status}"
     );
     let messages_after = state.message_service.load_messages().unwrap();
-    // A System message is logged on trigger failure (expected). Assert no new
-    // event Narration was added — the failed continuation is not persisted.
+    // The failed continuation is not persisted, and neither is its engine
+    // error: the status line reports that failure.
     let new_event_narrations = messages_after
         .iter()
         .filter(|m| m.message_type == MessageType::Narration && m.event_header().is_some())
@@ -238,10 +239,29 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
         "failed retrigger should not persist a new event narration"
     );
     assert!(
-        messages_after.iter().any(|m| {
+        !messages_after.iter().any(|m| {
             m.message_type == MessageType::System && m.text().contains("Trigger narration failed")
         }),
-        "System log should mention trigger failure"
+        "the engine error must not be written into the story log: {messages_after:?}"
+    );
+    let last = messages_after
+        .last()
+        .expect("the main narration survives the failed retrigger");
+    assert_eq!(
+        last.message_type,
+        MessageType::Narration,
+        "the main narration must stay the last entry: {messages_after:?}"
+    );
+
+    let story_log = fetch_body(&app, "/fragment/story-log").await;
+    assert!(
+        story_log.contains("retrigger-btn"),
+        "the failed trigger must leave Retrigger available: {story_log}"
+    );
+    assert_story_log_ends_with_message(
+        &story_log,
+        last.id,
+        "the main narration must be the last rendered entry",
     );
 }
 

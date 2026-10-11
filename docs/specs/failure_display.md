@@ -24,6 +24,16 @@ When a later Quantifier attempt succeeds and the client GET /fragment/header aga
 Then the response carries no failure banner
 ```
 
+#### Scenario 38.8: A degraded Trigger role raises the banner and leaves the Connections marker empty
+
+```gherkin
+Given an active Game whose newest Trigger attempt carries an error message
+When the client GET /fragment/header
+Then the response carries a failure banner naming the Trigger and its failure effect
+And its Details disclosure lists the Trigger role with that raw failure text
+And the Connections sub-tab's warning marker stays empty
+```
+
 #### Scenario 38.6: The header poll keeps the Settings role health current
 
 ```gherkin
@@ -86,5 +96,6 @@ And the raw text naming the missing preset is reachable only inside the response
 Given a Game whose last generation failed because the model spent its whole token budget before writing an answer
 When the client GET /status/generating
 Then the response carries the spent-token-budget line, not the unreadable-answer line or the line for an unnamed failure
+And that line names the model's reasoning and only an action the dashboard offers
 And the raw text naming the completion and reasoning token counts is reachable only inside the response's disclosure
 ```

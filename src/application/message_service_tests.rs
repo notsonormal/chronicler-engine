@@ -86,8 +86,8 @@ fn test_find_retry_anchor_guided_narration_after_input_anchors_the_guided_narrat
     );
     let messages = state.narrative.history.as_slice().to_vec();
 
-    // The guided Narration is the retry target, so it must also be the anchor —
-    // not the older Input, whose snapshot predates the older turn's narration.
+    // A guided Narration is its own retry target, so it must anchor; the older
+    // Input's snapshot predates its narration.
     let (idx, anchor) = service
         .find_retry_anchor_msg(&messages)
         .expect("anchor for a guided turn after an input");
@@ -108,6 +108,54 @@ fn test_find_retry_anchor_normal_turn_anchors_the_input() {
         .expect("anchor for a normal turn");
     assert_eq!(idx, 0, "anchor must be the Input whose narration follows");
     assert_eq!(anchor.text(), "the player input");
+}
+
+#[test]
+fn test_find_retry_anchor_trailing_system_notice_anchors_the_input() {
+    let (service, _) = make_service();
+    let mut state = GameState::new("start");
+    state.add_message("the player input".to_string(), MessageType::Input);
+    state.add_message("a narration".to_string(), MessageType::Narration);
+    state.add_message(
+        "[System] a trailing notice".to_string(),
+        MessageType::System,
+    );
+    let messages = state.narrative.history.as_slice().to_vec();
+
+    let (idx, anchor) = service
+        .find_retry_anchor_msg(&messages)
+        .expect("anchor for a normal turn with a trailing System notice");
+    assert_eq!(idx, 0, "the notice must not decide the anchor");
+    assert_eq!(anchor.text(), "the player input");
+}
+
+#[test]
+fn test_find_retry_anchor_trailing_system_notice_after_an_event_anchors_the_main_narration() {
+    let (service, _) = make_service();
+    let mut state = GameState::new("start");
+    state.add_message("the player input".to_string(), MessageType::Input);
+    state.add_message("the main narration".to_string(), MessageType::Narration);
+    state.add_message("the event narration".to_string(), MessageType::Narration);
+    state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .set_event_header(Some("Event".to_string()));
+    state.add_message(
+        "[System] a trailing notice".to_string(),
+        MessageType::System,
+    );
+    let messages = state.narrative.history.as_slice().to_vec();
+
+    let (idx, anchor) = service
+        .find_retry_anchor_msg(&messages)
+        .expect("anchor for an event continuation with a trailing System notice");
+    assert_eq!(
+        idx, 1,
+        "the event continuation re-appends onto the main narration"
+    );
+    assert_eq!(anchor.text(), "the main narration");
 }
 
 #[test]

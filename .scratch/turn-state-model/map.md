@@ -21,9 +21,8 @@ A written model of a turn's states, the writers of game state, and the part of a
 
 ## Not yet specified
 
-<!-- Charting has not run. These patches come from the seed. -->
+<!-- These patches come from the seed. "A turn's states" graduated into the first ticket. -->
 
-- **A turn's states.** Does a turn need a rewind point and a result as two separate pointers? Which Snapshot is each one (S0–S5 in the seed)? What does a trigger continuation own?
 - **Retry tails.** For each retry form, what it restores and what it re-runs. The re-impersonate conflict (seed §2) is one case.
 - **The writer rule.** Is the slot owner the only writer of game state? How does arrival fit (seed §3)? What does `heal_stale_if_changed` assume?
 - **Fix or rewrite.** Decided after the model is checked against the code.

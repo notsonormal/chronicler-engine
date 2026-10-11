@@ -373,12 +373,10 @@ impl TestCharacterSheet {
     }
 }
 
-/// Builds a `GameState` with only a starting room.
 pub fn create_minimal_test_state() -> GameState {
     GameState::new("room1".to_string())
 }
 
-/// Builds a minimal `WorldCard` for tests.
 pub fn create_test_world() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
@@ -388,7 +386,6 @@ pub fn create_test_world() -> WorldCard {
     }
 }
 
-/// Builds a standard `PersonaCard` for tests.
 pub fn create_test_player() -> PersonaCard {
     PersonaCard {
         key: "test_player".to_string(),
@@ -406,7 +403,6 @@ pub fn create_test_player() -> PersonaCard {
     }
 }
 
-/// Builds a three-room `MapDef` with deterministic exits for tests.
 pub fn create_test_map() -> MapDef {
     let mut room1_exits = HashMap::new();
     room1_exits.insert(Direction::North, "room2".to_string());
@@ -462,7 +458,6 @@ pub fn create_test_map() -> MapDef {
     MapDef { overworld }
 }
 
-/// Builds a single test NPC.
 pub fn create_test_npcs() -> Vec<NpcCard> {
     vec![NpcCard {
         id: "test_npc".to_string(),
@@ -482,7 +477,6 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
     }]
 }
 
-/// Builds a `GameState` with selected NPCs in the starting area.
 pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
     let _world = Arc::new(WorldCard {
         key: "test".into(),
@@ -546,12 +540,10 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
     state
 }
 
-/// Builds a `GameState` seeded with the default test NPC.
 pub fn create_test_state() -> GameState {
     create_test_state_with_npcs(vec!["test_npc".to_string()], create_test_npcs())
 }
 
-/// Builds a `WorldCard` with a default scenario for tests.
 pub fn create_test_world_with_scenario() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
@@ -569,7 +561,6 @@ pub fn create_test_world_with_scenario() -> WorldCard {
     }
 }
 
-/// Builds the shopkeeper NPC used by mutation-order tests.
 pub fn shopkeeper_npc() -> NpcCard {
     NpcCard {
         id: "shopkeeper".into(),
@@ -600,7 +591,6 @@ pub fn shopkeeper_npc() -> NpcCard {
     }
 }
 
-/// Converts a vector of NPCs into an id-keyed map.
 pub fn npc_map(npcs: Vec<NpcCard>) -> HashMap<String, NpcCard> {
     npcs.into_iter().map(|npc| (npc.id.clone(), npc)).collect()
 }
@@ -629,8 +619,8 @@ pub fn dummy_message(text: &str) -> Message {
     Message::new(text, MessageType::Input, None, None)
 }
 
-/// A forensics record for a role's newest attempt, `created_offset_secs` away
-/// from now (negative for the past), so a test can order two attempts.
+/// `created_offset_secs` is signed so a test can order two attempts: negative is
+/// in the past.
 pub fn llm_message(
     agent: &str,
     model: &str,
@@ -680,8 +670,7 @@ pub fn make_test_recorder_with_storage(
     Arc::new(LlmCallRecorder::new(provider, save_fn))
 }
 
-/// The swipe inherits the message's text, snapshot_id, location_header, and
-/// event_header so the row matches what production code writes.
+/// Mirrors what production code writes, so a seeded row matches a generated one.
 pub fn insert_message_with_swipe(
     storage: &Storage,
     msg: &Message,
@@ -698,8 +687,6 @@ pub fn insert_message_with_swipe(
     Ok(())
 }
 
-/// Build a game state whose last message has a Swipe with stored generation
-/// inputs.
 pub fn seed_swipe_with_stored_inputs(
     storage: &Storage,
     room_id: &str,
@@ -726,59 +713,76 @@ pub fn seed_swipe_with_stored_inputs(
     Ok(snapshot_id)
 }
 
-/// Event retry flow: Input → Main narration (with `last_trigger`) →
-/// Event narration (with `event_header`). Each message gets its own snapshot.
-pub fn seed_event_flow(
+/// One main turn, in the order the pipeline saves it.
+pub fn seed_main_narration_flow(
     state: &crate::adapters::driving::http::AppState,
     storage: &Storage,
+    room_after: &str,
 ) -> Result<(), crate::error::EngineError> {
     use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 
-    let input_snap_id = {
+    // Mirrors `phase_pre_main_snapshot`: the Input links to this snapshot, so it is
+    // the turn's retry anchor.
+    {
         let mut gs = state.message_service.load_or_fresh();
         gs.add_message("look".to_string(), MessageType::Input);
-        let snap = GameStateSnapshot::from_game_state(&gs);
-        let id = storage.save_snapshot(&snap)?;
+        let id = storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
         if let Some(last) = gs.narrative.history.last_mut() {
             last.set_snapshot_id(Some(id));
             insert_message_with_swipe(storage, last)?;
         }
-        id
-    };
-    let _ = input_snap_id;
+    }
 
-    let _pre_event_id = {
+    // Saved before the engine commit, so this snapshot carries no movement or
+    // trigger.
+    {
+        let mut gs = state.message_service.load_or_fresh();
+        gs.add_message("Main narration".to_string(), MessageType::Narration);
+        let id = storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+        if let Some(last) = gs.narrative.history.last_mut() {
+            last.set_snapshot_id(Some(id));
+            insert_message_with_swipe(storage, last)?;
+        }
+    }
+
+    let mut gs = state.message_service.load_or_fresh();
+    gs.movement.current_room_id = room_after.to_string();
+    storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+    Ok(())
+}
+
+/// [`seed_main_narration_flow`] plus what a real trigger turn adds.
+pub fn seed_event_flow(
+    state: &crate::adapters::driving::http::AppState,
+    storage: &Storage,
+    room_after: &str,
+) -> Result<(), crate::error::EngineError> {
+    use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+
+    seed_main_narration_flow(state, storage, room_after)?;
+
+    // The snapshot `phase_trigger_continuation_llm_call` writes before the trigger
+    // call; no Message links to it.
+    {
         let mut gs = state.message_service.load_or_fresh();
         gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
-        gs.add_message("Main narration".to_string(), MessageType::Narration);
-        let snap = GameStateSnapshot::from_game_state(&gs);
-        let id = storage.save_snapshot(&snap)?;
-        if let Some(last) = gs.narrative.history.last_mut() {
-            last.set_snapshot_id(Some(id));
-            insert_message_with_swipe(storage, last)?;
-        }
-        id
-    };
+        storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+    }
 
-    let _final_id = {
+    {
         let mut gs = state.message_service.load_or_fresh();
-        gs.narrative.pending_event = Some("Event".to_string());
+        gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
+        gs.npc_encounter_log.mark_trigger_fired("npc_1", 0);
+        gs.narrative.pending_event = Some(TestStoredTriggerContext::standard().trigger_name);
         gs.add_message("Event narration".to_string(), MessageType::Narration);
-        if let Some(last) = gs.narrative.history.last_mut() {
-            last.set_event_header(Some("Event".to_string()));
-        }
-        let snap = GameStateSnapshot::from_game_state(&gs);
-        let id = storage.save_snapshot(&snap)?;
+        let id = storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
         if let Some(last) = gs.narrative.history.last_mut() {
             last.set_snapshot_id(Some(id));
             insert_message_with_swipe(storage, last)?;
         }
-        id
-    };
+    }
 
-    // Persist last_trigger on the latest snapshot so retry's `from_snapshot` sees it.
-    let mut gs = state.message_service.load_or_fresh();
-    gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
-    let _ = state.message_service.save_state(&gs);
+    let gs = state.message_service.load_or_fresh();
+    storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
     Ok(())
 }

@@ -114,6 +114,7 @@ When the client submits a command and the server fails the action
 Then the form shows an inline error naming the action as failed
 And the inline error's short line carries no raw server text
 And the raw server text is reachable in that error's disclosure
+And the inline error is drawn as a message with a Details control, not as a second Send button
 And the banner is not raised
 ```
 
@@ -284,8 +285,10 @@ When the client confirms that world row's Delete and the server fails it
 Then the world row shows its own short failure message
 And its Details disclosure holds the raw server text
 And the world row is still in the list
+And its Delete control has keyboard focus
 When the client confirms that game row's Reset and the server fails it
 Then the game row shows its own short failure message
+And the game row's Reset control has keyboard focus
 And the banner is not raised
 ```
 
@@ -375,4 +378,16 @@ When the client submits a command the engine refuses
 Then #status-display carries the wait state's class and not the ready state's
 And the wait label is drawn in the palette's body text colour
 And the command input still holds the typed command
+```
+
+#### Scenario 16.43: Every failure sentence reads in full in the status column
+
+```gherkin
+Given the dashboard is loaded at a viewport width of 1280
+When the status display reports a failed generation of any kind
+Then the whole sentence for that kind is drawn inside #status-display
+And no part of the sentence is clipped or ellipsized
+And the command input and the action area keep their sizes
+When the viewport width is 1024
+Then the whole sentence for every kind still reads in full
 ```

@@ -7,18 +7,14 @@ use futures_util::future::FutureExt;
 
 use super::*;
 
-/// How long a poll the test fired itself may take to be answered.
 const POLL_NOW_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// One check's outcome, for the runner's per-check timing summary.
 struct CheckReport {
     name: String,
     duration: Duration,
     passed: bool,
 }
 
-/// Runs one stub module's checks in a single browser.
-///
 /// Each check gets a fresh `StubServer` carrying the action outcome it asked
 /// for and its own page, so one check's server state cannot reach the next. The
 /// browser launch is paid once per runner instead of once per check.
@@ -35,9 +31,6 @@ impl StubRunner {
         }
     }
 
-    /// Run one check and keep its report. A check that panics is caught here, so
-    /// the module's remaining checks still run and the summary names the one
-    /// that failed.
     pub(super) async fn run<Fut>(
         &mut self,
         outcome: StubActionOutcome,
@@ -62,9 +55,8 @@ impl StubRunner {
         });
     }
 
-    /// Print the per-check summary, close the browser, and panic if any check
-    /// failed. The browser is closed before the panic so no driver process
-    /// outlives the test.
+    /// The browser is closed before the panic so no driver process outlives the
+    /// test.
     pub(super) async fn finish(self) {
         let failed: Vec<String> = self
             .reports
@@ -84,9 +76,8 @@ impl StubRunner {
     }
 }
 
-/// The report name of a check is the check function's own name, so the summary
-/// and the failed-check list cannot drift from the `check_*` function they
-/// describe.
+/// The summary and the failed-check list cannot drift from the `check_*` function
+/// they name.
 fn check_name<Check>(_check: &Check) -> String {
     let full = std::any::type_name::<Check>();
     full.rsplit("::").next().unwrap_or(full).to_string()
@@ -174,8 +165,7 @@ pub(super) async fn poll_now(page: &playwright_rs::Page, selector: &str) {
     );
 }
 
-/// A focus move lands at the end of a swap, so a test polls for it rather than
-/// reading focus once.
+/// Focus lands only at the end of a swap.
 pub(super) async fn wait_until_focused(
     page: &playwright_rs::Page,
     selector: &str,
@@ -197,6 +187,35 @@ pub(super) async fn active_element_is(page: &playwright_rs::Page, selector: &str
     )
     .await
     .unwrap()
+}
+
+/// A delete's `swap:0.3s` delay removes its row after the click resolves, so the
+/// count the swap changes — not the click — is what says the swap has landed.
+/// A query that errors panics rather than counting as zero, so a wait for "none
+/// left" cannot pass on a failed query.
+pub(super) async fn wait_for_count(
+    page: &playwright_rs::Page,
+    selector: &str,
+    expected: usize,
+) -> bool {
+    wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async move {
+            page.query_selector_all(selector)
+                .await
+                .expect("count the elements the selector names")
+                .len()
+                == expected
+        },
+    )
+    .await
+}
+
+pub(super) async fn accept_delete_confirmation(page: &playwright_rs::Page) {
+    page.on_dialog(|dialog| async move { dialog.accept(None).await })
+        .await
+        .unwrap();
 }
 
 pub(super) async fn read_command_input(page: &playwright_rs::Page) -> String {

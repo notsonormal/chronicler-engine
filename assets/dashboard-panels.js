@@ -10,12 +10,18 @@ const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";
 // A form field is the better landing spot: an Edit that opens a form should put
 // the caret in its first field, not on the back link above it.
 const FOCUSABLE_FIELD = "input:not([type=hidden]), select, textarea";
-// The saved-game Delete removes the row its control sits in, so there is
-// nothing left inside the swap target to land on. (The story log's own delete
-// plans its landing spot in dashboard-story-log.js.)
-const FOCUS_ROW = ".game-item";
-let focusedBeforeSwap = null;
-let removedRow = null;
+// A Delete removes the row its control sits in; the story log plans its own
+// landing spot in dashboard-story-log.js.
+const FOCUS_ROW = ".game-item, .preset-card, .world-item";
+const FOCUS_ROW_PANEL = ".games-panel, .prompt-presets-panel, .worlds-panel";
+// A refused action can answer 200 with an error fragment standing in for the row,
+// card or panel it replaced: that message is the landing spot, not a neighbour.
+const FOCUS_ERROR = ".error-message";
+// The element a swap took focus from, with the swap target whose settle may claim
+// focus for it: htmx reports both events for one request, and `detail.target` is
+// the resolved swap target in `htmx:beforeSwap` and stays that element in
+// `htmx:afterSettle` (whose `detail.elt` is the swapped-in replacement).
+let focusBeforeSwap = null;
 
 // `focus()` is a no-op on a hidden or detached control (inside a closed
 // disclosure, in a removed row), so a candidate counts only once it holds focus.
@@ -33,47 +39,86 @@ function focusInto(root) {
   return focusFirstIn(root, FOCUSABLE_FIELD) || focusFirstIn(root, FOCUSABLE);
 }
 
+// A server error fragment carries no focus of its own (it is the same markup
+// every failure surface uses), so it becomes focusable here, where it is the
+// landing spot. `tabindex="-1"` takes no stop in the tab order.
+function focusErrorFragment(target) {
+  const error = target.matches(FOCUS_ERROR)
+    ? target
+    : target.querySelector(FOCUS_ERROR);
+  if (!error) return false;
+  if (!error.hasAttribute("tabindex")) error.setAttribute("tabindex", "-1");
+  error.focus();
+  return document.activeElement === error;
+}
+
+// A preset section's add form sits between its cards, so the landing spot is the
+// next card in the container.
+function focusAfterRemovedRow(row) {
+  const cards = Array.from(row.parentElement.children).filter((child) =>
+    child.matches(FOCUS_ROW),
+  );
+  const position = cards.indexOf(row);
+  return (
+    focusInto(cards[position + 1]) ||
+    focusInto(cards[position - 1]) ||
+    focusInto(row.closest(FOCUS_ROW_PANEL))
+  );
+}
+
+// A swap that inserts a panel, a card, or the error fragment that stands in for
+// one takes focus from `htmx:afterSettle`, so a row with no such replacement is
+// the one whose landing spot has to be claimed while the row is still there.
+function insertsFocusTarget(response) {
+  const fragment = document.createElement("template");
+  fragment.innerHTML = response || "";
+  return !!fragment.content.querySelector(`${FOCUS_SWAP_TARGETS}, ${FOCUS_ERROR}`);
+}
+
+// A swap whose target is the row itself takes the row out; a rename or a reset
+// form inside a row leaves it in place. That removal needs focus to move before
+// the swap: a `swap:0.3s` delete removes the row after htmx:afterRequest has
+// already been handled, and a swap that inserts nothing fires no afterSettle.
+//
+// Only a swap that can take the focused control's row or panel away records a
+// landing spot: a poll's swap target is neither, so its 2–5 s cycle cannot
+// overwrite the element a delete saved while the delete's settle delay runs.
 document.body.addEventListener("htmx:beforeSwap", function (evt) {
-  focusedBeforeSwap = document.activeElement;
-  removedRow = null;
   const target = evt.detail.elt;
-  const row =
-    focusedBeforeSwap &&
-    focusedBeforeSwap.closest &&
-    focusedBeforeSwap.closest(FOCUS_ROW);
-  if (!row || !target || !target.contains || !target.contains(focusedBeforeSwap)) {
-    return;
-  }
-  removedRow = {
-    focused: focusedBeforeSwap,
-    next: row.nextElementSibling,
-    previous: row.previousElementSibling,
-  };
+  if (!target || !target.matches || !evt.detail.shouldSwap) return;
+  if (!target.matches(FOCUS_SWAP_TARGETS) && !target.closest(FOCUS_ROW)) return;
+  const element = document.activeElement;
+  focusBeforeSwap = { element, target };
+  const row = element && element.closest && element.closest(FOCUS_ROW);
+  if (!row || target !== row) return;
+  if (insertsFocusTarget(evt.detail.serverResponse)) return;
+  focusAfterRemovedRow(row);
 });
 
 document.body.addEventListener("htmx:afterSettle", function (evt) {
-  const saved = focusedBeforeSwap;
-  focusedBeforeSwap = null;
-  if (!saved || saved === document.body || document.contains(saved)) return;
+  const saved = focusBeforeSwap;
+  // A poll can settle inside a `swap:0.3s` delete's delay, and that settle
+  // carries its own target: only the swap that saved the element may claim or
+  // clear it, or the delete's landing spot is lost and focus falls to `body`.
+  // Scenario 29.5 dispatches that poll settle on purpose.
+  if (!saved || !evt.detail || evt.detail.target !== saved.target) return;
+  focusBeforeSwap = null;
+  const element = saved.element;
+  if (!element || element === document.body || document.contains(element)) return;
   if (document.activeElement && document.activeElement !== document.body) return;
   const target = evt.detail.elt;
-  if (!target || !target.matches || !target.matches(FOCUS_SWAP_TARGETS)) return;
-  focusInto(target);
-});
-
-// A removed row fires no afterSettle at all when it was the last child, so its
-// landing spot is applied when the request settles instead: the row that takes
-// its place, else the row before it, else the panel. htmx re-fires afterRequest
-// on the nearest surviving ancestor of a request element the swap removed,
-// which is what reaches this listener.
-document.body.addEventListener("htmx:afterRequest", function () {
-  const removed = removedRow;
-  removedRow = null;
-  if (!removed || document.contains(removed.focused)) return;
-  if (document.activeElement && document.activeElement !== document.body) return;
-  focusInto(removed.next) ||
-    focusInto(removed.previous) ||
-    focusInto(document.querySelector(".games-panel"));
+  if (!target || !target.matches) return;
+  if (target.matches(FOCUS_SWAP_TARGETS)) {
+    focusInto(target);
+    return;
+  }
+  // The row the control sat in came back as an error fragment: focus the message
+  // there, so the refusal is read where the control was, not on a neighbour. Only
+  // a row or an error fragment may take focus this way, so an unrelated poll's
+  // fragment cannot.
+  if (target.matches(FOCUS_ROW) || target.matches(FOCUS_ERROR)) {
+    focusErrorFragment(target);
+  }
 });
 
 // A failed Update World must not sit under green feedback from an earlier auto-save.
@@ -103,7 +148,7 @@ function rememberActiveTab(tab) {
   try {
     sessionStorage.setItem(ACTIVE_TAB_KEY, tab);
   } catch (e) {
-    // Without storage the tab only lasts for the page, which is the old behaviour.
+    // Without storage the active tab lasts for the page only.
   }
 }
 

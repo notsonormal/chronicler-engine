@@ -62,9 +62,7 @@ State mutation preserves this order:
 
 ## Retry Flow
 
-Main retry and event retry restore Message-aligned Snapshot state before generation. Retrigger runs on the current state.
-
-Each Message and Swipe points to the Snapshot representing its resulting state.
+Main retry restores the Snapshot of its anchor Message before generation. Event retry restores the Snapshot of the Swipe it redoes. Retrigger runs on the current state.
 
 ## Movement Branch
 

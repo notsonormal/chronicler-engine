@@ -13,11 +13,11 @@ use chronicler_engine::test_support::{
     make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder, TestDataBuilder,
 };
 
-use crate::support::http_assertions::status_error_message;
+use crate::support::http_assertions::{assert_story_log_ends_with_message, status_error_message};
 use crate::support::app_wiring::{app_with_narrator, app_with_narrator_and_settings};
 use crate::support::http_requests::{
-    fetch_generating_status, post_action, post_action_check, post_empty, post_form, response_body,
-    wait_idle,
+    fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
+    response_body, wait_idle,
 };
 
 // [docs/specs/actions.md] SCENARIO: 1.1
@@ -390,13 +390,12 @@ async fn test_nonexistent_room_sets_error_status_http() {
         "expected 'Room not found' in the status, got: {status}"
     );
     let messages = state.message_service.load_messages().unwrap();
-    let new_narrations: Vec<_> = messages
-        .iter()
-        .filter(|m| m.message_type == MessageType::Narration)
-        .collect();
-    // The fresh-game opening narration exists, but no new narration from this action.
-    // We assert none of the narrations mention "look" output (the action failed).
-    let _ = new_narrations; // not asserting count here — the opening narration may exist
+    assert!(
+        !messages
+            .iter()
+            .any(|m| m.message_type == MessageType::Narration),
+        "the action in an invalid room must append no Narration: {messages:?}"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 2.2
@@ -429,8 +428,6 @@ async fn test_empty_narrator_response_sets_error_no_narration_http() {
         status.contains("empty"),
         "error message should mention 'empty', got: {status}"
     );
-    // No new narration persisted. The fresh-game opening narration may exist
-    // from setup; count narrations before and after to be sure.
     let messages = state.message_service.load_messages().unwrap();
     let has_new_narration_for_this_action = messages
         .iter()
@@ -507,11 +504,38 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
         }),
         "main narration should be preserved"
     );
+    assert_eq!(
+        messages.len(),
+        messages
+            .iter()
+            .filter(|m| m.is_input_or_narration())
+            .count(),
+        "a failed trigger must not append a story-log entry: {messages:?}"
+    );
     assert!(
-        messages.iter().any(|m| {
+        !messages.iter().any(|m| {
             m.message_type == MessageType::System && m.text().contains("Trigger narration failed")
         }),
-        "System log should mention trigger failure"
+        "the engine error must not be written into the story log: {messages:?}"
+    );
+    assert_eq!(
+        messages.last().map(|m| m.message_type.clone()),
+        Some(MessageType::Narration),
+        "the main narration must stay the last entry: {messages:?}"
+    );
+
+    let story_log = fetch_body(&app, "/fragment/story-log").await;
+    assert!(
+        story_log.contains("retrigger-btn"),
+        "the failed trigger must leave Retrigger available: {story_log}"
+    );
+    assert_story_log_ends_with_message(
+        &story_log,
+        messages
+            .last()
+            .expect("the main narration survives the failed trigger")
+            .id,
+        "the main narration must be the last rendered entry",
     );
 }
 
@@ -717,7 +741,6 @@ async fn test_slash_impersonate_produces_input_http() {
         "impersonate should produce exactly one Input entry"
     );
 
-    // The slash command itself is not persisted as a plain Input entry.
     let raw_command: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input && m.text().contains("/impersonate hello"))
@@ -795,7 +818,6 @@ async fn test_slash_command_bypasses_text_check_http() {
     };
     let (app, state) = app_with_narrator_and_settings(narrator, settings);
 
-    // Recognized steering command: the misspelling must not surface a preview.
     let resp = post_action_check(&app, "/guide look at the casle").await;
     assert!(resp.status().is_success());
     assert!(
@@ -813,12 +835,11 @@ async fn test_slash_command_bypasses_text_check_http() {
         "guide action should complete"
     );
 
-    // An /options leg runs next: it is an engine command and bypasses the
-    // check the same way /guide does (spec 1.12). The /guide leg above has
-    // created scene history, so the dispatch does not hit the empty-history
-    // validation error. The fixture carries no options agent, so generation
-    // itself surfaces the unavailable-agent message — outcome assertions are
-    // unit-tier (options_tests.rs); this leg pins only the bypass.
+    // An /options leg: engine commands bypass the text check the same way /guide
+    // does (spec 1.12). The /guide leg above has already created scene history, so
+    // the dispatch avoids the empty-history validation error. The fixture carries
+    // no options agent, so only the bypass is pinned here; outcome assertions are
+    // unit-tier (options_tests.rs).
     let resp = post_action_check(&app, "/options").await;
     assert!(resp.status().is_success());
     assert!(
@@ -836,7 +857,6 @@ async fn test_slash_command_bypasses_text_check_http() {
         "/options action should complete"
     );
 
-    // Same words as plain input: the spell check must surface a preview.
     let resp = post_action_check(&app, "look at the casle").await;
     assert!(resp.status().is_success());
     assert!(
@@ -860,8 +880,7 @@ async fn test_confirm_retargets_status_display() {
 
     let resp = post_form(&app, "/action/confirm", "command=look").await;
     assert!(resp.status().is_success());
-    // The confirm retargets its status fragment at #status-display; it must not
-    // swap a fresh (disabled) action area back in.
+    // A confirm must not swap a fresh (disabled) action area back in.
     assert_eq!(
         resp.headers().get("HX-Retarget"),
         Some(&axum::http::HeaderValue::from_static("#status-display")),

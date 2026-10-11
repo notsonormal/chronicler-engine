@@ -10,6 +10,17 @@ pub fn assert_option_selected(html: &str, value: &str, msg: &str) {
     );
 }
 
+/// The story log renders one `id="entry-N"` row per Message, in history
+/// order, so the last one is the Message the player sees at the log's bottom.
+pub fn assert_story_log_ends_with_message(story_log: &str, message_id: u64, msg: &str) {
+    let last_rendered = story_log
+        .rsplit(r#"id="entry-"#)
+        .next()
+        .and_then(|rest| rest.split('"').next())
+        .expect("the story log fragment renders entries");
+    assert_eq!(last_rendered, message_id.to_string(), "{msg}: {story_log}");
+}
+
 pub fn status_error_message(fragment: &str) -> &str {
     let marker = r#"<pre class="error-detail-raw">"#;
     let start = fragment
@@ -27,7 +38,6 @@ fn attribute_value(opening_tag: &str, name: &str) -> Option<String> {
     Some(opening_tag[start..start + length].to_string())
 }
 
-/// Skips any `>` that sits inside a quoted attribute value.
 fn opening_tag_end(markup: &str) -> usize {
     let mut quote: Option<char> = None;
     for (offset, character) in markup.char_indices() {

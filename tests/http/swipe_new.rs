@@ -7,6 +7,7 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::message::Message;
@@ -15,12 +16,80 @@ use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnaps
 use chronicler_engine::test_support::{
     insert_message_with_swipe, make_test_pipeline_with_backends,
     make_test_pipeline_with_mock_quantifier, make_test_recorder, make_test_recorder_with_storage,
-    seed_event_flow, TestAppBuilder, TestDataBuilder, TestMap,
+    seed_event_flow, seed_main_narration_flow, TestAppBuilder, TestDataBuilder, TestMap,
+    TestStoredTriggerContext,
 };
 
 use crate::support::app_wiring::app_with_narrator;
 use crate::support::http_assertions::status_error_message;
 use crate::support::http_requests::{fetch_generating_status, post_action, post_empty, wait_idle};
+
+/// A game whose event Narration meets Gabriella in Swipe 1, while the retry's
+/// own generation leaves her out: the two Swipes disagree about the encounter.
+/// Returns the app, its state and the event Message's id.
+async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u64) {
+    use chronicler_engine::domain::model::trigger::ComparisonOperator;
+    use chronicler_engine::test_support::TestNpc;
+
+    let storage = Arc::new(Storage::new_in_memory());
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .npcs(vec![TestNpc::with_room_scoped_trigger(
+            "gabriella",
+            "Gabriella",
+            ComparisonOperator::Eq,
+            0,
+            "room2",
+        )])
+        .build();
+    let narrator = Arc::new(MockBackend::default());
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        // The action's post-generation pass moves the player into the room the
+        // trigger watches.
+        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+            .to_string(),
+        // The event's own reconciliation meets Gabriella.
+        r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
+        // The retry's reconciliation leaves her out.
+        r#"{"npcs_in_room": []}"#.to_string(),
+    ])) as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline =
+        make_test_pipeline_with_mock_quantifier(Arc::clone(&storage), recorder, quantifier);
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .storage(Arc::clone(&storage))
+        .pipeline(pipeline)
+        .build_with_state();
+
+    let resp = post_action(&app, "walk around").await;
+    assert!(resp.status().is_success());
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the trigger turn should complete"
+    );
+
+    let event_id = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .iter()
+        .find(|m| m.event_header().is_some())
+        .map(|m| m.id)
+        .expect("the trigger turn appends an event narration");
+    (app, state, event_id)
+}
+
+fn encounter_times_met(state: &AppState, npc_id: &str) -> u32 {
+    state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed")
+        .npc_encounter_log
+        .get(npc_id)
+        .map(|encounter| encounter.times_met)
+        .unwrap_or(0)
+}
 
 // [docs/specs/swipe_new.md] SCENARIO: 9.1
 #[tokio::test]
@@ -278,6 +347,9 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
 #[tokio::test]
 async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
     let storage = Arc::new(Storage::new_in_memory());
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
     let narrator = Arc::new(MockBackend::default());
     let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
     let pipeline = make_test_pipeline_with_mock_quantifier(
@@ -286,11 +358,12 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
         Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>,
     );
     let (app, state) = TestAppBuilder::default_test()
+        .data(data)
         .storage(Arc::clone(&storage))
         .pipeline(pipeline)
         .build_with_state();
 
-    seed_event_flow(&state, &storage).unwrap();
+    seed_event_flow(&state, &storage, "room2").unwrap();
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -331,13 +404,13 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
 #[tokio::test]
 async fn test_event_retry_does_not_rerun_quantifier_http() {
     let storage = Arc::new(Storage::new_in_memory());
-    // Quantifier would move the player if called; event retry must NOT call it.
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
+    // Quantifier would move the player back if called; event retry must NOT call it.
     let narrator = Arc::new(MockBackend::default());
     let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
-        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room_1"}}"#
             .to_string(),
     ])) as Arc<dyn LlmProvider>;
     let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
@@ -349,7 +422,7 @@ async fn test_event_retry_does_not_rerun_quantifier_http() {
         .pipeline(pipeline)
         .build_with_state();
 
-    seed_event_flow(&state, &storage).unwrap();
+    seed_event_flow(&state, &storage, "room2").unwrap();
 
     let room_before = state
         .game_view_query
@@ -369,6 +442,280 @@ async fn test_event_retry_does_not_rerun_quantifier_http() {
     assert_eq!(
         room_before, room_after,
         "event retry must not re-run quantifier (room unchanged)"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 10.4
+#[tokio::test]
+async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
+    let narrator = Arc::new(MockBackend::default());
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::clone(&storage),
+        recorder,
+        Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>,
+    );
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .storage(Arc::clone(&storage))
+        .pipeline(pipeline)
+        .build_with_state();
+
+    seed_main_narration_flow(&state, &storage, "room2").unwrap();
+    // The trigger matched but its continuation never landed: the context is
+    // persisted, which is what makes Retrigger available.
+    {
+        let mut gs = state.message_service.load_or_fresh();
+        gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
+        storage
+            .save_snapshot(&GameStateSnapshot::from_game_state(&gs))
+            .unwrap();
+    }
+
+    let resp = post_empty(&app, "/retrigger").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "retrigger should complete");
+    let retriggered_event = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .into_iter()
+        .next_back()
+        .expect("retrigger appends the event narration");
+    assert!(
+        retriggered_event.event_header().is_some(),
+        "retrigger should append an event narration"
+    );
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "event retry should complete");
+
+    let messages = state.message_service.load_messages().unwrap();
+    let event = messages
+        .iter()
+        .find(|m| m.id == retriggered_event.id)
+        .expect("the retriggered event survives the retry");
+    assert_eq!(
+        event.swipes.len(),
+        2,
+        "event retry appends exactly one swipe (retriggered + new)"
+    );
+    assert_eq!(
+        event.active_swipe_index, 1,
+        "new swipe should be the active swipe"
+    );
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "event retry should finish in the Idle state"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 10.5
+#[tokio::test]
+async fn test_event_retry_does_not_carry_the_previous_swipes_encounter_http() {
+    let (app, state, event_id) = app_with_an_event_that_meets_gabriella().await;
+    assert_eq!(
+        encounter_times_met(&state, "gabriella"),
+        1,
+        "the event's own reconciliation meets Gabriella"
+    );
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "event retry should complete");
+
+    assert_eq!(
+        encounter_times_met(&state, "gabriella"),
+        0,
+        "the retry's Swipe must not carry the previous Swipe's encounter"
+    );
+    let debug = state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed");
+    assert!(
+        debug.npcs_in_area.is_empty(),
+        "Gabriella is not in the retry's scene, got {:?}",
+        debug.npcs_in_area
+    );
+    let messages = state.message_service.load_messages().unwrap();
+    let event = messages
+        .iter()
+        .find(|m| m.id == event_id)
+        .expect("the event survives the retry");
+    assert_eq!(
+        event.swipes.len(),
+        2,
+        "event retry appends exactly one swipe"
+    );
+    assert_eq!(fetch_generating_status(&app).await, "idle");
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 10.6
+#[tokio::test]
+async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
+    use chronicler_engine::domain::model::trigger::ComparisonOperator;
+    use chronicler_engine::test_support::TestNpc;
+
+    let storage = Arc::new(Storage::new_in_memory());
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        // The seeded event's own trigger context belongs to `npc_1`, so the
+        // world keeps it and adds the Character the later turn fires.
+        .npc(TestNpc::with_room_scoped_trigger(
+            "gabriella",
+            "Gabriella",
+            ComparisonOperator::Eq,
+            0,
+            "room2",
+        ))
+        .build();
+    let narrator = Arc::new(MockBackend::default());
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": []}"#.to_string(),
+        r#"{"npcs_in_room": []}"#.to_string(),
+        r#"{"npcs_in_room": []}"#.to_string(),
+    ])) as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline =
+        make_test_pipeline_with_mock_quantifier(Arc::clone(&storage), recorder, quantifier);
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .storage(Arc::clone(&storage))
+        .pipeline(pipeline)
+        .build_with_state();
+
+    seed_event_flow(&state, &storage, "room2").unwrap();
+    let seeded_messages = state.message_service.load_messages().unwrap();
+    let seeded = seeded_messages
+        .last()
+        .expect("the seeded event narration")
+        .clone();
+    let seeded_count = seeded_messages.len();
+    let seeded_header = seeded
+        .event_header()
+        .map(str::to_string)
+        .expect("the seeded event has a header");
+
+    let resp = post_action(&app, "look around").await;
+    assert!(resp.status().is_success());
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the later turn should complete"
+    );
+    let later = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .into_iter()
+        .next_back()
+        .expect("the later turn's event narration");
+    assert_eq!(
+        later.event_header().map(str::to_string),
+        Some("Gabriella Encounter in room2".to_string()),
+        "the later turn fires Gabriella's Trigger"
+    );
+
+    // Deleting that whole turn leaves the seeded event last again, with the
+    // other Trigger's context still on the latest Snapshot.
+    while state.message_service.load_messages().unwrap().len() > seeded_count {
+        let resp = post_empty(&app, "/history/delete").await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "event retry should complete");
+
+    let messages = state.message_service.load_messages().unwrap();
+    let retried = messages
+        .iter()
+        .find(|m| m.id == seeded.id)
+        .expect("the seeded event survives the retry");
+    assert_eq!(
+        retried.swipes.len(),
+        2,
+        "event retry appends exactly one swipe"
+    );
+    assert_eq!(
+        retried.event_header().map(str::to_string),
+        Some(seeded_header),
+        "the retry reuses the event's own trigger context"
+    );
+    assert_eq!(fetch_generating_status(&app).await, "idle");
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 10.7
+#[tokio::test]
+async fn test_event_retry_matches_with_a_prior_swipe_switch_http() {
+    let (app, state, event_id) = app_with_an_event_that_meets_gabriella().await;
+
+    // Re-selecting the event's only Swipe re-saves its Snapshot as the latest
+    // one; the retry must not read the world from there.
+    let resp = post_empty(&app, &format!("/message/{event_id}/swipe/0")).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "event retry should complete");
+
+    assert_eq!(
+        encounter_times_met(&state, "gabriella"),
+        0,
+        "a prior swipe switch must not change what the retry starts from"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 10.8
+#[tokio::test]
+async fn test_event_retry_keeps_the_swipes_room_name_http() {
+    let (app, state, event_id) = app_with_an_event_that_meets_gabriella().await;
+
+    // The turn's own movement put the room name on the event Swipe; the retry
+    // regenerates the continuation on that Swipe's Snapshot, which has no
+    // pending room left.
+    let room_name = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .iter()
+        .find(|m| m.id == event_id)
+        .and_then(|m| m.location_header().map(str::to_string))
+        .expect("the turn's movement puts the room name on the event Swipe");
+    assert_eq!(
+        room_name, "Room room2",
+        "the movement into \"room2\" must report that room's display name"
+    );
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "event retry should complete");
+
+    let messages = state.message_service.load_messages().unwrap();
+    let event_narration = messages
+        .iter()
+        .find(|m| m.id == event_id)
+        .expect("the event Message survives the retry");
+    assert_eq!(
+        event_narration.swipes.len(),
+        2,
+        "event retry appends exactly one swipe"
+    );
+    assert_eq!(
+        event_narration.location_header(),
+        Some("Room room2"),
+        "the new active swipe must report the room the event was written in"
+    );
+    assert_eq!(
+        event_narration.swipes[0].location_header.as_deref(),
+        Some("Room room2"),
+        "the first swipe must still report that room"
     );
 }
 
@@ -424,7 +771,6 @@ async fn test_retry_anchor_no_snapshot_returns_500_http() {
         .storage(Arc::clone(&storage))
         .build();
 
-    // Seed an Input message with snapshot_id = None (broken integrity).
     let input_msg = Message::new("look", MessageType::Input, None, None);
     insert_message_with_swipe(&storage, &input_msg).unwrap();
 
@@ -449,7 +795,6 @@ async fn test_retry_anchor_snapshot_deleted_returns_500_http() {
         .storage(Arc::clone(&storage))
         .build();
 
-    // Seed an Input message with a snapshot_id that doesn't exist in storage.
     let mut input_msg = Message::new("look", MessageType::Input, None, None);
     input_msg.set_snapshot_id(Some(999_999)); // non-existent snapshot
     insert_message_with_swipe(&storage, &input_msg).unwrap();
@@ -473,7 +818,6 @@ async fn test_retry_llm_failure_sets_error_http() {
     let narrator = Arc::new(MockBackend::default().with_fail());
     let (app, state) = app_with_narrator(narrator);
 
-    // Seed Input + Narration directly; the with_fail() narrator fails on retry.
     {
         let mut gs = state.message_service.load_or_fresh();
         gs.add_message("look".to_string(), MessageType::Input);
@@ -576,7 +920,6 @@ async fn test_retry_room_not_found_sets_error_http() {
         .storage(Arc::clone(&storage))
         .build_with_state();
 
-    // Seed an Input whose snapshot points at a non-existent room (retry anchor).
     let mut gs = state.message_service.load_or_fresh();
     gs.movement.current_room_id = "non_existent_room".to_string();
     gs.add_message("look".to_string(), MessageType::Input);
@@ -590,7 +933,6 @@ async fn test_retry_room_not_found_sets_error_http() {
         }
     }
 
-    // Seed a non-event Narration as the last message (spec 11.7 Given).
     let mut gs = state.message_service.load_or_fresh();
     gs.add_message("A calm scene.".to_string(), MessageType::Narration);
     let snap = GameStateSnapshot::from_game_state(&gs);
@@ -616,7 +958,6 @@ async fn test_retry_room_not_found_sets_error_http() {
         "error should mention room invalid, got: {status}"
     );
 
-    // Spec 11.7 Then: original narration's swipes unchanged (no new swipe appended).
     let messages = state.message_service.load_messages().unwrap();
     let narration = messages
         .iter()
@@ -634,6 +975,9 @@ async fn test_retry_room_not_found_sets_error_http() {
 #[tokio::test]
 async fn test_event_retry_trigger_narration_failure_sets_error_http() {
     let storage = Arc::new(Storage::new_in_memory());
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
     let narrator = Arc::new(MockBackend::default().with_trigger_narration_fail());
     let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
     let pipeline = make_test_pipeline_with_mock_quantifier(
@@ -642,11 +986,13 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
         Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>,
     );
     let (app, state) = TestAppBuilder::default_test()
+        .data(data)
         .storage(Arc::clone(&storage))
         .pipeline(pipeline)
         .build_with_state();
 
-    seed_event_flow(&state, &storage).unwrap();
+    seed_event_flow(&state, &storage, "room2").unwrap();
+    let messages_before = state.message_service.load_messages().unwrap().len();
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -669,11 +1015,131 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
         }),
         "main narration should be preserved"
     );
+    assert_eq!(
+        messages.len(),
+        messages_before,
+        "a failed trigger must not append a story-log entry: {messages:?}"
+    );
+
+    let debug = state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed");
+    assert_eq!(
+        debug.current_room_id, "room2",
+        "failed event retry must not roll the turn's movement back"
+    );
+    assert_eq!(
+        debug
+            .npc_encounter_log
+            .get("npc_1")
+            .and_then(|state| state.trigger_fired.get(&0))
+            .copied(),
+        Some(true),
+        "failed event retry must not clear the fired trigger"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 11.9
+#[tokio::test]
+async fn test_failed_retry_does_not_roll_the_movement_back_http() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let narrator = Arc::new(MockBackend::default().with_fail());
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::clone(&storage),
+        recorder,
+        Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>,
+    );
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .storage(Arc::clone(&storage))
+        .pipeline(pipeline)
+        .build_with_state();
+
+    // The settled turn moved the player; the Narration's anchor is the room
+    // before that movement, as a real turn leaves it.
+    seed_main_narration_flow(&state, &storage, "room2").unwrap();
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        messages.iter().any(|m| {
-            m.message_type == MessageType::System && m.text().contains("Trigger narration failed")
-        }),
-        "System log should mention trigger failure"
+        wait_idle(&state, 1000).await,
+        "retry should complete (with error)"
+    );
+
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        !status_error_message(&status).is_empty(),
+        "failed retry should show an error, got: {status}"
+    );
+    let debug = state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed");
+    assert_eq!(
+        debug.current_room_id, "room2",
+        "a failed retry must not roll the turn's movement back"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 11.10
+#[tokio::test]
+async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
+    use chronicler_engine::domain::model::trigger::ComparisonOperator;
+    use chronicler_engine::test_support::TestNpc;
+
+    let storage = Arc::new(Storage::new_in_memory());
+    // The narration lands, then the trigger it fires fails: the redo wrote a
+    // narration and moved the player, so that world is the one to keep.
+    let narrator = Arc::new(MockBackend::default().with_trigger_narration_fail());
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+            .to_string(),
+    ])) as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline =
+        make_test_pipeline_with_mock_quantifier(Arc::clone(&storage), recorder, quantifier);
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .npcs(vec![TestNpc::with_room_scoped_trigger(
+            "shopkeeper",
+            "Shopkeeper Sarah",
+            ComparisonOperator::Eq,
+            0,
+            "room2",
+        )])
+        .build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .storage(Arc::clone(&storage))
+        .pipeline(pipeline)
+        .build_with_state();
+
+    seed_main_narration_flow(&state, &storage, "room_1").unwrap();
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(
+        wait_idle(&state, 1000).await,
+        "retry should complete (with error)"
+    );
+
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("Trigger narration failed"),
+        "error should mention 'Trigger narration failed', got: {status}"
+    );
+    let debug = state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed");
+    assert_eq!(
+        debug.current_room_id, "room2",
+        "the world the failed retry wrote is the one on screen"
     );
 }
 
@@ -691,7 +1157,6 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
         .save_message_and_snapshot(&mut game_state)
         .expect("seed input message with snapshot");
 
-    // Pre-claim the generation gate so retry sees it busy.
     let game_id = state.game_catalogue.current_game_id();
     let (_, _, claim) = state
         .generation_gate
@@ -906,9 +1371,8 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
             .expect("seed impersonate input");
     }
 
-    // Update the active impersonate preset's content in place. Same id, new
-    // configuration: if the redo still pinned the old preset, the marker would
-    // never reach the prompt.
+    // Same id, new configuration: if the redo still pinned the old preset, the
+    // marker would never reach the prompt.
     let marker = "MARKER-IMPERSONATE-PRESET-V2";
     {
         let mut preset = state
