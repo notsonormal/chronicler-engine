@@ -27,3 +27,19 @@ Then the same connection form page is shown
 When the client activates the back link
 Then the Connections list is shown again
 ```
+
+#### Scenario 40.3: A Settings panel swap keeps keyboard focus in the panel
+
+```gherkin
+Given the dashboard is loaded on the Connections sub-tab
+And a connection's Edit control has keyboard focus
+When the client activates it
+Then the connection form page is shown
+And #conn_name has keyboard focus
+When the client activates the back link
+Then the Connections list is shown again
+And #role-select-narrator has keyboard focus
+When the client changes the Quantifier role's connection
+Then the panel is re-rendered
+And #role-select-quantifier has keyboard focus
+```

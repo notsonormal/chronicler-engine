@@ -13,6 +13,14 @@ slow-timeout = { period = "60s", terminate-after = 1, on-timeout = "fail" }
 filter = 'binary(architecture)'
 slow-timeout = { period = "180s", terminate-after = 1, on-timeout = "fail" }
 
+# A converted stub module runs every check of that module inside one `run_*`
+# test, so its runtime is the module's whole check set instead of one test's.
+# A runner also matches the browser override below. nextest takes each setting
+# from the first override that matches, so this block stays above it.
+[[profile.default.overrides]]
+filter = 'binary(browser) and test(/run_/)'
+slow-timeout = { period = "180s", terminate-after = 1, on-timeout = "fail" }
+
 # Browser concurrency is test-threads / threads-required, so 3 / 1 runs three
 # Playwright/Chromium tests at once. Four at once gained nothing and hit the
 # 8 GiB memory limit. Change both values together, or concurrency drops.

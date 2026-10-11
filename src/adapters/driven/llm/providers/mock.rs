@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
+//! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! Mock LLM provider for testing
 
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};

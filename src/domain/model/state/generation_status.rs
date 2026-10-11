@@ -40,6 +40,8 @@ pub enum GenerationFailureKind {
     /// An answer arrived but could not be used: unparseable, empty, or rejected
     /// by narration post-processing.
     UnreadableAnswer,
+    /// The model spent its whole output budget before writing an answer.
+    TokenBudgetSpent,
     /// The turn could not be persisted.
     SaveFailed,
     /// The room the turn ran in is gone from the map.
@@ -78,9 +80,12 @@ impl GenerationFailure {
             | EngineError::Narrative(NarrativeFailure::PromptBuild { .. }) => {
                 GenerationFailureKind::PromptTooLong
             }
-            EngineError::Llm(LlmFailure::ParseError { .. } | LlmFailure::EmptyResponse)
+            EngineError::Llm(LlmFailure::ParseError { .. } | LlmFailure::EmptyResponse { .. })
             | EngineError::Narrative(NarrativeFailure::Generation { .. }) => {
                 GenerationFailureKind::UnreadableAnswer
+            }
+            EngineError::Llm(LlmFailure::TokenBudgetSpent { .. }) => {
+                GenerationFailureKind::TokenBudgetSpent
             }
             EngineError::Database(_) | EngineError::Io(_) => GenerationFailureKind::SaveFailed,
             EngineError::RoomNotFound(_) => GenerationFailureKind::SceneMissing,

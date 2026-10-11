@@ -17,9 +17,26 @@ When the client GET /fragment/header
 Then the response carries a failure banner naming the Quantifier and its failure effect
 And the banner states that role health covers every game
 And the banner's Details disclosure lists each role with the backend and model of its newest attempt
+And a role whose newest attempt succeeded reads as a success
+And a role with no recorded attempt reads as having no calls
 And the raw failure text is reachable only inside that disclosure
 When a later Quantifier attempt succeeds and the client GET /fragment/header again
 Then the response carries no failure banner
+```
+
+#### Scenario 38.6: The header poll keeps the Settings role health current
+
+```gherkin
+Given a client showing the dashboard, whose Settings panel rendered a health cell per role row
+When a role's newest attempt fails
+And the client GET /fragment/header
+Then the response carries an out-of-band swap for that role's health cell
+And the cell reports the role as Degraded
+And the response carries an out-of-band swap for the Connections sub-tab's warning marker, which is present
+When a later attempt for that role succeeds
+And the client GET /fragment/header again
+Then the cell reports the role as Healthy
+And the marker's swap is empty
 ```
 
 ### Failed requests
@@ -61,4 +78,13 @@ Given a Game whose last generation failed because its active prompt preset is mi
 When the client GET /status/generating
 Then the response carries the missing-preset line, not the line for an unnamed failure
 And the raw text naming the missing preset is reachable only inside the response's disclosure
+```
+
+#### Scenario 38.7: A spent token budget clamps to its own line with the counts in the disclosure
+
+```gherkin
+Given a Game whose last generation failed because the model spent its whole token budget before writing an answer
+When the client GET /status/generating
+Then the response carries the spent-token-budget line, not the unreadable-answer line or the line for an unnamed failure
+And the raw text naming the completion and reasoning token counts is reachable only inside the response's disclosure
 ```

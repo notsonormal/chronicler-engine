@@ -128,10 +128,8 @@ pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String
     )
 }
 
-/// The card every preset listing renders, so an edit-refreshed card is
-/// identical to the same card in the panel. `preview` is pre-truncated (120
-/// chars, newlines flattened); `active_badges` and `activate_buttons` are the
-/// card's slice of the settings' active slots.
+/// The card every preset listing renders, so an edit-refreshed card matches the panel's.
+/// `preview` arrives pre-truncated: newlines flattened, a cut marked with an ellipsis.
 #[derive(Template)]
 #[template(
     source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if !self.active_badges.is_empty() %} active{% endif %}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% for badge in self.active_badges %}<span class="badge primary">{{ badge }}</span>{% endfor %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% for (label, mode_query) in self.activate_buttons %}<button hx-post="/prompt-presets/{{ preset.id }}/activate{{ mode_query }}" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">{{ label }}</button>{% endfor %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button></div></div>"##,
@@ -162,8 +160,6 @@ impl PresetCardTemplate {
     }
 }
 
-/// The badges and activation buttons a mode-tagged preset earns from its
-/// per-mode slots.
 fn mode_slot_actions(
     preset: &PromptPreset,
     settings: &AppSettings,
@@ -184,8 +180,8 @@ fn mode_slot_actions(
     (active_badges, activate_buttons)
 }
 
-/// The same for an Options preset, whose single settings-level slot serves both
-/// modes, so its `allowed_modes` flags do not gate the button.
+/// The Options slot is settings-level, so its `allowed_modes` flags do not gate the
+/// button.
 fn options_slot_actions(
     preset: &PromptPreset,
     settings: &AppSettings,
@@ -198,13 +194,19 @@ fn options_slot_actions(
     }
 }
 
+/// The ellipsis stops a cut preview reading as the whole field.
 fn truncated_preview(preset: &PromptPreset) -> String {
-    preset
-        .preview_text()
-        .chars()
-        .take(120)
-        .collect::<String>()
-        .replace('\n', " ")
+    const MAX_PREVIEW_CHARS: usize = 120;
+    let text = preset.preview_text().replace('\n', " ");
+    let text = text.trim();
+    if text.chars().count() <= MAX_PREVIEW_CHARS {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(MAX_PREVIEW_CHARS).collect();
+    match head.rsplit_once(' ') {
+        Some((words, _)) => format!("{}…", words.trim_end()),
+        None => format!("{head}…"),
+    }
 }
 
 pub(crate) fn preset_card_html(preset: &PromptPreset, settings: &AppSettings) -> String {

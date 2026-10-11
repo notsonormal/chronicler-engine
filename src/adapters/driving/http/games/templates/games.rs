@@ -89,7 +89,7 @@ pub struct PersonaRowView {
         <h2>Saved Games</h2>
         <div class="games-list">
             {% if saved_games.is_empty() %}
-            <div class="games-empty">No other saved games.</div>
+            {{ saved_games_empty|safe }}
             {% else %}
             {% for game in saved_games %}
             <div class="game-item" data-id="{{ game.id }}">
@@ -123,6 +123,24 @@ pub struct GamesPanelTemplate {
     pub personas: Vec<PersonaRowView>,
     /// Pre-rendered because the fragment is also a standalone auto-save target.
     pub posture_html: String,
+    /// Pre-rendered from the same template the delete route answers with, so the
+    /// empty state has one source.
+    pub saved_games_empty: SafeHtml,
+}
+
+/// A delete replaces the removed row with this, because the list's own empty state
+/// only renders with the whole panel.
+#[derive(Template)]
+#[template(
+    source = r##"<div class="games-empty">No other saved games.</div>"##,
+    ext = "html"
+)]
+struct SavedGamesEmptyTemplate;
+
+impl GamesPanelTemplate {
+    pub fn saved_games_empty_html() -> String {
+        SavedGamesEmptyTemplate.render().unwrap_or_default()
+    }
 }
 
 #[derive(Template)]

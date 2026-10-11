@@ -100,7 +100,39 @@
         <h2>Saved Games</h2>
         <div class="games-list">
             
-            <div class="games-empty">No other saved games.</div>
+            <div class="game-item" data-id="2">
+                <span class="game-name">Test Realm — 17 Sep 2026 (2)</span>
+                <span class="world-badge">Test Realm</span>
+                <span class="persona-badge">Test Player</span>
+                <div class="game-actions">
+                    <details class="game-rename">
+                        <summary>Rename</summary>
+                        <form hx-post="/games/2/rename" hx-swap="none">
+                            <input type="text" name="display_name" value="Test Realm — 17 Sep 2026 (2)" required maxlength="120" aria-label="Game display name">
+                            <button type="submit" class="btn-primary">Save</button>
+                        </form>
+                    </details>
+                    <button class="btn-primary" hx-post="/games/2/switch" hx-swap="none">Switch</button>
+                    <button class="btn-danger" hx-post="/games/2/delete" hx-target="closest .game-item" hx-swap="outerHTML" hx-confirm="Delete this game? This cannot be undone.">Delete</button>
+                </div>
+            </div>
+            
+            <div class="game-item" data-id="3">
+                <span class="game-name">Test Realm — 17 Sep 2026 (3)</span>
+                <span class="world-badge">Test Realm</span>
+                <span class="persona-badge">Test Player</span>
+                <div class="game-actions">
+                    <details class="game-rename">
+                        <summary>Rename</summary>
+                        <form hx-post="/games/3/rename" hx-swap="none">
+                            <input type="text" name="display_name" value="Test Realm — 17 Sep 2026 (3)" required maxlength="120" aria-label="Game display name">
+                            <button type="submit" class="btn-primary">Save</button>
+                        </form>
+                    </details>
+                    <button class="btn-primary" hx-post="/games/3/switch" hx-swap="none">Switch</button>
+                    <button class="btn-danger" hx-post="/games/3/delete" hx-target="closest .game-item" hx-swap="outerHTML" hx-confirm="Delete this game? This cannot be undone.">Delete</button>
+                </div>
+            </div>
             
         </div>
     </div>

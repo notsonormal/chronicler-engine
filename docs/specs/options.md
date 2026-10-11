@@ -3,6 +3,7 @@
 Endpoints:
 - `POST /action`
 - `GET /fragment/options-dock`
+- `POST /games/{game_id}/mode`
 
 ## Scenarios
 
@@ -24,6 +25,16 @@ Given a fresh game with an empty story log
 When the client POST /action with command="/options"
 Then the response is a 500 whose body names the validation failure ("No scene to generate options for yet")
 And GET /fragment/options-dock renders no options strip
+```
+
+#### Scenario 24.18: /options with no options agent reports the agent is unavailable and keeps the set
+
+```gherkin
+Given a game with scene history, an offered set of set A, and no options agent
+When the client POST /action with command="/options"
+And the pipeline returns to idle
+Then the offered set still holds set A
+And the story log gained a System message saying the options agent is not available
 ```
 
 ### Using the offered set
@@ -56,41 +67,69 @@ When the client POST /action with command="/options"
 And the pipeline returns to idle
 And the client POST /action/check with command="Search the desk" (the form submit the Use button performs)
 And the pipeline returns to idle
-Then message_service.load_messages() contains one more Input entry than before
-And the newest Input entry's text is "Search the desk"
-And a Narration entry was added after it
+Then the message history holds one more player-input message than before
+And the newest player-input message's text is "Search the desk"
+And a Narration message was added after it
 ```
 
 ### Always-on generation
 
-#### Scenario 24.6: The always-on toggle generates options after a narration turn
+#### Scenario 24.6: The always-on toggle generates options after a narration message
 
 ```gherkin
-Given a world with options_always_on enabled
+Given a world with the always-on toggle enabled
 When the client POST /games creates a game from that world (the toggle is inherited at creation)
 And the client POST /action with command="look"
 And the pipeline returns to idle
 Then the dock renders a fresh option set without any /options command
 ```
 
-#### Scenario 24.7: The always-on toggle never fires after an impersonate turn
+#### Scenario 24.15: An impersonate message leaves the offered set unchanged
 
 ```gherkin
 Given a game with the always-on toggle on
+And the offered set is set A
 When the client POST /action with command="/impersonate hello"
 And the pipeline returns to idle
-Then the dock renders no options strip
-And the offered set is empty
+Then the offered set still holds set A
+And the dock still renders set A
 ```
 
-#### Scenario 24.12: A narration turn with the toggle off generates no options
+#### Scenario 24.16: A narration message with the toggle off clears the offered set
 
 ```gherkin
 Given a game whose always-on toggle is off
+And the offered set is set A
 When the client POST /action with command="look"
 And the pipeline returns to idle
-Then the dock renders no options strip
-And the offered set is empty
+Then the offered set is empty
+And the dock renders no options strip
+```
+
+#### Scenario 24.17: A failed always-on regeneration empties the offered set and reports the failure
+
+```gherkin
+Given a world with the always-on toggle on and an options agent whose first response yields set A and whose later responses fail to parse
+When the client POST /games creates a game from that world
+And the client POST /action with command="look"
+And the pipeline returns to idle
+Then the offered set is set A
+When the client POST /action with command="look" again
+And the pipeline returns to idle
+Then the offered set is empty
+And the dock renders no options strip
+And the story log gained a System message naming the options generation failure
+```
+
+#### Scenario 24.20: With no options agent, an always-on narration message empties the offered set and reports the agent unavailable
+
+```gherkin
+Given a world with the always-on toggle on, no options agent, and an offered set of set A
+When the client POST /action with command="look"
+And the pipeline returns to idle
+Then the offered set is empty
+And the dock renders no options strip
+And the story log gained a System message saying the options agent is not available
 ```
 
 ### Response shapes
@@ -113,6 +152,15 @@ Given an active game in Interactive Fiction mode with scene history and an optio
 When the client POST /action with command="/options"
 And the pipeline returns to idle
 Then the dock renders the generated option set
+```
+
+#### Scenario 24.19: A narrator-mode switch leaves the offered set alone
+
+```gherkin
+Given an active game in Novel mode whose offered set is set A
+And an options agent whose next response yields set B
+When the client POST /games/{game_id}/mode with narrator_mode="interactive_fiction"
+Then the offered set still holds set A
 ```
 
 ### Dock controls

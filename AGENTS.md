@@ -87,7 +87,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `server.rs` — Server implementation
         - **builders/**
           - `forms.rs` — Form field HTML builders.
-          - `headers.rs` — Header fragment + status-swap header builders.
+          - `headers.rs` — Header fragment, Settings role-health cell and status-swap header builders.
           - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
           - `presets.rs` — Prompt-preset card + form HTML builders.
           - `router.rs` — HTTP router composition.
@@ -351,6 +351,8 @@ Temporary files should be written into tmp folders e.g. `tmp`.
 
 Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
 
+The dev server stores its SQLite DB next to its binary (`<target-dir>/debug/chronicler_<port>.db`). It reads `<target-dir>/debug/data` if a full gate copied it there, and otherwise reads the repo's `data/`. A world JSON edit in `data/` therefore does not reach a target dir with a gate copy until the next full gate. The server writes only the DB and `logs/`. It never writes to a data dir.
+
 `build.py` writes logs to both standard output and to the `logs/` folder. A standard build takes about 2 minutes once the target dir is warm. A cold one takes far longer.
 
 Use the Pi bash tool with a timeout of 1200 seconds when calling `build.py`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
@@ -373,7 +375,7 @@ python build.py architecture                    # Run the architecture tests
 python build.py guardrails                      # Run the guardrails tests
 python build.py test-pattern "action_pipeline::options_tests" # Run tests whose name matches a substring, across all test binaries
 python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s, unit tests included)
-python build.py browser                         # Only the browser/Playwright binary (~1 min)
+python build.py browser                         # Only the browser/Playwright binary
 python build.py validate-docs                   # Validate markdown docs
 python build.py run                             # Run the dev server (see ENVIRONMENT.md)
 ```

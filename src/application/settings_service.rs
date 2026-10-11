@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
+//! [DOC: docs/diataxis/reference/architecture_system.md]
 //! Settings service — settings persistence orchestration at the application layer.
 //!
 //! Name uniqueness runs inside a `Storage` closure, so refusals surface as

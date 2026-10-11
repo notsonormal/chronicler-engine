@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
+//! [DOC: docs/diataxis/reference/game_flow.md]
 //! Generation guard logic
 
 use std::collections::HashMap;

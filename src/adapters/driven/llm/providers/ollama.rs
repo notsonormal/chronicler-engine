@@ -1,7 +1,7 @@
-//! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
+//! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! Ollama LLM provider
 
-use crate::error::{EngineError, LlmFailure};
+use crate::error::EngineError;
 use crate::domain::model::settings::LlmProviderConfig;
 use crate::adapters::driven::llm::transport::call_ollama;
 
@@ -36,19 +36,19 @@ impl OllamaBackend {
             user_text.to_string()
         };
         let user = self.preprocess_user_text(&user);
-        let result = call_ollama(
+        call_ollama(
             &self.base_url,
             &self.model,
             system_prompt,
             &user,
             max_tokens,
-        )?;
-        if result.text.trim().is_empty() {
-            return Err(EngineError::Llm(LlmFailure::EmptyResponse));
-        }
-        Ok(result)
+        )
     }
 
+    /// Ollama runs a `{{ .Prompt }}` passthrough template, so this backend owns
+    /// turn structure. Gemma 4 can loop in its thinking channel until it spends
+    /// `max_tokens` and returns empty content; the closed channel stops that.
+    /// `sanitize_llm_output` removes any marker that still leaks.
     pub fn preprocess_user_text(&self, text: &str) -> String {
         let m = self.model.to_lowercase();
         if m.contains("gemma-4") || m.contains("gemma4") {

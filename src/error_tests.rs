@@ -23,7 +23,9 @@ fn test_engine_error_display_variants() {
     let err = EngineError::Parse("bad json".to_string());
     assert!(err.to_string().contains("bad json"));
 
-    let err = EngineError::Llm(LlmFailure::EmptyResponse);
+    let err = EngineError::Llm(LlmFailure::EmptyResponse {
+        raw_response: String::new(),
+    });
     assert!(err.to_string().contains("empty response"));
 
     let err = EngineError::ContextOverflow {
@@ -60,8 +62,26 @@ fn test_llm_error_string_maps_user_facing_messages() {
             "LLM Error: unexpected response format (expected JSON)",
         ),
         (
-            EngineError::Llm(LlmFailure::EmptyResponse),
+            EngineError::Llm(LlmFailure::EmptyResponse {
+                raw_response: "{}".to_string(),
+            }),
             "LLM Error: empty response",
+        ),
+        (
+            EngineError::Llm(LlmFailure::TokenBudgetSpent {
+                raw_response: "{}".to_string(),
+                completion_tokens: Some(2048),
+                reasoning_tokens: Some(2041),
+            }),
+            "LLM Error: the model spent its whole token budget before writing an answer (2048 completion tokens, 2041 of them reasoning)",
+        ),
+        (
+            EngineError::Llm(LlmFailure::TokenBudgetSpent {
+                raw_response: "{}".to_string(),
+                completion_tokens: None,
+                reasoning_tokens: None,
+            }),
+            "LLM Error: the model spent its whole token budget before writing an answer",
         ),
         (
             EngineError::Llm(LlmFailure::Http {
@@ -97,6 +117,81 @@ fn test_internal_error_from_helper() {
         }
         other => panic!("Expected EngineError::Internal, got: {other:?}"),
     }
+}
+
+#[test]
+fn test_token_budget_spent_display_counts_the_spend() {
+    let err = LlmFailure::TokenBudgetSpent {
+        raw_response: "{}".to_string(),
+        completion_tokens: Some(2048),
+        reasoning_tokens: Some(2041),
+    };
+    assert_eq!(
+        err.to_string(),
+        "LLM returned no answer after spending its whole token budget (2048 completion tokens, 2041 of them reasoning)"
+    );
+
+    let completion_only = LlmFailure::TokenBudgetSpent {
+        raw_response: "{}".to_string(),
+        completion_tokens: Some(300),
+        reasoning_tokens: None,
+    };
+    assert_eq!(
+        completion_only.to_string(),
+        "LLM returned no answer after spending its whole token budget (300 completion tokens)"
+    );
+
+    let unreported = LlmFailure::TokenBudgetSpent {
+        raw_response: "{}".to_string(),
+        completion_tokens: None,
+        reasoning_tokens: Some(12),
+    };
+    assert_eq!(
+        unreported.to_string(),
+        "LLM returned no answer after spending its whole token budget"
+    );
+}
+
+#[test]
+fn test_raw_response_body_is_present_for_the_body_carrying_kinds() {
+    let empty = LlmFailure::EmptyResponse {
+        raw_response: "{\"choices\":[]}".to_string(),
+    };
+    assert_eq!(empty.raw_response_body(), Some("{\"choices\":[]}"));
+
+    let spent = LlmFailure::TokenBudgetSpent {
+        raw_response: "{\"finish_reason\":\"length\"}".to_string(),
+        completion_tokens: Some(2048),
+        reasoning_tokens: None,
+    };
+    assert_eq!(
+        spent.raw_response_body(),
+        Some("{\"finish_reason\":\"length\"}")
+    );
+
+    let unparsed = LlmFailure::ParseError {
+        raw_response: "not json".to_string(),
+        expected_format: "valid JSON",
+    };
+    assert_eq!(unparsed.raw_response_body(), Some("not json"));
+
+    assert_eq!(LlmFailure::Timeout.raw_response_body(), None);
+    assert_eq!(
+        LlmFailure::Network {
+            url: "http://localhost:11434".to_string(),
+            detail: "connection refused".to_string(),
+        }
+        .raw_response_body(),
+        None
+    );
+    assert_eq!(
+        LlmFailure::Http {
+            status: 503,
+            body: "unavailable".to_string(),
+        }
+        .raw_response_body(),
+        None
+    );
 }
 
 #[test]

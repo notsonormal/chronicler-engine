@@ -93,6 +93,19 @@ When the client POST /games/99999999/delete
 Then the response status is "200 OK"
 ```
 
+#### Scenario 19.4: Deleting the last saved game answers with the list's empty state
+
+```gherkin
+Given two created games with ids "id1" (active) and "id2"
+When the client POST /games/{id2}/delete
+Then the response status is "200 OK"
+And the response body renders the Saved Games empty state
+Given a third created game with id "id3"
+When the client POST /games/{id3}/delete
+Then the response status is "200 OK"
+And the response body is empty
+```
+
 ### Rename
 
 #### Scenario 17.4: Renaming a game sets its display name, shown in the header and the Games tab

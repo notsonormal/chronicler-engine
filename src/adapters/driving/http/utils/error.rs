@@ -42,6 +42,9 @@ pub fn generation_failure_summary(kind: GenerationFailureKind) -> &'static str {
             "The last turn was too long for the language model."
         }
         GenerationFailureKind::UnreadableAnswer => "The language model's answer could not be read.",
+        GenerationFailureKind::TokenBudgetSpent => {
+            "The model used its whole token budget before writing an answer — raise Max Tokens or choose a model that does less reasoning."
+        }
         GenerationFailureKind::SaveFailed => "The last turn could not be saved.",
         GenerationFailureKind::SceneMissing => "The current scene could not be found.",
         GenerationFailureKind::PresetMissing => "The active prompt preset is missing.",

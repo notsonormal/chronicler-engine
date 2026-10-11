@@ -11,7 +11,7 @@ An interactive fiction / text-adventure engine in Rust. An LLM-driven narrative 
 ## Quick start
 
 ```bash
-python build.py                  # full gate: fmt + clippy + guardrails + tests (~1 min)
+python build.py                  # full gate: fmt + clippy + guardrails + tests
 python build.py run -- --port 3000   # run the server (defaults: redmist_estate world, julian persona)
 ```
 

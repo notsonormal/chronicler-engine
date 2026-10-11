@@ -84,6 +84,8 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
 
         exec("CREATE INDEX IF NOT EXISTS idx_messages_game_id ON messages(game_id, id)")?;
 
+        // `snapshot_id` is deliberately not a FOREIGN KEY: a cascade would delete
+        // a swipe whenever its snapshot is deleted.
         exec(
             "CREATE TABLE IF NOT EXISTS message_swipes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

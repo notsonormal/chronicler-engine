@@ -58,6 +58,8 @@ Completion: every capability claim AND every schema claim verified against `src/
 
 Doc claims behavior X; code does Y. Extract behavioral claims, verify against `src/`, report contradictions with `file:line`. This phase is semantic verification of behavioral claims (mechanical link / ADR / plan-link checks owned by `validate_docs.py`).
 
+A claim that needs a qualifier to match the code ("when the provider reports them", "only on the narration path") restates the code. Expected: `remove`. Propose a qualified rewrite only when the claim carries an invariant or a frame that the code does not state (`docs/AGENTS.md` §Reference defers to source).
+
 Completion: every behavioral claim verified against `src/`; contradictions reported with `FILE:LINE` (doc) and `src/file:line` (code).
 
 ## Phase 6 — Cross-Doc Drift

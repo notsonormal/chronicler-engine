@@ -26,7 +26,7 @@ And #status-display text contains one of "Thinking", "Narrating", "Generating", 
 
 ```gherkin
 Given the client submitted a command the text-check preview intercepted, so the preview is open
-When the client confirms the preview, so a turn starts
+When the client confirms the preview, so a generation starts
 Then the primary button is disabled and labelled as a generating indicator
 And the command form is the same node as before
 When the status poll reports idle and the status display returns to Ready
@@ -51,7 +51,7 @@ And the banner is not raised
 Given the dashboard is loaded with text check enabled
 When the client submits a misspelled command and the preview opens
 And the client confirms the preview
-Then the turn runs and the status returns to Ready
+Then the Action runs and the status returns to Ready
 And the command form is still in the document
 And the command input accepts and submits a new command with no reload
 ```
@@ -59,7 +59,7 @@ And the command input accepts and submits a new command with no reload
 #### Scenario 16.13: The send preview opens beside the status display
 
 ```gherkin
-Given a turn is generating and the status display shows its phase
+Given a generation is running and the status display shows its phase
 When the client submits a command the preview intercepts
 Then the preview is open
 And the status display is still in the document and still shows the phase
@@ -228,6 +228,7 @@ And the form is the same node as before the submission
 When the client submits the form and the server refuses it
 Then the form page is still in the document
 And the form shows an inline error naming the failure
+And that short line quotes the server's own explanation of the refusal
 And the raw server text is reachable in that error's disclosure
 ```
 
@@ -297,4 +298,81 @@ When the client submits the form and the server refuses it
 Then the form page is still in the document
 And the form shows an inline error naming the failure
 And the raw server text is reachable in that error's disclosure
+```
+
+#### Scenario 16.36: A confirmed preview consumes the command text
+
+```gherkin
+Given the dashboard is loaded with text check enabled
+When the client submits a misspelled command and the preview opens
+Then the command input still holds the submitted text
+When the client confirms the preview with edits
+Then the preview closes and the command input is empty
+When the client submits the command again and sends the original
+Then the preview closes and the command input is empty
+When the client submits the command again and cancels the preview
+Then the command input still holds the submitted text
+```
+
+#### Scenario 16.37: A send that cannot reach the engine keeps the typed command
+
+```gherkin
+Given the dashboard is loaded and the engine has stopped
+When the client submits the typed command
+Then the form shows an inline error saying the engine is unreachable
+And the command input still holds the typed command
+```
+
+#### Scenario 16.38: The engine's recovery clears the form's inline error and the banner
+
+```gherkin
+Given the dashboard is loaded and the engine has stopped
+When the client submits a command and the form shows its inline error
+And the engine answers again
+Then the inline error is gone
+And the banner is gone
+```
+
+#### Scenario 16.39: The active tab survives a reload
+
+```gherkin
+Given the dashboard is loaded on the Game tab
+When the client activates the Worlds tab
+And the page reloads
+Then the Worlds tab is the active tab and its panel is the visible one
+```
+
+#### Scenario 16.40: A failed confirm reports on the command form's slot
+
+```gherkin
+Given the dashboard is loaded with text check enabled and the preview is open
+And the engine has stopped
+When the client confirms the preview
+Then the preview closes
+And the command form's own inline error slot reports the failure
+And the command input still holds the typed command
+```
+
+#### Scenario 16.41: A generation error takes the error state's class and colour
+
+```gherkin
+Given the dashboard is loaded and idle
+When the status display reports a generation error
+Then #status-display carries the error state's class and not the ready state's
+And the short line is drawn in the palette's error colour, not the Ready colour
+And the whole short line is readable without opening Details
+When the status returns to Ready
+Then #status-display carries the ready state's class again
+And Ready is drawn in its own colour
+```
+
+#### Scenario 16.42: A refused concurrent send keeps the typed command and shows the wait state
+
+```gherkin
+Given the dashboard is loaded
+And a generation is already in flight
+When the client submits a command the engine refuses
+Then #status-display carries the wait state's class and not the ready state's
+And the wait label is drawn in the palette's body text colour
+And the command input still holds the typed command
 ```

@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
+//! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! Prompt preset service — prompt preset persistence orchestration at the application layer.
 
 use std::sync::Arc;

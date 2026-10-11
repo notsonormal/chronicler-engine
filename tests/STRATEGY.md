@@ -65,6 +65,8 @@ dereferences a `GameState` field or calls a `Storage` method to observe state.
 Specs (`docs/specs/`) state what the engine does. An HTTP-observed scenario
 maps to at least one tier-1 test that asserts a domain outcome. A DOM-observed
 scenario (`browser_*.md`) maps to at least one tier-2 or tier-3 test.
+`docs/AGENTS.md` "Where a fact lives" sets what a spec holds and what a
+Diátaxis doc holds.
 
 A scenario can be a single call ("POST /action with empty input → one
 continuation narration"), or a sequence ("POST /action → POST /retry → POST
@@ -81,8 +83,9 @@ the frontend or a browser test selects on. A change there breaks the client.
 **Check:** review-only.
 
 **Complete specs.** A spec covers each distinct response its route can
-return: each success shape, each refusal, each error status. Behaviour that a
-spec omits gets no end-to-end coverage. Specs describe the system, not a
+return: each success shape, each refusal, each error status. The rule is per
+route. Fine-grained UI behaviour inside one response stays in the code and its
+tests. Behaviour that a spec omits gets no end-to-end coverage. Specs describe the system, not a
 change to it. **Check:** review-only. `spec-coverage` checks the other
 direction: every tagged test cites a declared scenario.
 
@@ -108,13 +111,23 @@ Place a new UI test by this rule.
    delivers it is not.
 2. **If the server behind this were fake, does the behaviour change?** No →
    tier 2, `tests/browser/stub/`. Pure client behaviour: the slash palette,
-   edit-mode activation, toast handling, DOM rendering invariants.
+   edit-mode activation, toast handling, DOM layout.
 3. Otherwise → **tier 3**, `tests/browser/<surface>.rs`. The test's point is
    the full-stack hop: a click or a `change` whose effect is real server-side
    state, read back through a reload.
 
 **Tie-breaker: when in doubt, file down.** A test that can be expressed a tier
 lower belongs there.
+
+**Stub-tier shape.** A tier-2 test is an `async fn check_*(page, stub)` that a
+`run_*` runner test passes to `StubRunner::run`. The runner shares one Chromium;
+each check gets its own `StubServer` and page. The SCENARIO tag goes above the
+`check_*` function, and `scripts/validate_feature_spec.py` exempts `run_*`.
+Split a runner when it becomes the longest browser test by a wide margin.
+
+**Layout-only checks.** A check that asserts only computed style, size or
+position goes in `tests/browser/stub/layout.rs`. It has no spec scenario.
+It puts its markup in place with client-side JS, not through a real failure.
 
 **Check:** review-only.
 

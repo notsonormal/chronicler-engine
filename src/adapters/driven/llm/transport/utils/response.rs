@@ -1,29 +1,43 @@
-//! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
+//! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! LLM response parsing
 
 use crate::error::{EngineError, LlmFailure};
 
-pub fn extract_content_from_response(json: &serde_json::Value) -> Option<(String, &'static str)> {
-    let message = json.get("choices")?.get(0)?.get("message")?;
-
-    // 1. Try content field
-    if let Some(c) = message.get("content").and_then(|c| c.as_str()) {
-        return Some((c.to_string(), "content"));
-    }
-
-    // 2. Try reasoning field
-    if let Some(r) = message.get("reasoning").and_then(|r| r.as_str()) {
-        return Some((r.to_string(), "reasoning"));
-    }
-
-    // 3. Try reasoning_content field (OpenRouter extended field)
-    if let Some(rc) = message.get("reasoning_content").and_then(|rc| rc.as_str()) {
-        return Some((rc.to_string(), "reasoning_content"));
-    }
-
-    None
+fn missing_message_error(
+    json_response: &serde_json::Value,
+    raw_response: &str,
+    req_id: u64,
+) -> EngineError {
+    tracing::error!(
+        "[LLM][req:{req_id}] Parse error: Could not find choices[0].message in response structure"
+    );
+    tracing::error!(
+        "[LLM][req:{req_id}] Response had keys: {:?}",
+        json_response
+            .as_object()
+            .map(|m| m.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default()
+    );
+    EngineError::Llm(LlmFailure::ParseError {
+        raw_response: raw_response.to_string(),
+        expected_format: "choices[0].message.content",
+    })
 }
 
+fn token_counts(json_response: &serde_json::Value) -> (Option<u64>, Option<u64>) {
+    let usage = json_response.get("usage");
+    let completion_tokens = usage
+        .and_then(|usage| usage.get("completion_tokens"))
+        .and_then(serde_json::Value::as_u64);
+    let reasoning_tokens = usage
+        .and_then(|usage| usage.get("completion_tokens_details"))
+        .and_then(|details| details.get("reasoning_tokens"))
+        .and_then(serde_json::Value::as_u64);
+    (completion_tokens, reasoning_tokens)
+}
+
+/// The one place the "what counts as an answer" rule lives, shared by every provider
+/// that parses a chat-completions body.
 pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Result<String> {
     match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
         Ok(json_response) => {
@@ -41,28 +55,46 @@ pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Res
                 }));
             }
 
-            if let Some((content, source)) = extract_content_from_response(&json_response) {
+            let Some(choice) = json_response.get("choices").and_then(|c| c.get(0)) else {
+                return Err(missing_message_error(&json_response, raw_response, req_id));
+            };
+            let Some(message) = choice.get("message").filter(|message| message.is_object()) else {
+                return Err(missing_message_error(&json_response, raw_response, req_id));
+            };
+
+            // `reasoning` and `reasoning_content` are separate channels: only
+            // `choices[0].message.content` can become the answer.
+            if let Some(content) = message
+                .get("content")
+                .and_then(|c| c.as_str())
+                .filter(|c| !c.trim().is_empty())
+            {
                 tracing::info!(
-                    "[LLM][req:{req_id}] Extracted content via: {source} ({} chars)",
+                    "[LLM][req:{req_id}] Extracted content ({} chars)",
                     content.len()
                 );
-                return Ok(content);
+                return Ok(content.to_string());
             }
 
-            // If we got here, the response structure was unexpected
+            // `finish_reason: "length"` names the cause of the missing answer: the
+            // model spent its whole output budget before writing one.
+            if choice.get("finish_reason").and_then(|f| f.as_str()) == Some("length") {
+                let (completion_tokens, reasoning_tokens) = token_counts(&json_response);
+                tracing::error!(
+                    "[LLM][req:{req_id}] Token budget spent with no answer (completion_tokens: {completion_tokens:?}, reasoning_tokens: {reasoning_tokens:?})"
+                );
+                return Err(EngineError::Llm(LlmFailure::TokenBudgetSpent {
+                    raw_response: raw_response.to_string(),
+                    completion_tokens,
+                    reasoning_tokens,
+                }));
+            }
+
             tracing::error!(
-                "[LLM][req:{req_id}] Parse error: Could not find content in response structure"
+                "[LLM][req:{req_id}] Empty response: choices[0].message carries no answer"
             );
-            tracing::error!(
-                "[LLM][req:{req_id}] Response had keys: {:?}",
-                json_response
-                    .as_object()
-                    .map(|m| m.keys().cloned().collect::<Vec<_>>())
-                    .unwrap_or_default()
-            );
-            Err(EngineError::Llm(LlmFailure::ParseError {
+            Err(EngineError::Llm(LlmFailure::EmptyResponse {
                 raw_response: raw_response.to_string(),
-                expected_format: "content or reasoning",
             }))
         }
         Err(e) => {

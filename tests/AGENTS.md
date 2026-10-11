@@ -51,7 +51,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
 - **browser/**
     - `dashboard.rs` — Browser dashboard-chrome tests: static command form, status display. Tagged against `docs/specs/browser_dashboard.md`.
     - `games.rs` — Browser games-panel tests: per-game posture auto-save wiring guard. Tagged against `docs/specs/browser_games.md`.
-    - `mod.rs` — Browser test binary root (Playwright-driven): per-surface behaviour modules mirroring the `docs/specs/browser_<feature>.md` specs (`dashboard`, `games`, `options`, `prompt_presets`, `worlds`) plus `stub/` (stub-browser tests against a fake engine, incl. `invariants` — CSS/layout rendering invariants, declared exemption, no spec, test code is the definition).
+    - `mod.rs` — Browser test binary root (Playwright-driven): per-surface behaviour modules mirroring the `docs/specs/browser_<feature>.md` specs (`dashboard`, `games`, `options`, `prompt_presets`, `worlds`) plus `stub/` (stub-browser tests against a fake engine, incl. `layout` — CSS and layout checks, declared exemption, no spec, test code is the definition).
     - `options.rs` — Browser options-dock tests: reload persistence and the Use-click wiring guard. Tagged against `docs/specs/browser_options.md`.
     - `prompt_presets.rs` — Browser prompt-presets tests: the duplicate → edit → save click chain wiring guard. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
@@ -60,7 +60,8 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `dashboard.rs` — Stub-browser tests for dashboard chrome: the action-area state machine, the tab bar, the landmarks and the status display. Tagged against `docs/specs/browser_dashboard.md`.
       - `failure_display.rs` — Stub-browser tests for the failure display: the banner, the in-place slots and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
       - `form_failures.rs` — Stub-browser tests for refused form actions: the form keeps its place and reports the failure inline. Tagged against `docs/specs/browser_dashboard.md`.
-      - `invariants.rs` — Rendering invariants (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Ten checks share one server+browser (no server-state mutation); each runs on a fresh page via `run_subtest` with panic isolation and a per-check timing summary.
+      - `games.rs` — Stub-browser tests for the Games panel: the keyboard-focus landing after a saved-game delete. Tagged against `docs/specs/browser_games.md`.
+      - `layout.rs` — Layout checks (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Twelve checks share one browser through the shared runner; each runs on a fresh page against its own stub server, with panic isolation and a per-check timing summary.
       - `llm_messages.rs` — Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row. Tagged against `docs/specs/browser_llm_messages.md`.
       - `mod.rs` — Stub-browser tests: browser-only behaviour against a fake engine.
       - `options.rs` — Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
@@ -68,7 +69,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `slash_menu.rs` — Stub-browser tests for the slash menu: the client-side command palette rendered from the shipped shell's `input` listener. Tagged against `docs/specs/browser_slash_menu.md`.
       - `story_log.rs` — Stub-browser tests for the story log's poll: the morph that keeps selection, focus, scroll position and the surviving entries. Tagged against `docs/specs/browser_story_log.md`.
       - `story_log_edit.rs` — Stub-browser tests for the story log's edit flow: edit mode, the entry locks and the failure slots. Tagged against `docs/specs/browser_story_log.md`.
-      - `support.rs` — Shared stub-browser helpers: page probes and node reads used by more than one stub test module.
+      - `support.rs` — Shared stub-browser helpers: the check runner, page probes, node reads and the on-demand poll trigger used by more than one stub test module.
       - `swipes.rs` — Stub-browser test for switching swipes: the client's restore handling and the dock it leaves behind.
 - **helpers/**
     - `fixtures.rs` — Shared fixtures for integration tests: builds storage instances with deterministic defaults so tests can focus on the behaviour under test.

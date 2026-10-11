@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
+//! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! LLM request building
 
 use std::sync::atomic::{AtomicU64, Ordering};

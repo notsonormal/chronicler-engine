@@ -58,7 +58,7 @@ Each script's docstring has its details. These are the reasons and measurements 
 
 | Scenario | Total | clippy | architecture | guardrails | integration | browser |
 |---|---|---|---|---|---|---|
-| Warm, no Rust change | 97 s | 1 | 4 | 7 | 19 | 60 |
+| Warm, no Rust change (2026-10-10) | 134 s | 1 | 3 | 7 | 24 | 92 |
 | Warm default target dir, no Rust change, `--no-browser` (2026-10-08) | 34 s | 1 | 3 | 6 | 17 | skipped |
 | Seeded new worktree, before the test speed-ups | 344 s | 52 | 37 | n/a | 136 | 98 |
 | Seed miss, before the test speed-ups | 728 s | 239 | 242 | n/a | 146 | 81 |
@@ -81,4 +81,4 @@ Each script's docstring has its details. These are the reasons and measurements 
 | Switching `--target-dir` mid-task | The new dir is cold. |
 | A raw `cargo build`/`cargo run` or IDE build in a `build.py` target dir | `build.py` exports `CARGO_TARGET_<host>_LINKER`, and cargo hashes the linker value into every unit fingerprint. A raw build sets no such variable, so it recompiles the tree, and the next `build.py` run recompiles it back. Measured 2026-10-03: raw `cargo run` recompiled 243 crates in 2m11s; the immediate second raw build was a no-op in 0.85s. |
 
-Start the dev server with `python build.py run [-- <server flags>]`. The step builds the binary in this same environment and links it with lld. It then replaces the `build.py` process with the binary. Switching between a build step and the server recompiles nothing. Ctrl-C and stdio behave as with `cargo run`, because the server is the same process. Like raw `cargo run`, the server reads `target/debug/data`, the copy the full gate last wrote, not the live `data/`. World JSON edits appear only after the next full gate.
+Start the dev server with `python build.py run [-- <server flags>]`. The step builds the binary in this same environment and links it with lld. It then replaces the `build.py` process with the binary. Switching between a build step and the server recompiles nothing. Ctrl-C and stdio behave as with `cargo run`, because the server is the same process. For where the server reads its data and stores its DB, see `AGENTS.md`, *Development Loop*.

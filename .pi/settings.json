@@ -1,6 +1,7 @@
 {
   "packages": [
     "extensions/pi-plan-mode",
+    "/workspace/pi-emote",
     "npm:@agnishc/edb-todo"
   ]
 }

@@ -21,3 +21,4 @@ Should the report be a review input?
 - `build.py` gate step `duplicates`; report `report/jscpd-report.json`.
 - `.agents/skills/code-review/SKILL.md:48` — the *Duplicated Code* smell line, with no tool pointer.
 - Related: [Never tell a review axis to skip `tooling.patch`](21-review-bundle-tooling-patch.md).
+- More evidence (`/retro` 2026-10-11, implementer session `01a12ac6-5809`): a new test helper `seed_prior_options` in `tests/http/options.rs` copied the private `store_options` in `tests/http/dashboard.rs` line for line. The Standards review found it by hand. A private helper in another test file is invisible to an implementer who reads only `tests/http/support/`, so a clone report is the only mechanical signal. The lead moved the helper to `tests/http/support/http_fixtures.rs` as `seed_offered_set`.

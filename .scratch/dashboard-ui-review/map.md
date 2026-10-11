@@ -4,6 +4,8 @@ Labels: wayfinder:map
 
 ## Destination
 
+> **Closed 2026-10-09.** Work continues in [dashboard UI review, phase 2](../dashboard-ui-review-phase2/map.md).
+
 The dashboard has no open finding from the [UI review](review-2026-09-29.md). Each finding is fixed, or ruled out of scope with a reason. This includes new findings from the areas the first review skipped. The error and health display is redesigned (Theme 1). The [final re-review](issues/24-final-re-review.md) finds no new P1/P2, and `python build.py` passes.
 
 The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one checkable rule for what a tier-1 test may observe, and the test standards docs match the code. This was added after the [test audit](assets/test-audit/), because this map's tickets write specs and tests by those rules.
@@ -173,11 +175,10 @@ The test rules the map's tickets rely on hold: `tests/STRATEGY.md` states one ch
 
 54 [Retire the toast and route its callers](issues/54-retire-toast-and-route-callers.md): resolved — `#error-notification`, `showError`, its 5s timer and the `.error-notification` styles are gone. Per call site: the status-text path now shows only the status display's own clamped disclosure (the `lastStatusError` dedupe went with it) and the `htmx:beforeSwap` listener is deleted; `submitGenerationRequest` reports into the status display; `submitEdit`, `switchSwipe` and `deleteMessage` report into a new `#story-log-error` slot outside the polled log. `inlineErrorSlotFor` now adds a slot when the server rendered none (`.posture-override` and `.posture-group` joined the container list), or the games, worlds and posture action failures would have gone silent. Scenarios 16.7/16.8 removed (16.19 covers the inline slot; 16.8 was the toast's own timer), 16.10 rewritten, 30.4/30.5/30.10 moved onto their surfaces, new 30.18/30.19 for a failed delete and a failed swipe switch; tier 2, mutation-proven. `dashboard.md` and `ui_design.md` no longer describe the toast, and `--color-error-gradient-start` is deleted.
 
+24 [Final re-review of the dashboard](issues/24-final-re-review.md): resolved — no: the re-review on `75919da6` ([report](re-review-2026-10-09.md)) found one new P1 (a truncated reasoning-only reply stored as story text) and eight new P2s; they continue in [dashboard UI review, phase 2](../dashboard-ui-review-phase2/map.md), which inherits the out-of-scope rulings and the two dashboard fog items. Browser suite cost: no action (69 tests, ~155s).
+
 ## Not yet specified
 
-- **Other snapshot-restore paths.** [Reset the generation status and the options dock when a swipe switch restores a snapshot](issues/43-reset-status-and-dock-on-swipe-switch.md) landed the swipe case only, where the snapshot was written mid-generation; its normalisation does not touch the other restore paths. Retrigger and history revert restore snapshots by different paths and may show the same stuck status. Unverified; [Drive the retrigger control in a browser test](issues/40-drive-retrigger-in-a-browser-test.md) drove the failure path only and did not surface it.
-- **Structured editing of Map and Scenarios JSON.** [Decide the panel layout convention and supported viewports](issues/19-decide-layout-convention.md) pushed finding 4.8 (raw JSON in plain textareas) here. It is a separate question and can wait for a later pass.
-- **Browser suite cost.** Each stub-tier test launches its own Chromium, and Theme 1/Theme 2 fixes will add several. Check the cost at the final re-review. Decide then whether it needs action.
 - **A validator check for spec prose.** `scripts/validate_feature_spec.py` never reads Givens or Thens. One cheap check might flag dotted identifiers in backticks, such as `narrative.last_trigger`. Its false-hit rate is unknown. [Rewrite the test strategy around one checkable tier-1 rule](issues/32-rewrite-test-strategy.md) left the spec-vocabulary rule review-only. Two related checks are also unscheduled: a guardrail for `GameState` field reads in `tests/http/`, and a guardrail for a `tests/` directory with no row in the tier table. Decide whether any of the three is worth building. (A third rule, `check_test_layer_boundaries`, guarded a `tests/components/` tier that does not exist and could never fire — the runner strips the `tests/` prefix before matching — so it was deleted with its two detection tests rather than re-pointed at `tests/http/`, which would make the first decision above.)
 
 ## Out of scope

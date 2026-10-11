@@ -37,6 +37,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border);
     border-radius: 6px;
@@ -202,6 +203,14 @@
     color: var(--color-accent-ok);
 }
 
+/* The disclosure opens beside its summary, so opening it neither grows the row nor
+   drops the summary above the badges' line. */
+.game-rename {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
 .game-rename summary {
     cursor: pointer;
     font-size: var(--font-size-small, 0.85em);
@@ -210,13 +219,12 @@
 
 .game-rename form {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 6px;
+    align-items: center;
+    gap: var(--spacing-sm);
 }
 
 .game-rename input {
-    width: 160px;
+    width: 240px;
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);

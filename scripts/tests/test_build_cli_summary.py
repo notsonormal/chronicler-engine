@@ -9,7 +9,6 @@ import io
 import os
 import sys
 import unittest
-from build_cli_support import _MemLog
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -19,6 +18,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build  # noqa: E402
+from build_cli_support import _MemLog, reset_epilogue_state  # noqa: E402
 
 class SessionStampTests(unittest.TestCase):
     """Build logs carry the originating pi session id when known."""
@@ -143,16 +143,10 @@ class NextestStashTests(unittest.TestCase):
     """run() stashes the summary even when a checked failure sys.exits."""
 
     def setUp(self):
-        build._NextestSummary.lines = []
-        build._NextestSummary.label = ""
-        build._NextestSummary.sizes = {}
-        build._NextestLeaks.lines = []
+        reset_epilogue_state()
 
     def tearDown(self):
-        build._NextestSummary.lines = []
-        build._NextestSummary.label = ""
-        build._NextestSummary.sizes = {}
-        build._NextestLeaks.lines = []
+        reset_epilogue_state()
 
     @staticmethod
     def _fake_process(out, returncode):
@@ -209,6 +203,26 @@ class NextestStashTests(unittest.TestCase):
             ],
         )
 
+    def test_leak_printed_live_and_in_final_list_is_named_once(self):
+        leak = "        LEAK [   1.229s] ( 2/63) chronicler_engine::browser behaviour::test_x\n"
+        self._run_silenced(
+            leak
+            + "     Summary [ 130.000s] 63 tests run: 63 passed (1 leaky), 0 skipped\n"
+            + leak,
+            0,
+        )
+        self.assertEqual(len(build._NextestLeaks.lines), 1)
+
+    def test_timing_report_counts_a_repeated_test_once(self):
+        line = "        LEAK [   1.229s] ( 2/63) chronicler_engine::browser behaviour::test_x\n"
+        result = mock.Mock(returncode=0, stdout="", stderr=line + line)
+        printed = []
+        with mock.patch.object(
+            build.subprocess, "run", return_value=result
+        ), mock.patch("builtins.print", side_effect=lambda msg="": printed.append(msg)):
+            build.run_with_test_timings("cargo nextest run")
+        self.assertIn("  Slowest tests (of 1 measured, top 30):", printed)
+
     def test_tier_command_records_its_test_set_size(self):
         build._NextestSummary.label = "Running integration tests..."
         fake = self._fake_process(
@@ -220,7 +234,11 @@ class NextestStashTests(unittest.TestCase):
             build.run(build.get_integration_test_cmd())
         self.assertEqual(
             build._NextestSummary.sizes,
-            {"Running integration tests...": ("integration", 1572)},
+            {"Running integration tests...": build._TierSize("integration", 1572)},
+        )
+        # A NamedTuple equals a plain tuple, so check the type as well.
+        self.assertIsInstance(
+            build._NextestSummary.sizes["Running integration tests..."], build._TierSize
         )
         # The epilogue lines keep their (label, text) shape.
         self.assertEqual(
@@ -246,16 +264,10 @@ class NextestEpilogueTests(unittest.TestCase):
     """The epilogue prints the one-liner directly before the build banner."""
 
     def setUp(self):
-        build._NextestSummary.lines = []
-        build._NextestSummary.label = ""
-        build._NextestSummary.sizes = {}
-        build._NextestLeaks.lines = []
+        reset_epilogue_state()
 
     def tearDown(self):
-        build._NextestSummary.lines = []
-        build._NextestSummary.label = ""
-        build._NextestSummary.sizes = {}
-        build._NextestLeaks.lines = []
+        reset_epilogue_state()
 
     @staticmethod
     def _run_main(printed, no_browser=False):
@@ -321,7 +333,7 @@ class NextestEpilogueTests(unittest.TestCase):
             ("Running integration tests...", "nextest: 1563 passed, 0 failed, 2 skipped")
         ]
         build._NextestSummary.sizes = {
-            "Running integration tests...": ("integration", 1565)
+            "Running integration tests...": build._TierSize("integration", 1565)
         }
         self.assertEqual(self._run_main(printed), 0)
         self.assertIn(

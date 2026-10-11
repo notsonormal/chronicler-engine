@@ -515,6 +515,70 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
     );
 }
 
+// [docs/specs/actions.md] SCENARIO: 2.5
+#[tokio::test]
+async fn test_quantifier_transport_failure_completes_action_and_keeps_npcs_http() {
+    let quantifier = Arc::new(MockBackend::default().with_fail()) as Arc<dyn LlmProvider>;
+    assert_quantifier_failure_keeps_npcs(quantifier).await;
+}
+
+// [docs/specs/actions.md] SCENARIO: 2.5
+#[tokio::test]
+async fn test_quantifier_unparseable_answer_completes_action_and_keeps_npcs_http() {
+    let quantifier = Arc::new(
+        MockBackend::default()
+            .with_prompt_responses(vec!["There is no room report in this answer.".to_string()]),
+    ) as Arc<dyn LlmProvider>;
+    assert_quantifier_failure_keeps_npcs(quantifier).await;
+}
+
+async fn assert_quantifier_failure_keeps_npcs(quantifier_provider: Arc<dyn LlmProvider>) {
+    let narrator = Arc::new(
+        MockBackend::default().with_narrations(vec!["The innkeeper glances your way.".to_string()]),
+    );
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        recorder,
+        quantifier_provider,
+    );
+    let (app, state) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_with_state();
+
+    let npcs_before = state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed")
+        .npcs_in_area;
+    assert!(
+        !npcs_before.is_empty(),
+        "the setup must start from a non-empty NPC set: {npcs_before:?}"
+    );
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(
+        wait_idle(&state, 1000).await,
+        "a quantifier failure must not stop the action"
+    );
+
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "the action must finish in the Idle state"
+    );
+    let npcs_after = state
+        .game_view_query
+        .get_debug_state()
+        .expect("get_debug_state should succeed")
+        .npcs_in_area;
+    assert_eq!(
+        npcs_after, npcs_before,
+        "the scene must keep its prior NPC set after a quantifier failure"
+    );
+}
+
 // [docs/specs/actions.md] SCENARIO: 3.3
 #[tokio::test]
 async fn test_delayed_llm_completes_without_deadlock_http() {
