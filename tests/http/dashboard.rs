@@ -61,6 +61,10 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
     distinct.sort();
     distinct.dedup();
     assert!(!defined.is_empty(), "the shell must define the icon sprite");
+    assert!(
+        defined.iter().any(|icon| icon == "pencil"),
+        "the sprite's ids read as bare names, not `i-` prefixed ids: {defined:?}"
+    );
     assert_eq!(
         distinct.len(),
         defined.len(),
@@ -89,8 +93,6 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
     }
 }
 
-/// The two state channels disagree in both directions here: a busy slot with a
-/// stale `Idle` record, and a stale `Generating` record with no slot.
 // [docs/specs/dashboard.md] SCENARIO: 39.3
 #[tokio::test]
 async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {

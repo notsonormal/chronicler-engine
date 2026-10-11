@@ -10,8 +10,7 @@ fn test_db_creates_empty_games_table() {
     let exists: Result<String, _> = stmt.query_row([], |row| row.get(0));
     assert!(exists.is_ok(), "games table should exist");
 
-    // After persona relocation: no default game is seeded by migrations. The server
-    // auto-creates a game via `resolve_game_id` using the `--persona` CLI flag.
+    // The server auto-creates a game via `resolve_game_id` using the `--persona` CLI flag.
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
         .unwrap();
@@ -98,7 +97,6 @@ fn test_db_reopen_idempotent() {
     {
         let _pool = DbPool::new(temp_file.to_str().unwrap()).unwrap();
     }
-    // Re-opening should not create any games (migrations no longer seed a default game).
     let pool = DbPool::new(temp_file.to_str().unwrap()).unwrap();
     let conn = pool.conn();
     let count: i64 = conn
@@ -142,14 +140,25 @@ fn test_db_message_swipes_flat_input_columns() {
     let conn = pool.conn();
     let count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name IN ('impersonated', 'steering_instruction')",
+            "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name IN ('impersonated', 'guide_text', 'impersonate_direction')",
             [],
             |row| row.get(0),
         )
         .unwrap();
     assert_eq!(
-        count, 2,
+        count, 3,
         "message_swipes must carry the flattened input columns after v22"
+    );
+    let merged: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('message_swipes') WHERE name='steering_instruction'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        merged, 0,
+        "message_swipes.steering_instruction must be split by the v26 migration"
     );
     let replay: i64 = conn
         .query_row(

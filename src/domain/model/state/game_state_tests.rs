@@ -6,6 +6,7 @@ use proptest::prelude::*;
 
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
+use crate::domain::model::message::Message;
 use crate::domain::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
@@ -15,6 +16,7 @@ use crate::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind, GenerationStatus, InputBuffer,
 };
 use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state::narrative_state::ArrivingLocationWrite;
 use crate::domain::model::state::scene_state::SceneState;
 use crate::domain::model::trigger::{
     ComparisonOperator, NpcEncounterLog, Trigger, TriggerNarration, TriggerRequirement,
@@ -115,7 +117,7 @@ fn test_push_message_inherits_stored_inputs_on_retry_swipe() {
         None,
     );
     target.swipes[0].impersonated = true;
-    target.swipes[0].steering_instruction = Some("as the player".to_string());
+    target.swipes[0].impersonate_direction = Some("as the player".to_string());
     state.narrative.retry_target = Some(target);
 
     state.add_message("Retried narration".into(), MessageType::Narration);
@@ -124,7 +126,7 @@ fn test_push_message_inherits_stored_inputs_on_retry_swipe() {
     assert_eq!(target.swipes.len(), 2);
     assert!(target.swipes[1].impersonated);
     assert_eq!(
-        target.swipes[1].steering_instruction.as_deref(),
+        target.swipes[1].impersonate_direction.as_deref(),
         Some("as the player")
     );
 }
@@ -182,15 +184,13 @@ fn test_push_message_writes_stored_inputs_on_new_narration_message() {
         MessageType::Narration,
         false,
         Some("steer toward the cellar".to_string()),
+        None,
     );
 
     let message = state.narrative.history.last().unwrap();
     assert_eq!(message.text(), "Guided narration");
     assert!(message.is_guided());
-    assert_eq!(
-        message.steering_instruction(),
-        Some("steer toward the cellar")
-    );
+    assert_eq!(message.guide_text(), Some("steer toward the cellar"));
 }
 
 #[test]
@@ -201,7 +201,9 @@ fn test_push_message_no_stored_inputs_leaves_swipe_inputs_empty() {
 
     let message = state.narrative.history.last().unwrap();
     assert!(
-        !message.impersonated() && message.steering_instruction().is_none(),
+        !message.impersonated()
+            && message.guide_text().is_none()
+            && message.impersonate_direction().is_none(),
         "swipe stays plain without stored inputs"
     );
 }
@@ -214,6 +216,7 @@ fn test_push_message_writes_impersonate_inputs_on_player_voiced_input() {
         "I ask about the artifact.".into(),
         MessageType::Input,
         true,
+        None,
         Some("ask about the artifact".to_string()),
     );
 
@@ -222,7 +225,7 @@ fn test_push_message_writes_impersonate_inputs_on_player_voiced_input() {
     assert_eq!(message.message_type, MessageType::Input);
     assert!(message.impersonated());
     assert_eq!(
-        message.steering_instruction(),
+        message.impersonate_direction(),
         Some("ask about the artifact")
     );
 }
@@ -663,9 +666,10 @@ fn test_handle_movement_creates_dynamic_room() {
 }
 
 #[test]
-fn test_handle_movement_sets_pending_location() {
+fn test_handle_movement_puts_the_room_name_on_the_arriving_narration() {
     let deps = deps_with_carla("test_room");
     let mut state = make_test_state();
+    state.add_message("You step inside.".to_string(), MessageType::Narration);
 
     state
         .handle_movement(
@@ -676,10 +680,105 @@ fn test_handle_movement_sets_pending_location() {
         )
         .unwrap();
 
-    assert!(state.narrative.history().is_empty());
     assert_eq!(
-        state.narrative.pending_location,
-        Some("Test Room".to_string())
+        state
+            .narrative
+            .history
+            .last()
+            .and_then(Message::location_header),
+        Some("Test Room"),
+        "the Narration that arrived in the room must report it"
+    );
+
+    state.add_message("look".to_string(), MessageType::Input);
+    assert_eq!(
+        state
+            .narrative
+            .history
+            .last()
+            .and_then(Message::location_header),
+        None,
+        "the Message after the movement must not take the room name"
+    );
+}
+
+#[test]
+fn test_handle_movement_puts_the_room_name_on_the_redo_swipe() {
+    let deps = deps_with_carla("test_room");
+    let mut state = make_test_state();
+    state.add_message("An older narration.".to_string(), MessageType::Narration);
+
+    let mut retried = Message::new(
+        "The narration it retries.",
+        MessageType::Narration,
+        None,
+        None,
+    );
+    retried.swipes.push(dummy_swipe("The redo."));
+    retried.set_active_swipe(1);
+    state.narrative.retry_target = Some(retried);
+
+    state
+        .handle_movement(Some("test_room"), &[], &deps.map, &deps.npcs)
+        .unwrap();
+
+    let retried = state
+        .narrative
+        .retry_target
+        .as_ref()
+        .expect("the redo keeps the Message it retries");
+    assert_eq!(
+        retried.location_header(),
+        Some("Test Room"),
+        "the redo's Swipe carries this generation's Narration"
+    );
+    assert_eq!(
+        state
+            .narrative
+            .history
+            .last()
+            .and_then(Message::location_header),
+        None,
+        "an older Message must not be relabelled"
+    );
+}
+
+#[test]
+fn test_handle_movement_queues_the_arriving_location_write_for_a_saved_message() {
+    let deps = deps_with_carla("test_room");
+    let mut state = make_test_state();
+    let mut saved = Message::new("You step inside.", MessageType::Narration, None, None);
+    saved.id = 7;
+    saved.swipes.push(dummy_swipe("A second swipe."));
+    saved.set_active_swipe(1);
+    state.narrative.history.append(saved);
+    state.narrative.pending_location = Some("The room before".to_string());
+
+    state
+        .handle_movement(Some("test_room"), &[], &deps.map, &deps.npcs)
+        .unwrap();
+
+    assert_eq!(
+        state
+            .narrative
+            .history
+            .last()
+            .and_then(Message::location_header),
+        Some("Test Room"),
+        "the saved Narration reports the room it arrives in"
+    );
+    assert_eq!(
+        state.narrative.arriving_location_write,
+        Some(ArrivingLocationWrite {
+            message_id: 7,
+            swipe_index: 1,
+            room_name: "Test Room".to_string(),
+        }),
+        "the Swipe row already exists, so the next save writes it as an update"
+    );
+    assert_eq!(
+        state.narrative.pending_location, None,
+        "the arriving Narration owns the room name, not the next Message"
     );
 }
 

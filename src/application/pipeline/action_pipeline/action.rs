@@ -12,20 +12,17 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
 
 impl ActionPipeline {
-    /// Single gated entry. The empty free-action input is a continue —
-    /// no message is persisted.
     pub fn process_action(
         &self,
         generation_gate: &GenerationGate,
         action: Action,
     ) -> Result<ProcessActionResult, EngineError> {
-        // The impersonate preset resolves at generation time from the game's
-        // active configuration — nothing is pinned at entry.
-        let (input, impersonated, steering_instruction) = match action {
-            Action::FreeAction(input) => (input, false, None),
-            // The steering rides on the Swipe's stored inputs (not history), so a redo re-applies it.
-            Action::Guide(guide) => (String::new(), false, Some(guide)),
-            Action::Impersonate(direction) => (String::new(), true, direction),
+        // The impersonate preset resolves at generation time from the game's active configuration.
+        let (input, impersonated, guide_text, impersonate_direction) = match action {
+            Action::FreeAction(input) => (input, false, None, None),
+            // Steering rides on the Swipe's stored inputs, so a redo re-applies it.
+            Action::Guide(guide) => (String::new(), false, Some(guide), None),
+            Action::Impersonate(direction) => (String::new(), true, None, direction),
             Action::Options => return self.process_options(generation_gate),
         };
 
@@ -45,24 +42,33 @@ impl ActionPipeline {
                 pipeline.execute_action_with_inputs(
                     spawn_input,
                     impersonated,
-                    steering_instruction,
+                    guide_text,
+                    impersonate_direction,
                 );
             },
         )
     }
 
-    #[instrument(skip(self, impersonated, steering_instruction), fields(input_length))]
+    #[instrument(
+        skip(self, impersonated, guide_text, impersonate_direction),
+        fields(input_length)
+    )]
     pub(crate) fn execute_action_with_inputs(
         &self,
         input: String,
         impersonated: bool,
-        steering_instruction: Option<String>,
+        guide_text: Option<String>,
+        impersonate_direction: Option<String>,
     ) {
         let mut state = self.message_service.load_or_fresh();
         state.narrative.last_trigger = None;
-        if let Err(PhaseError::Cancelled) =
-            self.run_from_input(state, input, impersonated, steering_instruction)
-        {
+        if let Err(PhaseError::Cancelled) = self.run_from_input(
+            state,
+            input,
+            impersonated,
+            guide_text,
+            impersonate_direction,
+        ) {
             tracing::debug!("Pipeline cancelled");
         }
     }

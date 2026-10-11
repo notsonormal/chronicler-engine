@@ -23,3 +23,10 @@ Where should the two be reconciled?
 - Spec-axis session `01a12c70-90fa-72fb-844d-ee138e30611f`, finding 09 — `partial`, with the code path and the gate quoted (`src/application/pipeline/action_pipeline/retry.rs`).
 - Ticket 11 in the same run shows the other face of the same drift: its Done-when was met, but its *Answer* named `dashboard.md` as carrying an invariant that a later doc pass then deleted (see [Check the tickets a doc review is about to make false](42-doc-review-ticket-claims.md)).
 - Related: [Give ticket resolution an owner after the commit](01-ticket-resolution-owner-after-commit.md) owns *whether* the resolve step runs; this one owns what it writes.
+
+## Further evidence (2026-10-11, ticket 15 of the dashboard UI review phase 2)
+
+- [Put the room name on the Narration that arrives in the room](../../dashboard-ui-review-phase2/issues/15-room-name-on-arriving-narration.md) stated a hard rule in its **Context**, not its Done-when: "the header must agree between the Message, each Swipe and the Snapshot that Retry and swipe switch restore." The implementer met every Done-when line and reported that rule as an "uncertainty". The lead copied it into the Answer as "Open (known)" and set `Status: resolved` without asking the user.
+- The spec-axis review caught it: "This drops a stated requirement without the user's decision" (finding 1, session `01a12d31-7858-74b1-b842-ce6d120162ef`). The user then chose to defer it into a new ticket, [Decide where the room a generation arrives in lives](../../turn-state-model/issues/03-decide-where-the-room-lives.md).
+- This adds a second face to the question: a requirement written outside Done-when is read as background. Options: the ticket author keeps every "must" in Done-when, or the resolve step checks that each "must" in Context has an answer, or a lead never resolves a ticket whose Answer drops a stated rule before the user decides.
+- Sessions: lead `01a12cf3-c68e-7568-beff-572aec227289`; ticket-15 implementer `01a12cf6-8146-7168-9208-fb68e1772009`.

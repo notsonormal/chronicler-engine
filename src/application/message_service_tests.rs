@@ -8,6 +8,7 @@ use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state::narrative_state::ArrivingLocationWrite;
 use crate::test_support::fixtures::{TestMap, TestPersona, TestWorld};
 
 type Storage = crate::adapters::driven::storage::Storage;
@@ -83,11 +84,11 @@ fn test_find_retry_anchor_guided_narration_after_input_anchors_the_guided_narrat
         MessageType::Narration,
         false,
         Some("make it ominous".to_string()),
+        None,
     );
     let messages = state.narrative.history.as_slice().to_vec();
 
-    // A guided Narration is its own retry target, so it must anchor; the older
-    // Input's snapshot predates its narration.
+    // The older Input's snapshot predates its narration, so it cannot anchor.
     let (idx, anchor) = service
         .find_retry_anchor_msg(&messages)
         .expect("anchor for a guided turn after an input");
@@ -167,6 +168,7 @@ fn test_find_retry_anchor_guide_only_turn_anchors_the_guided_narration() {
         MessageType::Narration,
         false,
         Some("make it ominous".to_string()),
+        None,
     );
     let messages = state.narrative.history.as_slice().to_vec();
 
@@ -194,7 +196,8 @@ fn swipe_with_snapshot(text: &str, snapshot_id: u64) -> Swipe {
         location_header: None,
         event_header: None,
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     }
 }
 
@@ -202,9 +205,8 @@ fn swipe_with_snapshot(text: &str, snapshot_id: u64) -> Swipe {
 fn test_switch_swipe_restores_a_settled_snapshot() {
     let (service, storage, _game_id) = make_service_with_game();
 
-    // A mid-generation snapshot: the status a narration turn leaves on the
-    // Swipe's snapshot, plus a stale option set inherited from the scene the
-    // redo reconstructed from.
+    // The shape a narration turn leaves on its Swipe: still Generating, with the
+    // redo's stale option set.
     let mut generating = GameState::new("start");
     generating.narrative.input_buffer.status = GenerationStatus::Generating;
     generating.narrative.input_buffer.phase = GenerationPhase::Narrating;
@@ -314,5 +316,61 @@ fn test_save_message_and_snapshot_persists_a_snapshot() {
     assert!(
         storage.load_latest_snapshot().unwrap().is_some(),
         "saving a message must persist the snapshot the restores read"
+    );
+}
+
+#[test]
+fn test_save_message_and_snapshot_writes_the_arriving_room_onto_the_saved_swipe() {
+    let (service, _storage, _game_id) = make_service_with_game();
+
+    let mut state = GameState::new("start");
+    state.add_message("hello".to_string(), MessageType::Narration);
+    service.save_message_and_snapshot(&mut state).unwrap();
+
+    let narration = state.narrative.history.last().unwrap();
+    state.narrative.arriving_location_write = Some(ArrivingLocationWrite {
+        message_id: narration.id,
+        swipe_index: narration.active_swipe_index,
+        room_name: "Room start".to_string(),
+    });
+    service.save_message_and_snapshot(&mut state).unwrap();
+
+    let stored = service.load_messages().unwrap();
+    assert_eq!(
+        stored[0].location_header(),
+        Some("Room start"),
+        "the write lands on the Swipe row the Narration was saved in"
+    );
+    assert_eq!(
+        state.narrative.arriving_location_write, None,
+        "a written room must not be applied twice"
+    );
+}
+
+#[test]
+fn test_a_failed_arriving_room_write_stays_for_the_next_save() {
+    let (service, storage, _game_id) = make_service_with_game();
+
+    let mut state = GameState::new("start");
+    state.add_message("hello".to_string(), MessageType::Narration);
+    service.save_message_and_snapshot(&mut state).unwrap();
+
+    let narration = state.narrative.history.last().unwrap();
+    let arriving = ArrivingLocationWrite {
+        message_id: narration.id,
+        swipe_index: narration.active_swipe_index,
+        room_name: "Room start".to_string(),
+    };
+    state.narrative.arriving_location_write = Some(arriving.clone());
+    storage.add_failure(
+        "update_swipe_location_header",
+        crate::adapters::driven::storage::TestOverride::internal("write failed"),
+    );
+
+    assert!(service.save_message_and_snapshot(&mut state).is_err());
+    assert_eq!(
+        state.narrative.arriving_location_write,
+        Some(arriving),
+        "the failed write must stay queued"
     );
 }

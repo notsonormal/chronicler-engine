@@ -17,10 +17,11 @@ use crate::error::InternalError;
 use crate::domain::model::message::{Message, Swipe};
 use super::message_types::MessageType;
 use super::movement::MovementState;
-use super::narrative_state::NarrativeState;
+use super::narrative_state::{ArrivingLocationWrite, NarrativeState};
 use super::scene_state::SceneState;
 
-/// Mutable game state. World data lives on the orchestrator and threads through engine call sites as `&Arc<T>`/`&HashMap<_, _>` args.
+/// World data lives on the orchestrator and threads through engine call sites
+/// as `&Arc<T>`/`&HashMap<_, _>` args.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct GameState {
@@ -30,7 +31,6 @@ pub struct GameState {
     pub npc_encounter_log: NpcEncounterLog,
 }
 
-// Builder uses Option + Default so new GameState fields don't break callers.
 pub struct GameStateBuilder {
     starting_room: String,
     narrative: Option<NarrativeState>,
@@ -118,7 +118,8 @@ impl GameState {
         text: String,
         message_type: MessageType,
         impersonated: bool,
-        steering_instruction: Option<String>,
+        guide_text: Option<String>,
+        impersonate_direction: Option<String>,
     ) {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
@@ -128,16 +129,16 @@ impl GameState {
                 let target_is_event = target.event_header().is_some();
                 let new_is_event = event_header.is_some();
                 if target_is_event == new_is_event {
-                    let inherited_impersonated = target.impersonated();
-                    let inherited_steering_instruction =
-                        target.steering_instruction().map(|d| d.to_string());
                     let swipe = Swipe {
                         text: text.clone(),
                         snapshot_id: None,
                         location_header: location_header.clone(),
                         event_header: event_header.clone(),
-                        impersonated: inherited_impersonated,
-                        steering_instruction: inherited_steering_instruction,
+                        impersonated: target.impersonated(),
+                        guide_text: target.guide_text().map(|d| d.to_string()),
+                        impersonate_direction: target
+                            .impersonate_direction()
+                            .map(|d| d.to_string()),
                     };
                     target.swipes.push(swipe);
                     target.set_active_swipe(target.swipes.len() - 1);
@@ -147,26 +148,32 @@ impl GameState {
         }
 
         let mut message = Message::new(text, message_type, location_header, event_header);
-        if impersonated || steering_instruction.is_some() {
-            message.set_stored_inputs(impersonated, steering_instruction);
+        if impersonated || guide_text.is_some() || impersonate_direction.is_some() {
+            message.set_stored_inputs(impersonated, guide_text, impersonate_direction);
         }
         self.narrative.history.append(message);
     }
 
     pub fn add_message(&mut self, text: String, message_type: MessageType) {
-        self.push_message(text, message_type, false, None);
+        self.push_message(text, message_type, false, None, None);
     }
 
-    /// Add a message carrying the inputs that produced its generation — the
-    /// Swipe stores them so a redo re-applies them.
+    /// The Swipe stores the generation inputs so a redo re-applies them.
     pub fn add_message_with_inputs(
         &mut self,
         text: String,
         message_type: MessageType,
         impersonated: bool,
-        steering_instruction: Option<String>,
+        guide_text: Option<String>,
+        impersonate_direction: Option<String>,
     ) {
-        self.push_message(text, message_type, impersonated, steering_instruction);
+        self.push_message(
+            text,
+            message_type,
+            impersonated,
+            guide_text,
+            impersonate_direction,
+        );
     }
 
     pub fn inject_scenario_logs(
@@ -245,17 +252,44 @@ impl GameState {
         }
     }
 
+    /// The Quantifier reports a movement only after the Narration was saved, so
+    /// the room it names is written back onto that Narration.
     pub fn log_movement_completion(&mut self, map: &MapDef) {
-        let room = map
+        let room_name = map
             .get_room_by_id(&self.movement.current_room_id)
             .or_else(|| {
                 self.movement
                     .dynamic_rooms
                     .get(&self.movement.current_room_id)
-            });
-        if let Some(current_room) = room {
-            self.narrative.pending_location = Some(current_room.name.clone());
+            })
+            .map(|current_room| current_room.name.clone());
+        let Some(room_name) = room_name else {
+            return;
+        };
+        self.narrative.pending_location = None;
+        if let Some(arriving_message) = self.arriving_message_mut() {
+            arriving_message.set_location_header(room_name.clone());
+            if !arriving_message.is_unpersisted() {
+                self.narrative.arriving_location_write = Some(ArrivingLocationWrite {
+                    message_id: arriving_message.id,
+                    swipe_index: arriving_message.active_swipe_index,
+                    room_name,
+                });
+            }
         }
+    }
+
+    /// A redo appends its Swipe to the Message it retries, so that Message
+    /// carries the redo's Narration.
+    fn arriving_message_mut(&mut self) -> Option<&mut Message> {
+        if let Some(target) = self.narrative.retry_target.as_mut() {
+            return Some(target);
+        }
+        self.narrative
+            .history
+            .iter_mut()
+            .rev()
+            .find(|message| message.is_input_or_narration())
     }
 
     pub fn handle_movement(
@@ -449,12 +483,10 @@ impl GameState {
         results
     }
 
-    /// Cross-checks derived state against the map and NPC registry.
-    ///
-    /// Deliberately not checked here: the "last Narration after last player
-    /// Input" ordering on `MessageHistory`. It is not a global invariant —
-    /// `POST /history/delete` legitimately pops a Narration, so a state whose
-    /// last entry is an Input is a valid rest state, not corruption.
+    /// The "last Narration after last player Input" ordering on `MessageHistory`
+    /// is not a global invariant: `POST /history/delete` legitimately pops a
+    /// trailing Narration, so a state whose last entry is an Input is a valid
+    /// rest state. This check therefore omits it.
     #[cfg(feature = "diagnostics")]
     pub fn assert_state_consistency(
         &self,

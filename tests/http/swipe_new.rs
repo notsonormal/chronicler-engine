@@ -24,8 +24,6 @@ use crate::support::app_wiring::app_with_narrator;
 use crate::support::http_assertions::status_error_message;
 use crate::support::http_requests::{fetch_generating_status, post_action, post_empty, wait_idle};
 
-/// A game whose event Narration meets Gabriella in Swipe 1, while the retry's
-/// own generation leaves her out: the two Swipes disagree about the encounter.
 /// Returns the app, its state and the event Message's id.
 async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u64) {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
@@ -44,13 +42,11 @@ async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u6
         .build();
     let narrator = Arc::new(MockBackend::default());
     let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
-        // The action's post-generation pass moves the player into the room the
-        // trigger watches.
+        // Consumed in call order: the Action's post-generation pass, the event's own
+        // reconciliation, then the retry's.
         r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
             .to_string(),
-        // The event's own reconciliation meets Gabriella.
         r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
-        // The retry's reconciliation leaves her out.
         r#"{"npcs_in_room": []}"#.to_string(),
     ])) as Arc<dyn LlmProvider>;
     let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
@@ -166,6 +162,21 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
         .expect("get_debug_state should succeed")
         .current_room_id;
     assert_eq!(room, "room2", "retry re-ran quantifier → moved to room2");
+
+    let messages = state.message_service.load_messages().unwrap();
+    let narration = messages
+        .iter()
+        .find(|m| m.message_type == MessageType::Narration)
+        .expect("the generation appends a Narration");
+    assert_eq!(
+        narration.location_header(),
+        Some("Room room2"),
+        "the redo's Swipe reports the room it moved the player into"
+    );
+    assert_eq!(
+        narration.swipes[0].location_header, None,
+        "the first Swipe's own generation did not move, so it reports no room"
+    );
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 9.3
@@ -343,6 +354,92 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
     );
 }
 
+// [docs/specs/swipe_new.md] SCENARIO: 9.8
+#[tokio::test]
+async fn test_retry_swipe_without_movement_reports_no_room_http() {
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
+    let narrator = Arc::new(MockBackend::default());
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+            .to_string(),
+        r#"{"npcs_in_room": []}"#.to_string(),
+    ])) as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        recorder,
+        quantifier,
+    );
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .pipeline(pipeline)
+        .build_with_state();
+
+    assert!(post_action(&app, "walk north").await.status().is_success());
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the moving Action should complete"
+    );
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_idle(&state, 1000).await, "retry should complete");
+
+    let messages = state.message_service.load_messages().unwrap();
+    let narration = messages
+        .iter()
+        .find(|m| m.message_type == MessageType::Narration)
+        .expect("the generation appends a Narration");
+    assert_eq!(
+        narration.swipes.len(),
+        2,
+        "the redo appends one Swipe to the Narration"
+    );
+    assert_eq!(
+        narration.location_header(),
+        None,
+        "a redo that stays put must not keep the room its sibling arrived in"
+    );
+    assert_eq!(
+        narration.swipes[0].location_header.as_deref(),
+        Some("Room room2"),
+        "the first Swipe keeps the room its own generation arrived in"
+    );
+
+    let narration_id = narration.id;
+    let resp = post_empty(&app, &format!("/message/{narration_id}/swipe/0")).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let switched = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .into_iter()
+        .find(|m| m.id == narration_id)
+        .expect("the Narration survives the switch");
+    assert_eq!(
+        switched.location_header(),
+        Some("Room room2"),
+        "switching to the first Swipe shows the room it arrived in"
+    );
+
+    let resp = post_empty(&app, &format!("/message/{narration_id}/swipe/1")).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let switched = state
+        .message_service
+        .load_messages()
+        .unwrap()
+        .into_iter()
+        .find(|m| m.id == narration_id)
+        .expect("the Narration survives the switch back");
+    assert_eq!(
+        switched.location_header(),
+        None,
+        "switching to the redo's Swipe shows its own, room-less generation"
+    );
+}
+
 // [docs/specs/swipe_new.md] SCENARIO: 10.1
 #[tokio::test]
 async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
@@ -407,7 +504,7 @@ async fn test_event_retry_does_not_rerun_quantifier_http() {
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
-    // Quantifier would move the player back if called; event retry must NOT call it.
+    // The seeded response is a tripwire: a stray quantifier call would move the player back.
     let narrator = Arc::new(MockBackend::default());
     let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
         r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room_1"}}"#
@@ -674,22 +771,28 @@ async fn test_event_retry_matches_with_a_prior_swipe_switch_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 10.8
 #[tokio::test]
-async fn test_event_retry_keeps_the_swipes_room_name_http() {
+async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
     let (app, state, event_id) = app_with_an_event_that_meets_gabriella().await;
 
-    // The turn's own movement put the room name on the event Swipe; the retry
-    // regenerates the continuation on that Swipe's Snapshot, which has no
-    // pending room left.
-    let room_name = state
-        .message_service
-        .load_messages()
-        .unwrap()
+    // The room name belongs to the Narration the Action's movement arrived on, so
+    // the event continuation that follows it in the same generation carries none.
+    let messages = state.message_service.load_messages().unwrap();
+    let event_narration = messages
         .iter()
         .find(|m| m.id == event_id)
-        .and_then(|m| m.location_header().map(str::to_string))
-        .expect("the turn's movement puts the room name on the event Swipe");
+        .expect("the event Message exists");
     assert_eq!(
-        room_name, "Room room2",
+        event_narration.location_header(),
+        None,
+        "the event continuation must not carry the room the main Narration arrived in"
+    );
+    let main_narration = messages
+        .iter()
+        .find(|m| m.message_type == MessageType::Narration && m.event_header().is_none())
+        .expect("the Action's main Narration exists");
+    assert_eq!(
+        main_narration.location_header(),
+        Some("Room room2"),
         "the movement into \"room2\" must report that room's display name"
     );
 
@@ -709,13 +812,12 @@ async fn test_event_retry_keeps_the_swipes_room_name_http() {
     );
     assert_eq!(
         event_narration.location_header(),
-        Some("Room room2"),
-        "the new active swipe must report the room the event was written in"
+        None,
+        "the redo's Swipe must not invent a room its siblings do not carry"
     );
     assert_eq!(
-        event_narration.swipes[0].location_header.as_deref(),
-        Some("Room room2"),
-        "the first swipe must still report that room"
+        event_narration.swipes[0].location_header, None,
+        "switching between the event's Swipes must not add or remove a room name"
     );
 }
 
@@ -796,7 +898,7 @@ async fn test_retry_anchor_snapshot_deleted_returns_500_http() {
         .build();
 
     let mut input_msg = Message::new("look", MessageType::Input, None, None);
-    input_msg.set_snapshot_id(Some(999_999)); // non-existent snapshot
+    input_msg.set_snapshot_id(Some(999_999));
     insert_message_with_swipe(&storage, &input_msg).unwrap();
 
     let resp = post_empty(&app, "/swipe/new").await;
@@ -1187,7 +1289,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
     {
         let mut gs = state.message_service.load_or_fresh();
         let mut input = Message::new("I look around.".to_string(), MessageType::Input, None, None);
-        input.set_stored_inputs(true, Some("I look around.".to_string()));
+        input.set_stored_inputs(true, None, Some("I look around.".to_string()));
         gs.narrative.history.append(input);
         state
             .message_service
@@ -1305,7 +1407,7 @@ async fn test_retry_re_impersonate_preserves_record_http() {
     {
         let mut gs = state.message_service.load_or_fresh();
         let mut input = Message::new("I sneak past.".to_string(), MessageType::Input, None, None);
-        input.set_stored_inputs(true, Some("Sneak past the guard.".to_string()));
+        input.set_stored_inputs(true, None, Some("Sneak past the guard.".to_string()));
         gs.narrative.history.append(input);
         state
             .message_service
@@ -1327,14 +1429,12 @@ async fn test_retry_re_impersonate_preserves_record_http() {
         "record still marks the turn as impersonated"
     );
     assert_eq!(
-        input.steering_instruction(),
+        input.impersonate_direction(),
         Some("Sneak past the guard."),
-        "the steering instruction re-applies on the redo"
+        "the impersonate direction re-applies on the redo"
     );
 }
 
-// The impersonate preset resolves at generation time from the game's active
-// configuration — a redo picks up the preset's current content.
 // [docs/specs/swipe_new.md] SCENARIO: 22.4
 #[tokio::test]
 async fn test_retry_re_impersonate_uses_current_preset_content_http() {
@@ -1363,7 +1463,7 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     {
         let mut gs = state.message_service.load_or_fresh();
         let mut input = Message::new("I look around.".to_string(), MessageType::Input, None, None);
-        input.set_stored_inputs(true, Some("I look around.".to_string()));
+        input.set_stored_inputs(true, None, Some("I look around.".to_string()));
         gs.narrative.history.append(input);
         state
             .message_service
@@ -1421,8 +1521,89 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
         "the redo's active swipe stays impersonated"
     );
     assert_eq!(
-        input.steering_instruction(),
+        input.impersonate_direction(),
         Some("I look around."),
-        "the steering instruction re-applies on the redo"
+        "the impersonate direction re-applies on the redo"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 22.5
+#[tokio::test]
+async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
+    let narrator = Arc::new(MockBackend::default());
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        // Consumed in call order: the moving Action, the guided generation, then the redo.
+        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+            .to_string(),
+        r#"{"npcs_in_room": []}"#.to_string(),
+        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room_1"}}"#
+            .to_string(),
+    ])) as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        recorder,
+        quantifier,
+    );
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .pipeline(pipeline)
+        .build_with_state();
+
+    assert!(post_action(&app, "walk north").await.status().is_success());
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the moving Action should complete"
+    );
+    assert!(
+        post_action(&app, "/guide look for the key")
+            .await
+            .status()
+            .is_success()
+    );
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the guided generation should complete"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let guided = messages
+        .iter()
+        .find(|m| m.is_guided())
+        .expect("the guided generation appends a guided Narration");
+    assert_eq!(
+        guided.location_header(),
+        None,
+        "a guided Narration that stayed put must not take the previous Action's room"
+    );
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the guided retry should complete"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let guided = messages
+        .iter()
+        .find(|m| m.is_guided())
+        .expect("the guided Message survives the retry");
+    assert_eq!(
+        guided.swipes.len(),
+        2,
+        "the redo appends one Swipe to the guided Narration"
+    );
+    assert_eq!(
+        guided.location_header(),
+        Some("Room room_1"),
+        "the redo's Swipe reports the room its own generation arrived in"
+    );
+    assert_eq!(
+        guided.swipes[0].location_header, None,
+        "the first Swipe keeps its own, room-less generation"
     );
 }

@@ -102,6 +102,23 @@ Then at most one Narration message carries an event header (the trigger fires at
 And the generation status is Idle
 ```
 
+#### Scenario 1.14: A Narration that moves the player reports the room it arrives in
+
+```gherkin
+Given a game state whose player stands in "room_1"
+And a map whose rooms are "room_1" and "room2"
+And a quantifier backend that moves the player to "room2" for the first Action and reports no movement for the second
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action with command="walk north"
+And the pipeline returns to idle
+Then the Narration message reports the room "Room room2"
+And the player-input message reports no room
+When the client POST /action with command="look"
+And the pipeline returns to idle
+Then the second Action's Narration message reports no room
+And that Action's player-input message reports no room
+```
+
 ### Error recovery
 
 #### Scenario 2.1: Action in a non-existent room reports an error

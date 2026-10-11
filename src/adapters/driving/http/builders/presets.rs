@@ -128,20 +128,24 @@ pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String
     )
 }
 
-/// Shared with the edit-refresh path, so a refreshed card matches the panel's.
 /// `preview` arrives pre-truncated: newlines flattened, a cut marked with an ellipsis.
 #[derive(Template)]
 #[template(
-    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if !self.active_badges.is_empty() %} active{% endif %}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% for badge in self.active_badges %}<span class="badge primary">{{ badge }}</span>{% endfor %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% for (label, mode_query) in self.activate_buttons %}<button hx-post="/prompt-presets/{{ preset.id }}/activate{{ mode_query }}" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">{{ label }}</button>{% endfor %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button></div></div>"##,
+    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if !self.active_badges.is_empty() %} active{% endif %}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% for badge in self.active_badges %}<span class="badge primary">{{ badge }}</span>{% endfor %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% for button in self.activate_buttons %}<button hx-post="/prompt-presets/{{ preset.id }}/activate{{ button.mode_query }}" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">{{ button.label }}</button>{% endfor %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button></div></div>"##,
     ext = "html"
 )]
 pub struct PresetCardTemplate {
     pub preset: PromptPreset,
     pub preview: String,
     pub active_badges: Vec<String>,
-    /// Each entry pairs the button's label with the mode query appended to its
-    /// activate route.
-    pub activate_buttons: Vec<(String, String)>,
+    pub activate_buttons: Vec<ActivateButton>,
+}
+
+/// `mode_query` is `?mode=<narrator mode>` for a mode-tagged preset, empty for
+/// the Options slot's button.
+pub struct ActivateButton {
+    pub label: String,
+    pub mode_query: String,
 }
 
 impl PresetCardTemplate {
@@ -163,7 +167,7 @@ impl PresetCardTemplate {
 fn mode_slot_actions(
     preset: &PromptPreset,
     settings: &AppSettings,
-) -> (Vec<String>, Vec<(String, String)>) {
+) -> (Vec<String>, Vec<ActivateButton>) {
     let mut active_badges = Vec::new();
     let mut activate_buttons = Vec::new();
     for mode in [NarratorMode::Novel, NarratorMode::InteractiveFiction] {
@@ -171,10 +175,10 @@ fn mode_slot_actions(
         if is_active {
             active_badges.push(format!("Active · {}", mode.display_label()));
         } else if preset.allows(mode) {
-            activate_buttons.push((
-                format!("Set Active ({})", mode.display_label()),
-                format!("?mode={}", mode.as_str()),
-            ));
+            activate_buttons.push(ActivateButton {
+                label: format!("Set Active ({})", mode.display_label()),
+                mode_query: format!("?mode={}", mode.as_str()),
+            });
         }
     }
     (active_badges, activate_buttons)
@@ -184,12 +188,18 @@ fn mode_slot_actions(
 fn options_slot_actions(
     preset: &PromptPreset,
     settings: &AppSettings,
-) -> (Vec<String>, Vec<(String, String)>) {
+) -> (Vec<String>, Vec<ActivateButton>) {
     let is_active = settings.active_preset_id(preset.preset_type, NarratorMode::Novel) == preset.id;
     if is_active {
         (vec!["Active".to_string()], Vec::new())
     } else {
-        (Vec::new(), vec![("Set Active".to_string(), String::new())])
+        (
+            Vec::new(),
+            vec![ActivateButton {
+                label: "Set Active".to_string(),
+                mode_query: String::new(),
+            }],
+        )
     }
 }
 

@@ -619,8 +619,6 @@ pub fn dummy_message(text: &str) -> Message {
     Message::new(text, MessageType::Input, None, None)
 }
 
-/// `created_offset_secs` is signed so a test can order two attempts: negative is
-/// in the past.
 pub fn llm_message(
     agent: &str,
     model: &str,
@@ -649,7 +647,8 @@ pub fn dummy_swipe(text: &str) -> Swipe {
         location_header: None,
         event_header: None,
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     }
 }
 
@@ -693,7 +692,8 @@ pub fn seed_swipe_with_stored_inputs(
     text: &str,
     message_type: MessageType,
     impersonated: bool,
-    steering_instruction: Option<String>,
+    guide_text: Option<String>,
+    impersonate_direction: Option<String>,
 ) -> Result<u64, crate::error::EngineError> {
     use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 
@@ -707,7 +707,7 @@ pub fn seed_swipe_with_stored_inputs(
         .last()
         .ok_or_else(|| crate::error::EngineError::Config("seed: no message appended".into()))?
         .clone();
-    message.set_stored_inputs(impersonated, steering_instruction);
+    message.set_stored_inputs(impersonated, guide_text, impersonate_direction);
     message.set_snapshot_id(Some(snapshot_id));
     insert_message_with_swipe(storage, &message)?;
     Ok(snapshot_id)
@@ -751,7 +751,6 @@ pub fn seed_main_narration_flow(
     Ok(())
 }
 
-/// [`seed_main_narration_flow`] plus what a real trigger turn adds.
 pub fn seed_event_flow(
     state: &crate::adapters::driving::http::AppState,
     storage: &Storage,

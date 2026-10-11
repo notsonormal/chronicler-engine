@@ -70,6 +70,7 @@ Movement is a branch of post-generation quantification:
 
 - Movement occurs when the Quantifier derives a destination from the narrator's latest outcome.
 - A static match updates `movement.current_room_id`. An unmatched destination creates a dynamic pseudo-room, stores it in `movement.dynamic_rooms`, and makes it current.
+- The room a movement lands in is the location header of the Swipe whose generation moved the player.
 - Movement detection runs on main narration; the post-event Quantifier reconciles Character presence.
 
 Dynamic rooms travel with mutable movement state in Snapshots.

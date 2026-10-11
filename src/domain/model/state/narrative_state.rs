@@ -22,13 +22,21 @@ pub struct NarrativeState {
     pub last_backend_name: Option<String>,
     #[serde(default)]
     pub last_model_name: Option<String>,
-    /// The offered pickable-option set (options agent output). Current-scene
-    /// artifact — replaced wholesale, never per-message history.
     #[serde(default)]
     pub current_options: Vec<String>,
-    // Transient — not persisted (pipeline run only).
     #[serde(skip)]
     pub retry_target: Option<Message>,
+    /// Deferred write for a Swipe whose row already exists; the next save applies
+    /// it as an update.
+    #[serde(skip)]
+    pub arriving_location_write: Option<ArrivingLocationWrite>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArrivingLocationWrite {
+    pub message_id: u64,
+    pub swipe_index: usize,
+    pub room_name: String,
 }
 
 impl NarrativeState {
@@ -49,6 +57,7 @@ impl NarrativeState {
             last_model_name: snapshot.last_model_name.clone(),
             current_options: snapshot.current_options.clone(),
             retry_target: None,
+            arriving_location_write: None,
         }
     }
 }

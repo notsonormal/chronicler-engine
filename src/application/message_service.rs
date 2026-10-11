@@ -60,6 +60,7 @@ impl MessageService {
     }
 
     pub fn save_message_and_snapshot(&self, state: &mut GameState) -> Result<u64, EngineError> {
+        self.save_arriving_location(state)?;
         let snapshot_id = self.write_snapshot(state)?;
 
         if let Some(ref mut target) = state.narrative.retry_target {
@@ -92,6 +93,19 @@ impl MessageService {
     fn write_snapshot(&self, state: &GameState) -> Result<u64, EngineError> {
         let snapshot = GameStateSnapshot::from_game_state(state);
         self.storage.save_snapshot(&snapshot)
+    }
+
+    fn save_arriving_location(&self, state: &mut GameState) -> Result<(), EngineError> {
+        let Some(arriving) = state.narrative.arriving_location_write.as_ref() else {
+            return Ok(());
+        };
+        self.storage.update_swipe_location_header(
+            arriving.message_id,
+            arriving.swipe_index,
+            &arriving.room_name,
+        )?;
+        state.narrative.arriving_location_write = None;
+        Ok(())
     }
 
     pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
@@ -179,9 +193,8 @@ impl MessageService {
             .load_snapshot_by_id(snapshot_id)?
             .ok_or_else(|| ApplicationError::internal("Snapshot not found"))?;
 
-        // A Swipe's snapshot is written while its narration still generates, so a
-        // restore must settle the game: Idle, no options (the set is regenerated
-        // per turn).
+        // A Swipe's snapshot is taken while its narration still generates, and the
+        // option set is regenerated each turn.
         snapshot.narrative.input_buffer.status = GenerationStatus::Idle;
         snapshot.narrative.input_buffer.phase = GenerationPhase::default();
         snapshot.narrative.current_options.clear();

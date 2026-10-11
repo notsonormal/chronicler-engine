@@ -39,12 +39,22 @@ async fn error_detail_popover_open(page: &playwright_rs::Page, popover_id: &str)
     .unwrap_or(false)
 }
 
-/// The Send control's height and the form's own type size against the inline
-/// error's: the slot draws a message and a Details link, not a second Send
-/// button. Returns (send height, toggle height, send size, toggle size, message
-/// size).
-async fn read_inline_error_sizes(page: &playwright_rs::Page) -> (f64, f64, f64, f64, f64) {
-    page.evaluate::<(), (f64, f64, f64, f64, f64)>(
+#[derive(serde::Deserialize)]
+struct InlineErrorSizes {
+    #[serde(rename = "sendHeight")]
+    send_height: f64,
+    #[serde(rename = "toggleHeight")]
+    toggle_height: f64,
+    #[serde(rename = "sendFontSize")]
+    send_font_size: f64,
+    #[serde(rename = "toggleFontSize")]
+    toggle_font_size: f64,
+    #[serde(rename = "messageFontSize")]
+    message_font_size: f64,
+}
+
+async fn read_inline_error_sizes(page: &playwright_rs::Page) -> InlineErrorSizes {
+    page.evaluate::<(), InlineErrorSizes>(
         r#"() => {
             const submit = document.getElementById('submit-btn');
             const toggle = document.querySelector(
@@ -52,13 +62,13 @@ async fn read_inline_error_sizes(page: &playwright_rs::Page) -> (f64, f64, f64, 
             const message = document.querySelector(
                 '#command-form .inline-error-slot .error-disclosure-message');
             const size = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
-            return [
-                submit ? submit.getBoundingClientRect().height : 0,
-                toggle ? toggle.getBoundingClientRect().height : 0,
-                size(submit),
-                size(toggle),
-                size(message),
-            ];
+            return {
+                sendHeight: submit ? submit.getBoundingClientRect().height : 0,
+                toggleHeight: toggle ? toggle.getBoundingClientRect().height : 0,
+                sendFontSize: size(submit),
+                toggleFontSize: size(toggle),
+                messageFontSize: size(message),
+            };
         }"#,
         None,
     )
@@ -219,19 +229,23 @@ async fn check_failed_action_renders_inline_slot(page: playwright_rs::Page, _stu
         "an action failure with the server up must not raise the banner"
     );
 
-    let (submit_height, toggle_height, submit_size, toggle_size, message_size) =
-        read_inline_error_sizes(&page).await;
+    let sizes = read_inline_error_sizes(&page).await;
     assert!(
-        toggle_height > 0.0 && toggle_height < submit_height,
+        sizes.toggle_height > 0.0 && sizes.toggle_height < sizes.send_height,
         "the inline error's Details control must stay a small inline button, not a second \
-         Send button ({toggle_height}px against Send's {submit_height}px)"
+         Send button ({}px against Send's {}px)",
+        sizes.toggle_height,
+        sizes.send_height
     );
     assert!(
-        message_size > 0.0
-            && message_size < submit_size
-            && (message_size - toggle_size).abs() < 0.01,
+        sizes.message_font_size > 0.0
+            && sizes.message_font_size < sizes.send_font_size
+            && (sizes.message_font_size - sizes.toggle_font_size).abs() < 0.01,
         "the inline error's message and its Details control share the failure size \
-         ({message_size}px and {toggle_size}px), below the form's own {submit_size}px"
+         ({}px and {}px), below the form's own {}px",
+        sizes.message_font_size,
+        sizes.toggle_font_size,
+        sizes.send_font_size
     );
 }
 
@@ -735,9 +749,18 @@ fn carries_state(class_name: &str, state: &str) -> bool {
     class_name.split_whitespace().any(|class| class == state)
 }
 
-// The returned tuple: the container's class, its inherited text colour, the
-// palette's error colour, and whether the short line fits the column unclipped.
-async fn read_status_state(page: &playwright_rs::Page) -> (String, String, String, bool) {
+#[derive(serde::Deserialize)]
+struct StatusState {
+    #[serde(rename = "className")]
+    class_name: String,
+    #[serde(rename = "textColour")]
+    text_colour: String,
+    #[serde(rename = "paletteError")]
+    palette_error: String,
+    fits: bool,
+}
+
+async fn read_status_state(page: &playwright_rs::Page) -> StatusState {
     let script = r#"() => {
             const display = document.getElementById('status-display');
             const text = display.querySelector('.error-disclosure-message, .status');
@@ -755,24 +778,23 @@ async fn read_status_state(page: &playwright_rs::Page) -> (String, String, Strin
                     measured.scrollWidth <= measured.clientWidth + 1 &&
                     measured.neededHeight <= measured.boxHeight + 1;
             }
-            return [
-                display.className,
-                text ? getComputedStyle(text).color : '',
+            return {
+                className: display.className,
+                textColour: text ? getComputedStyle(text).color : '',
                 paletteError,
-                readable,
-            ];
+                fits: readable,
+            };
         }"#
     .replace("// MEASURE_CLAMPED_TEXT", MEASURE_CLAMPED_TEXT);
-    page.evaluate::<(), (String, String, String, bool)>(script.as_str(), None)
+    page.evaluate::<(), StatusState>(script.as_str(), None)
         .await
         .unwrap()
 }
 
-/// The status column's clamp hides the lines it cuts, so a reader that measures
-/// only the clamp's own box cannot see a clipped sentence. This measures that box,
-/// then lifts the clamp off that same element to measure the height the sentence
-/// really needs — the element keeps its exact width and font, which an offscreen
-/// copy of it would only approximate — and puts the clamp back before returning.
+/// Measuring the clamp's own box misses the lines it cuts, so the height the
+/// sentence needs has to come off that same element — it keeps the width and font
+/// an offscreen copy would only approximate. Each probe injects this definition by
+/// replacing its own `// MEASURE_CLAMPED_TEXT` line, so that marker is code.
 const MEASURE_CLAMPED_TEXT: &str = r#"
             const clampedText = (display) => {
                 const text = display.querySelector('.error-disclosure-text');
@@ -806,10 +828,11 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     stub: StubServer,
 ) {
     let status = stub.status_handle();
-    let (ready_class, ready_colour, _, _) = read_status_state(&page).await;
+    let ready = read_status_state(&page).await;
     assert!(
-        carries_state(&ready_class, "ready") && !carries_state(&ready_class, "error"),
-        "an idle dashboard must carry the ready state, got {ready_class:?}"
+        carries_state(&ready.class_name, "ready") && !carries_state(&ready.class_name, "error"),
+        "an idle dashboard must carry the ready state, got {:?}",
+        ready.class_name
     );
 
     status.set(StubStatus::Error(
@@ -821,40 +844,43 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async { read_status_state(&page).await.0.contains("error") },
+            || async { read_status_state(&page).await.class_name.contains("error") },
         )
         .await,
         "a generation error must put the status display into its error state"
     );
 
-    let (error_class, error_colour, palette_error, fits) = read_status_state(&page).await;
+    let error = read_status_state(&page).await;
     assert!(
-        carries_state(&error_class, "error") && !carries_state(&error_class, "ready"),
-        "the error state must replace the ready state, not sit under it, got {error_class:?}"
+        carries_state(&error.class_name, "error") && !carries_state(&error.class_name, "ready"),
+        "the error state must replace the ready state, not sit under it, got {:?}",
+        error.class_name
     );
     assert_ne!(
-        error_colour, ready_colour,
+        error.text_colour, ready.text_colour,
         "the error must not be drawn in the Ready colour"
     );
     assert_eq!(
-        error_colour, palette_error,
+        error.text_colour, error.palette_error,
         "the error must be drawn in the palette's error colour"
     );
     assert!(
-        fits,
+        error.fits,
         "the longest clamped line must be drawn inside the status column, unclipped, without opening Details"
     );
 
     status.set(StubStatus::Idle);
     poll_now(&page, "#status-display").await;
     wait_for_status_ready(&page).await;
-    let (recovered_class, recovered_colour, _, _) = read_status_state(&page).await;
+    let recovered = read_status_state(&page).await;
     assert!(
-        carries_state(&recovered_class, "ready") && !carries_state(&recovered_class, "error"),
-        "returning to Ready must restore the ready state, got {recovered_class:?}"
+        carries_state(&recovered.class_name, "ready")
+            && !carries_state(&recovered.class_name, "error"),
+        "returning to Ready must restore the ready state, got {:?}",
+        recovered.class_name
     );
     assert_ne!(
-        recovered_colour, palette_error,
+        recovered.text_colour, error.palette_error,
         "Ready must not keep the error's colour"
     );
 }
@@ -885,28 +911,52 @@ fn assert_kind_is_listed(kind: GenerationFailureKind) {
     }
 }
 
-/// The status column's own numbers for the line it is drawing: the rendered
-/// text, the box the clamp draws and the height the sentence needs unclamped,
-/// the line height, the horizontal scroll and client widths, and how far past
-/// the column's right edge the box is drawn.
-async fn read_clamped_line(page: &playwright_rs::Page) -> (String, f64, f64, f64, f64, f64, f64) {
+/// `box_height` is the box the clamp draws, `needed_height` the height the
+/// sentence needs once the clamp is lifted off it.
+#[derive(serde::Deserialize)]
+struct ClampedLine {
+    text: String,
+    #[serde(rename = "boxHeight")]
+    box_height: f64,
+    #[serde(rename = "neededHeight")]
+    needed_height: f64,
+    #[serde(rename = "lineHeight")]
+    line_height: f64,
+    #[serde(rename = "scrollWidth")]
+    scroll_width: f64,
+    #[serde(rename = "clientWidth")]
+    client_width: f64,
+    overhang: f64,
+}
+
+async fn read_clamped_line(page: &playwright_rs::Page) -> ClampedLine {
     let script = r#"() => {
             const display = document.getElementById('status-display');
             // MEASURE_CLAMPED_TEXT
             const measured = clampedText(display);
-            if (!measured) return ['', 0, 0, 0, 0, 0, 0];
-            return [
-                measured.text,
-                measured.boxHeight,
-                measured.neededHeight,
-                measured.lineHeight,
-                measured.scrollWidth,
-                measured.clientWidth,
-                measured.overhang,
-            ];
+            if (!measured) {
+                return {
+                    text: '',
+                    boxHeight: 0,
+                    neededHeight: 0,
+                    lineHeight: 0,
+                    scrollWidth: 0,
+                    clientWidth: 0,
+                    overhang: 0,
+                };
+            }
+            return {
+                text: measured.text,
+                boxHeight: measured.boxHeight,
+                neededHeight: measured.neededHeight,
+                lineHeight: measured.lineHeight,
+                scrollWidth: measured.scrollWidth,
+                clientWidth: measured.clientWidth,
+                overhang: measured.overhang,
+            };
         }"#
     .replace("// MEASURE_CLAMPED_TEXT", MEASURE_CLAMPED_TEXT);
-    page.evaluate::<(), (String, f64, f64, f64, f64, f64, f64)>(script.as_str(), None)
+    page.evaluate::<(), ClampedLine>(script.as_str(), None)
         .await
         .unwrap()
 }
@@ -955,34 +1005,40 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
                 wait_for_condition_async(
                     Duration::from_secs(10),
                     Duration::from_millis(50),
-                    || async { read_clamped_line(&page).await.0 == sentence },
+                    || async { read_clamped_line(&page).await.text == sentence },
                 )
                 .await,
                 "the {kind:?} line should reach the status display at {width}px"
             );
 
-            let (text, box_h, needed_h, line_h, scroll_w, client_w, overhang) =
-                read_clamped_line(&page).await;
+            let line = read_clamped_line(&page).await;
             assert_eq!(
-                text, sentence,
+                line.text, sentence,
                 "the status display must draw the {kind:?} sentence at {width}px"
             );
             assert!(
-                needed_h <= box_h + 1.0,
-                "the {kind:?} sentence is clipped at {width}px: it needs {needed_h}px in {box_h}px"
+                line.needed_height <= line.box_height + 1.0,
+                "the {kind:?} sentence is clipped at {width}px: it needs {}px in {}px",
+                line.needed_height,
+                line.box_height
             );
             assert!(
-                box_h <= 2.0 * line_h + 1.0,
+                line.box_height <= 2.0 * line.line_height + 1.0,
                 "the {kind:?} sentence must be drawn inside the clamp's two lines at {width}px: \
-                 {box_h}px against {line_h}px a line"
+                 {}px against {}px a line",
+                line.box_height,
+                line.line_height
             );
             assert!(
-                scroll_w <= client_w + 1.0,
-                "the {kind:?} sentence overflows its column at {width}px: {scroll_w}px in {client_w}px"
+                line.scroll_width <= line.client_width + 1.0,
+                "the {kind:?} sentence overflows its column at {width}px: {}px in {}px",
+                line.scroll_width,
+                line.client_width
             );
             assert!(
-                overhang <= 1.0,
-                "the {kind:?} sentence is drawn {overhang}px past the status column at {width}px"
+                line.overhang <= 1.0,
+                "the {kind:?} sentence is drawn {}px past the status column at {width}px",
+                line.overhang
             );
 
             let (input_after, area_after) = measure_action_area(&page).await;

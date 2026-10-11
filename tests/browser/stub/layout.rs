@@ -258,8 +258,29 @@ async fn check_npc_portraits_fixed_width(page: Page, _stub: StubServer) {
     );
 }
 
-/// Mirrors the `max-height: 50vh` cap `assets/styles.css` puts on `#edit-textarea`.
-const AUTO_GROW_VIEWPORT_HEIGHT_RATIO: f64 = 0.5;
+#[derive(serde::Deserialize)]
+struct EditTextareaBox {
+    height: f64,
+    #[serde(rename = "maxHeight")]
+    max_height: String,
+}
+
+async fn read_edit_textarea_box(page: &Page) -> EditTextareaBox {
+    page.evaluate::<(), EditTextareaBox>(
+        r#"(() => {
+                const textarea = document.querySelector('#edit-textarea');
+                if (!textarea) return { height: -1, maxHeight: '' };
+                void textarea.offsetHeight;
+                return {
+                    height: textarea.getBoundingClientRect().height,
+                    maxHeight: getComputedStyle(textarea).maxHeight,
+                };
+            })()"#,
+        None,
+    )
+    .await
+    .unwrap()
+}
 
 async fn check_edit_textarea_matches_original_height(page: Page, _stub: StubServer) {
     let original_height: f64 = page
@@ -294,35 +315,25 @@ async fn check_edit_textarea_matches_original_height(page: Page, _stub: StubServ
 
     wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
-    let textarea_height: f64 = page
-        .evaluate::<(), f64>(
-            r#"(() => {
-                    const textarea = document.querySelector('#edit-textarea');
-                    if (!textarea) return -1;
-                    void textarea.offsetHeight;
-                    const rect = textarea.getBoundingClientRect();
-                    return rect.height;
-                })()"#,
-            None,
-        )
-        .await
-        .unwrap();
+    let textarea = read_edit_textarea_box(&page).await;
+    assert!(textarea.height > 0.0, "Textarea should have a valid height");
 
-    assert!(textarea_height > 0.0, "Textarea should have a valid height");
-
-    let viewport_height: f64 = page
-        .evaluate::<(), f64>("window.innerHeight", None)
-        .await
-        .unwrap();
-    let expected_height = original_height.min(viewport_height * AUTO_GROW_VIEWPORT_HEIGHT_RATIO);
+    let cap = textarea
+        .max_height
+        .strip_suffix("px")
+        .and_then(|value| value.parse::<f64>().ok())
+        .expect("`#edit-textarea` must cap its height in px");
+    let expected_height = original_height.min(cap);
 
     assert!(
-        textarea_height >= expected_height,
-        "Textarea height ({textarea_height}) should not be smaller than the entry text height ({expected_height})"
+        textarea.height >= expected_height,
+        "Textarea height ({}) should not be smaller than the entry text height ({expected_height})",
+        textarea.height
     );
     assert!(
-        textarea_height <= expected_height * 2.0 + 20.0,
-        "Textarea height ({textarea_height}) should not be drastically larger than the entry text height ({expected_height})"
+        textarea.height <= expected_height * 2.0 + 20.0,
+        "Textarea height ({}) should not be drastically larger than the entry text height ({expected_height})",
+        textarea.height
     );
 }
 
@@ -444,9 +455,9 @@ async fn check_forced_colors_focus_ring(page: Page, _stub: StubServer) {
     );
 }
 
-/// Hiding the rest of a clamped sentence silently would read as the end of the
-/// sentence, so the cut has to be visible and the Details control beside it has
-/// to stay laid out and focusable.
+/// A clamped sentence's cut has to be visible — a silently hidden tail reads as
+/// the end of the sentence — and the Details control beside it must stay laid out
+/// and focusable.
 async fn check_a_long_status_sentence_clamps_with_a_visible_cut(page: Page, _stub: StubServer) {
     let (
         line_clamp,

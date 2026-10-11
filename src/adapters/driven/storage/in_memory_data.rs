@@ -28,9 +28,8 @@ pub struct InMemoryData {
     pub personas: Vec<PersonaCardWithKey>,
     pub characters: Vec<CharacterSeed>,
     pub settings: AppSettings,
-    /// Whether `settings` holds a value written by anyone yet. `false` means
-    /// the field is the constructed default standing in for an absent row, so
-    /// `seed_settings` may still write.
+    /// `false` means `settings` is the constructed default standing in for an
+    /// absent row, so `seed_settings` may still write.
     pub settings_seeded: bool,
 }
 
@@ -106,6 +105,21 @@ impl InMemoryData {
             .and_then(|vec| vec.get_mut(swipe_index))
         {
             swipe.text = text.to_string();
+        }
+    }
+
+    pub(crate) fn update_swipe_location_header(
+        &mut self,
+        message_id: u64,
+        swipe_index: usize,
+        location_header: &str,
+    ) {
+        if let Some(swipe) = self
+            .swipes
+            .get_mut(&message_id)
+            .and_then(|vec| vec.get_mut(swipe_index))
+        {
+            swipe.location_header = Some(location_header.to_string());
         }
     }
 

@@ -13,10 +13,10 @@ pub struct Swipe {
     pub event_header: Option<String>,
     #[serde(default)]
     pub impersonated: bool,
-    /// Holds the guide text (plain generation) or the impersonate direction;
-    /// `impersonated` is the discriminator — the two never coexist.
     #[serde(default)]
-    pub steering_instruction: Option<String>,
+    pub guide_text: Option<String>,
+    #[serde(default)]
+    pub impersonate_direction: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -43,7 +43,8 @@ impl Message {
             location_header,
             event_header,
             impersonated: false,
-            steering_instruction: None,
+            guide_text: None,
+            impersonate_direction: None,
         };
         Self {
             id: 0,
@@ -92,9 +93,13 @@ impl Message {
         self.active_swipe().is_some_and(|s| s.impersonated)
     }
 
-    pub fn steering_instruction(&self) -> Option<&str> {
+    pub fn guide_text(&self) -> Option<&str> {
+        self.active_swipe().and_then(|s| s.guide_text.as_deref())
+    }
+
+    pub fn impersonate_direction(&self) -> Option<&str> {
         self.active_swipe()
-            .and_then(|s| s.steering_instruction.as_deref())
+            .and_then(|s| s.impersonate_direction.as_deref())
     }
 
     pub fn is_input_or_narration(&self) -> bool {
@@ -102,7 +107,7 @@ impl Message {
     }
 
     pub fn is_guided(&self) -> bool {
-        !self.impersonated() && self.steering_instruction().is_some()
+        self.guide_text().is_some()
     }
 
     pub fn set_active_swipe(&mut self, index: usize) {
@@ -125,6 +130,12 @@ impl Message {
         }
     }
 
+    pub fn set_location_header(&mut self, location_header: String) {
+        if let Some(swipe) = self.active_swipe_mut() {
+            swipe.location_header = Some(location_header);
+        }
+    }
+
     pub(crate) fn from_db(
         id: u64,
         message_type: MessageType,
@@ -142,7 +153,6 @@ impl Message {
         }
     }
 
-    /// Returns true when the index was out of bounds and has been reset.
     pub fn ensure_valid_swipe_index(&mut self) -> bool {
         if self.active_swipe_index >= self.swipes.len() {
             self.active_swipe_index = 0;
@@ -161,10 +171,16 @@ impl Message {
         }
     }
 
-    pub fn set_stored_inputs(&mut self, impersonated: bool, steering_instruction: Option<String>) {
+    pub fn set_stored_inputs(
+        &mut self,
+        impersonated: bool,
+        guide_text: Option<String>,
+        impersonate_direction: Option<String>,
+    ) {
         if let Some(swipe) = self.active_swipe_mut() {
             swipe.impersonated = impersonated;
-            swipe.steering_instruction = steering_instruction;
+            swipe.guide_text = guide_text;
+            swipe.impersonate_direction = impersonate_direction;
         }
     }
 }

@@ -89,7 +89,7 @@ fn test_always_on_generates_options_after_narration_turn() {
     set_always_on(&storage, true);
 
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
 
     let options = current_options(&app);
     assert_eq!(options.len(), 3, "always-on turn must install a fresh set");
@@ -103,7 +103,7 @@ fn test_always_on_no_agent_clears_set_and_surfaces_message() {
     set_prior_options(&app, &["Stale option"]);
 
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
 
     assert!(
         current_options(&app).is_empty(),
@@ -122,7 +122,7 @@ fn test_always_on_skipped_after_impersonate_turn() {
     set_prior_options(&app, &["Stale option"]);
 
     app.pipeline
-        .execute_action_with_inputs(String::new(), true, None);
+        .execute_action_with_inputs(String::new(), true, None, None);
 
     assert_eq!(
         current_options(&app),
@@ -137,7 +137,7 @@ fn test_toggle_off_clears_set_after_turn() {
     set_prior_options(&app, &["Stale option"]);
 
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
 
     assert!(
         current_options(&app).is_empty(),
@@ -160,7 +160,7 @@ fn test_world_toggle_does_not_enable_always_on_for_running_game() {
     set_prior_options(&app, &["Stale option"]);
 
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
 
     assert!(
         current_options(&app).is_empty(),
@@ -207,7 +207,7 @@ fn test_always_on_failure_clears_set_and_surfaces_system_message() {
     set_prior_options(&app, &["Stale option"]);
 
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
 
     assert!(current_options(&app).is_empty());
     assert!(system_messages_contain(&app, "Options generation failed"));
@@ -217,7 +217,7 @@ fn test_always_on_failure_clears_set_and_surfaces_system_message() {
 async fn test_process_options_replaces_set() {
     let (app, _storage) = make_app(Some(tagged_options_provider()));
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     set_prior_options(&app, &["Old option"]);
     let game_id = app.pipeline.storage.current_game_id();
 
@@ -242,7 +242,7 @@ async fn test_process_options_during_shutdown_returns_shutting_down() {
     // The mid-refresh Cancelled branch (game-id switch) has no deterministic seam, so the claim-time guard is the covered path.
     let (app, _storage) = make_app(Some(tagged_options_provider()));
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     set_prior_options(&app, &["Old option"]);
 
     app.shutdown_token.cancel();
@@ -293,7 +293,7 @@ fn test_process_options_empty_history_rejected() {
 async fn test_process_options_failure_keeps_prior_set() {
     let (app, _storage) = make_app(Some(Arc::new(MockBackend::new().with_fail())));
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     set_prior_options(&app, &["Old option"]);
     let game_id = app.pipeline.storage.current_game_id();
 
@@ -315,7 +315,7 @@ async fn test_process_options_failure_keeps_prior_set() {
 async fn test_no_options_agent_surfaces_unavailable_message() {
     let (app, _storage) = make_app(None);
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     set_prior_options(&app, &["Old option"]);
     let game_id = app.pipeline.storage.current_game_id();
 

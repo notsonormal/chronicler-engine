@@ -11,6 +11,7 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::test_support::{
     make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder, TestDataBuilder,
+    TestMap,
 };
 
 use crate::support::http_assertions::{assert_story_log_ends_with_message, status_error_message};
@@ -311,8 +312,8 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
     use chronicler_engine::test_support::TestNpc;
 
-    // shopkeeper's times_met==0 trigger fires the continuation that re-runs quantifier
-    // (evaluate_triggers iterates all world NPCs, not just npcs_in_area).
+    // evaluate_triggers iterates every world NPC, not just npcs_in_area, so the
+    // shopkeeper's times_met trigger fires the continuation.
     let shopkeeper = TestNpc::with_times_met_trigger(
         "shopkeeper",
         "Shopkeeper Sarah",
@@ -757,9 +758,9 @@ async fn test_slash_impersonate_produces_input_http() {
         "the impersonate flag must be stored on the swipe"
     );
     assert_eq!(
-        input_entry.steering_instruction(),
+        input_entry.impersonate_direction(),
         Some("hello"),
-        "the steering instruction must be stored on the swipe"
+        "the impersonate direction must be stored on the swipe"
     );
 }
 
@@ -794,7 +795,7 @@ async fn test_slash_guide_does_not_persist_input_http() {
 
     let narration = narrations.first().expect("at least one Narration entry");
     assert_eq!(
-        narration.steering_instruction(),
+        narration.guide_text(),
         Some("look around"),
         "the guide must be stored on the swipe"
     );
@@ -835,11 +836,9 @@ async fn test_slash_command_bypasses_text_check_http() {
         "guide action should complete"
     );
 
-    // An /options leg: engine commands bypass the text check the same way /guide
-    // does (spec 1.12). The /guide leg above has already created scene history, so
-    // the dispatch avoids the empty-history validation error. The fixture carries
-    // no options agent, so only the bypass is pinned here; outcome assertions are
-    // unit-tier (options_tests.rs).
+    // The /guide leg above already created scene history, so this dispatch avoids the
+    // empty-history validation error. The fixture carries no options agent, so only the
+    // bypass is pinned here; outcome assertions live in options_tests.rs.
     let resp = post_action_check(&app, "/options").await;
     assert!(resp.status().is_success());
     assert!(
@@ -871,6 +870,81 @@ async fn test_slash_command_bypasses_text_check_http() {
     );
 }
 
+// [docs/specs/actions.md] SCENARIO: 1.14
+#[tokio::test]
+async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
+    let narrator = Arc::new(MockBackend::default());
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+            .to_string(),
+        r#"{"npcs_in_room": []}"#.to_string(),
+    ])) as Arc<dyn LlmProvider>;
+    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
+    let pipeline =
+        make_test_pipeline_with_mock_quantifier(Arc::clone(&storage), recorder, quantifier);
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .storage(Arc::clone(&storage))
+        .pipeline(pipeline)
+        .build_with_state();
+
+    assert!(post_action(&app, "walk north").await.status().is_success());
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the Action that moves the player should complete"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let narration = messages
+        .iter()
+        .find(|m| m.message_type == MessageType::Narration)
+        .expect("the Action appends a Narration");
+    assert_eq!(
+        narration.location_header(),
+        Some("Room room2"),
+        "the Narration that moved the player must report the room it arrived in"
+    );
+    let input = messages
+        .iter()
+        .find(|m| m.message_type == MessageType::Input)
+        .expect("the Action appends a player input");
+    assert_eq!(
+        input.location_header(),
+        None,
+        "the player input that leaves a room must not carry the old room's name"
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the later, stationary Action should complete"
+    );
+
+    let messages = state.message_service.load_messages().unwrap();
+    let later: Vec<_> = messages
+        .iter()
+        .filter(|m| m.is_input_or_narration())
+        .skip(2)
+        .collect();
+    assert_eq!(
+        later.len(),
+        2,
+        "the second Action adds a player input and a Narration"
+    );
+    assert!(
+        later.iter().all(|m| m.location_header().is_none()),
+        "the room name must not leak onto the Action after the movement: {:?}",
+        later
+            .iter()
+            .map(|m| m.location_header())
+            .collect::<Vec<_>>()
+    );
+}
+
 // [docs/specs/actions.md] SCENARIO: 1.13
 #[tokio::test]
 async fn test_confirm_retargets_status_display() {
@@ -880,7 +954,6 @@ async fn test_confirm_retargets_status_display() {
 
     let resp = post_form(&app, "/action/confirm", "command=look").await;
     assert!(resp.status().is_success());
-    // A confirm must not swap a fresh (disabled) action area back in.
     assert_eq!(
         resp.headers().get("HX-Retarget"),
         Some(&axum::http::HeaderValue::from_static("#status-display")),

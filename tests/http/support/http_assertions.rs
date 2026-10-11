@@ -109,7 +109,6 @@ pub fn svgs_not_hidden_from_assistive_technology(html: &str) -> Vec<String> {
         .collect()
 }
 
-/// Each returned id keeps the `i-` prefix.
 fn icon_ids(markup: &str, marker: &str) -> Vec<String> {
     const PREFIX: &str = "i-";
     assert!(
@@ -119,7 +118,7 @@ fn icon_ids(markup: &str, marker: &str) -> Vec<String> {
     markup
         .match_indices(marker)
         .map(|(start, found)| {
-            let name = &markup[start + found.len() - PREFIX.len()..];
+            let name = &markup[start + found.len()..];
             name[..name.find('"').expect("an icon id must close")].to_string()
         })
         .collect()

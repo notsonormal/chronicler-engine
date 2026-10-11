@@ -42,8 +42,15 @@ This map continues the [dashboard UI review](../dashboard-ui-review/map.md). Tha
 - [Show the whole token-budget failure, remedy included](issues/11-show-the-token-budget-remedy.md) — the sentence is now "The model used its budget on reasoning. Try another model."; a stub test fits every `GenerationFailureKind` sentence at 1280 and 1024.
 - [Restore focus after preset and world deletes](issues/12-restore-focus-after-card-deletes.md) — the removed-row rule covers games, presets and worlds (next, previous, panel), claimed at `htmx:beforeSwap`.
 - [Follow up on small issues found in the phase-2 re-review](issues/13-follow-up-phase-2-re-review-p3s.md) — 11 of 16 items fixed (S5, S7, S8, F11-1, F12-1–F12-4, F09-1 and more); S6, F10-1 and F10-2 moved to the fog below; F09-2 kept; F09-3 dropped as rare.
+- [Put the room name on the Narration that arrives in the room](issues/15-room-name-on-arriving-narration.md) — the engine commit writes the header back onto the moving Narration (or the redo's Swipe) and clears `pending_location`; the F09-1 retry seed is gone; event Swipes carry no header.
+- [Apply the six reshape flags the comment pass offered](issues/16-apply-the-comment-pass-reshape-flags.md) — all six applied: `Swipe` splits into `guide_text` and `impersonate_direction` (migration v26), named structs replace the tuples, and `durable_world_after_failed_redo` holds the failed-redo rule.
 
 ## Not yet specified
+
+- **Old games can show one stale header (inferred).** A game whose latest Snapshot was saved by the old code right after a movement still holds `pending_location`, so its next Message takes that room. Found by the spec review of tickets 15 and 16.
+- **One type for a Swipe's stored inputs.** `(impersonated, guide_text, impersonate_direction)` travels as three values through seven functions; a sum type (`Plain | Guided(String) | Impersonated(Option<String>)`) would make "both set" impossible. Found by the standards review of ticket 16.
+- **Tier-1 swipe counts.** `tests/STRATEGY.md` names a swipe count as a fact with no allowed read source, but scenarios 9.1, 9.8 and 22.5 read it through `MessageService`. A gap in the rule, older than this change.
+- **`game_flow.md` "Retry Flow" does not describe the failed-redo restore,** although [Make event Retry restore the trigger context and never roll the game back](issues/09-fix-event-retry-snapshot.md) says it does. Found by the F6 agent of ticket 16.
 
 - **The story log renders the oldest 50 entries** (`app_state.rs`) while the controls hang off `loop.last`. Reported by ticket 13; games with more than 50 Messages are affected (inferred).
 
@@ -65,3 +72,4 @@ Carried from [Final re-review of the dashboard](../dashboard-ui-review/issues/24
 - **Changing the Quantifier's fallback behaviour.** A backend design question; the banner already reports the fallback.
 - **The Quantifier misses an NPC that a trigger introduces.** In the [2026-10-11 re-review](re-review-2026-10-11.md), the post-event Quantifier detected only Carla while Gabriella spoke, so she got no portrait. Detection quality is a backend question, like the fallback item above.
 - **Trailing `System` notices (F10-1, F10-2).** The notices are an error channel inside the Message history: LLMs read them and they hide the Retrigger and Swipe controls. The user wants no notice to reach an LLM. Owner: [Replace `System` Messages with an error channel outside the Message history](../turn-state-model/issues/02-replace-system-messages.md) on the turn state model map.
+- **A swipe switch to a moving Narration restores the room it started from,** while its header names the arrival room. The Swipe links the Snapshot from before the Quantifier, and `storage_design.md` §Per-swipe state binding claims otherwise. The user deferred it out of [Put the room name on the Narration that arrives in the room](issues/15-room-name-on-arriving-narration.md) (2026-10-11): it is a question of where the room lives, not a dashboard fix. Owner: [Decide where the room a generation arrives in lives](../turn-state-model/issues/03-decide-where-the-room-lives.md) on the turn state model map.

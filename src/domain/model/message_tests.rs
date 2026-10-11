@@ -73,7 +73,6 @@ fn test_message_from_db_with_deleted() {
 
 #[test]
 fn test_message_swipe_fields_roundtrip() {
-    // Create message with multiple swipes
     let mut msg = Message::new(
         "Original text",
         MessageType::Narration,
@@ -81,44 +80,38 @@ fn test_message_swipe_fields_roundtrip() {
         Some("EventX".to_string()),
     );
 
-    // Add second swipe with different values
     msg.swipes.push(Swipe {
         text: "Swiped text".to_string(),
         snapshot_id: None,
         location_header: Some("Room B".to_string()),
         event_header: Some("EventY".to_string()),
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     });
 
-    // Initially at index 0
     assert_eq!(msg.text(), "Original text");
     assert_eq!(msg.location_header(), Some("Room A"));
     assert_eq!(msg.event_header(), Some("EventX"));
     assert_eq!(msg.snapshot_id(), None);
 
-    // Set snapshot_id on first swipe
     msg.set_snapshot_id(Some(42));
     assert_eq!(msg.snapshot_id(), Some(42));
     assert_eq!(msg.swipes[0].snapshot_id, Some(42));
 
-    // Switch to second swipe
     msg.set_active_swipe(1);
     assert_eq!(msg.text(), "Swiped text");
     assert_eq!(msg.location_header(), Some("Room B"));
     assert_eq!(msg.event_header(), Some("EventY"));
-    assert_eq!(msg.snapshot_id(), None); // Second swipe has no snapshot_id yet
+    assert_eq!(msg.snapshot_id(), None);
 
-    // Set snapshot_id on second swipe
     msg.set_snapshot_id(Some(99));
     assert_eq!(msg.snapshot_id(), Some(99));
     assert_eq!(msg.swipes[1].snapshot_id, Some(99));
 
-    // Switch back to first swipe - should have original snapshot_id
     msg.set_active_swipe(0);
     assert_eq!(msg.snapshot_id(), Some(42));
 
-    // Update text on active swipe
     msg.update_active_swipe_text("Updated original");
     assert_eq!(msg.text(), "Updated original");
     assert_eq!(msg.swipes[0].text, "Updated original");
@@ -133,13 +126,13 @@ fn test_message_set_snapshot_id_writes_active_swipe() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     });
     msg.set_active_swipe(1);
 
     msg.set_snapshot_id(Some(123));
 
-    // Must write to active swipe, not separate field
     assert_eq!(msg.swipes[1].snapshot_id, Some(123));
     assert_eq!(msg.swipes[0].snapshot_id, None);
     assert_eq!(msg.snapshot_id(), Some(123));
@@ -147,35 +140,32 @@ fn test_message_set_snapshot_id_writes_active_swipe() {
 
 #[test]
 fn test_is_guided_truth_table() {
-    // The four representable swipe states: plain, guided, bare impersonate,
-    // directed impersonate. Only a plain generation with a steering instruction is guided.
-    let mut plain = Message::new("n", MessageType::Narration, None, None);
-    plain.swipes[0].impersonated = false;
-    plain.swipes[0].steering_instruction = None;
+    let plain = Message::new("n", MessageType::Narration, None, None);
     assert!(!plain.is_guided());
     assert!(!plain.impersonated());
-    assert_eq!(plain.steering_instruction(), None);
+    assert_eq!(plain.guide_text(), None);
+    assert_eq!(plain.impersonate_direction(), None);
 
     let mut guided = Message::new("n", MessageType::Narration, None, None);
-    guided.swipes[0].impersonated = false;
-    guided.swipes[0].steering_instruction = Some("make it ominous".to_string());
+    guided.swipes[0].guide_text = Some("make it ominous".to_string());
     assert!(guided.is_guided());
     assert!(!guided.impersonated());
-    assert_eq!(guided.steering_instruction(), Some("make it ominous"));
+    assert_eq!(guided.guide_text(), Some("make it ominous"));
+    assert_eq!(guided.impersonate_direction(), None);
 
     let mut bare_impersonate = Message::new("i", MessageType::Input, None, None);
     bare_impersonate.swipes[0].impersonated = true;
-    bare_impersonate.swipes[0].steering_instruction = None;
     assert!(!bare_impersonate.is_guided());
     assert!(bare_impersonate.impersonated());
+    assert_eq!(bare_impersonate.impersonate_direction(), None);
 
     let mut directed_impersonate = Message::new("i", MessageType::Input, None, None);
     directed_impersonate.swipes[0].impersonated = true;
-    directed_impersonate.swipes[0].steering_instruction = Some("as the player".to_string());
+    directed_impersonate.swipes[0].impersonate_direction = Some("as the player".to_string());
     assert!(!directed_impersonate.is_guided());
     assert!(directed_impersonate.impersonated());
     assert_eq!(
-        directed_impersonate.steering_instruction(),
+        directed_impersonate.impersonate_direction(),
         Some("as the player")
     );
 }
@@ -183,14 +173,14 @@ fn test_is_guided_truth_table() {
 #[test]
 fn test_set_stored_inputs_on_active_swipe() {
     let mut msg = Message::new("n", MessageType::Narration, None, None);
-    msg.set_stored_inputs(false, Some("steer".to_string()));
+    msg.set_stored_inputs(false, Some("steer".to_string()), None);
     assert!(msg.is_guided());
 
-    msg.set_stored_inputs(true, Some("as the player".to_string()));
+    msg.set_stored_inputs(true, None, Some("as the player".to_string()));
     assert!(msg.impersonated());
     assert!(!msg.is_guided());
 
-    msg.set_stored_inputs(false, None);
+    msg.set_stored_inputs(false, None, None);
     assert!(!msg.impersonated());
-    assert_eq!(msg.steering_instruction(), None);
+    assert_eq!(msg.guide_text(), None);
 }

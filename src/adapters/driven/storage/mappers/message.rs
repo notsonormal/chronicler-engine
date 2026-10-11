@@ -34,7 +34,8 @@ impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
                 location_header: db_swipe.location_header.clone(),
                 event_header: db_swipe.event_header.clone(),
                 impersonated: db_swipe.impersonated != 0,
-                steering_instruction: db_swipe.steering_instruction.clone(),
+                guide_text: db_swipe.guide_text.clone(),
+                impersonate_direction: db_swipe.impersonate_direction.clone(),
             });
         }
 

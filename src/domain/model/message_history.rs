@@ -121,8 +121,8 @@ impl MessageHistory {
         Some(input.text().to_string())
     }
 
-    /// A guided turn appends no Input row, so its stored steering instruction is
-    /// the turn's input.
+    /// A guided turn appends no Input row, so its stored guide text is the
+    /// turn's input.
     pub fn last_turn_is_retryable(&self) -> bool {
         self.last_input_text().is_some()
             || self

@@ -95,7 +95,7 @@ fn test_run_impersonate_adds_input_message() {
         input: String::new(),
         guide: None,
         impersonate: Some(ImpersonateInputs {
-            steering_instruction: Some("act wary".to_string()),
+            direction: Some("act wary".to_string()),
         }),
     };
     let outcome = NarrationGeneration::new(&pipeline_run, inputs)

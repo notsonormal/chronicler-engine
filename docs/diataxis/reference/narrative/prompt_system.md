@@ -20,7 +20,7 @@ The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manage
 | 4 | World Info | World Info / Lorebook | User (data) | `<WorldLore>` world name + description |
 | 5 | History | Chat History | User (data) | `<ConversationHistory>` conversation history |
 | 6 | User Input | User Message | User (data) | `<PlayerInput>` sanitized current player input |
-| 7 | Guide | — | User (data) | Transient steering instruction on guided turns; omitted on plain turns |
+| 7 | Guide | — | User (data) | Transient guide text on guided turns; omitted on plain turns |
 
 ## Section Definitions
 

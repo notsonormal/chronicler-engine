@@ -1,7 +1,7 @@
 # Apply the six reshape flags the comment pass offered
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -76,3 +76,20 @@ The comment pass deleted six comments whose reason the code could carry, and off
 - Each of the six items is applied or dropped with a reason.
 - `python build.py` is green for whatever was applied; a behavioural item (F6) names the test that pins it unchanged.
 - Each item's comment is either gone because the code carries its reason, or still there and the item is dropped with a reason.
+
+## Answer
+
+All six items applied. Three agents worked them in parallel (F1, F2–F5, F6), so the ticket lands as one combined change with ticket 15.
+
+| ID | Outcome |
+| --- | --- |
+| **F1** | **Applied.** `Swipe` has `guide_text` and `impersonate_direction`; the contract comment is gone. `is_guided()` is `guide_text().is_some()`. `impersonated` stays persisted: a bare `/impersonate` has no direction, so it is not derivable. Migration v26 (`plumbing.rs`) adds both columns, fills each from `steering_instruction` by the row's `impersonated` flag, and drops the old column; unit test `test_v26_splits_merged_steering_instruction_into_its_two_columns`. The Context claim that a Swipe persists inside snapshot JSON is wrong (inferred from code, and checked in a dev DB): `NarrativeSnapshot` has no history, so no JSON migration was needed. |
+| **F2** | **Applied.** `activate_buttons: Vec<ActivateButton { label, mode_query }>`. Tier 1 `tests/http/prompt_presets.rs` already pins the mode query. |
+| **F3** | **Applied.** `InlineErrorSizes`, `StatusState` and `ClampedLine` structs; the JS probes return objects. One field doc stays on `ClampedLine` (box height against needed height). Browser tier. |
+| **F4** | **Applied.** The check reads the textarea's computed `max-height` and caps at it; the mirrored ratio constant is gone. Browser tier. |
+| **F5** | **Applied.** `icon_ids` returns bare names; a tier-1 assertion in `tests/http/dashboard.rs` pins it. |
+| **F6** | **Applied, no behaviour change.** `durable_world_after_failed_redo` returns `DurableWorldAfterFailedRedo { ClickTime, Attempt }`; the deliberate-keep ruling sits on the `Attempt` variant. F6's own commit (`28c194a5`) left `retry_tests.rs` unchanged and green; the combined change edits that file only for F1's renames and ticket 15's tests; tier 1 scenarios 11.9 and 11.10 pin the behaviour. |
+
+**Gate.** Combined with ticket 15, after the review fixes: `logs/build_20261011_231121.log` in the main checkout, all steps OK (guardrails 163, integration 1634 passed / 2 skipped, browser 29). The code review folded `redo_persisted_a_swipe` into `durable_world_after_failed_redo`, so the decision is one function.
+
+**New reshape flags from the after-plan comment pass (offered, not applied).** (1) Split `run_migrations` (`plumbing.rs`) into per-version step functions, so the step headers can go. (2) Named row structs for the 4-tuple fixtures in `plumbing_tests.rs`. (3) A named struct for the `(Router, AppState, u64)` that `app_with_an_event_that_meets_gabriella` (`tests/http/swipe_new.rs`) returns. (4) Rename `Message::ensure_valid_swipe_index` so the name carries its `bool`. None blocks a merge; each waits for [Decide whether the comment pass renames or gates instead of delete-and-flag](../../retro-issue-bucket/issues/44-comment-pass-rename-or-gate.md).

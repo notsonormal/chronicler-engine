@@ -2,7 +2,7 @@
 
 Type: grilling
 Status: open
-Blocked by: —
+Blocked by: 07, 09, 13, 14
 
 ## Question
 
@@ -48,6 +48,8 @@ Questions for the grilling: does each source need the player to see it at all (t
 ## Related
 
 [Model a generation's states, its Snapshot pointers and the game-state writers](01-model-a-generations-states.md) — the first ticket of this map. This ticket does not wait for it, because the user's rule (no notice reaches an LLM) holds whatever the model says.
+
+[Decide where the room a generation arrives in lives](03-decide-where-the-room-lives.md) — the same shape: display data stored inside the Message history. "[System] Entered unknown location" belongs to both. Record the dependency if one decision settles the other.
 
 ## Source
 

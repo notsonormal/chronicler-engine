@@ -507,9 +507,8 @@ fn test_retry_target_and_anchor_agree_when_a_system_notice_trails_an_event_narra
     );
 }
 
-/// The event commit consumed the room the turn's movement put on the event Swipe,
-/// so the Snapshot the Swipe points at has no pending room and only a sibling
-/// Swipe can name it.
+/// A redo's Swipe names only the room its own generation arrives in, so an event
+/// redo's Swipe names no room even when a sibling row carries one.
 fn event_target_with_a_stale_active_swipe() -> (GameStateSnapshot, Vec<Message>, RetryTarget) {
     let snapshot = GameStateSnapshot::from_game_state(&GameState::new("room2"));
 
@@ -526,7 +525,8 @@ fn event_target_with_a_stale_active_swipe() -> (GameStateSnapshot, Vec<Message>,
         location_header: None,
         event_header: Some("Event".to_string()),
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     });
     event_message.set_active_swipe(1);
 
@@ -543,16 +543,15 @@ fn event_target_with_a_stale_active_swipe() -> (GameStateSnapshot, Vec<Message>,
 }
 
 #[test]
-fn test_event_retry_seeds_the_room_name_of_the_message_it_retries() {
+fn test_event_retry_redo_swipe_names_no_room_of_its_own() {
     let (snapshot, messages, target) = event_target_with_a_stale_active_swipe();
 
     let mut restored = crate::application::pipeline::ActionPipeline::reconstruct_retry_state(
         snapshot, messages, &target,
     );
     assert_eq!(
-        restored.narrative.pending_location.as_deref(),
-        Some("Room room2"),
-        "the restored state must carry the room the event Swipe was written under"
+        restored.narrative.pending_location, None,
+        "the redo carries no room for a Swipe to inherit"
     );
 
     restored.narrative.pending_event = Some("Event".to_string());
@@ -569,49 +568,8 @@ fn test_event_retry_seeds_the_room_name_of_the_message_it_retries() {
     );
     assert_eq!(
         retried.location_header(),
-        Some("Room room2"),
-        "switching to the redo's Swipe must not remove the room name"
-    );
-}
-
-#[test]
-fn test_event_retry_seeds_no_room_name_when_the_message_has_none() {
-    let snapshot = GameStateSnapshot::from_game_state(&GameState::new("room2"));
-    let mut event_message = Message::new(
-        "Event narration",
-        MessageType::Narration,
         None,
-        Some("Event".to_string()),
-    );
-    event_message.id = 1;
-    let target = RetryTarget {
-        anchor_idx: 0,
-        snapshot_id: 1,
-        is_event: true,
-        mode: RetryMode::ReNarrate,
-        old_target: Some(event_message.clone()),
-    };
-
-    let mut restored = crate::application::pipeline::ActionPipeline::reconstruct_retry_state(
-        snapshot,
-        vec![event_message],
-        &target,
-    );
-    assert_eq!(
-        restored.narrative.pending_location, None,
-        "a turn that did not move has no room name to seed"
-    );
-
-    restored.narrative.pending_event = Some("Event".to_string());
-    restored.add_message("Retry narration".to_string(), MessageType::Narration);
-    assert_eq!(
-        restored
-            .narrative
-            .retry_target
-            .as_ref()
-            .and_then(|m| m.location_header()),
-        None,
-        "the redo must not invent a room name its siblings do not carry"
+        "the redo's Swipe must not invent a room its siblings do not carry"
     );
 }
 
@@ -739,7 +697,6 @@ async fn test_retry_event_continuation_happy_path() {
     );
 }
 
-/// An event-only retry is a narration-producing turn.
 #[test]
 fn test_retry_event_continuation_rewrites_options_when_enabled() {
     let (app, storage) = make_app(Some(tagged_options_provider()));
@@ -798,7 +755,6 @@ fn test_retry_event_continuation_rewrites_options_when_enabled() {
     assert!(options.contains(&"Search the desk".to_string()));
 }
 
-/// A toggle-off event retry clears the set: a cleared set is the normal outcome here.
 #[test]
 fn test_retry_event_continuation_clears_options_when_disabled() {
     let (app, storage) = make_app(None);
@@ -894,7 +850,6 @@ async fn test_retry_main_narration_happy_path() {
     );
 }
 
-// Input is pre-seeded: execute_action runs the pipeline on existing state without adding the input itself.
 #[tokio::test]
 async fn test_retry_recovers_after_llm_failure() {
     let narrator = Arc::new(MockBackend::default().with_fail_first_n(1));
@@ -911,7 +866,7 @@ async fn test_retry_recovers_after_llm_failure() {
     let _input_id = add_input_and_save(&app, &storage, "look");
 
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     let after_fail = app.message_service.load_or_fresh();
     assert!(
         after_fail.narrative.input_buffer.status.failure().is_some(),
@@ -1191,7 +1146,8 @@ async fn test_retry_appends_swipe_to_same_message() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     };
     storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
@@ -1597,6 +1553,7 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
         "I look around.",
         MessageType::Input,
         true,
+        None,
         Some("A steering instruction".to_string()),
     )
     .expect("seed: impersonated input with stored inputs");
@@ -1666,6 +1623,7 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
         MessageType::Narration,
         false,
         Some("make it ominous".to_string()),
+        None,
     )
     .expect("seed: guided narration with stored inputs");
 
@@ -1707,10 +1665,7 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
     );
     assert_eq!(target.active_swipe_index, 1);
     assert_eq!(target.text(), "Ominous retake.");
-    assert!(
-        target.is_guided(),
-        "the new swipe inherits the guide's steering instruction"
-    );
+    assert!(target.is_guided(), "the new swipe inherits the guide text");
     app.shutdown_token.cancel();
 }
 
@@ -1753,6 +1708,7 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         MessageType::Narration,
         false,
         Some("make it ominous".to_string()),
+        None,
     )
     .expect("seed: guided narration with stored inputs");
 
@@ -1827,6 +1783,7 @@ async fn test_retry_flow_user_regen_mode_stays_tail_less() {
         "look around",
         MessageType::Input,
         false,
+        None,
         None,
     )
     .expect("seed: plain input");

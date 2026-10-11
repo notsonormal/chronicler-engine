@@ -17,6 +17,18 @@ use crate::domain::model::state::generation_status::{
 use crate::domain::model::state::message_types::MessageType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DurableWorldAfterFailedRedo {
+    /// The state the click found: no Swipe for the target matches the story on
+    /// screen, so the rewound world the attempt left would sit behind it.
+    ClickTime,
+    /// The world the attempt left: a Swipe for the target is the narration on
+    /// screen, and the failing write already saved the movement and trigger mark
+    /// it holds. A failure between the narration persist and the post-engine
+    /// Snapshot is this variant too, on purpose — too rare to special-case.
+    Attempt,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RetryMode {
     /// Retry the last AI narration using the original input.
     ReNarrate,
@@ -85,10 +97,9 @@ impl ActionPipeline {
             }
         };
 
-        // An event continuation is regenerated on the state its own Message was
-        // committed onto, not the latest snapshot: that Swipe's Snapshot holds the
-        // trigger context, the post-movement room and the scene before the
-        // post-trigger reconciliation.
+        // An event continuation regenerates from the state its own Message was
+        // committed onto: that Swipe's Snapshot holds the trigger context, the
+        // post-movement room and the scene before the post-trigger reconciliation.
         let restore_snapshot_id = if target.is_event {
             let Some(snapshot_id) = target.old_target.as_ref().and_then(|m| m.snapshot_id()) else {
                 self.persist_generation_error(GenerationFailure::new(
@@ -149,8 +160,6 @@ impl ActionPipeline {
                 }
             }
             RetryMode::ReImpersonate => {
-                // Unlike user regen, an impersonate redo runs the full tail
-                // (quantifier → engine commit → trigger).
                 let outcome = self.retry_main_narration(state, String::new());
                 self.log_cancellation(outcome);
             }
@@ -163,25 +172,9 @@ impl ActionPipeline {
         self.restore_click_time_state_after_failed_redo(retry_game_id, state_at_click, &target);
     }
 
-    /// A redo replays from its anchor's snapshot, so it persists that older
-    /// world while it runs and only its finalize makes the new world durable.
-    ///
-    /// A failure that never got as far as persisting a Swipe for the target
-    /// would leave that older world behind the story: put the state the click
-    /// found back and keep the failure on screen. A failure that did persist one has
-    /// a narration to match, so its world is the one to keep.
-    ///
-    /// A persist that fails at or after the post-engine Snapshot leaves the
-    /// movement on record, and one at or after the trigger commit leaves the
-    /// trigger mark on record too: the failing write saves the state it holds,
-    /// and `finalize_phase_error` saves it once more.
-    ///
-    /// Between the pre-quantifier narration persist, which saves the new Swipe,
-    /// and the post-engine Snapshot, a failure — an engine-commit error, or a
-    /// write that fails once and then recovers — keeps the rewound world that
-    /// Swipe was written from.
-    ///
-    /// That world is kept on purpose: the case is too rare to special-case.
+    /// A failed redo leaves the rewound world of its anchor's Snapshot behind
+    /// the Messages it wrote, so the world the click found comes back while
+    /// those Messages stay.
     fn restore_click_time_state_after_failed_redo(
         &self,
         retry_game_id: u64,
@@ -206,9 +199,9 @@ impl ActionPipeline {
         let Some(failure) = attempt.narrative.input_buffer.status.failure() else {
             return;
         };
-        match self.redo_persisted_a_swipe(target) {
-            Some(true) | None => return,
-            Some(false) => {}
+        match self.durable_world_after_failed_redo(target) {
+            DurableWorldAfterFailedRedo::Attempt => return,
+            DurableWorldAfterFailedRedo::ClickTime => {}
         }
         let mut state = GameState::from_snapshot(&state_at_click);
         state.narrative.input_buffer.status = GenerationStatus::Error(failure.clone());
@@ -218,25 +211,32 @@ impl ActionPipeline {
         }
     }
 
-    /// The Swipe it finds is the narration on screen, so the world it was written
-    /// from is the one to keep. `None` means the Messages cannot be read, which
-    /// leaves the restore unsafe.
-    fn redo_persisted_a_swipe(&self, target: &RetryTarget) -> Option<bool> {
-        let target = target.old_target.as_ref()?;
+    /// A redo persists its anchor's older world while it runs; only its finalize
+    /// makes the new world durable.
+    ///
+    /// Messages that cannot be read answer `Attempt` too: an unknown outcome is
+    /// not a licence to overwrite a game.
+    fn durable_world_after_failed_redo(&self, target: &RetryTarget) -> DurableWorldAfterFailedRedo {
+        let Some(target) = target.old_target.as_ref() else {
+            return DurableWorldAfterFailedRedo::Attempt;
+        };
         let messages = match self.message_service.load_messages() {
             Ok(messages) => messages,
             Err(e) => {
                 tracing::error!("Retry: cannot read the Messages a failed redo left: {e}");
-                return None;
+                return DurableWorldAfterFailedRedo::Attempt;
             }
         };
-        Some(
-            messages
-                .iter()
-                .find(|m| m.id == target.id)
-                .map(|m| m.swipes.len())
-                .is_some_and(|count| count > target.swipes.len()),
-        )
+        let persisted_a_swipe = messages
+            .iter()
+            .find(|m| m.id == target.id)
+            .map(|m| m.swipes.len())
+            .is_some_and(|count| count > target.swipes.len());
+        if persisted_a_swipe {
+            DurableWorldAfterFailedRedo::Attempt
+        } else {
+            DurableWorldAfterFailedRedo::ClickTime
+        }
     }
 
     /// The target rule matches [`MessageService::find_retry_anchor_msg`], so the
@@ -255,8 +255,6 @@ impl ActionPipeline {
         let mode = if is_event || old_target.message_type == MessageType::Narration {
             RetryMode::ReNarrate
         } else {
-            // The find filter above yields only Narration | Input targets, so
-            // this arm is Input (non-event); the debug_assert pins that invariant.
             debug_assert_eq!(old_target.message_type, MessageType::Input);
             if old_target.impersonated() {
                 RetryMode::ReImpersonate
@@ -274,34 +272,14 @@ impl ActionPipeline {
         })
     }
 
-    /// A Message's Swipes all come from the one turn that created it, so any
-    /// Swipe that carries a room name answers for the Message.
-    fn message_location_header(message: &Message) -> Option<String> {
-        message
-            .swipes
-            .iter()
-            .find_map(|swipe| swipe.location_header.clone())
-    }
-
     pub(crate) fn reconstruct_retry_state(
         snapshot: GameStateSnapshot,
         messages: Vec<Message>,
         target: &RetryTarget,
     ) -> GameState {
         let mut state = GameState::from_snapshot(&snapshot);
-        // An event continuation's own Snapshot is written after
-        // `commit_trigger_narration` consumed the pending room, so the room name is
-        // seeded back from the Message and the redo's Swipe reads like its siblings.
-        if target.is_event {
-            state.narrative.pending_location = target
-                .old_target
-                .as_ref()
-                .and_then(Self::message_location_header);
-        }
-        // When the anchor IS the target (a guided Narration with no prior
-        // Input), truncate exclusively so the target lands only in
-        // `retry_target` — the same shape the ReImpersonate/UserRegen paths
-        // use for Input targets.
+        // The tail re-appends the target from `retry_target`, so it must not stay
+        // in history: an anchor that IS the target truncates exclusively.
         let anchor_is_target = messages
             .get(target.anchor_idx)
             .zip(target.old_target.as_ref())
@@ -374,8 +352,6 @@ impl ActionPipeline {
         };
         let instruction = self.build_user_regen_instruction(target.text());
 
-        // The message lands as a Swipe on the retry target; a plain user input
-        // never gets the tail.
         let inputs = crate::application::pipeline::narration_generation::GenerationInputs {
             input: instruction,
             guide: None,
