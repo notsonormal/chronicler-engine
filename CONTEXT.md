@@ -81,7 +81,7 @@ Which of two narration stances a Game plays — Novel or Interactive Fiction. Se
 _Avoid_: style, tone, personality, narrator persona
 
 **Options**:
-Pre-written player inputs the engine offers after a non-impersonate narration turn or on demand (`/options`).
+Pre-written player inputs the engine offers after a non-impersonate narration message or on demand (`/options`).
 _Avoid_: suggestions, quick actions, auto-inputs
 
 ## Deprecated Terms

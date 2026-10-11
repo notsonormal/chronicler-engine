@@ -8,14 +8,14 @@ use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::application::agents::options::OptionsAgent;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
-use chronicler_engine::domain::model::settings::AppSettings;
+use chronicler_engine::domain::model::settings::{AppSettings, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::TestMap;
 
 use crate::support::app_wiring::app_with_narrator_and_registry;
 use crate::support::http_assertions::{defined_icons, referenced_icons};
-use crate::support::http_fixtures::if_world;
+use crate::support::http_fixtures::{if_world, seed_offered_set};
 use crate::support::http_requests::{fetch_body, post_action, post_action_check, post_form, wait_idle};
 
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
@@ -52,6 +52,22 @@ fn always_on_world() -> WorldCard {
     }
 }
 
+fn set_a_options() -> Vec<String> {
+    vec![
+        "Search the desk".to_string(),
+        "Question the guard".to_string(),
+        "Leave the hall".to_string(),
+    ]
+}
+
+fn app_without_options_agent() -> (axum::Router, AppState, Arc<Storage>) {
+    app_with_narrator_and_registry(
+        Arc::new(MockBackend::default()),
+        AgentRegistry::default(),
+        AppSettings::default(),
+    )
+}
+
 async fn create_game(app: &axum::Router, world_key: &str) {
     let body = format!("world_key={world_key}&persona_key=test_player");
     let resp = post_form(app, "/games", &body).await;
@@ -78,6 +94,13 @@ fn system_messages(state: &AppState) -> Vec<String> {
         .filter(|m| m.message_type == MessageType::System)
         .map(|m| m.text().to_string())
         .collect()
+}
+
+fn unavailable_agent_reports(state: &AppState) -> usize {
+    system_messages(state)
+        .iter()
+        .filter(|m| m.contains("Options agent is not available"))
+        .count()
 }
 
 // [docs/specs/options.md] SCENARIO: 24.1
@@ -205,6 +228,37 @@ async fn test_failed_regeneration_keeps_prior_set_http() {
     );
 }
 
+// [docs/specs/options.md] SCENARIO: 24.18
+#[tokio::test]
+async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
+    let (app, state, _storage) = app_without_options_agent();
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    seed_offered_set(&state, &["Inspect the ledger"]);
+    let unavailable_before = unavailable_agent_reports(&state);
+    assert_eq!(
+        unavailable_before, 0,
+        "only /options may report the unavailable agent"
+    );
+
+    let resp = post_action(&app, "/options").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "/options should complete");
+
+    assert_eq!(
+        current_options(&state),
+        vec!["Inspect the ledger".to_string()],
+        "an unavailable options agent must keep the prior set"
+    );
+    assert_eq!(
+        unavailable_agent_reports(&state),
+        1,
+        "the unavailable agent must be reported once in the story log"
+    );
+}
+
 // [docs/specs/options.md] SCENARIO: 24.6
 #[tokio::test]
 async fn test_always_on_generates_after_narration_turn_http() {
@@ -240,50 +294,150 @@ async fn test_always_on_generates_after_narration_turn_http() {
     );
 }
 
-// [docs/specs/options.md] SCENARIO: 24.7
+// Set B is next in the mock response queue: a regeneration would overwrite set A with it.
+// [docs/specs/options.md] SCENARIO: 24.15
 #[tokio::test]
-async fn test_always_on_skips_impersonate_turn_http() {
-    let (app, state, storage) = options_app(Arc::new(MockBackend::default()));
+async fn test_impersonate_keeps_offered_set_http() {
+    let (app, state, storage) =
+        options_app(tagged_provider(vec![SET_A.to_string(), SET_B.to_string()]));
     storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))
         .expect("seed always-on world");
     create_game(&app, "always_on_world").await;
 
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "the setup must install set A"
+    );
+
     let resp = post_action(&app, "/impersonate hello").await;
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "impersonate should complete");
 
-    assert!(
-        current_options(&state).is_empty(),
-        "an impersonate turn must not trigger always-on options"
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "an impersonate message must leave the offered set alone"
     );
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
-        !dock.contains("options-strip"),
-        "the dock must stay empty after an impersonate turn: {dock}"
+        dock.contains("Search the desk"),
+        "the dock must still render set A: {dock}"
     );
 }
 
-// [docs/specs/options.md] SCENARIO: 24.12
+// [docs/specs/options.md] SCENARIO: 24.16
 #[tokio::test]
-async fn test_always_on_disabled_does_not_generate_after_narration_turn_http() {
-    let (app, state, _storage) = options_app(Arc::new(MockBackend::default()));
+async fn test_narration_turn_clears_offered_set_http() {
+    let (app, state, _storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+
+    let resp = post_action(&app, "/options").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "/options should complete");
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "the setup must install set A"
+    );
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(
         wait_idle(&state, 1000).await,
-        "narration turn should complete"
+        "the narration turn should complete"
     );
 
     assert!(
         current_options(&state).is_empty(),
-        "the toggle-off game must not generate options at turn end"
+        "the turn end must clear the offered set when the toggle is off"
     );
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         !dock.contains("options-strip"),
-        "the dock must stay empty when the toggle is off: {dock}"
+        "a cleared set must leave the dock empty: {dock}"
+    );
+}
+
+// [docs/specs/options.md] SCENARIO: 24.17
+#[tokio::test]
+async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
+    // Zero-parse answers get one retry, so this needs two unparseable responses to fail.
+    let (app, state, storage) = options_app(tagged_provider(vec![
+        SET_A.to_string(),
+        "no parseable options in this response".to_string(),
+        "still no parseable options".to_string(),
+    ]));
+    storage
+        .seed_world(&always_on_world(), &TestMap::single_room("start"))
+        .expect("seed always-on world");
+    create_game(&app, "always_on_world").await;
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "the first always-on generation must install set A"
+    );
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await);
+
+    assert!(
+        current_options(&state).is_empty(),
+        "a failed regeneration must leave the offered set empty"
+    );
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert!(
+        !dock.contains("options-strip"),
+        "a failed regeneration must leave the dock empty: {dock}"
+    );
+    let systems = system_messages(&state);
+    assert!(
+        systems
+            .iter()
+            .any(|m| m.contains("Options generation failed")),
+        "the failed regeneration must surface a system message: {systems:?}"
+    );
+}
+
+// [docs/specs/options.md] SCENARIO: 24.20
+#[tokio::test]
+async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
+    let (app, state, storage) = app_without_options_agent();
+    storage
+        .seed_world(&always_on_world(), &TestMap::single_room("start"))
+        .expect("seed always-on world");
+    create_game(&app, "always_on_world").await;
+    seed_offered_set(&state, &["Inspect the ledger"]);
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "the message should complete");
+
+    assert!(
+        current_options(&state).is_empty(),
+        "the turn end must clear the offered set even when no agent can regenerate it"
+    );
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert!(
+        !dock.contains("options-strip"),
+        "with no agent the dock must render no options strip: {dock}"
+    );
+    assert_eq!(
+        unavailable_agent_reports(&state),
+        1,
+        "the unavailable agent must be reported once in the story log"
     );
 }
 
@@ -332,6 +486,72 @@ async fn test_options_work_in_if_mode_http() {
         "the dock must render: {dock}"
     );
     assert!(dock.contains("Search the desk"), "{dock}");
+}
+
+// Set B is next in the mock response queue: a regeneration would overwrite set A with it.
+// [docs/specs/options.md] SCENARIO: 24.19
+#[tokio::test]
+async fn test_mode_switch_keeps_offered_set_http() {
+    let (app, state, storage) =
+        options_app(tagged_provider(vec![SET_A.to_string(), SET_B.to_string()]));
+    let game_id = storage.current_game_id();
+    let starting_mode = state
+        .game_catalogue
+        .current_game()
+        .expect("current_game should succeed")
+        .expect("a current game must exist")
+        .narrator_mode;
+    assert_eq!(
+        starting_mode,
+        NarratorMode::Novel,
+        "the game must start in Novel mode"
+    );
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+
+    let resp = post_action(&app, "/options").await;
+    assert!(resp.status().is_success());
+    assert!(wait_idle(&state, 1000).await, "/options should complete");
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "the setup must install set A"
+    );
+
+    let resp = post_form(
+        &app,
+        &format!("/games/{game_id}/mode"),
+        "narrator_mode=interactive_fiction",
+    )
+    .await;
+    assert!(resp.status().is_success(), "mode switch should succeed");
+    let switched = state
+        .game_catalogue
+        .current_game()
+        .expect("current_game should succeed")
+        .expect("a current game must exist");
+    assert_eq!(
+        switched.narrator_mode,
+        NarratorMode::InteractiveFiction,
+        "the switch must actually change the game's narrator mode"
+    );
+    assert!(
+        wait_idle(&state, 1000).await,
+        "the mode switch must leave no generation running"
+    );
+
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "a narrator-mode switch must leave the offered set alone"
+    );
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert!(
+        dock.contains("Search the desk"),
+        "the dock must still render set A: {dock}"
+    );
 }
 
 // `useOption` fills the command input with the option's text and submits

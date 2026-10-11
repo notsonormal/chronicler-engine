@@ -52,21 +52,21 @@ Each task adds one scenario to the named spec and one test tagged `// [docs/spec
 
 Existing coverage and code: Scenarios 24.7 and 24.12 start from an empty offered set, so they cannot show a set kept or cleared. Scenario 24.5 already pins "a failed on-demand regeneration keeps the previous set". The turn-end rules live in `ActionPipeline::rewrite_options_after_turn`; the on-demand failure path is `finalize_options_failure` (both in `src/application/pipeline/action_pipeline/options.rs`). Start each new scenario from a non-empty offered set.
 
-- [ ] #### Task B.1 (G1): Quantifier failure → `docs/specs/actions.md`
+- [x] #### Task B.1 (G1): Quantifier failure → `docs/specs/actions.md`
   - When the quantifier call fails, or its answer stays unparseable after its retry, the Action still completes: the status returns to Idle and the scene keeps its prior NPC set.
-- [ ] #### Task B.2 (G2): Impersonate keeps the offered set → `docs/specs/options.md`
+- [x] #### Task B.2 (G2): Impersonate keeps the offered set → `docs/specs/options.md`
   - When an impersonate turn completes, a non-empty offered set is unchanged. Spec 24.7 asserts only "empty" from an empty start.
-- [ ] #### Task B.3 (G3): Turn end clears the offered set → `docs/specs/options.md`
+- [x] #### Task B.3 (G3): Turn end clears the offered set → `docs/specs/options.md`
   - When a non-impersonate narration turn ends with always-on off, the offered set is cleared.
   - When an always-on regeneration fails, or no Options agent is registered, the set stays empty and a System message is added. Both are branches of `rewrite_options_after_turn`.
-- [ ] #### Task B.4 (G4): No Options agent on demand → `docs/specs/options.md`
+- [x] #### Task B.4 (G4): No Options agent on demand → `docs/specs/options.md`
   - With no Options agent, `/options` reports that the agent is not available and keeps the set.
-- [ ] #### Task B.5 (G5): Mode switch keeps the offered set → `docs/specs/options.md` §Mode neutrality
+- [x] #### Task B.5 (G5): Mode switch keeps the offered set → `docs/specs/options.md` §Mode neutrality
   - When a Game switches narrator mode, the offered set is neither cleared nor regenerated.
 
 ### Phase C: Close
 
-- [ ] #### Task C.1: Validate and delete the scratch folder
+- [x] #### Task C.1: Validate and delete the scratch folder
   - Run `python build.py`. The full gate passes, with the browser tier included.
   - `python scripts/validate_feature_spec.py` reports 0 gaps and 0 orphans.
   - Delete `.scratch/doc-spec-boundary/`.

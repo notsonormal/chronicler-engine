@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::map::MapDef;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
@@ -68,4 +69,14 @@ pub fn world_form_body(world: &WorldCard, map: &MapDef) -> String {
         ("scenarios_json", scenarios_json),
     ];
     serde_urlencoded::to_string(pairs).expect("world form body serializes")
+}
+
+/// Persist `options` as the current game's offered set.
+pub fn seed_offered_set(state: &AppState, options: &[&str]) {
+    let mut game_state = state.message_service.load_or_fresh();
+    game_state.narrative.current_options = options.iter().map(|o| o.to_string()).collect();
+    state
+        .message_service
+        .save_state(&game_state)
+        .expect("the offered set should persist");
 }
