@@ -47,6 +47,8 @@ Questions for the grilling: does each source need the player to see it at all (t
 
 ## Related
 
+[Research: route each System notice to an existing channel](09-research-system-notice-channels.md) — the source list, the channels and the stored-data position, with corrections to two framings above. Read its Answer and asset before this grilling.
+
 [Model a generation's states, its Snapshot pointers and the game-state writers](01-model-a-generations-states.md) — the first ticket of this map. This ticket does not wait for it, because the user's rule (no notice reaches an LLM) holds whatever the model says.
 
 [Decide where the room a generation arrives in lives](03-decide-where-the-room-lives.md) — the same shape: display data stored inside the Message history. "[System] Entered unknown location" belongs to both. Record the dependency if one decision settles the other.
