@@ -64,33 +64,31 @@ picture. Do not edit the reports.
 
 | Rank | Ticket | Strength | Source | Why this position |
 |---|---|---|---|---|
-| 1 | [Give the input buffer named generation transitions](issues/09-input-buffer-generation-transitions.md) | Strong — top pick | 2026-10-04 · A | Smallest change with the widest reach; unblocks 08 and shrinks 04, 05, 10 |
-| 2 | [Research the Storage seam constraints](issues/01-research-storage-seam-constraints.md) | (prerequisite) | 2026-08-16 | AFK research; gates the Storage pair. Can run alongside any grilling |
-| 3 | [Deepen Storage into a StorageBackend trait](issues/02-deepen-storage-into-backend-trait.md) | Strong — top pick | 2026-08-16 · 1 | Widest interface in the codebase, and wider since 2026-08-16. Blocked by 01 |
-| 4 | [Route arrival narration through the one narration-generation path](issues/10-route-arrival-through-narration-generation.md) | Strong | 2026-10-04 · B | Removes a second narrate-and-persist path; settles part of 06 |
-| 5 | [Share one Agent call core between Options and Quantifier](issues/12-share-agent-call-core.md) | Strong | 2026-10-04 · D | Two copies of the same Agent body. See the exception below about 13 |
-| 6 | [One generation-status strip for the action area and the poll](issues/11-single-generation-status-strip.md) | Strong | 2026-10-04 · C | Three copies of one display rule, one of them skipping `GameViewQuery` |
-| 7 | [Replace CRUD services with a Repository port](issues/03-replace-crud-services-with-repository-port.md) | Strong | 2026-08-16 · 2 | Blocked by 02, so it lands later despite its strength |
-| 8 | [One definition of the connection card](issues/14-single-connection-card.md) | Strong (small) | 2026-10-04 · F | Clear fix, low leverage; a quick session |
-| 9 | [Retire or justify the Agent registry](issues/13-retire-or-justify-agent-registry.md) | Worth exploring | 2026-10-04 · E | Blocks 07 and may reshape 12 |
-| 10 | [Consolidate the ActionPipeline turn lifecycle](issues/04-consolidate-action-pipeline-turn-lifecycle.md) | Worth exploring | 2026-08-16 · 3 | Worse since 2026-08-16 (fifth entry path). Better after 09 and 10 |
-| 11 | [Split MessageService by concern](issues/05-split-message-service-by-concern.md) | Worth exploring | 2026-08-16 · 4 | Unchanged; better after 09 and 10 |
-| 12 | [One fragment error policy for the HTTP adapter](issues/15-single-fragment-error-policy.md) | Worth exploring | 2026-10-04 · G | Observable HTTP contract; needs a spec check |
-| 13 | [Bootstrap creates and finds Games only through GameCatalogue](issues/16-bootstrap-games-through-game-catalogue.md) | Worth exploring | 2026-10-04 · H | Easier once 01's constraints exist |
-| 14 | [Move Agent preset resolution into AgentContext](issues/07-move-quantifier-preset-into-agent-context.md) | Worth exploring | 2026-08-16 · 6 | Worse since 2026-08-16 (now two Agents). Blocked by 13 |
-| 15 | [Deepen PromptAssembler, absorb shallow helpers](issues/06-deepen-prompt-assembler-absorb-helpers.md) | Worth exploring | 2026-08-16 · 5 | Slightly better since 2026-08-16; 10 may settle part of it |
-| 16 | [Fold generation slot and guard into GenerationGate](issues/08-fold-generation-slot-guard-into-gate.md) | Speculative | 2026-08-16 · 7 | Blocked by 09. Consider reject |
-| 17 | [Flatten LLM transport/utils and share the result mapping](issues/17-flatten-llm-transport.md) | Speculative | 2026-10-04 · I | Low leverage. Consider reject |
+| 1 | [Research the Storage seam constraints](issues/01-research-storage-seam-constraints.md) | (prerequisite) | 2026-08-16 | AFK research; gates the Storage pair. Can run alongside any grilling |
+| 2 | [Deepen Storage into a StorageBackend trait](issues/02-deepen-storage-into-backend-trait.md) | Strong — top pick | 2026-08-16 · 1 | Widest interface in the codebase, and wider since 2026-08-16. Blocked by 01 |
+| 3 | [Share one Agent call core between Options and Quantifier](issues/12-share-agent-call-core.md) | Strong | 2026-10-04 · D | Two copies of the same Agent body. Reshape around the hook traits of turn-state-model D-29 (note in the ticket) |
+| 4 | [One generation-status strip for the action area and the poll](issues/11-single-generation-status-strip.md) | Strong | 2026-10-04 · C | Three copies of one display rule, one of them skipping `GameViewQuery` |
+| 5 | [Replace CRUD services with a Repository port](issues/03-replace-crud-services-with-repository-port.md) | Strong | 2026-08-16 · 2 | Blocked by 02. The new game-state design's repositories are its first instance (note in the ticket) |
+| 6 | [One definition of the connection card](issues/14-single-connection-card.md) | Strong (small) | 2026-10-04 · F | Clear fix, low leverage; a quick session |
+| 7 | [One fragment error policy for the HTTP adapter](issues/15-single-fragment-error-policy.md) | Worth exploring | 2026-10-04 · G | Observable HTTP contract; needs a spec check |
+| 8 | [Bootstrap creates and finds Games only through GameCatalogue](issues/16-bootstrap-games-through-game-catalogue.md) | Worth exploring | 2026-10-04 · H | Easier once 01's constraints exist |
+| 9 | [Deepen PromptAssembler, absorb shallow helpers](issues/06-deepen-prompt-assembler-absorb-helpers.md) | Worth exploring | 2026-08-16 · 5 | Slightly better since 2026-08-16. Ticket 10's verdict deletes arrival, the only production caller of `build_narration_prompt` |
+| 10 | [Flatten LLM transport/utils and share the result mapping](issues/17-flatten-llm-transport.md) | Speculative | 2026-10-04 · I | Low leverage. Consider reject |
 
-Exception: if both 12 and 13 are on the frontier, a session may take 13
-(registry) before 12. The registry decision can change where the shared Agent
-call core lives, and it unblocks 07.
+Tickets 13 (registry) and 07 (preset) were decided by the turn-state-model
+verdict on 2026-10-14, so the old exception for 12 and 13 no longer applies.
 
 ## Decisions so far
 
-<!-- one line per closed ticket: gist + link. Empty until the first ticket resolves. -->
+<!-- one line per closed ticket: gist + link. -->
 
-_None yet._
+- [Consolidate the ActionPipeline turn lifecycle](issues/04-consolidate-action-pipeline-turn-lifecycle.md) — rejected, superseded: the new game-state design replaces the pipeline with one Job and one `generate` (turn-state-model ticket 24).
+- [Split MessageService by concern](issues/05-split-message-service-by-concern.md) — rejected, superseded: `MessageService` is deleted in the new design.
+- [Fold generation slot and guard into GenerationGate](issues/08-fold-generation-slot-guard-into-gate.md) — rejected, superseded: `gate.rs` becomes `GameWriter` and `JobWriter`; slot and guard are deleted.
+- [Give the input buffer named generation transitions](issues/09-input-buffer-generation-transitions.md) — rejected, superseded: the status is in memory, and `JobWriter::step` is its only writer.
+- [Route arrival narration through the one narration-generation path](issues/10-route-arrival-through-narration-generation.md) — rejected, superseded: arrival is deleted (one create unit, no LLM opening).
+- [Retire or justify the Agent registry](issues/13-retire-or-justify-agent-registry.md) — decided by turn-state-model ticket 24: Agents attach at four fixed hooks, one trait and output type per hook, run by `AgentRunner`.
+- [Move Agent preset resolution into AgentContext](issues/07-move-quantifier-preset-into-agent-context.md) — decided by turn-state-model ticket 24: the step loads each Agent's settings and preset and passes them as values.
 
 ## Not yet specified
 
@@ -100,15 +98,9 @@ _None yet._
   question may graduate: do they land as one coordinated migration or as
   independent refactors? Not yet ticketable — the set of accepted decisions
   isn't known. Revisit after the storage-seam tickets (01–03) resolve.
-- **Generation-state cluster ordering.** Tickets 09 (input-buffer
-  transitions), 04 (pipeline lifecycle), 08 (gate fold) and 10 (arrival
-  narration) all touch who writes `GenerationStatus`. Only 08 → 09 is a hard
-  block today. Once 09 resolves, check whether 04 and 10 should be re-scoped
-  around its interface.
-- **Agent cluster shape.** Tickets 13 (registry), 07 (preset on
-  `AgentContext`) and 12 (shared Agent call core) may collapse into one
-  Agent-module decision once 13 resolves. Not yet clear whether they stay
-  three tickets.
+- **Agent cluster shape.** Tickets 13 and 07 were decided by the
+  turn-state-model verdict (Agent hooks; settings as values). Only 12 (the
+  call core inside each Agent) is left, reshaped around the hook traits.
 - **HTTP adapter cohesion.** Tickets 11 (status strip), 14 (connection
   card) and 15 (error policy) all point at `AppState` (21 public items, 7
   `render_*` methods that repeat one shape). A separate `AppState` interface

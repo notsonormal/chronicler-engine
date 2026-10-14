@@ -61,3 +61,7 @@ parameters, not deletions.
   map's fog "Agent cluster shape" may merge these three after 13 resolves.
 - Changes in agent prompts fall under the LLM-test policy at implementation
   time (note in hand-off).
+
+## Comments
+
+**2026-10-14, from [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md).** Agents now attach at fixed hooks and get their settings as values ([sketch 24](../../turn-state-model/assets/sketch-24-agent-hooks.md)). The call core inside each Agent is not designed there, so this ticket stays open, reshaped around the hook traits.

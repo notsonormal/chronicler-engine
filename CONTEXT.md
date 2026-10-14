@@ -29,12 +29,12 @@ A World sub-concept: the bundled starting state for a fresh Game — starting ro
 _Avoid_: Campaign, story, module
 
 **Action**:
-A semantic command issued by the player and resolved by the Action Pipeline.
+A semantic command issued by the player and resolved by a Job.
 _Avoid_: Command, input, verb
 
-**Action Pipeline**:
-The ordered sequence of phases that validates and resolves an Action.
-_Avoid_: Pipeline, command processor
+**Job**:
+The background work that one accepted Action, Retry, Retrigger or Options request starts. It can hold a Narration and its event Narration; while it runs, its Game is busy.
+_Avoid_: Work, turn, Action Pipeline
 
 **Trigger**:
 A condition attached to world state or events whose evaluation fires scripted continuation narrations.
@@ -48,8 +48,12 @@ _Avoid_: Story, text, output
 The post-generation Agent that analyzes narration to detect NPCs in area, player movement, and NPC enter/leave events.
 _Avoid_: Scorer, evaluator
 
+**Game rules**:
+The code that applies the analysis of a generation to the Game's state: movement, Characters present, encounters, and which Trigger fires. It makes no LLM call; the World supplies the map, the Characters and the Triggers.
+_Avoid_: World rules, engine commit
+
 **Agent**:
-A pipeline step that runs at a defined phase. Quantifier is one Agent.
+An LLM helper that runs at a fixed hook of a generation. The Quantifier is one Agent.
 _Avoid_: Bot, assistant, operator
 
 **Message**:
@@ -57,7 +61,7 @@ A single entry in a Game's conversation history — player input, narration outp
 _Avoid_: Line, entry, chat
 
 **Swipe**:
-An alternate version of an AI-generated Message, preserving a prior generation non-destructively. A Swipe carries the player-typed inputs of its generation.
+One of the texts of a Message. Every Message has at least one Swipe. A Swipe carries the inputs of its generation and the game state that its generation left.
 _Avoid_: Variant, version, alternate
 
 **Retry**:
@@ -88,6 +92,9 @@ _Avoid_: suggestions, quick actions, auto-inputs
 
 **Turn**:
 Don't use. Use Message + Swipe.
+
+**Action Pipeline**:
+Don't use. Use Job.
 
 **Narrator Action**:
 Don't use. Player direction is transient (Guided Generation); lasting facts go in-world through free actions.

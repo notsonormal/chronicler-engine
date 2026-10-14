@@ -1,7 +1,7 @@
 # Research: method and inputs for a clean-room design of the generation model
 
 Type: research
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -62,3 +62,16 @@ Label each fact known, inferred, or tested. Cite symbols, not line numbers.
 ## Feeds
 
 The map's fog patch "Fix or rewrite", and the order of [Model a generation's states, its Snapshot pointers and the game-state writers](01-model-a-generations-states.md).
+
+## Answer
+
+Asset: [research-15-clean-room-method.md](../assets/research-15-clean-room-method.md). Supporting assets: [research-15-web-sources.md](../assets/research-15-web-sources.md) (the web research; this session re-fetched its key quotes) and [research-15-leakcheck.py](../assets/research-15-leakcheck.py) (the leak check). Tree `9cbf3112` plus the work tree. Tested facts come from the leak check over every candidate input, and from an isolation probe run on four model families.
+
+- **Method.** Four roles: examiner, specification, reviewer, clean team. Contamination is access, not similarity. *NEC v. Intel* inferred "forced by constraints" where a walled-off clean implementation agreed with both originals. The test transfers only as an asymmetry. Here the spec writer and the owner sit on both sides, and Knight and Leveson showed that independent designs correlate. A run therefore yields a list of requirement-forced and history-forced decisions, not proof of independence. The disagreements are the result.
+- **Prior art.** No named software practice hides a design to counter anchoring. The nearest are the IETF and W3C "two independent implementations" rules, the Jas paper ("the most informative divergences are … specification gaps") and the chardet 7.0.0 rewrite. chardet shows the four failure modes: a leak (the agent read an original file), training-data recall, a design document in place of a behaviour spec, and convergence for other reasons.
+- **Inputs.** Only the specs come close to clean. `swipe_switch.md` and `failure_display.md` are clean. `actions.md` and `swipe_new.md` carry mechanism in domain words. `retrigger.md` and `reset.md` read storage functions. `CONTEXT.md` has no code names, but it defines **Snapshot**, **Action Pipeline** and **Agent** by the current mechanism. The Diátaxis docs keep seam identifiers by rule. Of the 18 prior decisions, 8 are behaviour rulings that a spec can carry, 8 are module shape that must stay out, and 2 are process.
+- **Premise sources.** SillyTavern and Marinara give different answers to four of the five questions of this map, so "behave as the premise source does" needs a choice per question. Excluding them is only partial: three of four models describe SillyTavern's swipe storage from training data. None knows Marinara's binding or this repo.
+- **Wall.** `pi --no-tools --no-context-files --no-skills --no-extensions --no-approve` gave no tools and no project context on all four models (tested). Still open: the cwd path in the system prompt, `ask_owner`, and training data. The asset lists 17 leak paths. It also notes a Herdsman trap: an inherited model whose provider comes from an extension switches extension discovery back on.
+- **Order.** Ticket 01 is on the frontier now. A run before it costs about four sessions and gives ticket 01 a reference point. A run after tickets 01–03 checks rulings that were made with no reference point. A run in place of part of ticket 01 changes that ticket's shape.
+
+**Decisions for the owner** (asset §7): whether to run; the scope (ticket 16); the role of the premise sources; the order; the wall; the reviewer and the owner's part during the run. They graduate into [Decide whether and how to run a clean-room design of the generation model](17-decide-clean-room-run.md).

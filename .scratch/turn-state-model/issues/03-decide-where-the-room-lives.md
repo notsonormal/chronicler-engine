@@ -1,8 +1,10 @@
 # Decide where the room a generation arrives in lives
 
 Type: grilling
-Status: open
-Blocked by: 01, 07, 08
+Status: resolved
+Blocked by: 01, 07, 08, 23
+
+**Waiting on the clean-room route (ticket 17).** Where the room lives is a choice inside the target design. After [Compare the target design with the code](23-compare-target-design-with-code.md), this ticket gets a new question, is closed, or is ruled out of scope.
 
 ## Question
 
@@ -56,3 +58,7 @@ Questions for the grilling: does the player need the room in the story log, or o
 ## Source
 
 Ticket 15 of the phase-2 map ("Open (known)" in its Answer), the spec review of tickets 15 and 16 (2026-10-11), and the user's decision B.
+
+## Answer
+
+Closed by the owner on 2026-10-12, in the grilling of [Decide where the new design of the game-state lifecycle makes sense](24-decide-fix-or-rewrite.md) (round 2, Q3), as [Compare the target design with the code](23-compare-target-design-with-code.md) recommended. In the [target design](../assets/target-design.md) the room report is on the Swipe and is written with its Swipe state (D-19), so a swipe switch gives back the room and the report together. That is this ticket's option A without pointers. The doc follow-ups (`storage_design.md` §Per-swipe state binding, `game_flow.md` §Movement Branch) go to whatever builds the result. Whether this design replaces today's is ticket 24's verdict.

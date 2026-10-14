@@ -1,8 +1,10 @@
 # Replace `System` Messages with an error channel outside the Message history
 
 Type: grilling
-Status: open
-Blocked by: 07, 09, 13, 14
+Status: resolved
+Blocked by: 07, 09, 13, 14, 23
+
+**Waiting on the clean-room route (ticket 17).** The owner's rule (no notice reaches an LLM) goes into the clean spec as a requirement. The channel is a choice inside the target design. After [Compare the target design with the code](23-compare-target-design-with-code.md), this ticket gets a new question, is closed, or is ruled out of scope.
 
 ## Question
 
@@ -56,3 +58,7 @@ Questions for the grilling: does each source need the player to see it at all (t
 ## Source
 
 The dashboard UI review phase 2: follow-ups F10-1 and F10-2 in [Follow up on small issues found in the phase-2 re-review](../../dashboard-ui-review-phase2/issues/13-follow-up-phase-2-re-review-p3s.md), and the ticket-10 Answer.
+
+## Answer
+
+Closed by the owner on 2026-10-12, in the grilling of [Decide where the new design of the game-state lifecycle makes sense](24-decide-fix-or-rewrite.md) (round 2, Q3), as [Compare the target design with the code](23-compare-target-design-with-code.md) recommended. The channel is the dock record of the [target design](../assets/target-design.md) (D-06): the offered set and one notice field, which no LLM call reads (§4.6). OR-34 and OR-35 drop two of the five sources, and OR-01 removes the migration. Whether this design replaces today's is ticket 24's verdict.

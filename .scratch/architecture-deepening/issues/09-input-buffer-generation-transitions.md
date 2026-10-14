@@ -1,7 +1,7 @@
 # 09 — Give the input buffer named generation transitions
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -72,3 +72,7 @@ invariant in one place.
   and `try_claim`.
 - Shrinks tickets 04 (pipeline lifecycle), 05 (MessageService) and 10
   (arrival narration), which all write the fields.
+
+## Answer
+
+**Rejected: superseded** (2026-10-14, by [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md), Q1 and Q10). `InputBuffer` and the saved `GenerationStatus` are deleted. The busy mark and the step name live in memory, and `JobWriter::step` is the only writer of the step name ([target design](../../turn-state-model/assets/target-design.md) D-05, D-24; [sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.2).

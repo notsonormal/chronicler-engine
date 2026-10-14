@@ -1,7 +1,7 @@
 # 13 — Retire or justify the Agent registry
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -68,3 +68,7 @@ behaviour. The cost is the test injection point: `with_agent` is used by
   phases may sharpen that entry.
 - Blocks ticket 07: 07's preset lookup was meant to land in `AgentRegistry`.
 - Related: ticket 12 (shared Agent call core).
+
+## Answer
+
+**Decided** (2026-10-14, by [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md), Q2 and Q10). The registry is replaced by Agent hooks: `generate` has four fixed hooks (before narration, rewrite, analysis, the Options run), each with its own trait and output type, and `AgentRunner` holds the Agents of each hook. `ExecutionPhase` becomes the hooks; the unused `AgentResult` variants go, replaced by one output type per hook. Only the analysis and Options hooks are built at first ([target design](../../turn-state-model/assets/target-design.md) D-29 to D-34; [sketch 24](../../turn-state-model/assets/sketch-24-agent-hooks.md)). `BackendSelector` is inside the Agent edge and is not decided there.

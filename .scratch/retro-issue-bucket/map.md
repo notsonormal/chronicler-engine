@@ -73,3 +73,4 @@ All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect
 - [34 — Sweep every caller when a change alters what a port returns](./issues/34-sweep-callers-of-a-changed-seam.md) (from the 2026-10-10 retro of the ticket-08 session)
 - [35 — Lint a spec scenario's shape and vocabulary](./issues/35-lint-spec-scenario-shape.md) (from the 2026-10-11 retro of the doc-spec boundary follow-ups session)
 - [36 — Show the next free scenario number for a spec](./issues/36-next-free-scenario-number.md) (from the 2026-10-11 retro of the doc-spec boundary follow-ups session)
+- [50 — Make the two path-limited guardrails check real files](./issues/50-dead-path-guardrails.md) (from the 2026-10-14 grilling of turn-state-model ticket 25)

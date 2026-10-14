@@ -64,3 +64,7 @@ reappears in the other and in the stub.
   `error_disclosure` is one of its helpers).
 - Explanation context: `docs/diataxis/explanation/two-state-channels.md`
   ("UI display reads the persisted status").
+
+## Comments
+
+**2026-10-14, from [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md).** In the new design, `GameViewQuery::status` holds the one status rule ([sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.4). The strip that renders it is in the HTTP adapter, outside that design, so this ticket's rendering question stays open.

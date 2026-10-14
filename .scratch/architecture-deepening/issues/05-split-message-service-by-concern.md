@@ -1,7 +1,7 @@
 # 05 — Split MessageService by concern
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -63,3 +63,7 @@ snapshot, message, swipe, retry-anchor and fresh-state.
 `save_message_and_snapshot` still bundles the four operations. The retry leak
 is still there: `retry.rs:71` and `retry.rs:203` call
 `self.storage.load_snapshot_by_id`.
+
+## Answer
+
+**Rejected: superseded** (2026-10-14, by [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md), Q1 and Q10). `MessageService` is deleted in the new design. Its loads become the story reads, its saves and pointer rule become the `JobWriter` save units, switch, edit and delete become `GameWriter` methods, and the Retry anchor becomes `Tail::start_at` ([sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §7.1).

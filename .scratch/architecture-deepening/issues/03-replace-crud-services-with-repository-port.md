@@ -72,3 +72,7 @@ Still present. The fleet is no longer uniformly one-method:
 The arch-lint rule moved to `arch-lint.toml` lines 138-142 (text unchanged).
 The HTTP adapter still honours it in `src/` (only `app_state_tests.rs`
 imports storage, as an exempt test). Still Strong.
+
+## Comments
+
+**2026-10-14, from [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md).** The new design of the game-state lifecycle uses one repository per record, with record writes only on a transaction handle ([sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.1). Those repositories are the first instance of this ticket's question. Trait or struct is still open here.

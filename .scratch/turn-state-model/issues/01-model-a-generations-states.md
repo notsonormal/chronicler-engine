@@ -1,8 +1,10 @@
 # Model a generation's states, its Snapshot pointers and the game-state writers
 
 Type: grilling
-Status: open
-Blocked by: 04, 05, 06, 07, 11, 13, 14
+Status: resolved
+Blocked by: 04, 05, 06, 07, 11, 13, 14, 23
+
+**Waiting on the clean-room route (ticket 17).** The owner ruled that this ticket's questions are implementation decisions, and a design from the spec may go another way. After [Compare the target design with the code](23-compare-target-design-with-code.md), this ticket gets a new question, is closed, or is ruled out of scope.
 
 ## Question
 
@@ -21,3 +23,7 @@ Which states does one generation pass through (Input, Narration, Quantifier, eng
 
 - The model is written as a linked asset under `../assets/` and checked against the code (each state and pointer cites the function that writes it).
 - The map's remaining fog patches "Retry tails" and "The writer rule" are graduated into tickets, or kept as fog with a reason.
+
+## Answer
+
+Closed by the owner on 2026-10-12, in the grilling of [Decide where the new design of the game-state lifecycle makes sense](24-decide-fix-or-rewrite.md) (round 2, Q3), as [Compare the target design with the code](23-compare-target-design-with-code.md) recommended. The [target design](../assets/target-design.md) is the model: its records (§2), the states of a generation and of a work (§4.3, §4.4) and the writer rule (§3). [Research 23](../assets/research-23-design-vs-code.md) §4 names the function that writes each state today. The owner ruled the pointer questions to be implementation (ticket 17). The fog patches "Retry tails" and "The writer rule" were cleared by ticket 23.

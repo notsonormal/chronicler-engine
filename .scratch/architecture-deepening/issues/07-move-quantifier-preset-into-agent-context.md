@@ -1,7 +1,7 @@
 # 07 — Move Agent preset resolution (Quantifier + Options) into AgentContext
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 13
 Assignee: (unclaimed)
 
@@ -77,3 +77,7 @@ Worse. The pattern now exists twice:
 `AgentRegistry` is now built by `from_configs_with_storage` (`registry.rs:20`),
 with a string switch for `"quantifier"` / `"options"`. `AgentContext`
 (`domain/model/agent.rs`) still has no preset field.
+
+## Answer
+
+**Decided** (2026-10-14, by [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md), Q3 and Q10). The Job step loads each Agent's settings and preset when its hook starts and passes them as values (`AgentSettings`). Agents and the narrator do not read storage. `AgentContext` is replaced by `HookInput` ([target design](../../turn-state-model/assets/target-design.md) D-33; [sketch 24](../../turn-state-model/assets/sketch-24-agent-hooks.md) §2.2).

@@ -1,7 +1,7 @@
 # 10 — Route arrival narration through the one narration-generation path
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -74,3 +74,7 @@ and the scene context stay arrival-specific.
   `save_message_and_snapshot`.
 - If this changes `src/application/prompting/`, the LLM-test policy applies
   at implementation time (note in hand-off).
+
+## Answer
+
+**Rejected: superseded** (2026-10-14, by [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md), Q1 and Q10). Arrival narration is deleted: a Game gets its opening in one create unit, with no LLM opening ([target design](../../turn-state-model/assets/target-design.md) D-25; [sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.5).
