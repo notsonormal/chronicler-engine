@@ -11,7 +11,7 @@ A decision: keep the Chronicler Engine in Rust or rewrite it. For a rewrite, the
 - **Plan, don't do.** Tickets produce decisions. A rewrite, if one is chosen, goes to a plan written after the map.
 - **Origin:** [Decide whether and how to run a clean-room design of the generation model](../turn-state-model/issues/17-decide-clean-room-run.md), in the turn state model map. The owner raised the language question during that grilling. Read its Answer.
 - **Seed:** [build, test and port facts from the ticket-17 grilling](assets/seed-build-and-port-facts.md). Read it before charting.
-- **Not charted yet.** This file is a skeleton: Destination, Notes and fog. A separate session charts the frontier and creates the tickets (wayfinder "Chart the map", steps 2 and 4).
+- **Not charted yet.** This file is a skeleton: Destination, Notes and fog. A separate session charts the frontier and creates the tickets (wayfinder "Chart the map", steps 2 and 4). The owner asked for one ticket before charting (2026-10-15): [Research: what explicit state machines and reducers give the new design, in Rust and in other languages](issues/01-research-state-machines-and-reducers.md). After ticket 01, the owner asked for [Prototype: the Job as a pure state machine, next to a straight `generate`](issues/02-prototype-job-as-pure-state-machine.md) (2026-10-15). The charting session numbers new tickets from 03.
 - **The problems that a language move must solve** (owner, 2026-10-12):
   - A: the edit-to-test loop after a change;
   - B: parallel agents that wait for the build slot or run out of memory;
@@ -32,6 +32,9 @@ A decision: keep the Chronicler Engine in Rust or rewrite it. For a rewrite, the
 
 ## Decisions so far
 
+- [Research: what explicit state machines and reducers give the new design, in Rust and in other languages](issues/01-research-state-machines-and-reducers.md) — the claim is opinion with no measurement; the design already removes impossible states by derivation, so an explicit form adds detection (generated tests over the stop table) and three small gaps (G1–G3), not prevention; it does not make the language choice clearer.
+- [Prototype: the Job as a pure state machine, next to a straight `generate`](issues/02-prototype-job-as-pure-state-machine.md) — both shapes sketched and measured as points of comparison, with no choice: option P doubles the code of the Job (236 against 116 lines), breaks rule 7, and keeps the stop table in a test as option S does; the busy state costs about the same in both.
+
 ## Not yet specified
 
 - **Language and platform candidates.** TypeScript is the owner's first idea, not a decision. Other languages, and building on an existing platform (SillyTavern and Marinara are JavaScript and TypeScript), are open.
@@ -40,6 +43,7 @@ A decision: keep the Chronicler Engine in Rust or rewrite it. For a rewrite, the
 - **The test oracle.** The HTTP tests call the router in-process and the browser tests use `playwright-rs`, so no test can check a server in another language. A rewrite needs black-box tests over HTTP and the browser, made from the specs, that run against both servers.
 - **The migration path.** Replace the parts one at a time behind the same HTTP interface, or rewrite everything at once. This also covers what happens to new features during the move.
 - **The parts tied to Rust.** `harper-core` (text check), Askama templates, the `arch-lint` and `syn` guardrails, the `build.py` tooling, `CODING_STANDARDS.md`, and the Rust skills.
+- **State-machine follow-ups** (from research 01 §6). Whether the build plan takes gaps G1 to G3. Which shape the Job and the busy state take: [Prototype: the Job as a pure state machine, next to a straight `generate`](issues/02-prototype-job-as-pure-state-machine.md) gives option S (straight) and option P (pure machine) as points of comparison; the owner has not chosen between them and the existing design (sketch 25 §3.3, or today's code). With that choice: gap G1 (the step name in code or only in a test) and, for option P, an exception to rule 7. Fork 1 stays with the build plan. Whether a measured trial of the forms (Rust enum and `match`, Rust typestate, TypeScript union with `fast-check`, optionally XState) is worth its cost; it can share a slice with the measured feedback loop. Whether the guard and the job id check need race tests with a scheduler tool.
 - **The design beyond scope B.** The turn-state-model map designs only the game-state lifecycle. A rewrite also needs designs for the Agents, Triggers, prompt assembly, storage, the HTTP views and the LLM transport. Four of those subsystems have no spec.
 
 ## Out of scope
