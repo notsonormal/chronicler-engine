@@ -436,7 +436,7 @@ class StepCommandTests(unittest.TestCase):
     # the suite instead of silently changing what a subcommand runs.
     EXPECTED_COMMANDS = {
         "install-hooks": "python scripts/install_git_hooks.py",
-        "remove-worktrees": "python scripts/remove_worktrees.py --apply",
+        "remove-worktrees": "python scripts/remove_worktrees.py --apply --prune-targets",
         "fmt": "cargo fmt",
         "validate-data": "python scripts/validate_data.py",
         "check": "cargo check --all-targets --all-features",

@@ -42,7 +42,9 @@ Each script's docstring lists its ``CHRONICLER_*`` switches. Use one target dir 
     python build.py --target-dir target/agent2
 
 The full gate also removes linked worktrees that are safe to lose: clean, pushed, and with no
-live process inside (``scripts/remove_worktrees.py``). It warns and continues if that fails.
+live process inside (``scripts/remove_worktrees.py``). It also prunes the stale ``target/``
+dirs of the linked worktrees it keeps, so a surviving tree does not hold a multi-GiB one for
+good. It warns and continues if either fails.
 
 ``--cleanup`` deletes this checkout's whole cargo target dir (the next build is cold) and the
 machine-wide port-lock dir ``<tmp>/chronicler_test_ports`` that every checkout's tests share.
@@ -631,11 +633,13 @@ REGISTRY: dict[str, StepSpec] = {
         ),
         StepSpec(
             "remove-worktrees",
-            "Removing worktrees that are safe to remove...",
-            "python scripts/remove_worktrees.py --apply",
+            "Removing safe worktrees and pruning stale target dirs...",
+            "python scripts/remove_worktrees.py --apply --prune-targets",
             help=(
                 "Remove linked worktrees that are clean, pushed, and have no live process"
-                " inside; every other tree is refused with a reason."
+                " inside; every other tree is refused with a reason. Also prunes the stale"
+                " target dirs of the linked trees that survive, which is what keeps a"
+                " multi-GiB target/ around; the main worktree's target dir is never pruned."
             ),
         ),
         StepSpec(
@@ -1482,7 +1486,7 @@ def _run_duplicates_report(cargo_env):
 
 
 def _run_remove_worktrees(cargo_env):
-    """Remove safe-to-lose worktrees without ever failing the gate.
+    """Remove safe-to-lose worktrees and prune stale target dirs, without failing the gate.
 
     Housekeeping like hook install: a failed removal warns and the build continues.
     """

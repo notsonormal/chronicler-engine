@@ -52,7 +52,8 @@ class GatePlanTests(unittest.TestCase):
         # A failed removal warns; it does not raise or record a step failure.
         self.assertFalse(runner.call_args.kwargs["check"])
         self.assertEqual(
-            runner.call_args.args[0], "python scripts/remove_worktrees.py --apply"
+            runner.call_args.args[0],
+            "python scripts/remove_worktrees.py --apply --prune-targets",
         )
         printer.assert_called_once()
 

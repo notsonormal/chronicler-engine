@@ -23,6 +23,10 @@ Each script's docstring has its details. These are the reasons and measurements 
 - **Target seeding** (`scripts/target_seed.py`): a cold target dir copies dependency artifacts from
   a worktree with the same build signature. A seeded new-worktree gate took 344 s, against 728 s
   unseeded.
+- **Stale target pruning** (`scripts/remove_worktrees.py --prune-targets`): a pruned target dir
+  costs build time, not correctness — the next build re-seeds from a warm sibling, 344 s against
+  728 s cold. That recovery cost is why the gate reclaims on idleness alone, without the git-level
+  vetoes that guard worktree removal.
 - **lld linker** (`build.py`, `scripts/lld-linker.sh`): it links about 4 times faster than GNU ld.
   It is set through an environment variable, not `.cargo/config.toml`, because cargo hashes the
   linker's absolute path into every unit.
