@@ -665,8 +665,8 @@ REGISTRY: dict[str, StepSpec] = {
             "Running seam-case guardrail...",
             "python scripts/validate_seam_cases.py",
             help=(
-                "Enforce the seam-contract rule: every declared CASE has its"
-                " tagged test, and no test in a declaring file goes untagged."
+                "Enforce the seam-contract rule: every test in a declaring file"
+                " carries its CASE tag, and every tag carries a description."
             ),
         ),
         StepSpec(

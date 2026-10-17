@@ -33,15 +33,16 @@ A `#[tokio::test]` with fakes is a unit test.
 
 A unit test lives in one of three places, and nowhere else:
 
-1. **A seam contract**: a `CASE` list in the test file of a box behind a port
-   boundary. The boxes are the storage adapters, the LLM providers and the
-   transport, the Harper text checker, each Agent, and the `Narrator`. The
-   storage contract lives at the driven-adapter tier, in `tests/storage/`. The
-   contract declares its cases in the file's module doc
-   (`//! CASE <id>: <what it pins>`), and every test in a declaring file carries
-   `// CASE: <id>`. A unit test in a declaring file calls only that box's entry
-   point. **Check:** `seam-cases` and the `guardrails` binary (the
-   `unit test allowlist` rule); the entry-point clause is review-only.
+1. **A seam contract**: the test file of a box behind a port boundary. The
+   boxes are the storage adapters, the LLM providers and the transport, the
+   Harper text checker, each Agent, and the `Narrator`. The storage contract
+   lives at the driven-adapter tier, in `tests/storage/`. The tag above each
+   test declares its case and carries the description:
+   `// CASE <id>: <what it pins>`, or `// CASE <id> [<label>]: <what it pins>`.
+   Every test in a declaring file carries one tag. A unit test in a declaring
+   file calls only that box's entry point. **Check:** `seam-cases` and the
+   `guardrails` binary (the `unit test allowlist` rule); the entry-point clause
+   is review-only.
 
    The shape of a case:
    - **One clause**: one input shape, one result, or one failure.

@@ -108,7 +108,7 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
 ];
 
 // The seam-contract files. A box adds its contract file here; the checker below
-// fails a file that declares cases without being listed.
+// fails a file that carries `CASE` tags without being listed.
 pub const SEAM_CONTRACT_FILES: &[&str] = &[
     // Each Agent is a box behind the LLM port, so its test file declares its cases.
     "application/agents/options/agent_tests.rs",
@@ -138,13 +138,27 @@ fn is_case_id(id: &str) -> bool {
         })
 }
 
-/// The form `scripts/validate_seam_cases.py` parses: `//! CASE <id> [<label>]: <description>`,
-/// the label optional.
+fn is_case_label(label: &str) -> bool {
+    let mut characters = label.chars();
+    match characters.next() {
+        Some(first) if first.is_ascii_lowercase() => {}
+        _ => return false,
+    }
+    characters.all(|character| {
+        character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+    })
+}
+
+/// The form `scripts/validate_seam_cases.py` parses: `// CASE <id>: <description>`,
+/// the label optional in `// CASE <id> [<label>]: <description>`.
 pub fn is_case_declaration(line: &str) -> bool {
-    let Some(rest) = line.trim_start().strip_prefix("//!") else {
+    let Some(rest) = line.trim_start().strip_prefix("//") else {
         return false;
     };
     let Some(rest) = rest.trim_start().strip_prefix("CASE") else {
+        return false;
+    };
+    let Some(rest) = rest.strip_prefix(char::is_whitespace) else {
         return false;
     };
     let rest = rest.trim_start();
@@ -160,7 +174,12 @@ pub fn is_case_declaration(line: &str) -> bool {
     let rest = rest.trim_start();
     let rest = match rest.strip_prefix('[') {
         Some(after_open) => match after_open.split_once(']') {
-            Some((_, after_close)) => after_close.trim_start(),
+            Some((label, after_close)) => {
+                if !is_case_label(label) {
+                    return false;
+                }
+                after_close.trim_start()
+            }
             None => return false,
         },
         None => rest,
@@ -219,9 +238,9 @@ pub fn check_unit_test_allowlist(
             violations.push(Violation::error(
                 &file.path,
                 line,
-                "this file declares `//! CASE` clauses but is not on \
-                 `SEAM_CONTRACT_FILES`: add the file to the table, or move the \
-                 clauses out of the file",
+                "this file carries `CASE` tags but is not on \
+                 `SEAM_CONTRACT_FILES`: add the file to the table, or drop the \
+                 tags",
             ));
             continue;
         }
@@ -236,7 +255,7 @@ pub fn check_unit_test_allowlist(
             line,
             format!(
                 "unit test outside the one rule: a unit test lives in a seam contract \
-                 (a listed `_tests.rs` file that declares `//! CASE` clauses), in a \
+                 (a listed `_tests.rs` file that carries `CASE` tags), in a \
                  `{PURE_DOMAIN_PREFIX}` file, or on `LEGACY_UNIT_TEST_FILES` — move the \
                  player-visible behaviour to a `docs/specs/` scenario, or put the clause \
                  in its box's seam contract"

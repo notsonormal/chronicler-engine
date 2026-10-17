@@ -1,18 +1,4 @@
 //! Seam contract of the Quantifier, the analysis hook's Agent.
-//!
-//! CASE quantifier-npc-ids: a parsed room report names the Characters present.
-//! CASE quantifier-unknown-id: an id the World does not know is dropped.
-//! CASE quantifier-movement: a parsed report names the room the player enters.
-//! CASE quantifier-low-confidence: an unparseable answer falls back to the scene's Characters, with Low confidence.
-//!
-//! CASE quantifier-retry: a low-confidence first answer is read again, and the second answer wins.
-//! CASE quantifier-transport-failure: both attempts fail and the fallback keeps the scene's Characters.
-//! CASE quantifier-no-text: a hook input without saved text fails.
-//! CASE quantifier-no-room: a hook input without a room fails.
-//!
-//! CASE quantifier-preset: the settings' preset text reaches the prompt.
-//! CASE quantifier-call-record: a good call is recorded with its agent name and prompts.
-//! CASE quantifier-call-record-failure: a failed call is recorded with its failure text.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -126,7 +112,7 @@ fn settings() -> AgentSettings {
     AgentSettings::default()
 }
 
-// CASE: quantifier-npc-ids
+// CASE quantifier-npc-ids: a parsed room report names the Characters present.
 #[test]
 fn test_parsed_report_names_the_characters_present() {
     let turn = Turn::new();
@@ -140,7 +126,7 @@ fn test_parsed_report_names_the_characters_present() {
     assert_eq!(output.0.confidence, Confidence::High);
 }
 
-// CASE: quantifier-unknown-id
+// CASE quantifier-unknown-id: an id the World does not know is dropped.
 #[test]
 fn test_an_unknown_character_id_is_dropped() {
     let turn = Turn::new();
@@ -154,7 +140,7 @@ fn test_an_unknown_character_id_is_dropped() {
     assert_eq!(output.0.npc_ids, vec![NPC_ID.to_string()]);
 }
 
-// CASE: quantifier-movement
+// CASE quantifier-movement: a parsed report names the room the player enters.
 #[test]
 fn test_parsed_report_names_the_room_the_player_enters() {
     let turn = Turn::new();
@@ -169,7 +155,7 @@ fn test_parsed_report_names_the_room_the_player_enters() {
     assert_eq!(output.0.movement_destination.as_deref(), Some("room2"));
 }
 
-// CASE: quantifier-low-confidence
+// CASE quantifier-low-confidence: an unparseable answer falls back to the scene's Characters, with Low confidence.
 #[test]
 fn test_an_unparseable_answer_keeps_the_scenes_characters() {
     let turn = Turn::new();
@@ -187,7 +173,7 @@ fn test_an_unparseable_answer_keeps_the_scenes_characters() {
     assert_eq!(output.0.confidence, Confidence::Low);
 }
 
-// CASE: quantifier-retry
+// CASE quantifier-retry: a low-confidence first answer is read again, and the second answer wins.
 #[test]
 fn test_a_low_confidence_answer_is_read_again() {
     let turn = Turn::new();
@@ -204,7 +190,7 @@ fn test_a_low_confidence_answer_is_read_again() {
     assert_eq!(output.0.confidence, Confidence::High);
 }
 
-// CASE: quantifier-transport-failure
+// CASE quantifier-transport-failure: both attempts fail and the fallback keeps the scene's Characters.
 #[test]
 fn test_a_transport_failure_keeps_the_scenes_characters() {
     let turn = Turn::new();
@@ -222,7 +208,7 @@ fn test_a_transport_failure_keeps_the_scenes_characters() {
     assert_eq!(output.0.confidence, Confidence::Low);
 }
 
-// CASE: quantifier-no-text
+// CASE quantifier-no-text: a hook input without saved text fails.
 #[test]
 fn test_a_hook_input_without_text_fails() {
     let turn = Turn::new();
@@ -233,7 +219,7 @@ fn test_a_hook_input_without_text_fails() {
     assert!(result.is_err(), "the analysis needs the saved text");
 }
 
-// CASE: quantifier-no-room
+// CASE quantifier-no-room: a hook input without a room fails.
 #[test]
 fn test_a_hook_input_without_a_room_fails() {
     let turn = Turn::new();
@@ -244,7 +230,7 @@ fn test_a_hook_input_without_a_room_fails() {
     assert!(result.is_err(), "the analysis needs the room it reads");
 }
 
-// CASE: quantifier-preset
+// CASE quantifier-preset: the settings' preset text reaches the prompt.
 #[test]
 fn test_the_settings_preset_reaches_the_prompt() {
     let turn = Turn::new();
@@ -269,7 +255,7 @@ fn test_the_settings_preset_reaches_the_prompt() {
     );
 }
 
-// CASE: quantifier-call-record
+// CASE quantifier-call-record: a good call is recorded with its agent name and prompts.
 #[test]
 fn test_a_good_call_is_recorded_with_its_prompts() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
@@ -295,7 +281,7 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     assert!(!call.system_prompt.is_empty());
 }
 
-// CASE: quantifier-call-record-failure
+// CASE quantifier-call-record-failure: a failed call is recorded with its failure text.
 #[test]
 fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
