@@ -1,7 +1,7 @@
 # 06 — Deepen PromptAssembler, absorb shallow helpers
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -66,3 +66,7 @@ constants (`MAX_CONTEXT_TOKENS`, `MAX_HISTORY_TOKENS`, `MAX_RESPONSE_TOKENS`,
 still exists at `assembler.rs:181`, and its only production caller is
 `arrival_service.rs:153`. `render_and_fit` is private, so part of the depth is
 already behind the interface.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.4: **settled in part, later effort for the rest.** `build_narration_prompt` goes with arrival (D-25); `with_storage` becomes a token budget passed as a value (sketch 24 §7). `prompt_merge.rs` belongs to the LLM transport (its only callers are the providers), and the `token_budget.rs` constants change no behaviour: a later effort.

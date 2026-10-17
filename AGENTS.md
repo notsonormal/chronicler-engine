@@ -299,7 +299,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `precommit_regenerate.py` — Regenerate the four generated index files for the git pre-commit hook.
   - `prepare_review_bundle.py` — Assemble a review bundle (stat, per-area patches, untracked/deleted lists) under tmp/.
   - `refine_character_json.py` — Split character card descriptions into structured personality/scenario/description fields.
-  - `remove_worktrees.py` — Remove linked git worktrees, but only ones that are safe to lose.
+  - `remove_worktrees.py` — Remove linked git worktrees, but only ones that are safe to lose, and prune stale target dirs.
   - `target_seed.py` — Seed a cold cargo target dir with dependency artifacts from a warm sibling checkout.
   - `vale_lint.py` — Vale prose linter wrapper for Chronicler Engine docs.
   - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
@@ -347,59 +347,29 @@ Avoid **analysis paralysis**: when reasoning stops converging, act instead — r
 
 ## Development Loop
 
-Temporary files should be written into tmp folders e.g. `tmp`.
+`tmp/` is the git-ignored scratch folder.
 
-Re-read the exact target region immediately before every file edit — edit from the file's current content, never from remembered or truncated output — and read back multi-block edits before running further commands. Never pass glob or wildcard patterns to file-read tools; if the exact name is unconfirmed, list the directory first.
-
-The dev server stores its SQLite DB next to its binary (`<target-dir>/debug/chronicler_<port>.db`). It reads `<target-dir>/debug/data` if a full gate copied it there, and otherwise reads the repo's `data/`. A world JSON edit in `data/` therefore does not reach a target dir with a gate copy until the next full gate. The server writes only the DB and `logs/`. It never writes to a data dir.
-
-`build.py` writes logs to both standard output and to the `logs/` folder. A standard build takes about 2 minutes once the target dir is warm. A cold one takes far longer.
-
-Use the Pi bash tool with a timeout of 1200 seconds when calling `build.py`. Tail the last 10 lines of the run's log file — not piped stdout — to get the results of the tests i.e. `nextest: 1482 passed, 0 failed, 2 skipped`:
+Every build action goes through `build.py`. Each run writes `logs/build_*.log` and appends a row to `logs/build_history.txt`. Call `build.py` with a bash timeout of 1200 seconds. A piped `tail` of stdout loses the result when the run times out, so read the result from the newest log file:
 
 ```bash
 tail -n 10 "$(ls -t logs/build_*.log | head -1)"
-```  
-
-### Commands
-
-#### Iteration (use these while fixing)
-All build actions go through `build.py`. Every run writes `logs/build_*.log`, stamped with the pi session id so the `mrn-context` extension attributes the log to the session that ran it.
-
-```bash
-python build.py fmt                             # Format sources (rewrites files in place)
-python build.py check                           # Fast compile check across all targets (no lint)
-python build.py clippy                          # ~10s — fix warnings here
-python build.py unit                            # Run the unit tests
-python build.py architecture                    # Run the architecture tests
-python build.py guardrails                      # Run the guardrails tests
-python build.py test-pattern "action_pipeline::options_tests" # Run tests whose name matches a substring, across all test binaries
-python build.py integration                     # Every test binary except browser, architecture and guardrails (~20s, unit tests included)
-python build.py browser                         # Only the browser/Playwright binary
-python build.py validate-docs                   # Validate markdown docs
-python build.py run                             # Run the dev server (see ENVIRONMENT.md)
 ```
 
-Almost every full-gate step is also a subcommand — see `python build.py --help`. Only the packaging, test-suite, and coverage-report phases stay gate-internal. `--target-dir` works on either side of the subcommand; all other top-level flags are full-gate only.
+| Command | Covers | Warm cost |
+|---|---|---|
+| `python build.py clippy` | Compile and lint of all targets; warnings are errors | ~12 s |
+| `python build.py test-pattern "<pattern>"` | Tests whose name matches the pattern, in every test binary | ~3 s, depends on the pattern |
+| `python build.py integration` | Every test binary except browser, architecture and guardrails; lib unit tests included | ~21 s |
+| `python build.py guardrails` | The architecture and guardrails test binaries | ~10 s |
+| `python build.py browser` | The browser (Playwright) binary only | ~92 s |
+| `python build.py --no-browser` | The full gate without the browser tier | ~50 s |
+| `python build.py` | The full gate: installs git hooks, removes safe-to-lose linked worktrees, fmt (rewrites files), data, doc and structure checks, Python tests, clippy, guardrails, integration, browser, packaging | ~145 s |
+| `python build.py validate-docs` | Markdown docs and DOC anchors under `docs/` | <1 s |
+| `python build.py run` | Builds and runs the dev server | see `ENVIRONMENT.md` |
 
-#### Final Validation (once, at the end)
+Warm cost is the median of recent runs in `logs/build_history.txt`, including runs after a Rust edit. A run with no Rust change is faster (`ENVIRONMENT.md`, *Typical gate cost*).
 
-```bash
-python build.py              # Full gate: fmt + clippy + guardrails + every test, browser tier included
-python build.py --no-browser # The same gate minus the browser tier
-```
-
-Green means the full gate ran on the tree you report. While you iterate, run one step
-(`clippy`, `test-pattern <pattern>`) or `python build.py --no-browser`.
-
-## Concurrent Builds
-
-`ENVIRONMENT.md`: read it when a build or test run is slow, waits for the build slot, or runs out of memory.
-
-Cold worktree builds compile the whole dependency tree into a fresh target dir;
-`scripts/sccache-wrapper.sh` (wired as `rustc-wrapper` in `.cargo/config.toml`)
-routes that through sccache, so the second build onward reuses the artifacts.
-Check it with `sccache --show-stats`.
+`python build.py --help` lists every subcommand and flag. `ENVIRONMENT.md`: read it when a build or test run is slow, waits for the build slot, or runs out of memory. It also says where the dev server keeps its DB and reads its data.
 
 ## Agent Skills
 

@@ -283,7 +283,7 @@ export default function planMode(pi: ExtensionAPI) {
 		return record;
 	}
 
-	pi.registerFlag("plan", {
+	pi.registerFlag("pi-plan", {
 		description: "Start in Codex-like Plan mode",
 		type: "boolean",
 		default: false,
@@ -377,7 +377,7 @@ export default function planMode(pi: ExtensionAPI) {
 			planToolsFlagOverride(),
 		);
 		restoreState(ctx);
-		if (pi.getFlag("plan") === true) state.enabled = true;
+		if (pi.getFlag("pi-plan") === true) state.enabled = true;
 		if (state.enabled) {
 			activatePlanModeTools();
 			pi.sendMessage(

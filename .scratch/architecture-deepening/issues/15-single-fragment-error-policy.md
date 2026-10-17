@@ -1,7 +1,7 @@
 # 15 — One fragment error policy for the HTTP adapter
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -68,3 +68,7 @@ duplication does not.
 - Extra friction seen in passing, not in scope here: `worlds.rs` repeats a
   5-line "list worlds + games + render panel" block twice and re-parses
   `MapDef` / `StartingScenario` JSON in the adapter.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.8: **settled for the routes that the build changes, later effort for the rest.** `Refusal` maps to `200` / `400` / `500`, busy first (sketch 25 §3.2; target design §3.3). The Validation conflict, `EngineError::Config` in `AppState` and the return conventions are outside the design: a later effort.

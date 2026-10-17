@@ -11,7 +11,8 @@ use crate::adapters::driving::http::builders::headers::{
     role_label,
 };
 use crate::adapters::driving::http::utils::error::{
-    error_disclosure, raw_error_detail, refusal_message,
+    error_disclosure, raw_error_detail,
+    refusal_message_without_layer_prefix_for_validation_and_config,
 };
 use crate::adapters::driving::http::utils::template_helpers::select_options_html;
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
@@ -111,7 +112,7 @@ impl SettingsTemplate {
             error: error.map(|error| {
                 SafeHtml::new(error_disclosure(
                     "settings-panel-error",
-                    &refusal_message(error),
+                    &refusal_message_without_layer_prefix_for_validation_and_config(error),
                     &raw_error_detail(&error.to_string()),
                 ))
             }),

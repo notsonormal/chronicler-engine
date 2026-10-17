@@ -15,11 +15,10 @@ use crate::domain::model::state::message_types::MessageType;
 use super::phase_error::PhaseError;
 use super::pipeline_run::{PipelineRun, PresetKind};
 
-/// The phase never reads `retry_target` — on a redo the caller reads the
-/// Swipe's stored inputs and passes them here.
+/// Redo inputs arrive resolved by the caller; this phase does not read `retry_target`.
 pub(crate) struct GenerationInputs {
-    /// Empty for continues and slash-command generations; persisted for free
-    /// actions by the entry path, not here.
+    /// Empty for continues and slash-command generations; the entry path
+    /// persists free actions.
     pub input: String,
     pub guide: Option<String>,
     pub impersonate: Option<ImpersonateInputs>,
@@ -27,7 +26,7 @@ pub(crate) struct GenerationInputs {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ImpersonateInputs {
-    pub steering_instruction: Option<String>,
+    pub direction: Option<String>,
 }
 
 /// The tail (quantifier → engine commit → trigger) runs on the same bundle
@@ -40,7 +39,6 @@ pub(crate) struct NarrationOutcome {
     pub bundle: WorldBundle,
 }
 
-/// Errors return as `PhaseError`; the caller runs `finalize_phase_error`.
 pub(crate) struct NarrationGeneration<'p, 'a> {
     run: &'p PipelineRun<'a>,
     inputs: GenerationInputs,
@@ -77,7 +75,7 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
         let (user_message, message_type) = match &self.inputs.impersonate {
             Some(impersonate) => (
-                impersonate.steering_instruction.clone().unwrap_or_default(),
+                impersonate.direction.clone().unwrap_or_default(),
                 MessageType::Input,
             ),
             None => (self.inputs.input.clone(), MessageType::Narration),
@@ -112,12 +110,14 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
         self.run.check_game_unchanged(started_for)?;
 
-        let (impersonated, steering_instruction) = Self::stored_inputs_from(&self.inputs);
+        let (impersonated, guide_text, impersonate_direction) =
+            Self::stored_inputs_from(&self.inputs);
         state.add_message_with_inputs(
             narration_text.clone(),
             message_type,
             impersonated,
-            steering_instruction,
+            guide_text,
+            impersonate_direction,
         );
         self.run
             .persist_snapshot_or_err(state, "pre-quantifier narration")?;
@@ -165,10 +165,10 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
         self.run.load_preset_and_response_length(&preset_id, kind)
     }
 
-    fn stored_inputs_from(inputs: &GenerationInputs) -> (bool, Option<String>) {
+    fn stored_inputs_from(inputs: &GenerationInputs) -> (bool, Option<String>, Option<String>) {
         match &inputs.impersonate {
-            Some(impersonate) => (true, impersonate.steering_instruction.clone()),
-            None => (false, inputs.guide.clone()),
+            Some(impersonate) => (true, None, impersonate.direction.clone()),
+            None => (false, inputs.guide.clone(), None),
         }
     }
 }

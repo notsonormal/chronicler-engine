@@ -45,7 +45,7 @@ The schema has 11 tables, organized into three logical clusters:
 - **`games`** — top-level game session record.
 - **`game_state_snapshots`** — frozen point-in-time captures of the mutable game state.
 - **`messages`** — chronological narrative history. Each row is one log entry (player input, narration, system message), persisted incrementally. There is exactly one message history per game.
-- **`message_swipes`** — per-message swipe versions. A swipe also carries the player-typed inputs of its generation — an impersonation flag and the steering instruction (a guide, or an impersonate direction) — so a retry of that swipe re-applies the same steering.
+- **`message_swipes`** — per-message swipe versions. A swipe also carries the player-typed inputs of its generation, so a retry of that swipe re-applies the same steering.
 
 ### World catalogue cluster
 

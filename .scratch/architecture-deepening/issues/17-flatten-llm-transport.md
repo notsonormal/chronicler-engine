@@ -1,7 +1,7 @@
 # 17 — Flatten LLM transport/utils and share the result mapping
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -50,3 +50,7 @@ DeepSeek stub) and is not in question.
 ## Notes
 
 - Resolution uses `/grilling`.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.10: **later effort.** No file of the build and no test seam (the tier-1 fake sits at `LlmProvider`). `prompt_merge.rs` (AD-06) goes with it.

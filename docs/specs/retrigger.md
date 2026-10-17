@@ -71,14 +71,15 @@ Then the response is 400 Bad Request
 #### Scenario 14.5: Retrigger trigger narration failure sets Error
 
 ```gherkin
-Given a game state where narrative.last_trigger is set
+Given a game state with a stored trigger context
 And the last message is a non-event Narration
 And a narrator backend that fails for the trigger continuation prompt
 When the client sends POST /retrigger
 And the pipeline returns to idle
-Then message_service.load_or_fresh().narrative.input_buffer.status is GenerationStatus::Error(msg) where msg contains "Trigger narration failed"
-And message_service.load_messages() contains no new event Narration entry (the failed continuation is not persisted)
-And message_service.load_messages() contains a System entry whose text mentions "Trigger narration failed"
+Then the generation status is an error whose text mentions "Trigger narration failed"
+And the message history gained no new event Narration entry (the failed continuation is not persisted)
+And the message history still ends in the non-event Narration the failure was reported on
+And the story-log fragment still offers the `.retrigger-btn` control on that Narration
 ```
 
 #### Scenario 14.6: Retrigger with no game context returns 400

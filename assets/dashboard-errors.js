@@ -13,11 +13,14 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => entities[ch]);
 }
 
-// Mirrors the server's disclosure shape for a request with no response body.
+// Mirrors the server's disclosure shape for a request with no response body:
+// the short line carries its own text element, which the status column's line
+// clamp is applied to.
 function errorDisclosureHtml(popoverId, message, rawText) {
   return (
     '<div class="error-disclosure">' +
-    '<span class="error-disclosure-message">' + escapeHtml(message) + "</span>" +
+    '<span class="error-disclosure-message">' +
+    '<span class="error-disclosure-text">' + escapeHtml(message) + "</span></span>" +
     '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
     escapeHtml(popoverId) + '">Details</button>' +
     '<div class="error-detail-popover" id="' + escapeHtml(popoverId) + '" hidden>' +
@@ -28,11 +31,8 @@ function errorDisclosureHtml(popoverId, message, rawText) {
 const INLINE_ERROR_CONTAINERS =
   "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .worlds-panel, .games-panel";
 
-// The counter keeps two generated slots from sharing one popover id.
 let generatedErrorSlots = 0;
 
-// A failed action needs a region to report in, so a container without a slot
-// gets one here.
 function inlineErrorSlotFor(elt, create) {
   if (!elt || !elt.closest) return null;
   const container = elt.closest(INLINE_ERROR_CONTAINERS);
@@ -78,7 +78,9 @@ function markUnreachable() {
   if (unreachable.innerHTML.trim() === "") {
     unreachable.innerHTML =
       '<div class="error-disclosure">' +
-      '<span class="error-disclosure-message">The engine is unreachable. Nothing you do is being saved.</span>' +
+      '<span class="error-disclosure-message"><span class="error-disclosure-text">' +
+      "The engine is unreachable. Nothing you do is being saved." +
+      "</span></span>" +
       "</div>";
   }
   refreshFailureBanner();
@@ -119,9 +121,6 @@ function refusalSummary(body, status) {
   return detail ? "That action failed. " + detail : "That action failed.";
 }
 
-// Every failed request reports the same way, wherever its slot sits: the
-// engine's own explanation for a refusal it answered, or the unreachable line
-// the banner carries when nothing answered at all.
 function reportSlotFailure(slot, xhr) {
   if (xhr && xhr.status !== 0) {
     renderInlineError(
@@ -137,7 +136,6 @@ function reportSlotFailure(slot, xhr) {
   slot.dataset.unreachable = "true";
 }
 
-// A failed fetch reports the server's own words behind the Details disclosure.
 function throwServerDetail(response) {
   return response.text().then((body) => {
     throw new Error(

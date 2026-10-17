@@ -63,6 +63,6 @@ And the next narration's recorded user prompt still resolves the perspective mac
 Given an active game in Interactive Fiction mode
 When the client POST /action with command="/impersonate hello"
 And the pipeline returns to idle
-Then the story log contains exactly one Input entry with the impersonated flag set and steering instruction "hello"
+Then the story log contains exactly one Input entry with the impersonated flag set and the impersonate direction "hello"
 And no Input entry carries the raw "/impersonate" command text
 ```

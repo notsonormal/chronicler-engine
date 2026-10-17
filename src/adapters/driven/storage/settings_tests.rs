@@ -638,9 +638,8 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();
 
-    // Simulate a v19 database: object-keyed registry with user-customized
-    // novel-bundle ids, plus an existing system_default preset row (whose
-    // allowed_modes column is born all-allowed).
+    // The system_default row inserted below inherits the all-allowed birth
+    // default for allowed_modes; v20 must tighten it to ["novel"].
     conn.execute_batch(
         "INSERT INTO settings (id, created_at, updated_at, mode_preset_registry) \
          VALUES (1, 't', 't', '{\"novel\":{\"system_prompt_preset_id\":\"custom_sys\",\"quantifier_prompt_preset_id\":\"custom_quant\",\"impersonate_prompt_preset_id\":\"custom_imp\"},\"interactive_fiction\":{\"system_prompt_preset_id\":\"system_if_default\",\"quantifier_prompt_preset_id\":\"quantifier_default\",\"impersonate_prompt_preset_id\":\"impersonate_default\"}}'); \
@@ -681,7 +680,7 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 25);
+    assert_eq!(version, 26);
 }
 
 #[test]

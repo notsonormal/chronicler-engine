@@ -1,7 +1,7 @@
 # 11 — One generation-status strip for the action area and the poll
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -64,3 +64,11 @@ reappears in the other and in the stub.
   `error_disclosure` is one of its helpers).
 - Explanation context: `docs/diataxis/explanation/two-state-channels.md`
   ("UI display reads the persisted status").
+
+## Comments
+
+**2026-10-14, from [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md).** In the new design, `GameViewQuery::status` holds the one status rule ([sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.4). The strip that renders it is in the HTTP adapter, outside that design, so this ticket's rendering question stays open.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.5: **settled.** One status rule in `GameViewQuery::status` (target design §2.3, §6; sketch 25 §3.4); the poll moves onto it, and checks busy before the failure line. The poll and the action area render one `Status` value into two HTTP contracts, so the rest is not a deepening.

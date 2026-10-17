@@ -1,7 +1,7 @@
 # 14 — One definition of the connection card
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -58,3 +58,7 @@ between the copies, not XSS.
 - Resolution uses `/grilling`.
 - Related: ticket 15 (error policy) and the map's fog "HTTP adapter
   cohesion".
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.7: **moot.** Commit `6916556a` (2026-10-07) deleted `builders/connections.rs` and its tests. The connection row now exists once, in `settings/templates/settings.rs`.

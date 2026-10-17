@@ -102,6 +102,23 @@ Then at most one Narration message carries an event header (the trigger fires at
 And the generation status is Idle
 ```
 
+#### Scenario 1.14: A Narration that moves the player reports the room it arrives in
+
+```gherkin
+Given a game state whose player stands in "room_1"
+And a map whose rooms are "room_1" and "room2"
+And a quantifier backend that moves the player to "room2" for the first Action and reports no movement for the second
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action with command="walk north"
+And the pipeline returns to idle
+Then the Narration message reports the room "Room room2"
+And the player-input message reports no room
+When the client POST /action with command="look"
+And the pipeline returns to idle
+Then the second Action's Narration message reports no room
+And that Action's player-input message reports no room
+```
+
 ### Error recovery
 
 #### Scenario 2.1: Action in a non-existent room reports an error
@@ -136,7 +153,7 @@ Then the generation status is an error whose text contains "empty"
 And the message history gained no Narration message (no empty narration persisted)
 ```
 
-#### Scenario 2.4: Trigger narration failure preserves the main narration, logs the failure, and reports an error
+#### Scenario 2.4: Trigger narration failure preserves the main narration and reports an error
 
 ```gherkin
 Given a game state with an NPC "npc_1" whose Trigger fires on the first meeting
@@ -145,8 +162,8 @@ And a narrator backend that succeeds for the main prompt but fails for the trigg
 When the client POST /action with command="examine the npc"
 And the pipeline returns to idle
 Then the generation status is an error whose text mentions "Trigger narration failed"
-And the message history still holds the main Narration message (preserved)
-And the message history holds a System message whose text mentions "Trigger narration failed"
+And the message history gained no entry for the failure and still ends in the main Narration
+And the story-log fragment still offers the `.retrigger-btn` control on that Narration
 ```
 
 #### Scenario 2.5: A failed or unparseable quantifier answer still completes the action with the prior NPC set

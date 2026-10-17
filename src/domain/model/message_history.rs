@@ -8,8 +8,6 @@ use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 
 const MAX_MESSAGES: usize = 1000;
 
-/// Owns `Vec<Message>` and all operations on it. Callers cannot bypass
-/// rules with direct `.push()`.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct MessageHistory {
@@ -123,18 +121,15 @@ impl MessageHistory {
         Some(input.text().to_string())
     }
 
-    /// The last Narration/Input turn is retryable when it carries its own
-    /// player input, or when its swipe stores a steering instruction (a guided
-    /// turn appends no Input row — the stored instruction is the turn's input).
+    /// A guided turn appends no Input row, so its stored guide text is the
+    /// turn's input.
     pub fn last_turn_is_retryable(&self) -> bool {
         self.last_input_text().is_some()
             || self
                 .messages
                 .iter()
                 .rev()
-                .find(|m| {
-                    m.message_type == MessageType::Narration || m.message_type == MessageType::Input
-                })
+                .find(|m| m.is_input_or_narration())
                 .is_some_and(|m| m.is_guided())
     }
 

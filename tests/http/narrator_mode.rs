@@ -17,8 +17,6 @@ use crate::support::http_requests::{post_action, post_form, wait_idle};
 
 /// App whose narrator recorder persists every assembled prompt into the
 /// shared storage, so tests can assert on what the narrator received.
-/// Built on the default test data (world "test", persona "test_player",
-/// one Novel game set current).
 fn narrated_app() -> (axum::Router, AppState, Arc<Storage>) {
     app_with_narrator_and_registry(
         Arc::new(MockBackend::default()),
@@ -250,9 +248,9 @@ async fn test_impersonate_works_in_if_game_http() {
         "the impersonated flag must be stored on the swipe"
     );
     assert_eq!(
-        inputs[0].steering_instruction(),
+        inputs[0].impersonate_direction(),
         Some("hello"),
-        "the steering instruction must be stored on the swipe"
+        "the impersonate direction must be stored on the swipe"
     );
     assert!(
         !inputs[0].text().contains("/impersonate"),

@@ -3,9 +3,8 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::models::message::DbMessage;
 use crate::adapters::driven::storage::models::swipe::DbSwipe;
 
-/// Test-local row builder for a message's swipes. Production writes swipe rows
-/// inline in `Storage::insert_swipe`; the mapper roundtrip tests need the same
-/// row shape to exercise `Message::try_from`.
+/// Mirrors the row shape `Storage::insert_swipe` writes, so the roundtrip
+/// exercises what production stores.
 fn to_db_swipes(msg: &Message) -> Vec<DbSwipe> {
     msg.swipes
         .iter()
@@ -19,7 +18,8 @@ fn to_db_swipes(msg: &Message) -> Vec<DbSwipe> {
             location_header: swipe.location_header.clone(),
             event_header: swipe.event_header.clone(),
             impersonated: if swipe.impersonated { 1 } else { 0 },
-            steering_instruction: swipe.steering_instruction.clone(),
+            guide_text: swipe.guide_text.clone(),
+            impersonate_direction: swipe.impersonate_direction.clone(),
         })
         .collect()
 }
@@ -39,7 +39,8 @@ fn test_message_roundtrip() {
         location_header: Some("Room A".to_string()),
         event_header: None,
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     }];
     let db = DbMessage::try_from((&original, 1)).unwrap();
     let swipes = to_db_swipes(&original);
@@ -69,7 +70,8 @@ fn test_message_unpersisted_roundtrip() {
         location_header: None,
         event_header: Some("Event".to_string()),
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     }];
     let db = DbMessage::try_from((&original, 2)).unwrap();
     let swipes = to_db_swipes(&original);
@@ -89,7 +91,8 @@ fn test_message_log_type_json_serialization() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     }];
     let db = DbMessage::try_from((&msg, 1)).unwrap();
     let _swipes = to_db_swipes(&msg);
@@ -113,7 +116,8 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
             location_header: Some("Room A".to_string()),
             event_header: None,
             impersonated: false,
-            steering_instruction: None,
+            guide_text: None,
+            impersonate_direction: None,
         },
         crate::domain::model::message::Swipe {
             text: "Second swipe".to_string(),
@@ -121,13 +125,13 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
             location_header: Some("Room B".to_string()),
             event_header: Some("Event B".to_string()),
             impersonated: false,
-            steering_instruction: None,
+            guide_text: None,
+            impersonate_direction: None,
         },
     ];
     let db = DbMessage::try_from((&original, 1)).unwrap();
     let swipes = to_db_swipes(&original);
 
-    // Simulate stale active_swipe_index by mutating the db row
     let mut db_stale = db;
     db_stale.active_swipe_index = 99;
 
@@ -146,7 +150,8 @@ fn test_swipe_stored_inputs_roundtrip() {
         location_header: None,
         event_header: None,
         impersonated: true,
-        steering_instruction: Some("as the player".to_string()),
+        guide_text: None,
+        impersonate_direction: Some("as the player".to_string()),
     }];
 
     let db = DbMessage::try_from((&original, 1)).unwrap();
@@ -154,5 +159,5 @@ fn test_swipe_stored_inputs_roundtrip() {
     let back = Message::try_from((&db, &swipes[..])).unwrap();
 
     assert!(back.impersonated());
-    assert_eq!(back.steering_instruction(), Some("as the player"));
+    assert_eq!(back.impersonate_direction(), Some("as the player"));
 }

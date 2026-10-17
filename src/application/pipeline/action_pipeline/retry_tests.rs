@@ -10,7 +10,9 @@ use crate::application::ports::llm_provider::LlmCallResult;
 use crate::application::errors::ApplicationError;
 use crate::application::errors::ProcessActionResult;
 use crate::domain::model::map::Room;
+use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{
     GenerationFailureKind, GenerationPhase, GenerationStatus,
 };
@@ -26,6 +28,7 @@ use crate::test_support::{
 use crate::test_support::fixtures::TestGameState;
 
 use super::action_tests::wait_for_gate_idle;
+use super::retry::{RetryMode, RetryTarget};
 use super::options_tests::{
     current_options, make_app, set_always_on, set_prior_options, tagged_options_provider,
 };
@@ -123,35 +126,31 @@ pub(super) fn save_pre_event(
     storage.save_snapshot(&snapshot).unwrap()
 }
 
+/// Mirrors the save order a real trigger turn leaves behind.
 pub(super) fn setup_event_flow(
     app: &AppState,
     storage: &crate::adapters::driven::storage::Storage,
 ) {
     let _ = add_input_and_save(app, storage, "test input");
     let _ = save_pre_main(app, storage);
+    let _ = add_narration_and_save(app, storage, "Main narration");
 
-    let mut pre_event_state = app.message_service.load_or_fresh();
-    pre_event_state.narrative.last_trigger =
-        Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_message("Main narration".to_string(), MessageType::Narration);
-    let snapshot =
-        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &pre_event_state,
-        );
-    let pre_event_id = storage.save_snapshot(&snapshot).unwrap();
-    if let Some(last) = pre_event_state.narrative.history.last_mut() {
-        last.set_snapshot_id(Some(pre_event_id));
-        insert_message_with_swipe(app, storage, last);
+    // The snapshot `phase_trigger_continuation_llm_call` writes before the trigger
+    // call; no Message links to it.
+    {
+        let mut gs = app.message_service.load_or_fresh();
+        gs.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
+        let snapshot =
+            crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+                &gs,
+            );
+        storage.save_snapshot(&snapshot).unwrap();
     }
 
-    let mut final_state = pre_event_state;
+    let mut final_state = app.message_service.load_or_fresh();
+    final_state.npc_encounter_log.mark_trigger_fired("npc_1", 0);
+    final_state.narrative.pending_event = Some("Event".to_string());
     final_state.add_message("Event narration".to_string(), MessageType::Narration);
-    final_state
-        .narrative
-        .history
-        .last_mut()
-        .unwrap()
-        .set_event_header(Some("Event".to_string()));
     let final_snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
@@ -429,18 +428,148 @@ async fn test_retry_event_trigger_narration_fails() {
         state.narrative.input_buffer.status
     );
 
-    let has_system_msg = state.narrative.history.iter().any(|m| {
-        m.message_type == MessageType::System && m.text().contains("Trigger narration failed")
-    });
+    let has_system_msg = state
+        .narrative
+        .history
+        .iter()
+        .any(|m| m.message_type == MessageType::System);
     assert!(
-        has_system_msg,
-        "Should persist a System message mentioning 'Trigger narration failed', got history: {:?}",
+        !has_system_msg,
+        "a failed trigger must not write a story-log entry, got history: {:?}",
         state
             .narrative
             .history
             .iter()
             .map(|m| (m.message_type.clone(), m.text().to_string()))
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_retry_target_and_anchor_agree_when_a_system_notice_trails_an_event_narration() {
+    let pipeline = make_test_pipeline_with_mock_quantifier(
+        Arc::new(Storage::new_in_memory()),
+        make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
+    );
+    let (app, storage) = TestAppBuilder::default_test()
+        .pipeline(pipeline)
+        .build_service_with_storage();
+
+    setup_event_flow(&app, &storage);
+
+    let mut state = app.message_service.load_or_fresh();
+    state.add_message(
+        "[System] a trailing notice".to_string(),
+        MessageType::System,
+    );
+    insert_message_with_swipe(&app, &storage, state.narrative.history.last().unwrap());
+
+    let messages = app.message_service.load_messages().unwrap();
+    let target = app
+        .pipeline
+        .resolve_retry_target(&messages)
+        .expect("retry target for the trailing-System shape");
+    assert!(target.is_event, "the event Narration is the retry target");
+    assert_eq!(
+        target.anchor_idx, 1,
+        "the anchor must be the main Narration, not the Input"
+    );
+    assert_eq!(
+        target.old_target.as_ref().map(|m| m.text().to_string()),
+        Some("Event narration".to_string()),
+        "the trailing System notice must not become the retry target"
+    );
+
+    let event_snapshot_id = target
+        .old_target
+        .as_ref()
+        .and_then(|m| m.snapshot_id())
+        .expect("the event Narration links its post-trigger snapshot");
+    let snapshot = storage
+        .load_snapshot_by_id(event_snapshot_id)
+        .unwrap()
+        .expect("post-trigger snapshot");
+    let restored = crate::application::pipeline::ActionPipeline::reconstruct_retry_state(
+        snapshot, messages, &target,
+    );
+    let history: Vec<String> = restored
+        .narrative
+        .history
+        .iter()
+        .map(|m| m.text().to_string())
+        .collect();
+    assert_eq!(
+        history,
+        vec!["test input".to_string(), "Main narration".to_string()],
+        "the redo must keep the main Narration it re-narrates from"
+    );
+}
+
+/// A redo's Swipe names only the room its own generation arrives in, so an event
+/// redo's Swipe names no room even when a sibling row carries one.
+fn event_target_with_a_stale_active_swipe() -> (GameStateSnapshot, Vec<Message>, RetryTarget) {
+    let snapshot = GameStateSnapshot::from_game_state(&GameState::new("room2"));
+
+    let mut event_message = Message::new(
+        "Event narration",
+        MessageType::Narration,
+        Some("Room room2".to_string()),
+        Some("Event".to_string()),
+    );
+    event_message.id = 2;
+    event_message.swipes.push(Swipe {
+        text: "Stale event narration".to_string(),
+        snapshot_id: None,
+        location_header: None,
+        event_header: Some("Event".to_string()),
+        impersonated: false,
+        guide_text: None,
+        impersonate_direction: None,
+    });
+    event_message.set_active_swipe(1);
+
+    let mut input = Message::new("look", MessageType::Input, None, None);
+    input.id = 1;
+    let target = RetryTarget {
+        anchor_idx: 0,
+        snapshot_id: 1,
+        is_event: true,
+        mode: RetryMode::ReNarrate,
+        old_target: Some(event_message.clone()),
+    };
+    (snapshot, vec![input, event_message], target)
+}
+
+#[test]
+fn test_event_retry_redo_swipe_names_no_room_of_its_own() {
+    let (snapshot, messages, target) = event_target_with_a_stale_active_swipe();
+
+    let mut restored = crate::application::pipeline::ActionPipeline::reconstruct_retry_state(
+        snapshot, messages, &target,
+    );
+    assert_eq!(
+        restored.narrative.pending_location, None,
+        "the redo carries no room for a Swipe to inherit"
+    );
+
+    restored.narrative.pending_event = Some("Event".to_string());
+    restored.add_message("Retry narration".to_string(), MessageType::Narration);
+    let retried = restored
+        .narrative
+        .retry_target
+        .as_ref()
+        .expect("the redo keeps the Message it retries");
+    assert_eq!(
+        retried.swipes.len(),
+        3,
+        "the redo appends one Swipe to the event Message"
+    );
+    assert_eq!(
+        retried.location_header(),
+        None,
+        "the redo's Swipe must not invent a room its siblings do not carry"
     );
 }
 
@@ -552,9 +681,9 @@ async fn test_retry_event_continuation_happy_path() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let _ = storage.save_snapshot(&final_snapshot);
+    let final_id = storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
-        last.set_snapshot_id(Some(final_snapshot.db_id.unwrap_or(0)));
+        last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&app, &storage, last);
     }
 
@@ -568,7 +697,6 @@ async fn test_retry_event_continuation_happy_path() {
     );
 }
 
-/// Event-only retry is a narration-producing turn, so it gets the ordinary turn-end options rewrite.
 #[test]
 fn test_retry_event_continuation_rewrites_options_when_enabled() {
     let (app, storage) = make_app(Some(tagged_options_provider()));
@@ -604,9 +732,9 @@ fn test_retry_event_continuation_rewrites_options_when_enabled() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let _ = storage.save_snapshot(&final_snapshot);
+    let final_id = storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
-        last.set_snapshot_id(Some(final_snapshot.db_id.unwrap_or(0)));
+        last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&app, &storage, last);
     }
 
@@ -627,7 +755,6 @@ fn test_retry_event_continuation_rewrites_options_when_enabled() {
     assert!(options.contains(&"Search the desk".to_string()));
 }
 
-/// A toggle-off event retry clears the set silently — a cleared set is the normal outcome here, not a failure.
 #[test]
 fn test_retry_event_continuation_clears_options_when_disabled() {
     let (app, storage) = make_app(None);
@@ -663,9 +790,9 @@ fn test_retry_event_continuation_clears_options_when_disabled() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
-    let _ = storage.save_snapshot(&final_snapshot);
+    let final_id = storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
-        last.set_snapshot_id(Some(final_snapshot.db_id.unwrap_or(0)));
+        last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&app, &storage, last);
     }
 
@@ -696,7 +823,6 @@ async fn test_retry_main_narration_happy_path() {
         .pipeline
         .retry_main_narration(state, "test input".to_string());
 
-    // retry_main_narration is sync (pub(crate) fn) — state is final on return.
     let final_state = app.message_service.load_or_fresh();
     assert!(
         matches!(
@@ -724,8 +850,6 @@ async fn test_retry_main_narration_happy_path() {
     );
 }
 
-// execute_action + retry_last_response are sync (no spawn, no gate) — no wait seam needed.
-// Input is pre-seeded: execute_action runs the pipeline on existing state without adding the input itself.
 #[tokio::test]
 async fn test_retry_recovers_after_llm_failure() {
     let narrator = Arc::new(MockBackend::default().with_fail_first_n(1));
@@ -742,7 +866,7 @@ async fn test_retry_recovers_after_llm_failure() {
     let _input_id = add_input_and_save(&app, &storage, "look");
 
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     let after_fail = app.message_service.load_or_fresh();
     assert!(
         after_fail.narrative.input_buffer.status.failure().is_some(),
@@ -750,7 +874,7 @@ async fn test_retry_recovers_after_llm_failure() {
         after_fail.narrative.input_buffer.status
     );
 
-    // Retry dispatches on the last message; seeding a Narration exercises re-narrate recovery rather than user-regen.
+    // Retry dispatches on the last message, so a Narration exercises re-narrate recovery.
     add_narration_and_save(&app, &storage, "You look around.");
 
     app.pipeline.retry_last_response();
@@ -1022,7 +1146,8 @@ async fn test_retry_appends_swipe_to_same_message() {
         location_header: None,
         event_header: None,
         impersonated: false,
-        steering_instruction: None,
+        guide_text: None,
+        impersonate_direction: None,
     };
     storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
@@ -1428,6 +1553,7 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
         "I look around.",
         MessageType::Input,
         true,
+        None,
         Some("A steering instruction".to_string()),
     )
     .expect("seed: impersonated input with stored inputs");
@@ -1497,6 +1623,7 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
         MessageType::Narration,
         false,
         Some("make it ominous".to_string()),
+        None,
     )
     .expect("seed: guided narration with stored inputs");
 
@@ -1538,10 +1665,7 @@ async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
     );
     assert_eq!(target.active_swipe_index, 1);
     assert_eq!(target.text(), "Ominous retake.");
-    assert!(
-        target.is_guided(),
-        "the new swipe inherits the guide's steering instruction"
-    );
+    assert!(target.is_guided(), "the new swipe inherits the guide text");
     app.shutdown_token.cancel();
 }
 
@@ -1584,6 +1708,7 @@ async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
         MessageType::Narration,
         false,
         Some("make it ominous".to_string()),
+        None,
     )
     .expect("seed: guided narration with stored inputs");
 
@@ -1658,6 +1783,7 @@ async fn test_retry_flow_user_regen_mode_stays_tail_less() {
         "look around",
         MessageType::Input,
         false,
+        None,
         None,
     )
     .expect("seed: plain input");

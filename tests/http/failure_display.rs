@@ -84,6 +84,46 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
     );
 }
 
+// [docs/specs/failure_display.md] SCENARIO: 38.8
+#[tokio::test]
+async fn test_degraded_trigger_role_raises_the_banner() {
+    let (state, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let app = build_router(state);
+
+    storage
+        .save_llm_message(&llm_message(
+            "trigger",
+            "mock",
+            Some("trigger call timed out"),
+            -10,
+        ))
+        .unwrap();
+
+    let body = fetch_body(&app, "/fragment/header").await;
+    assert!(
+        body.contains("failure-banner"),
+        "a degraded Trigger must raise the banner: {body}"
+    );
+    assert!(
+        body.contains("Trigger failed") && body.contains("skipping the trigger"),
+        "the banner must name the Trigger role and what the engine did instead: {body}"
+    );
+    assert!(
+        body.contains(r#"<span class="error-role-name">Trigger</span>"#),
+        "the disclosure must list the Trigger role: {body}"
+    );
+    assert!(
+        body.contains(r#"<pre class="error-detail-raw">trigger call timed out</pre>"#),
+        "the raw failure text must be reachable inside the disclosure: {body}"
+    );
+    assert!(
+        body.contains(
+            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"></span>"#
+        ),
+        "a Trigger failure has no Settings row to mark: {body}"
+    );
+}
+
 // [docs/specs/failure_display.md] SCENARIO: 38.6
 #[tokio::test]
 async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
@@ -272,8 +312,12 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 
     let body = fetch_body(&app, "/status/generating").await;
     assert!(
-        body.contains("The model used its whole token budget before writing an answer — raise Max Tokens or choose a model that does less reasoning."),
+        body.contains("The model used its budget on reasoning. Try another model."),
         "a spent token budget must keep its own line: {body}"
+    );
+    assert!(
+        !body.contains("Max Tokens"),
+        "the line must name only an action the dashboard offers: {body}"
     );
     assert!(
         !body.contains("The last turn failed to generate."),

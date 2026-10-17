@@ -29,9 +29,8 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap_or(0);
 
-    // One transaction for the whole set: each statement otherwise commits on
-    // its own, and default `synchronous=FULL` makes every commit an fsync. The
-    // single commit here is still fsynced, so durability is unchanged.
+    // Batched to avoid one fsync per statement under default `synchronous=FULL`;
+    // the single commit is still fsynced, so durability is unchanged.
     let tx = conn
         .unchecked_transaction()
         .map_err(|e| EngineError::Config(format!("Failed to begin migration: {e}")))?;
@@ -387,10 +386,9 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             )?;
         }
 
-        // Games inherit posture from their world.
         // COALESCE keeps the migration alive for a game whose world_key has
-        // no matching world row — the subquery would otherwise produce NULL
-        // and fail the NOT NULL constraint, aborting startup.
+        // no matching world row: the subquery would otherwise produce NULL and
+        // fail the NOT NULL constraint, aborting startup.
         exec(
             "UPDATE games SET \
                narrator_mode = COALESCE((SELECT narrator_mode FROM worlds WHERE worlds.key = games.world_key), 'novel'), \
@@ -398,8 +396,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
                narrative_tense = COALESCE((SELECT narrative_tense FROM worlds WHERE worlds.key = games.world_key), 'past')",
         )?;
 
-        // The COALESCE fallback above silently repairs orphaned games; these
-        // warnings keep the data-integrity signal visible in the logs.
         let orphans: Vec<String> = {
             let mut stmt = conn
                 .prepare(
@@ -420,8 +416,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             );
         }
 
-        // Mode-preset registry column on settings. Backfill from the legacy
-        // per-type columns before they are dropped below.
         if !column_exists(conn, "settings", "mode_preset_registry") {
             exec(
                 "ALTER TABLE settings ADD COLUMN mode_preset_registry TEXT NOT NULL DEFAULT '{}'",
@@ -431,7 +425,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
                 "UPDATE settings SET mode_preset_registry = '{\"novel\":{\"system_prompt_preset_id\":\"system_default\",\"quantifier_prompt_preset_id\":\"quantifier_default\",\"impersonate_prompt_preset_id\":\"impersonate_default\"},\"interactive_fiction\":{\"system_prompt_preset_id\":\"system_if_default\",\"quantifier_prompt_preset_id\":\"quantifier_default\",\"impersonate_prompt_preset_id\":\"impersonate_default\"}}' \
                WHERE mode_preset_registry = '{}'",
             )?;
-            // Migrate legacy per-type columns into the Novel bundle, where present.
             exec(
                 "UPDATE settings SET mode_preset_registry = json_set(mode_preset_registry, '$.novel.system_prompt_preset_id', active_system_prompt_preset_id) \
                WHERE active_system_prompt_preset_id IS NOT NULL",
@@ -444,7 +437,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
                 "UPDATE settings SET mode_preset_registry = json_set(mode_preset_registry, '$.novel.impersonate_prompt_preset_id', active_impersonate_prompt_preset_id) \
                WHERE active_impersonate_prompt_preset_id IS NOT NULL",
             )?;
-            // IF bundle keeps quantifier/impersonate in step with the migrated Novel values.
             exec(
                 "UPDATE settings SET mode_preset_registry = json_set(mode_preset_registry, '$.interactive_fiction.quantifier_prompt_preset_id', mode_preset_registry->'$.novel.quantifier_prompt_preset_id')",
             )?;
@@ -479,26 +471,22 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
         };
 
-        // Per-preset mode-allow flags on the presets table. The column is
-        // born all-allowed on every existing row — no user value can
-        // pre-exist a column at birth.
+        // The column is born all-allowed on every existing row — no user value
+        // can pre-exist a column at birth.
         if !column_exists(conn, "prompt_presets", "allowed_modes") {
             exec(
                 "ALTER TABLE prompt_presets ADD COLUMN allowed_modes \
                  TEXT NOT NULL DEFAULT '[\"novel\",\"interactive_fiction\"]'",
             )?;
         }
-        // One-time tighten of the novel system seed; every other row keeps
-        // its all-allowed birth value.
         exec(
             "UPDATE prompt_presets SET allowed_modes = '[\"novel\"]' \
              WHERE id = 'system_default'",
         )?;
 
-        // Reshape the settings registry from the v19 object-keyed JSON to the
-        // mode-tagged list, preserving user-customized bundle values. The RHS
-        // is evaluated against the pre-update column value (SQLite semantics).
-        // The json_type guard keeps a partially applied block safe to re-run.
+        // The RHS is evaluated against the pre-update column value (SQLite
+        // semantics). The json_type guard keeps a partially applied block safe
+        // to re-run.
         exec(
             "UPDATE settings SET mode_preset_registry = json_array( \
                json_object('mode', 'novel', \
@@ -522,8 +510,8 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
         };
 
-        // Per-game posture is dead data: the prompt assembler stamps world
-        // posture as the sole owner, and no code reads the per-game copies.
+        // The prompt assembler stamps world posture as the sole owner; nothing
+        // reads the per-game copies.
         if column_exists(conn, "games", "narrative_perspective") {
             exec("ALTER TABLE games DROP COLUMN narrative_perspective")?;
         }
@@ -541,9 +529,8 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
         };
 
-        // Swipe generation inputs flatten from the v15 replay blob into two direct
-        // columns. A corrupt blob degraded the turn to a plain retry at parse time,
-        // so the backfill skips non-JSON values. Producers never set
+        // A corrupt v15 replay blob degraded the turn to a plain retry at parse
+        // time, so the backfill skips non-JSON values. Producers never set
         // impersonate_direction and guide together; the impersonate direction wins.
         if !column_exists(conn, "message_swipes", "impersonated") {
             exec("ALTER TABLE message_swipes ADD COLUMN impersonated INTEGER NOT NULL DEFAULT 0")?;
@@ -619,9 +606,8 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
         };
 
-        // Options autogeneration, on the v19/v23 posture pattern: world-default
-        // toggle with per-game override. The options preset id is mode-agnostic;
-        // games inherit a copy from settings at creation.
+        // Options autogeneration follows the v19/v23 posture pattern. The options
+        // preset id is mode-agnostic; games inherit a copy from settings at creation.
         if !column_exists(conn, "worlds", "options_always_on") {
             exec("ALTER TABLE worlds ADD COLUMN options_always_on INTEGER NOT NULL DEFAULT 0")?;
         }
@@ -641,7 +627,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             )?;
         }
 
-        // Games inherit the toggle from their world (mirrors v19/v23 backfill).
         exec(
             "UPDATE games SET \
                options_always_on = COALESCE((SELECT options_always_on FROM worlds WHERE worlds.key = games.world_key), 0)",
@@ -704,6 +689,35 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         }
 
         conn.pragma_update(None, "user_version", 25)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if version < 26 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // The `impersonated` flag picks the owner column, so no row ends up with
+        // both: the old merged column fills that column and the split column
+        // keeps the other. The old column is dropped below, so the UPDATE runs
+        // at most once.
+        if !column_exists(conn, "message_swipes", "guide_text") {
+            exec("ALTER TABLE message_swipes ADD COLUMN guide_text TEXT")?;
+        }
+        if !column_exists(conn, "message_swipes", "impersonate_direction") {
+            exec("ALTER TABLE message_swipes ADD COLUMN impersonate_direction TEXT")?;
+        }
+        if column_exists(conn, "message_swipes", "steering_instruction") {
+            exec(
+                "UPDATE message_swipes SET \
+                   guide_text = CASE WHEN impersonated = 0 THEN steering_instruction ELSE guide_text END, \
+                   impersonate_direction = CASE WHEN impersonated = 1 THEN steering_instruction ELSE impersonate_direction END",
+            )?;
+            exec("ALTER TABLE message_swipes DROP COLUMN steering_instruction")?;
+        }
+
+        conn.pragma_update(None, "user_version", 26)
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 

@@ -11,7 +11,7 @@ Two steering commands let the player shape what the narrator generates. Both ent
 
 | Command | What it steers | Output message type | Retry re-applies via |
 |---|---|---|---|
-| Guided generation | content — what the AI says | `Narration` | the swipe's stored steering instruction |
-| Impersonate | speaker — who says it | `Input` | the swipe's stored steering instruction |
+| Guided generation | content — what the AI says | `Narration` | the swipe's stored guide text |
+| Impersonate | speaker — who says it | `Input` | the swipe's stored impersonation flag and impersonate direction |
 
 Both commands are transient: their steering lives for one generation and never becomes a history entry. A turn resolves one steering source at a time. On an impersonated turn, the impersonate preset replaces the system preset.

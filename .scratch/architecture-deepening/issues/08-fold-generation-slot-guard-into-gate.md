@@ -1,7 +1,7 @@
 # 08 — Fold generation slot and guard into GenerationGate
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 09
 Assignee: (unclaimed)
 
@@ -66,3 +66,7 @@ free fn in `slot.rs`, called from `gate.rs` and `guard.rs`, and the
 `Arc<RwLock<HashMap<…>>>` registry still crosses files. Still the weakest
 candidate on its own. The wider interface makes the fold, or an interface
 cut, more worth discussing than on 2026-08-16.
+
+## Answer
+
+**Rejected: superseded** (2026-10-14, by [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md), Q1 and Q10). `gate.rs` becomes `GameWriter` and `JobWriter`; `slot.rs` and `guard.rs` are deleted, and `JobWriter`'s `Drop` takes the guard's job ([sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.2, §7.1).

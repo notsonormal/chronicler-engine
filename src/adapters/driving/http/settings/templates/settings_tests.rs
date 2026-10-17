@@ -166,7 +166,7 @@ fn test_refusal_message_rides_inside_the_connections_panel() {
 
     assert!(
         html.contains(
-            r#"<span class="error-disclosure-message">Narrator uses this connection</span>"#
+            r#"<span class="error-disclosure-message"><span class="error-disclosure-text">Narrator uses this connection</span></span>"#
         ),
         "the refusal's short message must be the disclosure's visible text: {html}"
     );

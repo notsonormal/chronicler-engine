@@ -25,3 +25,15 @@ How should scope be defined?
 - `.agents/skills/chronicler-comment-fixer/scripts/comment_finder.py:234` — `--uncommitted` selects files, then `find_comments_in_file` returns every comment.
 - `.agents/skills/chronicler-comment-fixer/SKILL.md:10` — "Its output is the scope".
 - Prior art: `tmp/reflect/final_01a1089d-5ec4.md` (2026-10-04 Accepted, unlanded) — "give the finder a diff-line mode".
+
+## User ruling (2026-10-11)
+
+> The comments and doc reviews SHOULD catch older comments and document problems. Just like how updating code should fix existing code problems.
+
+This rejects the question's premise. The scope is every comment in each file that the change touches, not only the lines that the diff adds. The finder already gives that scope (`comment_finder.py --uncommitted`), and `SKILL.md:10` already says "Its output is the scope". `document-review/SKILL.md:17` holds the same rule for docs.
+
+**Evidence from the run that raised the ruling** (`/simple-after-plan` over tickets 15 and 16 of the dashboard UI review phase 2, lead session `01a12cf3-c68e-7568-beff-572aec227289`):
+
+- The pass changed 56 comments in 40 touched files. Most of them were older than the change, for example the migration headers in `plumbing.rs` (v19–v23). That is the intended behaviour.
+- The spec-axis code review reported those edits as scope creep (finding 5, session `01a12d31-7858-74b1-b842-ce6d120162ef`). Under this ruling that finding is wrong. The gap is in the code-review spec brief (`code-review/SKILL.md:76`, "(b) behaviour in the diff that wasn't asked for (scope creep)"), which does not say that cleanup in touched files is expected.
+- The pass also deleted two lines of code that look like comments: [Stop the comment pass from deleting code inside string literals](49-comment-pass-code-inside-string-literals.md). Under this ruling the fix belongs there, not in a narrower scope.

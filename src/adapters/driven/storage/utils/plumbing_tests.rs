@@ -4,7 +4,6 @@ use rusqlite::Connection;
 
 use super::plumbing::run_migrations;
 
-/// Column names of `table` via `PRAGMA table_info`.
 fn columns_of(conn: &Connection, table: &str) -> Vec<String> {
     let mut stmt = conn
         .prepare(&format!("PRAGMA table_info({table})"))
@@ -21,9 +20,6 @@ fn test_pre_v21_database_restores_posture_and_keeps_rows() {
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
-    // Recreate the pre-v21 shape (user_version = 20): v21 dropped the
-    // columns as write-only; v23 restores them. The orphan game takes the
-    // defaults.
     conn.execute(
         "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
          VALUES ('w', 'w', 'g', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
@@ -55,15 +51,13 @@ fn test_pre_v21_database_restores_posture_and_keeps_rows() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 25,
+        version, 26,
         "the migration chain must land on the latest version"
     );
 }
 
 #[test]
 fn test_fresh_database_has_game_posture_columns() {
-    // Fresh installs run the whole chain: v19 adds the columns, v21 drops
-    // them, v23 restores them. Terminal shape: present, version 23.
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
@@ -74,19 +68,14 @@ fn test_fresh_database_has_game_posture_columns() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 25);
+    assert_eq!(version, 26);
 }
 
 #[test]
 fn test_v19_defaults_posture_for_game_with_missing_world() {
-    // A game whose world_key has no matching worlds row must not abort the
-    // migration chain: the posture backfill falls back to the column
-    // defaults instead of failing the NOT NULL constraint.
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
-    // Simulate an upgrade from v18: insert a game referencing a world that
-    // does not exist, then re-run from v19.
     conn.execute(
         "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, created_at, updated_at) \
          VALUES ('Ghost World', 'missing_world', 'p', 'P', 'orphan-game', 't', 't')",
@@ -97,7 +86,6 @@ fn test_v19_defaults_posture_for_game_with_missing_world() {
 
     run_migrations(&conn).expect("migration must survive an orphan world_key");
 
-    // The orphan game must carry the defaults, and the row itself must live.
     let mode: String = conn
         .query_row(
             "SELECT narrator_mode FROM games WHERE world_key = 'missing_world'",
@@ -119,7 +107,7 @@ fn test_v19_defaults_posture_for_game_with_missing_world() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 25);
+    assert_eq!(version, 26);
 }
 
 #[test]
@@ -127,12 +115,10 @@ fn test_v23_backfills_game_posture_from_world() {
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
-    // Recreate the post-v21 shape: posture columns absent, user_version = 22.
     conn.execute("ALTER TABLE games DROP COLUMN narrative_perspective", [])
         .unwrap();
     conn.execute("ALTER TABLE games DROP COLUMN narrative_tense", [])
         .unwrap();
-    // A world with non-default posture and a game that must inherit it.
     conn.execute(
         "INSERT INTO worlds (key, name, created_at, updated_at) \
          VALUES ('w1', 'World One', 't', 't')",
@@ -168,7 +154,7 @@ fn test_v23_backfills_game_posture_from_world() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 25);
+    assert_eq!(version, 26);
 }
 
 #[test]
@@ -176,7 +162,6 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
-    // Recreate the pre-v22 shape: the v15 replay blob column with filled rows.
     conn.execute("ALTER TABLE message_swipes ADD COLUMN replay TEXT", [])
         .unwrap();
     conn.execute(
@@ -192,14 +177,13 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
     )
     .unwrap();
     let blobs = [
-        // (replay json, expected impersonated, expected steering_instruction)
-        // guided row
         (
             Some(
                 r#"{"guide":"make it ominous","impersonate":false,"impersonate_direction":null,"impersonate_preset_id":null}"#,
             ),
             0,
             Some("make it ominous"),
+            None,
         ),
         // directed impersonation: the pinned preset id must be discarded
         (
@@ -207,22 +191,22 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
                 r#"{"guide":null,"impersonate":true,"impersonate_direction":"as the player","impersonate_preset_id":"gone_preset"}"#,
             ),
             1,
+            None,
             Some("as the player"),
         ),
-        // bare impersonation
         (
             Some(
                 r#"{"guide":null,"impersonate":true,"impersonate_direction":null,"impersonate_preset_id":null}"#,
             ),
             1,
             None,
+            None,
         ),
-        // plain row without a blob
-        (None, 0, None),
+        (None, 0, None, None),
         // corrupt blob: degrades to plain, mirroring the old parse-time behavior
-        (Some("{not json"), 0, None),
+        (Some("{not json"), 0, None, None),
     ];
-    for (idx, (blob, _, _)) in blobs.iter().enumerate() {
+    for (idx, (blob, _, _, _)) in blobs.iter().enumerate() {
         conn.execute(
             "INSERT INTO message_swipes (message_id, swipe_index, text, replay) \
              VALUES (1, ?1, 't', ?2)",
@@ -234,13 +218,18 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
 
     run_migrations(&conn).unwrap();
 
-    for (idx, (_, expected_impersonated, expected_steering_instruction)) in blobs.iter().enumerate()
+    for (idx, (_, expected_impersonated, expected_guide_text, expected_direction)) in
+        blobs.iter().enumerate()
     {
-        let (impersonated, steering_instruction): (i64, Option<String>) = conn
+        let (impersonated, guide_text, impersonate_direction): (
+            i64,
+            Option<String>,
+            Option<String>,
+        ) = conn
             .query_row(
-                "SELECT impersonated, steering_instruction FROM message_swipes WHERE swipe_index = ?1",
+                "SELECT impersonated, guide_text, impersonate_direction FROM message_swipes WHERE swipe_index = ?1",
                 rusqlite::params![idx as i64],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .unwrap();
         assert_eq!(
@@ -248,9 +237,14 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
             "row {idx}: impersonated flag"
         );
         assert_eq!(
-            steering_instruction.as_deref(),
-            *expected_steering_instruction,
-            "row {idx}: steering_instruction"
+            guide_text.as_deref(),
+            *expected_guide_text,
+            "row {idx}: guide_text"
+        );
+        assert_eq!(
+            impersonate_direction.as_deref(),
+            *expected_direction,
+            "row {idx}: impersonate_direction"
         );
     }
 
@@ -263,27 +257,107 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 25,
+        version, 26,
         "migration chain must land on the latest version"
     );
 }
 
 #[test]
 fn test_v22_is_noop_on_fresh_databases() {
-    // Fresh installs never had the replay blob; the guarded migration must
-    // no-op cleanly and still land on the latest user_version.
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
     let columns = columns_of(&conn, "message_swipes");
     assert!(columns.contains(&"impersonated".to_string()));
-    assert!(columns.contains(&"steering_instruction".to_string()));
+    assert!(columns.contains(&"guide_text".to_string()));
+    assert!(columns.contains(&"impersonate_direction".to_string()));
     assert!(!columns.contains(&"replay".to_string()));
 
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 25);
+    assert_eq!(version, 26);
+}
+
+#[test]
+fn test_v26_splits_merged_steering_instruction_into_its_two_columns() {
+    let conn = Connection::open_in_memory().unwrap();
+    run_migrations(&conn).unwrap();
+
+    conn.execute("ALTER TABLE message_swipes DROP COLUMN guide_text", [])
+        .unwrap();
+    conn.execute(
+        "ALTER TABLE message_swipes DROP COLUMN impersonate_direction",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "ALTER TABLE message_swipes ADD COLUMN steering_instruction TEXT",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
+         VALUES ('w', 'w', 'g', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO messages (game_id, message_type, timestamp) \
+         VALUES (1, '\"Narration\"', '2026-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    let rows = [
+        (0, Some("make it ominous"), Some("make it ominous"), None),
+        (1, Some("as the player"), None, Some("as the player")),
+        (1, None, None, None),
+        (0, None, None, None),
+    ];
+    for (idx, (impersonated, steering_instruction, _, _)) in rows.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO message_swipes (message_id, swipe_index, text, impersonated, steering_instruction) \
+             VALUES (1, ?1, 't', ?2, ?3)",
+            rusqlite::params![idx as i64, impersonated, steering_instruction],
+        )
+        .unwrap();
+    }
+    conn.pragma_update(None, "user_version", 25).unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    for (idx, (_, _, expected_guide_text, expected_direction)) in rows.iter().enumerate() {
+        let (guide_text, impersonate_direction): (Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT guide_text, impersonate_direction FROM message_swipes WHERE swipe_index = ?1",
+                rusqlite::params![idx as i64],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            guide_text.as_deref(),
+            *expected_guide_text,
+            "row {idx}: guide_text"
+        );
+        assert_eq!(
+            impersonate_direction.as_deref(),
+            *expected_direction,
+            "row {idx}: impersonate_direction"
+        );
+    }
+
+    let columns = columns_of(&conn, "message_swipes");
+    assert!(
+        !columns.contains(&"steering_instruction".to_string()),
+        "steering_instruction must be dropped, got: {columns:?}"
+    );
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(
+        version, 26,
+        "migration chain must land on the latest version"
+    );
 }
 
 #[test]
@@ -291,7 +365,6 @@ fn test_v25_backfills_game_display_name_from_stable_name() {
     let conn = Connection::open_in_memory().unwrap();
     run_migrations(&conn).unwrap();
 
-    // Recreate the pre-v25 shape: no display_name column, user_version = 24.
     conn.execute("ALTER TABLE games DROP COLUMN display_name", [])
         .unwrap();
     conn.execute(
@@ -336,5 +409,5 @@ fn test_v25_backfills_game_display_name_from_stable_name() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 25);
+    assert_eq!(version, 26);
 }

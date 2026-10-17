@@ -18,8 +18,8 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute(
-                    "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, steering_instruction)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, guide_text, impersonate_direction)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     rusqlite::params![
                         message_id as i64,
                         index as i64,
@@ -28,7 +28,8 @@ impl Storage {
                         swipe.location_header.as_deref(),
                         swipe.event_header.as_deref(),
                         if swipe.impersonated { 1 } else { 0 },
-                        swipe.steering_instruction.as_deref(),
+                        swipe.guide_text.as_deref(),
+                        swipe.impersonate_direction.as_deref(),
                     ],
                 )
                 .map_err(|e| EngineError::Config(format!("Failed to insert swipe: {e}")))?;
@@ -69,6 +70,31 @@ impl Storage {
         })
     }
 
+    pub fn update_swipe_location_header(
+        &self,
+        message_id: u64,
+        swipe_index: usize,
+        location_header: &str,
+    ) -> Result<(), EngineError> {
+        self.with_backend_mut("update_swipe_location_header", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                conn.execute(
+                    "UPDATE message_swipes SET location_header = ?1 WHERE message_id = ?2 AND swipe_index = ?3",
+                    rusqlite::params![location_header, message_id as i64, swipe_index as i64],
+                )
+                .map_err(|e| {
+                    EngineError::Config(format!("Failed to update swipe location header: {e}"))
+                })?;
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                data.update_swipe_location_header(message_id, swipe_index, location_header);
+                Ok(())
+            }
+        })
+    }
+
     pub fn shift_swipe_indices(&self, message_id: u64, offset: usize) -> Result<(), EngineError> {
         self.with_backend_mut("shift_swipe_indices", |backend| match backend {
             Backend::Sqlite { pool } => {
@@ -101,7 +127,7 @@ impl Storage {
                     .collect::<Vec<_>>()
                     .join(",");
                 let sql = format!(
-                    "SELECT message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, steering_instruction
+                    "SELECT message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, guide_text, impersonate_direction
                      FROM message_swipes
                      WHERE message_id IN ({placeholders})
                      ORDER BY message_id, swipe_index"
@@ -124,7 +150,8 @@ impl Storage {
                                     location_header: row.get(4)?,
                                     event_header: row.get(5)?,
                                     impersonated: impersonated != 0,
-                                    steering_instruction: row.get(7)?,
+                                    guide_text: row.get(7)?,
+                                    impersonate_direction: row.get(8)?,
                                 },
                             ))
                         },
@@ -170,7 +197,7 @@ impl Storage {
         })
     }
 
-    /// Insert every swipe for a freshly inserted message. Logs + swallows per-swipe errors.
+    /// Per-swipe errors are logged and swallowed.
     pub fn persist_swipes(&self, msg_id: u64, swipes: &[Swipe]) {
         for (index, swipe) in swipes.iter().enumerate() {
             if let Err(e) = self.insert_swipe(msg_id, swipe, index) {

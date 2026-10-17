@@ -228,6 +228,9 @@ struct StubState {
     deleted: std::sync::atomic::AtomicBool,
     header_degraded: std::sync::atomic::AtomicBool,
     polls_failing: std::sync::atomic::AtomicBool,
+    row_deletes_succeed: std::sync::atomic::AtomicBool,
+    world_delete_refused: std::sync::atomic::AtomicBool,
+    preset_card_refused: std::sync::atomic::AtomicBool,
 }
 
 pub struct StubServer {
@@ -263,6 +266,9 @@ impl StubServer {
             deleted: std::sync::atomic::AtomicBool::new(false),
             header_degraded: std::sync::atomic::AtomicBool::new(false),
             polls_failing: std::sync::atomic::AtomicBool::new(false),
+            row_deletes_succeed: std::sync::atomic::AtomicBool::new(false),
+            world_delete_refused: std::sync::atomic::AtomicBool::new(false),
+            preset_card_refused: std::sync::atomic::AtomicBool::new(false),
         });
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
@@ -340,6 +346,12 @@ impl StubServer {
 
     pub fn failure_handle(&self) -> StubFailureHandle {
         StubFailureHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    pub fn row_delete_handle(&self) -> StubRowDeleteHandle {
+        StubRowDeleteHandle {
             state: Arc::clone(&self.state),
         }
     }
@@ -431,6 +443,27 @@ impl StubSaveHandle {
 }
 
 #[derive(Clone)]
+pub struct StubRowDeleteHandle {
+    state: Arc<StubState>,
+}
+
+impl StubRowDeleteHandle {
+    /// A preset delete refuses and a world delete fails until armed, so the
+    /// tests that drive those paths keep their outcome.
+    pub fn set_row_deletes_succeed(&self, succeeds: bool) {
+        self.state
+            .row_deletes_succeed
+            .store(succeeds, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn set_world_delete_refused(&self, refused: bool) {
+        self.state
+            .world_delete_refused
+            .store(refused, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[derive(Clone)]
 pub struct StubFailureHandle {
     state: Arc<StubState>,
 }
@@ -454,6 +487,12 @@ impl StubFailureHandle {
         self.state
             .panel_loads_failing
             .store(failing, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn set_preset_card_refused(&self, refused: bool) {
+        self.state
+            .preset_card_refused
+            .store(refused, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -582,12 +621,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/prompt-presets/:id",
             post(|| async { client_failure("preset save failure") }),
         )
-        .route(
-            "/prompt-presets/:id/delete",
-            post(|| async {
-                client_refusal("Preset is a mode default; change the default before deleting")
-            }),
-        )
+        .route("/prompt-presets/:id/delete", post(delete_preset))
         .route("/games/:id/posture", post(failing_posture_save))
         // The real delete answers an empty body, so htmx removes the row the
         // control sits in.
@@ -601,10 +635,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/reset",
             post(|| async { client_failure("Stub reset failure") }),
         )
-        .route(
-            "/worlds/:key/delete",
-            post(|| async { client_failure("Stub world delete failure") }),
-        )
+        .route("/worlds/:key/delete", post(delete_world))
         .route("/history/delete", post(delete_message))
         .route(
             "/swipe/new",
@@ -647,7 +678,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route(
             "/fragment/prompt-presets/:id/edit",
-            get(|| async { Html(preset_edit_form_html(&custom_preset(), "system")) }),
+            get(preset_edit_form_fragment),
         )
         .route("/fragment/worlds", get(|| async { Html(FIXTURE_WORLDS) }))
         .route("/fragment/games", get(|| async { Html(FIXTURE_GAMES) }))
@@ -765,8 +796,7 @@ fn restored_swipe_entries() -> Vec<MessageEntry> {
     swipe_script_entries("A road at dawn.", 0)
 }
 
-/// The stub answers a swipe switch with the restored log and drops the dock's
-/// option set, mirroring the engine's settled-restore outcome.
+/// Mirrors the engine's settled-restore outcome: the restored log, no dock options.
 async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.switch_fails.load(SeqCst) {
@@ -866,10 +896,9 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
         .into_response()
 }
 
-/// The real `POST /action/confirm` retargets its status fragment at
-/// `#status-display`; the stub consumes the engine's `add_status_swap_headers`
-/// so the canned shape cannot drift from it. An error outcome answers the 500 a
-/// failing engine action produces, so a test can drive a refused confirm.
+/// The stub consumes the engine's `add_status_swap_headers`, so the canned shape
+/// cannot drift from the real route's. An error outcome answers the 500 a failing
+/// engine action produces, so a test can drive a refused confirm.
 async fn action_confirm(
     State(state): State<Arc<StubState>>,
     Form(form): Form<HashMap<String, String>>,
@@ -909,6 +938,52 @@ async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body>
         .retrigger_requests
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     client_failure("Stub retrigger failure")
+}
+
+/// The real preset delete answers an empty body, so htmx removes the card the
+/// control sits in.
+async fn delete_preset(State(state): State<Arc<StubState>>) -> Response<Body> {
+    if state
+        .row_deletes_succeed
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        (StatusCode::OK, "").into_response()
+    } else {
+        client_refusal("Preset is a mode default; change the default before deleting")
+    }
+}
+
+/// The card's Edit control: the engine answers a default preset's edit with a
+/// 200 error fragment in place of the card.
+async fn preset_edit_form_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    use std::sync::atomic::Ordering::SeqCst;
+    if state.preset_card_refused.load(SeqCst) {
+        return Html("<div class=\"error-message\">Cannot edit default presets</div>".to_string());
+    }
+    Html(preset_edit_form_html(&custom_preset(), "system"))
+}
+
+/// The real world delete answers an empty body for a delete that went through,
+/// and a 200 error fragment in place of the row for a world that still has
+/// games.
+async fn delete_world(State(state): State<Arc<StubState>>) -> Response<Body> {
+    use std::sync::atomic::Ordering::SeqCst;
+    if state.world_delete_refused.load(SeqCst) {
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            format!(
+                "<li class=\"world-item\">{}</li>",
+                render_error("World still has games")
+            ),
+        )
+            .into_response();
+    }
+    if state.row_deletes_succeed.load(SeqCst) {
+        (StatusCode::OK, "").into_response()
+    } else {
+        client_failure("Stub world delete failure")
+    }
 }
 
 async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {

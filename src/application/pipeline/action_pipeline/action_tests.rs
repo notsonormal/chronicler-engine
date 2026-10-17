@@ -3,7 +3,6 @@
 use std::sync::Arc;
 use std::sync::Barrier;
 
-/// Poll until the generation gate releases the game's slot (5s budget).
 pub(super) async fn wait_for_gate_idle(
     gate: &crate::application::generation::gate::GenerationGate,
     game_id: u64,
@@ -53,7 +52,7 @@ fn test_execute_action_clears_last_trigger() {
         .expect("save_state should succeed");
 
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     assert!(
@@ -88,7 +87,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     let handle = thread::spawn(move || {
         app_clone
             .pipeline
-            .execute_action_with_inputs("look around".to_string(), false, None);
+            .execute_action_with_inputs("look around".to_string(), false, None, None);
     });
 
     let start = std::time::Instant::now();
@@ -145,7 +144,7 @@ fn test_execute_action_completes_and_persists_state() {
         .pipeline(service)
         .build_service();
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -177,7 +176,7 @@ fn test_execute_action_handles_narration_error() {
         .pipeline(service)
         .build_service();
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     let final_state = app.message_service.load_or_fresh();
     assert!(
         matches!(
@@ -203,7 +202,7 @@ fn test_execute_action_handles_cancellation() {
         .build_service();
     app.shutdown_token.cancel();
     app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None);
+        .execute_action_with_inputs("look".to_string(), false, None, None);
     let final_state = app.message_service.load_or_fresh();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -226,7 +225,7 @@ fn test_execute_action_preserves_existing_input_log() {
         .pipeline(service)
         .build_service();
     app.pipeline
-        .execute_action_with_inputs("examine room".to_string(), false, None);
+        .execute_action_with_inputs("examine room".to_string(), false, None, None);
     let final_state = app.message_service.load_or_fresh();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
@@ -301,7 +300,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     let handle = thread::spawn(move || {
         app_for_thread
             .pipeline
-            .execute_action_with_inputs("look".to_string(), false, None);
+            .execute_action_with_inputs("look".to_string(), false, None, None);
     });
 
     entered.wait();
@@ -350,7 +349,7 @@ fn test_narration_saved_before_quantifying_phase() {
     let handle = thread::spawn(move || {
         app_for_thread
             .pipeline
-            .execute_action_with_inputs("test".to_string(), false, None);
+            .execute_action_with_inputs("test".to_string(), false, None, None);
     });
 
     entered.wait();
@@ -422,7 +421,7 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
         "gen A narration should start within timeout"
     );
 
-    // Reset to a new game mid-flight: gen A's next phase-boundary check reads game2 and cancels.
+    // Gen A cancels at its next phase-boundary check, which reads the new current game.
     let game2 = app
         .game_catalogue
         .create_game("test", "test_player")
@@ -492,9 +491,6 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
 fn test_process_action_heals_stale_status_before_validation_error() {
     let (app, storage) = make_test_app_with_storage();
 
-    // Create a game whose persona_key does not resolve; this is the validation
-    // that will fail. The default world/persona are already seeded, but the new
-    // game points at a non-existent persona.
     let bad_game_id = storage
         .create_game(
             "Test World",
@@ -506,7 +502,6 @@ fn test_process_action_heals_stale_status_before_validation_error() {
         .expect("create_game should succeed");
     storage.set_game_id(bad_game_id);
 
-    // Persist a stale Generating snapshot for the new game.
     let mut state = app.message_service.load_or_fresh();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
@@ -577,7 +572,7 @@ async fn test_dispatcher_guide_stores_guide_on_swipe_stored_inputs() {
         .find(|e| e.message_type == MessageType::Narration)
         .expect("guide should produce a Narration message");
     assert_eq!(
-        narration.steering_instruction(),
+        narration.guide_text(),
         Some("make it ominous"),
         "the guide must be stored on the swipe"
     );
@@ -636,9 +631,9 @@ async fn test_dispatcher_impersonate_stores_direction() {
         "the impersonate flag must be stored on the swipe"
     );
     assert_eq!(
-        input_entry.steering_instruction(),
+        input_entry.impersonate_direction(),
         Some("act wary"),
-        "the steering instruction must be stored on the swipe"
+        "the impersonate direction must be stored on the swipe"
     );
 
     app.shutdown_token.cancel();

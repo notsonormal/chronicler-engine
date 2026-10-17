@@ -22,3 +22,28 @@ When the client activates Cancel
 Then the worlds panel shows the world list again
 And focus is on a control inside the worlds panel
 ```
+
+#### Scenario 29.4: Deleting a world keeps focus in the worlds panel
+
+```gherkin
+Given the Worlds tab shows two worlds
+And the first world's Delete control has focus
+When the client confirms the delete
+Then that world's row is removed
+And the surviving world's Edit control has focus
+When the client confirms the delete of the last world
+Then no world row remains
+And focus is on a control inside the worlds panel
+```
+
+#### Scenario 29.5: A refused world delete draws its message in the row and focuses it
+
+```gherkin
+Given the Worlds tab shows two worlds
+And the first world's Delete control has focus
+When the client confirms a delete the engine refuses because the world still has games
+And a poll settles while that delete's swap is in flight
+Then that row holds the refusal message in place of the world
+And the surviving world keeps its own controls
+And the refusal message has focus
+```

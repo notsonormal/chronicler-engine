@@ -108,9 +108,8 @@
     filter: brightness(1.15);
 }
 
-/* Hierarchy comes from the utility class's colour, not a size jump: in form,
-   card and game action rows the utility-class buttons render at one size;
-   other rows stay compact. */
+/* Hierarchy comes from the utility class's colour: in form, card and game action
+   rows the utility-class buttons render at one size; other rows stay compact. */
 .form-actions .btn-primary,
 .form-actions .btn-cyan,
 .form-actions .btn-danger,
@@ -571,7 +570,9 @@ body {
     white-space: nowrap;
 }
 
-#command-form button {
+/* The submit control only: the form's inline-error slot injects a Details
+   toggle that must stay a small inline button, not a second Send button. */
+#command-form #submit-btn {
     background: linear-gradient(180deg, var(--color-button-send-start) 0%, var(--color-button-send-end) 100%);
     border: 1px solid var(--color-accent-ok);
     border-radius: 4px;
@@ -591,22 +592,22 @@ body {
     gap: 6px;
 }
 
-#command-form button .icon {
+#command-form #submit-btn .icon {
     width: 16px;
     height: 16px;
 }
 
-#command-form button:hover:not(:disabled) {
+#command-form #submit-btn:hover:not(:disabled) {
     background: var(--color-button-send-start);
     filter: brightness(1.15);
 }
 
-#command-form button:active:not(:disabled) {
+#command-form #submit-btn:active:not(:disabled) {
     background: var(--color-button-send-end);
     filter: none;
 }
 
-#command-form button:disabled {
+#command-form #submit-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
@@ -648,11 +649,29 @@ body {
     white-space: normal;
 }
 
-/* The clamped failure line wraps inside the fixed column — two lines fit the
-   action area's height — so the sentence reads without opening Details. */
+/* The failure line wraps inside the fixed column — two lines fit the action area's
+   height — so the sentence reads without opening Details. The clamp itself sits
+   on the text element inside this one, which is where the wrapping width is. */
 #status-display .error-disclosure-message {
     min-width: 0;
     white-space: normal;
+}
+
+/* The clamp needs a block box of its own: Chrome does not fragment a line clamp
+   on a flex item, and the message is the disclosure's. A sentence past the two
+   lines the column holds therefore ends in an ellipsis instead of a silent
+   stop. The Details control beside it stays its own flex item.
+
+   The clamp draws that ellipsis only for left-aligned text, so the failure line
+   parts with the column's own right alignment (`.status`); the disclosure as a
+   whole still sits against the column's right edge. */
+#status-display .error-disclosure-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+    text-align: left;
     text-overflow: clip;
     line-height: 1.4;
     max-height: 2.8em;
@@ -1187,6 +1206,13 @@ body {
     display: none;
 }
 
+/* The slot's text is an error line, so it keeps the small failure size the other
+   failure surfaces use. */
+#command-form .inline-error-slot,
+#command-form .inline-error-slot .error-disclosure-message {
+    font-size: var(--font-size-small);
+}
+
 /* The story log sits in a column flex parent, so this slot sizes to its text
    instead of taking the full height .inline-error-slot claims for its row. */
 .story-log-error {
@@ -1361,9 +1387,10 @@ body {
     letter-spacing: 0.5px;
 }
 
+/* The Original is the text "Send Original" sends, so it is drawn as the muted
+   reference beside the editable suggestion. */
 .preview-original span {
     color: var(--color-text-muted);
-    text-decoration: line-through;
     word-break: break-word;
 }
 
@@ -1570,7 +1597,7 @@ input[type="checkbox"]:focus {
     }
 
     #command-form input,
-    #command-form button {
+    #command-form #submit-btn {
         width: 100%;
         min-width: unset;
     }

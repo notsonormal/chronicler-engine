@@ -1,7 +1,7 @@
 # 03 — Replace CRUD services with a Repository port
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 02
 Assignee: (unclaimed)
 
@@ -72,3 +72,11 @@ Still present. The fleet is no longer uniformly one-method:
 The arch-lint rule moved to `arch-lint.toml` lines 138-142 (text unchanged).
 The HTTP adapter still honours it in `src/` (only `app_state_tests.rs`
 imports storage, as an exempt test). Still Strong.
+
+## Comments
+
+**2026-10-14, from [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md).** The new design of the game-state lifecycle uses one repository per record, with record writes only on a transaction handle ([sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.1). Those repositories are the first instance of this ticket's question. Trait or struct is still open here.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.3: **moved to a ticket in the rebuild map.** The repositories' shape (trait or `Storage` method) is open in sketch 25 §3.1. Note: a port trait in `application/` breaks `arch-lint.toml:164-169`. [Decide the storage seam of the rebuild](../../platform-choice/issues/11-decide-storage-seam-of-rebuild.md), questions 2 and 3.

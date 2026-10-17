@@ -36,7 +36,7 @@ fn test_pipeline_runs_to_completion() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(matches!(outcome, Ok(())));
     let final_state = app.message_service.load_or_fresh();
@@ -57,7 +57,7 @@ fn test_pipeline_saves_narration_to_history() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     let has_narration = final_state
@@ -85,7 +85,7 @@ fn test_pipeline_returns_error_on_narration_failure() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(
         outcome.is_ok(),
@@ -121,7 +121,7 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(
         outcome.is_ok(),
@@ -175,7 +175,7 @@ fn test_pipeline_with_custom_quantifier_result() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(matches!(outcome, Ok(())));
     let final_state = app.message_service.load_or_fresh();
@@ -309,7 +309,7 @@ fn test_pipeline_trigger_happy_path() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(
         matches!(outcome, Ok(())),
@@ -396,7 +396,7 @@ fn test_pipeline_trigger_empty_continuation() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
@@ -460,7 +460,7 @@ fn test_pipeline_trigger_complete_failure() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
@@ -487,10 +487,15 @@ fn test_pipeline_trigger_complete_failure() {
         "Main narration should be preserved after trigger failure, got history: {history_dbg:?}"
     );
     assert!(
-        history_dbg.iter().any(|(t, text)| {
-            *t == MessageType::System && text.contains("Trigger narration failed")
-        }),
-        "Should persist a System message mentioning 'Trigger narration failed', got history: {history_dbg:?}"
+        !history_dbg
+            .iter()
+            .any(|(t, text)| *t == MessageType::System && text.contains("Trigger narration failed")),
+        "a failed trigger must not write its engine error into the story log, got history: {history_dbg:?}"
+    );
+    assert_eq!(
+        history_dbg.last().map(|(t, _)| t.clone()),
+        Some(MessageType::Narration),
+        "the main narration must stay the last entry, got history: {history_dbg:?}"
     );
 }
 
@@ -501,7 +506,7 @@ fn test_pipeline_saves_narration_before_quantifier() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let messages = app.message_service.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
@@ -542,7 +547,7 @@ fn test_pipeline_no_duplicate_narration() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "test input".to_string(), false, None);
+        .run_from_input(state, "test input".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     let history = final_state.narrative.history();
@@ -570,7 +575,7 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let messages = app.message_service.load_messages().unwrap();
     let narration = messages
@@ -609,7 +614,7 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(
         matches!(outcome, Ok(())),
@@ -644,7 +649,7 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let messages = app.message_service.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
@@ -681,7 +686,7 @@ fn orchestrator_records_error_when_world_missing() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(
         matches!(outcome, Ok(())),
@@ -718,7 +723,7 @@ fn orchestrator_records_error_when_persona_missing() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(
         matches!(outcome, Ok(())),
@@ -755,7 +760,7 @@ fn test_pipeline_persists_input_before_narration() {
     state.add_message("look".to_string(), MessageType::Input);
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let messages = app.message_service.load_messages().unwrap();
     let input_idx = messages
@@ -833,7 +838,7 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
 
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(
         matches!(outcome, Ok(())),
@@ -885,7 +890,7 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     let state = app.message_service.load_or_fresh();
     let outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     assert!(
         matches!(outcome, Ok(())),
@@ -909,7 +914,7 @@ fn test_pipeline_empty_input_produces_continuation() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, String::new(), false, None);
+        .run_from_input(state, String::new(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     assert!(
@@ -942,7 +947,7 @@ fn test_pipeline_room_not_found_sets_error_status() {
     state.movement.current_room_id = "non_existent_room".to_string();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     let failure = match &final_state.narrative.input_buffer.status {
@@ -978,7 +983,7 @@ fn test_pipeline_phase_stays_narrating_on_narration_failure() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     assert_eq!(
@@ -1015,7 +1020,7 @@ fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     let msg = match &final_state.narrative.input_buffer.status {
@@ -1064,9 +1069,9 @@ fn test_pipeline_quantifier_detects_movement() {
         .build_service();
 
     let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "go to room 2".to_string(), false, None);
+    let _outcome =
+        app.pipeline
+            .run_from_input(state, "go to room 2".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     assert_ne!(
@@ -1087,7 +1092,7 @@ fn test_pipeline_cancels_when_token_already_cancelled() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look".to_string(), false, None);
+        .run_from_input(state, "look".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     assert_eq!(
@@ -1102,9 +1107,9 @@ fn test_pre_main_snapshot_saved_before_narration() {
     let (app, storage) = make_test_app_with_storage();
 
     let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "examine the room".to_string(), false, None);
+    let _outcome =
+        app.pipeline
+            .run_from_input(state, "examine the room".to_string(), false, None, None);
 
     let latest = storage
         .load_latest_snapshot()
@@ -1165,9 +1170,9 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         .build_service_with_storage();
 
     let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "examine the npc".to_string(), false, None);
+    let _outcome =
+        app.pipeline
+            .run_from_input(state, "examine the npc".to_string(), false, None, None);
 
     let latest = storage
         .load_latest_snapshot()
@@ -1196,7 +1201,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look around".to_string(), false, None);
+        .run_from_input(state, "look around".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     assert!(
@@ -1228,7 +1233,7 @@ fn test_cancellation_resets_state_to_idle() {
     let state = app.message_service.load_or_fresh();
     let _outcome = app
         .pipeline
-        .run_from_input(state, "look around".to_string(), false, None);
+        .run_from_input(state, "look around".to_string(), false, None, None);
 
     let final_state = app.message_service.load_or_fresh();
     assert!(
@@ -1260,7 +1265,7 @@ async fn test_pipeline_cancels_after_main_narration() {
     let handle = tokio::task::spawn_blocking(move || {
         app_clone
             .pipeline
-            .execute_action_with_inputs("look around".to_string(), false, None);
+            .execute_action_with_inputs("look around".to_string(), false, None, None);
     });
 
     let started = tokio::time::timeout(Duration::from_secs(5), async {
@@ -1334,9 +1339,12 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     let token = app.shutdown_token.clone();
     let app_clone = app.clone();
     let handle = tokio::task::spawn_blocking(move || {
-        app_clone
-            .pipeline
-            .execute_action_with_inputs("enter the shop".to_string(), false, None);
+        app_clone.pipeline.execute_action_with_inputs(
+            "enter the shop".to_string(),
+            false,
+            None,
+            None,
+        );
     });
 
     let started = tokio::time::timeout(Duration::from_secs(5), async {

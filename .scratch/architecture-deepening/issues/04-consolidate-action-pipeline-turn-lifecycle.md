@@ -1,7 +1,7 @@
 # 04 — Consolidate the ActionPipeline turn lifecycle
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -72,3 +72,7 @@ Current sizes: `core.rs` 584, `retry.rs` 273, `options.rs` 223, `action.rs`
 to ~155 lines and gained an always-on Options rewrite branch. The grilling
 must decide how the Options entry fits the consolidated lifecycle. The
 `inherent-impl-locality` constraint still applies.
+
+## Answer
+
+**Rejected: superseded** (2026-10-14, by [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md), Q1 and Q10). The owner chose the new design of the game-state lifecycle for its whole designed scope. The files of `pipeline/` and `action_pipeline/` are replaced by `pipeline/job.rs`, with one `generate` for every kind of generation ([sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.3; [target design](../../turn-state-model/assets/target-design.md) D-16). A consolidation of today's `ActionPipeline` would deepen a module that the build replaces.

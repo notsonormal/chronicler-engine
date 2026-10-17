@@ -1,7 +1,7 @@
 # 16 — Bootstrap creates and finds Games only through GameCatalogue
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -55,3 +55,11 @@ Both errors are reported as `EngineError::Config`.
   Mode).
 - Not hard-blocked by 01–03, but if ticket 02 adopts a backend trait, these
   queries would need a home in it anyway.
+
+## Comments
+
+**2026-10-14, from [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md).** Game creation at boot is settled: `init_game` keeps `resolve_game_id` and calls `GameCatalogue::create_game`, so a Game made at boot gets the same create unit ([sketch 25](../../turn-state-model/assets/sketch-25-new-design.md) §3.5). Only the lookup part of this ticket stays open.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.9: **creation settled, lookup moved to a ticket in the rebuild map.** `init_game` calls `GameCatalogue::create_game` (sketch 25 §3.5). The raw-SQL lookup by World reads the `messages` table that the build changes: [Decide the storage seam of the rebuild](../../platform-choice/issues/11-decide-storage-seam-of-rebuild.md), question 4.

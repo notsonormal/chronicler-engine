@@ -35,7 +35,7 @@ The action area is in one of four states: **Idle**, **Checking**, **Generating**
 
 ## Failures and Health
 
-A failure shows where its scope is. A failed form or control shows the failure in its own inline slot. A generation failure shows in the status display. A failure that affects the whole engine shows in the failure banner. A poll that gets no usable answer is an engine failure.
+A failure shows where its scope is. A failed form or control shows the failure in its own inline slot. A generation failure shows in the status display as a short sentence that names only an action the dashboard offers. The status display draws that sentence in full, and the raw error text stays behind its Details control. A failure that affects the whole engine shows in the failure banner. A poll that gets no usable answer is an engine failure.
 
 Four health states describe the engine's roles and the engine itself:
 
@@ -48,9 +48,9 @@ The server owns the three role states. It reads them from the LLM Messages recor
 
 ## Story Log and Swipes
 
-Each story-log entry is one Message. An entry can carry the controls Edit, Delete, the swipe controls (previous, next, and Retry), and Retrigger.
+Each story-log entry is one Message. Edit sits on every entry. The last entry alone carries Retrigger and Delete.
 
-A swipe switch restores the Snapshot of the target Swipe, so every region shows that state. Swipes exist only on the last Message. Retry adds a new swipe to it. Retrigger runs the previous turn's trigger narration again, as a new event Message.
+A swipe switch restores the Snapshot of the target Swipe, so every region shows that state. Only the last Message shows swipe controls. Retry adds a new swipe to it. Retrigger runs the stored trigger context's trigger narration again, as a new event Message.
 
 ## Management Panels
 

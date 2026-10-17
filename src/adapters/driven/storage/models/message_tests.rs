@@ -26,7 +26,6 @@ fn test_db_message_from_row_maps_columns() {
     assert_eq!(msg.message_type_json, "\"Narration\"");
     assert_eq!(msg.timestamp, "2026-01-01");
     assert_eq!(msg.active_swipe_index, 2);
-    // from_row always initializes is_deleted to 0; it is not read from the row.
     assert_eq!(msg.is_deleted, 0);
 }
 
@@ -36,14 +35,14 @@ fn test_db_swipe_from_row_maps_columns() {
     conn.execute_batch(
         "CREATE TABLE s (id INTEGER, message_id INTEGER, swipe_index INTEGER, \
          text TEXT, snapshot_id INTEGER, location_header TEXT, event_header TEXT, \
-         impersonated INTEGER, steering_instruction TEXT);\
-         INSERT INTO s VALUES (5, 9, 1, 'hello', 42, 'Town', 'Battle', 0, NULL);",
+         impersonated INTEGER, guide_text TEXT, impersonate_direction TEXT);\
+         INSERT INTO s VALUES (5, 9, 1, 'hello', 42, 'Town', 'Battle', 0, 'make it ominous', NULL);",
     )
     .unwrap();
 
     let swipe = conn
         .query_row(
-            "SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, steering_instruction \
+            "SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, guide_text, impersonate_direction \
              FROM s",
             [],
             DbSwipe::from_row,
@@ -58,7 +57,8 @@ fn test_db_swipe_from_row_maps_columns() {
     assert_eq!(swipe.location_header.as_deref(), Some("Town"));
     assert_eq!(swipe.event_header.as_deref(), Some("Battle"));
     assert_eq!(swipe.impersonated, 0);
-    assert!(swipe.steering_instruction.is_none());
+    assert_eq!(swipe.guide_text.as_deref(), Some("make it ominous"));
+    assert!(swipe.impersonate_direction.is_none());
 }
 
 #[test]
@@ -67,14 +67,14 @@ fn test_db_swipe_from_row_null_optionals() {
     conn.execute_batch(
         "CREATE TABLE s (id INTEGER, message_id INTEGER, swipe_index INTEGER, \
          text TEXT, snapshot_id INTEGER, location_header TEXT, event_header TEXT, \
-         impersonated INTEGER, steering_instruction TEXT);\
-         INSERT INTO s VALUES (1, 1, 0, 't', NULL, NULL, NULL, 0, NULL);",
+         impersonated INTEGER, guide_text TEXT, impersonate_direction TEXT);\
+         INSERT INTO s VALUES (1, 1, 0, 't', NULL, NULL, NULL, 0, NULL, NULL);",
     )
     .unwrap();
 
     let swipe = conn
         .query_row(
-            "SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, steering_instruction \
+            "SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header, impersonated, guide_text, impersonate_direction \
              FROM s",
             [],
             DbSwipe::from_row,
@@ -85,5 +85,6 @@ fn test_db_swipe_from_row_null_optionals() {
     assert_eq!(swipe.location_header, None);
     assert_eq!(swipe.event_header, None);
     assert_eq!(swipe.impersonated, 0);
-    assert!(swipe.steering_instruction.is_none());
+    assert!(swipe.guide_text.is_none());
+    assert!(swipe.impersonate_direction.is_none());
 }

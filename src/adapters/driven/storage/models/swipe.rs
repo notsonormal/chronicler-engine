@@ -10,7 +10,8 @@ pub struct DbSwipe {
     pub location_header: Option<String>,
     pub event_header: Option<String>,
     pub impersonated: i64,
-    pub steering_instruction: Option<String>,
+    pub guide_text: Option<String>,
+    pub impersonate_direction: Option<String>,
 }
 
 impl DbSwipe {
@@ -24,7 +25,8 @@ impl DbSwipe {
             location_header: row.get(5)?,
             event_header: row.get(6)?,
             impersonated: row.get(7)?,
-            steering_instruction: row.get(8)?,
+            guide_text: row.get(8)?,
+            impersonate_direction: row.get(9)?,
         })
     }
 }
