@@ -60,7 +60,6 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
     "application/agents/quantifier/utils/orchestration_tests.rs",
     "application/agents/quantifier/utils/parser_tests.rs",
     "application/agents/registry_tests.rs",
-    "application/arrival_service_tests.rs",
     "application/connection_test_service_tests.rs",
     "application/games/catalogue_tests.rs",
     "application/games/view_query_tests.rs",

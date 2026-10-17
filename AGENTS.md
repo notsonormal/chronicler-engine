@@ -154,7 +154,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `mod.rs` — Worlds askama templates.
             - `worlds.rs` — Worlds templates
   - **application/**
-    - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `connection_test_service.rs` — Connection test service — one short provider call that records nothing.
     - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
@@ -229,7 +228,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `context.rs` — Prompt context fitting — message budget enforcement.
         - `mod.rs` — Narrative prompt utility modules.
   - **bootstrap/**
-    - `init_game.rs` — Game state initialization and arrival narration spawning
+    - `init_game.rs` — Game state initialization and game resolution
     - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution

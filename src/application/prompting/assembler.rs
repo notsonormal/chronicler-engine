@@ -177,21 +177,6 @@ impl PromptContext<'_> {
         }
         self
     }
-
-    pub fn build_narration_prompt(
-        &self,
-        preset: &PromptPreset,
-        global_rules: &[String],
-        response_length: Option<&str>,
-        max_context_tokens: u32,
-        max_tokens: Option<u32>,
-    ) -> Result<AssembledPrompt, EngineError> {
-        let mut assembler = PromptAssembler::new(max_context_tokens);
-        if let Some(max) = max_tokens {
-            assembler = assembler.with_max_tokens(max);
-        }
-        assembler.assemble(self, preset, global_rules, response_length)
-    }
 }
 
 struct LayerRenderer<'a> {

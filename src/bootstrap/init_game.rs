@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/startup.md]
-//! Game state initialization and arrival narration spawning
+//! Game state initialization and game resolution
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -112,70 +112,5 @@ fn try_persist_initial_message(
         storage.insert_swipe(id, swipe, 0)?;
     }
     msg.id = id;
-    Ok(())
-}
-
-pub struct ArrivalSpawnRequest {
-    pub world: Arc<WorldCard>,
-    pub room_id: String,
-    pub nearby_npcs: Vec<NpcCard>,
-    pub all_npcs: Vec<NpcCard>,
-}
-
-pub fn spawn_arrival_task_if_needed(
-    runtime: &tokio::runtime::Runtime,
-    message_service: Arc<crate::application::message_service::MessageService>,
-    pipeline: Arc<crate::application::pipeline::ActionPipeline>,
-    storage: &Arc<crate::adapters::driven::storage::Storage>,
-    game_id: GameId,
-    _db_pool: &crate::adapters::driven::storage::db::DbPool,
-    request: ArrivalSpawnRequest,
-) -> crate::error::Result<()> {
-    let ArrivalSpawnRequest {
-        world,
-        room_id,
-        nearby_npcs,
-        all_npcs,
-    } = request;
-
-    let has_scenario = world.default_scenario().is_some_and(|s| !s.text.is_empty());
-
-    if has_scenario {
-        return Ok(());
-    }
-
-    let settings = storage.get_settings()?;
-    let (arrival_preset, response_length, max_context_tokens, max_tokens) = {
-        let preset_id = storage.active_system_preset_id(game_id, &settings);
-        let preset = storage.get_preset(&preset_id).ok().flatten();
-        let conn = settings.narration_connection()?;
-        (
-            preset,
-            settings.response_length.clone(),
-            conn.resolve_max_context_tokens(),
-            conn.max_tokens,
-        )
-    };
-
-    let recorder = Arc::clone(pipeline.recorder());
-
-    let task_ctx = crate::application::arrival_service::ArrivalTaskContext::new(
-        message_service,
-        Arc::clone(storage),
-        game_id,
-        room_id,
-        arrival_preset,
-        response_length,
-        max_context_tokens,
-        max_tokens,
-        nearby_npcs,
-        all_npcs,
-        recorder,
-    );
-
-    runtime.spawn_blocking(move || {
-        task_ctx.run();
-    });
-
     Ok(())
 }
