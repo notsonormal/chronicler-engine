@@ -312,7 +312,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
   - `validate_docs.py` — Validate markdown docs + DOC anchors under docs/.
   - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
-  - `validate_seam_cases.py` — Validate the seam contracts: every declared `CASE` has exactly one tagged test.
+  - `validate_seam_cases.py` — Validate the seam contracts: every test in a declaring file carries one `CASE` tag.
 <!-- AUTO-STRUCTURE END -->
 
 ## Your Responsibility

@@ -1,14 +1,4 @@
 //! Seam contract of the Options Agent, the Options hook's Agent.
-//!
-//! CASE options-set: a parsed answer is the offered set.
-//! CASE options-retry: an answer with no parseable option is read again, and the second answer wins.
-//! CASE options-transport-failure: both attempts fail and the call fails.
-//! CASE options-no-room: a hook input without a room fails.
-//!
-//! CASE options-preset: the settings' preset text reaches the prompt.
-//! CASE options-fallback-prompt: without a preset the fallback prompt renders its macros.
-//! CASE options-call-record: a good call is recorded with its agent name and prompts.
-//! CASE options-call-record-failure: a failed call is recorded with its failure text.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -105,7 +95,7 @@ impl Scene {
     }
 }
 
-// CASE: options-set
+// CASE options-set: a parsed answer is the offered set.
 #[test]
 fn test_a_parsed_answer_is_the_offered_set() {
     let scene = Scene::new();
@@ -121,7 +111,7 @@ fn test_a_parsed_answer_is_the_offered_set() {
     );
 }
 
-// CASE: options-retry
+// CASE options-retry: an answer with no parseable option is read again, and the second answer wins.
 #[test]
 fn test_an_answer_with_no_option_is_read_again() {
     let scene = Scene::new();
@@ -138,7 +128,7 @@ fn test_an_answer_with_no_option_is_read_again() {
     assert_eq!(offered.0, vec!["Search the desk"]);
 }
 
-// CASE: options-transport-failure
+// CASE options-transport-failure: both attempts fail and the call fails.
 #[test]
 fn test_a_transport_failure_fails_the_call() {
     let scene = Scene::new();
@@ -154,7 +144,7 @@ fn test_a_transport_failure_fails_the_call() {
     assert!(result.is_err(), "a failed call has no offered set");
 }
 
-// CASE: options-no-room
+// CASE options-no-room: a hook input without a room fails.
 #[test]
 fn test_a_hook_input_without_a_room_fails() {
     let scene = Scene::new();
@@ -166,7 +156,7 @@ fn test_a_hook_input_without_a_room_fails() {
     assert!(result.is_err(), "the options Agent needs the room it reads");
 }
 
-// CASE: options-preset
+// CASE options-preset: the settings' preset text reaches the prompt.
 #[test]
 fn test_the_settings_preset_reaches_the_prompt() {
     let scene = Scene::new();
@@ -191,7 +181,7 @@ fn test_the_settings_preset_reaches_the_prompt() {
     );
 }
 
-// CASE: options-fallback-prompt
+// CASE options-fallback-prompt: without a preset the fallback prompt renders its macros.
 #[test]
 fn test_without_a_preset_the_fallback_prompt_renders_its_macros() {
     let scene = Scene::new();
@@ -215,7 +205,7 @@ fn test_without_a_preset_the_fallback_prompt_renders_its_macros() {
     );
 }
 
-// CASE: options-call-record
+// CASE options-call-record: a good call is recorded with its agent name and prompts.
 #[test]
 fn test_a_good_call_is_recorded_with_its_prompts() {
     let storage = Arc::new(Storage::new_in_memory());
@@ -239,7 +229,7 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     assert!(call.user_prompt.contains("<CurrentRoom>"));
 }
 
-// CASE: options-call-record-failure
+// CASE options-call-record-failure: a failed call is recorded with its failure text.
 #[test]
 fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let storage = Arc::new(Storage::new_in_memory());

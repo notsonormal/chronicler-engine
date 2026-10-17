@@ -15,7 +15,7 @@ const UNIT_TEST_BODY: &str = "#[test]\nfn test_switch_keeps_the_game() {}\n";
 const LISTED: &[&str] = &[UNIT_TEST_FILE];
 const CONTRACT_FILE: &str = "adapters/driven/storage/transaction_tests.rs";
 const CONTRACT_BODY: &str =
-    "//! CASE storage-1: a save unit lands whole\n\n#[test]\nfn test_save_unit() {}\n";
+    "// CASE storage-1: a save unit lands whole\n#[test]\nfn test_save_unit() {}\n";
 
 #[test]
 fn a_listed_legacy_file_passes() {
@@ -90,24 +90,44 @@ fn a_stale_legacy_entry_is_reported() {
 }
 
 #[test]
-fn the_declaration_form_requires_an_id_and_a_description() {
+fn the_tag_form_requires_an_id_and_a_description() {
     assert!(is_case_declaration(
+        "// CASE storage-1: a save unit lands whole"
+    ));
+    assert!(is_case_declaration(
+        "// CASE storage-2 [failure]: a failing write leaves no row"
+    ));
+    assert!(!is_case_declaration("// CASE storage-1"));
+    assert!(!is_case_declaration("// CASE storage-1:"));
+    assert!(!is_case_declaration("// CASE Storage-1: a save unit"));
+    assert!(!is_case_declaration("// CASE storage_1: a save unit"));
+    assert!(!is_case_declaration("// CASEstorage-1: a save unit"));
+}
+
+#[test]
+fn the_tag_form_rejects_a_loose_label() {
+    assert!(!is_case_declaration(
+        "// CASE storage-2 [Failure]: a failing write leaves no row"
+    ));
+    assert!(!is_case_declaration(
+        "// CASE storage-2 [fail ure]: a failing write leaves no row"
+    ));
+    assert!(!is_case_declaration(
+        "// CASE storage-2 [failure: a failing write leaves no row"
+    ));
+}
+
+#[test]
+fn the_old_forms_are_not_declarations() {
+    assert!(!is_case_declaration(
         "//! CASE storage-1: a save unit lands whole"
     ));
-    assert!(is_case_declaration(
-        "//! CASE storage-2 [failure]: a failing write leaves no row"
-    ));
-    assert!(!is_case_declaration("//! CASE storage-1"));
-    assert!(!is_case_declaration("//! CASE storage-1:"));
-    assert!(!is_case_declaration("//! CASE Storage-1: a save unit"));
-    assert!(!is_case_declaration("//! CASE storage_1: a save unit"));
-    assert!(!is_case_declaration("// CASE: storage-1"));
+    assert!(!is_case_declaration("// CASE:storage-1"));
 }
 
 #[test]
 fn a_loose_case_prefix_does_not_make_a_seam_contract() {
-    let loose =
-        "//! CASE storage one: a save unit lands whole\n\n#[test]\nfn test_save_unit() {}\n";
+    let loose = "// CASE storage one: a save unit lands whole\n\n#[test]\nfn test_save_unit() {}\n";
     let files = [source(CONTRACT_FILE, loose)];
     let violations = check_unit_test_allowlist(&files, &[], &[]);
     assert_eq!(violations.len(), 1, "{violations:?}");

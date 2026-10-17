@@ -1,59 +1,4 @@
 //! Seam contract of the Narrator, the box that turns a generation into one prompt and one call.
-//!
-//! CASE narrator-prompt-layers: every prompt layer renders.
-//! CASE narrator-turn-untrimmed: a turn that fits the window passes through untrimmed.
-//! CASE narrator-preset-fields-absent: a preset with no fields renders no section tags.
-//! CASE narrator-preset-fields-present: only the preset's present fields render, and the response length lands in the output format.
-//!
-//! CASE narrator-history-small-budget: a small context budget drops the oldest history entries.
-//! CASE narrator-history-large-budget: the default window keeps the whole story window.
-//! CASE narrator-response-cap: the call asks for the budget's response length.
-//!
-//! CASE narrator-posture-macros: the narrator stamps the resolved perspective and tense onto the preset's macros.
-//!
-//! CASE narrator-guide-layer: the guide renders last, in its wrapper.
-//! CASE narrator-guide-absent: a plain turn, and a blank guide, render no guide layer.
-//! CASE narrator-impersonate-layer: an impersonate prompt drops the player-character layer and the guide.
-//!
-//! CASE narrator-impersonate-persona-macros: the impersonate preset's persona macros render.
-//! CASE narrator-global-rules: the World's global rules render into the system prompt.
-//!
-//! CASE narrator-npc-summary: a Character with a summary renders that summary, not the long description.
-//!
-//! CASE narrator-npc-description-lines: a Character without a summary renders the first three description lines.
-//! CASE narrator-npc-relationships-absent: no relationships block renders while the related Character is away.
-//! CASE narrator-npc-relationships-present: the relationships block renders the present Character's name.
-//!
-//! CASE narrator-context-overflow: a prompt that cannot fit the window fails instead of truncating the system layer.
-//!
-//! CASE narrator-input-injection-system: a `{{system}}` in the player's text is filtered.
-//! CASE narrator-input-injection-char: a `{{char}}` in the player's text is filtered.
-//!
-//! CASE narrator-input-clean: plain player text passes through.
-//! CASE narrator-input-single-braces: single braces pass through.
-//! CASE narrator-input-multiple-injections: every injection in the player's text is filtered.
-//!
-//! CASE narrator-input-empty-braces: empty braces pass through.
-//! CASE narrator-input-unclosed-braces: unclosed braces pass through.
-//! CASE narrator-input-nested-braces: nested braces filter the outer pattern.
-//!
-//!
-//! CASE narrator-cleanup-lead-channel: a leading channel close is stripped from the answer.
-//! CASE narrator-cleanup-thought: a thought block is stripped from the answer.
-//! CASE narrator-cleanup-channel-thought: a channel-thought block is stripped from the answer.
-//!
-//! CASE narrator-cleanup-turn-markers: orphan turn markers are stripped from the answer.
-//! CASE narrator-cleanup-combined: every artifact in one answer is stripped.
-//! CASE narrator-cleanup-clean: a clean answer passes through.
-//!
-//! CASE narrator-cleanup-multiple-blocks: two thought blocks are both stripped.
-//! CASE narrator-cleanup-lines: leading whitespace is trimmed on every line.
-//!
-//! CASE narrator-empty-answer: an empty or whitespace-only answer fails, so no empty Narration is saved.
-//!
-//! CASE narrator-transport-failure: a failed call fails the narration.
-//! CASE narrator-call-record: a good call is recorded with its agent name and prompts.
-//! CASE narrator-call-record-failure: a failed call is recorded with its failure text.
 
 use std::sync::Arc;
 
@@ -261,7 +206,7 @@ fn prompt_of(model: &ScriptedModel) -> ModelCall {
         .expect("the narrator makes one call")
 }
 
-// CASE: narrator-prompt-layers
+// CASE narrator-prompt-layers: every prompt layer renders.
 #[test]
 fn test_every_prompt_layer_renders() {
     let fixture = Fixture::new();
@@ -312,7 +257,7 @@ fn test_every_prompt_layer_renders() {
     );
 }
 
-// CASE: narrator-turn-untrimmed
+// CASE narrator-turn-untrimmed: a turn that fits the window passes through untrimmed.
 #[test]
 fn test_a_turn_that_fits_passes_through_untrimmed() {
     let fixture = Fixture::new();
@@ -333,7 +278,7 @@ fn test_a_turn_that_fits_passes_through_untrimmed() {
     );
 }
 
-// CASE: narrator-preset-fields-absent
+// CASE narrator-preset-fields-absent: a preset with no fields renders no section tags.
 #[test]
 fn test_a_preset_with_no_fields_renders_no_sections() {
     let fixture = Fixture::new().without_global_rules();
@@ -366,7 +311,7 @@ fn test_a_preset_with_no_fields_renders_no_sections() {
     }
 }
 
-// CASE: narrator-preset-fields-present
+// CASE narrator-preset-fields-present: only the preset's present fields render, and the response length lands in the output format.
 #[test]
 fn test_only_the_presets_present_fields_render() {
     let fixture = Fixture::new();
@@ -400,7 +345,7 @@ fn test_only_the_presets_present_fields_render() {
     );
 }
 
-// CASE: narrator-history-small-budget
+// CASE narrator-history-small-budget: a small context budget drops the oldest history entries.
 #[test]
 fn test_a_small_budget_drops_the_oldest_history() {
     let fixture = Fixture::new();
@@ -437,7 +382,7 @@ fn test_a_small_budget_drops_the_oldest_history() {
     assert!(!narrated.text.is_empty(), "a trimmed turn still narrates");
 }
 
-// CASE: narrator-history-large-budget
+// CASE narrator-history-large-budget: the default window keeps the whole story window.
 #[test]
 fn test_the_default_window_carries_the_whole_history() {
     let fixture = Fixture::new();
@@ -456,7 +401,7 @@ fn test_the_default_window_carries_the_whole_history() {
     );
 }
 
-// CASE: narrator-response-cap
+// CASE narrator-response-cap: the call asks for the budget's response length.
 #[test]
 fn test_the_call_asks_for_the_budgets_response_length() {
     let fixture = Fixture::new();
@@ -476,7 +421,7 @@ fn test_the_call_asks_for_the_budgets_response_length() {
     );
 }
 
-// CASE: narrator-posture-macros
+// CASE narrator-posture-macros: the narrator stamps the resolved perspective and tense onto the preset's macros.
 #[test]
 fn test_the_narrator_stamps_the_resolved_posture() {
     let fixture = Fixture::new();
@@ -505,7 +450,7 @@ fn test_the_narrator_stamps_the_resolved_posture() {
     );
 }
 
-// CASE: narrator-guide-layer
+// CASE narrator-guide-layer: the guide renders last, in its wrapper.
 #[test]
 fn test_the_guide_renders_last_in_its_wrapper() {
     let fixture = Fixture::new();
@@ -526,7 +471,7 @@ fn test_the_guide_renders_last_in_its_wrapper() {
     );
 }
 
-// CASE: narrator-guide-absent
+// CASE narrator-guide-absent: a plain turn, and a blank guide, render no guide layer.
 #[test]
 fn test_a_plain_turn_and_a_blank_guide_render_no_guide_layer() {
     let fixture = Fixture::new();
@@ -547,7 +492,7 @@ fn test_a_plain_turn_and_a_blank_guide_render_no_guide_layer() {
     );
 }
 
-// CASE: narrator-impersonate-layer
+// CASE narrator-impersonate-layer: an impersonate prompt drops the player-character layer and the guide.
 #[test]
 fn test_an_impersonate_prompt_drops_the_player_layer_and_the_guide() {
     let fixture = Fixture::new();
@@ -565,7 +510,7 @@ fn test_an_impersonate_prompt_drops_the_player_layer_and_the_guide() {
     assert!(!user.contains("Add tension."), "and the guide: {user}");
 }
 
-// CASE: narrator-impersonate-persona-macros
+// CASE narrator-impersonate-persona-macros: the impersonate preset's persona macros render.
 #[test]
 fn test_the_impersonate_preset_renders_its_persona_macros() {
     let fixture = Fixture::new();
@@ -590,7 +535,7 @@ fn test_the_impersonate_preset_renders_its_persona_macros() {
     );
 }
 
-// CASE: narrator-global-rules
+// CASE narrator-global-rules: the World's global rules render into the system prompt.
 #[test]
 fn test_the_world_global_rules_render_into_the_system_prompt() {
     let mut fixture = Fixture::new();
@@ -608,7 +553,7 @@ fn test_the_world_global_rules_render_into_the_system_prompt() {
     );
 }
 
-// CASE: narrator-npc-summary
+// CASE narrator-npc-summary: a Character with a summary renders that summary, not the long description.
 #[test]
 fn test_a_character_with_a_summary_renders_that_summary() {
     let npc = npc_card("n1", "Alice", Some("Short summary."), "Long desc.", vec![]);
@@ -634,7 +579,7 @@ fn test_a_character_with_a_summary_renders_that_summary() {
     );
 }
 
-// CASE: narrator-npc-description-lines
+// CASE narrator-npc-description-lines: a Character without a summary renders the first three description lines.
 #[test]
 fn test_a_character_without_a_summary_renders_three_description_lines() {
     let description = "line one.\nline two.\nline three.\nline four.";
@@ -661,7 +606,7 @@ fn test_a_character_without_a_summary_renders_three_description_lines() {
     );
 }
 
-// CASE: narrator-npc-relationships-absent
+// CASE narrator-npc-relationships-absent: no relationships block renders while the related Character is away.
 #[test]
 fn test_no_relationships_block_renders_while_the_related_character_is_away() {
     let partner = npc_card("p1", "Partner", None, "d", vec![]);
@@ -690,7 +635,7 @@ fn test_no_relationships_block_renders_while_the_related_character_is_away() {
     );
 }
 
-// CASE: narrator-npc-relationships-present
+// CASE narrator-npc-relationships-present: the relationships block renders the present Character's name.
 #[test]
 fn test_the_relationships_block_renders_the_present_characters_name() {
     let partner = npc_card("p1", "Partner", None, "d", vec![]);
@@ -727,7 +672,7 @@ fn test_the_relationships_block_renders_the_present_characters_name() {
     );
 }
 
-// CASE: narrator-context-overflow
+// CASE narrator-context-overflow: a prompt that cannot fit the window fails instead of truncating the system layer.
 #[test]
 fn test_a_prompt_that_cannot_fit_the_window_fails() {
     let fixture = Fixture::new();
@@ -767,7 +712,7 @@ fn test_a_prompt_that_cannot_fit_the_window_fails() {
     assert!(after_trim.is_err(), "an unfittable user half must fail");
 }
 
-// CASE: narrator-input-injection-system
+// CASE narrator-input-injection-system: a `{{system}}` in the player's text is filtered.
 #[test]
 fn test_a_system_injection_in_the_players_text_is_filtered() {
     let fixture = Fixture::new();
@@ -787,7 +732,7 @@ fn test_a_system_injection_in_the_players_text_is_filtered() {
     );
 }
 
-// CASE: narrator-input-injection-char
+// CASE narrator-input-injection-char: a `{{char}}` in the player's text is filtered.
 #[test]
 fn test_a_char_injection_in_the_players_text_is_filtered() {
     let fixture = Fixture::new();
@@ -803,7 +748,7 @@ fn test_a_char_injection_in_the_players_text_is_filtered() {
     );
 }
 
-// CASE: narrator-input-clean
+// CASE narrator-input-clean: plain player text passes through.
 #[test]
 fn test_plain_player_text_passes_through() {
     let fixture = Fixture::new();
@@ -816,7 +761,7 @@ fn test_plain_player_text_passes_through() {
     );
 }
 
-// CASE: narrator-input-single-braces
+// CASE narrator-input-single-braces: single braces pass through.
 #[test]
 fn test_single_braces_in_the_players_text_pass_through() {
     let fixture = Fixture::new();
@@ -826,7 +771,7 @@ fn test_single_braces_in_the_players_text_pass_through() {
     assert!(call.user_prompt.contains(player), "{}", call.user_prompt);
 }
 
-// CASE: narrator-input-multiple-injections
+// CASE narrator-input-multiple-injections: every injection in the player's text is filtered.
 #[test]
 fn test_every_injection_in_the_players_text_is_filtered() {
     let fixture = Fixture::new();
@@ -843,7 +788,7 @@ fn test_every_injection_in_the_players_text_is_filtered() {
     );
 }
 
-// CASE: narrator-input-empty-braces
+// CASE narrator-input-empty-braces: empty braces pass through.
 #[test]
 fn test_empty_braces_in_the_players_text_pass_through() {
     let fixture = Fixture::new();
@@ -859,7 +804,7 @@ fn test_empty_braces_in_the_players_text_pass_through() {
     );
 }
 
-// CASE: narrator-input-unclosed-braces
+// CASE narrator-input-unclosed-braces: unclosed braces pass through.
 #[test]
 fn test_unclosed_braces_in_the_players_text_pass_through() {
     let fixture = Fixture::new();
@@ -875,7 +820,7 @@ fn test_unclosed_braces_in_the_players_text_pass_through() {
     );
 }
 
-// CASE: narrator-input-nested-braces
+// CASE narrator-input-nested-braces: nested braces filter the outer pattern.
 #[test]
 fn test_nested_braces_in_the_players_text_filter_the_outer_pattern() {
     let fixture = Fixture::new();
@@ -895,7 +840,7 @@ fn narrated_text(context: &PromptContext, answer: &str) -> String {
         .text
 }
 
-// CASE: narrator-cleanup-lead-channel
+// CASE narrator-cleanup-lead-channel: a leading channel close is stripped from the answer.
 #[test]
 fn test_a_leading_channel_close_is_stripped() {
     let fixture = Fixture::new();
@@ -907,7 +852,7 @@ fn test_a_leading_channel_close_is_stripped() {
     );
 }
 
-// CASE: narrator-cleanup-thought
+// CASE narrator-cleanup-thought: a thought block is stripped from the answer.
 #[test]
 fn test_a_thought_block_is_stripped() {
     let fixture = Fixture::new();
@@ -922,7 +867,7 @@ fn test_a_thought_block_is_stripped() {
     );
 }
 
-// CASE: narrator-cleanup-channel-thought
+// CASE narrator-cleanup-channel-thought: a channel-thought block is stripped from the answer.
 #[test]
 fn test_a_channel_thought_block_is_stripped() {
     let fixture = Fixture::new();
@@ -937,7 +882,7 @@ fn test_a_channel_thought_block_is_stripped() {
     );
 }
 
-// CASE: narrator-cleanup-turn-markers
+// CASE narrator-cleanup-turn-markers: orphan turn markers are stripped from the answer.
 #[test]
 fn test_orphan_turn_markers_are_stripped() {
     let fixture = Fixture::new();
@@ -952,7 +897,7 @@ fn test_orphan_turn_markers_are_stripped() {
     );
 }
 
-// CASE: narrator-cleanup-combined
+// CASE narrator-cleanup-combined: every artifact in one answer is stripped.
 #[test]
 fn test_every_artifact_in_one_answer_is_stripped() {
     let fixture = Fixture::new();
@@ -967,7 +912,7 @@ fn test_every_artifact_in_one_answer_is_stripped() {
     );
 }
 
-// CASE: narrator-cleanup-clean
+// CASE narrator-cleanup-clean: a clean answer passes through.
 #[test]
 fn test_a_clean_answer_passes_through() {
     let fixture = Fixture::new();
@@ -977,7 +922,7 @@ fn test_a_clean_answer_passes_through() {
     assert_eq!(narrated_text(&context, answer), answer);
 }
 
-// CASE: narrator-cleanup-multiple-blocks
+// CASE narrator-cleanup-multiple-blocks: two thought blocks are both stripped.
 #[test]
 fn test_two_thought_blocks_are_both_stripped() {
     let fixture = Fixture::new();
@@ -992,7 +937,7 @@ fn test_two_thought_blocks_are_both_stripped() {
     );
 }
 
-// CASE: narrator-cleanup-lines
+// CASE narrator-cleanup-lines: leading whitespace is trimmed on every line.
 #[test]
 fn test_leading_whitespace_is_trimmed_on_every_line() {
     let fixture = Fixture::new();
@@ -1007,7 +952,7 @@ fn test_leading_whitespace_is_trimmed_on_every_line() {
     );
 }
 
-// CASE: narrator-empty-answer
+// CASE narrator-empty-answer: an empty or whitespace-only answer fails, so no empty Narration is saved.
 #[test]
 fn test_an_empty_or_whitespace_only_answer_fails() {
     let fixture = Fixture::new();
@@ -1026,7 +971,7 @@ fn test_an_empty_or_whitespace_only_answer_fails() {
     }
 }
 
-// CASE: narrator-transport-failure
+// CASE narrator-transport-failure: a failed call fails the narration.
 #[test]
 fn test_a_failed_call_fails_the_narration() {
     let fixture = Fixture::new();
@@ -1047,7 +992,7 @@ fn recording_narrator(
     Narrator::new(PromptAssembler, recorder)
 }
 
-// CASE: narrator-call-record
+// CASE narrator-call-record: a good call is recorded with its agent name and prompts.
 #[test]
 fn test_a_good_call_is_recorded_with_its_prompts() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
@@ -1070,7 +1015,7 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     assert!(!call.user_prompt.is_empty());
 }
 
-// CASE: narrator-call-record-failure
+// CASE narrator-call-record-failure: a failed call is recorded with its failure text.
 #[test]
 fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
