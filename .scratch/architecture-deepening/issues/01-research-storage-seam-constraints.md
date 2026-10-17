@@ -1,7 +1,7 @@
 # 01 — Research the Storage seam constraints
 
 Type: research
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -81,3 +81,7 @@ references across the storage module. `Backend` / `BackendKind` (including
 `BackendKind::Test`) are still at the top of `core.rs`. There are still 13
 `impl Storage` blocks, and `test_support.rs` is unchanged in role. No
 `StorageBackend` or `Repository` trait exists yet.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.1: **moved to a ticket in the rebuild map.** Failure injection cannot fail half a `Tx` today, and arch-lint forbids storage to import ports. The re-scoped question is [Research: the storage constraints that the rebuild must keep](../../platform-choice/issues/10-research-storage-constraints-for-rebuild.md).

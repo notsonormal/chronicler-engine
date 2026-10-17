@@ -1,7 +1,7 @@
 # 02 — Deepen Storage into a StorageBackend trait
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 01
 Assignee: (unclaimed)
 
@@ -68,3 +68,7 @@ a raw `pub fn` line count gives 65, which may include helper types. The
 2026-08-16 count was ~30. `with_backend_mut` is at `core.rs:126` with 48
 references, and `games.rs` / `worlds.rs` / `messages.rs` / `snapshots.rs`
 still repeat the match shape. Shape unchanged; still Strong.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.2: **moved to a ticket in the rebuild map.** The build writes about 330 new storage lines for two backends, so the dispatch shape is a build decision: [Decide the storage seam of the rebuild](../../platform-choice/issues/11-decide-storage-seam-of-rebuild.md), question 1.

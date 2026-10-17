@@ -1,5 +1,7 @@
 # Map: Architecture Deepening
 
+Status: **closed 2026-10-16, superseded by [the Rust rebuild](../platform-choice/map.md).** Every ticket is resolved. Do not reopen it; the open questions now live in that map.
+
 ## Destination
 
 For each deepening opportunity surfaced by the architecture review, a
@@ -14,6 +16,10 @@ Execution of accepted deepenings is the next effort's job, not this map's.
 
 ## Notes
 
+- **Superseded (owner, 2026-10-16) by [the Rust rebuild](../platform-choice/map.md).** The new
+  game-state design changes the architecture this map deepens. Do not work its tickets.
+  [Research: sort the open architecture-deepening tickets against the new design](../platform-choice/issues/04-research-sort-architecture-deepening.md)
+  ruled on each open ticket on 2026-10-16, and this map is closed.
 - Tracker: local markdown (`.scratch/architecture-deepening/`). See
   `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`.
 - Motivating artifacts (`assets/`), both from
@@ -89,26 +95,20 @@ verdict on 2026-10-14, so the old exception for 12 and 13 no longer applies.
 - [Route arrival narration through the one narration-generation path](issues/10-route-arrival-through-narration-generation.md) — rejected, superseded: arrival is deleted (one create unit, no LLM opening).
 - [Retire or justify the Agent registry](issues/13-retire-or-justify-agent-registry.md) — decided by turn-state-model ticket 24: Agents attach at four fixed hooks, one trait and output type per hook, run by `AgentRunner`.
 - [Move Agent preset resolution into AgentContext](issues/07-move-quantifier-preset-into-agent-context.md) — decided by turn-state-model ticket 24: the step loads each Agent's settings and preset and passes them as values.
+- [Research the Storage seam constraints](issues/01-research-storage-seam-constraints.md) — moved: [Research: the storage constraints that the rebuild must keep](../platform-choice/issues/10-research-storage-constraints-for-rebuild.md) ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [Deepen Storage into a StorageBackend trait](issues/02-deepen-storage-into-backend-trait.md) — moved: [Decide the storage seam of the rebuild](../platform-choice/issues/11-decide-storage-seam-of-rebuild.md) ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [Replace CRUD services with a Repository port](issues/03-replace-crud-services-with-repository-port.md) — moved: [Decide the storage seam of the rebuild](../platform-choice/issues/11-decide-storage-seam-of-rebuild.md); a port trait in `application/` breaks `arch-lint.toml:164-169` ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [Deepen PromptAssembler, absorb shallow helpers](issues/06-deepen-prompt-assembler-absorb-helpers.md) — settled in part by the new design (`build_narration_prompt` goes, the token budget comes in as a value); the rest is a later effort ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [One generation-status strip for the action area and the poll](issues/11-single-generation-status-strip.md) — settled: one rule in `GameViewQuery::status`; two renderings for two HTTP contracts ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [Share one Agent call core between Options and Quantifier](issues/12-share-agent-call-core.md) — settled in part (window and settings come in as values); the shared prompt blocks and retry loop are a later effort ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [One definition of the connection card](issues/14-single-connection-card.md) — moot: commit `6916556a` deleted the builder ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [One fragment error policy for the HTTP adapter](issues/15-single-fragment-error-policy.md) — settled for the build's routes (`Refusal`); the rest is a later effort ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [Bootstrap creates and finds Games only through GameCatalogue](issues/16-bootstrap-games-through-game-catalogue.md) — creation settled; the lookup moved to [Decide the storage seam of the rebuild](../platform-choice/issues/11-decide-storage-seam-of-rebuild.md) ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
+- [Flatten LLM transport/utils and share the result mapping](issues/17-flatten-llm-transport.md) — later effort: no file of the rebuild ([sort](../platform-choice/issues/04-research-sort-architecture-deepening.md)).
 
 ## Not yet specified
 
-<!-- fog: suspected decisions that can't be pinned until the frontier advances -->
-
-- **Cross-cutting migration shape.** Once the accepted deepenings are known, a
-  question may graduate: do they land as one coordinated migration or as
-  independent refactors? Not yet ticketable — the set of accepted decisions
-  isn't known. Revisit after the storage-seam tickets (01–03) resolve.
-- **Agent cluster shape.** Tickets 13 and 07 were decided by the
-  turn-state-model verdict (Agent hooks; settings as values). Only 12 (the
-  call core inside each Agent) is left, reshaped around the hook traits.
-- **HTTP adapter cohesion.** Tickets 11 (status strip), 14 (connection
-  card) and 15 (error policy) all point at `AppState` (21 public items, 7
-  `render_*` methods that repeat one shape). A separate `AppState` interface
-  question may surface after 15. Not sharp enough to ticket yet.
-- **Port-trait granularity for the Repository.** If candidate 2 is accepted,
-  the Repository port may split into per-concern sub-traits (World / Persona /
-  Settings / Preset) or stay one fat trait. Can't be sharpened until the
-  storage-seam shape (ticket 02) is decided.
+None. The map is closed; its fog went with the sort to [the Rust rebuild](../platform-choice/map.md).
 
 ## Out of scope
 

@@ -1,7 +1,7 @@
 # 12 — Share one Agent call core between Options and Quantifier
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: (none)
 Assignee: (unclaimed)
 
@@ -65,3 +65,7 @@ parameters, not deletions.
 ## Comments
 
 **2026-10-14, from [Decide where the new design of the game-state lifecycle makes sense](../../turn-state-model/issues/24-decide-fix-or-rewrite.md).** Agents now attach at fixed hooks and get their settings as values ([sketch 24](../../turn-state-model/assets/sketch-24-agent-hooks.md)). The call core inside each Agent is not designed there, so this ticket stays open, reshaped around the hook traits.
+
+## Answer
+
+Closed 2026-10-16, superseded by [the Rust rebuild](../../platform-choice/map.md). Ruling of [Research: sort the open architecture-deepening tickets against the new design](../../platform-choice/issues/04-research-sort-architecture-deepening.md), [asset](../../platform-choice/assets/research-04-architecture-deepening-sort.md) §2.6: **settled in part, later effort for the rest.** The step loads the window of 4 and passes it in `HookInput.story` (sketch 24 §2.2); settings come in as values (D-33). The shared `<CurrentRoom>` / `<RecentHistory>` blocks and the retry loop sit inside the Agent edge, and the build keeps the prompts unchanged: a later effort.
