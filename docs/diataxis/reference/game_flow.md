@@ -5,7 +5,7 @@ title: Game Flow
 
 ## Overview
 
-A FreeAction moves from player input through narration, scene quantification, engine commit, optional trigger continuation, and finalization. The busy display reads the generation-slot registry; the persisted status supplies the phase and the failure.
+A FreeAction moves from player input through narration, scene quantification, the game rules, optional trigger continuation, and finalization. The busy display reads the generation-slot registry; the persisted status supplies the phase and the failure.
 
 ## Granular Status Phases
 
@@ -20,7 +20,7 @@ flowchart TD
     Start([Action submitted]) --> Pre[pre-main snapshot]
     Pre --> Narrate[narrate]
     Narrate --> PostGen[post-generation Agents]
-    PostGen --> Commit[engine commit]
+    PostGen --> Commit[game rules]
     Commit -->|Trigger present| Trigger[trigger continuation]
     Commit -->|No Trigger| Options[turn-end Options rewrite]
     Trigger --> Reconcile[post-event Agent reconciliation]
@@ -45,7 +45,7 @@ A Game switch or reset invalidates stale work at the next boundary. Mismatch ret
 
 ## Trigger Evaluation
 
-Trigger evaluation runs after main narration and post-generation quantification, inside engine commit. At most the first matching Trigger produces a continuation for an Action.
+Trigger evaluation runs after main narration and post-generation quantification, inside the game rules. At most the first matching Trigger produces a continuation for an Action.
 
 The Trigger name becomes event-header metadata on the continuation Message.
 
@@ -59,6 +59,10 @@ State mutation preserves this order:
 4. Character enter/leave events update `currently_meeting` and `times_met`.
 5. Trigger context is stored, continuation generation runs, and successful continuation commits event metadata.
 6. Post-event Character reconciliation applies after continuation commit.
+
+## Game Rules
+
+`apply_game_rules` in `domain/model/utils/game_rules.rs` holds the game rules. It changes only the `SwipeState` of a Game, and it returns an outcome. `GameState` writes each story change from that outcome.
 
 ## Retry Flow
 

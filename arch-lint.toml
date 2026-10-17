@@ -80,6 +80,14 @@ from = "model"
 to = ["server", "narrative", "application"]
 message = "Model layer must be pure; cannot depend on outer layers."
 
+# ── The game rules are pure ──
+# The game rules decide the game state, so a pure function can be tested with no storage
+# and no LLM. A model file that imports the storage adapter would need a database to run.
+[[deny-scope-dep]]
+from = "model"
+to = ["storage"]
+message = "Model layer must be pure; the game rules cannot depend on the storage adapter."
+
 # Application must not depend on server.
 [[deny-scope-dep]]
 from = "application"

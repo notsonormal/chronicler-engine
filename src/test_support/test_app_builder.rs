@@ -169,7 +169,7 @@ impl TestAppBuilder {
             .iter()
             .filter(|n| test_data.room_npcs.contains(&n.id))
         {
-            state.scene.npcs_in_area.push(npc.clone());
+            state.swipe.scene.npcs_in_area.push(npc.clone());
         }
 
         if let Some(trigger) = self.last_trigger {
@@ -193,7 +193,6 @@ impl TestAppBuilder {
             }
         }
 
-        // Persist the builder's settings so storage is the single read source.
         let _ = storage.save_settings(&self.settings);
         let pipeline_override = self.pipeline.take();
 

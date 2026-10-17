@@ -8,6 +8,7 @@ pub mod message_types;
 pub mod movement;
 pub mod narrative_state;
 pub mod scene_state;
+pub mod swipe_state;
 pub mod trigger_context;
 
 #[cfg(test)]

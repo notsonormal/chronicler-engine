@@ -15,7 +15,6 @@ use crate::domain::model::state::message_types::MessageType;
 use super::phase_error::PhaseError;
 use super::pipeline_run::{PipelineRun, PresetKind};
 
-/// Redo inputs arrive resolved by the caller; this phase does not read `retry_target`.
 pub(crate) struct GenerationInputs {
     /// Empty for continues and slash-command generations; the entry path
     /// persists free actions.
@@ -29,7 +28,7 @@ pub(crate) struct ImpersonateInputs {
     pub direction: Option<String>,
 }
 
-/// The tail (quantifier → engine commit → trigger) runs on the same bundle
+/// The tail (quantifier → game rules → trigger) runs on the same bundle
 /// the narration was generated from, so the loaded bundle rides on the outcome.
 #[derive(Debug)]
 pub(crate) struct NarrationOutcome {
@@ -91,7 +90,7 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
             room,
             NpcContext {
                 all_npcs: &all_npcs,
-                npcs_in_area: &state.scene.npcs_in_area,
+                npcs_in_area: &state.swipe.scene.npcs_in_area,
             },
             &bundle.persona,
             &user_message,
@@ -131,12 +130,13 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
     }
 
     fn resolve_room<'s>(state: &'s GameState, map: &'s Arc<MapDef>) -> Option<&'s Room> {
-        map.get_room_by_id(&state.movement.current_room_id)
+        map.get_room_by_id(&state.swipe.movement.current_room_id)
             .or_else(|| {
                 state
+                    .swipe
                     .movement
                     .dynamic_rooms
-                    .get(&state.movement.current_room_id)
+                    .get(&state.swipe.movement.current_room_id)
             })
     }
 

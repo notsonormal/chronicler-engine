@@ -209,7 +209,7 @@ async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
     let state = TestAppBuilder::default_test().build_service();
     {
         let mut game_state = state.message_service.load_or_fresh(active_game_of(&state));
-        game_state.movement.current_room_id = "non_existent_room".to_string();
+        game_state.swipe.movement.current_room_id = "non_existent_room".to_string();
         let _ = state
             .message_service
             .save_state(active_game_of(&state), &game_state);

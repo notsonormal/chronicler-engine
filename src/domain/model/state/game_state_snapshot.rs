@@ -47,7 +47,6 @@ impl NarrativeSnapshot {
     }
 }
 
-/// Frozen game state (persisted to `game_state_snapshots` table).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameStateSnapshot {
     pub db_id: Option<u64>,
@@ -63,10 +62,10 @@ impl GameStateSnapshot {
     pub fn from_game_state(state: &GameState) -> Self {
         Self {
             db_id: None,
-            movement: state.movement.clone(),
+            movement: state.swipe.movement.clone(),
             narrative: NarrativeSnapshot::from_narrative(&state.narrative),
-            scene: state.scene.clone(),
-            npc_encounter_log: state.npc_encounter_log.clone(),
+            scene: state.swipe.scene.clone(),
+            npc_encounter_log: state.swipe.npc_encounter_log.clone(),
             created_at: Utc::now(),
         }
     }
