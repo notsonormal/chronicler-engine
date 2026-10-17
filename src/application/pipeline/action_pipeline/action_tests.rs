@@ -1,5 +1,3 @@
-//! Unit tests for the action entry path (process_action dispatcher).
-
 use std::sync::Arc;
 use std::sync::Barrier;
 
@@ -36,10 +34,9 @@ pub(super) async fn wait_for_gate_idle(
 }
 
 use crate::application::agents::quantifier::QuantifierAgent;
-use crate::application::agents::registry::AgentRegistry;
-use crate::application::agents::Agent;
+use crate::application::agents::AgentRunner;
 use crate::application::ports::llm_provider::LlmProvider;
-use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
+use crate::domain::model::agent::{AgentSettings, AnalysisOutput, HookInput};
 use crate::domain::model::action::Action;
 use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -304,20 +301,19 @@ impl std::fmt::Debug for SyncQuantifierAgent {
     }
 }
 
-impl Agent for SyncQuantifierAgent {
+impl crate::application::agents::AnalysisAgent for SyncQuantifierAgent {
     fn name(&self) -> &str {
         self.inner.name()
     }
-    fn phase(&self) -> ExecutionPhase {
-        self.inner.phase()
-    }
-    fn backend_selector(&self) -> BackendSelector {
-        self.inner.backend_selector()
-    }
-    fn execute(&self, ctx: &AgentContext) -> crate::error::Result<AgentResult> {
+
+    fn run(
+        &self,
+        input: &HookInput,
+        settings: &AgentSettings,
+    ) -> crate::error::Result<AnalysisOutput> {
         self.entered.wait();
         self.release.wait();
-        self.inner.execute(ctx)
+        self.inner.run(input, settings)
     }
 }
 
@@ -339,7 +335,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        AgentRegistry::with_agent(sync_agent),
+        AgentRunner::with_analysis_agent(sync_agent),
     );
     let app = TestAppBuilder::default_test()
         .pipeline(service)
@@ -392,7 +388,7 @@ fn test_narration_saved_before_quantifying_phase() {
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        AgentRegistry::with_agent(sync_agent),
+        AgentRunner::with_analysis_agent(sync_agent),
     );
     let app = TestAppBuilder::default_test()
         .pipeline(service)
@@ -451,7 +447,7 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        AgentRegistry::default(),
+        AgentRunner::default(),
     );
     let (app, _storage) = TestAppBuilder::default_test()
         .pipeline(service)

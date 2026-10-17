@@ -5,7 +5,7 @@ pub mod prompt;
 pub(crate) mod types;
 pub(crate) mod utils;
 
-pub use agent::OptionsAgent;
+pub use agent::OptionsGeneratorAgent;
 
 #[cfg(test)]
 mod agent_tests;

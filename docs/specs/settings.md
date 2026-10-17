@@ -200,6 +200,16 @@ And the body carries the unknown-backend failure text
 And a following GET /fragment/settings still renders the Connection named "Alpha"
 ```
 
+#### Scenario 20.25: A Connection's context window applies from the next narration
+
+```gherkin
+Given a Game with a long story log, whose Narrator role uses a Connection whose provider has a small default context window
+And the player submits an Action, and its narration settles
+When the client edits that Connection to a provider with a larger default context window
+And the player submits a second Action, and its narration settles
+Then the recorded prompt of the second narration holds more of the story log than the first
+```
+
 ### POST /connections/{id}/test — connection test
 
 The test sends one short fixed prompt to a connection and reports the result

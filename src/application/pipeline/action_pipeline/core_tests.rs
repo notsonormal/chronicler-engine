@@ -1,10 +1,8 @@
-//! Unit tests for shared action-pipeline orchestration (run_from_input and phase internals).
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::adapters::driving::http::AppState;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::AgentRunner;
 use crate::application::pipeline::phase_error::PhaseError;
 use crate::application::pipeline::pipeline_run::PipelineRun;
 use crate::domain::model::game::GameId;
@@ -85,11 +83,11 @@ fn test_pipeline_saves_narration_to_history() {
 fn test_pipeline_returns_error_on_narration_failure() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -126,11 +124,11 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -184,12 +182,12 @@ fn test_pipeline_with_custom_quantifier_result() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -224,11 +222,11 @@ fn test_trigger_continuation_save_post_trigger_error() {
         TestOverride::internal("simulated save failure"),
     );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = AppState::from_wired(
         crate::test_support::build_test_wired_app(failing, service, MISSING_GAME_ID)
@@ -265,8 +263,8 @@ fn phase_post_generation_returns_persist_error_on_pre_quantifier_save_failure() 
     );
 
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline_with_backends(failing, narrator_recorder, agent_registry);
+    let agent_runner = AgentRunner::default();
+    let pipeline = make_test_pipeline_with_backends(failing, narrator_recorder, agent_runner);
 
     let mut state = TestGameState::in_room("start");
     let map = Arc::new(TestMap::single_room("start"));
@@ -281,6 +279,7 @@ fn phase_post_generation_returns_persist_error_on_pre_quantifier_save_failure() 
         &map,
         &persona,
         &npcs,
+        crate::domain::model::agent::Kind::Narration,
     );
     match result {
         Err(PhaseError::PersistFailed { label, .. }) => {
@@ -325,14 +324,14 @@ fn test_pipeline_trigger_happy_path() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["The NPC greets you warmly.".to_string()]),
     ));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -418,13 +417,13 @@ fn test_pipeline_trigger_empty_continuation() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -486,14 +485,14 @@ fn test_pipeline_trigger_complete_failure() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_trigger_narration_fail(),
     ));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -589,11 +588,11 @@ fn test_pipeline_no_duplicate_narration() {
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -668,12 +667,12 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     use crate::application::agents::quantifier::QuantifierAgent;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -706,14 +705,14 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     use crate::application::agents::quantifier::QuantifierAgent;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -841,11 +840,11 @@ fn test_pipeline_persists_input_before_narration() {
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -983,11 +982,11 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
         (base, id)
     };
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::default_test()
         .storage(Arc::new(storage))
@@ -1094,11 +1093,11 @@ fn test_pipeline_room_not_found_sets_error_status() {
 fn test_pipeline_phase_stays_narrating_on_narration_failure() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -1136,11 +1135,11 @@ fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -1191,12 +1190,12 @@ fn test_pipeline_quantifier_detects_movement() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -1305,14 +1304,14 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["The NPC greets you warmly.".to_string()]),
     ));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let (app, storage) = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -1342,11 +1341,11 @@ fn test_pre_event_snapshot_saved_before_continuation() {
 fn test_delayed_llm_completes_without_deadlock() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_delay(200)));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -1378,11 +1377,11 @@ fn test_delayed_llm_completes_without_deadlock() {
 fn test_cancellation_resets_state_to_idle() {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_delay(50)));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())
@@ -1414,11 +1413,11 @@ async fn test_pipeline_cancels_after_main_narration() {
     let mock_narrator_backend = Arc::new(MockBackend::default().with_delay(50));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_narrator_backend)
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>);
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(TestDataBuilder::default_test().build())
         .pipeline(service.clone())
@@ -1494,11 +1493,11 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     let quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]));
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
+    let agent_runner = AgentRunner::with_analysis_agent(Box::new(agent));
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let app = TestAppBuilder::with_data(data)
         .pipeline(service.clone())

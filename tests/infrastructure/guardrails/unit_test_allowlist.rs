@@ -52,14 +52,12 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
     "adapters/driving/http/utils/view_models_tests.rs",
     "adapters/driving/http/view_models_tests.rs",
     "adapters/driving/http/worlds/handlers/worlds_tests.rs",
-    "application/agents/options/agent_tests.rs",
     "application/agents/options/prompt_tests.rs",
     "application/agents/options/utils/parser_tests.rs",
-    "application/agents/quantifier/agent_tests.rs",
     "application/agents/quantifier/prompt_tests.rs",
     "application/agents/quantifier/utils/orchestration_tests.rs",
     "application/agents/quantifier/utils/parser_tests.rs",
-    "application/agents/registry_tests.rs",
+    "application/agents/runner_tests.rs",
     "application/connection_test_service_tests.rs",
     "application/games/catalogue_tests.rs",
     "application/games/view_query_tests.rs",
@@ -78,9 +76,6 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
     "application/ports/llm_provider_tests.rs",
     "application/ports/text_checker_tests.rs",
     "application/prompt_preset_service_tests.rs",
-    "application/prompting/assembler_tests.rs",
-    "application/prompting/builders/sections_tests.rs",
-    "application/prompting/sanitize_tests.rs",
     "application/prompting/token_budget_tests.rs",
     "application/prompting/utils/context_tests.rs",
     "application/settings_service_tests.rs",
@@ -114,7 +109,12 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
 
 // The seam-contract files. A box adds its contract file here; the checker below
 // fails a file that declares cases without being listed.
-pub const SEAM_CONTRACT_FILES: &[&str] = &[];
+pub const SEAM_CONTRACT_FILES: &[&str] = &[
+    // Each Agent is a box behind the LLM port, so its test file declares its cases.
+    "application/agents/options/agent_tests.rs",
+    "application/agents/quantifier/agent_tests.rs",
+    "application/narration/narrator_tests.rs",
+];
 
 const TEST_MARKERS: &[&str] = &["#[test]", "#[tokio::test", "#[rstest]", "proptest!"];
 
@@ -131,7 +131,6 @@ fn first_test_line(content: &str) -> Option<usize> {
         .map(|index| index + 1)
 }
 
-/// Whether a case id is well formed: lowercase letters, digits and dashes.
 fn is_case_id(id: &str) -> bool {
     !id.is_empty()
         && id.chars().all(|character| {
@@ -139,9 +138,8 @@ fn is_case_id(id: &str) -> bool {
         })
 }
 
-/// Whether `line` is a case declaration: `//! CASE <id>: <description>`, with an
-/// optional `[<label>]` before the colon. The reader in
-/// `scripts/validate_seam_cases.py` accepts exactly this form.
+/// The form `scripts/validate_seam_cases.py` parses: `//! CASE <id> [<label>]: <description>`,
+/// the label optional.
 pub fn is_case_declaration(line: &str) -> bool {
     let Some(rest) = line.trim_start().strip_prefix("//!") else {
         return false;

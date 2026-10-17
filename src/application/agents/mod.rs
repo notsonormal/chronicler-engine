@@ -1,12 +1,13 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
-//! Agent registry and trait definitions
+//! Agent hooks: the hook traits and the AgentRunner
 
 pub mod options;
 pub mod quantifier;
-pub mod registry;
+pub mod runner;
 pub mod trait_def;
 
-pub use trait_def::Agent;
+pub use runner::AgentRunner;
+pub use trait_def::{AnalysisAgent, OptionsAgent};
 
 #[cfg(test)]
-mod registry_tests;
+mod runner_tests;

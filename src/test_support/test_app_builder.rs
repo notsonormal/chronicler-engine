@@ -7,7 +7,7 @@ use axum::Router;
 
 use crate::application::errors::ProcessActionResult;
 use crate::application::pipeline::ActionPipeline;
-use crate::test_support::context::{configured_registry, make_test_pipeline_with_backends};
+use crate::test_support::context::{configured_runner, make_test_pipeline_with_backends};
 use crate::test_support::fixtures::make_test_recorder_with_storage;
 use crate::test_support::scripted_model::ScriptedModel;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
@@ -106,7 +106,6 @@ impl TestAppBuilder {
         self
     }
 
-    /// The app's model and the real Agents that call it.
     pub fn model(mut self, model: Arc<ScriptedModel>) -> Self {
         self.model = Some(model);
         self
@@ -209,11 +208,11 @@ impl TestAppBuilder {
         if pipeline_override.is_none() {
             if let Some(model) = self.model.take() {
                 let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
-                let registry = configured_registry(Arc::clone(&recorder));
+                let runner = configured_runner(Arc::clone(&recorder));
                 pipeline_override = Some(make_test_pipeline_with_backends(
                     Arc::clone(&storage),
                     recorder,
-                    registry,
+                    runner,
                 ));
             }
         }

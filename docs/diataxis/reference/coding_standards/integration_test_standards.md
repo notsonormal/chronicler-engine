@@ -234,10 +234,10 @@ Hand the model to the app with `app_with_script` /
 `app_with_model_and_storage` (`tests/http/support/app_wiring.rs`), or with
 `TestAppBuilder::model(model)` when the builder's other knobs seed the fixture.
 `app_with_script`, `TestAppBuilder::model` and `app_with_model` wire the
-production Agents through `configured_registry` (`src/test_support/context.rs`),
+production Agents through `configured_runner` (`src/test_support/context.rs`),
 so a tier-1 turn runs the real Quantifier and the real Options agent on that
-script. The tests that leave an Agent out build their registry themselves with
-`configured_registry_without(recorder, "options")` and pass it to
+script. The tests that leave an Agent out build their runner through a closure
+over `configured_runner_without(recorder, "options")`, passed to
 `app_with_script_and_agents`.
 
 A stray call fails the test three ways: the fake answers the caller with an

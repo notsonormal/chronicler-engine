@@ -1,7 +1,7 @@
 # P4: the Agent edge on values
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 04
 
 ## Question
@@ -70,3 +70,150 @@ What is left in P4: the Agent edge (`Hook`, `AnalysisAgent`/`OptionsAgent`, `Age
 Not done, with the reason. `assert_no_unscripted_calls()` is not called by a test body anywhere: the fake's drop and the hold's drop call it, and `wait_settled` uses the forensics read, which is the only check that works without a handle. The `MockBackend` knobs still stand (the lead's decision: their 61 uses are legacy, 45 of them in pipeline tests C6 deletes). Also note: the hold must be released for a stray to surface through the hold's drop, so the drop releases first and asserts second.
 
 Validation. Full gate green at `logs/build_20261017_211007.log` (tree `4ab1380b97+ccc9ffd7`): clippy, data, structure, spec-coverage, seam-cases, Python 393, http_routes/guardrails freshness, docs, guardrails 187, integration 1626 + 2 skipped, browser 29. `--test-target http` three times: `logs/build_20261017_210950.log` 4.16 s, `logs/build_20261017_210955.log` 4.39 s, `logs/build_20261017_211000.log` 4.18 s, 274 passed each, no races.rs flake. Focused stray and hold-drop probes: `logs/build_20261017_205357.log`, `logs/build_20261017_210402.log`, `logs/build_20261017_210422.log`, `logs/build_20261017_205439.log` (each reverted after measuring).
+
+**2026-10-17, implementer (P4 commit 2, uncommitted).** The rest of plan §7: the Agent edge on values, the `Narrator`, the three seam contracts, rule 11, and the docs. No commit was made.
+
+Content items, each to its result.
+
+| Plan item | Result |
+|---|---|
+| `ExecutionPhase` → `Hook` | `Hook { Analysis, Options }` in `domain/model/agent.rs`, `#[serde(rename_all = "snake_case")]`, `Analysis` default. The before-narration and rewrite hooks come with their first Agent. |
+| `AgentResult` → the output types | `AnalysisOutput(pub StatePatch)` and `OfferedSet(pub Vec<String>)`. `AgentResult`, `PromptDirective` and `NoOp` go. |
+| `AgentContext` → `HookInput` (values) | `HookInput { kind, text, player_text, story, world, event }`, with `Kind { Narration, Impersonate, UserRegen, Event }`, `StoryEntry { message_type, text }` (+ `From<&MessageEntry>`), `EventRecord` (+ `From<&StoredTriggerContext>`), `WorldView { room, map, persona, characters, present }` and `STORY_WINDOW = 4`. No `GameId`, no storage, no dock record, no failure line; `AgentContext.game_id` (the P1 throw-away glue) is gone. `StatePatch`, `Confidence` and `Role` stay. |
+| `AgentSettings` | `{ preset: Option<String>, max_tokens: Option<u32> }`, the values one Agent reads from its own config. The caller loads both (D-33) and the Agents pass `max_tokens` into their model calls, so the field is live. |
+| `AnalysisAgent` and `OptionsAgent` | In `trait_def.rs`: `name()` and `run(&HookInput, &AgentSettings) -> Result<Output, EngineError>`. `Agent`, `phase()` and `backend_selector()` go (nothing read the selector: the wiring binds each Agent's recorder by name). |
+| `registry.rs` → `runner.rs` | `AgentRunner { analysis, options }`: `from_configs(configs, analysis_recorder, options_recorder)` (the production wiring, empty config keeps the defaults), `with_analysis_agent`, `with_options_agent`, `analysis(&input, &settings) -> QuantifierResult` (the old `PostGeneration` merge loop, failures logged and dropped), `options(&input, &settings) -> Result<Vec<String>>` (`Ok(empty)` = no Options Agent), `is_empty`. |
+| The Quantifier and the Options Agent | Both implement their hook trait and hold only a recorder: `from_config(config, recorder)`, `with_provider` for tests. `from_config_with_storage` and their Storage-backed Settings/preset reads are gone (D-33). |
+| `Narrator` with `narrate` | `application/narration/narrator.rs`: `Narrator { assembler, recorder }` with `narrate(context, preset, response_length, budget) -> Result<Narrated, GenerationFailure>` (assemble, one call, empty-answer failure) and `assemble(..)` for the trigger context. `call_narrator` is gone from `pipeline_run.rs`; `Narrated { text, backend_name, model_name }` replaces the triple. |
+| `PromptAssembler::with_storage` goes; the budget is a value | `with_storage`, `with_max_tokens`, `resolve_budget` and the `max_tokens` field go; `assemble(.., budget: TokenBudget)` takes `TokenBudget { max_context_tokens, max_tokens }` (`prompting/token_budget.rs`). `PipelineRun::narration_budget()` reads the connection per call, as the old `resolve_budget` did. |
+| The glue | `PipelineRun::run_analysis_hook(state, map, persona, npcs, text, player_text, kind)` builds the story window, the event record and the `WorldView` (about 25 lines) and calls the runner; `phase_post_generation` and `reconcile_post_trigger_npcs` both use it (kind `Narration` and `Event`). The Options slice builds its own input in `run_options_generation`. |
+| No `Tracker`, no `SwipeState.trackers` | Neither added (ticket 17 Q9). |
+
+Seam contracts. `validate_seam_cases.py` now prints its result and the contracts with their case counts:
+
+```
+Seam cases OK: 3 contract(s), 32 case(s).
+  src/application/agents/options/agent_tests.rs: 8 case(s)
+  src/application/agents/quantifier/agent_tests.rs: 11 case(s)
+  src/application/narration/narrator_tests.rs: 13 case(s)
+```
+
+- **Quantifier** (11): npc ids, unknown id dropped, movement, low-confidence fallback, retry, transport failure, no text, no room, preset, call record, failed-call record.
+- **Options** (8): offered set, retry, transport failure, no room, preset, fallback prompt, call record, failed-call record.
+- **Narrator** (13): every prompt layer, history fit to the budget, response cap, posture macros, guide layer, impersonate layer, global rules, two cleanup cases, empty answer, transport failure, call record, failed-call record.
+
+All three call only their box's entry point (`AnalysisAgent::run`, `OptionsAgent::run`, `Narrator::narrate`) and build the box as production does (`from_config`/`from_configs`, `Narrator::new(assembler, recorder)`); the two Agents' files left the legacy list and the three are on `SEAM_CONTRACT_FILES`. They use `ScriptedModel`, which is why the old `MockBackend` knobs lost their last tier-1 user; the prompt/parser/orchestration tests stay legacy per the plan. `runner_tests.rs` (the renamed `registry_tests.rs`) stays legacy: the runner is not a box behind a port.
+
+Guardrails. **Rule 11**: `arch-lint.toml` gained the `agent-edge` scope (`src/application/agents/**`, `src/application/narration/**`) and a `deny-scope-dep` on `storage`, with the reason in the file's comment. **Rule 16**: each hook trait returns a value (`AnalysisOutput`, `OfferedSet`), and no Agent holds `Storage` or a `JobWriter` — the Agents hold one `LlmCallRecorder` and the arch-lint scope now holds the door shut. Both are green. Rule 16's compiler half has no walker row by design.
+
+Docs. `agent_system.md` rewritten for the hooks, the values and `AgentRunner`; `agent_system_design.md` rewritten for the runner, the hook output types and the two hooks that wait for their first Agent; `prompt_system.md` names none of the changed items, so it did not change; `CONTEXT.md` gained **Hook**; `tests/STRATEGY.md` "The one rule" names the `Narrator` among the boxes; `scripts/validate_seam_cases.py` says the same in its docstring; `tests/AGENTS.md`'s seam recipe now names `AgentRunner::with_options_agent`; `integration_test_standards.md` names `configured_runner` / `configured_runner_without`. `data/settings.json` and `data/schemas/settings.schema.json` carry `hook` instead of `phase` (`["analysis", "options"]`).
+
+Behaviour. Unchanged: no scenario text was touched, and the tier-1 suite plus the lib unit tests are green. `log` lines: `logs/build_20261017_214317.log` (full gate, tree `90128752ed+1641a281`, integration 1642 + 2 skipped, guardrails 187, browser 29), `logs/build_20261017_214230.log` (`--test-target lib`, 1265 passed), `logs/build_20261017_214251.log` (`--test-target http`, 274 passed), `logs/build_20261017_214213.log` (clippy).
+
+Deviations, and what is left.
+
+1. **The storage-backed preset and budget reads stay in the pipeline.** The plan says the preset lookups move to the narrator; rule 11's scope denies `application/narration/**` storage, and the preset id, its text and the connection budget all come from storage. So the narrator takes them as values (`&PromptPreset`, `&str response_length`, `TokenBudget`) and `PipelineRun::{analysis_settings, options_settings, narration_budget}` keeps the reads. The value boundary is the same one D-33 draws for the Agents.
+2. **`AgentSettings` is one value per hook call**, not the sketch's `HookSettings` keyed by Agent name: each hook has one Agent today, and a hook with several Agents needs the per-name map when its second Agent arrives.
+3. **`PromptAssembler::with_max_tokens` was removed, not kept.** The budget is read per call from the connection today, so it comes in as an argument; a boot-time value would freeze a dashboard edit.
+4. **The 58 prompting unit tests did not move into the Narrator contract yet.** The contract covers the clauses the plan names (the prompt sections, the budget fit, the input cleanup, the call record), but `assembler_tests.rs` (20), `builders/sections_tests.rs` (7), `utils/context_tests.rs` (10), `sanitize_tests.rs` (10) and `token_budget_tests.rs` (11) are still legacy files. Their subjects are inside the Narrator box, so the one rule wants one `CASE` per test through `narrate`, and the rewrite is the next bounded piece of work; `token_budget_tests.rs` needs an owner decision first, because `estimate_tokens`/`truncate_to_budget` are pure helpers whose arithmetic no `narrate` call can observe (they are neither in `domain/model/` nor a box, so place 2 does not cover them).
+5. `MAX_RESPONSE_TOKENS` and the other budget constants stay where they were; `TokenBudget::fallback()` mirrors the old no-storage fallback (`MAX_CONTEXT_TOKENS`, no response cap). Rule 11 has no walker row (it is an arch-lint scope, as the plan's table says).
+
+**2026-10-17, implementer (P4 commit 2, the prompting tests move, uncommitted).** The prompting unit tests moved into the Narrator seam contract, per the lead's decision. `validate_seam_cases.py` now reports:
+
+```
+Seam cases OK: 3 contract(s), 55 case(s).
+  src/application/agents/options/agent_tests.rs: 8 case(s)
+  src/application/agents/quantifier/agent_tests.rs: 11 case(s)
+  src/application/narration/narrator_tests.rs: 36 case(s)
+```
+
+The Narrator contract grew from 13 to 36 cases; every case drives `Narrator::narrate` only, and a prompt-only case reads the one `ScriptedModel` call the box made.
+
+**Count per source file (moved as a case / merged into another case / stayed legacy).** The sum is 58.
+
+| Source file | Tests | Moved as its own case | Merged | Stayed legacy |
+|---|---|---|---|---|
+| `prompting/assembler_tests.rs` | 20 | 8 | 12 | 0 |
+| `prompting/builders/sections_tests.rs` | 7 | 4 | 3 | 0 |
+| `prompting/utils/context_tests.rs` | 10 | 1 | 5 | 4 |
+| `prompting/sanitize_tests.rs` | 10 | 8 | 2 | 0 |
+| `prompting/token_budget_tests.rs` | 11 | 0 | 0 | 11 |
+| **total** | **58** | **21** | **22** | **15** |
+
+`assembler_tests.rs`, `builders/sections_tests.rs` and `sanitize_tests.rs` are empty after the move, so the files go with their legacy-list entries; `utils/context_tests.rs` and `token_budget_tests.rs` keep theirs. The lib binary lost 14 tests net (58 out, 23 new cases in, 15 kept).
+
+**The merges** (two old tests pinning one clause through the entry, one case carrying both):
+
+- `narrator-prompt-sections` ← assembler `test_assemble_includes_all_layers`, context `test_context_fitting_no_trim_needed`, context `test_context_fitting_user_already_fits`.
+- `narrator-preset-fields-absent` ← assembler `test_assemble_empty_preset_sections`, sections `render_field_parts_omits_all_fields_when_preset_has_none`.
+- `narrator-preset-fields-present` ← sections `render_field_parts_emits_only_present_fields`, sections `render_field_parts_appends_response_length_to_output_format`.
+- `narrator-history-fit` ← assembler `test_assemble_budget_trimming`, assembler `test_budget_value_fits_the_history_and_the_response_cap`, context `test_context_fitting_trims_oldest_history`.
+- `narrator-response-cap` ← assembler `test_assemble_respects_max_tokens`, assembler `test_budget_value_fits_the_history_and_the_response_cap`, context `test_context_fitting_caps_max_tokens`.
+- `narrator-posture-macros` ← assembler `test_assemble_injects_narrative_voice_from_resolved_posture`, assembler `test_assemble_without_settings_uses_default_voice` (and the earlier case).
+- `narrator-guide-layer` ← assembler `test_assemble_guide_layer_renders_last_with_wrapper`.
+- `narrator-guide-absent` ← assembler `test_assemble_no_guide_omits_guide_layer`, assembler `test_assemble_blank_guide_omits_guide_layer`.
+- `narrator-impersonate-layer` ← assembler `test_assemble_impersonate_drops_player_character_layer` (and the earlier guide clause).
+- `narrator-empty-answer` ← sanitize `test_sanitize_empty_string`, sanitize `test_sanitize_whitespace_only` (both answers sanitize to empty, which the box fails).
+- `narrator-context-overflow` ← context `test_context_fitting_system_overflow`, context `test_context_fitting_post_trim_overflow`.
+
+**Owner items: the 15 tests that stayed legacy, each a pure or internal helper outside `domain/model/`, not observable through the Narrator entry.** They are unchanged, and their files stay on the list.
+
+- `prompting/token_budget_tests.rs` (11): `test_token_budgets` (the constants' values), `test_estimate_tokens_empty`, `test_estimate_tokens_single_char`, `test_estimate_tokens_exact_four`, `test_estimate_tokens_five_chars`, `test_estimate_tokens_many_chars`, `test_truncate_to_budget_no_truncate_needed`, `test_truncate_to_budget_exact_fit`, `test_truncate_to_budget_truncate`, `test_truncate_to_budget_preserves_recent`, `test_truncate_to_budget_zero_tokens` — the arithmetic of `estimate_tokens` and `truncate_to_budget`.
+- `prompting/utils/context_tests.rs` (4): `test_make_prompt_context` (the `PromptContext::new` value builder), `test_trim_history_to_budget_no_history_tag`, `test_trim_history_to_budget_empty_content`, `test_trim_history_to_budget_no_close_tag` (the `trim_history_to_budget` helper's own edge cases).
+
+Behaviour did not change: no source test was deleted without a case, no scenario was touched, and the full gate is green.
+
+Validation. `python scripts/validate_seam_cases.py` → `Seam cases OK: 3 contract(s), 55 case(s).` (above). Clippy `logs/build_20261017_215212.log`; guardrails `logs/build_20261017_215251.log` (187 passed); `--test-target lib` `logs/build_20261017_215225.log` (1251 passed); full `python build.py` `logs/build_20261017_215315.log` (tree `90128752ed+22858548`): clippy, data, structure, spec-coverage, seam-cases, Python 393, docs, guardrails 187, integration 1628 passed + 2 skipped, browser 29.
+
+**2026-10-17, implementer (P4 commit 2, fix pass, uncommitted).** The spec-review and standards-review findings are applied. No commit was made.
+
+Lead decisions recorded here.
+
+- **The preset and budget reads stay in the pipeline.** Rule 11's `agent-edge` scope denies `storage` to `application/agents/**` and `application/narration/**`, and the plan's line "the preset lookups move here" cannot hold against that: the preset id, its text and the connection budget all come from storage. The narrator keeps the value boundary (`&PromptPreset`, `&str response_length`, `TokenBudget`) and `PipelineRun::{analysis_settings, options_settings, narration_budget}` keeps the reads.
+- **Rule 11 bans the storage adapter scope only.** The row's deny list holds the `storage` scope, so a wrapper such as `MessageService` would not trip it. Noted; no change made, because the Agents and the narrator hold neither.
+- **The `OptionsAgent` struct is renamed.** The plan names the traits `AnalysisAgent` and `OptionsAgent`, so the struct became `application::agents::options::agent::OptionsGeneratorAgent` (CONTEXT.md's term is **Options**; the Quantifier's struct is `QuantifierAgent`). The `OptionsAgentTrait` aliases are gone, and `agent_system.md` and `tests/AGENTS.md` name the new type.
+- **`Kind` is not a target-design §1 term** (its tables use the kinds but §1 has no bold entry), so the type carries a one-line doc instead of a glossary entry: the kind of one generation, and a typed Input is no generation.
+
+Fixes, each to its result.
+
+- **S1 — the per-call budget read is a tier-1 test now.** Per the lead's decision, the legacy-file test and its helpers went from `application/pipeline/narration_generation_tests.rs` (a legacy file only shrinks, and the test used `MockBackend` knobs that C6 deletes), and `tests/http/settings.rs` gained `test_connection_context_window_applies_from_the_next_narration`, tagged `SCENARIO: 20.25`: a `ScriptedModel` app on a seeded 150-entry story log, a first Action that settles, an edit of the Connection through `POST /connections/{id}/edit`, a second Action that settles, and the two recorded narrator prompts read back through `GameViewQuery::list_latest_llm_messages`. It asserts the small window does not carry the whole log (`tight < 150`) and that the second prompt holds more entries than the first. **The route used is the edit route, but the field it changes is the provider, not the window:** `ConnectionForm` and `ConnectionFormTemplate` carry only name, provider, model, API key, base URL and single-user-message, `add_connection_handler` hard-codes `max_tokens: None, max_context_tokens: None`, and `edit_connection_handler` never touches either field. So the window moves only through the per-provider default (`resolve_max_context_tokens`: Mock 4096, Ollama 8192, OpenRouter/DeepSeek 32768) and the test edits `conn_provider=mock` to `conn_provider=ollama`. Owner item: scenario 20.25 speaks of editing "that Connection to a large context window", which today has no form field; the test drives the nearest client path instead. Adding a window field to the form and the handlers would let the test edit the window itself, and until then the scenario's wording and the form disagree.
+- **S3 — the six merged cases left `utils/context_tests.rs`.** They were running twice (once there, once as Narrator cases). The corrected per-file table is below: **43 tests left the prompting files** (21 became their own Narrator case, 22 were merged into one), and **15 stay legacy** (11 `token_budget_tests.rs` + 4 `utils/context_tests.rs`). 43 + 15 = 58. The earlier comment's "37 left / 21 remain" was wrong.
+- **S4 — one fallback only.** The `max_context_tokens == 0` branch is gone, and the now-vestigial window field, accessor and `PromptAssembler::new(max_context_tokens)` argument went with it: the builder is `PromptAssembler` (a unit struct) and every call carries its `TokenBudget`. A saved `Some(0)` therefore behaves as on `main` (a window of 0, which the fit refuses).
+- **S5 — the Options failure is logged again.** `AgentRunner::options` logs `warn!` for a failed Agent and returns its error.
+- **T1 — the runner's tests keep only the config wiring.** `test_runner_merges_its_analysis_agents` (the runner is not a box) and the dead bindings went; `test_agent_config_serde_roundtrip` moved to `domain/model/agent_tests.rs`. The merge rule's tests (union of ids, first destination wins, minimum confidence) were already there — twelve of them, from P3 — so no test was duplicated in. `runner_tests.rs` keeps the three config-wiring tests and stays on the legacy list.
+- **T2 — one clause per case.** `narrator-prompt-sections` split into `narrator-prompt-layers` (every layer renders) and `narrator-turn-untrimmed` (a fitting turn passes through); `narrator-history-fit` split into `narrator-history-small-budget` and `narrator-history-large-budget`. The CASE form is unchanged.
+- **T3/T4 — names and the two reason comments.** The struct rename above; the `core.rs` comment "An impersonate turn is the player acting, so its offered set is not rewritten." is back; `StatePatch::merge` carries its policy in a doc comment (union, first destination wins because a second is a contradiction between Agents, least confident wins).
+- **T5 — the hooks get the real kind.** The analysis hook receives `Kind::Impersonate` on an impersonate turn and `Kind::Narration` otherwise (`phase_post_generation` gained the kind; the retry paths recover impersonation before that point), and `Kind::Event` for an event's reconciliation. The Options hook has no kind of its own: `PipelineRun::scene_kind` reports the kind of the generation whose scene it reads (an event Narration when the last Message is one, else a Narration) for both the on-demand and the turn-end call. Correction: **`AgentSettings.max_tokens` is always `None` in production**, as before this slice — the field exists so a hook's budget reaches its Agent, and the Agents pass it into their model calls.
+- **T6/T11 — one place builds a hook input.** `PipelineRun::with_hook_input` owns the story window, the event record and the `WorldView` and hands the input to a closure; `run_analysis_hook` and `run_options_generation` both go through it. `room_of` is an associated function and `scene_kind` is one too.
+- **T7 — "no Agent" is its own answer.** `AgentRunner::options` returns `Result<Option<Vec<String>>, EngineError>`: `Ok(None)` is no Options Agent (the caller reports it unavailable) and a failure is an error. The two call sites distinguish them.
+- **T8 — `Confidence` is ordered for `.min()`.** `Low < Medium < High`, so `self.confidence.min(other.confidence)` keeps the least sure analysis. No serde on the type, so nothing serialized moved.
+- **T9 — the analysis reads its text from the input** (`text` argument dropped; the input without text is the error) and `process_quantifier_result` filters the ids by the Character map instead of cloning a Vec to search it.
+- **T12 — dead code.** The throw-away `fat_room` fixture and the unused recorder in `recording_narrator` went, and `ModelCall` lost `agent_name` (never read; the call-record cases read the stored forensics row).
+
+The corrected per-file table (the sum is 58).
+
+| Source file | Tests | Moved as its own case | Merged | Stayed legacy |
+|---|---|---|---|---|
+| `prompting/assembler_tests.rs` | 20 | 8 | 12 | 0 |
+| `prompting/builders/sections_tests.rs` | 7 | 4 | 3 | 0 |
+| `prompting/utils/context_tests.rs` | 10 | 1 | 5 | 4 |
+| `prompting/sanitize_tests.rs` | 10 | 8 | 2 | 0 |
+| `prompting/token_budget_tests.rs` | 11 | 0 | 0 | 11 |
+| **total** | **58** | **21** | **22** | **15** |
+
+Validation. `python scripts/validate_seam_cases.py`:
+
+```
+Seam cases OK: 3 contract(s), 57 case(s).
+  src/application/agents/options/agent_tests.rs: 8 case(s)
+  src/application/agents/quantifier/agent_tests.rs: 11 case(s)
+  src/application/narration/narrator_tests.rs: 38 case(s)
+```
+
+Clippy `logs/build_20261017_222755.log`; spec-coverage `logs/build_20261017_222743.log`; guardrails `logs/build_20261017_222758.log` (187 passed); `--test-target lib` `logs/build_20261017_222813.log` (1246 passed); `--test-target http` `logs/build_20261017_222836.log` (275 passed, the new scenario among them); full `python build.py` `logs/build_20261017_222844.log` (tree `90128752ed+229d6554`): clippy, data, structure, spec-coverage, seam-cases, Python 393, docs, guardrails 187, integration 1624 passed + 2 skipped, browser 29.
+
+**2026-10-17, lead (retro).** The lead wrote Scenario 20.25 for a context-window field that the Connection form does not have; the test changes the window through the provider, and the scenario now says so. This repeats ticket 02's lesson (check that a named thing exists before building against it), so it applies to spec lines too. The two code-review axes and the doc review each found real defects in both P4 commits; no recurring process gap beyond this one. Owner items from P4: (1) the 15 prompting helper tests on the legacy list (`token_budget_tests.rs` 11, `utils/context_tests.rs` 4): move the helpers to `domain/model/` or delete the tests; (2) the Connection form has no context-window or `max_tokens` field; (3) the seam-case form, decided as option B in [ticket 08](08-seam-case-tag-only-form.md).
+
+## Answer
+
+P4 is built and merged to `main` in two commits. Commit 1: the strict `ScriptedModel` fake and the real Agents at tier 1, with `races.rs` (I1). Commit 2: the Agent edge on values: `Hook`, `AnalysisAgent`/`OptionsAgent`, `AgentRunner`, `HookInput` with its value types, `Narrator::narrate`, three seam contracts (57 cases), rule 11 (arch-lint) and rule 16 (compiler). The preset and budget reads stay in the pipeline (rule 11). Full gate green: `logs/build_20261017_222844.log`.

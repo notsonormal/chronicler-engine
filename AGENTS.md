@@ -164,9 +164,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `text_check_service.rs` — TextCheckService orchestrator for text checking
     - `world_catalogue.rs` — World catalogue — world CRUD orchestration at the application layer.
     - **agents/**
-      - `mod.rs` — Agent registry and trait definitions
-      - `registry.rs` — Runtime agent lookup and lifecycle
-      - `trait_def.rs` — Agent trait definitions
+      - `mod.rs` — Agent hooks: the hook traits and the AgentRunner
+      - `runner.rs` — Agent runner: the Agents of each hook, built from their configuration
+      - `trait_def.rs` — Agent hook traits
       - **options/**
         - `agent.rs` — Options agent implementation.
         - `mod.rs` — Options agent system — generates the pickable next-action option set.
@@ -198,6 +198,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `guard.rs` — Generation guard logic
       - `mod.rs` — Generation gating and per-game slot orchestration.
       - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
+    - **narration/**
+      - `mod.rs` — Narration: the generation a Job's narration call makes
+      - `narrator.rs` — The narrator: the assembly and the model call a Job's narration needs
     - **pipeline/**
       - `mod.rs` — Action pipeline for processing game actions
       - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.

@@ -11,6 +11,7 @@ pub mod games;
 pub mod generation;
 pub mod llm_recorder;
 pub mod message_service;
+pub mod narration;
 pub mod persona_catalogue;
 pub mod pipeline;
 pub mod ports;

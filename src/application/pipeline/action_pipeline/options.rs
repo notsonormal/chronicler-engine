@@ -19,11 +19,9 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase};
 use crate::error::EngineError;
 
 impl ActionPipeline {
-    /// Requires scene history — options need a scene to ground in.
     pub fn process_options(
         &self,
         generation_gate: &GenerationGate,
@@ -47,9 +45,8 @@ impl ActionPipeline {
         )
     }
 
-    /// `Ok(empty)` means no options agent is registered (an `[agents]` settings
-    /// section without an `options` entry); callers surface that as an
-    /// unavailable-agent failure.
+    /// The Options hook of one Game: the values its Agent reads, built from the
+    /// state the Job holds. `Ok(None)` means no Options Agent is registered.
     pub(crate) fn run_options_generation(
         &self,
         game_id: GameId,
@@ -57,45 +54,12 @@ impl ActionPipeline {
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
         npcs: &HashMap<String, NpcCard>,
-    ) -> Result<Vec<String>, EngineError> {
-        let current_room = map
-            .get_room_by_id(&state.swipe.movement.current_room_id)
-            .or_else(|| {
-                state
-                    .swipe
-                    .movement
-                    .dynamic_rooms
-                    .get(&state.swipe.movement.current_room_id)
-            });
-        let agent_ctx = AgentContext {
-            game_id,
-            state,
-            main_response: None,
-            player_input: "",
-            current_room,
-            map,
-            persona,
-            npcs,
-        };
-
-        let mut last_err = None;
-        for agent in self
-            .agent_registry
-            .agents_for_phase(ExecutionPhase::OptionsGeneration)
-        {
-            match agent.execute(&agent_ctx) {
-                Ok(AgentResult::Options(options)) => return Ok(options),
-                Ok(_) => continue,
-                Err(e) => {
-                    tracing::warn!("Options agent {} failed: {e}", agent.name());
-                    last_err = Some(e);
-                }
-            }
-        }
-        match last_err {
-            Some(e) => Err(e),
-            None => Ok(Vec::new()),
-        }
+    ) -> Result<Option<Vec<String>>, EngineError> {
+        let run = PipelineRun::new(self, game_id);
+        let kind = PipelineRun::scene_kind(state);
+        PipelineRun::with_hook_input(state, map, persona, npcs, None, "", kind, |input| {
+            self.agent_runner.options(input, &run.options_settings())
+        })
     }
 
     /// A failed refresh keeps the prior set plus a system message — the scene did not change.
@@ -138,7 +102,7 @@ impl ActionPipeline {
         };
 
         match self.run_options_generation(game_id, &state, &map, &persona, &npcs) {
-            Ok(options) if !options.is_empty() => {
+            Ok(Some(options)) => {
                 state.narrative.current_options = options;
                 if let Err(e) = self
                     .message_service
@@ -147,7 +111,7 @@ impl ActionPipeline {
                     tracing::error!("Failed to save options set: {e}");
                 }
             }
-            Ok(_) => {
+            Ok(None) => {
                 self.finalize_options_failure(
                     &mut state,
                     &run,
@@ -198,10 +162,10 @@ impl ActionPipeline {
         state.narrative.current_options.clear();
         if options_enabled {
             match self.run_options_generation(game_id, state, map, persona, npcs) {
-                Ok(options) if !options.is_empty() => {
+                Ok(Some(options)) => {
                     state.narrative.current_options = options;
                 }
-                Ok(_) => {
+                Ok(None) => {
                     state.add_message(
                         "[System] Options agent is not available".to_string(),
                         MessageType::System,

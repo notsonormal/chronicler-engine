@@ -19,7 +19,7 @@ use crate::domain::model::state::generation_status::{
 };
 use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::AgentRunner;
 use crate::test_support::{
     active_game_of, make_test_app_without_snapshot,
     make_test_pipeline_app_with_storage as make_test_app_with_storage,
@@ -1269,11 +1269,11 @@ async fn test_retry_event_continuation_returns_ok_on_world_fetch_failure() {
         TestOverride::internal("simulated get_world failure"),
     );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let (app, storage) = TestAppBuilder::with_data(data)
         .storage(Arc::new(storage))
@@ -1311,11 +1311,11 @@ async fn test_retry_event_continuation_returns_ok_on_persona_fetch_failure() {
         TestOverride::internal("simulated get_persona failure"),
     );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let (app, storage) = TestAppBuilder::with_data(data)
         .storage(Arc::new(storage))
@@ -1348,11 +1348,11 @@ async fn retry_records_canonical_game_not_found_when_game_missing() {
         base
     };
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let (app, storage) = TestAppBuilder::with_data(TestDataBuilder::default_test().build())
         .storage(Arc::new(storage))
@@ -1380,11 +1380,11 @@ async fn retry_records_canonical_game_not_found_when_game_missing() {
 async fn test_retry_last_response_cancelled_at_phase_boundary() {
     let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let (app, storage) = TestAppBuilder::default_test()
         .pipeline(service)

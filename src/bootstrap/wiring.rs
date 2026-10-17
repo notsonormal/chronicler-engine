@@ -10,7 +10,7 @@ use crate::adapters::driven::llm::providers::{
 };
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::text_check::HarperTextChecker;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::AgentRunner;
 use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::active::ActiveGame;
 use crate::application::games::catalogue::GameCatalogue;
@@ -102,12 +102,10 @@ pub struct WiredApp {
 fn build_wired_app(
     storage: Arc<Storage>,
     recorder: Arc<LlmCallRecorder>,
-    agent_registry: AgentRegistry,
+    agent_runner: AgentRunner,
     text_check_service: Arc<TextCheckService>,
     initial_game: Option<GameId>,
 ) -> Result<WiredApp> {
-    // The pointer is built here and handed to the catalogue, which owns both
-    // its reading and its writing.
     let active_game = Arc::new(ActiveGame::new(Arc::clone(&storage)));
     let shutdown_token = CancellationToken::new();
 
@@ -129,7 +127,7 @@ fn build_wired_app(
     let pipeline = ActionPipeline::with_storage(
         shutdown_token.clone(),
         recorder,
-        agent_registry,
+        agent_runner,
         Arc::clone(&message_service),
         Arc::clone(&storage),
         Arc::new(game_catalogue.clone()),
@@ -177,11 +175,10 @@ pub fn build_app_graph(storage: Arc<Storage>, initial_game: Option<GameId>) -> R
         AppSettings::quantifier_connection,
     );
     let options_recorder = options_recorder(Arc::clone(&storage));
-    let registry = AgentRegistry::from_configs_with_storage(
+    let agent_runner = AgentRunner::from_configs(
         &settings.agents,
         Arc::clone(&quantifier_recorder),
         options_recorder,
-        Some(Arc::clone(&storage)),
     )
     .unwrap_or_default();
     let checker = Arc::new(HarperTextChecker::new());
@@ -190,7 +187,7 @@ pub fn build_app_graph(storage: Arc<Storage>, initial_game: Option<GameId>) -> R
     build_wired_app(
         storage,
         narration_recorder,
-        registry,
+        agent_runner,
         text_check_service,
         initial_game,
     )
@@ -212,23 +209,18 @@ pub fn build_app_graph_for_tests(
         Arc::clone(&storage),
     );
     // Build placeholder collaborators; a pipeline override replaces them below.
-    let registry = if pipeline_override.is_some() {
-        AgentRegistry::default()
+    let agent_runner = if pipeline_override.is_some() {
+        AgentRunner::default()
     } else {
         let options_recorder = options_recorder(Arc::clone(&storage));
-        AgentRegistry::from_configs_with_storage(
-            &settings.agents,
-            Arc::clone(&recorder),
-            options_recorder,
-            Some(Arc::clone(&storage)),
-        )
-        .unwrap_or_default()
+        AgentRunner::from_configs(&settings.agents, Arc::clone(&recorder), options_recorder)
+            .unwrap_or_default()
     };
 
     let mut wired = build_wired_app(
         storage,
         recorder,
-        registry,
+        agent_runner,
         text_check_service,
         initial_game,
     )?;

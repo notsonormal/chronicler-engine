@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::Room;
-use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::agent::StoryEntry;
 
 use super::prompt::QuantifierPromptBuilder;
 use crate::test_support::quantifier::{make_history, make_npc, make_room};
@@ -92,7 +92,7 @@ fn test_quantifier_prompt_builder_empty_history() {
     let room = make_room();
     let all_npcs: Vec<NpcCard> = vec![];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<MessageEntry> = vec![];
+    let history: Vec<StoryEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -150,7 +150,7 @@ fn test_quantifier_prompt_builder_empty_npcs() {
     let room = make_room();
     let all_npcs: Vec<NpcCard> = vec![];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<MessageEntry> = vec![];
+    let history: Vec<StoryEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -209,7 +209,7 @@ fn test_quantifier_prompt_uses_latest_narration_tag() {
     let room = make_room();
     let all_npcs: Vec<NpcCard> = vec![];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<MessageEntry> = vec![];
+    let history: Vec<StoryEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -240,7 +240,7 @@ fn test_quantifier_prompt_references_latest_narration_in_query() {
     let room = make_room();
     let all_npcs: Vec<NpcCard> = vec![];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<MessageEntry> = vec![];
+    let history: Vec<StoryEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,

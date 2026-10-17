@@ -66,6 +66,17 @@ paths = [
   "src/application/prompting/**",
 ]
 
+# ── The Agent edge gets values and does not know storage ──
+# An Agent and the narrator read `HookInput` and `AgentSettings`, and every read and
+# write of a Game record belongs to the step that calls them. A file that imports the
+# storage adapter would let an Agent write a game record outside the writer rule.
+[[scopes]]
+name = "agent-edge"
+paths = [
+  "src/application/agents/**",
+  "src/application/narration/**",
+]
+
 [[scopes]]
 name = "application"
 paths = ["src/application/**"]
@@ -93,6 +104,11 @@ message = "Model layer must be pure; the game rules cannot depend on the storage
 from = "application"
 to = ["server"]
 message = "Application layer must not depend on server layer."
+
+[[deny-scope-dep]]
+from = "agent-edge"
+to = ["storage"]
+message = "Agents and the narrator get values; the step owns the storage reads and writes."
 
 # ── Storage model isolation ──
 # DB models and mappers are an internal storage concern.

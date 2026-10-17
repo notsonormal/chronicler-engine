@@ -6,7 +6,7 @@ use chronicler_engine::domain::model::settings::{AppSettings, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    analysis_report, configured_registry_without, ScriptedModel, TestMap,
+    analysis_report, configured_runner_without, ScriptedModel, TestMap,
 };
 
 use crate::support::app_wiring::{app_with_script, app_with_script_and_agents};
@@ -219,7 +219,7 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
     let (app, state, _storage) = app_with_script_and_agents(
         ScriptedModel::new().turn("You look around."),
         AppSettings::default(),
-        |recorder| configured_registry_without(recorder, "options"),
+        |recorder| configured_runner_without(recorder, "options"),
     );
 
     let resp = post_action(&app, "look").await;
@@ -439,7 +439,7 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
     let (app, state, storage) = app_with_script_and_agents(
         ScriptedModel::new().turn("You look around."),
         AppSettings::default(),
-        |recorder| configured_registry_without(recorder, "options"),
+        |recorder| configured_runner_without(recorder, "options"),
     );
     storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))

@@ -2,7 +2,7 @@
 //!
 //! A call the test did not script fails the test: the fake answers it with an
 //! error, records it in its stray-call list, and panics when it drops with one
-//! on record. The Diátaxis reference for the integration tier has the rest.
+//! on record.
 //!
 //! `MockBackend` stays the lenient runtime provider of `LlmBackendType::Mock`.
 #![allow(clippy::expect_used)]
@@ -56,6 +56,14 @@ impl ModelRole {
 }
 
 #[derive(Clone, Debug)]
+pub struct ModelCall {
+    pub role: ModelRole,
+    pub system_prompt: String,
+    pub user_prompt: String,
+    pub max_tokens: Option<u32>,
+}
+
+#[derive(Clone, Debug)]
 enum Reply {
     /// The answer the call returns.
     Text(String),
@@ -66,8 +74,7 @@ enum Reply {
 #[derive(Default)]
 struct Inner {
     replies: HashMap<ModelRole, VecDeque<Reply>>,
-    /// The roles of the calls the fake saw, in order, for a stray's message.
-    seen: Vec<ModelRole>,
+    calls: Vec<ModelCall>,
     stray: Vec<ModelRole>,
 }
 
@@ -90,52 +97,44 @@ impl ScriptedModel {
         }
     }
 
-    /// Scripts one narration turn: its narration and the analysis of it.
     #[must_use]
     pub fn turn(self, narration: impl Into<String>) -> Self {
         self.narration(narration)
             .analysis(analysis_report(&[], None))
     }
 
-    /// Scripts one narration reply.
     #[must_use]
     pub fn narration(self, text: impl Into<String>) -> Self {
         self.reply(ModelRole::Narration, text)
     }
 
-    /// Scripts one event-narration reply.
     #[must_use]
     pub fn event_narration(self, text: impl Into<String>) -> Self {
         self.reply(ModelRole::Event, text)
     }
 
-    /// Scripts one analysis reply.
     #[must_use]
     pub fn analysis(self, text: impl Into<String>) -> Self {
         self.reply(ModelRole::Analysis, text)
     }
 
-    /// Scripts one offered-set reply.
     #[must_use]
     pub fn options(self, text: impl Into<String>) -> Self {
         self.reply(ModelRole::Options, text)
     }
 
-    /// Scripts one reply for `role`.
     #[must_use]
     pub fn reply(self, role: ModelRole, text: impl Into<String>) -> Self {
         self.push(role, Reply::Text(text.into()));
         self
     }
 
-    /// Scripts an empty answer, the way a provider can return one.
     #[must_use]
     pub fn empty(self, role: ModelRole) -> Self {
         self.push(role, Reply::Text(String::new()));
         self
     }
 
-    /// Scripts a failed call at the transport seam.
     #[must_use]
     pub fn failed(self, role: ModelRole) -> Self {
         self.push(role, Reply::Failed);
@@ -148,7 +147,12 @@ impl ScriptedModel {
         inner.replies.entry(role).or_default().push_back(reply);
     }
 
-    /// Fails the test when a call reached the fake without a scripted answer.
+    pub fn calls(&self) -> Vec<ModelCall> {
+        // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned script lock is a broken test"
+        let inner = self.inner.lock().expect("scripted model call log lock");
+        inner.calls.clone()
+    }
+
     pub fn assert_no_unscripted_calls(&self) {
         assert_no_strays(&self.inner);
     }
@@ -191,24 +195,26 @@ impl ScriptedModel {
         }
     }
 
-    /// Answers `role`, or records it as stray and fails it.
-    fn next_reply(&self, role: ModelRole) -> Result<Reply, EngineError> {
+    fn next_reply(&self, call: &ModelCall) -> Result<Reply, EngineError> {
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned script lock is a broken test"
         let mut inner = self.inner.lock().expect("scripted model script lock");
-        inner.seen.push(role);
-        let reply = inner.replies.get_mut(&role).and_then(VecDeque::pop_front);
+        inner.calls.push(call.clone());
+        let reply = inner
+            .replies
+            .get_mut(&call.role)
+            .and_then(VecDeque::pop_front);
         match reply {
             Some(reply) => Ok(reply),
             None => {
-                inner.stray.push(role);
+                inner.stray.push(call.role);
                 let seen = inner
-                    .seen
+                    .calls
                     .iter()
-                    .map(|role| role.label())
+                    .map(|call| call.role.label())
                     .collect::<Vec<_>>();
                 Err(EngineError::Config(format!(
                     "ScriptedModel: the test {STRAY_CALL_MARKER} a {} call; its calls so far: {seen:?}",
-                    role.label()
+                    call.role.label()
                 )))
             }
         }
@@ -234,9 +240,14 @@ impl LlmProvider for ScriptedModel {
         let role = ModelRole::of_agent_name(agent_name)
             // arch-lint: allow(no-unwrap-expect) reason="test fake: an unknown agent name is a wiring bug"
             .expect("ScriptedModel: a call names one of the four model roles");
-        let _ = (system_prompt, user_prompt, max_tokens);
+        let call = ModelCall {
+            role,
+            system_prompt: system_prompt.to_string(),
+            user_prompt: user_prompt.to_string(),
+            max_tokens,
+        };
         self.block_if_held(role);
-        match self.next_reply(role)? {
+        match self.next_reply(&call)? {
             Reply::Text(text) => Ok(LlmCallResult {
                 text: text.clone(),
                 raw_request_json: String::new(),
@@ -277,7 +288,6 @@ struct HoldState {
     cv: Condvar,
 }
 
-/// Fails the test when a call reached the fake without a scripted answer.
 fn assert_no_strays(inner: &Mutex<Inner>) {
     // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned script lock is a broken test"
     let inner = inner.lock().expect("scripted model stray lock");
@@ -289,7 +299,6 @@ fn assert_no_strays(inner: &Mutex<Inner>) {
     );
 }
 
-/// One armed hold: the next call of its role stays until `release`.
 pub struct ModelHold {
     state: Arc<HoldState>,
 }
@@ -312,7 +321,6 @@ impl ModelHold {
         sync.started
     }
 
-    /// Lets the held call answer.
     pub fn release(&self) {
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
         let mut sync = self.state.sync.lock().expect("scripted model hold lock");
@@ -332,9 +340,6 @@ impl Drop for ModelHold {
     }
 }
 
-/// A quantifier room report: the NPCs the narration puts in the room, and the
-/// room it moves the player into.
-///
 /// A parsed report is a High-confidence analysis, so the turn reports no
 /// uncertain-detection notice.
 pub fn analysis_report(npcs_in_room: &[&str], movement_destination: Option<&str>) -> String {

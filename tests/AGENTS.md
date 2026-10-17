@@ -40,7 +40,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
 
 - Assert what the narrator was sent → storage-backed recorder (`make_test_recorder_with_storage`, `src/test_support/fixtures.rs`) + `GameViewQuery::list_latest_llm_messages`
 - Inject a storage failure → `Storage::with_failure` + `TestOverride::internal`, exemplar `tests/http/settings.rs`
-- Wire an options agent → `OptionsAgent::with_provider` registered in `AgentRegistry`, exemplar `src/application/pipeline/action_pipeline/options_tests.rs`
+- Wire an options agent → `OptionsGeneratorAgent::with_provider` inside `AgentRunner::with_options_agent`, exemplar `src/application/pipeline/action_pipeline/options_tests.rs`
 - Observe generated options in the UI → `GET /fragment/options-dock` (`src/adapters/driving/http/builders/router.rs`)
 
 ## STRUCTURE

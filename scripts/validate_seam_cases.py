@@ -2,7 +2,7 @@
 
 A **seam contract** is the test file of a black box that sits behind a port
 boundary: the storage adapters, the LLM providers and transport, the Harper
-text checker, and each Agent. Its clauses are declared as
+text checker, each Agent, and the Narrator. Its clauses are declared as
 `CASE`s because no route reaches them, so `validate_feature_spec.py` (which
 pairs `docs/specs/` scenarios with tests) cannot cover them. The rule that
 places a test is `tests/STRATEGY.md`, "The one rule".
@@ -122,7 +122,6 @@ def declaring_files(entries: dict[Path, str]) -> dict[Path, list[CaseDeclaration
 
 
 def validate(entries: dict[Path, str]) -> list[str]:
-    """Return one message per violation of the seam-contract rule, sorted."""
     errors: list[str] = []
     declared = declaring_files(entries)
 
@@ -217,7 +216,11 @@ def main() -> int:
         )
         return 1
 
-    print("Seam cases OK.")
+    declared = declaring_files(collect_entries())
+    cases = sum(len(declarations) for declarations in declared.values())
+    print(f"Seam cases OK: {len(declared)} contract(s), {cases} case(s).")
+    for path, declarations in sorted(declared.items(), key=lambda item: str(item[0])):
+        print(f"  {path}: {len(declarations)} case(s)")
     return 0
 
 

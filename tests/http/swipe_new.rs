@@ -12,16 +12,15 @@ use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, configured_registry, insert_message_with_swipe,
-    seed_event_flow, seed_main_narration_flow, ModelRole, ScriptedModel, TestAppBuilder,
-    TestDataBuilder, TestMap, TestStoredTriggerContext,
+    active_game_of, analysis_report, configured_runner, insert_message_with_swipe, seed_event_flow,
+    seed_main_narration_flow, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
+    TestStoredTriggerContext,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
 use crate::support::http_assertions::status_error_message;
 use crate::support::http_requests::{fetch_generating_status, post_action, post_empty, wait_settled};
 
-/// The player-input and Narration counts of the story log.
 fn story_log_counts(state: &AppState) -> (usize, usize) {
     let messages = state
         .message_service
@@ -31,7 +30,6 @@ fn story_log_counts(state: &AppState) -> (usize, usize) {
     (count(MessageType::Input), count(MessageType::Narration))
 }
 
-/// Returns the app, its state and the event Message's id.
 async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u64) {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
     use chronicler_engine::test_support::TestNpc;
@@ -1519,7 +1517,7 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
         Arc::clone(&app_storage),
         Arc::new(ScriptedModel::new().turn("I look around cautiously.")),
         AppSettings::default(),
-        configured_registry,
+        configured_runner,
     );
 
     {

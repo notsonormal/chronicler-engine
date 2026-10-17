@@ -1,11 +1,9 @@
-//! Unit tests for GenerationGate.
-
 use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::AppState;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::AgentRunner;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::message_service::MessageService;
 use crate::application::ports::llm_provider::LlmProvider;
@@ -99,7 +97,7 @@ fn test_reset_generating_status_sets_idle() {
     let pipeline = make_test_pipeline_with_backends(
         Arc::clone(&storage),
         narrator_recorder,
-        AgentRegistry::default(),
+        AgentRunner::default(),
     );
     let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), pipeline, NO_GAME)
         .expect("build_test_wired_app should succeed");
@@ -138,7 +136,7 @@ fn test_boot_heal_resets_stale_generating_status() {
     let pipeline = make_test_pipeline_with_backends(
         Arc::clone(&storage),
         narrator_recorder,
-        AgentRegistry::default(),
+        AgentRunner::default(),
     );
     let wired = crate::test_support::build_test_wired_app(storage, pipeline, NO_GAME)
         .expect("build_test_wired_app should succeed");

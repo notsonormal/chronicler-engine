@@ -1,5 +1,3 @@
-//! Unit tests for GameViewQuery read-side orchestration.
-
 use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
@@ -38,7 +36,7 @@ fn minimal_app_no_game() -> AppState {
     let _ = storage.save_snapshot(NO_GAME, &GameStateSnapshot::from_game_state(&state));
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
     let narrator_recorder = make_test_recorder(Arc::clone(&mock));
-    let registry = crate::application::agents::registry::AgentRegistry::default();
+    let registry = crate::application::agents::AgentRunner::default();
     let pipeline =
         make_test_pipeline_with_backends(Arc::clone(&storage), narrator_recorder, registry);
     let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), pipeline, NO_GAME)

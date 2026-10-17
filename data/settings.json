@@ -71,7 +71,7 @@
         "type": "use_named",
         "value": "quantifier"
       },
-      "phase": "post_generation"
+      "hook": "analysis"
     },
     {
       "name": "options",
@@ -81,7 +81,7 @@
         "type": "use_named",
         "value": "options"
       },
-      "phase": "options_generation"
+      "hook": "options"
     }
   ],
   "mode_preset_registry": [

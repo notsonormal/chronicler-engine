@@ -1,9 +1,6 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
 
-use std::sync::Arc;
-
-use crate::adapters::driven::storage::Storage;
 use crate::error::EngineError;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
@@ -13,7 +10,7 @@ use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::world::WorldCard;
 use crate::application::prompting::token_budget as budget;
-use crate::application::prompting::token_budget::truncate_to_budget;
+use crate::application::prompting::token_budget::{truncate_to_budget, TokenBudget};
 use crate::application::prompting::builders::sections::{
     build_post_history_prompt, build_system_prompt, render_known_npc_entry,
     render_present_relationships, sanitize_for_prompt,
@@ -31,8 +28,8 @@ pub struct AssembledPrompt {
 #[derive(Debug, Clone)]
 pub struct PromptContext<'a> {
     pub world: &'a WorldCard,
-    /// Resolved narrative posture (game-first, world fallback). Callers supply
-    /// it; `assemble` is the sole owner that stamps it onto the template vars.
+    /// Resolved posture (game-first, world fallback); `assemble` alone stamps it
+    /// onto the template vars.
     pub narrative_perspective: NarrativePerspective,
     pub narrative_tense: NarrativeTense,
     pub room: &'a Room,
@@ -47,33 +44,10 @@ pub struct PromptContext<'a> {
     pub impersonate: bool,
 }
 
-pub struct PromptAssembler {
-    max_context_tokens: u32,
-    max_tokens: Option<u32>,
-    storage: Option<Arc<Storage>>,
-}
-
-impl PromptAssembler {
-    pub fn new(max_context_tokens: u32) -> Self {
-        Self {
-            max_context_tokens,
-            max_tokens: None,
-            storage: None,
-        }
-    }
-
-    pub fn with_max_tokens(mut self, max: u32) -> Self {
-        self.max_tokens = Some(max);
-        self
-    }
-
-    /// Read the token budget from storage rather than a boot-time snapshot, so
-    /// a connection edit takes effect on the next assemble.
-    pub fn with_storage(mut self, storage: Arc<Storage>) -> Self {
-        self.storage = Some(storage);
-        self
-    }
-}
+/// The layered prompt builder. Every call carries its own `TokenBudget`, so the
+/// builder holds no window and no connection.
+#[derive(Default)]
+pub struct PromptAssembler;
 
 impl PromptAssembler {
     pub fn assemble(
@@ -82,6 +56,7 @@ impl PromptAssembler {
         preset: &PromptPreset,
         global_rules: &[String],
         response_length: Option<&str>,
+        budget: TokenBudget,
     ) -> Result<AssembledPrompt, EngineError> {
         let mut template_vars = context.template_vars.clone();
         Self::apply_posture(
@@ -108,9 +83,8 @@ impl PromptAssembler {
             impersonate: context.impersonate,
         };
 
-        let (max_context_tokens, requested_max_tokens) = self.resolve_budget()?;
         let (system, user, actual_max_tokens) =
-            renderer.render_and_fit(max_context_tokens, requested_max_tokens)?;
+            renderer.render_and_fit(budget.max_context_tokens, budget.max_tokens)?;
 
         Ok(AssembledPrompt {
             system_prompt: system,
@@ -119,15 +93,7 @@ impl PromptAssembler {
         })
     }
 
-    fn resolve_budget(&self) -> Result<(u32, Option<u32>), EngineError> {
-        let Some(storage) = &self.storage else {
-            return Ok((self.max_context_tokens, self.max_tokens));
-        };
-        let conn = storage.get_settings()?.narration_connection()?;
-        Ok((conn.resolve_max_context_tokens(), conn.max_tokens))
-    }
-
-    /// Sole owner of narrative-voice application. Callers never stamp.
+    /// Sole writer of the narrative-voice template vars.
     fn apply_posture(
         template_vars: &mut TemplateVars,
         perspective: NarrativePerspective,

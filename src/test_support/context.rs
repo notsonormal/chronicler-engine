@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::AppState;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::AgentRunner;
 use crate::application::games::active::ActiveGame;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::llm_recorder::LlmCallRecorder;
@@ -88,27 +88,22 @@ pub fn build_test_message_service(storage: Arc<Storage>) -> Arc<MessageService> 
     Arc::new(MessageService::new(storage))
 }
 
-/// The production default Agents, wired to a script instead of the
-/// storage-backed preset lookup, so a tier-1 turn scripts each call it makes.
-pub fn configured_registry(recorder: Arc<LlmCallRecorder>) -> AgentRegistry {
-    registry_from_configs(&AgentConfig::defaults(), recorder)
+pub fn configured_runner(recorder: Arc<LlmCallRecorder>) -> AgentRunner {
+    runner_from_configs(&AgentConfig::defaults(), recorder)
 }
 
 /// The same wiring without the Agents of `agent_type`, as an `[agents]` section
 /// with no entry for that type leaves them.
-pub fn configured_registry_without(
-    recorder: Arc<LlmCallRecorder>,
-    agent_type: &str,
-) -> AgentRegistry {
+pub fn configured_runner_without(recorder: Arc<LlmCallRecorder>, agent_type: &str) -> AgentRunner {
     let configs: Vec<AgentConfig> = AgentConfig::defaults()
         .into_iter()
         .filter(|config| config.agent_type != agent_type)
         .collect();
-    registry_from_configs(&configs, recorder)
+    runner_from_configs(&configs, recorder)
 }
 
-fn registry_from_configs(configs: &[AgentConfig], recorder: Arc<LlmCallRecorder>) -> AgentRegistry {
-    AgentRegistry::from_configs_with_storage(configs, Arc::clone(&recorder), recorder, None)
+fn runner_from_configs(configs: &[AgentConfig], recorder: Arc<LlmCallRecorder>) -> AgentRunner {
+    AgentRunner::from_configs(configs, Arc::clone(&recorder), recorder)
         // arch-lint: allow(no-unwrap-expect) reason="test wiring fails on an unknown agent config"
         .expect("configured Agents build from the default configs")
 }
@@ -116,7 +111,7 @@ fn registry_from_configs(configs: &[AgentConfig], recorder: Arc<LlmCallRecorder>
 pub fn make_test_pipeline_with_backends(
     storage: Arc<Storage>,
     recorder: Arc<LlmCallRecorder>,
-    agent_registry: AgentRegistry,
+    agent_runner: AgentRunner,
 ) -> ActionPipeline {
     seed_default_preset(&storage);
     let message_service = build_test_message_service(Arc::clone(&storage));
@@ -129,7 +124,7 @@ pub fn make_test_pipeline_with_backends(
     ActionPipeline::with_backends(
         CancellationToken::new(),
         recorder,
-        agent_registry,
+        agent_runner,
         message_service,
         storage,
         game_catalogue,
@@ -183,11 +178,11 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) -> Gam
 pub fn make_test_pipeline_app() -> AppState {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     TestAppBuilder::with_data(data)
         .pipeline(service)
@@ -197,11 +192,11 @@ pub fn make_test_pipeline_app() -> AppState {
 pub fn make_test_pipeline_app_with_storage() -> (AppState, Arc<Storage>) {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     TestAppBuilder::with_data(data)
         .pipeline(service)

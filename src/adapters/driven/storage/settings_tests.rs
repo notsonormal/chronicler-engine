@@ -1,7 +1,7 @@
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::domain::model::{
-    agent::{AgentConfig, BackendSelector, ExecutionPhase},
+    agent::{AgentConfig, BackendSelector, Hook},
     settings::{AppSettings, LlmProviderConfig, NarratorMode, TextCheckMode, TextCheckSettings},
 };
 use crate::error::EngineError;
@@ -229,7 +229,7 @@ fn test_save_then_get_settings_roundtrip() {
             agent_type: "PreGeneration".into(),
             enabled: true,
             backend: BackendSelector::UseMain,
-            phase: ExecutionPhase::PreGeneration,
+            hook: Hook::Analysis,
         }],
         ..Default::default()
     };
@@ -296,7 +296,7 @@ fn test_save_then_get_settings_roundtrip_sqlite() {
             agent_type: "PreGeneration".into(),
             enabled: true,
             backend: BackendSelector::UseMain,
-            phase: ExecutionPhase::PreGeneration,
+            hook: Hook::Analysis,
         }],
         ..Default::default()
     };
@@ -511,7 +511,7 @@ fn test_save_then_get_settings_preserves_agents() {
         agent_type: "Custom".into(),
         enabled: false,
         backend: BackendSelector::UseNamed("special-conn".into()),
-        phase: ExecutionPhase::PostGeneration,
+        hook: Hook::Options,
     };
 
     let settings = AppSettings {
@@ -531,7 +531,7 @@ fn test_save_then_get_settings_preserves_agents() {
         loaded_agent.backend,
         BackendSelector::UseNamed("special-conn".into())
     );
-    assert_eq!(loaded_agent.phase, ExecutionPhase::PostGeneration);
+    assert_eq!(loaded_agent.hook, Hook::Options);
 }
 
 #[test]
@@ -542,7 +542,7 @@ fn test_save_then_get_settings_preserves_agents_sqlite() {
         agent_type: "Custom".into(),
         enabled: false,
         backend: BackendSelector::UseNamed("special-conn".into()),
-        phase: ExecutionPhase::PostGeneration,
+        hook: Hook::Options,
     };
 
     let settings = AppSettings {
@@ -562,7 +562,7 @@ fn test_save_then_get_settings_preserves_agents_sqlite() {
         loaded_agent.backend,
         BackendSelector::UseNamed("special-conn".into())
     );
-    assert_eq!(loaded_agent.phase, ExecutionPhase::PostGeneration);
+    assert_eq!(loaded_agent.hook, Hook::Options);
 }
 
 #[test]

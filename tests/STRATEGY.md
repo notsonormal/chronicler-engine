@@ -35,8 +35,8 @@ A unit test lives in one of three places, and nowhere else:
 
 1. **A seam contract**: a `CASE` list in the test file of a box behind a port
    boundary. The boxes are the storage adapters, the LLM providers and the
-   transport, the Harper text checker, and each Agent. The storage contract
-   lives at the driven-adapter tier, in `tests/storage/`. The
+   transport, the Harper text checker, each Agent, and the `Narrator`. The
+   storage contract lives at the driven-adapter tier, in `tests/storage/`. The
    contract declares its cases in the file's module doc
    (`//! CASE <id>: <what it pins>`), and every test in a declaring file carries
    `// CASE: <id>`. A unit test in a declaring file calls only that box's entry
