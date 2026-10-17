@@ -18,6 +18,7 @@ Labels: wayfinder:map
 
 - [P0: the test rule and the guardrail machinery](issues/01-p0-test-rule-and-guardrail-machinery.md) — built and merged; the walker tables are empty until their rows land; `unit_test_standards.md` is deleted (owner), so read `tests/STRATEGY.md` where the plan names it; the `Narrator` joins the box lists in P4.
 - [P1: `ActiveGame` and `CurrentGame`](issues/02-p1-active-game-and-current-game.md) — built and merged; `GameId` is a newtype (lead); rule 2's row allows only `catalogue.rs`, and `CurrentGame` reads through `GameCatalogue`; call-site rows take a `callees` list.
+- [P2: delete the arrival opening](issues/03-p2-delete-the-arrival-opening.md) — built and merged; the boot-time `load_game_state` call stays until the core step; `with_max_tokens` waits for P4.
 
 ## Not yet specified
 

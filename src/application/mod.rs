@@ -2,9 +2,6 @@
 //! Application layer services and game flow orchestration
 
 pub mod agents;
-pub mod arrival_service;
-#[cfg(test)]
-mod arrival_service_tests;
 pub mod connection_test_service;
 #[cfg(test)]
 mod connection_test_service_tests;

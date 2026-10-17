@@ -18,7 +18,6 @@ use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
 struct PreparedData {
-    db_pool: DbPool,
     storage: Arc<Storage>,
     active_game_id: GameId,
     world_card: WorldCard,
@@ -105,7 +104,6 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         &settings,
     )?;
     Ok(PreparedData {
-        db_pool,
         storage,
         active_game_id,
         world_card: world_with_map.world_card,
@@ -122,7 +120,9 @@ fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
     let world_arc = Arc::new(data.world_card.clone());
     let player_arc = Arc::new(data.player.clone());
 
-    let state = super::init_game::load_game_state(
+    // Called for its write of the initial Snapshot and the scenario Message
+    // when a game has none; the loaded state itself is not kept.
+    super::init_game::load_game_state(
         &data.storage,
         data.active_game_id,
         &world_arc,
@@ -131,26 +131,7 @@ fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
         &data.npcs_map,
     )?;
 
-    let nearby_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
-    let all_npcs: Vec<NpcCard> = data.npcs_map.values().cloned().collect();
-    let room_id = state.movement.current_room_id.clone();
-
     let wired = build_app_graph(Arc::clone(&data.storage), Some(data.active_game_id))?;
-
-    super::init_game::spawn_arrival_task_if_needed(
-        &runtime,
-        Arc::clone(&wired.message_service),
-        Arc::new(wired.pipeline.clone()),
-        &data.storage,
-        data.active_game_id,
-        &data.db_pool,
-        super::init_game::ArrivalSpawnRequest {
-            world: world_arc,
-            room_id,
-            nearby_npcs,
-            all_npcs,
-        },
-    )?;
 
     Ok(StateResources { runtime, wired })
 }
