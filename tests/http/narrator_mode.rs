@@ -1,29 +1,14 @@
 //! HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
 
-use std::sync::Arc;
-
 use chronicler_engine::test_support::active_game_of;
-use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
-use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::application::ports::llm_provider::AGENT_NARRATOR;
-use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::TestMap;
+use chronicler_engine::test_support::{ScriptedModel, TestMap};
 
-use crate::support::app_wiring::app_with_narrator_and_registry;
+use crate::support::app_wiring::app_with_script;
 use crate::support::http_fixtures::if_world;
-use crate::support::http_requests::{post_action, post_form, wait_idle};
-/// App whose narrator recorder persists every assembled prompt into the
-/// shared storage, so tests can assert on what the narrator received.
-fn narrated_app() -> (axum::Router, AppState, Arc<Storage>) {
-    app_with_narrator_and_registry(
-        Arc::new(MockBackend::default()),
-        AgentRegistry::default(),
-        AppSettings::default(),
-    )
-}
+use crate::support::http_requests::{post_action, post_form, wait_settled};
 
 fn narrator_prompts(state: &AppState) -> Vec<(String, String)> {
     state
@@ -47,7 +32,7 @@ fn if_prompt_marker() -> &'static str {
 // [docs/specs/narrator_mode.md] SCENARIO: 23.1
 #[tokio::test]
 async fn test_if_world_game_inherits_posture_and_bundle_http() {
-    let (app, state, storage) = narrated_app();
+    let (app, state, storage) = app_with_script(ScriptedModel::new().turn("You look around."));
     storage
         .seed_world(&if_world(), &TestMap::single_room("start"))
         .expect("seed IF world");
@@ -57,7 +42,7 @@ async fn test_if_world_game_inherits_posture_and_bundle_http() {
 
     let resp = post_action(&app, "open the door").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 1000).await, "action should complete");
 
     let prompts = narrator_prompts(&state);
     assert!(
@@ -104,12 +89,16 @@ async fn test_if_world_game_inherits_posture_and_bundle_http() {
 // [docs/specs/narrator_mode.md] SCENARIO: 23.2
 #[tokio::test]
 async fn test_mode_switch_retargets_system_preset_http() {
-    let (app, state, _storage) = narrated_app();
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .turn("You look around again."),
+    );
     let game_id = active_game_of(&state);
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let prompts = narrator_prompts(&state);
     assert!(
         prompts
@@ -128,7 +117,7 @@ async fn test_mode_switch_retargets_system_preset_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let (last_system, _) = narrator_prompts(&state)
         .pop()
@@ -146,7 +135,7 @@ async fn test_mode_switch_retargets_system_preset_http() {
 // [docs/specs/narrator_mode.md] SCENARIO: 23.3
 #[tokio::test]
 async fn test_mode_switch_renders_if_bundle_and_nudges_perspective_http() {
-    let (app, state, _storage) = narrated_app();
+    let (app, state, _storage) = app_with_script(ScriptedModel::new().turn("You look around."));
     let game_id = active_game_of(&state);
 
     let resp = post_form(
@@ -169,7 +158,7 @@ async fn test_mode_switch_renders_if_bundle_and_nudges_perspective_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let (last_system, last_user) = narrator_prompts(&state)
         .pop()
         .expect("the post-switch narration must record a prompt");
@@ -186,7 +175,7 @@ async fn test_mode_switch_renders_if_bundle_and_nudges_perspective_http() {
 // [docs/specs/narrator_mode.md] SCENARIO: 23.4
 #[tokio::test]
 async fn test_deliberate_perspective_survives_mode_switch_http() {
-    let (app, state, _storage) = narrated_app();
+    let (app, state, _storage) = app_with_script(ScriptedModel::new().turn("You look around."));
     let game_id = active_game_of(&state);
 
     let resp = post_form(
@@ -216,7 +205,7 @@ async fn test_deliberate_perspective_survives_mode_switch_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let (_, last_user) = narrator_prompts(&state)
         .pop()
         .expect("the post-switch narration must record a prompt");
@@ -229,7 +218,7 @@ async fn test_deliberate_perspective_survives_mode_switch_http() {
 // [docs/specs/narrator_mode.md] SCENARIO: 23.5
 #[tokio::test]
 async fn test_impersonate_works_in_if_game_http() {
-    let (app, state, storage) = narrated_app();
+    let (app, state, storage) = app_with_script(ScriptedModel::new().turn("You look around."));
     storage
         .seed_world(&if_world(), &TestMap::single_room("start"))
         .expect("seed IF world");
@@ -238,7 +227,10 @@ async fn test_impersonate_works_in_if_game_http() {
 
     let resp = post_action(&app, "/impersonate hello").await;
     assert!(resp.status().is_success(), "/impersonate should accept");
-    assert!(wait_idle(&state, 1000).await, "impersonate should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "impersonate should complete"
+    );
 
     let messages = state
         .message_service

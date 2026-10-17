@@ -13,12 +13,18 @@ use chronicler_engine::TestAppBuilder;
 use chronicler_engine::domain::model::message::{Message, Swipe};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
-use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+use chronicler_engine::adapters::driving::http::AppState;
 
-use crate::support::app_wiring::app_with_narrator;
-use crate::support::http_requests::{fetch_body, post_action, wait_idle};
+use crate::support::app_wiring::app_with_model;
+use crate::support::http_requests::{fetch_body, post_action, wait_settled};
 use crate::TEST_PERSONA;
-use chronicler_engine::test_support::active_game_of;
+use chronicler_engine::test_support::{active_game_of, analysis_report, ScriptedModel};
+
+fn one_turn_app() -> (axum::Router, AppState) {
+    TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().turn("You look around.")))
+        .build_with_state()
+}
 
 #[tokio::test]
 async fn test_basic_fragments_return_html() {
@@ -56,21 +62,26 @@ async fn test_visual_sidebar_renders_room_image() {
 
 #[tokio::test]
 async fn test_story_log_fragment_renders_action_buttons_after_actions() {
-    let narrator = Arc::new(
-        MockBackend::default().with_narrations(vec!["First.".to_string(), "Second.".to_string()]),
-    );
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = {
+        let model = Arc::new(
+            ScriptedModel::new()
+                .turn("First.")
+                .narration("Second.")
+                .analysis(analysis_report(&[], None)),
+        );
+        app_with_model(model)
+    };
 
     let resp = post_action(&app, "first").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "first action should complete"
     );
     let resp = post_action(&app, "second").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "second action should complete"
     );
 
@@ -109,7 +120,7 @@ async fn test_header_fragment_displays_game_title() {
 
 #[tokio::test]
 async fn test_action_handler_accepts_command() {
-    let app = TestAppBuilder::default_app();
+    let (app, state) = one_turn_app();
 
     let req = Request::builder()
         .uri("/action")
@@ -128,11 +139,15 @@ async fn test_action_handler_accepts_command() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(body_str.contains("status"));
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the accepted Action's Job should settle"
+    );
 }
 
 #[tokio::test]
 async fn test_action_handler_empty_command() {
-    let app = TestAppBuilder::default_app();
+    let (app, state) = one_turn_app();
 
     let req = Request::builder()
         .uri("/action")
@@ -153,6 +168,10 @@ async fn test_action_handler_empty_command() {
     assert!(
         body_str.contains("Thinking"),
         "Expected empty command to trigger continuation: {body_str}"
+    );
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the continuation Job should settle"
     );
 }
 
@@ -299,7 +318,9 @@ async fn test_delete_history_handler_empty() {
 
 #[tokio::test]
 async fn test_action_confirm_empty_command() {
-    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().turn("The scene continues.")))
+        .build_with_state();
 
     let req = Request::builder()
         .uri("/action/confirm")
@@ -313,22 +334,15 @@ async fn test_action_confirm_empty_command() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-
-    let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_millis(500);
-    while start.elapsed() < timeout {
-        let state = state.message_service.load_or_fresh(active_game_of(&state));
-        if !state.narrative.input_buffer.status.is_generating() {
-            return;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    }
-    panic!("Pipeline did not finalize within 500ms");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the continuation Job should settle"
+    );
 }
 
 #[tokio::test]
 async fn test_action_async_inventory() {
-    let app = TestAppBuilder::default_app();
+    let (app, state) = one_turn_app();
 
     let req = Request::builder()
         .uri("/action")
@@ -344,6 +358,10 @@ async fn test_action_async_inventory() {
     assert!(response.status().is_success());
     let hx_trigger = response.headers().get("HX-Trigger");
     assert!(hx_trigger.is_none(), "Inventory should be async, not sync");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the inventory Action's Job should settle"
+    );
 }
 
 #[tokio::test]

@@ -19,7 +19,7 @@ Normal Actions and main retries run the same success-path phases. Event retry an
 flowchart TD
     Start([Action submitted]) --> Pre[pre-main snapshot]
     Pre --> Narrate[narrate]
-    Narrate --> PostGen[post-generation Agents]
+    Narrate --> PostGen[analysis hook]
     PostGen --> Commit[game rules]
     Commit -->|Trigger present| Trigger[trigger continuation]
     Commit -->|No Trigger| Options[turn-end Options rewrite]
@@ -45,7 +45,7 @@ A Game switch or reset invalidates stale work at the next boundary. Mismatch ret
 
 ## Trigger Evaluation
 
-Trigger evaluation runs after main narration and post-generation quantification, inside the game rules. At most the first matching Trigger produces a continuation for an Action.
+Trigger evaluation runs after main narration and the analysis hook, inside the game rules. At most the first matching Trigger produces a continuation for an Action.
 
 The Trigger name becomes event-header metadata on the continuation Message.
 
@@ -70,7 +70,7 @@ Main retry restores the Snapshot of its anchor Message before generation. Event 
 
 ## Movement Branch
 
-Movement is a branch of post-generation quantification:
+Movement is a branch of the analysis hook:
 
 - Movement occurs when the Quantifier derives a destination from the narrator's latest outcome.
 - A static match updates `movement.current_room_id`. An unmatched destination creates a dynamic pseudo-room, stores it in `movement.dynamic_rooms`, and makes it current.

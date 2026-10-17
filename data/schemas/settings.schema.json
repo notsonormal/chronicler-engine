@@ -124,13 +124,13 @@
             },
             "required": ["type"]
           },
-          "phase": {
+          "hook": {
             "type": "string",
-            "enum": ["pre_generation", "post_generation", "options_generation"],
-            "description": "Pipeline position where the agent runs."
+            "enum": ["analysis", "options"],
+            "description": "Fixed point in a generation where the agent runs."
           }
         },
-        "required": ["name", "agent_type", "enabled", "phase"]
+        "required": ["name", "agent_type", "enabled", "hook"]
       }
     },
     "mode_preset_registry": {

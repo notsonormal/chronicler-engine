@@ -110,14 +110,14 @@ And the event narration message has its new swipe as the active swipe
 And the generation status is Idle
 ```
 
-#### Scenario 10.2: Event retry does not re-run the quantifier
+#### Scenario 10.2: Event retry does not move the player
 
 ```gherkin
 Given a game state where the last message is an event Narration
 And the Action that fired the event moved the player into "room2"
 When the client sends POST /swipe/new
 And the pipeline returns to idle
-Then the player is still in "room2" (the Quantifier does not re-run)
+Then the player is still in "room2" (an event retry applies no movement)
 ```
 
 #### Scenario 10.4: An event retry after a Retrigger adds a swipe to the retriggered event
@@ -318,7 +318,7 @@ Then the message history contains exactly one Input entry (the original message 
 And that Input entry has 2 swipes (one appended by retry)
 And the active swipe's text is "I look around cautiously."
 And the generation status is Idle
-And the player has not moved (the quantifier did not re-run)
+And the player has not moved
 ```
 
 #### Scenario 22.2: User-regen retry generates a new Input swipe
@@ -392,9 +392,11 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   swipe without altering prior swipes.
 - **I.5** Each retry appends exactly one swipe. Repeated retries on the
   same message increment the swipe count by one each time.
-- **I.6** Main retry re-runs the quantifier; event retry does not.
-  Re-impersonate and user-regen retries do not re-run the quantifier.
-  They generate one swipe and stop.
+- **I.6** A retry moves the player nowhere except through the movement its
+  own generation reports. A main retry and a re-impersonate retry apply the
+  movement their generation reports. An event retry applies no movement, so
+  the player stays in the room that event narration reported. A user-regen
+  retry narrates the replacement message only.
 - **I.7** If a message exists in history, it must have a Snapshot
   that can be restored. A message without a snapshot (or with
   a dangling snapshot id) is a data-integrity violation (500), not a user

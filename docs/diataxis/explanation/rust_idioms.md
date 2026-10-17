@@ -5,7 +5,7 @@ title: Rust Idioms
 
 ## Concrete services and backend enum dispatch
 
-`ActionPipeline` and the catalogue/gate collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum — `Sqlite` or `InMemory` — plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the agent registry's `Box<dyn Agent>` for heterogeneous agent dispatch).
+`ActionPipeline` and the catalogue/gate collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum — `Sqlite` or `InMemory` — plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the `AgentRunner`'s `Box<dyn AnalysisAgent>` for heterogeneous agent dispatch).
 
 Backend switching travels through enum-variant dispatch. Tests construct an in-memory backend by selecting the enum variant; production constructs the SQLite backend the same way; the surrounding code is the same struct. Each call site reads the same concrete type; the polymorphism lives at the switch sites that consume the enum, which avoids threading a type parameter through the application to make storage polymorphic.
 

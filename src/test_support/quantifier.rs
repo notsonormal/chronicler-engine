@@ -2,11 +2,10 @@
 
 use std::collections::HashMap;
 
-use chrono::Utc;
-
 use crate::domain::model::character::{CharacterSheet, NpcCard};
 use crate::domain::model::map::{Direction, Room};
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::agent::StoryEntry;
+use crate::domain::model::state::message_types::MessageType;
 
 pub fn make_room() -> Room {
     Room {
@@ -39,21 +38,15 @@ pub fn make_npc(id: &str, name: &str) -> NpcCard {
     }
 }
 
-pub fn make_history() -> Vec<MessageEntry> {
+pub fn make_history() -> Vec<StoryEntry> {
     vec![
-        MessageEntry {
-            id: 1,
+        StoryEntry {
             text: "You enter the front gate.".to_string(),
             message_type: MessageType::Narration,
-            timestamp: Utc::now(),
-            ..Default::default()
         },
-        MessageEntry {
-            id: 2,
+        StoryEntry {
             text: "I'll follow you inside.".to_string(),
             message_type: MessageType::Input,
-            timestamp: Utc::now(),
-            ..Default::default()
         },
     ]
 }

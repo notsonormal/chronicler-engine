@@ -1,49 +1,16 @@
 //! HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
 
-use std::sync::Arc;
-
 use axum::http::StatusCode;
 
-use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
-use chronicler_engine::application::agents::options::OptionsAgent;
-use chronicler_engine::application::agents::quantifier::QuantifierAgent;
-use chronicler_engine::application::agents::registry::AgentRegistry;
-use chronicler_engine::application::ports::llm_provider::LlmProvider;
-use chronicler_engine::domain::model::settings::AppSettings;
+use chronicler_engine::test_support::ScriptedModel;
 
-use crate::support::app_wiring::app_with_narrator_and_registry;
-use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_idle};
-
-/// App wired with an options agent so the dock can be populated, and a
-/// narrator that returns a non-empty narration for any prompt.
-fn options_app() -> (axum::Router, AppState, Arc<Storage>) {
-    let mut registry = AgentRegistry::default();
-    // A High-confidence quantifier result suppresses the uncertain-NPC
-    // System fallback message, so the Narration stays the last Message and
-    // keeps its swipe controls.
-    registry.add_agent(Box::new(QuantifierAgent::with_provider(
-        "quantifier".to_string(),
-        Arc::new(
-            MockBackend::default()
-                .with_prompt_responses(vec![r#"{"npcs_in_room": []}"#.to_string()]),
-        ) as Arc<dyn LlmProvider>,
-    )));
-    registry.add_agent(Box::new(OptionsAgent::with_provider(
-        "options".to_string(),
-        Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>,
-    )));
-    app_with_narrator_and_registry(
-        Arc::new(MockBackend::default()),
-        registry,
-        AppSettings::default(),
-    )
-}
+use crate::support::app_wiring::app_with_script;
+use crate::support::http_fixtures::OFFERED_SET;
+use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_settled};
 
 /// The first swipe switch the rendered log offers, as `(message id, target
-/// index)`. Reading the switch out of the fragment keeps the test on the HTTP
-/// seam instead of reaching into storage.
+/// index)`.
 fn first_switch_target(log_fragment: &str) -> (u64, usize) {
     let marker = "switchSwipe(";
     let start = log_fragment
@@ -66,13 +33,12 @@ fn first_switch_target(log_fragment: &str) -> (u64, usize) {
     (id, index)
 }
 
-/// Drive a turn, then a second swipe of it, and return the switch target.
 async fn last_message_with_two_swipes(app: &axum::Router, state: &AppState) -> (u64, usize) {
     assert!(post_action(app, "look").await.status().is_success());
-    assert!(wait_idle(state, 1000).await, "the turn should complete");
+    assert!(wait_settled(state, 1000).await, "the turn should complete");
 
     assert!(post_empty(app, "/swipe/new").await.status().is_success());
-    assert!(wait_idle(state, 1000).await, "the retry should complete");
+    assert!(wait_settled(state, 1000).await, "the retry should complete");
 
     let log = fetch_body(app, "/fragment/story-log").await;
     first_switch_target(&log)
@@ -81,7 +47,11 @@ async fn last_message_with_two_swipes(app: &axum::Router, state: &AppState) -> (
 // [docs/specs/swipe_switch.md] SCENARIO: 36.1
 #[tokio::test]
 async fn test_switch_swipe_leaves_the_game_idle_http() {
-    let (app, state, _storage) = options_app();
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .turn("You look around again."),
+    );
 
     let (message_id, target) = last_message_with_two_swipes(&app, &state).await;
 
@@ -99,20 +69,27 @@ async fn test_switch_swipe_leaves_the_game_idle_http() {
 // [docs/specs/swipe_switch.md] SCENARIO: 36.2
 #[tokio::test]
 async fn test_switch_swipe_drops_the_offered_option_set_http() {
-    let (app, state, _storage) = options_app();
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .options(OFFERED_SET)
+            .turn("You look around.")
+            .options(OFFERED_SET)
+            .turn("You look around again.")
+            .turn("You look around once more.")
+            .options(OFFERED_SET),
+    );
 
-    // Turn 1, then a live option set. Turn 2's pre-turn snapshot then carries
-    // that set, so the retry's Swipe snapshot does too — the stale set the
-    // switch must not restore.
+    // Turn 2's pre-turn snapshot carries the live option set, so the retry's
+    // Swipe snapshot does too — the stale set the switch must not restore.
     assert!(post_action(&app, "look").await.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     assert!(post_action(&app, "/options").await.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let (message_id, target) = last_message_with_two_swipes(&app, &state).await;
 
     assert!(post_action(&app, "/options").await.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let before = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         before.contains("options-strip"),

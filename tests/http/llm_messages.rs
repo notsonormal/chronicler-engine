@@ -1,30 +1,18 @@
 //! HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders.
 
-use std::sync::Arc;
+use chronicler_engine::test_support::{analysis_report, ModelRole, ScriptedModel};
 
-use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::adapters::driven::storage::Storage;
-use chronicler_engine::adapters::driving::http::AppState;
-use chronicler_engine::application::agents::registry::AgentRegistry;
-use chronicler_engine::domain::model::settings::AppSettings;
-
-use crate::support::app_wiring::app_with_narrator_and_registry;
-use crate::support::http_requests::{fetch_body, post_action, wait_idle};
-
-/// App on the default test data whose narrator recorder persists every
-/// attempt into the shared storage.
-fn narrator_app(narrator: Arc<MockBackend>) -> (axum::Router, AppState, Arc<Storage>) {
-    app_with_narrator_and_registry(narrator, AgentRegistry::default(), AppSettings::default())
-}
+use crate::support::app_wiring::app_with_script;
+use crate::support::http_requests::{fetch_body, post_action, wait_settled};
 
 // [docs/specs/llm_messages.md] SCENARIO: 33.1
 #[tokio::test]
 async fn test_failed_narration_attempt_records_and_renders_failure_http() {
-    let (app, state, _storage) = narrator_app(Arc::new(MockBackend::new().with_fail()));
+    let (app, state, _storage) = app_with_script(ScriptedModel::new().failed(ModelRole::Narration));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 1000).await, "action should complete");
 
     let messages = state
         .game_view_query
@@ -41,8 +29,8 @@ async fn test_failed_narration_attempt_records_and_renders_failure_http() {
     );
     let failure = failures[0];
     assert_eq!(failure.agent_name, "narrator");
-    assert_eq!(failure.backend_name, "Mock");
-    assert_eq!(failure.model_name, "mock");
+    assert_eq!(failure.backend_name, "Scripted");
+    assert_eq!(failure.model_name, "scripted");
     assert!(
         failure
             .error_message
@@ -62,7 +50,7 @@ async fn test_failed_narration_attempt_records_and_renders_failure_http() {
         "the Agent must be named: {panel}"
     );
     assert!(
-        panel.contains("Mock / mock"),
+        panel.contains("Scripted / scripted"),
         "the backend/model must be named: {panel}"
     );
     assert!(
@@ -78,26 +66,34 @@ async fn test_failed_narration_attempt_records_and_renders_failure_http() {
 // [docs/specs/llm_messages.md] SCENARIO: 33.2
 #[tokio::test]
 async fn test_failed_attempt_survives_a_later_success_http() {
-    let (app, state, _storage) = narrator_app(Arc::new(MockBackend::new().with_fail_first_n(1)));
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .failed(ModelRole::Narration)
+            .narration("You listen.")
+            .analysis(analysis_report(&[], None)),
+    );
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "first action should complete"
     );
 
     let resp = post_action(&app, "listen").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "second action should complete"
     );
 
-    let messages = state
+    let messages: Vec<_> = state
         .game_view_query
         .list_latest_llm_messages(50)
-        .expect("list_latest_llm_messages should succeed");
+        .expect("list_latest_llm_messages should succeed")
+        .into_iter()
+        .filter(|m| m.agent_name == "narrator")
+        .collect();
     assert_eq!(messages.len(), 2, "each attempt leaves its own row");
     assert_eq!(
         messages

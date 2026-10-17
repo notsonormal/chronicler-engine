@@ -1,11 +1,9 @@
-//! Unit tests for retrigger entry path.
-
 use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use super::action_tests::app_with_second_game;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::AgentRunner;
 use crate::application::errors::ProcessActionResult;
 use crate::application::pipeline::action_pipeline::retry_tests::{
     add_input_and_save, insert_message_with_swipe, save_pre_main, setup_event_flow,
@@ -86,11 +84,11 @@ async fn test_retrigger_event_cancelled_at_phase_boundary() {
 
     let mock_backend = Arc::new(MockBackend::default().with_trigger_delay(200));
     let narrator_recorder = make_test_recorder(Arc::clone(&mock_backend) as Arc<_>);
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let (app, storage) = TestAppBuilder::default_test()
         .pipeline(service)
@@ -141,11 +139,11 @@ async fn test_retrigger_event_emits_error_on_world_fetch_failure() {
         TestOverride::internal("simulated get_world failure"),
     );
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     let (app, storage) = TestAppBuilder::with_data(data)
         .storage(Arc::new(storage))

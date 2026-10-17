@@ -18,6 +18,7 @@ mod llm_messages;
 mod narrator_mode;
 mod options;
 mod prompt_presets;
+mod races;
 mod reset;
 mod retrigger;
 mod settings;

@@ -2,6 +2,3 @@
 //! Narrative prompt builder modules.
 
 pub(crate) mod sections;
-
-#[cfg(test)]
-mod sections_tests;

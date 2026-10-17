@@ -13,12 +13,15 @@ use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
+use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::body_text;
 use chronicler_engine::test_support::fixtures::llm_message;
+use chronicler_engine::test_support::ScriptedModel;
 use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
-use crate::support::app_wiring::app_with_production_graph;
+use crate::support::app_wiring::{app_with_model_and_storage, app_with_production_graph};
+use crate::support::http_requests::{post_action, wait_settled};
 use crate::test_utils::card_html_slice;
 
 fn post_form_request(uri: &str, body: &str) -> Request<Body> {
@@ -789,4 +792,95 @@ async fn test_form_connection_test_uses_the_typed_values_before_save() {
         "a form test must not save the typed connection"
     );
     assert_eq!(stored.connections[0].id, "saved-conn");
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.25
+#[tokio::test]
+async fn test_connection_context_window_applies_from_the_next_narration() {
+    let _guard = SettingsTestGuard::new();
+    let model = Arc::new(
+        ScriptedModel::new()
+            .turn("First narration.")
+            .turn("Second narration."),
+    );
+    // A mock connection resolves a 4096-token window; an Ollama connection
+    // resolves 8192, so the edit widens the window the narration fits into.
+    let settings = AppSettings {
+        connections: vec![mock_connection("narration-conn", "mock-model")],
+        narration_connection_id: "narration-conn".into(),
+        quantifier_connection_id: "narration-conn".into(),
+        ..AppSettings::default()
+    };
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(Storage::new_in_memory()),
+        model,
+        settings,
+        chronicler_engine::test_support::configured_runner,
+    );
+    let game_id = chronicler_engine::test_support::active_game_of(&state);
+
+    // A story log long enough that the window's size shows in the prompt.
+    {
+        let mut seeded = state.message_service.load_or_fresh(game_id);
+        for index in 0..150 {
+            seeded.add_message(
+                format!(
+                    "Story entry {index}: the long tale of the inn, told again at length \
+                     for everyone who came to listen that evening."
+                ),
+                MessageType::Narration,
+            );
+        }
+        state
+            .message_service
+            .save_message_and_snapshot(game_id, &mut seeded)
+            .expect("the seeded story log saves");
+    }
+
+    assert!(post_action(&app, "first look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the first narration should settle"
+    );
+
+    let edited = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/narration-conn/edit",
+            "conn_name=Wide&conn_provider=ollama&conn_model=mock-model&conn_api_key=&conn_base_url=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        edited.status(),
+        StatusCode::OK,
+        "the connection edit should save"
+    );
+
+    assert!(post_action(&app, "second look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the second narration should settle"
+    );
+
+    let prompts: Vec<String> = state
+        .game_view_query
+        .list_latest_llm_messages(20)
+        .expect("the recorded calls read back")
+        .into_iter()
+        .filter(|message| message.agent_name == "narrator")
+        .map(|message| message.user_prompt)
+        .collect();
+    assert_eq!(prompts.len(), 2, "each Action records one narrator call");
+    let tight = prompts[0].matches("Story entry ").count();
+    let wide = prompts[1].matches("Story entry ").count();
+    assert!(
+        tight < 150,
+        "the small window must not carry the whole story log: {tight} entries"
+    );
+    assert!(
+        wide > tight,
+        "the window the Connection holds at that moment decides how much of the story \
+         log reaches the prompt: {tight} entries before the edit, {wide} after"
+    );
 }

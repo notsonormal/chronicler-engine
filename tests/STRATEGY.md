@@ -13,7 +13,7 @@ checks outside the tier model.
 | Directory | Tier | Faked | Real | Holds |
 |---|---|---|---|---|
 | `src/**/*_tests.rs` | **Unit** | both driven ports (`MockBackend`, in-memory `Storage`) | nothing | [the one rule](#the-one-rule): a seam contract's `CASE`s, a pure `domain/model/` function, or a file on the legacy list |
-| `tests/http/` | **HTTP E2E (tier 1)** | LLM (`MockBackend` via pipeline override) | axum router, SQLite or in-memory storage | spec scenarios, asserted on [domain outcomes](#domain-outcome-the-tier-1-rule) |
+| `tests/http/` | **HTTP E2E (tier 1)** | LLM (`ScriptedModel`, one script entry per call) | axum router, SQLite or in-memory storage | spec scenarios, asserted on [domain outcomes](#domain-outcome-the-tier-1-rule) |
 | `tests/http/requires_migration/` | tier 1, quarantine | as `tests/http/` | as `tests/http/` | legacy tests that wait for a spec; untagged, size pinned |
 | `tests/http/support/` | support for tier 1 | — | — | request builders, seeding fixtures, HTML assertions, app wiring |
 | `tests/browser/stub/` | **Stub browser (tier 2)** | the whole engine | stub server (real shell, real or canned fragments) + browser, a fresh page per test | client-side behaviour of the shipped JS |
@@ -35,8 +35,8 @@ A unit test lives in one of three places, and nowhere else:
 
 1. **A seam contract**: a `CASE` list in the test file of a box behind a port
    boundary. The boxes are the storage adapters, the LLM providers and the
-   transport, the Harper text checker, and each Agent. The storage contract
-   lives at the driven-adapter tier, in `tests/storage/`. The
+   transport, the Harper text checker, each Agent, and the `Narrator`. The
+   storage contract lives at the driven-adapter tier, in `tests/storage/`. The
    contract declares its cases in the file's module doc
    (`//! CASE <id>: <what it pins>`), and every test in a declaring file carries
    `// CASE: <id>`. A unit test in a declaring file calls only that box's entry

@@ -1,13 +1,16 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Agent definitions and behavior types
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::game::GameId;
-use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::map::{MapDef, Room};
+use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::state::trigger_context::StoredTriggerContext;
 
-/// A role the failure banner and the Settings role rows report on. A role's
-/// health is its newest LLM attempt across every game.
+/// A role's health is its newest LLM attempt across every game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     /// Writes the turn's narration.
@@ -38,19 +41,93 @@ impl Role {
     }
 }
 
+/// A point in a generation where the Job runs the Agents registered for that hook.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum ExecutionPhase {
-    /// Agents that run before narration is generated.
+pub enum Hook {
+    /// Runs after the narrator wrote the text: the patch the game rules apply.
     #[default]
-    PreGeneration,
-    /// Agents the generic post-narration loop runs, whose `StatePatch`
-    /// output merges into the quantifier result.
-    PostGeneration,
-    /// Agents dispatched only at gated call sites — the turn-end offered-set
-    /// rewrite and the `/options` entry path. The generic PostGeneration
-    /// merge loop never runs them.
-    OptionsGeneration,
+    Analysis,
+    /// Runs once per Job, after its last generation: the offered set.
+    Options,
+}
+
+/// The kind of one generation: how it was asked for, which decides how the
+/// Narrator writes it and what may follow it. A typed Input is no generation,
+/// so it has no kind here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    /// A player Action or a Retry of one.
+    Narration,
+    /// The player dictating their own character's turn.
+    Impersonate,
+    /// A Retry that regenerates the player's own message.
+    UserRegen,
+    /// A Trigger's continuation narration.
+    Event,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoryEntry {
+    pub message_type: MessageType,
+    pub text: String,
+}
+
+impl From<&MessageEntry> for StoryEntry {
+    fn from(entry: &MessageEntry) -> Self {
+        Self {
+            message_type: entry.message_type.clone(),
+            text: entry.text.clone(),
+        }
+    }
+}
+
+pub const STORY_WINDOW: usize = 4;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EventRecord {
+    pub npc_id: String,
+    pub trigger_idx: usize,
+    pub trigger_name: String,
+    pub direction: String,
+}
+
+impl From<&StoredTriggerContext> for EventRecord {
+    fn from(context: &StoredTriggerContext) -> Self {
+        Self {
+            npc_id: context.npc_id.clone(),
+            trigger_idx: context.trigger_idx,
+            trigger_name: context.trigger_name.clone(),
+            direction: context.trigger_narration_prompt.clone(),
+        }
+    }
+}
+
+pub struct WorldView<'a> {
+    /// `None` when the state names a room the map does not know.
+    pub room: Option<&'a Room>,
+    pub map: &'a MapDef,
+    pub persona: &'a PersonaCard,
+    pub characters: &'a HashMap<String, NpcCard>,
+    pub present: &'a [NpcCard],
+}
+
+/// Carries no Game id, no storage, no dock record and no failure line: an Agent
+/// writes no game record, and the step owns every read and write.
+pub struct HookInput<'a> {
+    pub kind: Kind,
+    /// The text the Job saved, for a hook that runs after the narrator call.
+    pub text: Option<&'a str>,
+    pub player_text: &'a str,
+    pub story: &'a [StoryEntry],
+    pub world: &'a WorldView<'a>,
+    pub event: Option<&'a EventRecord>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AgentSettings {
+    pub preset: Option<String>,
+    pub max_tokens: Option<u32>,
 }
 
 /// [TRIVIAL_ENUM]
@@ -70,7 +147,7 @@ pub struct AgentConfig {
     #[serde(default)]
     pub backend: BackendSelector,
     #[serde(default)]
-    pub phase: ExecutionPhase,
+    pub hook: Hook,
 }
 
 impl AgentConfig {
@@ -81,62 +158,59 @@ impl AgentConfig {
                 agent_type: "quantifier".to_string(),
                 enabled: true,
                 backend: BackendSelector::UseNamed("quantifier".to_string()),
-                phase: ExecutionPhase::PostGeneration,
+                hook: Hook::Analysis,
             },
             Self {
                 name: "options".to_string(),
                 agent_type: "options".to_string(),
                 enabled: true,
                 backend: BackendSelector::UseNamed("options".to_string()),
-                phase: ExecutionPhase::OptionsGeneration,
+                hook: Hook::Options,
             },
         ]
     }
 }
 
 impl StatePatch {
-    /// Union `npc_ids`; keep first non-None `movement_destination` (warn on conflict); take minimum `confidence`.
+    /// Merges two Agents' patches into the one the game rules apply: the union of
+    /// their Characters, the first movement destination (a second one is a
+    /// contradiction between two Agents, so the first wins and the second is
+    /// logged), and the least confident of the two.
     pub fn merge(self, other: StatePatch) -> StatePatch {
-        let ids_b_unique: Vec<_> = other
+        let mut npc_ids = self.npc_ids;
+        let new_ids: Vec<String> = other
             .npc_ids
             .into_iter()
-            .filter(|id| !self.npc_ids.contains(id))
+            .filter(|id| !npc_ids.contains(id))
             .collect();
-        let mut npc_ids = self.npc_ids;
-        npc_ids.extend(ids_b_unique);
+        npc_ids.extend(new_ids);
 
-        let movement_destination = match self.movement_destination {
-            Some(ref d) => {
-                if let Some(ref db) = other.movement_destination {
-                    tracing::warn!("Movement destination conflict: {d} vs {db}, keeping first",);
-                }
-                Some(d.clone())
+        let movement_destination = match (self.movement_destination, other.movement_destination) {
+            (Some(first), Some(second)) => {
+                tracing::warn!("Movement destination conflict: {first} vs {second}, keeping first");
+                Some(first)
             }
-            None => other.movement_destination,
-        };
-
-        let confidence = match (self.confidence, other.confidence) {
-            (Confidence::High, c) => c,
-            (c, Confidence::High) => c,
-            (Confidence::Medium, c) => c,
-            (c, Confidence::Medium) => c,
-            (Confidence::Low, Confidence::Low) => Confidence::Low,
+            (Some(first), None) => Some(first),
+            (None, destination) => destination,
         };
 
         StatePatch {
             npc_ids,
             movement_destination,
-            confidence,
+            confidence: self.confidence.min(other.confidence),
         }
     }
 }
 
 /// [TRIVIAL_ENUM]
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// Ordered from the least to the most confident, so `min` of two analyses keeps
+/// the one that is least sure of itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Confidence {
-    High,
-    Medium,
     Low,
+    Medium,
+    High,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -146,28 +220,8 @@ pub struct StatePatch {
     pub confidence: Confidence,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum AgentResult {
-    /// A directive the agent wants folded into the next narration prompt;
-    /// the current merge loop carries and ignores it.
-    PromptDirective(String),
-    /// Structured state mutations (scene NPCs, movement, confidence) merged
-    /// into the quantifier result.
-    StatePatch(StatePatch),
-    /// A generated pickable-option set; the options dispatch sites write it
-    /// to the game's current options state.
-    Options(Vec<String>),
-    /// The agent ran and has nothing to contribute this turn.
-    NoOp,
-}
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnalysisOutput(pub StatePatch);
 
-pub struct AgentContext<'a> {
-    pub game_id: GameId,
-    pub state: &'a GameState,
-    pub main_response: Option<&'a str>,
-    pub player_input: &'a str,
-    pub current_room: Option<&'a crate::domain::model::map::Room>,
-    pub map: &'a crate::domain::model::map::MapDef,
-    pub persona: &'a crate::domain::model::character::PersonaCard,
-    pub npcs: &'a std::collections::HashMap<String, crate::domain::model::character::NpcCard>,
-}
+#[derive(Clone, Debug, PartialEq)]
+pub struct OfferedSet(pub Vec<String>);

@@ -8,13 +8,14 @@ use tokio_util::sync::CancellationToken;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::AppState;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::AgentRunner;
 use crate::application::games::active::ActiveGame;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::message_service::MessageService;
 use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
+use crate::domain::model::agent::AgentConfig;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::game::GameId;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
@@ -26,8 +27,8 @@ use crate::error::Result;
 use crate::test_support::TestData;
 use crate::test_support::{make_test_recorder, TestAppBuilder, TestDataBuilder};
 
-/// Matches the production system presets' macro-bearing writing style so
-/// posture macros resolve in recorded prompts without a test-side re-save.
+/// Mirrors the production system presets' macro-bearing writing style, so
+/// posture macros resolve in recorded prompts.
 const FIXTURE_WRITING_STYLE: &str = "{{narrative_perspective}}-person limited perspective, focused on the player character.\n{{narrative_tense}} tense narrative prose.";
 
 pub fn seed_default_preset(storage: &Storage) {
@@ -87,10 +88,30 @@ pub fn build_test_message_service(storage: Arc<Storage>) -> Arc<MessageService> 
     Arc::new(MessageService::new(storage))
 }
 
+pub fn configured_runner(recorder: Arc<LlmCallRecorder>) -> AgentRunner {
+    runner_from_configs(&AgentConfig::defaults(), recorder)
+}
+
+/// The same wiring without the Agents of `agent_type`, as an `[agents]` section
+/// with no entry for that type leaves them.
+pub fn configured_runner_without(recorder: Arc<LlmCallRecorder>, agent_type: &str) -> AgentRunner {
+    let configs: Vec<AgentConfig> = AgentConfig::defaults()
+        .into_iter()
+        .filter(|config| config.agent_type != agent_type)
+        .collect();
+    runner_from_configs(&configs, recorder)
+}
+
+fn runner_from_configs(configs: &[AgentConfig], recorder: Arc<LlmCallRecorder>) -> AgentRunner {
+    AgentRunner::from_configs(configs, Arc::clone(&recorder), recorder)
+        // arch-lint: allow(no-unwrap-expect) reason="test wiring fails on an unknown agent config"
+        .expect("configured Agents build from the default configs")
+}
+
 pub fn make_test_pipeline_with_backends(
     storage: Arc<Storage>,
     recorder: Arc<LlmCallRecorder>,
-    agent_registry: AgentRegistry,
+    agent_runner: AgentRunner,
 ) -> ActionPipeline {
     seed_default_preset(&storage);
     let message_service = build_test_message_service(Arc::clone(&storage));
@@ -103,7 +124,7 @@ pub fn make_test_pipeline_with_backends(
     ActionPipeline::with_backends(
         CancellationToken::new(),
         recorder,
-        agent_registry,
+        agent_runner,
         message_service,
         storage,
         game_catalogue,
@@ -157,11 +178,11 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) -> Gam
 pub fn make_test_pipeline_app() -> AppState {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     TestAppBuilder::with_data(data)
         .pipeline(service)
@@ -171,11 +192,11 @@ pub fn make_test_pipeline_app() -> AppState {
 pub fn make_test_pipeline_app_with_storage() -> (AppState, Arc<Storage>) {
     let data = TestDataBuilder::default_test().build();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let agent_registry = AgentRegistry::default();
+    let agent_runner = AgentRunner::default();
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,
-        agent_registry,
+        agent_runner,
     );
     TestAppBuilder::with_data(data)
         .pipeline(service)

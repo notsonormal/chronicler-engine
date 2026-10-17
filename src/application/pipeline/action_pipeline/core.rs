@@ -13,6 +13,7 @@ use crate::application::pipeline::pipeline_run::PipelineRun;
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::adapters::driven::storage::Storage;
 
+use crate::domain::model::agent::Kind;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::game::GameId;
 use crate::domain::model::map::MapDef;
@@ -27,20 +28,19 @@ use crate::application::errors::ProcessActionResult;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::prompting::PromptAssembler;
-use crate::application::prompting::token_budget::MAX_CONTEXT_TOKENS;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::agents::quantifier::QuantifierAgent;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::AgentRunner;
 use crate::application::message_service::MessageService;
+use crate::application::narration::Narrator;
 use crate::application::ports::llm_provider::LlmProvider;
-use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::error::EngineError;
 
 #[derive(Clone)]
 pub struct ActionPipeline {
-    pub(crate) prompt_assembler: Arc<PromptAssembler>,
+    pub(crate) narrator: Arc<Narrator>,
     pub(crate) recorder: Arc<LlmCallRecorder>,
-    pub(crate) agent_registry: Arc<AgentRegistry>,
+    pub(crate) agent_runner: Arc<AgentRunner>,
     pub(crate) message_service: Arc<MessageService>,
     pub(crate) storage: Arc<Storage>,
     pub(crate) game_catalogue: Arc<GameCatalogue>,
@@ -51,7 +51,7 @@ impl ActionPipeline {
     pub fn with_storage(
         shutdown_token: CancellationToken,
         recorder: Arc<LlmCallRecorder>,
-        agent_registry: AgentRegistry,
+        agent_runner: AgentRunner,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
         game_catalogue: Arc<GameCatalogue>,
@@ -60,7 +60,7 @@ impl ActionPipeline {
         Self::with_backends(
             shutdown_token,
             recorder,
-            agent_registry,
+            agent_runner,
             message_service,
             storage,
             game_catalogue,
@@ -70,17 +70,16 @@ impl ActionPipeline {
     pub fn with_backends(
         shutdown_token: CancellationToken,
         recorder: Arc<LlmCallRecorder>,
-        agent_registry: AgentRegistry,
+        agent_runner: AgentRunner,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
         game_catalogue: Arc<GameCatalogue>,
     ) -> Self {
+        let narrator = Arc::new(Narrator::new(PromptAssembler, Arc::clone(&recorder)));
         Self {
-            prompt_assembler: Arc::new(
-                PromptAssembler::new(MAX_CONTEXT_TOKENS).with_storage(Arc::clone(&storage)),
-            ),
+            narrator,
             recorder,
-            agent_registry: Arc::new(agent_registry),
+            agent_runner: Arc::new(agent_runner),
             message_service,
             storage,
             game_catalogue,
@@ -97,11 +96,11 @@ impl ActionPipeline {
         game_catalogue: Arc<GameCatalogue>,
     ) -> Self {
         let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-        let registry = AgentRegistry::with_agent(Box::new(agent));
+        let runner = AgentRunner::with_analysis_agent(Box::new(agent));
         Self::with_backends(
             shutdown_token,
             recorder,
-            registry,
+            runner,
             message_service,
             storage,
             game_catalogue,
@@ -290,6 +289,10 @@ impl ActionPipeline {
             )
         };
 
+        let kind = match impersonated {
+            true => Kind::Impersonate,
+            false => Kind::Narration,
+        };
         let quantifier_result = match run.phase_post_generation(
             &mut state,
             &input,
@@ -297,6 +300,7 @@ impl ActionPipeline {
             &map,
             &persona,
             &npcs,
+            kind,
         ) {
             Ok(r) => r,
             Err(e) => {
@@ -377,7 +381,8 @@ impl ActionPipeline {
             }
         }
 
-        // An impersonate turn is the player acting, so its options are not rewritten.
+        // An impersonate turn is the player acting, so its offered set is not
+        // rewritten.
         if !impersonated {
             let options_enabled = run.resolve_options_always_on(&outcome.bundle.world);
             self.rewrite_options_after_turn(
@@ -458,70 +463,6 @@ impl ActionPipeline {
             Err(PhaseError::Cancelled) => Err(run.handle_cancellation()),
             other => other,
         }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn run_post_generation_agents(
-        &self,
-        game_id: GameId,
-        state: &GameState,
-        player_input: &str,
-        main_response: &str,
-        map: &Arc<MapDef>,
-        persona: &Arc<PersonaCard>,
-        npcs: &HashMap<String, NpcCard>,
-    ) -> QuantifierResult {
-        let mut result = QuantifierResult::default();
-
-        let current_room = map
-            .get_room_by_id(&state.swipe.movement.current_room_id)
-            .or_else(|| {
-                state
-                    .swipe
-                    .movement
-                    .dynamic_rooms
-                    .get(&state.swipe.movement.current_room_id)
-            });
-        let agent_ctx = AgentContext {
-            game_id,
-            state,
-            main_response: Some(main_response),
-            player_input,
-            current_room,
-            map,
-            persona,
-            npcs,
-        };
-
-        let patches: Vec<_> = self
-            .agent_registry
-            .agents_for_phase(ExecutionPhase::PostGeneration)
-            .filter_map(|agent| match agent.execute(&agent_ctx) {
-                Ok(AgentResult::StatePatch(patch)) => Some(patch),
-                // Options agents dispatch by phase at gated call sites, so none
-                // arrive in PostGeneration.
-                Ok(AgentResult::NoOp)
-                | Ok(AgentResult::PromptDirective(_))
-                | Ok(AgentResult::Options(_)) => None,
-                Err(e) => {
-                    tracing::warn!("Agent {} failed: {e}", agent.name());
-                    None
-                }
-            })
-            .collect();
-
-        if let Some(first_patch) = patches.into_iter().reduce(StatePatch::merge) {
-            let StatePatch {
-                npc_ids,
-                movement_destination,
-                confidence,
-            } = first_patch;
-            result.npcs.npc_ids = npc_ids;
-            result.movement.destination = movement_destination;
-            result.npcs.confidence = confidence.into();
-        }
-
-        result
     }
 
     pub(crate) fn persist_generation_error(&self, game_id: GameId, failure: GenerationFailure) {

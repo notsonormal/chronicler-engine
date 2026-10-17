@@ -5,21 +5,38 @@ title: Agent System
 
 ## Overview
 
-An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in `AgentRegistry`. The engine works with **zero agents** — all agent execution is optional.
+An **agent** is any type implementing one of the hook traits: `AnalysisAgent` or
+`OptionsAgent`. Agents are loaded from `AppSettings` at startup and registered in
+`AgentRunner`. The engine works with **zero agents** — all agent execution is
+optional.
 
-Two agents exist: `QuantifierAgent` detects the NPCs present in the narration and any movement destination, and `OptionsAgent` generates the offered options.
+Two agents exist. `QuantifierAgent` detects the Characters present in the
+narration and any movement destination. The Options agent
+(`options::agent::OptionsGeneratorAgent`) generates the offered options.
 
-## Execution Phases
+## Hooks
 
-`ExecutionPhase` declares where in the pipeline the agent runs. Each phase has its own dispatch site:
+A **hook** is a fixed point in a generation where the Job runs the Agents
+registered for it. Each hook has one output type. `Hook` declares which one an
+Agent serves, and each hook has its own dispatch site:
 
-- **`PreGeneration`** — no dispatcher reads it.
-- **`PostGeneration`** — runs after the main LLM call returns, and its results merge into one scene result. `QuantifierAgent` runs here.
-- **`OptionsGeneration`** — runs only at the two gated Options sites (turn end and on demand). `OptionsAgent` runs here.
+- **`Analysis`**: runs after the narration was saved. `AgentRunner::analysis`
+  merges the `AnalysisOutput` of each Agent into the result that the game rules
+  apply. `QuantifierAgent` runs here.
+- **`Options`**: runs once per Job, at the two gated Options sites (turn end and
+  on demand). The Options hook holds at most one Agent. The Options agent runs
+  here and answers with an `OfferedSet`.
+
+## What an Agent gets
+
+An Agent reads values, never storage: a `HookInput` and an `AgentSettings`. The
+step that calls the hook owns every read and write, so an Agent writes no game
+record.
 
 ## Per-Agent Backends
 
-The wiring binds each agent to its recorder at startup. That binding, and not the agent's `backend_selector()`, decides the agent's connection.
+The wiring binds each agent to its recorder at startup, from the Agent's type.
+That binding decides the agent's connection.
 
 ## NPC Events
 

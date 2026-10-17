@@ -7,8 +7,8 @@ use super::action_tests::wait_for_gate_idle;
 use super::super::pipeline_run::PipelineRun;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::{Storage, TestOverride};
-use crate::application::agents::options::OptionsAgent;
-use crate::application::agents::registry::AgentRegistry;
+use crate::application::agents::options::OptionsGeneratorAgent;
+use crate::application::agents::AgentRunner;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::action::Action;
 use crate::domain::model::game::GameId;
@@ -30,13 +30,12 @@ pub(super) fn make_app(
     options_provider: Option<Arc<dyn LlmProvider>>,
 ) -> (crate::adapters::driving::http::AppState, Arc<Storage>) {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let mut registry = AgentRegistry::default();
-    if let Some(provider) = options_provider {
-        registry.add_agent(Box::new(OptionsAgent::with_provider(
-            "options".to_string(),
-            provider,
-        )));
-    }
+    let registry = match options_provider {
+        Some(provider) => AgentRunner::with_options_agent(Box::new(
+            OptionsGeneratorAgent::with_provider("options".to_string(), provider),
+        )),
+        None => AgentRunner::default(),
+    };
     let service = make_test_pipeline_with_backends(
         Arc::new(Storage::new_in_memory()),
         narrator_recorder,

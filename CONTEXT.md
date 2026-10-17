@@ -45,7 +45,7 @@ LLM-generated prose rendered in response to resolved Actions and trigger context
 _Avoid_: Story, text, output
 
 **Quantifier**:
-The post-generation Agent that analyzes narration to detect NPCs in area, player movement, and NPC enter/leave events.
+The analysis-hook Agent that analyzes narration to detect NPCs in area, player movement, and NPC enter/leave events.
 _Avoid_: Scorer, evaluator
 
 **Game rules**:
@@ -55,6 +55,10 @@ _Avoid_: World rules, engine commit
 **Agent**:
 An LLM helper that runs at a fixed hook of a generation. The Quantifier is one Agent.
 _Avoid_: Bot, assistant, operator
+
+**Hook**:
+A fixed point in a generation where the Job runs the Agents registered for it: the analysis hook and the Options hook. Each hook has one kind of output and one place where that output lands. The before-narration and rewrite hooks come with their first Agent.
+_Avoid_: Phase, stage, step
 
 **Message**:
 A single entry in a Game's conversation history — player input, narration output, event continuation, or system log. Each AI-generated Message has its own Swipe set.

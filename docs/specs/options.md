@@ -163,6 +163,18 @@ When the client POST /games/{game_id}/mode with narrator_mode="interactive_ficti
 Then the offered set still holds set A
 ```
 
+### Concurrency
+
+#### Scenario 24.21: /options is refused while the Game is busy
+
+```gherkin
+Given a Game with scene history whose Job is running, held inside its narrator call
+When a client POST /action with command="/options"
+Then the response is 200 carrying the "Still thinking..." status
+And the offered set is unchanged
+And GET /fragment/options-dock renders no options strip
+```
+
 ### Dock controls
 
 #### Scenario 24.14: The populated dock's controls reference icons the shell defines

@@ -1,242 +1,267 @@
-//! Tests for the OptionsAgent trait surface and execute behavior.
+//! Seam contract of the Options Agent, the Options hook's Agent.
+//!
+//! CASE options-set: a parsed answer is the offered set.
+//! CASE options-retry: an answer with no parseable option is read again, and the second answer wins.
+//! CASE options-transport-failure: both attempts fail and the call fails.
+//! CASE options-no-room: a hook input without a room fails.
+//!
+//! CASE options-preset: the settings' preset text reaches the prompt.
+//! CASE options-fallback-prompt: without a preset the fallback prompt renders its macros.
+//! CASE options-call-record: a good call is recorded with its agent name and prompts.
+//! CASE options-call-record-failure: a failed call is recorded with its failure text.
 
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
-use crate::application::agents::options::agent::OptionsAgent;
-use crate::application::agents::Agent;
-use crate::domain::model::agent::{AgentConfig, AgentContext, BackendSelector, ExecutionPhase};
+use crate::application::agents::options::agent::OptionsGeneratorAgent;
+use crate::application::agents::trait_def::OptionsAgent;
+use crate::domain::model::agent::{
+    AgentConfig, AgentSettings, BackendSelector, Hook, HookInput, Kind, StoryEntry, WorldView,
+};
 use crate::domain::model::character::NpcCard;
-use crate::domain::model::game::GameId;
-use crate::domain::model::prompt_preset::{PromptPreset, PresetType};
-use crate::domain::model::settings::AppSettings;
-use crate::domain::model::state::game_state::GameState;
-use crate::test_support::fixtures::{TestMap, TestPersona};
-use crate::test_support::make_test_recorder_with_storage;
+use crate::domain::model::state::message_types::MessageType;
+use crate::test_support::fixtures::{TestMap, TestNpc, TestPersona};
+use crate::test_support::{
+    make_test_recorder, make_test_recorder_with_storage, ModelRole, ScriptedModel,
+};
 
-fn make_agent(
-    provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-) -> OptionsAgent {
-    OptionsAgent::with_provider("options".to_string(), provider)
-}
+const SET_A: &str = "<suggestion>Search the desk</suggestion>\
+<suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
 
-fn make_ctx<'a>(
-    state: &'a GameState,
-    map: &'a crate::domain::model::map::MapDef,
-    persona: &'a crate::domain::model::character::PersonaCard,
-    npcs: &'a HashMap<String, NpcCard>,
-) -> AgentContext<'a> {
-    AgentContext {
-        game_id: GameId(1),
-        state,
-        main_response: None,
-        player_input: "",
-        current_room: map.get_room_by_id("start"),
-        map,
-        persona,
-        npcs,
-    }
-}
-
-#[test]
-fn test_from_config_creates_agent() {
-    let config = crate::domain::model::agent::AgentConfig {
+fn config() -> AgentConfig {
+    AgentConfig {
         name: "options".to_string(),
         agent_type: "options".to_string(),
         enabled: true,
         backend: BackendSelector::UseNamed("options".to_string()),
-        phase: ExecutionPhase::OptionsGeneration,
-    };
-    let agent = OptionsAgent::from_config_with_storage(
-        &config,
-        crate::test_support::make_test_recorder(Arc::new(MockBackend::default())),
-        None,
-    );
-    assert!(agent.is_ok());
-}
-
-#[test]
-fn test_trait_surface() {
-    let agent = make_agent(Arc::new(MockBackend::default()));
-    assert_eq!(agent.name(), "options");
-    assert_eq!(agent.phase(), ExecutionPhase::OptionsGeneration);
-    assert_eq!(
-        agent.backend_selector(),
-        BackendSelector::UseNamed("options".to_string())
-    );
-}
-
-#[test]
-fn test_execute_parses_tagged_response() {
-    let provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
-        Arc::new(MockBackend::default().with_prompt_responses(vec![
-            "<suggestion>Search the desk</suggestion><suggestion>Question the guard</suggestion>"
-                .to_string(),
-        ]));
-    let agent = make_agent(provider);
-
-    let state = GameState::new("start");
-    let map = TestMap::single_room("start");
-    let persona = TestPersona::standard();
-    let npcs: HashMap<String, NpcCard> = HashMap::new();
-    let ctx = make_ctx(&state, &map, &persona, &npcs);
-
-    match agent.execute(&ctx) {
-        Ok(crate::domain::model::agent::AgentResult::Options(options)) => {
-            assert_eq!(options, vec!["Search the desk", "Question the guard"]);
-        }
-        other => panic!("expected Options result, got {other:?}"),
+        hook: Hook::Options,
     }
 }
 
-#[test]
-fn test_execute_unparseable_response_errors_after_attempts() {
-    let backend = Arc::new(
-        MockBackend::new()
-            .with_prompt_responses(vec!["The model rambled about the weather.".to_string()]),
-    );
-    let agent = make_agent(Arc::clone(&backend) as Arc<_>);
-
-    let state = GameState::new("start");
-    let map = TestMap::single_room("start");
-    let persona = TestPersona::standard();
-    let npcs: HashMap<String, NpcCard> = HashMap::new();
-    let ctx = make_ctx(&state, &map, &persona, &npcs);
-
-    assert!(agent.execute(&ctx).is_err());
-    assert_eq!(
-        backend.call_index.load(Ordering::SeqCst),
-        2,
-        "unparseable output must be retried once before erroring"
-    );
+fn options_agent(model: Arc<ScriptedModel>) -> OptionsGeneratorAgent {
+    OptionsGeneratorAgent::from_config(&config(), make_test_recorder(model))
+        .expect("the options agent builds from its config")
 }
 
-#[test]
-fn test_execute_recovers_when_second_attempt_parses() {
-    let backend = MockBackend::new().with_prompt_responses(vec![
-        "The model rambled about the weather.".to_string(),
-        "<suggestion>Search the desk</suggestion>".to_string(),
-    ]);
-    let agent = make_agent(Arc::new(backend));
+struct Scene {
+    map: crate::domain::model::map::MapDef,
+    persona: crate::domain::model::character::PersonaCard,
+    characters: HashMap<String, NpcCard>,
+    present: Vec<NpcCard>,
+    story: Vec<StoryEntry>,
+}
 
-    let state = GameState::new("start");
-    let map = TestMap::single_room("start");
-    let persona = TestPersona::standard();
-    let npcs: HashMap<String, NpcCard> = HashMap::new();
-    let ctx = make_ctx(&state, &map, &persona, &npcs);
-
-    match agent.execute(&ctx) {
-        Ok(crate::domain::model::agent::AgentResult::Options(options)) => {
-            assert_eq!(options, vec!["Search the desk"]);
+impl Scene {
+    fn new() -> Self {
+        let map = TestMap::single_room("start");
+        let persona = TestPersona::standard();
+        let npcs = vec![TestNpc::named("npc_1", "Test NPC")];
+        let characters = npcs
+            .iter()
+            .map(|npc| (npc.id.clone(), npc.clone()))
+            .collect();
+        Self {
+            map,
+            persona,
+            characters,
+            present: npcs,
+            story: vec![StoryEntry {
+                message_type: MessageType::Narration,
+                text: "The innkeeper glances your way.".to_string(),
+            }],
         }
-        other => panic!("expected the retry to recover, got {other:?}"),
+    }
+
+    fn world(&self) -> WorldView<'_> {
+        WorldView {
+            room: self.map.get_room_by_id("start"),
+            map: &self.map,
+            persona: &self.persona,
+            characters: &self.characters,
+            present: &self.present,
+        }
+    }
+
+    fn world_without_room(&self) -> WorldView<'_> {
+        WorldView {
+            room: None,
+            map: &self.map,
+            persona: &self.persona,
+            characters: &self.characters,
+            present: &self.present,
+        }
+    }
+
+    fn input<'a>(&'a self, world: &'a WorldView<'a>) -> HookInput<'a> {
+        HookInput {
+            kind: Kind::Narration,
+            text: Some("You look around the inn."),
+            player_text: "look",
+            story: &self.story,
+            world,
+            event: None,
+        }
     }
 }
 
+// CASE: options-set
 #[test]
-fn test_execute_transport_failure_errors() {
-    let agent = make_agent(Arc::new(MockBackend::default().with_fail()));
+fn test_a_parsed_answer_is_the_offered_set() {
+    let scene = Scene::new();
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let world = scene.world();
+    let offered = options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &AgentSettings::default())
+        .expect("a parsed answer is an offered set");
 
-    let state = GameState::new("start");
-    let map = TestMap::single_room("start");
-    let persona = TestPersona::standard();
-    let npcs: HashMap<String, NpcCard> = HashMap::new();
-    let ctx = make_ctx(&state, &map, &persona, &npcs);
-
-    assert!(agent.execute(&ctx).is_err());
+    assert_eq!(
+        offered.0,
+        vec!["Search the desk", "Question the guard", "Leave the hall"]
+    );
 }
 
+// CASE: options-retry
 #[test]
-fn test_execute_missing_current_room_errors() {
-    let agent = make_agent(Arc::new(MockBackend::default()));
+fn test_an_answer_with_no_option_is_read_again() {
+    let scene = Scene::new();
+    let model = Arc::new(
+        ScriptedModel::new()
+            .options("The model rambled about the weather.")
+            .options("<suggestion>Search the desk</suggestion>"),
+    );
+    let world = scene.world();
+    let offered = options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &AgentSettings::default())
+        .expect("the second answer is an offered set");
 
-    let state = GameState::new("nowhere");
-    let map = TestMap::single_room("start");
-    let persona = TestPersona::standard();
-    let npcs: HashMap<String, NpcCard> = HashMap::new();
-    let ctx = AgentContext {
-        game_id: GameId(1),
-        state: &state,
-        main_response: None,
-        player_input: "",
-        current_room: None,
-        map: &map,
-        persona: &persona,
-        npcs: &npcs,
+    assert_eq!(offered.0, vec!["Search the desk"]);
+}
+
+// CASE: options-transport-failure
+#[test]
+fn test_a_transport_failure_fails_the_call() {
+    let scene = Scene::new();
+    let model = Arc::new(
+        ScriptedModel::new()
+            .failed(ModelRole::Options)
+            .failed(ModelRole::Options),
+    );
+    let world = scene.world();
+    let result =
+        options_agent(Arc::clone(&model)).run(&scene.input(&world), &AgentSettings::default());
+
+    assert!(result.is_err(), "a failed call has no offered set");
+}
+
+// CASE: options-no-room
+#[test]
+fn test_a_hook_input_without_a_room_fails() {
+    let scene = Scene::new();
+    let model = Arc::new(ScriptedModel::new());
+    let world = scene.world_without_room();
+    let result =
+        options_agent(Arc::clone(&model)).run(&scene.input(&world), &AgentSettings::default());
+
+    assert!(result.is_err(), "the options Agent needs the room it reads");
+}
+
+// CASE: options-preset
+#[test]
+fn test_the_settings_preset_reaches_the_prompt() {
+    let scene = Scene::new();
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let settings = AgentSettings {
+        preset: Some("Offer {{option_count}} bold moves for {{user}}.".to_string()),
+        max_tokens: None,
     };
+    let world = scene.world();
+    options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &settings)
+        .expect("a parsed answer is an offered set");
 
-    assert!(agent.execute(&ctx).is_err());
+    let call = model.calls().into_iter().next().expect("one call");
+    assert!(
+        call.system_prompt.contains(&format!(
+            "Offer 3 bold moves for {}.",
+            scene.persona.sheet.name
+        )),
+        "the preset's macros must render: {}",
+        call.system_prompt
+    );
 }
 
+// CASE: options-fallback-prompt
 #[test]
-fn test_execute_resolves_active_options_preset_and_records_prompts() {
-    // No Game row forces the settings-id fallback.
+fn test_without_a_preset_the_fallback_prompt_renders_its_macros() {
+    let scene = Scene::new();
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let world = scene.world();
+    options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &AgentSettings::default())
+        .expect("a parsed answer is an offered set");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    assert!(
+        call.system_prompt
+            .contains("options generator for a text adventure"),
+        "the fallback prompt must name what it is: {}",
+        call.system_prompt
+    );
+    assert!(
+        !call.system_prompt.contains("{{"),
+        "no macro may reach the model: {}",
+        call.system_prompt
+    );
+}
+
+// CASE: options-call-record
+#[test]
+fn test_a_good_call_is_recorded_with_its_prompts() {
     let storage = Arc::new(Storage::new_in_memory());
-    storage
-        .save_preset(&PromptPreset {
-            id: "options_test_preset".to_string(),
-            name: "Options Test".to_string(),
-            instructions: Some("Offer {{option_count}} bold moves for {{user}}.".to_string()),
-            preset_type: PresetType::Options,
-            ..PromptPreset::default()
-        })
-        .expect("save_preset should succeed");
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
+    let agent =
+        OptionsGeneratorAgent::from_config(&config(), recorder).expect("the options agent builds");
+    let scene = Scene::new();
 
-    let settings = AppSettings {
-        active_options_prompt_preset_id: "options_test_preset".to_string(),
-        ..AppSettings::default()
-    };
-    storage
-        .save_settings(&settings)
-        .expect("save_settings should succeed");
-    let config = AgentConfig {
-        name: "options".to_string(),
-        agent_type: "options".to_string(),
-        enabled: true,
-        backend: BackendSelector::UseNamed("options".to_string()),
-        phase: ExecutionPhase::OptionsGeneration,
-    };
-    let provider = Arc::new(
-        MockBackend::new()
-            .with_prompt_responses(vec!["<suggestion>Search the desk</suggestion>".to_string()]),
-    );
-    let agent = OptionsAgent::from_config_with_storage(
-        &config,
-        make_test_recorder_with_storage(provider, Arc::clone(&storage)),
-        Some(Arc::clone(&storage)),
-    )
-    .expect("agent construction should succeed");
-
-    let state = GameState::new("start");
-    let map = TestMap::single_room("start");
-    let persona = TestPersona::standard();
-    let npcs: HashMap<String, NpcCard> = HashMap::new();
-    let ctx = make_ctx(&state, &map, &persona, &npcs);
-
-    match agent.execute(&ctx) {
-        Ok(crate::domain::model::agent::AgentResult::Options(options)) => {
-            assert_eq!(options, vec!["Search the desk"]);
-        }
-        other => panic!("expected Options result, got {other:?}"),
-    }
+    let world = scene.world();
+    agent
+        .run(&scene.input(&world), &AgentSettings::default())
+        .expect("a parsed answer is an offered set");
 
     let recorded = storage
         .list_latest_llm_messages(10)
-        .expect("llm message listing should succeed");
-    let options_call = recorded
-        .iter()
-        .find(|message| message.agent_name == "options")
-        .expect("options LLM call must be recorded");
-    let expected_system = format!("Offer 3 bold moves for {}.", persona.sheet.name);
-    assert!(
-        options_call.system_prompt.contains(&expected_system),
-        "the preset override must be rendered with template vars: {}",
-        options_call.system_prompt
+        .expect("the forensics read back");
+    let call = recorded.last().expect("the call is recorded");
+    assert_eq!(call.agent_name, "options");
+    assert!(call.error_message.is_none());
+    assert!(call.user_prompt.contains("<CurrentRoom>"));
+}
+
+// CASE: options-call-record-failure
+#[test]
+fn test_a_failed_call_is_recorded_with_its_failure_text() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let model = Arc::new(
+        ScriptedModel::new()
+            .failed(ModelRole::Options)
+            .failed(ModelRole::Options),
     );
-    assert!(!options_call.system_prompt.contains("{{"));
-    assert!(!options_call.system_prompt.contains("{{"));
-    assert!(options_call.user_prompt.contains("<CurrentRoom>"));
+    let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
+    let agent =
+        OptionsGeneratorAgent::from_config(&config(), recorder).expect("the options agent builds");
+    let scene = Scene::new();
+
+    let world = scene.world();
+    let _ = agent.run(&scene.input(&world), &AgentSettings::default());
+
+    let recorded = storage
+        .list_latest_llm_messages(10)
+        .expect("the forensics read back");
+    let failure = recorded
+        .iter()
+        .find(|message| message.error_message.is_some())
+        .expect("the failed attempt is recorded");
+    assert_eq!(failure.agent_name, "options");
 }

@@ -101,11 +101,21 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
             None => context.with_guide(self.inputs.guide.clone()),
         };
 
-        let (narration_text, backend_name, model_name) =
-            match self.run.call_narrator(&context, &preset, &response_length) {
-                Ok(triple) => triple,
+        let budget = match self.run.narration_budget() {
+            Ok(budget) => budget,
+            Err(failure) => return Err(self.run.set_error(state, failure)),
+        };
+        let narrated =
+            match self
+                .run
+                .pipeline
+                .narrator
+                .narrate(&context, &preset, &response_length, budget)
+            {
+                Ok(narrated) => narrated,
                 Err(failure) => return Err(self.run.set_error(state, failure)),
             };
+        let narration_text = narrated.text;
 
         self.run.check_game_unchanged(started_for)?;
 
@@ -123,8 +133,8 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
 
         Ok(NarrationOutcome {
             narration_text,
-            backend_name,
-            model_name,
+            backend_name: narrated.backend_name,
+            model_name: narrated.model_name,
             bundle,
         })
     }
@@ -141,7 +151,7 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
     }
 
     fn resolve_preset_choice(&self) -> Result<(PromptPreset, String), GenerationFailure> {
-        // First run and redo alike resolve the game's current active preset —
+        // A redo resolves the game's current active preset, as a first run does:
         // a preset is game configuration, not swipe data.
         let settings = self.run.pipeline.storage.get_settings().map_err(|e| {
             GenerationFailure::new(

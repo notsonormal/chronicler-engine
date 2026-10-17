@@ -1,18 +1,23 @@
 //! HTTP E2E tests for the reset endpoint (POST /reset).
 
+use std::sync::Arc;
+
 use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::test_support::ScriptedModel;
 use chronicler_engine::TestAppBuilder;
 
-use crate::support::http_requests::{post_action, post_empty, wait_idle};
+use crate::support::http_requests::{post_action, post_empty, wait_settled};
 
 // [docs/specs/reset.md] SCENARIO: 7.1
 #[tokio::test]
 async fn test_reset_clears_history_http() {
-    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().turn("You examine the room.")))
+        .build_with_state();
 
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let before = state
         .message_service
         .load_messages(active_game_of(&state))
@@ -51,17 +56,23 @@ async fn test_reset_clears_history_http() {
 // [docs/specs/reset.md] SCENARIO: 7.2
 #[tokio::test]
 async fn test_reset_then_execute_works_http() {
-    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(
+            ScriptedModel::new()
+                .turn("You examine the room.")
+                .turn("You look around."),
+        ))
+        .build_with_state();
 
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let resp = post_empty(&app, "/reset").await;
     assert!(resp.status().is_success());
 
     let _ = post_action(&app, "look around").await;
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "action after reset should complete"
     );
 

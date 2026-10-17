@@ -11,7 +11,7 @@ Options are pre-written player inputs the engine offers while a game is idle. Th
 
 ## Where Options Come From
 
-The options agent generates the set. It is a named agent (`options`), and it runs in its own pipeline phase, `OptionsGeneration`. The pipeline dispatches it at exactly two gated sites:
+The options agent generates the set. It is a named agent (`options`), and it runs at the Options hook. The pipeline dispatches it at exactly two gated sites:
 
 1. **Turn end** — after a narration turn.
 2. **On demand** — when the player enters the `/options` slash command.

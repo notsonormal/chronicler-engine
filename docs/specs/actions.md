@@ -190,6 +190,26 @@ Then the response is not 500 INTERNAL_SERVER_ERROR
 And within 2 s, the generation status is no longer Generating
 ```
 
+#### Scenario 3.4: An Action is refused while the Game is busy
+
+```gherkin
+Given a Game whose Job is running, held inside its narrator call
+When a client POST /action with command="listen"
+Then the response is 200 carrying the "Still thinking..." status
+And the message history gained no player-input message for "listen"
+And the message history gained no Narration message for "listen"
+```
+
+#### Scenario 3.5: Two clients POST the same Action at the same moment and one Action is accepted
+
+```gherkin
+Given a Game that is idle
+When two clients POST /action with command="look" at the same moment
+Then one Action is accepted and the other is refused with the "Still thinking..." status
+And the message history holds exactly one player-input message for "look"
+And the message history holds exactly one Narration message
+```
+
 ### Sequencing
 
 #### Scenario 6.1: Three actions in sequence produce three player-input and three Narration messages

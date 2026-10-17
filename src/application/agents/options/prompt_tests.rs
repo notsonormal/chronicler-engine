@@ -1,8 +1,7 @@
-//! Tests for options prompt construction.
-
 use crate::application::agents::options::types::OptionsPromptContext;
 use crate::application::agents::options::prompt::OptionsPromptBuilder;
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::agent::StoryEntry;
+use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPersona};
 
 fn make_context<'a>(
@@ -72,20 +71,17 @@ fn user_prompt_carries_room_npc_and_history_sections() {
     let map = TestMap::single_room("start");
     let room = map.get_room_by_id("start").expect("room exists");
     let history = vec![
-        MessageEntry {
+        StoryEntry {
             text: "The hall is silent.".to_string(),
             message_type: MessageType::Narration,
-            ..MessageEntry::default()
         },
-        MessageEntry {
+        StoryEntry {
             text: "I step inside.".to_string(),
             message_type: MessageType::Input,
-            ..MessageEntry::default()
         },
-        MessageEntry {
+        StoryEntry {
             text: "[System] note".to_string(),
             message_type: MessageType::System,
-            ..MessageEntry::default()
         },
     ];
     let npcs = vec![TestNpc::named("npc_1", "Carla")];

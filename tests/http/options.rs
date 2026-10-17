@@ -1,45 +1,25 @@
 //! HTTP E2E tests for options-autogeneration: on-demand /options, the always-on turn-end hook, and response-shape parsing.
 
-use std::sync::Arc;
-
 use chronicler_engine::test_support::active_game_of;
-use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
-use chronicler_engine::application::agents::options::OptionsAgent;
-use chronicler_engine::application::agents::registry::AgentRegistry;
-use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::settings::{AppSettings, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::world::WorldCard;
-use chronicler_engine::test_support::TestMap;
+use chronicler_engine::test_support::{
+    analysis_report, configured_runner_without, ScriptedModel, TestMap,
+};
 
-use crate::support::app_wiring::app_with_narrator_and_registry;
+use crate::support::app_wiring::{app_with_script, app_with_script_and_agents};
 use crate::support::http_assertions::{defined_icons, referenced_icons};
 use crate::support::http_fixtures::{if_world, seed_offered_set};
-use crate::support::http_requests::{fetch_body, post_action, post_action_check, post_form, wait_idle};
+use crate::support::http_requests::{
+    fetch_body, post_action, post_action_check, post_form, wait_settled,
+};
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
 const SET_B: &str = "<suggestion>Open the gate</suggestion>\
 <suggestion>Feed the horse</suggestion><suggestion>Climb the tower</suggestion>";
 const NUMBERED: &str = "1. Search the desk\n2. Question the guard\n3. Leave the hall";
-
-fn options_app(options: Arc<MockBackend>) -> (axum::Router, AppState, Arc<Storage>) {
-    let mut registry = AgentRegistry::default();
-    registry.add_agent(Box::new(OptionsAgent::with_provider(
-        "options".to_string(),
-        options as Arc<dyn LlmProvider>,
-    )));
-    app_with_narrator_and_registry(
-        Arc::new(MockBackend::default()),
-        registry,
-        AppSettings::default(),
-    )
-}
-
-fn tagged_provider(responses: Vec<String>) -> Arc<MockBackend> {
-    Arc::new(MockBackend::new().with_prompt_responses(responses))
-}
 
 fn always_on_world() -> WorldCard {
     WorldCard {
@@ -57,14 +37,6 @@ fn set_a_options() -> Vec<String> {
         "Question the guard".to_string(),
         "Leave the hall".to_string(),
     ]
-}
-
-fn app_without_options_agent() -> (axum::Router, AppState, Arc<Storage>) {
-    app_with_narrator_and_registry(
-        Arc::new(MockBackend::default()),
-        AgentRegistry::default(),
-        AppSettings::default(),
-    )
 }
 
 async fn create_game(app: &axum::Router, world_key: &str) {
@@ -109,15 +81,19 @@ fn unavailable_agent_reports(state: &AppState) -> usize {
 // [docs/specs/options.md] SCENARIO: 24.1
 #[tokio::test]
 async fn test_on_demand_options_render_in_dock_http() {
-    let (app, state, _storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+    let (app, state, _storage) =
+        app_with_script(ScriptedModel::new().turn("You look around.").options(SET_A));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "/options should complete");
+    assert!(wait_settled(&state, 1000).await, "/options should complete");
 
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
@@ -133,7 +109,7 @@ async fn test_on_demand_options_render_in_dock_http() {
 // [docs/specs/options.md] SCENARIO: 24.2
 #[tokio::test]
 async fn test_options_without_scene_history_errors_http() {
-    let (app, state, _storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+    let (app, state, _storage) = app_with_script(ScriptedModel::new());
 
     let resp = post_action(&app, "/options").await;
     assert_eq!(resp.status(), axum::http::StatusCode::INTERNAL_SERVER_ERROR);
@@ -143,7 +119,7 @@ async fn test_options_without_scene_history_errors_http() {
         body_str.contains("No scene to generate options for yet"),
         "the validation failure must be named: {body_str}"
     );
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
@@ -156,23 +132,27 @@ async fn test_options_without_scene_history_errors_http() {
 // [docs/specs/options.md] SCENARIO: 24.4
 #[tokio::test]
 async fn test_regenerate_replaces_set_without_history_http() {
-    let (app, state, _storage) =
-        options_app(tagged_provider(vec![SET_A.to_string(), SET_B.to_string()]));
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(SET_A)
+            .options(SET_B),
+    );
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let count_before = message_count(&state);
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(dock.contains("Search the desk"), "set A first: {dock}");
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(dock.contains("Open the gate"), "set B second: {dock}");
@@ -190,24 +170,26 @@ async fn test_regenerate_replaces_set_without_history_http() {
 // [docs/specs/options.md] SCENARIO: 24.5
 #[tokio::test]
 async fn test_failed_regeneration_keeps_prior_set_http() {
-    let (app, state, _storage) = options_app(tagged_provider(vec![
-        SET_A.to_string(),
-        "no parseable options in this response".to_string(),
-        "still nothing parseable here".to_string(),
-    ]));
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(SET_A)
+            .options("no parseable options in this response")
+            .options("still nothing parseable here"),
+    );
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     assert_eq!(current_options(&state).len(), 3, "set A installed");
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let options = current_options(&state);
     assert_eq!(
@@ -234,11 +216,18 @@ async fn test_failed_regeneration_keeps_prior_set_http() {
 // [docs/specs/options.md] SCENARIO: 24.18
 #[tokio::test]
 async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
-    let (app, state, _storage) = app_without_options_agent();
+    let (app, state, _storage) = app_with_script_and_agents(
+        ScriptedModel::new().turn("You look around."),
+        AppSettings::default(),
+        |recorder| configured_runner_without(recorder, "options"),
+    );
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
     seed_offered_set(&state, &["Inspect the ledger"]);
     let unavailable_before = unavailable_agent_reports(&state);
     assert_eq!(
@@ -248,7 +237,7 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "/options should complete");
+    assert!(wait_settled(&state, 1000).await, "/options should complete");
 
     assert_eq!(
         current_options(&state),
@@ -265,7 +254,8 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
 // [docs/specs/options.md] SCENARIO: 24.6
 #[tokio::test]
 async fn test_always_on_generates_after_narration_turn_http() {
-    let (app, state, storage) = options_app(Arc::new(MockBackend::default()));
+    let (app, state, storage) =
+        app_with_script(ScriptedModel::new().turn("You look around.").options(SET_A));
     storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))
         .expect("seed always-on world");
@@ -275,7 +265,7 @@ async fn test_always_on_generates_after_narration_turn_http() {
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "narration turn should complete"
     );
 
@@ -292,8 +282,8 @@ async fn test_always_on_generates_after_narration_turn_http() {
         "the dock must render: {dock}"
     );
     assert!(
-        dock.contains("Option one from the mock."),
-        "the mock's canned options must render: {dock}"
+        dock.contains("Search the desk"),
+        "the always-on turn-end set must render: {dock}"
     );
 }
 
@@ -301,8 +291,15 @@ async fn test_always_on_generates_after_narration_turn_http() {
 // [docs/specs/options.md] SCENARIO: 24.15
 #[tokio::test]
 async fn test_impersonate_keeps_offered_set_http() {
-    let (app, state, storage) =
-        options_app(tagged_provider(vec![SET_A.to_string(), SET_B.to_string()]));
+    let (app, state, storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(SET_A)
+            // The impersonate turn must not spend this one.
+            .options(SET_B)
+            .narration("You say hello.")
+            .analysis(analysis_report(&[], None)),
+    );
     storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))
         .expect("seed always-on world");
@@ -310,7 +307,10 @@ async fn test_impersonate_keeps_offered_set_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
     assert_eq!(
         current_options(&state),
         set_a_options(),
@@ -319,7 +319,10 @@ async fn test_impersonate_keeps_offered_set_http() {
 
     let resp = post_action(&app, "/impersonate hello").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "impersonate should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "impersonate should complete"
+    );
 
     assert_eq!(
         current_options(&state),
@@ -336,15 +339,24 @@ async fn test_impersonate_keeps_offered_set_http() {
 // [docs/specs/options.md] SCENARIO: 24.16
 #[tokio::test]
 async fn test_narration_turn_clears_offered_set_http() {
-    let (app, state, _storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(SET_A)
+            .narration("You look around again.")
+            .analysis(analysis_report(&[], None)),
+    );
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "/options should complete");
+    assert!(wait_settled(&state, 1000).await, "/options should complete");
     assert_eq!(
         current_options(&state),
         set_a_options(),
@@ -354,7 +366,7 @@ async fn test_narration_turn_clears_offered_set_http() {
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "the narration turn should complete"
     );
 
@@ -373,11 +385,15 @@ async fn test_narration_turn_clears_offered_set_http() {
 #[tokio::test]
 async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
     // Zero-parse answers get one retry, so this needs two unparseable responses to fail.
-    let (app, state, storage) = options_app(tagged_provider(vec![
-        SET_A.to_string(),
-        "no parseable options in this response".to_string(),
-        "still no parseable options".to_string(),
-    ]));
+    let (app, state, storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(SET_A)
+            .narration("You look around again.")
+            .analysis(analysis_report(&[], None))
+            .options("no parseable options in this response")
+            .options("still no parseable options"),
+    );
     storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))
         .expect("seed always-on world");
@@ -385,7 +401,10 @@ async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
     assert_eq!(
         current_options(&state),
         set_a_options(),
@@ -394,7 +413,7 @@ async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     assert!(
         current_options(&state).is_empty(),
@@ -417,7 +436,11 @@ async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
 // [docs/specs/options.md] SCENARIO: 24.20
 #[tokio::test]
 async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
-    let (app, state, storage) = app_without_options_agent();
+    let (app, state, storage) = app_with_script_and_agents(
+        ScriptedModel::new().turn("You look around."),
+        AppSettings::default(),
+        |recorder| configured_runner_without(recorder, "options"),
+    );
     storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))
         .expect("seed always-on world");
@@ -426,7 +449,10 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "the message should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the message should complete"
+    );
 
     assert!(
         current_options(&state).is_empty(),
@@ -447,15 +473,19 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
 // [docs/specs/options.md] SCENARIO: 24.10
 #[tokio::test]
 async fn test_numbered_list_response_parses_http() {
-    let (app, state, _storage) = options_app(tagged_provider(vec![NUMBERED.to_string()]));
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(NUMBERED),
+    );
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(dock.contains("Search the desk"), "{dock}");
@@ -469,7 +499,8 @@ async fn test_numbered_list_response_parses_http() {
 // [docs/specs/options.md] SCENARIO: 24.11
 #[tokio::test]
 async fn test_options_work_in_if_mode_http() {
-    let (app, state, storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+    let (app, state, storage) =
+        app_with_script(ScriptedModel::new().turn("You look around.").options(SET_A));
     storage
         .seed_world(&if_world(), &TestMap::single_room("start"))
         .expect("seed IF world");
@@ -477,11 +508,11 @@ async fn test_options_work_in_if_mode_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
@@ -495,8 +526,13 @@ async fn test_options_work_in_if_mode_http() {
 // [docs/specs/options.md] SCENARIO: 24.19
 #[tokio::test]
 async fn test_mode_switch_keeps_offered_set_http() {
-    let (app, state, _storage) =
-        options_app(tagged_provider(vec![SET_A.to_string(), SET_B.to_string()]));
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(SET_A)
+            // The mode switch must not spend this one.
+            .options(SET_B),
+    );
     let game_id = active_game_of(&state);
     let starting_mode = state
         .game_catalogue
@@ -512,11 +548,14 @@ async fn test_mode_switch_keeps_offered_set_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "/options should complete");
+    assert!(wait_settled(&state, 1000).await, "/options should complete");
     assert_eq!(
         current_options(&state),
         set_a_options(),
@@ -541,7 +580,7 @@ async fn test_mode_switch_keeps_offered_set_http() {
         "the switch must actually change the game's narrator mode"
     );
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "the mode switch must leave no generation running"
     );
 
@@ -563,15 +602,24 @@ async fn test_mode_switch_keeps_offered_set_http() {
 // [docs/specs/options.md] SCENARIO: 24.13
 #[tokio::test]
 async fn test_using_offered_option_submits_as_input_http() {
-    let (app, state, _storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(SET_A)
+            .narration("You search the desk.")
+            .analysis(analysis_report(&[], None)),
+    );
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "/options should complete");
+    assert!(wait_settled(&state, 1000).await, "/options should complete");
 
     let inputs_before = state
         .message_service
@@ -587,7 +635,7 @@ async fn test_using_offered_option_submits_as_input_http() {
         "the option submit should accept"
     );
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "the submitted option should complete"
     );
 
@@ -624,15 +672,19 @@ async fn test_using_offered_option_submits_as_input_http() {
 // [docs/specs/options.md] SCENARIO: 24.14
 #[tokio::test]
 async fn test_options_dock_icons_are_defined_by_the_shell() {
-    let (app, state, _storage) = options_app(tagged_provider(vec![SET_A.to_string()]));
+    let (app, state, _storage) =
+        app_with_script(ScriptedModel::new().turn("You look around.").options(SET_A));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "setup turn should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "/options should complete");
+    assert!(wait_settled(&state, 1000).await, "/options should complete");
 
     let defined = defined_icons(&fetch_body(&app, "/").await);
     let dock = fetch_body(&app, "/fragment/options-dock").await;

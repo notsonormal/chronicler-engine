@@ -7,6 +7,9 @@ use axum::Router;
 
 use crate::application::errors::ProcessActionResult;
 use crate::application::pipeline::ActionPipeline;
+use crate::test_support::context::{configured_runner, make_test_pipeline_with_backends};
+use crate::test_support::fixtures::make_test_recorder_with_storage;
+use crate::test_support::scripted_model::ScriptedModel;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::game::GameId;
 use crate::domain::model::settings::AppSettings;
@@ -28,6 +31,7 @@ pub struct TestAppBuilder {
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
     pipeline: Option<ActionPipeline>,
+    model: Option<Arc<ScriptedModel>>,
     skip_seeding: bool,
     claim_generation_slot: bool,
     active_game: Option<GameId>,
@@ -45,6 +49,7 @@ impl TestAppBuilder {
             settings: AppSettings::default(),
             storage: None,
             pipeline: None,
+            model: None,
             skip_seeding: false,
             claim_generation_slot: false,
             active_game: None,
@@ -98,6 +103,11 @@ impl TestAppBuilder {
     /// `.storage(...)` when the test mutates storage the pipeline should read.
     pub fn pipeline(mut self, pipeline: ActionPipeline) -> Self {
         self.pipeline = Some(pipeline);
+        self
+    }
+
+    pub fn model(mut self, model: Arc<ScriptedModel>) -> Self {
+        self.model = Some(model);
         self
     }
 
@@ -194,7 +204,18 @@ impl TestAppBuilder {
         }
 
         let _ = storage.save_settings(&self.settings);
-        let pipeline_override = self.pipeline.take();
+        let mut pipeline_override = self.pipeline.take();
+        if pipeline_override.is_none() {
+            if let Some(model) = self.model.take() {
+                let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
+                let runner = configured_runner(Arc::clone(&recorder));
+                pipeline_override = Some(make_test_pipeline_with_backends(
+                    Arc::clone(&storage),
+                    recorder,
+                    runner,
+                ));
+            }
+        }
 
         let game_id = self.active_game.or(seeded_game);
         // Point the app before wiring, so the boot heal runs against the Game

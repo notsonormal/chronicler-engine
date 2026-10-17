@@ -2,7 +2,7 @@
 //! Options orchestration — LLM call + result processing + entry point.
 
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::domain::model::agent::AgentContext;
+use crate::domain::model::agent::{AgentSettings, HookInput};
 use crate::domain::model::template::DEFAULT_OPTION_COUNT;
 use crate::error::EngineError;
 
@@ -16,40 +16,31 @@ use crate::application::ports::llm_provider::AGENT_OPTIONS;
 const MAX_OPTIONS_ATTEMPTS: u32 = 2;
 
 pub fn generate_options(
-    ctx: &AgentContext,
+    input: &HookInput,
     recorder: &LlmCallRecorder,
-    options_prompt_override: Option<String>,
+    settings: &AgentSettings,
 ) -> Result<Vec<String>, EngineError> {
-    let state = ctx.state;
-    let current_room = ctx
-        .current_room
-        .ok_or_else(|| EngineError::RoomNotFound("current room not set in AgentContext".into()))?;
-
-    let recent_history: Vec<_> = state
-        .narrative
-        .history()
-        .iter()
-        .rev()
-        .take(4)
-        .rev()
-        .cloned()
-        .collect();
+    let world = input.world;
+    let current_room = world.room.ok_or_else(|| {
+        EngineError::RoomNotFound("current room not set in the hook input".into())
+    })?;
 
     let context = OptionsPromptContext {
         room: current_room,
-        npcs_in_area: &state.swipe.scene.npcs_in_area,
-        recent_history: &recent_history,
-        player_name: &ctx.persona.sheet.name,
-        options_prompt_override,
+        npcs_in_area: world.present,
+        recent_history: input.story,
+        player_name: &world.persona.sheet.name,
+        options_prompt_override: settings.preset.clone(),
         option_count: DEFAULT_OPTION_COUNT,
     };
 
-    options_with_llm_call(&context, recorder)
+    options_with_llm_call(&context, recorder, settings.max_tokens)
 }
 
 fn options_with_llm_call(
     context: &OptionsPromptContext<'_>,
     recorder: &LlmCallRecorder,
+    max_tokens: Option<u32>,
 ) -> Result<Vec<String>, EngineError> {
     let (system_prompt, user_prompt) = OptionsPromptBuilder::new(context.clone()).build();
 
@@ -57,7 +48,7 @@ fn options_with_llm_call(
 
     let mut last_error = None;
     for attempt in 1..=MAX_OPTIONS_ATTEMPTS {
-        match options_call_attempt(context, recorder, &system_prompt, &user_prompt) {
+        match options_call_attempt(context, recorder, &system_prompt, &user_prompt, max_tokens) {
             Ok(Some(options)) => return Ok(options),
             Ok(None) => {
                 last_error = Some(EngineError::Parse(
@@ -81,8 +72,9 @@ fn options_call_attempt(
     recorder: &LlmCallRecorder,
     system_prompt: &str,
     user_prompt: &str,
+    max_tokens: Option<u32>,
 ) -> Result<Option<Vec<String>>, EngineError> {
-    match recorder.complete(AGENT_OPTIONS, system_prompt, user_prompt, None) {
+    match recorder.complete(AGENT_OPTIONS, system_prompt, user_prompt, max_tokens) {
         Ok(llm_result) => {
             let options = parse_options(&llm_result.text, context.option_count);
             tracing::info!("[Options] Parsed {} options", options.len());

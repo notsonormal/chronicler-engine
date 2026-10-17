@@ -1,6 +1,6 @@
 //! Unit tests for StatePatch merge semantics and the Role agent names
 
-use crate::domain::model::agent::{Confidence, Role, StatePatch};
+use crate::domain::model::agent::{AgentConfig, BackendSelector, Confidence, Hook, Role, StatePatch};
 
 fn scene_patch(
     npc_ids: Vec<&str>,
@@ -162,4 +162,18 @@ fn test_merge_multiple_chains() {
     assert_eq!(npc_ids, vec!["a", "b", "c"]);
     assert_eq!(movement_destination, Some("x".to_string()));
     assert_eq!(confidence, Confidence::Low);
+}
+
+#[test]
+fn test_agent_config_serde_roundtrip() {
+    let config = AgentConfig {
+        name: "test".to_string(),
+        agent_type: "quantifier".to_string(),
+        enabled: true,
+        backend: BackendSelector::UseNamed("my-backend".to_string()),
+        hook: Hook::Options,
+    };
+    let json = serde_json::to_string(&config).expect("the config serializes");
+    let decoded: AgentConfig = serde_json::from_str(&json).expect("the config deserializes");
+    assert_eq!(config, decoded);
 }

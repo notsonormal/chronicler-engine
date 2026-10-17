@@ -1,25 +1,34 @@
 //! HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
 
+use std::sync::Arc;
+
 use chronicler_engine::test_support::active_game_of;
 use axum::http::StatusCode;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::TestStoredTriggerContext;
+use chronicler_engine::test_support::{analysis_report, ScriptedModel, TestStoredTriggerContext};
 use chronicler_engine::TestAppBuilder;
 
 use crate::support::http_assertions::{
     icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
 };
-use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_idle};
+use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_settled};
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
 #[tokio::test]
 async fn test_delete_last_between_actions_http() {
-    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(
+            ScriptedModel::new()
+                .turn("You examine the room.")
+                .narration("You look around.")
+                .analysis(analysis_report(&[], None)),
+        ))
+        .build_with_state();
 
     let resp = post_action(&app, "examine room").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "action A should complete");
+    assert!(wait_settled(&state, 1000).await, "action A should complete");
     let narration_a = state
         .message_service
         .load_messages(active_game_of(&state))
@@ -35,7 +44,7 @@ async fn test_delete_last_between_actions_http() {
 
     let resp = post_action(&app, "look around").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "action B should complete");
+    assert!(wait_settled(&state, 1000).await, "action B should complete");
 
     let messages = state
         .message_service
@@ -63,12 +72,21 @@ async fn test_delete_last_between_actions_http() {
 // [docs/specs/story_log.md] SCENARIO: 8.2
 #[tokio::test]
 async fn test_delete_mid_sequence_http() {
-    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(
+            ScriptedModel::new()
+                .turn("You examine the room.")
+                .narration("You look around.")
+                .analysis(analysis_report(&[], None))
+                .narration("You check the door.")
+                .analysis(analysis_report(&[], None)),
+        ))
+        .build_with_state();
 
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let _ = post_action(&app, "look around").await;
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let narration_b = state
         .message_service
         .load_messages(active_game_of(&state))
@@ -83,7 +101,7 @@ async fn test_delete_mid_sequence_http() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     let _ = post_action(&app, "check door").await;
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let messages = state
         .message_service
@@ -106,10 +124,17 @@ async fn test_delete_mid_sequence_http() {
 // [docs/specs/story_log.md] SCENARIO: 8.3
 #[tokio::test]
 async fn test_delete_input_then_retry_fails_gracefully_http() {
-    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(
+            ScriptedModel::new()
+                .turn("You examine the room.")
+                .narration("The room is empty.")
+                .analysis(analysis_report(&[], None)),
+        ))
+        .build_with_state();
 
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     // The delete leaves an Input with no anchor narration.
     let resp = post_empty(&app, "/history/delete").await;
@@ -122,7 +147,7 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
         "retry after delete should not 500"
     );
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "retry after delete should not leave state generating"
     );
 }
@@ -130,10 +155,12 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
 // [docs/specs/story_log.md] SCENARIO: 8.4
 #[tokio::test]
 async fn test_delete_removes_entry_from_fragment_http() {
-    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().turn("You examine the room.")))
+        .build_with_state();
 
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_idle(&state, 1000).await, "narration should persist");
+    assert!(wait_settled(&state, 1000).await, "narration should persist");
 
     let before = fetch_body(&app, "/fragment/story-log").await;
     let before_count = before.matches("class=\"log-entry").count();
