@@ -42,7 +42,8 @@ From [Decide the build path](../../.scratch/platform-choice/issues/09-decide-bui
 
 **Order and people.**
 
-- Before P0, the owner merges `dashboard-ui-review-phase3` to `main`. On 2026-10-17 it is still the checked-out branch.
+- `dashboard-ui-review-phase3` merged to `main` on 2026-10-17 (`ac22d864`), so P0 starts from `main`.
+- Each slice starts on its own branch from the current `main`: `wf/rebuild-p0` to `wf/rebuild-p5`, and `wf/rebuild-core` for the core step. The implementer of the slice makes the branch when the slice starts and deletes it after the merge (owner, 2026-10-17).
 - One implementer at a time. The slices run in order. Every commit passes the commit gate below, and the owner approves each commit (Q8).
 - No other work runs during the build. A player-visible bug found during the build becomes a spec scenario in the slice that runs (Q4, Q11).
 
