@@ -27,7 +27,7 @@ During code reviews, avoid vague architectural critiques and focus on actionable
 
 ## Testing
 
-Read `tests/AGENTS.md` and `tests/STRATEGY.md` when writing or reviewing tests; test-writing patterns live in `docs/diataxis/reference/coding_standards/unit_test_standards.md` and `integration_test_standards.md`.
+Read `tests/AGENTS.md` and `tests/STRATEGY.md` when writing or reviewing tests; the unit-test rule is "The one rule" in `tests/STRATEGY.md`, and the integration-test patterns live in `docs/diataxis/reference/coding_standards/integration_test_standards.md`.
 
 Tautological tests are considered harmful.
 

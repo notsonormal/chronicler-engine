@@ -8,6 +8,9 @@ pub mod location;
 pub mod nesting;
 pub mod structure;
 pub mod style;
+pub mod unit_test_allowlist;
+pub mod walker_rows;
+pub mod walkers;
 
 pub use inherent_impl::*;
 pub use enums::*;
@@ -17,6 +20,9 @@ pub use nesting::*;
 pub use structure::*;
 pub use style::*;
 pub use location::*;
+pub use unit_test_allowlist::*;
+pub use walker_rows::*;
+pub use walkers::*;
 
 #[cfg(test)]
 mod inherent_impl_tests;
@@ -35,6 +41,18 @@ mod registry_tests;
 
 #[cfg(test)]
 mod style_tests;
+
+#[cfg(test)]
+mod unit_test_allowlist_tests;
+
+#[cfg(test)]
+mod walker_tests;
+
+/// A `src/` or `tests/` file, with the path relative to that tree.
+pub struct SourceFile {
+    pub path: String,
+    pub content: String,
+}
 
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +106,28 @@ pub(crate) fn discover_rs_files(root: &str) -> Vec<String> {
         .collect()
 }
 
+/// The `src/` tree as a snapshot: the walker entry points need every file at once.
+pub(crate) fn src_snapshot() -> Vec<SourceFile> {
+    tree_snapshot("src")
+}
+
+/// Snapshot with paths relative to `tests/`.
+pub(crate) fn tests_snapshot() -> Vec<SourceFile> {
+    tree_snapshot("tests")
+}
+
+fn tree_snapshot(root: &str) -> Vec<SourceFile> {
+    let prefix = format!("{root}/");
+    discover_rs_files(root)
+        .into_iter()
+        .map(|full| {
+            let content = std::fs::read_to_string(&full).unwrap();
+            let path = full.strip_prefix(&prefix).unwrap_or(&full).to_string();
+            SourceFile { path, content }
+        })
+        .collect()
+}
+
 pub(crate) fn relative_path(full: &str) -> &str {
     full.strip_prefix("src/").unwrap_or(full)
 }
@@ -113,20 +153,16 @@ pub(crate) fn assert_violations(violations: &[Violation], rule_name: &str) {
 
 fn check_src_files(rule_name: &str, mut check: impl FnMut(&str, &str) -> Vec<Violation>) {
     let mut errors = Vec::new();
-    for file in discover_rs_files("src") {
-        let content = std::fs::read_to_string(&file).unwrap();
-        let rel = relative_path(&file);
-        errors.extend(check(rel, &content));
+    for file in src_snapshot() {
+        errors.extend(check(&file.path, &file.content));
     }
     assert_violations(&errors, rule_name);
 }
 
 fn check_tests_files(rule_name: &str, mut check: impl FnMut(&str, &str) -> Vec<Violation>) {
     let mut errors = Vec::new();
-    for file in discover_rs_files("tests") {
-        let content = std::fs::read_to_string(&file).unwrap();
-        let rel = file.strip_prefix("tests/").unwrap_or(&file);
-        errors.extend(check(rel, &content));
+    for file in tests_snapshot() {
+        errors.extend(check(&file.path, &file.content));
     }
     assert_violations(&errors, rule_name);
 }
@@ -315,4 +351,39 @@ fn guardrails_browser_interactions_use_htmx_settle() {
         "browser interactions use the htmx settle counter",
         check_browser_interactions_use_htmx_settle,
     );
+}
+
+#[test]
+fn guardrails_walker_banned_name() {
+    let files = src_snapshot();
+    let errors = check_banned_name_rows(&files, BANNED_NAME_ROWS);
+    assert_violations(&errors, "design-rule walker: banned name");
+}
+
+#[test]
+fn guardrails_walker_call_site() {
+    let files = src_snapshot();
+    let errors = check_call_site_rows(&files, CALL_SITE_ROWS);
+    assert_violations(&errors, "design-rule walker: call site");
+}
+
+#[test]
+fn guardrails_walker_type_check() {
+    let files = src_snapshot();
+    let errors = check_type_check_rows(&files, TYPE_CHECK_ROWS);
+    assert_violations(&errors, "design-rule walker: type check");
+}
+
+#[test]
+fn guardrails_walker_call_count() {
+    let files = src_snapshot();
+    let errors = check_call_count_rows(&files, CALL_COUNT_ROWS);
+    assert_violations(&errors, "design-rule walker: call count");
+}
+
+#[test]
+fn guardrails_unit_test_allowlist() {
+    let files = src_snapshot();
+    let errors = check_unit_test_allowlist(&files, LEGACY_UNIT_TEST_FILES, SEAM_CONTRACT_FILES);
+    assert_violations(&errors, "legacy unit-test allowlist");
 }

@@ -42,7 +42,7 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-10-10 16:50 UTC*
+*Index last generated: 2026-10-17 15:11 UTC*
 
 ### `docs/diataxis/explanation/`
 
@@ -67,7 +67,6 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 - [Guardrails](./diataxis/reference/coding_standards/guardrails.md)
 - [Integration Test Standards](./diataxis/reference/coding_standards/integration_test_standards.md)
 - [Testing](./diataxis/reference/coding_standards/testing.md)
-- [Unit Test Standards](./diataxis/reference/coding_standards/unit_test_standards.md)
 
 ### `docs/diataxis/reference/frontend/`
 

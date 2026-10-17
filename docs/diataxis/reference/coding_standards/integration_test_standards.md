@@ -236,7 +236,7 @@ CI does not exercise the ignored tests.
 
 ## Document References
 
-- [`unit_test_standards.md`](unit_test_standards.md) — unit-test standards.
+- `tests/STRATEGY.md` — the tiers, and the one rule for unit tests.
 - `tests/AGENTS.md` — test-infrastructure policy; test-mirror convention, structure overview.
 - `tests/test_utils/server.rs` — port allocation and `TestServer` lifecycle.
 - `tests/test_utils/wait.rs` — smart-waiting helpers.

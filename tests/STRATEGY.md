@@ -12,7 +12,7 @@ checks outside the tier model.
 
 | Directory | Tier | Faked | Real | Holds |
 |---|---|---|---|---|
-| `src/**/*_tests.rs` | **Unit** | both driven ports (`MockBackend`, in-memory `Storage`) | nothing | the branches of one module, including async seams (cancellation, mid-flight timing) |
+| `src/**/*_tests.rs` | **Unit** | both driven ports (`MockBackend`, in-memory `Storage`) | nothing | [the one rule](#the-one-rule): a seam contract's `CASE`s, a pure `domain/model/` function, or a file on the legacy list |
 | `tests/http/` | **HTTP E2E (tier 1)** | LLM (`MockBackend` via pipeline override) | axum router, SQLite or in-memory storage | spec scenarios, asserted on [domain outcomes](#domain-outcome-the-tier-1-rule) |
 | `tests/http/requires_migration/` | tier 1, quarantine | as `tests/http/` | as `tests/http/` | legacy tests that wait for a spec; untagged, size pinned |
 | `tests/http/support/` | support for tier 1 | — | — | request builders, seeding fixtures, HTML assertions, app wiring |
@@ -29,8 +29,55 @@ checks outside the tier model.
 
 A `#[tokio::test]` with fakes is a unit test.
 
-**Unit tier: a test for each branch.** **Check:** review-only. No step gates
-on coverage.
+## The one rule
+
+A unit test lives in one of three places, and nowhere else:
+
+1. **A seam contract**: a `CASE` list in the test file of a box behind a port
+   boundary. The boxes are the storage adapters, the LLM providers and the
+   transport, the Harper text checker, and each Agent. The storage contract
+   lives at the driven-adapter tier, in `tests/storage/`. The
+   contract declares its cases in the file's module doc
+   (`//! CASE <id>: <what it pins>`), and every test in a declaring file carries
+   `// CASE: <id>`. A unit test in a declaring file calls only that box's entry
+   point. **Check:** `seam-cases` and the `guardrails` binary (the
+   `unit test allowlist` rule); the entry-point clause is review-only.
+
+   The shape of a case:
+   - **One clause**: one input shape, one result, or one failure.
+   - **The entry point only**: the test builds the box as production does. It
+     does not call a helper that production never calls.
+   - **The declared outcome**: assert what the clause promises a caller, not
+     the internal steps.
+   - **A failure through the box's own seam**: for storage,
+     `Storage::with_failure` with `TestOverride::internal`. Do not mock an
+     internal part.
+   - **The call record**: a box that records its model call through
+     `LlmCallRecorder` has a case for the record of a good call and of a
+     failed call.
+2. **A pure function in `domain/model/`**, as a plain unit test. The function's
+   own branches are its cases. **Check:** the `guardrails` binary checks the
+   folder. Purity is review-only.
+3. **A file on the legacy list**, in
+   `tests/infrastructure/guardrails/unit_test_allowlist.rs`. The list holds
+   today's `src/**/*_tests.rs` files; it only shrinks, one module at a time.
+   A legacy test that breaks only by a mechanical change (a new parameter, a
+   renamed type) changes in place. A legacy test whose behaviour breaks moves
+   to its seam contract or its scenario. **Check:** the `guardrails` binary,
+   which also fails a stale entry.
+
+A behaviour a player can see is not a unit test: it is a **scenario** in
+`docs/specs/`, with one test at the tier that sees it. A module that is
+neither a box nor a pure domain function has no unit test of its own. The
+scenarios that pass through it are its coverage.
+
+Why the rule exists. A module between a box and its route has its behaviour
+observed by the scenarios that pass through it. A unit test there repeats the
+implementation, and it breaks at every refactor. A box behind a port boundary
+differs: no route reaches all of its failure modes. So the box writes its
+clauses down as cases, and one test pins each case.
+
+The coverage percentage stays a diagnostic: no step fails on it.
 
 ## Domain outcome (the tier-1 rule)
 

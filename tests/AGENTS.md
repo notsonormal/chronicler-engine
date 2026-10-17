@@ -129,11 +129,16 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `location_tests.rs` — Tests for `location.rs` guardrail.
       - `mod.rs` — Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
       - `nesting.rs` — Nesting depth guardrail — fails the build when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`.
-      - `registry_tests.rs` — Guardrail registry tests: every rule is reachable from `mod.rs` and has a detection test.
+      - `registry_tests.rs` — Guardrail registry tests: every rule is reachable from `mod.rs` and has a detection test, and every design-rule walker table is registered with a detection case.
       - `structure.rs` — Structure guardrail tests: doc-anchor standards, mod.rs purity, no-std-thread, file length, and the new test module-header rule.
       - `structure_tests.rs` — Tests for `structure.rs` guardrail.
       - `style.rs` — Style guardrail tests: import ordering, single-letter variable usage, separator comments, long comment runs, and per-file `cfg(test)` tracking.
       - `style_tests.rs` — Tests for `style.rs` guardrail.
+      - `unit_test_allowlist.rs` — The legacy unit-test list and its allowlist guardrail: a unit test lives in a seam contract, a `domain/model/` file, or a listed legacy file.
+      - `unit_test_allowlist_tests.rs` — Detection tests for the legacy and seam-contract allowlist guardrail: a unit test lives in a listed seam contract, a `domain/model/` file, or a listed legacy file.
+      - `walker_rows.rs` — The four design-rule walker row tables: one table per kind, and each row's reason on the comments above it.
+      - `walker_tests.rs` — Detection tests for the four design-rule walkers: one table-driven test per kind, each case running its walker over synthetic files.
+      - `walkers.rs` — Table-driven design-rule walkers: the four kinds, their row types, and the checks that run one row table.
 - **llm/**
     - `flow_llm_tests.rs` — LLM-driven flow tests: exercises real LLM provider flows end-to-end (ignored by default; run with `python build.py --llm-only`).
     - `mod.rs` — LLM test binary: real LLM provider flows (ignored by default; run with `python build.py --llm-only`).
