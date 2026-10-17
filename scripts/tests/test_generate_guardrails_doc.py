@@ -45,7 +45,6 @@ class DiscoveryPatternTests(unittest.TestCase):
                 ggd.ROOT, ggd.GUARDRAILS_DIR = originals
 
     def test_digit_in_name_is_discovered(self) -> None:
-        """The regression: `check_tier3_rule` must not vanish from the doc."""
         rows = self._rows_for(_rule("check_tier3_rule"))
         self.assertEqual(rows, ["check_tier3_rule"])
 
@@ -63,7 +62,6 @@ class DiscoveryPatternTests(unittest.TestCase):
         self.assertEqual(rows, ["check_alpha_1", "check_beta", "check_gamma_2"])
 
     def test_undocumented_rule_is_an_error(self) -> None:
-        """A rule with no `///` doc block must fail loudly, not be skipped."""
         with tempfile.TemporaryDirectory() as tmp:
             fake_root = Path(tmp)
             fixture = fake_root / "guardrails"
@@ -82,13 +80,10 @@ class DiscoveryPatternTests(unittest.TestCase):
 
 
 class AnalyzerScopeTests(unittest.TestCase):
-    """The generated arch-lint block states the scan scope from `[analyzer]`.
-
-    The regression this guards: the reference doc showed only the
-    `deny-scope-dep` rules, never which tree the linter scans or what it skips,
-    so an agent had to read arch-lint.toml (or its vendored crate) to answer
-    whether test files are analyzed.
-    """
+    """The reference doc once showed only the `deny-scope-dep` rules, never
+    which tree the linter scans or what it skips, so an agent had to read
+    arch-lint.toml (or its vendored crate) to answer whether test files are
+    analyzed."""
 
     def _scope_for(self, toml_text: str) -> str:
         with tempfile.TemporaryDirectory() as tmp:
@@ -118,7 +113,6 @@ class AnalyzerScopeTests(unittest.TestCase):
             self._scope_for('[analyzer]\nroot = "./src"\n')
 
     def test_live_doc_states_every_live_exclude_glob(self) -> None:
-        """Ratchet: every live exclude glob must appear in the committed doc."""
         with ggd.ARCH_LINT_TOML.open("rb") as f:
             excludes = tomllib.load(f)["analyzer"]["exclude"]
         doc = (ggd.ROOT / ggd.DOC_REL).read_text(encoding="utf-8")
@@ -131,12 +125,8 @@ class AnalyzerScopeTests(unittest.TestCase):
 
 
 class LiveRepoExhaustivenessTests(unittest.TestCase):
-    """Every rule in the live repo must have a row in the generated doc.
-
-    This is the check that turns a silent drop into a build failure: if a new
-    `check_*` appears (or one is renamed into a shape the pattern misses), the
-    doc is incomplete and this test fails.
-    """
+    """A silent drop must be a build failure: a new `check_*`, or one renamed
+    into a shape the pattern misses, leaves the doc incomplete."""
 
     def test_every_check_fn_has_a_doc_row(self) -> None:
         rows = ggd.parse_syn_table()
@@ -179,6 +169,92 @@ class ClippyPatternTests(unittest.TestCase):
         pattern = re.compile(r"clippy::([a-z0-9_]+),?\s*$")
         self.assertIsNotNone(pattern.match("clippy::lint2_rule,"))
         self.assertIsNotNone(pattern.match("clippy::lint"))
+
+
+class WalkerRowTableTests(unittest.TestCase):
+    """A walker row whose reason or rule number is missing would vanish from
+    the reference, so the rule no longer says why it exists or which decision it
+    enforces."""
+
+    ROW = (
+        "// Rule 1: every read and write names its Game.\n"
+        "BannedNameRow {\n"
+        '    rule: 1,\n'
+        '    scope: "adapters/driven/storage/",\n'
+        "    banned: &[BannedName::StaticItem],\n"
+        "},\n"
+    )
+
+    def _rows_for(self, source: str) -> list[tuple[int, str, str, int]]:
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_root = Path(tmp)
+            rows_file = fake_root / "walker_rows.rs"
+            rows_file.write_text(source)
+            originals = (ggd.ROOT, ggd.WALKER_ROWS_RS)
+            ggd.ROOT = fake_root
+            ggd.WALKER_ROWS_RS = rows_file
+            try:
+                return ggd.parse_walker_rows()
+            finally:
+                ggd.ROOT, ggd.WALKER_ROWS_RS = originals
+
+    def test_a_row_and_its_reason_are_parsed(self) -> None:
+        rows = self._rows_for(self.ROW)
+        self.assertEqual(len(rows), 1)
+        rule, kind, reason, line = rows[0]
+        self.assertEqual(rule, 1)
+        self.assertEqual(kind, "banned name")
+        self.assertIn("every read and write names its Game", reason)
+        self.assertEqual(line, 2)
+
+    def test_a_row_without_a_reason_is_an_error(self) -> None:
+        without_reason = self.ROW.split("\n", 1)[1]
+        with self.assertRaises(SystemExit):
+            self._rows_for(without_reason)
+
+    def test_a_row_without_a_rule_is_an_error(self) -> None:
+        source = self.ROW.replace("    rule: 1,\n", "")
+        with self.assertRaises(SystemExit):
+            self._rows_for(source)
+
+    def test_a_non_numeric_rule_is_an_error(self) -> None:
+        source = self.ROW.replace("rule: 1,", 'rule: "one",')
+        with self.assertRaises(SystemExit):
+            self._rows_for(source)
+
+    def test_an_empty_table_renders_the_empty_state(self) -> None:
+        table = ggd.format_walker_rows_table([])
+        self.assertIn("No row exists yet", table)
+
+    def test_a_row_like_item_outside_the_form_is_an_error(self) -> None:
+        """A row the parser cannot read must fail, never be skipped."""
+        one_line_row = (
+            "// Rule 1: every read and write names its Game.\n"
+            'BannedNameRow { rule: 1, scope: "storage/", banned: &[] },\n'
+        )
+        with self.assertRaises(SystemExit):
+            self._rows_for(one_line_row)
+
+    def test_a_field_line_outside_the_form_is_an_error(self) -> None:
+        source = self.ROW.replace("    rule: 1,\n", "    rule: 1\n")
+        with self.assertRaises(SystemExit):
+            self._rows_for(source)
+
+    def test_a_row_without_a_closing_line_is_an_error(self) -> None:
+        source = self.ROW.replace("},\n", "")
+        with self.assertRaises(SystemExit):
+            self._rows_for(source)
+
+    def test_unknown_kinds_are_humanized(self) -> None:
+        self.assertEqual(ggd.humanize_kind("BannedNameRow"), "banned name")
+        self.assertEqual(ggd.humanize_kind("TokenBudgetRow"), "token budget")
+
+    def test_live_tables_parse(self) -> None:
+        """Every live row parses, and each carries a rule number and a reason."""
+        for rule, kind, reason, line in ggd.parse_walker_rows():
+            self.assertGreater(rule, 0, f"row at line {line} has no rule number")
+            self.assertTrue(kind, f"row at line {line} has no kind")
+            self.assertTrue(reason, f"row at line {line} has no reason")
 
 
 if __name__ == "__main__":

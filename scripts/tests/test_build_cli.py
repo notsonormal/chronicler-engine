@@ -105,6 +105,11 @@ class ParseArgsTests(unittest.TestCase):
     def test_test_pattern_value(self):
         args = build.parse_args(["test-pattern", "behaviour::test_x"])
         self.assertEqual(args.pattern, "behaviour::test_x")
+        self.assertIsNone(args.test_target)
+
+    def test_test_pattern_accepts_a_test_target(self):
+        args = build.parse_args(["test-pattern", "x", "--test-target", "http"])
+        self.assertEqual(args.test_target, "http")
 
     def test_duplicates_step_forwards_extra_args(self):
         args = build.parse_args(["duplicates", "--all"])
@@ -430,8 +435,6 @@ class MainRunTests(unittest.TestCase):
 
 
 class StepCommandTests(unittest.TestCase):
-    """Step command assembly, including nextest pattern quoting."""
-
     # Every registry command pinned verbatim: a typo in any spec's cmd fails
     # the suite instead of silently changing what a subcommand runs.
     EXPECTED_COMMANDS = {
@@ -443,6 +446,7 @@ class StepCommandTests(unittest.TestCase):
         "clippy": "cargo clippy --all-targets --all-features -- -D warnings",
         "test-structure": "python scripts/check_test_structure.py",
         "spec-coverage": "python scripts/validate_feature_spec.py",
+        "seam-cases": "python scripts/validate_seam_cases.py",
         "docstrings": "python scripts/check_python_docstrings.py",
         "py-tests": "python -m unittest discover scripts/tests -v",
         "duplicates": "python scripts/healthcheck.py duplicates",
@@ -469,6 +473,24 @@ class StepCommandTests(unittest.TestCase):
     def test_pattern_is_shell_quoted(self):
         cmd = build._step_command(build.REGISTRY["test-pattern"], "my test")
         self.assertEqual(cmd, "cargo nextest run --no-fail-fast 'my test'")
+
+    def test_test_target_selects_one_binary(self):
+        cmd = build._step_command(build.REGISTRY["test-pattern"], "x", None, "http")
+        self.assertEqual(
+            cmd, "cargo nextest run --no-fail-fast --test http x"
+        )
+
+    def test_test_target_lib_selects_the_lib_unit_binary(self):
+        cmd = build._step_command(build.REGISTRY["test-pattern"], "", None, "lib")
+        self.assertEqual(cmd, "cargo nextest run --no-fail-fast --lib ''")
+
+    def test_no_test_target_keeps_every_binary(self):
+        cmd = build._step_command(build.REGISTRY["test-pattern"], "", None, None)
+        self.assertEqual(cmd, "cargo nextest run --no-fail-fast ''")
+
+    def test_test_target_is_ignored_by_a_non_test_step(self):
+        command = build._step_command(build.REGISTRY["clippy"], None, None, "http")
+        self.assertEqual(command, build.REGISTRY["clippy"].cmd)
 
 
 class CargoEnvTests(unittest.TestCase):

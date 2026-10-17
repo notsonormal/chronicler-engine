@@ -305,6 +305,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `validate_data.py` — Validate JSON data files against schemas and check cross-file references.
   - `validate_docs.py` — Validate markdown docs + DOC anchors under docs/.
   - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
+  - `validate_seam_cases.py` — Validate the seam contracts: every declared `CASE` has exactly one tagged test.
 <!-- AUTO-STRUCTURE END -->
 
 ## Your Responsibility
@@ -359,6 +360,7 @@ tail -n 10 "$(ls -t logs/build_*.log | head -1)"
 |---|---|---|
 | `python build.py clippy` | Compile and lint of all targets; warnings are errors | ~12 s |
 | `python build.py test-pattern "<pattern>"` | Tests whose name matches the pattern, in every test binary | ~3 s, depends on the pattern |
+| `python build.py test-pattern "<pattern>" --test-target <name>` | Tests whose name matches the pattern, in one test binary (`--test <name>`; `--test-target lib` for the lib unit tests). Only that binary is rebuilt | ~6 s after a one-line edit |
 | `python build.py integration` | Every test binary except browser, architecture and guardrails; lib unit tests included | ~21 s |
 | `python build.py guardrails` | The architecture and guardrails test binaries | ~10 s |
 | `python build.py browser` | The browser (Playwright) binary only | ~92 s |
@@ -367,7 +369,7 @@ tail -n 10 "$(ls -t logs/build_*.log | head -1)"
 | `python build.py validate-docs` | Markdown docs and DOC anchors under `docs/` | <1 s |
 | `python build.py run` | Builds and runs the dev server | see `ENVIRONMENT.md` |
 
-Warm cost is the median of recent runs in `logs/build_history.txt`, including runs after a Rust edit. A run with no Rust change is faster (`ENVIRONMENT.md`, *Typical gate cost*).
+Warm cost is the median of recent runs in `logs/build_history.txt`, including runs after a Rust edit. A run with no Rust change is faster (`ENVIRONMENT.md`, *Typical gate cost*). A narrow loop with `--test-target` does not compile the other test binaries, so a change to a shared API shows in `clippy` or in the full gate instead.
 
 `python build.py --help` lists every subcommand and flag. `ENVIRONMENT.md`: read it when a build or test run is slow, waits for the build slot, or runs out of memory. It also says where the dev server keeps its DB and reads its data.
 

@@ -23,7 +23,7 @@ The working test for the chronicler tree:
 
 - `diataxis/reference/narrative/prompt_system.md` — earns its place because it describes something intrinsic to LLM chat engines: how the engine assembles the system/user message split for each call.
 - `diataxis/reference/narrative/agent_system.md` and `diataxis/reference/narrative/narration_system.md` — earn their place because they provide an overarching frame, a way to view the system. This stops different systems from leaking into each other, keeping each focused on its pillar.
-- `diataxis/reference/coding_standards/unit_test_standards.md` and `diataxis/reference/coding_standards/integration_test_standards.md` — earn their place because coding standards need to be consistent across thousands of LLM-generated tests.
+- `diataxis/reference/coding_standards/integration_test_standards.md` — earns its place because coding standards need to be consistent across thousands of LLM-generated tests.
 - `diataxis/reference/game_flow.md` — earns its place because it describes a step-by-step flow that's hard to grasp without reading the code end-to-end.
 
 The pattern: a doc earns its place when it carries **purpose, invariants, or an overarching frame** the code does not say directly. Re-stating what the code already says — field lists, function signatures, "how the system works" summaries — is the failure mode. That is what the code does, by definition, better.

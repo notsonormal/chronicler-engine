@@ -55,7 +55,13 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 
 `tests/infrastructure/guardrails/` holds the AST walkers and the registered convention set (see `tests/infrastructure/guardrails/mod.rs` for the current rule count and per-rule registration). Per-rule details (which patterns are checked, which scopes apply, which exemptions exist) live in the individual rule files alongside the walker code. The walker code is the source for each rule's standard and severity — this section is a navigation pointer, not a content restatement.
 
+Four table-driven walkers enforce the design rules of the game-state lifecycle: banned name in a scope, call-site allowlist, type check, and call count. Their rows live in `tests/infrastructure/guardrails/walker_rows.rs`, one row per rule, and each row carries its reason on the comment lines above it. The Rule column holds the design rule's number. The two tables below are generated from those rows and from the `pub fn check_*` docs. A row with no reason or no `rule:` field fails `build.py guardrails-doc-check`.
+
 <!-- AUTO-GUARDRAILS: syn START -->
+| Rule | Kind | Reason | Source |
+|------|------|--------|--------|
+| — | — | No row exists yet. | — |
+
 | Rule | Description | Source |
 |------|-------------|--------|
 | enum variant docs | Requires every enum variant to have a `///` doc unless the enum is marked `/// [TRIVIAL_ENUM]`. | `tests/infrastructure/guardrails/enums.rs:69` |
@@ -83,6 +89,11 @@ Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline c
 | template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:165` |
 | separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:245` |
 | single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:260` |
+| unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:185` |
+| banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:162` |
+| call site rows | Runs the call-site table: only what a row allows may call its callee. | `tests/infrastructure/guardrails/walkers.rs:378` |
+| type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:408` |
+| call count rows | Runs the call-count table: no function calls a row's callee more than the row allows. | `tests/infrastructure/guardrails/walkers.rs:493` |
 <!-- AUTO-GUARDRAILS: syn END -->
 
 ## 4. Coverage Exclusion Policy
@@ -93,3 +104,4 @@ Coverage is measured via `cargo-llvm-cov` with file-level exclusions configured 
 
 - [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Architectural commitments](../../explanation/architecture.md#architectural-commitments) lists the guarantees the static guardrails enforce.
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — the trigger-evaluation mutation sequence is the same one the `execute_freeaction_impl` tests observe.
+- `.scratch/turn-state-model/assets/sketch-25-new-design.md` §6.2 — the design rule numbers the four table-driven walkers enforce.

@@ -36,13 +36,13 @@ class GatePlanTests(unittest.TestCase):
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_full_gate_installs_hooks_first_and_has_18_steps(self):
+    def test_full_gate_installs_hooks_first_and_has_19_steps(self):
         plan = build._plan_gate_steps(self.gate_args())
         self.assertEqual(plan[0].kind, "hooks")
         self.assertEqual(plan[0].label, "Installing git hooks...")
         self.assertEqual(plan[1].kind, "worktrees")
         self.assertEqual(plan[2].label, "Formatting...")
-        self.assertEqual(len(plan), 18)
+        self.assertEqual(len(plan), 19)
 
     def test_worktree_removal_is_best_effort(self):
         with mock.patch.object(build, "run", return_value=1) as runner, mock.patch.object(
@@ -58,7 +58,6 @@ class GatePlanTests(unittest.TestCase):
         printer.assert_called_once()
 
     def test_gate_splits_browser_from_integration(self):
-        """The gate runs the browser binary as its own step, not merged in."""
         plan = build._plan_gate_steps(self.gate_args())
         labels = [step.label for step in plan]
         self.assertIn("Running integration tests...", labels)
@@ -79,14 +78,14 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn("Running browser tests...", labels)
         self.assertIn("Running integration tests...", labels)
         self.assertIn("Running guardrail tests...", labels)
-        self.assertEqual(len(plan), 17)
+        self.assertEqual(len(plan), 18)
 
     def test_no_fmt_prunes_fmt_only(self):
         plan = build._plan_gate_steps(self.gate_args(no_fmt=True))
         labels = [step.label for step in plan]
         self.assertNotIn("Formatting...", labels)
         self.assertIn("Installing git hooks...", labels)
-        self.assertEqual(len(plan), 17)
+        self.assertEqual(len(plan), 18)
 
     def test_coverage_mode_swaps_test_and_report_steps(self):
         plan = build._plan_gate_steps(self.gate_args(coverage=True))

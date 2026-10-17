@@ -4,10 +4,17 @@ Sources:
   - `src/lib.rs` clippy `#![deny(...)]` lints + `//` rationale comments
   - `arch-lint.toml` `[analyzer]` scan scope + `[[deny-scope-dep]]` rows
   - `tests/infrastructure/guardrails/*.rs` `pub fn check_*` `///` doc comments
+  - `tests/infrastructure/guardrails/walker_rows.rs` design-rule row tables
 
-Default mode rewrites the three tables in place between sentinel comments.
+Default mode rewrites the four tables in place between sentinel comments.
 `--check` exits non-zero if the committed doc would change or if any source is
 missing its required comment.
+
+The row tables use one strict form, so this script can read them. A row is one
+struct literal whose type ends in `Row`: an opening `<Kind>Row {` line, one
+`field: value,` line per field, a closing `},` line, and the row's reason on the
+`//` comment lines directly above the opening line. Every value stays on one
+line. A row with no reason, or a row with no `rule:` field, fails the check.
 """
 
 from __future__ import annotations
@@ -28,12 +35,20 @@ CLIPPY_START = "<!-- AUTO-GUARDRAILS: clippy START -->"
 CLIPPY_END = "<!-- AUTO-GUARDRAILS: clippy END -->"
 ARCH_LINT_START = "<!-- AUTO-GUARDRAILS: arch-lint START -->"
 ARCH_LINT_END = "<!-- AUTO-GUARDRAILS: arch-lint END -->"
+
+WALKER_ROWS_RS = GUARDRAILS_DIR / "walker_rows.rs"
+
+ROW_OPEN_RE = re.compile(r"^(\s*)([A-Z][A-Za-z0-9]*)Row \{\s*$")
+ROW_LIKE_RE = re.compile(r"^\s*[A-Z][A-Za-z0-9]*Row\b")
+ROW_FIELD_RE = re.compile(r"^\s*([a-z_][a-z0-9_]*):\s*(\S.*?),\s*$")
+ROW_CLOSE_RE = re.compile(r"^\s*\},\s*$")
+
+ROW_RULE_RE = re.compile(r"^(\d+)$")
 SYN_START = "<!-- AUTO-GUARDRAILS: syn START -->"
 SYN_END = "<!-- AUTO-GUARDRAILS: syn END -->"
 
 
 def humanize(name: str) -> str:
-    """Convert `check_import_ordering` or `guardrails_import_ordering` to a readable label."""
     name = name.removeprefix("check_").removeprefix("guardrails_")
     return name.replace("_", " ")
 
@@ -136,7 +151,6 @@ def parse_analyzer_scope() -> str:
 
 
 def format_arch_lint_block(scope: str, rows: list[tuple[str, str, str]]) -> str:
-    """Compose the arch-lint auto-block: scan scope line, blank line, rules table."""
     return f"{scope}\n\n{format_arch_lint_table(rows)}"
 
 
@@ -180,12 +194,10 @@ def parse_syn_table() -> list[tuple[str, str, str, int]]:
                     )
                     sys.exit(1)
                 rows.append((fn_name, last_doc_first, str(rel), i))
-                # Reset for the next function; a new doc block must start fresh.
                 doc_block = []
                 last_doc_first = None
                 continue
 
-            # Non-doc, non-fn line ends any in-progress doc block without a match.
             if stripped:
                 doc_block = []
                 last_doc_first = None
@@ -204,11 +216,128 @@ def format_syn_table(rows: list[tuple[str, str, str, int]]) -> str:
     return "\n".join(lines)
 
 
+def humanize_kind(row_type: str) -> str:
+    """Render a row type's name as the walker kind it configures."""
+    kind = row_type.removesuffix("Row")
+    spaced = re.sub(r"(?<!^)(?=[A-Z])", " ", kind)
+    return spaced.lower()
+
+
+def parse_walker_rows() -> list[tuple[int, str, str, int]]:
+    """Return (rule, kind, reason, line) rows from the design-rule row tables.
+
+    The form is the strict one in this module's docstring. A row whose comment
+    block is missing is an error: a rule with no reason is a rule nobody can
+    re-point or retire confidently.
+    """
+    rows: list[tuple[int, str, str, int]] = []
+    lines = WALKER_ROWS_RS.read_text(encoding="utf-8").splitlines()
+
+    comment_block: list[str] = []
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if stripped.startswith("//"):
+            comment_block.append(stripped.lstrip("/").strip())
+            index += 1
+            continue
+
+        opening = ROW_OPEN_RE.match(lines[index])
+        if not opening:
+            if ROW_LIKE_RE.match(lines[index]):
+                print(
+                    f"error: the row at {WALKER_ROWS_RS}:{index + 1} is not in the"
+                    " row form — one `<Kind>Row {` line, one `field: value,` line"
+                    " per field, and a closing `},` line",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            if stripped:
+                comment_block = []
+            index += 1
+            continue
+
+        kind = humanize_kind(opening.group(2))
+        opening_line = index + 1
+        rule: int | None = None
+        index += 1
+        while True:
+            if index >= len(lines):
+                print(
+                    f"error: the {kind} row at {WALKER_ROWS_RS}:{opening_line}"
+                    " has no closing `},` line",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            if ROW_CLOSE_RE.match(lines[index]):
+                break
+            field = ROW_FIELD_RE.match(lines[index])
+            if not field:
+                print(
+                    f"error: {WALKER_ROWS_RS}:{index + 1} is not a `field: value,`"
+                    " line of the row it sits in",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            if field.group(1) == "rule":
+                rule_match = ROW_RULE_RE.match(field.group(2).strip())
+                if not rule_match:
+                    print(
+                        f"error: row at {WALKER_ROWS_RS}:{opening_line} has a"
+                        " non-numeric `rule:` field",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+                rule = int(rule_match.group(1))
+            index += 1
+        index += 1
+
+        reason = " ".join(part for part in comment_block if part)
+        if not reason:
+            print(
+                f"error: the {kind} row at {WALKER_ROWS_RS}:{opening_line} has no"
+                " reason — put the rule's reason on the comment lines directly"
+                " above it",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if rule is None:
+            print(
+                f"error: the {kind} row at {WALKER_ROWS_RS}:{opening_line} has no"
+                " `rule:` field",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        rows.append((rule, kind, reason, opening_line))
+        comment_block = []
+
+    return rows
+
+
+def format_walker_rows_table(rows: list[tuple[int, str, str, int]]) -> str:
+    lines = [
+        "| Rule | Kind | Reason | Source |",
+        "|------|------|--------|--------|",
+    ]
+    if not rows:
+        lines.append(
+            "| — | — | No row exists yet. | — |"
+        )
+        return "\n".join(lines)
+
+    rel = WALKER_ROWS_RS.relative_to(ROOT)
+    for rule, kind, reason, line in rows:
+        lines.append(f"| {rule} | {kind} | {reason} | `{rel}:{line}` |")
+    return "\n".join(lines)
+
+
 def generate_doc() -> str:
     clippy_rows = parse_clippy_table()
     arch_scope = parse_analyzer_scope()
     arch_rows = parse_arch_lint_table()
     syn_rows = parse_syn_table()
+    walker_rows = parse_walker_rows()
 
     doc_path = ROOT / DOC_REL
     content = doc_path.read_text(encoding="utf-8")
@@ -231,7 +360,11 @@ def generate_doc() -> str:
     content = replace_between(
         ARCH_LINT_START, ARCH_LINT_END, format_arch_lint_block(arch_scope, arch_rows)
     )
-    content = replace_between(SYN_START, SYN_END, format_syn_table(syn_rows))
+    content = replace_between(
+        SYN_START,
+        SYN_END,
+        f"{format_walker_rows_table(walker_rows)}\n\n{format_syn_table(syn_rows)}",
+    )
 
     return content
 

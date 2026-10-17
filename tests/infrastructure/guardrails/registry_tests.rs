@@ -1,4 +1,8 @@
-//! Guardrail registry tests: every rule is reachable from `mod.rs` and has a detection test.
+//! Guardrail registry tests: every rule is reachable from `mod.rs` and has a detection test, and every design-rule walker table is registered with a detection case.
+
+// The walker rows are not `check_*` functions, so `walker_tests.rs` runs one
+// case table per kind and the tests below keep each table registered and the
+// rule numbers unique.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -30,7 +34,6 @@ fn is_rule_file(path: &Path) -> bool {
     name != "mod.rs" && !name.ends_with("_tests.rs")
 }
 
-/// Public `check_*` function definitions in `content`.
 fn defined_rules(content: &str) -> BTreeSet<String> {
     let ast = parsed(content);
     ast.items
@@ -49,10 +52,9 @@ fn parsed(content: &str) -> syn::File {
     syn::parse_file(content).unwrap_or_else(|e| panic!("guardrail source must parse: {e}"))
 }
 
-/// The last path segment of every path expression in a file. A rule registered
-/// by value (`check_src_files("…", check_x)`) and a rule called
-/// (`check_x(path, content)`) both register, while a name in a comment, a
-/// string, or a `use` declaration does not.
+/// A rule registers whether it is passed by value
+/// (`check_src_files("…", check_x)`) or called (`check_x(path, content)`); a
+/// name in a comment, a string, or a `use` declaration does not.
 #[derive(Default)]
 struct RuleReferences {
     names: BTreeSet<String>,
@@ -67,7 +69,6 @@ impl<'ast> Visit<'ast> for RuleReferences {
     }
 }
 
-/// Rule names `content` references as an expression path.
 fn referenced_rules(content: &str) -> BTreeSet<String> {
     let mut visitor = RuleReferences::default();
     visitor.visit_file(&parsed(content));
@@ -80,10 +81,13 @@ fn calls_rule(content: &str, name: &str) -> bool {
 
 /// The callee ident of every call inside a `#[test]` function body, so a
 /// detection test is one that invokes the rule rather than one that names it.
+/// Every expression path inside a test body is also collected, so a row table
+/// passed to a walker counts as registered.
 #[derive(Default)]
 struct TestBodies {
     depth: usize,
     called: BTreeSet<String>,
+    referenced: BTreeSet<String>,
 }
 
 impl<'ast> Visit<'ast> for TestBodies {
@@ -107,17 +111,31 @@ impl<'ast> Visit<'ast> for TestBodies {
         }
         syn::visit::visit_expr_call(self, node);
     }
+
+    fn visit_expr_path(&mut self, node: &'ast syn::ExprPath) {
+        if self.depth > 0 {
+            if let Some(segment) = node.path.segments.last() {
+                self.referenced.insert(segment.ident.to_string());
+            }
+        }
+        syn::visit::visit_expr_path(self, node);
+    }
 }
 
 fn is_test_attribute(attr: &Attribute) -> bool {
     attr.path().is_ident("test")
 }
 
-/// Rule names called inside a `#[test]` function body in `content`.
 fn rules_called_in_tests(content: &str, all_names: &BTreeSet<String>) -> BTreeSet<String> {
     let mut visitor = TestBodies::default();
     visitor.visit_file(&parsed(content));
     all_names.intersection(&visitor.called).cloned().collect()
+}
+
+fn registered_in_tests(content: &str) -> BTreeSet<String> {
+    let mut visitor = TestBodies::default();
+    visitor.visit_file(&parsed(content));
+    visitor.referenced.union(&visitor.called).cloned().collect()
 }
 
 fn all_rule_names(files: &[PathBuf]) -> BTreeSet<String> {
@@ -253,5 +271,113 @@ fn detection_scan_ignores_prefixed_identifier() {
     assert!(
         called.is_empty(),
         "a differently-named helper must not count as a detection test"
+    );
+}
+
+const WALKER_KINDS: &[(&str, &str)] = &[
+    ("BANNED_NAME_ROWS", "BANNED_NAME_CASES"),
+    ("CALL_SITE_ROWS", "CALL_SITE_CASES"),
+    ("TYPE_CHECK_ROWS", "TYPE_CHECK_CASES"),
+    ("CALL_COUNT_ROWS", "CALL_COUNT_CASES"),
+];
+
+fn all_registered_in_tests() -> BTreeSet<String> {
+    let mut registered = registered_in_tests(&read(&guardrails_dir().join("mod.rs")));
+    for path in rs_files() {
+        registered.extend(registered_in_tests(&read(&path)));
+    }
+    registered
+}
+
+#[test]
+fn every_walker_table_is_run_by_a_registered_test() {
+    let registered = all_registered_in_tests();
+    for (rows, cases) in WALKER_KINDS {
+        assert!(
+            registered.contains(*rows),
+            "row table `{rows}` is never passed to its walker in a #[test] body, \
+             so its rows guard nothing"
+        );
+        assert!(
+            registered.contains(*cases),
+            "detection case table `{cases}` is never used in a #[test] body, so \
+             the walker kind has no detection test"
+        );
+    }
+}
+
+#[test]
+fn every_walker_row_has_a_detection_case() {
+    let banned_rules: BTreeSet<u8> = crate::walker_tests::BANNED_NAME_CASES
+        .iter()
+        .map(|case| case.row.rule)
+        .collect();
+    let call_site_rules: BTreeSet<u8> = crate::walker_tests::CALL_SITE_CASES
+        .iter()
+        .map(|case| case.row.rule)
+        .collect();
+    let type_check_rules: BTreeSet<u8> = crate::walker_tests::TYPE_CHECK_CASES
+        .iter()
+        .map(|case| case.row.rule)
+        .collect();
+    let call_count_rules: BTreeSet<u8> = crate::walker_tests::CALL_COUNT_CASES
+        .iter()
+        .map(|case| case.row.rule)
+        .collect();
+
+    let checks: [(&str, Vec<u8>, &BTreeSet<u8>); 4] = [
+        (
+            "BANNED_NAME_ROWS",
+            crate::BANNED_NAME_ROWS.iter().map(|row| row.rule).collect(),
+            &banned_rules,
+        ),
+        (
+            "CALL_SITE_ROWS",
+            crate::CALL_SITE_ROWS.iter().map(|row| row.rule).collect(),
+            &call_site_rules,
+        ),
+        (
+            "TYPE_CHECK_ROWS",
+            crate::TYPE_CHECK_ROWS.iter().map(|row| row.rule).collect(),
+            &type_check_rules,
+        ),
+        (
+            "CALL_COUNT_ROWS",
+            crate::CALL_COUNT_ROWS.iter().map(|row| row.rule).collect(),
+            &call_count_rules,
+        ),
+    ];
+
+    for (table, rules, covered) in checks {
+        let uncovered: Vec<u8> = rules
+            .into_iter()
+            .filter(|rule| !covered.contains(rule))
+            .collect();
+        assert!(
+            uncovered.is_empty(),
+            "rows in `{table}` have no detection case in `walker_tests.rs`: \
+             {uncovered:?} — a new row needs a fixture that proves the walker \
+             catches it"
+        );
+    }
+}
+
+#[test]
+fn every_walker_rule_number_is_used_once() {
+    let mut rules: Vec<u8> = Vec::new();
+    rules.extend(crate::BANNED_NAME_ROWS.iter().map(|row| row.rule));
+    rules.extend(crate::CALL_SITE_ROWS.iter().map(|row| row.rule));
+    rules.extend(crate::TYPE_CHECK_ROWS.iter().map(|row| row.rule));
+    rules.extend(crate::CALL_COUNT_ROWS.iter().map(|row| row.rule));
+
+    let mut seen: BTreeSet<u8> = BTreeSet::new();
+    let duplicates: Vec<u8> = rules
+        .into_iter()
+        .filter(|rule| !seen.insert(*rule))
+        .collect();
+    assert!(
+        duplicates.is_empty(),
+        "a design rule has one row, in one table; these rule numbers have more: \
+         {duplicates:?}"
     );
 }

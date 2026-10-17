@@ -90,14 +90,10 @@ if sys.platform == "win32":
 
 
 class _LogState:
-    """Module-level log handle for the current build run."""
-
     fh = None
 
 
 class _TierSize(NamedTuple):
-    """One step's test-set size, for a run whose command is a known tier."""
-
     tier: str
     size: int
 
@@ -169,12 +165,11 @@ class _CompileErrors:
 
 
 def _set_log_fh(fh):
-    """Register the log file handle for the current build run."""
     _LogState.fh = fh
 
 
 def _log_write(text):
-    """Write text to the log file. No newline is added."""
+    """No newline is added, so callers own the line breaks."""
     fh = _LogState.fh
     if fh is None:
         return
@@ -219,8 +214,6 @@ _CARGO_PROGRESS_RE = re.compile(
 
 
 class StepCounter:
-    """Simple step counter for build progress output."""
-
     def __init__(self, total: int):
         self.current = 0
         self.total = total
@@ -252,7 +245,6 @@ def check_rust_version():
 
 
 def require_nextest():
-    """Ensure cargo-nextest is installed; exit with error if not."""
     result = subprocess.run(
         ["cargo", "nextest", "--version"],
         capture_output=True,
@@ -280,7 +272,6 @@ _INTEGRATION_FILTER = (
 
 
 def get_test_cmd(include_llm=False):
-    """Return the test command using nextest."""
     cmd = _NEXTEST_RUN
     if include_llm:
         cmd += " --profile llm --run-ignored all"
@@ -288,17 +279,13 @@ def get_test_cmd(include_llm=False):
 
 
 def get_browser_test_cmd():
-    """Return the command running only the browser (Playwright) binary."""
     return f"{_NEXTEST_RUN} -E '{_BROWSER_FILTER}'"
 
 
 def get_integration_test_cmd(include_llm=False):
-    """Return the command running every test binary except browser, architecture
-    and guardrails.
-
-    The engine, http, storage, bootstrap and llm tiers are CPU-light; excluding
-    the browser binary keeps this step to ~20s, so it works as a standalone
-    check.
+    """The engine, http, storage, bootstrap and llm tiers are CPU-light;
+    excluding the browser binary keeps this step to ~20s, so it works as a
+    standalone check.
     """
     cmd = f"{_NEXTEST_RUN} -E '{_INTEGRATION_FILTER}'"
     if include_llm:
@@ -326,13 +313,12 @@ _NEXTEST_SUMMARY_RE = re.compile(r"^\s*Summary \[[^\]]*\]\s+\d+ tests? run:")
 
 
 def _summary_count(line: str, label: str) -> str | None:
-    """Return the count preceding ``label`` in a Summary line, or None."""
     m = re.search(rf"(\d+) {label}", line)
     return m.group(1) if m else None
 
 
 def _nextest_summary_line(output: str) -> str | None:
-    """Render nextest's final Summary line as a compact epilogue one-liner.
+    """Render nextest's final Summary line as one epilogue line, or None.
 
     Returns e.g. "nextest: 118 passed, 1 failed", or None when the output
     carries no nextest summary (compile error, non-nextest command).
@@ -366,10 +352,8 @@ _TIERS = ("guardrails", "integration", "browser")
 
 
 def _tier_for_cmd(cmd: str | None) -> str | None:
-    """Return the tier a nextest command runs, or None for any other command.
-
-    Coverage, --include-llm, test-pattern and LLM runs select a different test
-    set, so they map to None and record no size.
+    """Coverage, --include-llm, test-pattern and LLM runs select a different
+    test set, so they map to None and record no size.
     """
     commands = {
         REGISTRY["guardrails"].cmd: "guardrails",
@@ -380,7 +364,7 @@ def _tier_for_cmd(cmd: str | None) -> str | None:
 
 
 def _summary_size(output: str) -> int | None:
-    """Return the test-set size (tests run + skipped) from nextest's Summary."""
+    """The test-set size is tests run plus skipped, from nextest's Summary."""
     size = None
     for line in output.splitlines():
         if not _NEXTEST_SUMMARY_RE.match(line):
@@ -393,8 +377,6 @@ def _summary_size(output: str) -> int | None:
 
 
 def _stash_nextest_summary(output: str, cmd: str | None = None) -> None:
-    """Capture nextest's summary line, the tier's test-set size, and any
-    leaky/flaky test names."""
     line = _nextest_summary_line(output)
     if line is not None:
         _NextestSummary.lines.append((_NextestSummary.label, line))
@@ -428,7 +410,6 @@ _COMPILE_ERROR_NOISE = (
 
 
 def _stash_compile_errors(output: str) -> None:
-    """Capture each compiler error header with its ``--> file:line:col``."""
     lines = output.splitlines()
     for i, raw in enumerate(lines):
         if not _COMPILE_ERROR_RE.match(raw) or raw.startswith(_COMPILE_ERROR_NOISE):
@@ -446,7 +427,6 @@ def _stash_compile_errors(output: str) -> None:
 
 
 def _nextest_duration_to_secs(token: str) -> float:
-    """Convert a nextest duration token (e.g. "18.645s", "1m23s") to seconds."""
     token = token.strip()
     total = 0.0
     for value, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)([hms])", token):
@@ -488,9 +468,7 @@ def _parse_stub_check_timings(lines):
 
 
 def _timed_test_cmd(cmd):
-    """Return `cmd` with the flags the timing report needs.
-
-    The browser tier also shows passing tests' output, which carries each
+    """The browser tier also shows passing tests' output, which carries each
     stub runner's per-check summary. Other commands keep it hidden: the
     integration tier's passing output would grow the log about 14 times.
     """
@@ -501,7 +479,6 @@ def _timed_test_cmd(cmd):
 
 
 def _combined_output(result) -> str:
-    """Return a captured run's stdout and stderr as one text to scan."""
     return (result.stdout or "") + "\n" + (result.stderr or "")
 
 
@@ -589,12 +566,12 @@ def run_with_test_timings(cmd, env=None, check=True):
 
 
 def get_coverage_cmd(browser_only=False):
-    """Return the coverage test command using nextest.
+    """Return the coverage command for one half of the gate's tier split.
 
-    ``browser_only`` selects which half the gate's split runs: False yields
-    the non-browser tier (everything except the browser binary), True the
-    browser binary alone. The coverage step runs twice, once per half, so both
-    profiling runs share the single merged report that ``--no-report`` defers.
+    ``browser_only`` selects the half: False yields the non-browser tier
+    (everything except the browser binary), True the browser binary alone. The
+    coverage step runs twice, once per half, so both profiling runs share the
+    single merged report that ``--no-report`` defers.
     """
     cmd = "cargo llvm-cov nextest --no-report --no-fail-fast"
     if browser_only:
@@ -618,6 +595,11 @@ class StepSpec(NamedTuple):
     needs_nextest: bool = False
     pattern_arg: bool = False
     help: str = ""
+
+
+# The `--test-target` name that selects the package's lib unit-test binary
+# (`cargo nextest run --lib`) instead of one integration test binary.
+LIB_TEST_TARGET = "lib"
 
 
 _NEXTEST_RUN = "cargo nextest run --no-fail-fast"
@@ -677,6 +659,15 @@ REGISTRY: dict[str, StepSpec] = {
             "Running spec-coverage guardrail...",
             "python scripts/validate_feature_spec.py",
             help="Enforce spec-scenario coverage and SCENARIO-tag rules.",
+        ),
+        StepSpec(
+            "seam-cases",
+            "Running seam-case guardrail...",
+            "python scripts/validate_seam_cases.py",
+            help=(
+                "Enforce the seam-contract rule: every declared CASE has its"
+                " tagged test, and no test in a declaring file goes untagged."
+            ),
         ),
         StepSpec(
             "docstrings",
@@ -747,7 +738,12 @@ REGISTRY: dict[str, StepSpec] = {
             _NEXTEST_RUN,
             needs_nextest=True,
             pattern_arg=True,
-            help="Run the tests whose name matches a pattern, across all test binaries.",
+            help=(
+                "Run the tests whose name matches a pattern. With"
+                " `--test-target <name>` only that test binary is built and run"
+                f" (`--test <name>`, or `--test-target {LIB_TEST_TARGET}` for"
+                " `--lib`); with no target, every test binary runs."
+            ),
         ),
         StepSpec(
             "run",
@@ -779,6 +775,7 @@ GATE_ORDER = [
     "clippy",
     "test-structure",
     "spec-coverage",
+    "seam-cases",
     "docstrings",
     "py-tests",
     "http-routes-check",
@@ -889,6 +886,16 @@ def parse_args(argv=None):
             step_parser.add_argument(
                 "pattern", help="Test-name pattern passed to cargo nextest"
             )
+            step_parser.add_argument(
+                "--test-target",
+                dest="test_target",
+                default=None,
+                metavar="NAME",
+                help=(
+                    "Build and run only one test binary (`--test NAME`), or the"
+                    f" lib unit tests (`{LIB_TEST_TARGET}`). Default: every test binary."
+                ),
+            )
         if spec.name == "run":
             # REMAINDER keeps everything after the step (including a leading
             # ``--``) so the flags reach the server binary unparsed. Strip the
@@ -899,7 +906,6 @@ def parse_args(argv=None):
                 help="Flags forwarded verbatim to the server binary",
             )
         if spec.name == "duplicates":
-            # Forward the duplicate scope flags through to healthcheck.py.
             step_parser.add_argument(
                 "--all",
                 action="store_true",
@@ -923,7 +929,7 @@ def parse_args(argv=None):
 
 
 def _reject_gate_flags_with_step(parser, args):
-    """Fail at parse time when gate-only flags are mixed with a step subcommand."""
+    """Fail at parse time, before any step runs."""
     if args.command is None:
         return
     offenders = [
@@ -1023,11 +1029,20 @@ def _warn_if_target_locked(cargo_target_dir: Path, custom: bool):
 
 
 def _step_command(
-    spec: StepSpec, pattern: str | None = None, extra: list[str] | None = None
+    spec: StepSpec,
+    pattern: str | None = None,
+    extra: list[str] | None = None,
+    test_target: str | None = None,
 ) -> str:
-    """Assemble the shell command for a step spec (quotes the nextest pattern)."""
+    """Assemble the shell command for a step spec (quotes the nextest pattern).
+
+    ``test_target`` narrows a ``pattern_arg`` step to one test binary, so a
+    targeted run compiles only that binary (``--test <NAME>``, or ``--lib``
+    for ``LIB_TEST_TARGET``). No target keeps the all-binaries command.
+    """
     if spec.pattern_arg:
-        cmd = f"{spec.cmd} {shlex.quote(pattern)}"
+        target_flags = _test_target_flags(test_target)
+        cmd = f"{spec.cmd}{target_flags} {shlex.quote(pattern)}"
     else:
         cmd = spec.cmd
     if extra:
@@ -1035,8 +1050,15 @@ def _step_command(
     return cmd
 
 
+def _test_target_flags(test_target: str | None) -> str:
+    if not test_target:
+        return ""
+    if test_target == LIB_TEST_TARGET:
+        return " --lib"
+    return f" --test {shlex.quote(test_target)}"
+
+
 def clean_sqlite_dbs(data_dir: Path):
-    """Remove any SQLite database files from the data directory."""
     if not data_dir.exists():
         return
     removed = []
@@ -1049,7 +1071,6 @@ def clean_sqlite_dbs(data_dir: Path):
 
 
 def clean_old_logs(log_dir: Path, max_age_days: int = 3):
-    """Remove log files older than max_age_days from the log directory."""
     if not log_dir.exists():
         return
     now = time.time()
@@ -1069,8 +1090,7 @@ def clean_old_logs(log_dir: Path, max_age_days: int = 3):
 
 
 def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 30):
-    """Remove files older than max_age_days from the given tmp directories (recursing
-    into subdirectories). Subdirectories themselves are left in place."""
+    """Recurses into subdirectories, which are themselves left in place."""
     now = time.time()
     max_age_sec = max_age_days * 86400
     for tmp_dir in tmp_dirs:
@@ -1226,7 +1246,6 @@ def is_target_locked(target_dir: Path) -> bool:
 
 
 def _print_step_summary(step_timings, step_failures, log_path):
-    """Print the Step Timing Summary with per-step status and elapsed time."""
     if not step_timings:
         return
     both_print("")
@@ -1253,7 +1272,6 @@ class StepRecord:
 
 
 def _record_step(record, label, start, *, failed):
-    """Append one step outcome to the epilogue record."""
     record.timings.append(
         {
             "step": label,
@@ -1496,7 +1514,6 @@ def _run_remove_worktrees(cargo_env):
 
 
 def _copy_deployment_assets(args):
-    """Copy data/ and assets/ into the target dir and prepare the package layout."""
     _, target_dir = _target_paths(args)
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1521,7 +1538,6 @@ def _copy_deployment_assets(args):
 
 
 def _generate_coverage_report(args, cargo_env):
-    """Generate the llvm-cov JSON report and print the parsed summary."""
     cargo_target_dir, _ = _target_paths(args)
     json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
     json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1543,7 +1559,6 @@ def _generate_coverage_report(args, cargo_env):
 
 
 def _gate_tail(args):
-    """Post-test housekeeping: tmp cleanup and SQLite dump. Gate mode only."""
     project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
     engine_tmp = Path("tmp")
     clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=30)
@@ -1556,7 +1571,6 @@ def _gate_tail(args):
 
 
 def _gate_prelude(args) -> dict:
-    """Gate-mode prelude: target-dir env + lock warning."""
     cargo_target_dir, _ = _target_paths(args)
     cargo_env = _cargo_env_for(args)
     custom = bool(getattr(args, "target_dir", None))
@@ -1567,7 +1581,6 @@ def _gate_prelude(args) -> dict:
 
 
 def run_gate(args, record):
-    """Full gate: fmt + validation + clippy + guardrails + tests + packaging."""
     check_rust_version()
     require_nextest()
 
@@ -1607,7 +1620,10 @@ def run_step(args, record):
         record,
         spec.label,
         _step_command(
-            spec, getattr(args, "pattern", None), _step_extra_args(spec, args)
+            spec,
+            getattr(args, "pattern", None),
+            _step_extra_args(spec, args),
+            getattr(args, "test_target", None),
         ),
         check=True,
         env=cargo_env,
@@ -1615,7 +1631,6 @@ def run_step(args, record):
 
 
 def _step_extra_args(spec: StepSpec, args) -> list[str] | None:
-    """Build the extra pass-through flags for a step from its parsed args."""
     if spec.name == "duplicates":
         extra: list[str] = []
         if getattr(args, "duplicates_all", False):
@@ -1699,7 +1714,6 @@ def _port_in_use(host: str, port: int) -> bool:
 
 
 def _require_free_port(bind_target: tuple[int, str] | None) -> None:
-    """Stop with a clear message when the server's port is already bound."""
     if bind_target is None:
         return
     port, host = bind_target
@@ -1759,7 +1773,6 @@ def _exec_pending(exit_code: int) -> None:
 
 
 def run_cleanup(args, record):
-    """Cleanup mode: remove stale port locks and build artifacts."""
     both_print("=== Cleanup Mode ===")
 
     lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
@@ -1778,7 +1791,6 @@ def run_cleanup(args, record):
 
 
 def run_llm_only(args, record):
-    """LLM-only mode: build, then run only the slow LLM tests."""
     check_rust_version()
     require_nextest()
 
@@ -1896,7 +1908,6 @@ def _last_tier_sizes(path: Path) -> dict[str, _TierRecord]:
 
 
 def _size_suffix(size: int, baseline: _TierRecord | None) -> str:
-    """Render a tier's test count against its newest journal record."""
     if baseline is None:
         return f"tests: {size} (no earlier record)"
     where = f"{baseline.timestamp}, tree {baseline.tree}"
