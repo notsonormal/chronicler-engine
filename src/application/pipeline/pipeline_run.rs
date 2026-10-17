@@ -5,12 +5,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::domain::model::game::GameId;
-use crate::domain::model::state::game_state::{GameState, TriggerMatch};
+use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::quantifier::{NpcEventList, QuantifierConfidence, QuantifierResult};
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::utils::game_rules::TriggerMatch;
 use crate::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
 };
@@ -163,12 +164,13 @@ impl<'a> PipelineRun<'a> {
             npcs,
         );
 
-        state.scene.quantifier_confidence =
+        state.swipe.scene.quantifier_confidence =
             Some(format!("{:?}", quantifier_result.npcs.confidence));
 
         if quantifier_result.npcs.npc_ids.is_empty() && !quantifier_result.npcs.confidence.is_high()
         {
             let room_default_npcs = state
+                .swipe
                 .scene
                 .npcs_in_area
                 .iter()
@@ -271,6 +273,7 @@ impl<'a> PipelineRun<'a> {
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
 
         let previous_ids: Vec<String> = state
+            .swipe
             .scene
             .npcs_in_area
             .iter()
@@ -286,7 +289,7 @@ impl<'a> PipelineRun<'a> {
             npcs,
         );
 
-        state.scene.quantifier_confidence =
+        state.swipe.scene.quantifier_confidence =
             Some(format!("{:?}", post_trigger_result.npcs.confidence));
 
         let npc_cards: Vec<NpcCard> = post_trigger_result
@@ -297,7 +300,7 @@ impl<'a> PipelineRun<'a> {
             .collect();
         let new_ids: Vec<String> = npc_cards.iter().map(|n| n.id.clone()).collect();
 
-        state.scene.npcs_in_area = npc_cards;
+        state.swipe.scene.npcs_in_area = npc_cards;
 
         let events = NpcEventList::from_diff(&previous_ids, &new_ids);
         if let Err(e) = state.apply_npc_events(&events.events, map, npcs) {
@@ -326,12 +329,13 @@ impl<'a> PipelineRun<'a> {
 
         let room_data = bundle
             .map
-            .get_room_by_id(&state.movement.current_room_id)
+            .get_room_by_id(&state.swipe.movement.current_room_id)
             .or_else(|| {
                 state
+                    .swipe
                     .movement
                     .dynamic_rooms
-                    .get(&state.movement.current_room_id)
+                    .get(&state.swipe.movement.current_room_id)
             })?;
         let history = state.narrative.history();
 
@@ -354,7 +358,7 @@ impl<'a> PipelineRun<'a> {
             room_data,
             NpcContext {
                 all_npcs: &all_npcs,
-                npcs_in_area: &state.scene.npcs_in_area,
+                npcs_in_area: &state.swipe.scene.npcs_in_area,
             },
             &bundle.persona,
             &continuation_user_msg,

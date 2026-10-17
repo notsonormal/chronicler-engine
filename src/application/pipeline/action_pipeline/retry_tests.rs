@@ -28,8 +28,6 @@ use crate::test_support::{
 };
 use crate::test_support::fixtures::TestGameState;
 
-/// A Game id with no row: the failing-storage cases read and write by it
-/// and never load a Game record.
 const MISSING_GAME_ID: GameId = GameId(0);
 
 use super::action_tests::{app_with_second_game, wait_for_gate_idle};
@@ -164,7 +162,10 @@ pub(super) fn setup_event_flow(
     }
 
     let mut final_state = app.message_service.load_or_fresh(active_game_of(app));
-    final_state.npc_encounter_log.mark_trigger_fired("npc_1", 0);
+    final_state
+        .swipe
+        .npc_encounter_log
+        .mark_trigger_fired("npc_1", 0);
     final_state.narrative.pending_event = Some("Event".to_string());
     final_state.add_message("Event narration".to_string(), MessageType::Narration);
     let final_snapshot =
@@ -963,7 +964,7 @@ async fn test_retry_room_not_found_sets_error() {
     let (app, storage) = make_test_app_with_storage();
 
     let mut state = app.message_service.load_or_fresh(active_game_of(&app));
-    state.movement.current_room_id = "non_existent_room".to_string();
+    state.swipe.movement.current_room_id = "non_existent_room".to_string();
     state.add_message("look".to_string(), MessageType::Input);
     let input_snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -1391,7 +1392,6 @@ async fn test_retry_last_response_cancelled_at_phase_boundary() {
 
     setup_event_flow(&app, &storage);
 
-    // The flipper switches the app to a real second Game while the work runs.
     let (initial_game_id, other_game_id) = app_with_second_game(&app);
     let catalogue_for_thread = app.game_catalogue.clone();
     let backend_for_thread = Arc::clone(&mock_backend);
@@ -1692,7 +1692,7 @@ async fn test_retry_flow_impersonate_mode_runs_full_tail() {
         "the new swipe inherits the stored inputs"
     );
     assert!(
-        final_state.scene.quantifier_confidence.is_some(),
+        final_state.swipe.scene.quantifier_confidence.is_some(),
         "impersonate redo now runs the full post-narration tail"
     );
     app.shutdown_token.cancel();
@@ -1922,7 +1922,7 @@ async fn test_retry_flow_user_regen_mode_stays_tail_less() {
         "the target keeps its Input type"
     );
     assert!(
-        final_state.scene.quantifier_confidence.is_none(),
+        final_state.swipe.scene.quantifier_confidence.is_none(),
         "user-regen redo must stay tail-less"
     );
     app.shutdown_token.cancel();
@@ -2042,7 +2042,6 @@ async fn test_retry_user_regen_cancelled() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    // The flipper switches the app to a real second Game while the work runs.
     let (initial_game_id, other_game_id) = app_with_second_game(&app);
     let catalogue_for_thread = app.game_catalogue.clone();
     let backend_for_thread = Arc::clone(&mock_backend);

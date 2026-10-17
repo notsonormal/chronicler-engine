@@ -395,7 +395,7 @@ async fn test_nonexistent_room_sets_error_status_http() {
 
     {
         let mut gs = state.message_service.load_or_fresh(active_game_of(&state));
-        gs.movement.current_room_id = "non_existent_room".to_string();
+        gs.swipe.movement.current_room_id = "non_existent_room".to_string();
         let _ = state
             .message_service
             .save_state(active_game_of(&state), &gs);

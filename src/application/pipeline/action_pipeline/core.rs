@@ -242,7 +242,6 @@ impl ActionPipeline {
         tracing::debug!("run_from_input: called");
         let run = PipelineRun::new(self, game_id);
 
-        // A redo falls back to the retry target's stored inputs.
         let (impersonated, guide_text, impersonate_direction) =
             if impersonated || guide_text.is_some() || impersonate_direction.is_some() {
                 (impersonated, guide_text, impersonate_direction)
@@ -475,12 +474,13 @@ impl ActionPipeline {
         let mut result = QuantifierResult::default();
 
         let current_room = map
-            .get_room_by_id(&state.movement.current_room_id)
+            .get_room_by_id(&state.swipe.movement.current_room_id)
             .or_else(|| {
                 state
+                    .swipe
                     .movement
                     .dynamic_rooms
-                    .get(&state.movement.current_room_id)
+                    .get(&state.swipe.movement.current_room_id)
             });
         let agent_ctx = AgentContext {
             game_id,

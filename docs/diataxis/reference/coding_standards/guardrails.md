@@ -35,6 +35,7 @@ Scan scope: `root = "./src"`, excluding `**/target/**`, `**/tests/**`, `**/*_tes
 | From Scope | To Scope(s) | Rationale |
 |------------|-------------|----------|
 | `model` | `server, narrative, application` | Model layer must be pure; cannot depend on outer layers. |
+| `model` | `storage` | Model layer must be pure; the game rules cannot depend on the storage adapter. |
 | `application` | `server` | Application layer must not depend on server layer. |
 | `model` | `storage-models` | Model layer must not depend on storage DB models/mappers. |
 | `narrative` | `storage-models` | Narrative layer must not depend on storage DB models/mappers. |

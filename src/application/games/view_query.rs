@@ -47,12 +47,13 @@ impl GameViewQuery {
         let world = world_with_map.world_card;
         let map = world_with_map.map;
         let room = map
-            .get_room_by_id(&game_state.movement.current_room_id)
+            .get_room_by_id(&game_state.swipe.movement.current_room_id)
             .or_else(|| {
                 game_state
+                    .swipe
                     .movement
                     .dynamic_rooms
-                    .get(&game_state.movement.current_room_id)
+                    .get(&game_state.swipe.movement.current_room_id)
             })
             .ok_or_else(|| {
                 ApplicationError::from(EngineError::RoomNotFound(
@@ -88,6 +89,7 @@ impl GameViewQuery {
 
         let npc_ids: Vec<String> = if scene_only {
             game_state
+                .swipe
                 .scene
                 .npcs_in_area
                 .iter()
@@ -124,14 +126,20 @@ impl GameViewQuery {
             .collect();
 
         let npc_ids: Vec<String> = game_state
+            .swipe
             .scene
             .npcs_in_area
             .iter()
             .map(|npc| npc.id.clone())
             .collect();
 
-        let dynamic_rooms: Vec<String> =
-            game_state.movement.dynamic_rooms.keys().cloned().collect();
+        let dynamic_rooms: Vec<String> = game_state
+            .swipe
+            .movement
+            .dynamic_rooms
+            .keys()
+            .cloned()
+            .collect();
 
         let last_error = game_state
             .narrative
@@ -141,17 +149,17 @@ impl GameViewQuery {
             .map(|failure| failure.raw.clone());
 
         Ok(DebugStateView {
-            current_room_id: game_state.movement.current_room_id.clone(),
+            current_room_id: game_state.swipe.movement.current_room_id.clone(),
             npcs_in_area: npc_ids,
             generation_status: game_state.narrative.input_buffer.status.clone(),
             generation_phase: game_state.narrative.input_buffer.phase.clone(),
-            npc_encounter_log: game_state.npc_encounter_log.npcs.clone(),
+            npc_encounter_log: game_state.swipe.npc_encounter_log.npcs.clone(),
             narration_history_tail: history_tail,
             narration_history_length: game_state.narrative.history().len(),
             dynamic_rooms,
-            dynamic_room_count: game_state.movement.dynamic_rooms.len(),
+            dynamic_room_count: game_state.swipe.movement.dynamic_rooms.len(),
             last_error,
-            quantifier_confidence: game_state.scene.quantifier_confidence.clone(),
+            quantifier_confidence: game_state.swipe.scene.quantifier_confidence.clone(),
             backend_name: game_state.narrative.last_backend_name.clone(),
             model_name: game_state.narrative.last_model_name.clone(),
             current_options: game_state.narrative.current_options.clone(),
@@ -168,8 +176,7 @@ impl GameViewQuery {
         Ok((entries, has_last_trigger))
     }
 
-    /// Current game state, not UI state: the set survives a reload, and the
-    /// pipeline rewrites it.
+    /// The persisted set the pipeline rewrites at turn end.
     pub fn get_current_options(&self, game_id: GameId) -> Result<Vec<String>, ApplicationError> {
         let game_state = self.message_service.load_or_fresh(game_id);
         Ok(game_state.narrative.current_options.clone())

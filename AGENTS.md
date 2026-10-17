@@ -261,9 +261,11 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `movement.rs` — Player movement state
         - `narrative_state.rs` — Narrative state with history and input buffer
         - `scene_state.rs` — Current scene NPCs and quantifier confidence
+        - `swipe_state.rs` — The game state of one Swipe: movement, scene and encounter log
         - `trigger_context.rs` — Stored trigger snapshot context
       - **utils/**
         - `game_name.rs` — Game name generation with date-based disambiguation.
+        - `game_rules.rs` — The game rules: movement, the Characters present and the Triggers, as a pure function of the Swipe state
         - `mod.rs` — Domain model utility modules.
         - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings/preset services and preset storage.
         - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.
@@ -360,7 +362,7 @@ tail -n 10 "$(ls -t logs/build_*.log | head -1)"
 | Command | Covers | Warm cost |
 |---|---|---|
 | `python build.py clippy` | Compile and lint of all targets; warnings are errors | ~12 s |
-| `python build.py test-pattern "<pattern>"` | Tests whose name matches the pattern, in every test binary | ~3 s, depends on the pattern |
+| `python build.py test-pattern "<pattern>"` | Tests whose name contains the pattern (a substring, not a regex), in every test binary | ~3 s, depends on the pattern |
 | `python build.py test-pattern "<pattern>" --test-target <name>` | Tests whose name matches the pattern, in one test binary (`--test <name>`; `--test-target lib` for the lib unit tests). Only that binary is rebuilt | ~6 s after a one-line edit |
 | `python build.py integration` | Every test binary except browser, architecture and guardrails; lib unit tests included | ~21 s |
 | `python build.py guardrails` | The architecture and guardrails test binaries | ~10 s |

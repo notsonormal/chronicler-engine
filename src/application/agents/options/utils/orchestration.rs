@@ -15,9 +15,6 @@ use crate::application::ports::llm_provider::AGENT_OPTIONS;
 /// the quantifier's low-confidence retry.
 const MAX_OPTIONS_ATTEMPTS: u32 = 2;
 
-/// Build the options prompt from the current scene, call the options
-/// backend, and parse the response into at most [`DEFAULT_OPTION_COUNT`]
-/// option strings.
 pub fn generate_options(
     ctx: &AgentContext,
     recorder: &LlmCallRecorder,
@@ -40,7 +37,7 @@ pub fn generate_options(
 
     let context = OptionsPromptContext {
         room: current_room,
-        npcs_in_area: &state.scene.npcs_in_area,
+        npcs_in_area: &state.swipe.scene.npcs_in_area,
         recent_history: &recent_history,
         player_name: &ctx.persona.sheet.name,
         options_prompt_override,
@@ -79,7 +76,6 @@ fn options_with_llm_call(
         .unwrap_or_else(|| EngineError::Parse("options generation produced no result".into())))
 }
 
-/// One LLM attempt. `Ok(None)` — transport succeeded but zero options parsed.
 fn options_call_attempt(
     context: &OptionsPromptContext<'_>,
     recorder: &LlmCallRecorder,

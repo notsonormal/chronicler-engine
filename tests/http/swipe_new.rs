@@ -1070,7 +1070,7 @@ async fn test_retry_room_not_found_sets_error_http() {
         .build_with_state();
 
     let mut gs = state.message_service.load_or_fresh(active_game_of(&state));
-    gs.movement.current_room_id = "non_existent_room".to_string();
+    gs.swipe.movement.current_room_id = "non_existent_room".to_string();
     gs.add_message("look".to_string(), MessageType::Input);
     let snap = GameStateSnapshot::from_game_state(&gs);
     let input_snap_id = storage

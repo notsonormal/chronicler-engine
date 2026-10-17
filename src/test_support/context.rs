@@ -141,12 +141,11 @@ pub fn build_test_wired_app(
     build_app_graph_for_tests(storage, Some(pipeline), Some(game_id))
 }
 
-/// Returns the id of the Game the seed created.
 pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) -> GameId {
     let data = TestData {
         world: Arc::new(crate::test_support::fixtures::TestWorld::minimal()),
         map: Arc::new(crate::test_support::fixtures::TestMap::single_room(
-            &state.movement.current_room_id,
+            &state.swipe.movement.current_room_id,
         )),
         persona: Arc::new(crate::test_support::fixtures::TestPersona::standard()),
         npcs: std::iter::empty::<NpcCard>().collect(),

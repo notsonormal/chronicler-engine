@@ -28,8 +28,8 @@ fn test_from_game_state_sets_defaults() {
 #[test]
 fn test_snapshot_captures_state_fields() {
     let mut state = create_test_state();
-    state.movement.current_room_id = "room2".to_string();
-    state.scene.npcs_in_area.clear();
+    state.swipe.movement.current_room_id = "room2".to_string();
+    state.swipe.scene.npcs_in_area.clear();
     state.narrative.last_trigger = None;
 
     let snapshot = GameStateSnapshot::from_game_state(&state);

@@ -20,8 +20,6 @@ use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::test_support::fixtures::{TestGameState, TestMap, TestNpc};
 
-/// A Game id with no row: the failing-storage cases read and write by it
-/// and never load a Game record.
 const MISSING_GAME_ID: GameId = GameId(0);
 use crate::test_support::make_test_recorder;
 use crate::test_support::{
@@ -210,7 +208,7 @@ fn test_pipeline_with_custom_quantifier_result() {
     assert!(matches!(outcome, Ok(())));
     let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
-        final_state.scene.npcs_in_area.len(),
+        final_state.swipe.scene.npcs_in_area.len(),
         1,
         "Custom quantifier should place npc1 in area"
     );
@@ -910,7 +908,7 @@ fn load_or_fresh_unchanged_on_world_data_missing() {
 
     let loaded = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
-        loaded.movement.current_room_id, "room_1",
+        loaded.swipe.movement.current_room_id, "room_1",
         "load_or_fresh must return snapshot-derived GameState when world data is missing, got {loaded:?}"
     );
 }
@@ -928,7 +926,7 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
 
     let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     let dynamic_id = "dynamic_room_alcove".to_string();
-    state.movement.dynamic_rooms.insert(
+    state.swipe.movement.dynamic_rooms.insert(
         dynamic_id.clone(),
         Room {
             id: dynamic_id.clone(),
@@ -940,7 +938,7 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
             navigation_description: None,
         },
     );
-    state.movement.current_room_id = dynamic_id.clone();
+    state.swipe.movement.current_room_id = dynamic_id.clone();
 
     let outcome = app.pipeline.run_from_input(
         active_game_of(&app),
@@ -1065,7 +1063,7 @@ fn test_pipeline_room_not_found_sets_error_status() {
     let app = make_test_app();
 
     let mut state = app.message_service.load_or_fresh(active_game_of(&app));
-    state.movement.current_room_id = "non_existent_room".to_string();
+    state.swipe.movement.current_room_id = "non_existent_room".to_string();
     let _outcome = app.pipeline.run_from_input(
         active_game_of(&app),
         state,
@@ -1216,11 +1214,11 @@ fn test_pipeline_quantifier_detects_movement() {
 
     let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_ne!(
-        final_state.movement.current_room_id, "room_1",
+        final_state.swipe.movement.current_room_id, "room_1",
         "Player should have moved from starting room"
     );
     assert_eq!(
-        final_state.movement.current_room_id, "room_2",
+        final_state.swipe.movement.current_room_id, "room_2",
         "Player should be in destination room"
     );
 }

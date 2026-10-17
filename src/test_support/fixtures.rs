@@ -536,7 +536,7 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
 
     let mut state = GameState::new("room1");
     for npc in npcs.iter().filter(|n| room_npcs.contains(&n.id)) {
-        state.scene.npcs_in_area.push(npc.clone());
+        state.swipe.scene.npcs_in_area.push(npc.clone());
     }
     state
 }
@@ -698,7 +698,6 @@ pub fn insert_message_with_swipe(
     Ok(())
 }
 
-// Every seeded row names its Game.
 #[allow(clippy::too_many_arguments)]
 pub fn seed_swipe_with_stored_inputs(
     storage: &Storage,
@@ -749,7 +748,7 @@ pub fn seed_main_narration_flow(
         }
     }
 
-    // Saved before the engine commit, so this snapshot carries no movement or
+    // Saved before the game rules ran, so this snapshot carries no movement or
     // trigger.
     {
         let game_id = active_game_of(state);
@@ -764,7 +763,7 @@ pub fn seed_main_narration_flow(
 
     let game_id = active_game_of(state);
     let mut gs = state.message_service.load_or_fresh(game_id);
-    gs.movement.current_room_id = room_after.to_string();
+    gs.swipe.movement.current_room_id = room_after.to_string();
     storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
     Ok(())
 }
@@ -791,7 +790,7 @@ pub fn seed_event_flow(
         let game_id = active_game_of(state);
         let mut gs = state.message_service.load_or_fresh(game_id);
         gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
-        gs.npc_encounter_log.mark_trigger_fired("npc_1", 0);
+        gs.swipe.npc_encounter_log.mark_trigger_fired("npc_1", 0);
         gs.narrative.pending_event = Some(TestStoredTriggerContext::standard().trigger_name);
         gs.add_message("Event narration".to_string(), MessageType::Narration);
         let id = storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;

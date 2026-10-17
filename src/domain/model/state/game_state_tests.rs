@@ -1,4 +1,5 @@
-use std::cell::RefCell;
+//! Tests for `state/game_state.rs` game state, story and builder.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -8,26 +9,23 @@ use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::message::Message;
 use crate::domain::model::quantifier::{
-    MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
-    QuantifierParseResult, QuantifierResult,
+    MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
+    QuantifierResult,
 };
-use crate::domain::model::state::game_state::{FreeActionContext, GameState, GameStateBuilder};
+use crate::domain::model::state::game_state::{FreeActionContext, GameState};
 use crate::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind, GenerationStatus, InputBuffer,
 };
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::narrative_state::ArrivingLocationWrite;
-use crate::domain::model::state::scene_state::SceneState;
-use crate::domain::model::trigger::{
-    ComparisonOperator, NpcEncounterLog, Trigger, TriggerNarration, TriggerRequirement,
-};
+use crate::domain::model::trigger::{ComparisonOperator, NpcEncounterLog, TriggerRequirement};
 use crate::test_support::*;
 
 #[test]
 fn test_game_state_initialization() {
     let state = TestGameState::in_room("room_1");
 
-    assert_eq!(state.movement.current_room_id, "room_1");
+    assert_eq!(state.swipe.movement.current_room_id, "room_1");
 }
 
 #[test]
@@ -263,30 +261,6 @@ proptest! {
             prop_assert_eq!(history[i].message_type.clone(), expected_type.clone());
         }
     }
-
-    #[test]
-    fn prop_npcs_in_area_are_always_known(
-        mut state in Just(TestGameState::in_room("room1")),
-    ) {
-        // npcs_in_area ⊆ npcs map invariant moved to engine_fn tests (orchestration_tests.rs).
-        state.scene.npcs_in_area.push(TestNpc::named("alice", "Alice"));
-        for npc_in_area in &state.scene.npcs_in_area {
-            prop_assert!(!npc_in_area.id.is_empty(), "npc_in_area id should be non-empty");
-        }
-    }
-
-    #[test]
-    fn prop_npc_encounter_log_references_valid_npcs(
-        mut state in Just(TestGameState::in_room("room1")),
-    ) {
-        // Encounter-log invariant moved to engine_fn tests via explicit npcs arg.
-        let entry = state.npc_encounter_log.npcs.entry("bob".to_string()).or_default();
-        entry.times_met += 1;
-
-        for npc_id in state.npc_encounter_log.npcs.keys() {
-            prop_assert!(!npc_id.is_empty(), "encounter-log npc_id should be non-empty");
-        }
-    }
 }
 
 // The cap is one boundary at 1000 entries, so a handful of cases covers it.
@@ -320,7 +294,7 @@ fn test_npcs_in_area_initialization() {
     let state = TestGameState::in_room("room_1");
 
     assert!(
-        state.scene.npcs_in_area.is_empty(),
+        state.swipe.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty on initialization"
     );
 }
@@ -330,31 +304,34 @@ fn test_npcs_in_area_can_be_populated() {
     let mut state = TestGameState::in_room("room_1");
     let npc = TestNpc::named("npc_1", "N");
 
-    state.scene.npcs_in_area.push(npc);
+    state.swipe.scene.npcs_in_area.push(npc);
 
     assert_eq!(
-        state.scene.npcs_in_area.len(),
+        state.swipe.scene.npcs_in_area.len(),
         1,
         "npcs_in_area should have 1 NPC after population"
     );
-    assert_eq!(state.scene.npcs_in_area[0].id, "npc_1", "Should be npc_1");
+    assert_eq!(
+        state.swipe.scene.npcs_in_area[0].id, "npc_1",
+        "Should be npc_1"
+    );
 }
 
 #[test]
 fn test_npcs_in_area_can_be_cleared() {
     let mut state = TestGameState::in_room("room_1");
     let npc = TestNpc::named("npc_1", "N");
-    state.scene.npcs_in_area.push(npc);
+    state.swipe.scene.npcs_in_area.push(npc);
 
     assert!(
-        !state.scene.npcs_in_area.is_empty(),
+        !state.swipe.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be populated"
     );
 
-    state.scene.npcs_in_area.clear();
+    state.swipe.scene.npcs_in_area.clear();
 
     assert!(
-        state.scene.npcs_in_area.is_empty(),
+        state.swipe.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty after clear"
     );
 }
@@ -363,18 +340,19 @@ fn test_npcs_in_area_can_be_cleared() {
 fn test_npcs_in_area_can_be_replaced() {
     let mut state = TestGameState::in_room("room_1");
     let npc1 = TestNpc::named("npc_1", "N");
-    state.scene.npcs_in_area.push(npc1);
+    state.swipe.scene.npcs_in_area.push(npc1);
 
-    assert_eq!(state.scene.npcs_in_area.len(), 1, "Should have 1 NPC");
+    assert_eq!(state.swipe.scene.npcs_in_area.len(), 1, "Should have 1 NPC");
 
     let new_npcs = vec![];
-    state.scene.npcs_in_area = new_npcs;
+    state.swipe.scene.npcs_in_area = new_npcs;
 
     assert!(
-        state.scene.npcs_in_area.is_empty(),
+        state.swipe.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty after replacement"
     );
 }
+
 struct EngineDeps {
     map: Arc<MapDef>,
     persona: Arc<PersonaCard>,
@@ -410,12 +388,19 @@ fn deps_with_carla(room_id: &str) -> EngineDeps {
     )
 }
 
-fn deps_for_npc_ids(map: MapDef, ids: &[String]) -> EngineDeps {
-    let npcs = ids
-        .iter()
-        .map(|id| TestNpc::named(id, id))
-        .collect::<Vec<_>>();
-    engine_deps(map, npcs)
+/// The Quantifier result of a step that moves the player, with the Characters it names.
+fn make_quantifier_result_moving_to(destination: &str, npc_ids: &[&str]) -> QuantifierResult {
+    QuantifierResult {
+        npcs: QuantifierParseResult {
+            npc_ids: npc_ids.iter().map(|id| id.to_string()).collect(),
+            confidence: QuantifierConfidence::High,
+        },
+        movement: MovementParseResult {
+            movement_type: Some(MovementType::Entering),
+            destination: Some(destination.to_string()),
+            confidence: QuantifierConfidence::High,
+        },
+    }
 }
 
 fn make_quantifier_result_no_movement() -> QuantifierResult {
@@ -428,257 +413,28 @@ fn make_quantifier_result_no_movement() -> QuantifierResult {
     }
 }
 
-fn make_quantifier_result_with_movement(destination: &str) -> QuantifierResult {
-    QuantifierResult {
-        npcs: QuantifierParseResult {
-            npc_ids: vec!["carla".to_string()],
-            confidence: QuantifierConfidence::High,
-        },
-        movement: MovementParseResult {
-            movement_type: Some(MovementType::Entering),
-            destination: Some(destination.to_string()),
-            confidence: QuantifierConfidence::High,
-        },
-    }
-}
-
 fn make_test_state() -> GameState {
     TestGameState::in_room("test_room")
 }
 
 #[test]
-fn test_execute_freeaction_impl_no_movement() {
-    let deps = deps_with_carla("room1");
-    let mut state = TestGameState::in_room("room1");
-    state.add_message("You examine the room.".to_string(), MessageType::Narration);
-
-    let result = state.execute_freeaction_impl(
-        &FreeActionContext {
-            narration_text: "You examine the room.",
-            quantifier_result: &make_quantifier_result_no_movement(),
-        },
-        &deps.map,
-        &deps.persona,
-        &deps.npcs,
-    );
-
-    assert!(
-        result.is_ok(),
-        "execute_freeaction_impl failed: {:?}",
-        result.err()
-    );
-    let next_state = result.unwrap().post_commit_state;
-    assert_eq!(next_state.narrative.history().len(), 1);
-    assert_eq!(
-        next_state.narrative.history()[0].message_type,
-        MessageType::Narration
-    );
-    assert_eq!(next_state.scene.npcs_in_area.len(), 1);
-    assert_eq!(next_state.scene.npcs_in_area[0].id, "carla");
-}
-
-#[test]
-fn test_execute_freeaction_impl_with_movement() {
-    let deps = deps_with_carla("room1");
-    let state = TestGameState::in_room("room1");
-
-    let result = state.execute_freeaction_impl(
-        &FreeActionContext {
-            narration_text: "You walk to the tavern.",
-            quantifier_result: &make_quantifier_result_with_movement("nonexistent_room"),
-        },
-        &deps.map,
-        &deps.persona,
-        &deps.npcs,
-    );
-
-    assert!(
-        result.is_ok(),
-        "execute_freeaction_impl failed: {:?}",
-        result.err()
-    );
-    let next_state = result.unwrap().post_commit_state;
-    assert!(!next_state.narrative.history().is_empty());
-    assert!(next_state.movement.current_room_id.starts_with("dynamic_"));
-    assert!(
-        next_state
-            .movement
-            .dynamic_rooms
-            .contains_key(&next_state.movement.current_room_id)
-    );
-}
-
-#[test]
-fn test_execute_freeaction_impl_updates_npcs_in_area() {
-    let deps = deps_with_carla("room1");
-    let state = TestGameState::in_room("room1");
-
-    assert!(state.scene.npcs_in_area.is_empty());
-
-    let result = state.execute_freeaction_impl(
-        &FreeActionContext {
-            narration_text: "You look around.",
-            quantifier_result: &make_quantifier_result_no_movement(),
-        },
-        &deps.map,
-        &deps.persona,
-        &deps.npcs,
-    );
-
-    assert!(result.is_ok());
-    let next_state = result.unwrap().post_commit_state;
-    assert_eq!(next_state.scene.npcs_in_area.len(), 1);
-    assert_eq!(next_state.scene.npcs_in_area[0].id, "carla");
-}
-
-#[test]
-fn test_execute_freeaction_impl_npc_events_entered() {
-    let deps = deps_with_carla("room1");
-    let mut state = TestGameState::in_room("room1");
-    state.scene.npcs_in_area = vec![];
-
-    let result = state.execute_freeaction_impl(
-        &FreeActionContext {
-            narration_text: "You see Carla.",
-            quantifier_result: &make_quantifier_result_no_movement(),
-        },
-        &deps.map,
-        &deps.persona,
-        &deps.npcs,
-    );
-
-    assert!(result.is_ok());
-    let next_state = result.unwrap().post_commit_state;
-    let times_met = next_state
-        .npc_encounter_log
-        .npcs
-        .get("carla")
-        .map(|s| s.times_met)
-        .unwrap_or(0);
-    assert_eq!(times_met, 1);
-}
-
-#[test]
-fn test_apply_npc_events_entered() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-    let events = vec![NpcEvent {
-        npc_id: "carla".to_string(),
-        event_type: NpcTransitionType::Entered,
-    }];
-
-    state
-        .apply_npc_events(&events, &deps.map, &deps.npcs)
-        .unwrap();
-
-    assert!(state.npc_encounter_log.is_currently_meeting("carla"));
-}
-
-#[test]
-fn test_apply_npc_events_left() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-    state.npc_encounter_log.set_currently_meeting("carla", true);
-    let events = vec![NpcEvent {
-        npc_id: "carla".to_string(),
-        event_type: NpcTransitionType::Left,
-    }];
-
-    state
-        .apply_npc_events(&events, &deps.map, &deps.npcs)
-        .unwrap();
-
-    assert!(!state.npc_encounter_log.is_currently_meeting("carla"));
-}
-
-#[test]
-fn test_apply_npc_events_increments_times_met() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-    let initial_times = state.npc_encounter_log.get_times_met("carla");
-    let events = vec![NpcEvent {
-        npc_id: "carla".to_string(),
-        event_type: NpcTransitionType::Entered,
-    }];
-
-    state
-        .apply_npc_events(&events, &deps.map, &deps.npcs)
-        .unwrap();
-
-    assert_eq!(
-        state.npc_encounter_log.get_times_met("carla"),
-        initial_times + 1
-    );
-}
-
-#[test]
-fn test_handle_movement_no_destination() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-    let original_room = state.movement.current_room_id.clone();
-
-    state
-        .handle_movement(None, &["carla".to_string()], &deps.map, &deps.npcs)
-        .unwrap();
-
-    assert_eq!(state.movement.current_room_id, original_room);
-}
-
-#[test]
-fn test_handle_movement_same_room_no_increment() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-    state.movement.current_room_id = "test_room".to_string();
-    let initial_times = state.npc_encounter_log.get_times_met("carla");
-
-    state
-        .handle_movement(
-            Some("test_room"),
-            &["carla".to_string()],
-            &deps.map,
-            &deps.npcs,
-        )
-        .unwrap();
-
-    assert_eq!(
-        state.npc_encounter_log.get_times_met("carla"),
-        initial_times
-    );
-}
-
-#[test]
-fn test_handle_movement_creates_dynamic_room() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-    let original_room = state.movement.current_room_id.clone();
-
-    state
-        .handle_movement(Some("nonexistent_room"), &[], &deps.map, &deps.npcs)
-        .unwrap();
-
-    assert_ne!(state.movement.current_room_id, original_room);
-    assert!(
-        state
-            .movement
-            .dynamic_rooms
-            .contains_key(&state.movement.current_room_id)
-    );
-}
-
-#[test]
-fn test_handle_movement_puts_the_room_name_on_the_arriving_narration() {
+fn test_execute_freeaction_impl_puts_the_room_name_on_the_arriving_narration() {
     let deps = deps_with_carla("test_room");
     let mut state = make_test_state();
     state.add_message("You step inside.".to_string(), MessageType::Narration);
 
-    state
-        .handle_movement(
-            Some("test_room"),
-            &["carla".to_string()],
+    let result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "You step inside.",
+                quantifier_result: &make_quantifier_result_moving_to("test_room", &["carla"]),
+            },
             &deps.map,
+            &deps.persona,
             &deps.npcs,
         )
         .unwrap();
+    let mut state = result.post_commit_state;
 
     assert_eq!(
         state
@@ -703,7 +459,7 @@ fn test_handle_movement_puts_the_room_name_on_the_arriving_narration() {
 }
 
 #[test]
-fn test_handle_movement_puts_the_room_name_on_the_redo_swipe() {
+fn test_execute_freeaction_impl_puts_the_room_name_on_the_redo_swipe() {
     let deps = deps_with_carla("test_room");
     let mut state = make_test_state();
     state.add_message("An older narration.".to_string(), MessageType::Narration);
@@ -718,9 +474,18 @@ fn test_handle_movement_puts_the_room_name_on_the_redo_swipe() {
     retried.set_active_swipe(1);
     state.narrative.retry_target = Some(retried);
 
-    state
-        .handle_movement(Some("test_room"), &[], &deps.map, &deps.npcs)
+    let result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "The redo.",
+                quantifier_result: &make_quantifier_result_moving_to("test_room", &["carla"]),
+            },
+            &deps.map,
+            &deps.persona,
+            &deps.npcs,
+        )
         .unwrap();
+    let state = result.post_commit_state;
 
     let retried = state
         .narrative
@@ -744,7 +509,7 @@ fn test_handle_movement_puts_the_room_name_on_the_redo_swipe() {
 }
 
 #[test]
-fn test_handle_movement_queues_the_arriving_location_write_for_a_saved_message() {
+fn test_execute_freeaction_impl_queues_the_arriving_location_write_for_a_saved_message() {
     let deps = deps_with_carla("test_room");
     let mut state = make_test_state();
     let mut saved = Message::new("You step inside.", MessageType::Narration, None, None);
@@ -754,9 +519,18 @@ fn test_handle_movement_queues_the_arriving_location_write_for_a_saved_message()
     state.narrative.history.append(saved);
     state.narrative.pending_location = Some("The room before".to_string());
 
-    state
-        .handle_movement(Some("test_room"), &[], &deps.map, &deps.npcs)
+    let result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "You step inside.",
+                quantifier_result: &make_quantifier_result_moving_to("test_room", &["carla"]),
+            },
+            &deps.map,
+            &deps.persona,
+            &deps.npcs,
+        )
         .unwrap();
+    let state = result.post_commit_state;
 
     assert_eq!(
         state
@@ -780,23 +554,6 @@ fn test_handle_movement_queues_the_arriving_location_write_for_a_saved_message()
         state.narrative.pending_location, None,
         "the arriving Narration owns the room name, not the next Message"
     );
-}
-
-#[test]
-fn test_handle_movement_sets_currently_meeting() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-
-    state
-        .handle_movement(
-            Some("new_room"),
-            &["carla".to_string()],
-            &deps.map,
-            &deps.npcs,
-        )
-        .unwrap();
-
-    assert!(state.npc_encounter_log.is_currently_meeting("carla"));
 }
 
 #[test]
@@ -887,50 +644,6 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
 }
 
 #[test]
-fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-
-    let request = crate::test_support::TestStoredTriggerContext::for_npc(
-        "carla",
-        "Carla Introduction",
-        "Carla appears",
-    );
-
-    state
-        .commit_trigger_narration(&request, "Some text.", &deps.map, &deps.npcs)
-        .unwrap();
-
-    assert!(
-        state.npc_encounter_log.is_trigger_fired("carla", 0),
-        "Non-repeating trigger should be marked as fired"
-    );
-}
-
-#[test]
-fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
-    let deps = deps_with_carla("test_room");
-    let mut state = make_test_state();
-
-    let mut stored = crate::test_support::TestStoredTriggerContext::for_npc(
-        "carla",
-        "Carla Greeting",
-        "Carla greets",
-    );
-    stored.trigger_repeat = true;
-    let request = stored;
-
-    state
-        .commit_trigger_narration(&request, "Some text.", &deps.map, &deps.npcs)
-        .unwrap();
-
-    assert!(
-        !state.npc_encounter_log.is_trigger_fired("carla", 0),
-        "Repeating trigger should NOT be marked as fired"
-    );
-}
-
-#[test]
 fn test_commit_trigger_narration_empty_text_is_noop() {
     let deps = deps_with_carla("test_room");
     let mut state = make_test_state();
@@ -950,6 +663,36 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
         .commit_trigger_narration(&request, "   ", &deps.map, &deps.npcs)
         .unwrap();
     assert!(state.narrative.history().is_empty());
+}
+
+#[test]
+fn test_a_failed_trigger_consistency_check_keeps_the_event_narration() {
+    let deps = deps_with_carla("test_room");
+    let mut state = make_test_state();
+    // The Trigger names a Character the state does not hold, so the check fails.
+    let request = crate::test_support::TestStoredTriggerContext::for_npc(
+        "unknown_npc",
+        "Carla Introduction",
+        "Carla appears",
+    );
+
+    let result = state.commit_trigger_narration(&request, "Carla emerges.", &deps.map, &deps.npcs);
+
+    assert!(result.is_err());
+    assert_eq!(
+        state.narrative.history().len(),
+        1,
+        "the event Narration landed before the check ran"
+    );
+    assert_eq!(state.narrative.history()[0].text, "Carla emerges.");
+    assert_eq!(
+        state
+            .narrative
+            .last_trigger
+            .as_ref()
+            .map(|t| t.npc_id.as_str()),
+        Some("unknown_npc")
+    );
 }
 
 #[test]
@@ -985,153 +728,6 @@ fn test_commit_trigger_narration_stores_trigger_context() {
     assert_eq!(trigger.max_tokens, Some(512));
 }
 
-fn make_two_room_state() -> GameState {
-    GameState::new("room1")
-}
-
-proptest! {
-    #[test]
-    fn prop_handle_movement_preserves_state_consistency(
-        destination in prop_oneof![
-            Just(None),
-            Just(Some("room2")),
-            Just(Some("nonexistent_room")),
-        ],
-        new_npc_ids in prop::collection::vec("[a-z]{1,10}", 0..3),
-    ) {
-        let deps = deps_for_npc_ids(TestMap::two_rooms("room1", "room2"), &new_npc_ids);
-        let mut state = make_two_room_state();
-        state.handle_movement( destination, &new_npc_ids, &deps.map, &deps.npcs).unwrap();
-        prop_assert!(
-            state.assert_state_consistency(&deps.map, &deps.npcs).is_ok(),
-            "state inconsistent after handle_movement"
-        );
-    }
-
-    #[test]
-    fn prop_apply_npc_events_preserves_state_consistency(
-        events in prop::collection::vec(
-            ("[a-z]{1,10}", prop_oneof![
-                Just(NpcTransitionType::Entered),
-                Just(NpcTransitionType::Left),
-            ]),
-            0..10
-        ),
-    ) {
-        let npc_ids = events.iter().map(|(npc_id, _)| npc_id.clone()).collect::<Vec<_>>();
-        let deps = deps_for_npc_ids(TestMap::single_room("room1"), &npc_ids);
-        let mut state = TestGameState::in_room("room1");
-        let events: Vec<NpcEvent> = events
-            .into_iter()
-            .map(|(npc_id, event_type)| NpcEvent {
-                npc_id,
-                event_type,
-            })
-            .collect();
-        state.apply_npc_events(&events, &deps.map, &deps.npcs).unwrap();
-        prop_assert!(
-            state.assert_state_consistency(&deps.map, &deps.npcs).is_ok(),
-            "state inconsistent after apply_npc_events"
-        );
-    }
-
-    #[test]
-    fn prop_execute_freeaction_impl_preserves_state_consistency(
-        has_movement in prop::bool::ANY,
-        destination in "[a-z]{1,15}",
-    ) {
-        let deps = deps_with_carla("room1");
-        let state = TestGameState::in_room("room1");
-
-        let movement = if has_movement {
-            MovementParseResult {
-                movement_type: Some(MovementType::Entering),
-                destination: Some(destination),
-                confidence: QuantifierConfidence::High,
-            }
-        } else {
-            MovementParseResult::default()
-        };
-
-        let quantifier_result = QuantifierResult {
-            npcs: QuantifierParseResult {
-                npc_ids: vec!["carla".to_string()],
-                confidence: QuantifierConfidence::High,
-            },
-            movement,
-        };
-
-        let result = state.execute_freeaction_impl(
-            &FreeActionContext {
-                narration_text: "You do something.",
-                quantifier_result: &quantifier_result,
-            },
-            &deps.map,
-            &deps.persona,
-            &deps.npcs,
-        );
-
-        prop_assert!(
-            result.is_ok(),
-            "execute_freeaction_impl failed: {:?}",
-            result.err()
-        );
-        let next_state = result.unwrap().post_commit_state;
-        prop_assert!(
-            next_state
-                .assert_state_consistency(&deps.map, &deps.npcs)
-                .is_ok(),
-            "state inconsistent after execute_freeaction_impl"
-        );
-    }
-
-    #[test]
-    fn prop_execute_freeaction_impl_preserves_mutation_order(
-        narration_text in r"[^\s]{10,100}",
-        has_npc in any::<bool>(),
-    ) {
-        let mut state = create_minimal_test_state();
-        let npc_id = "shopkeeper";
-        state.add_message(narration_text.clone(), MessageType::Narration);
-        let npc_ids = if has_npc { vec![npc_id.to_string()] } else { vec![] };
-
-        let quantifier = QuantifierResult {
-            npcs: QuantifierParseResult {
-                npc_ids,
-                confidence: QuantifierConfidence::High,
-            },
-            movement: MovementParseResult::default(),
-        };
-
-        let map = Arc::new(create_test_map());
-        let player = Arc::new(create_test_player());
-        let npcs = npc_map(vec![shopkeeper_npc()]);
-        let result = state.execute_freeaction_impl(
-            &FreeActionContext {
-                narration_text: &narration_text,
-                quantifier_result: &quantifier,
-            },
-            &map,
-            &player,
-            &npcs,
-        ).expect("execute_freeaction_impl should succeed");
-        let history = &result.post_commit_state.narrative.history;
-        let search_len = 20.min(narration_text.chars().count());
-        let search_text: String = narration_text.chars().take(search_len).collect();
-        let has_narration = history.iter().any(|e| {
-            e.message_type == MessageType::Narration && e.text().contains(&search_text)
-        });
-        prop_assert!(has_narration, "narration should be in history");
-        if has_npc {
-            prop_assert!(result.trigger_match.is_some(), "trigger should fire when NPC appears");
-            prop_assert_eq!(
-                result.post_commit_state.npc_encounter_log.get_times_met(npc_id),
-                1,
-                "times_met should be 1 after apply_npc_events"
-            );
-        }
-    }
-}
 fn setup_test_state() -> (GameState, Arc<MapDef>) {
     let mut exits1 = HashMap::new();
     exits1.insert(Direction::North, "room2".to_string());
@@ -1195,12 +791,13 @@ fn setup_test_state() -> (GameState, Arc<MapDef>) {
 fn test_current_room_success() {
     let (state, map) = setup_test_state();
     let result = map
-        .get_room_by_id(&state.movement.current_room_id)
+        .get_room_by_id(&state.swipe.movement.current_room_id)
         .or_else(|| {
             state
+                .swipe
                 .movement
                 .dynamic_rooms
-                .get(&state.movement.current_room_id)
+                .get(&state.swipe.movement.current_room_id)
         });
     assert!(result.is_some());
     assert_eq!(result.unwrap().name, "Grand Hall");
@@ -1231,54 +828,15 @@ fn test_get_current_room_failure() {
     let state = GameState::new("non_existent_room");
 
     let result = map
-        .get_room_by_id(&state.movement.current_room_id)
+        .get_room_by_id(&state.swipe.movement.current_room_id)
         .or_else(|| {
             state
+                .swipe
                 .movement
                 .dynamic_rooms
-                .get(&state.movement.current_room_id)
+                .get(&state.swipe.movement.current_room_id)
         });
     assert!(result.is_none());
-}
-
-#[test]
-fn test_attempt_semantic_walk_valid() {
-    let (mut state, map) = setup_test_state();
-    let result = state.attempt_semantic_walk(&map, "room2");
-    assert!(result.is_ok());
-    assert!(result.unwrap().contains("Dusty Kitchen"));
-    assert_eq!(state.movement.current_room_id, "room2");
-}
-
-#[test]
-fn test_attempt_semantic_walk_invalid() {
-    let (mut state, map) = setup_test_state();
-    let result = state.attempt_semantic_walk(&map, "nonexistent_room");
-    assert!(result.is_err());
-    assert_eq!(state.movement.current_room_id, "room1");
-}
-
-#[test]
-fn test_attempt_semantic_walk_empty() {
-    let (mut state, map) = setup_test_state();
-    let result = state.attempt_semantic_walk(&map, "");
-    assert!(result.is_err(), "Empty room id should return error");
-}
-
-#[test]
-fn test_attempt_semantic_walk_dynamic_room() {
-    let (mut state, map) = setup_test_state();
-    let dynamic = Room::new_dynamic("Secret Cave", "Dark and damp.");
-    let dynamic_id = dynamic.id.clone();
-    state
-        .movement
-        .dynamic_rooms
-        .insert(dynamic_id.clone(), dynamic);
-
-    let result = state.attempt_semantic_walk(&map, &dynamic_id);
-    assert!(result.is_ok());
-    assert!(result.unwrap().contains("Secret Cave"));
-    assert_eq!(state.movement.current_room_id, dynamic_id);
 }
 
 #[test]
@@ -1289,246 +847,6 @@ fn test_new_dynamic_room() {
     assert!(room.id.starts_with("dynamic_"));
     assert!(room.exits.is_empty());
     assert!(room.items.is_empty());
-}
-thread_local! {
-    static TEST_NPCS: RefCell<HashMap<String, NpcCard>> = RefCell::new(HashMap::new());
-}
-
-fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
-    TEST_NPCS.with(|npcs| state.evaluate_triggers(&npcs.borrow()))
-}
-fn make_npc(id: &str, triggers: Vec<Trigger>) -> NpcCard {
-    NpcCard {
-        id: id.to_string(),
-        sheet: CharacterSheet {
-            name: id.to_string(),
-            description: "Test NPC".to_string(),
-            personality: "Neutral".to_string(),
-            scenario: "Testing".to_string(),
-            example_dialogue: String::new(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-        triggers,
-        relationships: vec![],
-    }
-}
-
-fn make_trigger(requirement: TriggerRequirement, repeat: bool) -> Trigger {
-    Trigger {
-        requirement,
-        narration: TriggerNarration {
-            name: "Test Event".to_string(),
-            narration_prompt: "Test trigger".to_string(),
-        },
-        repeat,
-        room_id: None,
-    }
-}
-
-fn make_trigger_with_room(requirement: TriggerRequirement, repeat: bool, room_id: &str) -> Trigger {
-    Trigger {
-        requirement,
-        narration: TriggerNarration {
-            name: "Test Event".to_string(),
-            narration_prompt: "Test trigger".to_string(),
-        },
-        repeat,
-        room_id: Some(room_id.to_string()),
-    }
-}
-
-fn make_state(
-    npcs_in_area: Vec<NpcCard>,
-    all_npcs: &[NpcCard],
-    npc_encounter_log: NpcEncounterLog,
-) -> GameState {
-    TEST_NPCS.with(|store| {
-        *store.borrow_mut() = all_npcs
-            .iter()
-            .cloned()
-            .map(|npc| (npc.id.clone(), npc))
-            .collect();
-    });
-    GameStateBuilder::new("room_1")
-        .with_scene(SceneState {
-            npcs_in_area,
-            ..Default::default()
-        })
-        .with_npc_encounter_log(npc_encounter_log)
-        .build()
-}
-
-#[test]
-fn test_evaluate_triggers_empty_room() {
-    let state = make_state(vec![], &[], NpcEncounterLog::default());
-    let results = evaluate_triggers(&state);
-    assert!(results.is_empty());
-}
-
-#[test]
-fn test_evaluate_triggers_first_encounter() {
-    let trigger = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-    );
-    let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(
-        vec![npc.clone()],
-        &[npc.clone()],
-        NpcEncounterLog::default(),
-    );
-    let results = evaluate_triggers(&state);
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].0.id, "gabriella");
-}
-
-#[test]
-fn test_evaluate_triggers_no_match_when_times_met_greater() {
-    let trigger = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-    );
-    let npc = make_npc("gabriella", vec![trigger]);
-    let mut npc_encounter_log = NpcEncounterLog::default();
-    npc_encounter_log.increment_times_met("gabriella");
-    let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
-    let results = evaluate_triggers(&state);
-    assert!(results.is_empty());
-}
-
-#[test]
-fn test_evaluate_triggers_skips_fired_non_repeatable() {
-    let trigger = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-    );
-    let npc = make_npc("gabriella", vec![trigger.clone()]);
-    let mut npc_encounter_log = NpcEncounterLog::default();
-    npc_encounter_log.mark_trigger_fired("gabriella", 0);
-    let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
-    let results = evaluate_triggers(&state);
-    assert!(results.is_empty());
-}
-
-#[test]
-fn test_evaluate_triggers_fires_for_npc_not_in_area() {
-    let trigger = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-    );
-    let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(vec![], &[npc.clone()], NpcEncounterLog::default());
-
-    assert!(
-        state.scene.npcs_in_area.is_empty(),
-        "npcs_in_area should be empty"
-    );
-
-    let results = evaluate_triggers(&state);
-    assert_eq!(
-        results.len(),
-        1,
-        "Global trigger should fire for NPC not in area"
-    );
-    assert_eq!(results[0].0.id, "gabriella");
-}
-
-#[test]
-fn test_room_scoped_trigger_fires_in_correct_room() {
-    let trigger = make_trigger_with_room(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-        "room_1",
-    );
-    let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(vec![], &[npc.clone()], NpcEncounterLog::default());
-
-    assert_eq!(state.movement.current_room_id, "room_1");
-
-    let results = evaluate_triggers(&state);
-    assert_eq!(
-        results.len(),
-        1,
-        "Room-scoped trigger should fire in correct room"
-    );
-    assert_eq!(results[0].0.id, "gabriella");
-}
-
-#[test]
-fn test_room_scoped_trigger_skipped_in_wrong_room() {
-    let trigger = make_trigger_with_room(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-        "entrance_hall",
-    );
-    let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(vec![], &[npc.clone()], NpcEncounterLog::default());
-
-    assert_eq!(state.movement.current_room_id, "room_1");
-
-    let results = evaluate_triggers(&state);
-    assert!(
-        results.is_empty(),
-        "Room-scoped trigger should NOT fire in wrong room"
-    );
-}
-
-#[test]
-fn test_global_trigger_fires_in_any_room() {
-    let trigger = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-    );
-    let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(vec![], &[npc.clone()], NpcEncounterLog::default());
-
-    let results = evaluate_triggers(&state);
-    assert_eq!(
-        results.len(),
-        1,
-        "Global trigger should fire regardless of room"
-    );
-}
-
-#[test]
-fn test_evaluate_triggers_repeatable_fires_again() {
-    let trigger = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Lt,
-            threshold: 3,
-        },
-        true,
-    );
-    let npc = make_npc("ranger", vec![trigger]);
-    let mut npc_encounter_log = NpcEncounterLog::default();
-    npc_encounter_log.increment_times_met("ranger");
-    let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
-    let results = evaluate_triggers(&state);
-    assert_eq!(results.len(), 1);
 }
 
 #[test]
@@ -1575,61 +893,8 @@ fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
     let _npcs = vec![npc];
     let state = GameState::new("start");
 
-    assert_eq!(state.npc_encounter_log.get_times_met("carla"), 0);
-    assert!(!state.npc_encounter_log.is_currently_meeting("carla"));
-}
-
-#[test]
-fn test_increment_times_met_and_mark_fired() {
-    let trigger = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-    );
-    let npc = make_npc("gabriella", vec![trigger]);
-    let mut state = make_state(
-        vec![npc.clone()],
-        &[npc.clone()],
-        NpcEncounterLog::default(),
-    );
-    let results = evaluate_triggers(&state);
-    assert_eq!(results.len(), 1);
-    state.npc_encounter_log.increment_times_met("gabriella");
-    state.npc_encounter_log.mark_trigger_fired("gabriella", 0);
-    let results = evaluate_triggers(&state);
-    assert!(results.is_empty());
-}
-
-#[test]
-fn test_trigger_index_with_skipped_triggers() {
-    let trigger_0 = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Eq,
-            threshold: 0,
-        },
-        false,
-    );
-    let trigger_1 = make_trigger(
-        TriggerRequirement {
-            operator: ComparisonOperator::Gte,
-            threshold: 0,
-        },
-        false,
-    );
-    let npc = make_npc("gabriella", vec![trigger_0.clone(), trigger_1.clone()]);
-    let mut npc_encounter_log = NpcEncounterLog::default();
-    npc_encounter_log.mark_trigger_fired("gabriella", 0);
-    let mut state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
-
-    let results = evaluate_triggers(&state);
-    assert_eq!(results.len(), 1, "Only trigger 1 should match");
-    assert_eq!(results[0].2, 1, "Original index should be 1, not 0");
-
-    state.npc_encounter_log.mark_trigger_fired("gabriella", 1);
-    let results = evaluate_triggers(&state);
-    assert!(results.is_empty(), "All triggers should now be skipped");
+    assert_eq!(state.swipe.npc_encounter_log.get_times_met("carla"), 0);
+    assert!(!state.swipe.npc_encounter_log.is_currently_meeting("carla"));
 }
 
 #[test]
@@ -1643,147 +908,12 @@ fn test_check_condition_missing_npc_defaults_to_zero() {
 }
 
 #[test]
-fn test_state_mutation_order() {
-    let mut state = create_minimal_test_state();
-    let npc_id = "shopkeeper";
-
-    state.add_message(
-        "You look around the shop.".to_string(),
-        MessageType::Narration,
-    );
-
-    assert_eq!(
-        state.npc_encounter_log.get_times_met(npc_id),
-        0,
-        "pre-condition: times_met should be 0"
-    );
-
-    let quantifier = QuantifierResult {
-        npcs: QuantifierParseResult {
-            npc_ids: vec![npc_id.to_string()],
-            confidence: QuantifierConfidence::High,
-        },
-        movement: MovementParseResult::default(),
-    };
-
-    let map = Arc::new(create_test_map());
-    let player = Arc::new(create_test_player());
-    let npcs = npc_map(vec![shopkeeper_npc()]);
-
-    let result = state
-        .execute_freeaction_impl(
-            &FreeActionContext {
-                narration_text: "You look around the shop.",
-                quantifier_result: &quantifier,
-            },
-            &map,
-            &player,
-            &npcs,
-        )
-        .expect("execute_freeaction_impl should succeed");
-    assert!(
-        result.trigger_match.is_some(),
-        "trigger should have fired (evaluated before times_met increment)"
-    );
-    assert_eq!(
-        result
-            .post_commit_state
-            .npc_encounter_log
-            .get_times_met(npc_id),
-        1,
-        "times_met should be 1 after NPC events are applied"
-    );
-    let history = &result.post_commit_state.narrative.history;
-    let narration_idx = history
-        .iter()
-        .position(|e| e.message_type == MessageType::Narration && e.text().contains("look around"))
-        .expect("narration should be in history");
-    assert!(
-        narration_idx < history.len(),
-        "narration should be logged before trigger-related entries"
-    );
-}
-
-#[test]
-fn test_mutation_order_violation_demo() {
-    let state = create_minimal_test_state();
-    let npc_id = "shopkeeper";
-    assert_eq!(
-        state.npc_encounter_log.get_times_met(npc_id),
-        0,
-        "pre-condition: times_met should be 0"
-    );
-    let events = vec![NpcEvent {
-        npc_id: npc_id.to_string(),
-        event_type: NpcTransitionType::Entered,
-    }];
-    let map = Arc::new(create_test_map());
-    let npcs = npc_map(vec![shopkeeper_npc()]);
-    let mut state_after_events = state.clone();
-    state_after_events
-        .apply_npc_events(&events, &map, &npcs)
-        .expect("apply_npc_events should succeed");
-    let triggers_after_swap = state_after_events.evaluate_triggers(&npcs);
-    assert!(
-        triggers_after_swap.is_empty(),
-        "VIOLATION: trigger should NOT fire when apply_npc_events runs first (times_met == 1)"
-    );
-    let triggers_correct = state.evaluate_triggers(&npcs);
-    assert!(
-        !triggers_correct.is_empty(),
-        "Correct order: trigger SHOULD fire (times_met == 0)"
-    );
-}
-
-#[test]
-fn test_handle_movement_runs_before_narration() {
-    let map = Arc::new(create_test_map());
-    let player = Arc::new(create_test_player());
-    let npcs = HashMap::new();
-    let state = GameState::new("room1".to_string());
-    let original_room = state.movement.current_room_id.clone();
-    let target_room = "room2";
-
-    let quantifier = QuantifierResult {
-        npcs: QuantifierParseResult {
-            npc_ids: vec![],
-            confidence: QuantifierConfidence::High,
-        },
-        movement: MovementParseResult {
-            movement_type: Some(MovementType::Leaving),
-            destination: Some(target_room.to_string()),
-            confidence: QuantifierConfidence::High,
-        },
-    };
-
-    let result = state
-        .execute_freeaction_impl(
-            &FreeActionContext {
-                narration_text: "I walk north.",
-                quantifier_result: &quantifier,
-            },
-            &map,
-            &player,
-            &npcs,
-        )
-        .expect("execute_freeaction_impl should succeed");
-
-    assert_eq!(
-        result.post_commit_state.movement.current_room_id, target_room,
-        "current_room_id should be updated by handle_movement before narration is logged"
-    );
-    assert_ne!(
-        result.post_commit_state.movement.current_room_id, original_room,
-        "handle_movement should have changed the room"
-    );
-}
-
-#[test]
-fn test_dynamic_room_creation_on_invalid_destination() {
-    let mut state = create_test_state();
+fn test_execute_freeaction_impl_adds_a_room_the_map_does_not_know() {
+    let state = create_test_state();
     let invalid_destination = "nonexistent_place_xyz";
 
     let map = Arc::new(create_test_map());
+    let player = Arc::new(create_test_player());
     let test_npc = NpcCard {
         id: "test_npc".into(),
         sheet: CharacterSheet {
@@ -1811,15 +941,24 @@ fn test_dynamic_room_creation_on_invalid_destination() {
         "precondition: invalid_destination should not exist in map"
     );
 
-    state
-        .handle_movement(Some(invalid_destination), &[], &map, &npcs)
+    let result = state
+        .execute_freeaction_impl(
+            &FreeActionContext {
+                narration_text: "I walk there.",
+                quantifier_result: &make_quantifier_result_moving_to(invalid_destination, &[]),
+            },
+            &map,
+            &player,
+            &npcs,
+        )
         .unwrap();
+    let state = result.post_commit_state;
     assert!(
-        !state.movement.dynamic_rooms.is_empty(),
+        !state.swipe.movement.dynamic_rooms.is_empty(),
         "dynamic room should be created for invalid destination"
     );
     assert!(
-        state.movement.current_room_id.starts_with("dynamic_"),
+        state.swipe.movement.current_room_id.starts_with("dynamic_"),
         "current_room_id should be set to a dynamic room"
     );
     let history = state.narrative.history();

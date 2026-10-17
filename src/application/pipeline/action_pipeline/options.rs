@@ -23,8 +23,7 @@ use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase};
 use crate::error::EngineError;
 
 impl ActionPipeline {
-    /// On-demand `/options`: claims the slot and refreshes the offered set without
-    /// narrating. Requires scene history — options need a scene to ground in.
+    /// Requires scene history — options need a scene to ground in.
     pub fn process_options(
         &self,
         generation_gate: &GenerationGate,
@@ -60,12 +59,13 @@ impl ActionPipeline {
         npcs: &HashMap<String, NpcCard>,
     ) -> Result<Vec<String>, EngineError> {
         let current_room = map
-            .get_room_by_id(&state.movement.current_room_id)
+            .get_room_by_id(&state.swipe.movement.current_room_id)
             .or_else(|| {
                 state
+                    .swipe
                     .movement
                     .dynamic_rooms
-                    .get(&state.movement.current_room_id)
+                    .get(&state.swipe.movement.current_room_id)
             });
         let agent_ctx = AgentContext {
             game_id,
@@ -98,8 +98,7 @@ impl ActionPipeline {
         }
     }
 
-    /// Replaces the offered set in place. A failure surfaces a system message and
-    /// keeps the prior set — the scene did not change.
+    /// A failed refresh keeps the prior set plus a system message — the scene did not change.
     #[instrument(skip(self))]
     pub(crate) fn execute_options_refresh(&self, game_id: GameId) {
         let run = PipelineRun::new(self, game_id);
@@ -186,8 +185,7 @@ impl ActionPipeline {
         run.phase_finalize(state);
     }
 
-    /// Always-on turn-end rewrite. A failed regeneration leaves the set empty plus a
-    /// system message rather than stale — the set must always describe the current scene.
+    /// A failed regeneration empties the set: it must always describe the current scene.
     pub(crate) fn rewrite_options_after_turn(
         &self,
         game_id: GameId,

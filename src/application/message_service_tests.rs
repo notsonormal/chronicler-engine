@@ -59,14 +59,14 @@ fn test_save_state_and_load_roundtrip() {
     service.save_state(GameId(0), &state).unwrap();
 
     let loaded = service.load_expecting_valid_state(GameId(0)).unwrap();
-    assert_eq!(loaded.movement.current_room_id, "start");
+    assert_eq!(loaded.swipe.movement.current_room_id, "start");
 }
 
 #[test]
 fn test_build_fresh_initial_state_uses_starting_room() {
     let (service, _, game_id) = make_service_with_game();
     let state = service.build_fresh_initial_state(game_id).unwrap();
-    assert_eq!(state.movement.current_room_id, "start");
+    assert_eq!(state.swipe.movement.current_room_id, "start");
 }
 
 #[test]

@@ -163,7 +163,7 @@ fn test_run_room_not_found_sets_error_status() {
     let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
     let mut state = app.message_service.load_or_fresh(active_game_of(&app));
-    state.movement.current_room_id = "non_existent_room".to_string();
+    state.swipe.movement.current_room_id = "non_existent_room".to_string();
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     match outcome {

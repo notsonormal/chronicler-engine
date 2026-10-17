@@ -28,7 +28,7 @@ pub fn determine_npcs_in_room(
     let persona = ctx.persona;
     let npcs = ctx.npcs;
 
-    let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
+    let previous_room_npcs: Vec<NpcCard> = state.swipe.scene.npcs_in_area.clone();
 
     let all_npcs: Vec<NpcCard> = npcs.values().cloned().collect();
 
@@ -201,6 +201,7 @@ pub(crate) fn static_npc_result(
     movement: MovementParseResult,
 ) -> QuantifierResult {
     let npc_ids = state
+        .swipe
         .scene
         .npcs_in_area
         .iter()

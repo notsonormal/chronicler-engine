@@ -225,7 +225,7 @@ fn determine_npcs_with_room(
     let map = map_with_room(current_room);
     let persona = TestPersona::standard();
     let npcs = npc_map_from_ids(npc_pool_ids);
-    state.scene.npcs_in_area = scene_npcs.to_vec();
+    state.swipe.scene.npcs_in_area = scene_npcs.to_vec();
     let ctx = AgentContext {
         game_id: GameId(1),
         state: &*state,
@@ -484,6 +484,7 @@ fn test_static_npc_result_preserves_movement() {
 fn test_static_npc_result_fallback_to_scene_npcs() {
     let mut state = TestGameState::in_room("hall");
     state
+        .swipe
         .scene
         .npcs_in_area
         .push(TestNpc::named("carla", "Carla"));
