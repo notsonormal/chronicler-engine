@@ -27,6 +27,10 @@ use crate::adapters::driven::storage::worlds::WorldBundle;
 use super::phase_error::PhaseError;
 use super::action_pipeline::core::ActionPipeline;
 
+/// The system notice a turn leaves when the analysis could not name the room's
+/// NPCs and the Game rules fall back to the Characters already present.
+pub const UNCERTAIN_NPC_NOTICE: &str = "[System] NPC detection uncertain — using room defaults";
+
 pub(crate) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
     pub(super) started_for: GameId,
@@ -178,10 +182,7 @@ impl<'a> PipelineRun<'a> {
                 .collect();
             quantifier_result.npcs.npc_ids = room_default_npcs;
             quantifier_result.npcs.confidence = QuantifierConfidence::Low;
-            state.add_message(
-                "[System] NPC detection uncertain — using room defaults".to_string(),
-                MessageType::System,
-            );
+            state.add_message(UNCERTAIN_NPC_NOTICE.to_string(), MessageType::System);
         }
 
         // Best-effort: the turn commit does not depend on quantifier metadata (swipes).

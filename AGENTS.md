@@ -278,6 +278,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `fixtures.rs` — Test fixtures shared between unit and integration tests.
     - `http.rs` — HTTP response helpers for unit tests that call handlers directly.
     - `quantifier.rs` — Quantifier test utilities
+    - `scripted_model.rs` — `ScriptedModel`: the strict, holdable LLM port fake for tier-1 tests.
     - `test_app_builder.rs` — Test application builder for HTTP and integration tests.
     - `test_data_builder.rs` — Test data bundle builder for integration tests.
   - **utils/**

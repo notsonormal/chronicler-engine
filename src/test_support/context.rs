@@ -15,6 +15,7 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::message_service::MessageService;
 use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
+use crate::domain::model::agent::AgentConfig;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::game::GameId;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
@@ -26,8 +27,8 @@ use crate::error::Result;
 use crate::test_support::TestData;
 use crate::test_support::{make_test_recorder, TestAppBuilder, TestDataBuilder};
 
-/// Matches the production system presets' macro-bearing writing style so
-/// posture macros resolve in recorded prompts without a test-side re-save.
+/// Mirrors the production system presets' macro-bearing writing style, so
+/// posture macros resolve in recorded prompts.
 const FIXTURE_WRITING_STYLE: &str = "{{narrative_perspective}}-person limited perspective, focused on the player character.\n{{narrative_tense}} tense narrative prose.";
 
 pub fn seed_default_preset(storage: &Storage) {
@@ -85,6 +86,31 @@ pub fn seed_default_impersonate_preset(storage: &Storage) {
 
 pub fn build_test_message_service(storage: Arc<Storage>) -> Arc<MessageService> {
     Arc::new(MessageService::new(storage))
+}
+
+/// The production default Agents, wired to a script instead of the
+/// storage-backed preset lookup, so a tier-1 turn scripts each call it makes.
+pub fn configured_registry(recorder: Arc<LlmCallRecorder>) -> AgentRegistry {
+    registry_from_configs(&AgentConfig::defaults(), recorder)
+}
+
+/// The same wiring without the Agents of `agent_type`, as an `[agents]` section
+/// with no entry for that type leaves them.
+pub fn configured_registry_without(
+    recorder: Arc<LlmCallRecorder>,
+    agent_type: &str,
+) -> AgentRegistry {
+    let configs: Vec<AgentConfig> = AgentConfig::defaults()
+        .into_iter()
+        .filter(|config| config.agent_type != agent_type)
+        .collect();
+    registry_from_configs(&configs, recorder)
+}
+
+fn registry_from_configs(configs: &[AgentConfig], recorder: Arc<LlmCallRecorder>) -> AgentRegistry {
+    AgentRegistry::from_configs_with_storage(configs, Arc::clone(&recorder), recorder, None)
+        // arch-lint: allow(no-unwrap-expect) reason="test wiring fails on an unknown agent config"
+        .expect("configured Agents build from the default configs")
 }
 
 pub fn make_test_pipeline_with_backends(

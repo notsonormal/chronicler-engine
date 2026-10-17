@@ -5,33 +5,41 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
-use chronicler_engine::application::ports::llm_provider::LlmProvider;
+use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder,
+    active_game_of, analysis_report, ModelRole, ScriptedModel, TestAppBuilder,
     TestStoredTriggerContext,
 };
 
 use crate::support::http_assertions::assert_story_log_ends_with_message;
-use crate::support::http_requests::{fetch_body, fetch_generating_status, post_empty, wait_idle};
+use crate::support::http_fixtures::OFFERED_SET;
+use crate::support::http_requests::{
+    fetch_body, fetch_generating_status, post_action, post_empty, wait_settled,
+};
+
+/// Whether the story log holds an event Narration.
+fn story_log_holds_event_narration(state: &AppState) -> bool {
+    state
+        .message_service
+        .load_messages(active_game_of(state))
+        .expect("the story log reads back")
+        .iter()
+        .any(|message| message.event_header().is_some())
+}
 
 // [docs/specs/retrigger.md] SCENARIO: 13.1
 #[tokio::test]
 async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
-    let narrator = Arc::new(MockBackend::default());
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>,
-    );
+    let model = ScriptedModel::new()
+        .event_narration("The event fires again.")
+        .analysis(analysis_report(&["npc_1"], None));
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
         .log("Main narration", MessageType::Narration)
-        .pipeline(pipeline)
+        .model(Arc::new(model))
         .build_with_state();
 
     let messages_before = state
@@ -42,7 +50,10 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
 
     let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_idle(&state, 1000).await, "retrigger should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "retrigger should complete"
+    );
 
     let messages_after = state
         .message_service
@@ -68,23 +79,16 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
 
 // [docs/specs/retrigger.md] SCENARIO: 13.2
 #[tokio::test]
-async fn test_retrigger_does_not_rerun_quantifier_http() {
-    let narrator = Arc::new(MockBackend::default());
-    // Quantifier WOULD move the player if called — retrigger must NOT call it.
-    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
-        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
-            .to_string(),
-    ])) as Arc<dyn LlmProvider>;
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        quantifier,
-    );
+async fn test_retrigger_does_not_move_the_player_http() {
+    // The event's reconciliation reads this answer; its movement destination
+    // would move the player if a retrigger ran a movement-applying pass.
+    let model = ScriptedModel::new()
+        .event_narration("The event fires again.")
+        .analysis(analysis_report(&[], Some("room2")));
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
         .log("Main narration", MessageType::Narration)
-        .pipeline(pipeline)
+        .model(Arc::new(model))
         .build_with_state();
 
     let room_before = state
@@ -95,7 +99,10 @@ async fn test_retrigger_does_not_rerun_quantifier_http() {
 
     let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_idle(&state, 1000).await, "retrigger should complete");
+    assert!(
+        wait_settled(&state, 1000).await,
+        "retrigger should complete"
+    );
 
     let room_after = state
         .game_view_query
@@ -210,23 +217,18 @@ async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
 // [docs/specs/retrigger.md] SCENARIO: 14.5
 #[tokio::test]
 async fn test_retrigger_trigger_narration_failure_sets_error_http() {
-    let narrator = Arc::new(MockBackend::default().with_trigger_narration_fail());
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        Arc::new(MockBackend::default()) as Arc<dyn LlmProvider>,
-    );
+    // The event narration fails, so the event's reconciliation never runs.
+    let model = ScriptedModel::new().failed(ModelRole::Event);
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
         .log("Main narration", MessageType::Narration)
-        .pipeline(pipeline)
+        .model(Arc::new(model))
         .build_with_state();
 
     let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "retrigger should complete (with error)"
     );
 
@@ -239,8 +241,6 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
         .message_service
         .load_messages(active_game_of(&state))
         .unwrap();
-    // The failed continuation is not persisted, and neither is its engine
-    // error: the status line reports that failure.
     let new_event_narrations = messages_after
         .iter()
         .filter(|m| m.message_type == MessageType::Narration && m.event_header().is_some())
@@ -303,20 +303,22 @@ async fn test_retrigger_no_game_context_returns_400_http() {
 // [docs/specs/retrigger.md] SCENARIO: 15.1
 #[tokio::test]
 async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
-    use chronicler_engine::application::errors::ProcessActionResult;
-
+    // The held Options refresh is the busy state retrigger meets, and it leaves
+    // the story log's last Message the Narration the route validates.
+    let model = Arc::new(ScriptedModel::new().options(OFFERED_SET));
+    let hold = model.hold(ModelRole::Options);
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
         .log("Main narration", MessageType::Narration)
+        .model(Arc::clone(&model))
         .build_with_state();
 
-    let game_id = active_game_of(&state);
-    let mut game_state = state.message_service.load_or_fresh(active_game_of(&state));
-    let (_, _, claim) = state
-        .generation_gate
-        .try_claim(game_id, &mut game_state, state.message_service.as_ref())
-        .expect("pre-claim should succeed");
-    assert!(matches!(claim, ProcessActionResult::Started));
+    let resp = post_action(&app, "/options").await;
+    assert!(resp.status().is_success(), "the options Job should accept");
+    assert!(
+        hold.wait_started(1000),
+        "the held options call should reach the model"
+    );
 
     let req = axum::http::Request::builder()
         .uri("/retrigger")
@@ -333,5 +335,15 @@ async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
     assert!(
         body_str.contains("Still thinking..."),
         "expected 'Still thinking...' in body, got: {body_str}"
+    );
+
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the held Job should complete once released"
+    );
+    assert!(
+        !story_log_holds_event_narration(&state),
+        "no retrigger was started: its event Narration never lands"
     );
 }

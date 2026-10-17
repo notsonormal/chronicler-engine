@@ -1,5 +1,20 @@
 //! Rendered-HTML assertions shared by the http test binary.
 
+use chronicler_engine::adapters::driving::http::AppState;
+
+/// How many model calls the Game recorded for one Agent, read through the
+/// forensics seam. A test that pins "the Job made no Options call" reads this
+/// rather than the fake's own call log.
+pub fn llm_call_count(state: &AppState, agent_name: &str) -> usize {
+    state
+        .game_view_query
+        .list_latest_llm_messages(50)
+        .expect("list_latest_llm_messages should succeed")
+        .into_iter()
+        .filter(|message| message.agent_name == agent_name)
+        .count()
+}
+
 /// The selected option is the only server-observable proof that a stored
 /// posture (or mode) reached the rendered form; an unselected select renders
 /// the same shell whatever the stored value is.

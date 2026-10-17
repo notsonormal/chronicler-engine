@@ -20,7 +20,7 @@ And the new message is a Narration entry whose event_header is Some(...)
 And message_service.load_or_fresh().narrative.input_buffer.status is Idle
 ```
 
-#### Scenario 13.2: Retrigger does not re-run the quantifier
+#### Scenario 13.2: Retrigger does not move the player
 
 ```gherkin
 Given a game state where narrative.last_trigger is set
@@ -28,7 +28,7 @@ And the last message is a non-event Narration
 And movement.current_room_id == "room2"
 When the client sends POST /retrigger
 And the pipeline returns to idle
-Then message_service.load_or_fresh().movement.current_room_id is still "room2" (no quantifier re-run)
+Then message_service.load_or_fresh().movement.current_room_id is still "room2" (a retrigger applies no movement)
 ```
 
 ### Retrigger error cases

@@ -4,34 +4,34 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 
-use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::test_support::{
-    active_game_of, make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder,
-    TestDataBuilder, TestMap,
+    active_game_of, analysis_report, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder,
+    TestMap,
 };
 
-use crate::support::http_assertions::{assert_story_log_ends_with_message, status_error_message};
-use crate::support::app_wiring::{app_with_narrator, app_with_narrator_and_settings};
+use crate::support::app_wiring::{app_with_model, app_with_model_and_settings};
+use crate::support::http_assertions::{
+    assert_story_log_ends_with_message, llm_call_count, status_error_message,
+};
+use crate::support::http_fixtures::OFFERED_SET;
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
-    response_body, wait_idle,
+    response_body, wait_settled,
 };
 
 // [docs/specs/actions.md] SCENARIO: 1.1
 #[tokio::test]
 async fn test_action_succeeds_one_narration_idle_http() {
-    let narrator = Arc::new(
-        MockBackend::default().with_narrations(vec!["You see a small wooden room.".to_string()]),
-    );
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(
+        ScriptedModel::new().turn("You see a small wooden room."),
+    ));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 1000).await, "action should complete");
 
     let messages = state
         .message_service
@@ -59,14 +59,13 @@ async fn test_action_succeeds_one_narration_idle_http() {
 // [docs/specs/actions.md] SCENARIO: 1.2
 #[tokio::test]
 async fn test_input_persisted_before_narration_http() {
-    let narrator = Arc::new(
-        MockBackend::default().with_narrations(vec!["It is a small wooden room.".to_string()]),
-    );
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(
+        ScriptedModel::new().turn("It is a small wooden room."),
+    ));
 
     let resp = post_action(&app, "examine the room").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let messages = state
         .message_service
@@ -121,28 +120,21 @@ async fn test_quantifier_npc_fires_trigger_http() {
     };
     let data = TestDataBuilder::default_test().npcs(vec![npc]).build();
 
-    let narrator = Arc::new(MockBackend::default().with_narrations(vec![
-        "The main narration.".to_string(),
-        "The NPC greets you warmly.".to_string(),
-    ]));
-    let quantifier_result = r#"{"npcs_in_room": ["npc_1"], "movement": null}"#.to_string();
-    let quantifier_provider =
-        Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]))
-            as Arc<dyn LlmProvider>;
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        quantifier_provider,
-    );
+    // The turn's own analysis and the event's reconciliation both report npc_1.
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
-        .pipeline(pipeline)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("The main narration.")
+                .analysis(analysis_report(&["npc_1"], None))
+                .event_narration("The NPC greets you warmly.")
+                .analysis(analysis_report(&["npc_1"], None)),
+        ))
         .build_with_state();
 
     let resp = post_action(&app, "enter the shop").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let messages = state
         .message_service
@@ -176,26 +168,18 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
     let npc = TestNpc::named("bartender", "Bartender");
     let data = TestDataBuilder::default_test().npcs(vec![npc]).build();
 
-    let narrator =
-        Arc::new(MockBackend::default().with_narrations(vec!["The bartender nods.".to_string()]));
-    let quantifier_result = r#"{"npcs_in_room": ["bartender"], "movement": null}"#.to_string();
-    let quantifier_provider =
-        Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]))
-            as Arc<dyn LlmProvider>;
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        quantifier_provider,
-    );
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
-        .pipeline(pipeline)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("The bartender nods.")
+                .analysis(analysis_report(&["bartender"], None)),
+        ))
         .build_with_state();
 
     let resp = post_action(&app, "talk to bartender").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 1000).await, "action should complete");
 
     let messages = state
         .message_service
@@ -236,38 +220,30 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         .npcs(vec![shopkeeper])
         .build();
 
-    let narrator = Arc::new(MockBackend::default().with_narrations(vec![
-        "The shopkeeper greets you.".to_string(),
-        "The shopkeeper greets you.".to_string(),
-        "The shopkeeper greets you again.".to_string(),
-        "The shopkeeper greets you again.".to_string(),
-    ]));
-    let quantifier_provider = Arc::new(MockBackend::default().with_prompt_responses(vec![
-        r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
-        r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string(),
-    ])) as Arc<dyn LlmProvider>;
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        quantifier_provider,
-    );
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
-        .pipeline(pipeline)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("The shopkeeper greets you.")
+                .analysis(analysis_report(&["shopkeeper"], None))
+                .event_narration("The shopkeeper greets you.")
+                .analysis(analysis_report(&["shopkeeper"], None))
+                .narration("The shopkeeper greets you again.")
+                .analysis(analysis_report(&["shopkeeper"], None)),
+        ))
         .build_with_state();
 
     let resp = post_action(&app, "talk to shopkeeper").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "first action should complete"
     );
 
     let resp = post_action(&app, "talk to shopkeeper").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "second action should complete"
     );
 
@@ -294,13 +270,11 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
 // [docs/specs/actions.md] SCENARIO: 1.5
 #[tokio::test]
 async fn test_empty_command_continuation_no_input_http() {
-    let narrator =
-        Arc::new(MockBackend::default().with_narrations(vec!["The scene continues.".to_string()]));
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().turn("The scene continues.")));
 
     let resp = post_action(&app, "").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let messages = state
         .message_service
@@ -344,28 +318,22 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
         .room_npc("gabriella")
         .build();
 
-    let narrator = Arc::new(MockBackend::default().with_narrations(vec![
-        "You step into the shop.".to_string(),
-        "Gabriella emerges from the shadows.".to_string(),
-    ]));
-    let quantifier_provider = Arc::new(MockBackend::default().with_prompt_responses(vec![
-        r#"{"npcs_in_room": []}"#.to_string(),
-        r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
-    ])) as Arc<dyn LlmProvider>;
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        quantifier_provider,
-    );
+    // The turn's analysis reports nobody; the event's reconciliation reports
+    // Gabriella, the Character the trigger's narration brings in.
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
-        .pipeline(pipeline)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You step into the shop.")
+                .analysis(analysis_report(&[], None))
+                .event_narration("Gabriella emerges from the shadows.")
+                .analysis(analysis_report(&["gabriella"], None)),
+        ))
         .build_with_state();
 
     let resp = post_action(&app, "enter shop").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 1000).await, "action should complete");
 
     let debug = state
         .game_view_query
@@ -390,8 +358,9 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
 // [docs/specs/actions.md] SCENARIO: 2.1
 #[tokio::test]
 async fn test_nonexistent_room_sets_error_status_http() {
-    let narrator = Arc::new(MockBackend::default());
-    let (app, state) = app_with_narrator(narrator);
+    // The room lookup fails before the analysis call, so this script omits the
+    // analysis.
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().narration("You look around.")));
 
     {
         let mut gs = state.message_service.load_or_fresh(active_game_of(&state));
@@ -403,7 +372,7 @@ async fn test_nonexistent_room_sets_error_status_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let status = fetch_generating_status(&app).await;
     assert!(
@@ -425,12 +394,11 @@ async fn test_nonexistent_room_sets_error_status_http() {
 // [docs/specs/actions.md] SCENARIO: 2.2
 #[tokio::test]
 async fn test_failing_narrator_sets_error_status_http() {
-    let narrator = Arc::new(MockBackend::default().with_fail());
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().failed(ModelRole::Narration)));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let status = fetch_generating_status(&app).await;
     let message = status_error_message(&status);
@@ -440,12 +408,11 @@ async fn test_failing_narrator_sets_error_status_http() {
 // [docs/specs/actions.md] SCENARIO: 2.3
 #[tokio::test]
 async fn test_empty_narrator_response_sets_error_no_narration_http() {
-    let narrator = Arc::new(MockBackend::default().with_empty_response());
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().empty(ModelRole::Narration)));
 
     let resp = post_action(&app, "examine the room").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let status = fetch_generating_status(&app).await;
     assert!(
@@ -494,29 +461,19 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
     };
     let data = TestDataBuilder::default_test().npcs(vec![npc]).build();
 
-    let narrator = Arc::new(
-        MockBackend::default()
-            .with_narrations(vec!["Main narration preserved.".to_string()])
-            .with_trigger_narration_fail(),
-    );
-    let quantifier_result = r#"{"npcs_in_room": ["npc_1"], "movement": null}"#.to_string();
-    let quantifier_provider =
-        Arc::new(MockBackend::default().with_prompt_responses(vec![quantifier_result]))
-            as Arc<dyn LlmProvider>;
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        quantifier_provider,
-    );
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
-        .pipeline(pipeline)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("Main narration preserved.")
+                .analysis(analysis_report(&["npc_1"], None))
+                .failed(ModelRole::Event),
+        ))
         .build_with_state();
 
     let resp = post_action(&app, "examine the npc").await;
     assert!(resp.status().is_success());
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let status = fetch_generating_status(&app).await;
     assert!(
@@ -572,33 +529,31 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
 // [docs/specs/actions.md] SCENARIO: 2.5
 #[tokio::test]
 async fn test_quantifier_transport_failure_completes_action_and_keeps_npcs_http() {
-    let quantifier = Arc::new(MockBackend::default().with_fail()) as Arc<dyn LlmProvider>;
-    assert_quantifier_failure_keeps_npcs(quantifier).await;
+    // The quantifier retries once, so a failed analysis fails twice.
+    assert_quantifier_failure_keeps_npcs(Arc::new(
+        ScriptedModel::new()
+            .narration("The innkeeper glances your way.")
+            .failed(ModelRole::Analysis)
+            .failed(ModelRole::Analysis),
+    ))
+    .await;
 }
 
 // [docs/specs/actions.md] SCENARIO: 2.5
 #[tokio::test]
 async fn test_quantifier_unparseable_answer_completes_action_and_keeps_npcs_http() {
-    let quantifier = Arc::new(
-        MockBackend::default()
-            .with_prompt_responses(vec!["There is no room report in this answer.".to_string()]),
-    ) as Arc<dyn LlmProvider>;
-    assert_quantifier_failure_keeps_npcs(quantifier).await;
+    // The quantifier retries once, so an unparseable answer is read twice.
+    assert_quantifier_failure_keeps_npcs(Arc::new(
+        ScriptedModel::new()
+            .narration("The innkeeper glances your way.")
+            .analysis("There is no room report in this answer.")
+            .analysis("There is no room report in this answer."),
+    ))
+    .await;
 }
 
-async fn assert_quantifier_failure_keeps_npcs(quantifier_provider: Arc<dyn LlmProvider>) {
-    let narrator = Arc::new(
-        MockBackend::default().with_narrations(vec!["The innkeeper glances your way.".to_string()]),
-    );
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        recorder,
-        quantifier_provider,
-    );
-    let (app, state) = TestAppBuilder::default_test()
-        .pipeline(pipeline)
-        .build_with_state();
+async fn assert_quantifier_failure_keeps_npcs(model: Arc<ScriptedModel>) {
+    let (app, state) = app_with_model(Arc::clone(&model));
 
     let npcs_before = state
         .game_view_query
@@ -613,7 +568,7 @@ async fn assert_quantifier_failure_keeps_npcs(quantifier_provider: Arc<dyn LlmPr
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "a quantifier failure must not stop the action"
     );
 
@@ -631,13 +586,19 @@ async fn assert_quantifier_failure_keeps_npcs(quantifier_provider: Arc<dyn LlmPr
         npcs_after, npcs_before,
         "the scene must keep its prior NPC set after a quantifier failure"
     );
+    assert_eq!(
+        llm_call_count(&state, "quantifier"),
+        2,
+        "the analysis retries once before it falls back"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 3.3
 #[tokio::test]
 async fn test_delayed_llm_completes_without_deadlock_http() {
-    let narrator = Arc::new(MockBackend::default().with_delay(200));
-    let (app, state) = app_with_narrator(narrator);
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(ModelRole::Narration);
+    let (app, state) = app_with_model(Arc::clone(&model));
 
     let resp = post_action(&app, "look around").await;
     assert!(
@@ -645,8 +606,13 @@ async fn test_delayed_llm_completes_without_deadlock_http() {
         "should not 500"
     );
     assert!(
-        wait_idle(&state, 2000).await,
-        "delayed LLM should complete within 2s"
+        hold.wait_started(1000),
+        "the held narration call should reach the model"
+    );
+    hold.release();
+    assert!(
+        wait_settled(&state, 2000).await,
+        "a held LLM call should complete once released"
     );
     assert_eq!(
         fetch_generating_status(&app).await,
@@ -658,14 +624,20 @@ async fn test_delayed_llm_completes_without_deadlock_http() {
 // [docs/specs/actions.md] SCENARIO: 6.1
 #[tokio::test]
 async fn test_three_actions_in_sequence_http() {
-    let narrator = Arc::new(MockBackend::default());
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(
+        ScriptedModel::new()
+            .turn("You examine the room.")
+            .narration("You look around.")
+            .analysis(analysis_report(&[], None))
+            .narration("You check your inventory.")
+            .analysis(analysis_report(&[], None)),
+    ));
 
     for command in ["examine room", "look around", "check inventory"] {
         let resp = post_action(&app, command).await;
         assert!(resp.status().is_success(), "action {command} should accept");
         assert!(
-            wait_idle(&state, 1000).await,
+            wait_settled(&state, 1000).await,
             "action '{command}' should complete"
         );
     }
@@ -697,18 +669,24 @@ async fn test_three_actions_in_sequence_http() {
 // [docs/specs/actions.md] SCENARIO: 6.2
 #[tokio::test]
 async fn test_sequential_execute_retry_execute_http() {
-    let narrator = Arc::new(MockBackend::default());
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(
+        ScriptedModel::new()
+            .turn("You examine the room.")
+            .narration("You examine the room again.")
+            .analysis(analysis_report(&[], None))
+            .narration("You look around.")
+            .analysis(analysis_report(&[], None)),
+    ));
 
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_idle(&state, 1000).await, "action A should complete");
+    assert!(wait_settled(&state, 1000).await, "action A should complete");
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_idle(&state, 1000).await, "retry A should complete");
+    assert!(wait_settled(&state, 1000).await, "retry A should complete");
 
     let _ = post_action(&app, "look around").await;
-    assert!(wait_idle(&state, 1000).await, "action B should complete");
+    assert!(wait_settled(&state, 1000).await, "action B should complete");
 
     let messages = state
         .message_service
@@ -733,17 +711,23 @@ async fn test_sequential_execute_retry_execute_http() {
 // [docs/specs/actions.md] SCENARIO: 6.3
 #[tokio::test]
 async fn test_async_action_sequence_then_retry_http() {
-    let narrator = Arc::new(MockBackend::default());
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(
+        ScriptedModel::new()
+            .turn("You greet the room.")
+            .narration("You examine the room.")
+            .analysis(analysis_report(&[], None))
+            .narration("You examine the room again.")
+            .analysis(analysis_report(&[], None)),
+    ));
 
     let _ = post_action(&app, "hello").await;
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_idle(&state, 1000).await);
+    assert!(wait_settled(&state, 1000).await);
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_idle(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 1000).await, "retry should complete");
 
     let messages = state
         .message_service
@@ -759,13 +743,12 @@ async fn test_async_action_sequence_then_retry_http() {
 // [docs/specs/actions.md] SCENARIO: 1.9
 #[tokio::test]
 async fn test_slash_impersonate_produces_input_http() {
-    let narrator = Arc::new(MockBackend::default());
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().turn("You say hello.")));
 
     let resp = post_action(&app, "/impersonate hello").await;
     assert!(resp.status().is_success(), "/impersonate should accept");
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "impersonate action should complete"
     );
 
@@ -808,13 +791,12 @@ async fn test_slash_impersonate_produces_input_http() {
 // [docs/specs/actions.md] SCENARIO: 1.10
 #[tokio::test]
 async fn test_slash_guide_does_not_persist_input_http() {
-    let narrator = Arc::new(MockBackend::default());
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().turn("You look around.")));
 
     let resp = post_action(&app, "/guide look around").await;
     assert!(resp.status().is_success(), "/guide should accept");
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "guide action should complete"
     );
 
@@ -852,7 +834,6 @@ async fn test_slash_guide_does_not_persist_input_http() {
 // [docs/specs/actions.md] SCENARIO: 1.12
 #[tokio::test]
 async fn test_slash_command_bypasses_text_check_http() {
-    let narrator = Arc::new(MockBackend::default());
     let settings = AppSettings {
         text_check: TextCheckSettings {
             mode: TextCheckMode::Spell,
@@ -861,7 +842,14 @@ async fn test_slash_command_bypasses_text_check_http() {
         },
         ..Default::default()
     };
-    let (app, state) = app_with_narrator_and_settings(narrator, settings);
+    let (app, state) = app_with_model_and_settings(
+        Arc::new(
+            ScriptedModel::new()
+                .turn("You look at the castle.")
+                .options(OFFERED_SET),
+        ),
+        settings,
+    );
 
     let resp = post_action_check(&app, "/guide look at the casle").await;
     assert!(resp.status().is_success());
@@ -876,13 +864,12 @@ async fn test_slash_command_bypasses_text_check_http() {
         "steering command must bypass the text check: {body_str}"
     );
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "guide action should complete"
     );
 
-    // The /guide leg above already created scene history, so this dispatch avoids the
-    // empty-history validation error. The fixture carries no options agent, so only the
-    // bypass is pinned here; outcome assertions live in options_tests.rs.
+    // The /guide leg above already created scene history, so this /options
+    // dispatch passes the empty-history validation.
     let resp = post_action_check(&app, "/options").await;
     assert!(resp.status().is_success());
     assert!(
@@ -896,7 +883,7 @@ async fn test_slash_command_bypasses_text_check_http() {
         "/options must bypass the text check: {body_str}"
     );
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "/options action should complete"
     );
 
@@ -921,24 +908,21 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
-    let narrator = Arc::new(MockBackend::default());
-    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
-        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
-            .to_string(),
-        r#"{"npcs_in_room": []}"#.to_string(),
-    ])) as Arc<dyn LlmProvider>;
-    let recorder = make_test_recorder(narrator as Arc<dyn LlmProvider>);
-    let pipeline =
-        make_test_pipeline_with_mock_quantifier(Arc::clone(&storage), recorder, quantifier);
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .storage(Arc::clone(&storage))
-        .pipeline(pipeline)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You walk north into the next room.")
+                .analysis(analysis_report(&[], Some("room2")))
+                .narration("You look around the new room.")
+                .analysis(analysis_report(&[], None)),
+        ))
         .build_with_state();
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "the Action that moves the player should complete"
     );
 
@@ -967,7 +951,7 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_idle(&state, 1000).await,
+        wait_settled(&state, 1000).await,
         "the later, stationary Action should complete"
     );
 
@@ -998,9 +982,7 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
 // [docs/specs/actions.md] SCENARIO: 1.13
 #[tokio::test]
 async fn test_confirm_retargets_status_display() {
-    let narrator =
-        Arc::new(MockBackend::default().with_narrations(vec!["You look around.".to_string()]));
-    let (app, state) = app_with_narrator(narrator);
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().turn("You look around.")));
 
     let resp = post_form(&app, "/action/confirm", "command=look").await;
     assert!(resp.status().is_success());
@@ -1018,5 +1000,5 @@ async fn test_confirm_retargets_status_display() {
         !body.contains("id=\"action-area\"") && !body.contains("command-form"),
         "confirm must not replace the action area or the command form: {body}"
     );
-    assert!(wait_idle(&state, 1000).await, "confirm should complete");
+    assert!(wait_settled(&state, 1000).await, "confirm should complete");
 }

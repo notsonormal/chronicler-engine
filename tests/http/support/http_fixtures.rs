@@ -9,6 +9,10 @@ use chronicler_engine::domain::model::settings::{NarrativePerspective, Narrative
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{active_game_of, TestMap, TestPersona, TestWorld};
 
+/// The offered set an Options call installs, in the shape the parser reads.
+pub const OFFERED_SET: &str = "<suggestion>Search the desk</suggestion>\
+<suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
+
 /// Returns `(storage, world_key, persona_key, initial_game_id)` for a world, map,
 /// persona, and one game row.
 pub fn seeded_storage_with_initial_game() -> (Arc<Storage>, String, String, i64) {

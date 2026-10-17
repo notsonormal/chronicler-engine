@@ -20,18 +20,18 @@ production, so a test can assert on the state a service left behind.
 
 **The builder.** `TestAppBuilder` (`src/test_support/test_app_builder.rs`).
 `default_test()` (or `with_data(data)`) seeds test data; `.storage(Arc<Storage>)`
-overrides storage; `.pipeline(pipeline)` injects a mock-wired `ActionPipeline`;
-`.skip_seeding(true)` leaves seeding to the test. Terminals: `build()` →
-`Router`, `build_service()` → `AppState`, `build_with_state()` →
+overrides storage; `.model(Arc<ScriptedModel>)` runs the real Agents on that
+script (Cross-cutting 7); `.pipeline(pipeline)` injects a mock-wired
+`ActionPipeline`; `.skip_seeding(true)` leaves seeding to the test. Terminals:
+`build()` → `Router`, `build_service()` → `AppState`, `build_with_state()` →
 `(Router, AppState)`, `build_service_with_storage()` → `(AppState, Arc<Storage>)`.
 
-**Wiring the mock pipeline.** Build the recorder with `make_test_recorder` /
-`make_test_recorder_with_storage` (`src/test_support/fixtures.rs`), then the
-pipeline with `make_test_pipeline_with_backends` or
-`make_test_pipeline_with_mock_quantifier` (`src/test_support/context.rs`).
-Configure narration per call with
-`MockBackend::default().with_narrations(vec![...])`; quantifier responses with
-`.with_prompt_responses(vec![...])` (Cross-cutting 7).
+**Wiring the scripted pipeline.** A test that does not seed through the builder
+uses `app_with_script` / `app_with_model_and_storage`
+(`tests/http/support/app_wiring.rs`); those build the recorder with
+`make_test_recorder_with_storage` (`src/test_support/fixtures.rs`) and the
+pipeline with `make_test_pipeline_with_backends` (`src/test_support/context.rs`).
+Either way the test scripts every model call the turn makes (Cross-cutting 7).
 
 **Observing state.** `app.message_service.load_or_fresh(game_id)` is the
 persisted state. Take the Game from the app the test built, through the shared
@@ -42,8 +42,9 @@ test mutates storage the pipeline should read. A test that seeds its own storage
 and skips the builder's seeding also names the Game the app should point at:
 `.skip_seeding(true).active_game(game_id)`.
 
-**Exemplars.** `tests/http/retrigger.rs` (mock quantifier + `build_with_state`),
-`tests/http/games_create.rs` (custom storage + `build`).
+**Exemplars.** `tests/http/retrigger.rs` (scripted model through
+`TestAppBuilder::model` + `build_with_state`), `tests/http/games_create.rs`
+(custom storage + `build`).
 
 **Service-direct variant.** Use it for collaborator methods no request flows
 through: lifecycle ops on `GameCatalogue` (`create_game`, `switch_game`,
@@ -217,15 +218,41 @@ The decision rule:
   or `Storage::new_in_memory()` (Pattern 3).
 - Router-only HTTP assertion? → `default_app()` / `.build()` (Pattern 4).
 
-### Cross-cutting 7 — Narrator vs quantifier mock wiring
+### Cross-cutting 7 — The scripted model and the Agents a tier-1 app runs
 
-Two pipeline constructors cover the common cases.
-`make_test_pipeline_with_backends` forwards the caller's `AgentRegistry`; call
-sites commonly pass `AgentRegistry::default()`, so the quantifier comes from the
-registry rather than the recorder. Use `make_test_pipeline_with_mock_quantifier`
-to supply a separate Mock quantifier provider. Configure narration text per call
-with `with_narrations`, and quantifier JSON with `with_prompt_responses`, on the
-`MockBackend`.
+A tier-1 test scripts every model call its turn makes. `ScriptedModel`
+(`src/test_support/scripted_model.rs`) is a strict, holdable `LlmProvider`: it
+holds one entry per call and fails the test on a call the test did not script.
+Entries are keyed by role (`ModelRole`), so a test declares `.narration("…")`,
+`.event_narration("…")`, `.analysis(analysis_report(&[], Some("room2")))`,
+`.options(set_a)` and the shorthand `.turn("…")` (a narration and the analysis
+of it) without depending on the order the roles interleave. The analysis entry
+is a parsed room report (`analysis_report`), which is what makes a turn's
+analysis confident.
+
+Hand the model to the app with `app_with_script` /
+`app_with_model_and_storage` (`tests/http/support/app_wiring.rs`), or with
+`TestAppBuilder::model(model)` when the builder's other knobs seed the fixture.
+`app_with_script`, `TestAppBuilder::model` and `app_with_model` wire the
+production Agents through `configured_registry` (`src/test_support/context.rs`),
+so a tier-1 turn runs the real Quantifier and the real Options agent on that
+script. The tests that leave an Agent out build their registry themselves with
+`configured_registry_without(recorder, "options")` and pass it to
+`app_with_script_and_agents`.
+
+A stray call fails the test three ways: the fake answers the caller with an
+error naming the role, `wait_settled` asserts no recorded attempt carries that
+failure, and the fake panics when it drops with a stray call on record.
+
+`ScriptedModel::hold(role)` returns a `ModelHold` that keeps the next call of
+that role until `release()`; the hold also releases with the handle, so a
+failing test cannot strand the held call. This is how a test arranges a real Job
+whose Game is busy: `tests/http/races.rs` holds one Job and asserts the second
+request's answer (actions.md 3.4, 3.5; options.md 24.21), and `swipe_new.rs`
+12.1 and `retrigger.rs` 15.1 do the same.
+
+`MockBackend` stays the lenient runtime provider of `LlmBackendType::Mock`,
+which the browser tier and dev runs use.
 
 ### Cross-cutting 8 — `#[ignore]` for real-LLM tests + `--llm-only` invocation
 

@@ -91,6 +91,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `narrator_mode.rs` — HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
     - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on turn-end hook, and response-shape parsing.
     - `prompt_presets.rs` — HTTP E2E tests for the prompt-presets endpoints.
+    - `races.rs` — HTTP E2E tests for the write-path races: a second request while a Job holds the slot. Cases: an Action while a Job runs (actions.md 3.4), two clicks at one moment (actions.md 3.5), /options while a Job runs (options.md 24.21).
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).
     - `retrigger.rs` — HTTP E2E tests for the retrigger endpoint (POST /retrigger).
     - `settings.rs` — HTTP E2E tests for the settings endpoints: sub-tabs, role rows, and the text-check auto-save.
@@ -111,7 +112,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `text_check.rs` — HTTP integration tests for the action-check text-check dispatch: disabled vs. enabled, auto-check off, issues, and clean.
       - `worlds_fragment_handlers.rs` — HTTP adapter tests for worlds_fragment handlers
     - **support/**
-      - `app_wiring.rs` — Test-app builders for the http test binary: narrator-wired AppState + router bundles.
+      - `app_wiring.rs` — Test-app builders for the http test binary: scripted-model AppState + router bundles.
       - `http_assertions.rs` — Rendered-HTML assertions shared by the http test binary.
       - `http_fixtures.rs` — HTTP test fixtures: storage seeding and world-card builders for the endpoint tests.
       - `http_requests.rs` — HTTP request plumbing for the http test binary: POST builders, body readers, generation-idle polling.
