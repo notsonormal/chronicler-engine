@@ -7,6 +7,7 @@ use crate::adapters::driving::http::AppState;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::pipeline::phase_error::PhaseError;
 use crate::application::pipeline::pipeline_run::PipelineRun;
+use crate::domain::model::game::GameId;
 use crate::domain::model::map::Room;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;
@@ -18,9 +19,13 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::test_support::fixtures::{TestGameState, TestMap, TestNpc};
+
+/// A Game id with no row: the failing-storage cases read and write by it
+/// and never load a Game record.
+const MISSING_GAME_ID: GameId = GameId(0);
 use crate::test_support::make_test_recorder;
 use crate::test_support::{
-    make_test_pipeline_app as make_test_app,
+    active_game_of, make_test_pipeline_app as make_test_app,
     make_test_pipeline_app_with_storage as make_test_app_with_storage,
     make_test_pipeline_with_backends, TestAppBuilder, TestDataBuilder,
 };
@@ -33,13 +38,18 @@ fn make_test_state() -> GameState {
 fn test_pipeline_runs_to_completion() {
     let app = make_test_app();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(matches!(outcome, Ok(())));
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -54,12 +64,17 @@ fn test_pipeline_runs_to_completion() {
 fn test_pipeline_saves_narration_to_history() {
     let app = make_test_app();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     let has_narration = final_state
         .narrative
         .history()
@@ -82,16 +97,21 @@ fn test_pipeline_returns_error_on_narration_failure() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         outcome.is_ok(),
         "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         final_state
             .narrative
@@ -118,16 +138,21 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         outcome.is_ok(),
         "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         final_state
             .narrative
@@ -172,13 +197,18 @@ fn test_pipeline_with_custom_quantifier_result() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(matches!(outcome, Ok(())));
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         final_state.scene.npcs_in_area.len(),
         1,
@@ -203,15 +233,19 @@ fn test_trigger_continuation_save_post_trigger_error() {
         agent_registry,
     );
     let app = AppState::from_wired(
-        crate::test_support::build_test_wired_app(failing, service)
+        crate::test_support::build_test_wired_app(failing, service, MISSING_GAME_ID)
             .expect("build_test_wired_app: build_app_graph_for_tests should succeed"),
     );
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
     let map = Arc::new(TestMap::single_room("start"));
     let npcs = HashMap::from([("npc1".to_string(), TestNpc::named("npc1", "Test NPC"))]);
-    let result = app
-        .pipeline
-        .phase_trigger_continuation(&mut state, &trigger, &map, &npcs);
+    let result = app.pipeline.phase_trigger_continuation(
+        active_game_of(&app),
+        &mut state,
+        &trigger,
+        &map,
+        &npcs,
+    );
 
     match result {
         Err(PhaseError::PersistFailed { label, .. }) => {
@@ -241,7 +275,7 @@ fn phase_post_generation_returns_persist_error_on_pre_quantifier_save_failure() 
     let persona = Arc::new(crate::test_support::fixtures::TestPersona::standard());
     let npcs: HashMap<String, NpcCard> = HashMap::new();
 
-    let run = PipelineRun::new(&pipeline, 0);
+    let run = PipelineRun::new(&pipeline, GameId(0));
     let result = run.phase_post_generation(
         &mut state,
         "look",
@@ -306,16 +340,21 @@ fn test_pipeline_trigger_happy_path() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         matches!(outcome, Ok(())),
         "Expected Completed, got {outcome:?}"
     );
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         final_state
             .narrative
@@ -393,15 +432,20 @@ fn test_pipeline_trigger_empty_continuation() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
     );
-    let reloaded = app.message_service.load_or_fresh();
+    let reloaded = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         reloaded.narrative.input_buffer.status.failure().is_some(),
         "Expected error status after trigger empty response, got: {:?}",
@@ -457,15 +501,20 @@ fn test_pipeline_trigger_complete_failure() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
     );
-    let reloaded = app.message_service.load_or_fresh();
+    let reloaded = app.message_service.load_or_fresh(active_game_of(&app));
     let status_msg = match &reloaded.narrative.input_buffer.status {
         GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error after trigger failure, got {other:?}"),
@@ -503,12 +552,20 @@ fn test_pipeline_trigger_complete_failure() {
 fn test_pipeline_saves_narration_before_quantifier() {
     let app = make_test_app();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let messages = app.message_service.load_messages().unwrap();
+    let messages = app
+        .message_service
+        .load_messages(active_game_of(&app))
+        .unwrap();
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -544,12 +601,17 @@ fn test_pipeline_no_duplicate_narration() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "test input".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "test input".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     let history = final_state.narrative.history();
     let narration_count = history
         .iter()
@@ -572,12 +634,20 @@ fn test_pipeline_no_duplicate_narration() {
 fn test_pipeline_quantifier_runs_on_saved_state() {
     let app = make_test_app();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let messages = app.message_service.load_messages().unwrap();
+    let messages = app
+        .message_service
+        .load_messages(active_game_of(&app))
+        .unwrap();
     let narration = messages
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -611,10 +681,15 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         matches!(outcome, Ok(())),
@@ -646,12 +721,20 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let messages = app.message_service.load_messages().unwrap();
+    let messages = app
+        .message_service
+        .load_messages(active_game_of(&app))
+        .unwrap();
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -669,10 +752,11 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
 #[test]
 fn orchestrator_records_error_when_world_missing() {
     let data = TestDataBuilder::default_test().build();
-    let (storage, handle) = {
+    let (storage, handle, game_id) = {
         let base = Storage::new_in_memory();
-        data.seed_into(&base);
-        base.with_test_failures()
+        let game_id = data.seed_into(&base);
+        let (storage, handle) = base.with_test_failures();
+        (storage, handle, game_id)
     };
     handle.set(
         "get_world",
@@ -681,18 +765,24 @@ fn orchestrator_records_error_when_world_missing() {
     let app = TestAppBuilder::with_data(data)
         .storage(Arc::new(storage))
         .skip_seeding(true)
+        .active_game(game_id)
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         matches!(outcome, Ok(())),
         "Pipeline must return Ok(()) on fetch failure (no panic, no Failed variant), got {outcome:?}"
     );
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -706,10 +796,11 @@ fn orchestrator_records_error_when_world_missing() {
 #[test]
 fn orchestrator_records_error_when_persona_missing() {
     let data = TestDataBuilder::default_test().build();
-    let (storage, handle) = {
+    let (storage, handle, game_id) = {
         let base = Storage::new_in_memory();
-        data.seed_into(&base);
-        base.with_test_failures()
+        let game_id = data.seed_into(&base);
+        let (storage, handle) = base.with_test_failures();
+        (storage, handle, game_id)
     };
     handle.set(
         "get_persona",
@@ -718,18 +809,24 @@ fn orchestrator_records_error_when_persona_missing() {
     let app = TestAppBuilder::with_data(data)
         .storage(Arc::new(storage))
         .skip_seeding(true)
+        .active_game(game_id)
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         matches!(outcome, Ok(())),
         "Pipeline must return Ok(()) on fetch failure (no panic, no Failed variant), got {outcome:?}"
     );
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -756,13 +853,21 @@ fn test_pipeline_persists_input_before_narration() {
         .pipeline(service.clone())
         .build_service();
 
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.add_message("look".to_string(), MessageType::Input);
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let messages = app.message_service.load_messages().unwrap();
+    let messages = app
+        .message_service
+        .load_messages(active_game_of(&app))
+        .unwrap();
     let input_idx = messages
         .iter()
         .position(|m| m.message_type == MessageType::Input && m.text() == "look");
@@ -780,7 +885,7 @@ fn test_pipeline_persists_input_before_narration() {
 
 #[test]
 fn load_or_fresh_unchanged_on_world_data_missing() {
-    let storage = {
+    let (storage, game_id) = {
         let base = Storage::new_in_memory();
         let id = base
             .create_game(
@@ -791,19 +896,19 @@ fn load_or_fresh_unchanged_on_world_data_missing() {
                 "Test Game",
             )
             .expect("test setup: create game");
-        base.set_game_id(id);
         let state = GameState::new("room_1");
         let snapshot = GameStateSnapshot::from_game_state(&state);
-        base.save_snapshot(&snapshot)
+        base.save_snapshot(GameId(id), &snapshot)
             .expect("test setup: save snapshot");
-        base
+        (base, GameId(id))
     };
     let app = TestAppBuilder::default_test()
         .storage(Arc::new(storage))
         .skip_seeding(true)
+        .active_game(game_id)
         .build_service();
 
-    let loaded = app.message_service.load_or_fresh();
+    let loaded = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         loaded.movement.current_room_id, "room_1",
         "load_or_fresh must return snapshot-derived GameState when world data is missing, got {loaded:?}"
@@ -814,13 +919,14 @@ fn load_or_fresh_unchanged_on_world_data_missing() {
 fn phase_narrate_resolves_dynamic_room_via_fallback() {
     let data = TestDataBuilder::default_test().build();
     let storage = Arc::new(Storage::new_in_memory());
-    data.seed_into(&storage);
+    let game_id = data.seed_into(&storage);
     let app = TestAppBuilder::with_data(data)
         .storage(Arc::clone(&storage))
         .skip_seeding(true)
+        .active_game(game_id)
         .build_service();
 
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     let dynamic_id = "dynamic_room_alcove".to_string();
     state.movement.dynamic_rooms.insert(
         dynamic_id.clone(),
@@ -836,15 +942,20 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
     );
     state.movement.current_room_id = dynamic_id.clone();
 
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         matches!(outcome, Ok(())),
         "Pipeline must return Ok(()) when current_room_id is a dynamic room, got {outcome:?}"
     );
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         !matches!(
             final_state.narrative.input_buffer.status,
@@ -858,7 +969,7 @@ fn phase_narrate_resolves_dynamic_room_via_fallback() {
 #[test]
 fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     let data = TestDataBuilder::default_test().build();
-    let storage = {
+    let (storage, missing_persona_game) = {
         let base = Storage::new_in_memory();
         base.seed_world(&data.world, &data.map)
             .expect("test setup: seed test world");
@@ -871,8 +982,7 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
                 "Test Game",
             )
             .expect("test setup: create game");
-        base.set_game_id(id);
-        base
+        (base, id)
     };
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
@@ -884,19 +994,25 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
     let app = TestAppBuilder::default_test()
         .storage(Arc::new(storage))
         .skip_seeding(true)
+        .active_game(GameId(missing_persona_game))
         .pipeline(service)
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         matches!(outcome, Ok(())),
         "Pipeline must return Ok(()) (no panic, no Failed variant), got {outcome:?}"
     );
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     let msg = match &final_state.narrative.input_buffer.status {
         GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected GenerationStatus::Error, got {other:?}"),
@@ -911,12 +1027,17 @@ fn orchestrator_records_canonical_persona_not_found_when_persona_missing() {
 fn test_pipeline_empty_input_produces_continuation() {
     let app = make_test_app();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, String::new(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        String::new(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Empty input should complete generation: {:?}",
@@ -943,13 +1064,18 @@ fn test_pipeline_empty_input_produces_continuation() {
 fn test_pipeline_room_not_found_sets_error_status() {
     let app = make_test_app();
 
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.movement.current_room_id = "non_existent_room".to_string();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     let failure = match &final_state.narrative.input_buffer.status {
         GenerationStatus::Error(failure) => failure,
         other => panic!("expected Error status, got {other:?}"),
@@ -980,12 +1106,17 @@ fn test_pipeline_phase_stays_narrating_on_narration_failure() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         final_state.narrative.input_buffer.phase,
         GenerationPhase::Narrating,
@@ -1017,12 +1148,17 @@ fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     let msg = match &final_state.narrative.input_buffer.status {
         GenerationStatus::Error(failure) => failure.raw.clone(),
         other => panic!("expected Error status, got {other:?}"),
@@ -1068,12 +1204,17 @@ fn test_pipeline_quantifier_detects_movement() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome =
-        app.pipeline
-            .run_from_input(state, "go to room 2".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "go to room 2".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_ne!(
         final_state.movement.current_room_id, "room_1",
         "Player should have moved from starting room"
@@ -1089,12 +1230,17 @@ fn test_pipeline_cancels_when_token_already_cancelled() {
     let app = make_test_app();
 
     app.shutdown_token.cancel();
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -1106,13 +1252,18 @@ fn test_pipeline_cancels_when_token_already_cancelled() {
 fn test_pre_main_snapshot_saved_before_narration() {
     let (app, storage) = make_test_app_with_storage();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome =
-        app.pipeline
-            .run_from_input(state, "examine the room".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "examine the room".to_string(),
+        false,
+        None,
+        None,
+    );
 
     let latest = storage
-        .load_latest_snapshot()
+        .load_latest_snapshot(active_game_of(&app))
         .expect("load_latest_snapshot should succeed")
         .expect("a snapshot should exist after action");
     assert!(
@@ -1169,13 +1320,18 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         .pipeline(service.clone())
         .build_service_with_storage();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome =
-        app.pipeline
-            .run_from_input(state, "examine the npc".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "examine the npc".to_string(),
+        false,
+        None,
+        None,
+    );
 
     let latest = storage
-        .load_latest_snapshot()
+        .load_latest_snapshot(active_game_of(&app))
         .expect("load_latest_snapshot should succeed")
         .expect("a snapshot should exist after trigger continuation");
     assert!(
@@ -1198,12 +1354,17 @@ fn test_delayed_llm_completes_without_deadlock() {
         .pipeline(service.clone())
         .build_service();
 
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look around".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look around".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after delayed action completes"
@@ -1230,12 +1391,17 @@ fn test_cancellation_resets_state_to_idle() {
         .build_service();
 
     app.shutdown_token.cancel();
-    let state = app.message_service.load_or_fresh();
-    let _outcome = app
-        .pipeline
-        .run_from_input(state, "look around".to_string(), false, None, None);
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
+    let _outcome = app.pipeline.run_from_input(
+        active_game_of(&app),
+        state,
+        "look around".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation"
@@ -1263,9 +1429,13 @@ async fn test_pipeline_cancels_after_main_narration() {
     let token = app.shutdown_token.clone();
     let app_clone = app.clone();
     let handle = tokio::task::spawn_blocking(move || {
-        app_clone
-            .pipeline
-            .execute_action_with_inputs("look around".to_string(), false, None, None);
+        app_clone.pipeline.execute_action_with_inputs(
+            active_game_of(&app_clone),
+            "look around".to_string(),
+            false,
+            None,
+            None,
+        );
     });
 
     let started = tokio::time::timeout(Duration::from_secs(5), async {
@@ -1281,7 +1451,7 @@ async fn test_pipeline_cancels_after_main_narration() {
     token.cancel();
     handle.await.expect("action task should complete");
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation at post-narration checkpoint"
@@ -1340,6 +1510,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     let app_clone = app.clone();
     let handle = tokio::task::spawn_blocking(move || {
         app_clone.pipeline.execute_action_with_inputs(
+            active_game_of(&app_clone),
             "enter the shop".to_string(),
             false,
             None,
@@ -1357,7 +1528,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     token.cancel();
     handle.await.expect("action task should complete");
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation at post-trigger checkpoint"
@@ -1374,20 +1545,23 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
 fn test_switch_game_heals_stale_status_for_the_current_game() {
     let (app, storage) = make_test_app_with_storage();
 
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
     storage
-        .save_snapshot(&GameStateSnapshot::from_game_state(&state))
+        .save_snapshot(
+            active_game_of(&app),
+            &GameStateSnapshot::from_game_state(&state),
+        )
         .expect("save stale snapshot should succeed");
 
     app.pipeline
-        .heal_stale_status(&app.generation_gate)
+        .heal_stale_status(&app.generation_gate, active_game_of(&app))
         .expect("heal_stale_status should succeed");
 
     let persisted = app
         .message_service
-        .load_expecting_valid_state()
+        .load_expecting_valid_state(active_game_of(&app))
         .expect("the healed snapshot should load");
     assert_eq!(
         persisted.narrative.input_buffer.status,

@@ -22,7 +22,7 @@ fn wired_app(connection: LlmProviderConfig, storage: Arc<Storage>) -> WiredApp {
     storage
         .save_settings(&settings_with(connection))
         .expect("save_settings should succeed");
-    build_app_graph(storage).expect("build_app_graph should succeed")
+    build_app_graph(storage, None).expect("build_app_graph should succeed")
 }
 
 fn mock_connection() -> LlmProviderConfig {
@@ -56,9 +56,6 @@ fn mock_backend_path_returns_recorder_with_mock_provider() {
 
 #[test]
 fn mock_backend_recorder_persists_forensics_to_storage() {
-    // Regression guard: the factory must wire `SaveLlmMessageFn` to
-    // `Storage::save_llm_message`, not a no-op closure. If the silent fallback
-    // is reintroduced, `storage.list_latest_llm_messages(...)` comes back empty.
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(mock_connection(), Arc::clone(&storage));
@@ -177,9 +174,8 @@ fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
 
 #[test]
 fn openrouter_connection_without_key_reports_missing_api_key() {
-    // Regression guard: a keyless OpenRouter connection must fail locally with a
-    // message naming the connection, rather than reaching the provider and
-    // surfacing its opaque 401 "Missing Authentication header".
+    // A keyless OpenRouter connection must fail locally with a message naming the
+    // connection rather than the provider's opaque 401 "Missing Authentication header".
     let _guard = ApiKeyEnvGuard::new();
     unsafe {
         std::env::remove_var("OPENROUTER_API_KEY");

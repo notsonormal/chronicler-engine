@@ -8,6 +8,7 @@ use crate::application::arrival_service::ArrivalTaskContext;
 use crate::application::message_service::MessageService;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::GenerationStatus;
@@ -16,6 +17,8 @@ use crate::test_support::{
     make_test_recorder_with_storage, seed_default_preset, seed_test_world_into_storage,
     TestDataBuilder,
 };
+
+const SEEDED_GAME_ID: GameId = GameId(1);
 
 fn make_test_arrival_task(
     storage: Arc<Storage>,
@@ -35,6 +38,7 @@ fn make_test_arrival_task(
     let task_ctx = ArrivalTaskContext::new_for_test(
         Arc::clone(&message_service),
         Arc::clone(&storage),
+        SEEDED_GAME_ID,
         room_id.to_string(),
         Vec::<NpcCard>::new(),
         Vec::<NpcCard>::new(),
@@ -53,15 +57,16 @@ fn test_run_produces_and_persists_narration() {
     let storage = Arc::new(Storage::new_in_memory());
     data.seed_into(&storage);
     storage
-        .save_snapshot(&GameStateSnapshot::from_game_state(&GameState::new(
-            "room_1",
-        )))
+        .save_snapshot(
+            SEEDED_GAME_ID,
+            &GameStateSnapshot::from_game_state(&GameState::new("room_1")),
+        )
         .expect("test setup: save initial snapshot");
 
     let (task_ctx, message_service) = make_test_arrival_task(Arc::clone(&storage), "room_1");
     task_ctx.run();
 
-    let state = message_service.load_or_fresh();
+    let state = message_service.load_or_fresh(SEEDED_GAME_ID);
     let narrations: Vec<_> = state
         .narrative
         .history()
@@ -79,7 +84,7 @@ fn test_run_produces_and_persists_narration() {
         "status should return to Idle after successful arrival narration"
     );
 
-    let messages = storage.load_messages_with_swipes().unwrap();
+    let messages = storage.load_messages_with_swipes(SEEDED_GAME_ID).unwrap();
     assert!(
         messages
             .iter()
@@ -111,7 +116,7 @@ fn test_run_falls_back_to_fresh_state_on_load_failure() {
 
     handle.clear("load_latest_snapshot");
 
-    let state = message_service.load_or_fresh();
+    let state = message_service.load_or_fresh(SEEDED_GAME_ID);
     let narrations: Vec<_> = state
         .narrative
         .history()
@@ -132,7 +137,7 @@ fn test_run_returns_early_without_narration_on_world_fetch_failure() {
     let failing_storage = Arc::new(failing_storage);
     seed_test_world_into_storage(&failing_storage, &state);
     failing_storage
-        .save_snapshot(&GameStateSnapshot::from_game_state(&state))
+        .save_snapshot(SEEDED_GAME_ID, &GameStateSnapshot::from_game_state(&state))
         .expect("test setup: save initial snapshot");
     handle.set(
         "get_world",
@@ -144,7 +149,7 @@ fn test_run_returns_early_without_narration_on_world_fetch_failure() {
 
     handle.clear("get_world");
 
-    let state = message_service.load_or_fresh();
+    let state = message_service.load_or_fresh(SEEDED_GAME_ID);
     let narrations: Vec<_> = state
         .narrative
         .history()

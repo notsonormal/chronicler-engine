@@ -30,15 +30,16 @@ pub struct CallSiteRow {
     pub rule: u8,
     /// A path prefix relative to `src/`.
     pub scope: &'static str,
-    /// Either an associated callee (`Type::method`), or a bare method or
-    /// free-function name (`hold`).
+    /// The associated callees (`Type::method`) or bare method or free-function
+    /// names (`hold`) this row guards: a rule about one type may name several
+    /// of its methods.
     ///
     /// `Type::method` matches a path call (`Type::method(..)`) and a method
     /// call whose receiver ends in an identifier or field named the
     /// snake_case of `Type` (`active_game.get()`, `self.active_game.set(..)`).
     /// The method-call half needs no type information, so it relies on that
     /// naming: a receiver stored under another name is not matched.
-    pub callee: &'static str,
+    pub callees: &'static [&'static str],
     /// What may call it, relative to `src/`: an entry ending in `/` allows
     /// every file under that folder, any other entry allows one exact file.
     /// Empty allows no file.
@@ -374,32 +375,34 @@ impl<'ast> Visit<'ast> for CallCollector<'_> {
     }
 }
 
-/// Runs the call-site table: only what a row allows may call its callee.
+/// Runs the call-site table: only what a row allows may call its callees.
 pub fn check_call_site_rows(files: &[SourceFile], rows: &[CallSiteRow]) -> Vec<Violation> {
-    let mut violations = Vec::new();
+    let mut violations: Vec<Violation> = Vec::new();
     for row in rows {
-        violations.extend(scan_row(
-            files,
-            "call site",
-            row.rule,
-            row.scope,
-            None,
-            |file| allowed(&file.path, row.allowed),
-            |file, ast, out| {
-                let mut collector = CallCollector::new(row.callee);
-                collector.visit_file(ast);
-                for line in collector.hits {
-                    let item = format!("call to `{}`", row.callee);
-                    out.push(row_violation(
-                        &file.path,
-                        line,
-                        "call site",
-                        row.rule,
-                        &item,
-                    ));
-                }
-            },
-        ));
+        for callee in row.callees {
+            violations.extend(scan_row(
+                files,
+                "call site",
+                row.rule,
+                row.scope,
+                None,
+                |file| allowed(&file.path, row.allowed),
+                |file, ast, out| {
+                    let mut collector = CallCollector::new(callee);
+                    collector.visit_file(ast);
+                    for line in collector.hits {
+                        let item = format!("call to `{callee}`");
+                        out.push(row_violation(
+                            &file.path,
+                            line,
+                            "call site",
+                            row.rule,
+                            &item,
+                        ));
+                    }
+                },
+            ));
+        }
     }
     violations
 }

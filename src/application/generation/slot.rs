@@ -4,6 +4,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use crate::domain::model::game::GameId;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerationSlot {
     /// No generation active for this game; slot is claimable.
@@ -27,8 +29,8 @@ impl GenerationSlot {
 /// Release a registry slot if the caller still owns it.
 /// A caller that no longer owns its slot is a no-op.
 pub fn release_owned_slot(
-    registry: &Arc<RwLock<HashMap<u64, GenerationSlot>>>,
-    game_id: u64,
+    registry: &Arc<RwLock<HashMap<GameId, GenerationSlot>>>,
+    game_id: GameId,
     generation_id: u64,
 ) {
     let mut registry = registry.write().unwrap_or_else(|p| {
@@ -45,7 +47,7 @@ pub fn release_owned_slot(
         registry.insert(game_id, GenerationSlot::Idle);
     } else {
         tracing::debug!(
-            game_id,
+            game_id = %game_id,
             generation_id,
             "release_owned_slot: registry slot not owned by caller; no-op"
         );

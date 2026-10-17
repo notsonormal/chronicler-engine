@@ -638,8 +638,6 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();
 
-    // The system_default row inserted below inherits the all-allowed birth
-    // default for allowed_modes; v20 must tighten it to ["novel"].
     conn.execute_batch(
         "INSERT INTO settings (id, created_at, updated_at, mode_preset_registry) \
          VALUES (1, 't', 't', '{\"novel\":{\"system_prompt_preset_id\":\"custom_sys\",\"quantifier_prompt_preset_id\":\"custom_quant\",\"impersonate_prompt_preset_id\":\"custom_imp\"},\"interactive_fiction\":{\"system_prompt_preset_id\":\"system_if_default\",\"quantifier_prompt_preset_id\":\"quantifier_default\",\"impersonate_prompt_preset_id\":\"impersonate_default\"}}'); \
@@ -686,7 +684,7 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
 #[test]
 fn test_corrupt_mode_preset_registry_in_db_errors_as_parse() {
     let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool.clone(), 1);
+    let storage = Storage::new_sqlite(pool.clone());
     storage
         .seed_settings(&AppSettings::default())
         .expect("seeding default settings should succeed");

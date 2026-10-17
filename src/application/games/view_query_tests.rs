@@ -10,11 +10,14 @@ use crate::application::games::view_query::GameViewQuery;
 use crate::application::message_service::MessageService;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::agent::Role;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::error::EngineError;
-use crate::test_support::fixtures::{llm_message, TestMap, TestWorld};
+use crate::test_support::fixtures::{active_game_of, llm_message, TestMap, TestWorld};
 use crate::test_support::{make_test_pipeline_with_backends, make_test_recorder};
+
+const NO_GAME: GameId = GameId(0);
 
 fn minimal_state() -> GameState {
     GameState::new("start")
@@ -32,21 +35,24 @@ fn minimal_app_no_game() -> AppState {
     let map_arc = Arc::new(TestMap::single_room("start"));
     let storage = Arc::new(Storage::new_in_memory());
     storage.seed_world(&world_arc, &map_arc).unwrap();
-    let _ = storage.save_snapshot(&GameStateSnapshot::from_game_state(&state));
+    let _ = storage.save_snapshot(NO_GAME, &GameStateSnapshot::from_game_state(&state));
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
     let narrator_recorder = make_test_recorder(Arc::clone(&mock));
     let registry = crate::application::agents::registry::AgentRegistry::default();
     let pipeline =
         make_test_pipeline_with_backends(Arc::clone(&storage), narrator_recorder, registry);
-    let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), pipeline)
+    let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), pipeline, NO_GAME)
         .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
     AppState::from_wired(wired)
 }
 
 #[test]
-fn test_get_current_game_display_name_unknown_when_no_game() {
+fn test_game_display_name_unknown_when_no_game() {
     let app = minimal_app_no_game();
-    let name = app.game_view_query.get_current_game_display_name().unwrap();
+    let name = app
+        .game_view_query
+        .game_display_name(active_game_of(&app))
+        .unwrap();
     assert_eq!(name, "Unknown");
 }
 
@@ -60,7 +66,10 @@ fn test_list_latest_llm_messages_empty() {
 #[test]
 fn test_get_story_log_entries_empty() {
     let app = minimal_app_no_game();
-    let (entries, has_trigger) = app.game_view_query.get_story_log_entries().unwrap();
+    let (entries, has_trigger) = app
+        .game_view_query
+        .get_story_log_entries(active_game_of(&app))
+        .unwrap();
     assert!(entries.is_empty());
     assert!(!has_trigger);
 }
@@ -68,7 +77,9 @@ fn test_get_story_log_entries_empty() {
 #[test]
 fn test_get_current_room_view_succeeds_with_valid_state() {
     let app = minimal_app();
-    let result = app.game_view_query.get_current_room_view();
+    let result = app
+        .game_view_query
+        .get_current_room_view(active_game_of(&app));
     assert!(result.is_ok());
     let (room_name, _image_path) = result.unwrap();
     assert_eq!(room_name, "Room start");
@@ -77,7 +88,10 @@ fn test_get_current_room_view_succeeds_with_valid_state() {
 #[test]
 fn test_get_current_room_view_returns_typed_error_when_game_missing() {
     let app = minimal_app_no_game();
-    let err = app.game_view_query.get_current_room_view().unwrap_err();
+    let err = app
+        .game_view_query
+        .get_current_room_view(active_game_of(&app))
+        .unwrap_err();
     assert!(
         matches!(
             &err,
@@ -90,7 +104,10 @@ fn test_get_current_room_view_returns_typed_error_when_game_missing() {
 #[test]
 fn test_get_npc_headshots_returns_typed_error_when_game_missing() {
     let app = minimal_app_no_game();
-    let err = app.game_view_query.get_npc_headshots(true).unwrap_err();
+    let err = app
+        .game_view_query
+        .get_npc_headshots(active_game_of(&app), true)
+        .unwrap_err();
     assert!(
         matches!(
             &err,
@@ -103,21 +120,30 @@ fn test_get_npc_headshots_returns_typed_error_when_game_missing() {
 #[test]
 fn test_get_npc_headshots_scene_only_empty() {
     let app = minimal_app();
-    let headshots = app.game_view_query.get_npc_headshots(true).unwrap();
+    let headshots = app
+        .game_view_query
+        .get_npc_headshots(active_game_of(&app), true)
+        .unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
 fn test_get_npc_headshots_all_empty() {
     let app = minimal_app();
-    let headshots = app.game_view_query.get_npc_headshots(false).unwrap();
+    let headshots = app
+        .game_view_query
+        .get_npc_headshots(active_game_of(&app), false)
+        .unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
 fn test_get_debug_state_populates_fields() {
     let app = minimal_app_no_game();
-    let debug = app.game_view_query.get_debug_state().unwrap();
+    let debug = app
+        .game_view_query
+        .get_debug_state(active_game_of(&app))
+        .unwrap();
     assert_eq!(debug.narration_history_length, 0);
     assert!(debug.dynamic_rooms.is_empty());
     assert_eq!(debug.dynamic_room_count, 0);
@@ -127,7 +153,9 @@ fn test_get_debug_state_populates_fields() {
 #[test]
 fn test_active_quantifier_prompt_does_not_panic() {
     let app = minimal_app();
-    let prompt = app.game_view_query.active_quantifier_prompt();
+    let prompt = app
+        .game_view_query
+        .active_quantifier_prompt(active_game_of(&app));
     let _ = prompt.len();
 }
 

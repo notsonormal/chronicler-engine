@@ -9,11 +9,16 @@ use crate::application::agents::registry::AgentRegistry;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::message_service::MessageService;
 use crate::application::ports::llm_provider::LlmProvider;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::test_support::fixtures::{TestMap, TestWorld};
-use crate::test_support::{make_test_pipeline_with_backends, make_test_recorder};
+use crate::test_support::{active_game_of, make_test_pipeline_with_backends, make_test_recorder};
+
+/// A Game id with no row: the fixture seeds none, so these tests read and
+/// write by this id and never load a Game record.
+const NO_GAME: GameId = GameId(0);
 
 #[test]
 fn test_heal_stale_resets_generating_status_when_no_active_slot() {
@@ -24,7 +29,7 @@ fn test_heal_stale_resets_generating_status_when_no_active_slot() {
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
 
-    gate.heal_stale(1, &mut state);
+    gate.heal_stale(GameId(1), &mut state);
 
     assert!(
         !state.narrative.input_buffer.status.is_generating(),
@@ -47,7 +52,7 @@ fn test_heal_stale_leaves_generating_status_when_slot_active() {
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
 
     let (_game_id, _generation_id, result) = gate
-        .try_claim(1, &mut state, message_service.as_ref())
+        .try_claim(GameId(1), &mut state, message_service.as_ref())
         .expect("try_claim should succeed");
     assert!(matches!(
         result,
@@ -57,7 +62,7 @@ fn test_heal_stale_leaves_generating_status_when_slot_active() {
     let mut fresh_state = GameState::new("room_1".to_string());
     fresh_state.narrative.input_buffer.status = GenerationStatus::Generating;
     fresh_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-    gate.heal_stale(1, &mut fresh_state);
+    gate.heal_stale(GameId(1), &mut fresh_state);
 
     assert!(
         fresh_state.narrative.input_buffer.status.is_generating(),
@@ -71,7 +76,7 @@ fn test_heal_stale_is_noop_when_status_is_idle() {
     let mut state = GameState::new("room_1".to_string());
     state.narrative.input_buffer.status = GenerationStatus::Idle;
 
-    gate.heal_stale(1, &mut state);
+    gate.heal_stale(GameId(1), &mut state);
 
     assert!(
         !state.narrative.input_buffer.status.is_generating(),
@@ -96,19 +101,19 @@ fn test_reset_generating_status_sets_idle() {
         narrator_recorder,
         AgentRegistry::default(),
     );
-    let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), pipeline)
+    let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), pipeline, NO_GAME)
         .expect("build_test_wired_app should succeed");
     let app = AppState::from_wired(wired);
 
-    let game_id = app.game_catalogue.current_game_id();
+    let game_id = active_game_of(&app);
     let _ = app
         .generation_gate
         .release_generation_slot_for_game(game_id);
-    let result = app.pipeline.reset_persisted_status();
+    let result = app.pipeline.reset_persisted_status(game_id);
     assert!(result.is_ok());
     let persisted = app
         .message_service
-        .load_expecting_valid_state()
+        .load_expecting_valid_state(game_id)
         .expect("the reset snapshot should load");
     assert_eq!(
         persisted.narrative.input_buffer.status,
@@ -126,7 +131,7 @@ fn test_boot_heal_resets_stale_generating_status() {
     let mut state = minimal_state();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-    let _ = storage.save_snapshot(&GameStateSnapshot::from_game_state(&state));
+    let _ = storage.save_snapshot(NO_GAME, &GameStateSnapshot::from_game_state(&state));
 
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
     let narrator_recorder = make_test_recorder(Arc::clone(&mock));
@@ -135,13 +140,13 @@ fn test_boot_heal_resets_stale_generating_status() {
         narrator_recorder,
         AgentRegistry::default(),
     );
-    let wired = crate::test_support::build_test_wired_app(storage, pipeline)
+    let wired = crate::test_support::build_test_wired_app(storage, pipeline, NO_GAME)
         .expect("build_test_wired_app should succeed");
     let app = AppState::from_wired(wired);
 
     let persisted = app
         .message_service
-        .load_expecting_valid_state()
+        .load_expecting_valid_state(NO_GAME)
         .expect("the healed snapshot should load");
     assert_eq!(
         persisted.narrative.input_buffer.status,

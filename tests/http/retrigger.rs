@@ -11,7 +11,7 @@ use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder,
+    active_game_of, make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder,
     TestStoredTriggerContext,
 };
 
@@ -34,14 +34,20 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
         .pipeline(pipeline)
         .build_with_state();
 
-    let messages_before = state.message_service.load_messages().unwrap();
+    let messages_before = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let n = messages_before.len();
 
     let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "retrigger should complete");
 
-    let messages_after = state.message_service.load_messages().unwrap();
+    let messages_after = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     assert_eq!(
         messages_after.len(),
         n + 1,
@@ -83,7 +89,7 @@ async fn test_retrigger_does_not_rerun_quantifier_http() {
 
     let room_before = state
         .game_view_query
-        .get_debug_state()
+        .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed")
         .current_room_id;
 
@@ -93,7 +99,7 @@ async fn test_retrigger_does_not_rerun_quantifier_http() {
 
     let room_after = state
         .game_view_query
-        .get_debug_state()
+        .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed")
         .current_room_id;
     assert_eq!(
@@ -168,11 +174,11 @@ async fn test_retrigger_last_message_not_narration_returns_400_http() {
 #[tokio::test]
 async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
     let storage = Arc::new(Storage::new_in_memory());
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
         .log("Main narration", MessageType::Narration)
         .storage(Arc::clone(&storage))
-        .build();
+        .build_with_state();
 
     let event_msg = Message::new(
         "Event narration",
@@ -180,7 +186,9 @@ async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
         None,
         Some("Event".to_string()),
     );
-    let id = storage.insert_message(&event_msg).unwrap();
+    let id = storage
+        .insert_message(active_game_of(&state), &event_msg)
+        .unwrap();
     if let Some(swipe) = event_msg.swipes.first() {
         let _ = storage.insert_swipe(id, swipe, 0);
     }
@@ -227,7 +235,10 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
         status.contains("Trigger narration failed"),
         "error should mention 'Trigger narration failed', got: {status}"
     );
-    let messages_after = state.message_service.load_messages().unwrap();
+    let messages_after = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     // The failed continuation is not persisted, and neither is its engine
     // error: the status line reports that failure.
     let new_event_narrations = messages_after
@@ -268,13 +279,12 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
 // [docs/specs/retrigger.md] SCENARIO: 14.6
 #[tokio::test]
 async fn test_retrigger_no_game_context_returns_400_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    // No Game in storage and no active-Game pointer: the `CurrentGame`
+    // extractor answers the 400 before the handler runs.
     let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
+        .storage(Arc::new(Storage::new_in_memory()))
+        .skip_seeding(true)
         .build();
-
-    let game_id = storage.current_game_id();
-    storage.delete_game(game_id).unwrap();
 
     let req = axum::http::Request::builder()
         .uri("/retrigger")
@@ -300,8 +310,8 @@ async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
         .log("Main narration", MessageType::Narration)
         .build_with_state();
 
-    let game_id = state.game_catalogue.current_game_id();
-    let mut game_state = state.message_service.load_or_fresh();
+    let game_id = active_game_of(&state);
+    let mut game_state = state.message_service.load_or_fresh(active_game_of(&state));
     let (_, _, claim) = state
         .generation_gate
         .try_claim(game_id, &mut game_state, state.message_service.as_ref())

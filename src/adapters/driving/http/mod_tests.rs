@@ -73,6 +73,7 @@ fn test_app_state_struct_fields() {
     let wired = crate::bootstrap::wiring::build_app_graph_for_tests(
         Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
         None,
+        None,
     )
     .expect("build_app_graph_for_tests should succeed");
 

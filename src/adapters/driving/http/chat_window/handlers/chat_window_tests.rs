@@ -1,9 +1,11 @@
 //! Unit tests for the chat window HTTP handlers.
 use axum::{http::StatusCode, response::IntoResponse};
 
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::chat_window::handlers::{
     retrigger_handler, retry_handler, switch_swipe_handler,
 };
+use crate::test_support::active_game_of;
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
@@ -11,7 +13,11 @@ async fn test_retry_handler_returns_503_on_shutdown() {
     let state = TestAppBuilder::default_test().build_service();
     state.shutdown_token.cancel();
 
-    let result = retry_handler(axum::extract::State(state)).await;
+    let result = retry_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+    )
+    .await;
     let status = match result {
         Ok(resp) => resp.status(),
         Err(e) => e.into_response().status(),
@@ -28,7 +34,11 @@ async fn test_retrigger_handler_returns_503_on_shutdown() {
     let state = TestAppBuilder::default_test().build_service();
     state.shutdown_token.cancel();
 
-    let result = retrigger_handler(axum::extract::State(state)).await;
+    let result = retrigger_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+    )
+    .await;
     let status = match result {
         Ok(resp) => resp.status(),
         Err(e) => e.into_response().status(),
@@ -44,7 +54,11 @@ async fn test_retrigger_handler_returns_503_on_shutdown() {
 async fn test_retry_handler_returns_400_when_no_input() {
     let state = TestAppBuilder::default_test().build_service();
 
-    let result = retry_handler(axum::extract::State(state)).await;
+    let result = retry_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+    )
+    .await;
     let status = match result {
         Ok(resp) => resp.status(),
         Err(e) => e.into_response().status(),
@@ -60,7 +74,11 @@ async fn test_retry_handler_returns_400_when_no_input() {
 async fn test_retrigger_handler_returns_400_when_no_trigger_context() {
     let state = TestAppBuilder::default_test().build_service();
 
-    let result = retrigger_handler(axum::extract::State(state)).await;
+    let result = retrigger_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+    )
+    .await;
     let status = match result {
         Ok(resp) => resp.status(),
         Err(e) => e.into_response().status(),
@@ -77,7 +95,8 @@ async fn test_switch_swipe_handler() {
     let state = TestAppBuilder::default_test().build_service();
 
     let result = switch_swipe_handler(
-        axum::extract::State(state),
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
         axum::extract::Path((0u64, 0usize)),
     )
     .await;

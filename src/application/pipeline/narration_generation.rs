@@ -154,11 +154,14 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
                 self.run
                     .pipeline
                     .storage
-                    .active_impersonate_preset_id(&settings),
+                    .active_impersonate_preset_id(self.run.started_for, &settings),
                 PresetKind::Impersonate,
             ),
             None => (
-                self.run.pipeline.storage.active_system_preset_id(&settings),
+                self.run
+                    .pipeline
+                    .storage
+                    .active_system_preset_id(self.run.started_for, &settings),
                 PresetKind::System,
             ),
         };

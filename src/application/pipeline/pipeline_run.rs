@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::{GameState, TriggerMatch};
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
@@ -27,23 +28,23 @@ use super::action_pipeline::core::ActionPipeline;
 
 pub(crate) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
-    pub(super) started_for: u64,
+    pub(super) started_for: GameId,
 }
 
 impl<'a> PipelineRun<'a> {
-    pub(super) fn new(pipeline: &'a ActionPipeline, started_for: u64) -> Self {
+    pub(super) fn new(pipeline: &'a ActionPipeline, started_for: GameId) -> Self {
         Self {
             pipeline,
             started_for,
         }
     }
 
-    pub(super) fn check_game_unchanged(&self, started_for: u64) -> Result<(), PhaseError> {
-        let current = self.pipeline.storage.current_game_id();
-        if current != started_for {
+    pub(super) fn check_game_unchanged(&self, started_for: GameId) -> Result<(), PhaseError> {
+        let current = self.pipeline.game_catalogue.active_game_id();
+        if current != Some(started_for) {
             tracing::info!(
-                started = started_for,
-                current = current,
+                started = %started_for,
+                current = ?current,
                 "Pipeline aborting: game changed — discarding in-flight generation"
             );
             return Err(PhaseError::Cancelled);
@@ -52,7 +53,11 @@ impl<'a> PipelineRun<'a> {
     }
 
     pub(super) fn persist(&self, state: &GameState) {
-        if let Err(e) = self.pipeline.message_service.save_state(state) {
+        if let Err(e) = self
+            .pipeline
+            .message_service
+            .save_state(self.started_for, state)
+        {
             tracing::error!("Failed to persist state: {e}");
         }
     }
@@ -65,7 +70,7 @@ impl<'a> PipelineRun<'a> {
         if let Err(source) = self
             .pipeline
             .message_service
-            .save_message_and_snapshot(state)
+            .save_message_and_snapshot(self.started_for, state)
         {
             tracing::error!("Failed to save {label}: {source}");
             state.narrative.input_buffer.status =
@@ -149,6 +154,7 @@ impl<'a> PipelineRun<'a> {
         self.persist_snapshot_or_err(state, "pre-quantifier phase update")?;
 
         let mut quantifier_result = self.pipeline.run_post_generation_agents(
+            self.started_for,
             state,
             input,
             narration_text,
@@ -180,7 +186,7 @@ impl<'a> PipelineRun<'a> {
         if let Err(e) = self
             .pipeline
             .message_service
-            .save_message_and_snapshot(state)
+            .save_message_and_snapshot(self.started_for, state)
         {
             tracing::warn!("Failed to save post-quantifier metadata: {e}");
         }
@@ -271,6 +277,7 @@ impl<'a> PipelineRun<'a> {
             .map(|n| n.id.clone())
             .collect();
         let post_trigger_result = self.pipeline.run_post_generation_agents(
+            self.started_for,
             state,
             player_input,
             continuation_text,
@@ -330,7 +337,9 @@ impl<'a> PipelineRun<'a> {
 
         let preset_id = {
             let settings = self.pipeline.storage.get_settings().ok()?;
-            self.pipeline.storage.active_system_preset_id(&settings)
+            self.pipeline
+                .storage
+                .active_system_preset_id(self.started_for, &settings)
         };
         let (preset, response_length) = self
             .load_preset_and_response_length(&preset_id, PresetKind::System)
@@ -379,7 +388,7 @@ impl<'a> PipelineRun<'a> {
         &self,
         world: &WorldCard,
     ) -> (NarrativePerspective, NarrativeTense) {
-        match self.pipeline.storage.get_game(self.started_for) {
+        match self.pipeline.storage.get_game(self.started_for.0) {
             Ok(Some(game)) => (game.narrative_perspective, game.narrative_tense),
             _ => {
                 tracing::warn!("game row unreadable; falling back to world posture");
@@ -389,7 +398,7 @@ impl<'a> PipelineRun<'a> {
     }
 
     pub(super) fn resolve_options_always_on(&self, world: &WorldCard) -> bool {
-        match self.pipeline.storage.get_game(self.started_for) {
+        match self.pipeline.storage.get_game(self.started_for.0) {
             Ok(Some(game)) => game.options_always_on,
             _ => {
                 tracing::warn!("game row unreadable; falling back to world options toggle");
@@ -478,7 +487,10 @@ impl<'a> PipelineRun<'a> {
 
     pub(super) fn handle_cancellation(&self) -> PhaseError {
         tracing::warn!("Pipeline cancelled — aborting remaining stages");
-        let mut state = self.pipeline.message_service.load_or_fresh();
+        let mut state = self
+            .pipeline
+            .message_service
+            .load_or_fresh(self.started_for);
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();
         self.persist(&state);

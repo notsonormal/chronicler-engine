@@ -1,5 +1,6 @@
 use crate::bootstrap::init_game::resolve_game_id;
 use crate::bootstrap::run::{ensure_presets, find_latest_game_for_world, list_game_names_for_world};
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::adapters::driven::storage::Storage;
@@ -23,13 +24,13 @@ fn resolve_game_id_auto_creates_with_persona() {
         &crate::domain::model::settings::AppSettings::default(),
     )
     .unwrap();
-    assert!(game_id > 0);
+    assert!(game_id.0 > 0);
 
     let (world_key, persona_key, persona_name): (String, String, String) = db_pool
         .conn()
         .query_row(
             "SELECT world_key, persona_key, persona_name FROM games WHERE id = ?1",
-            rusqlite::params![game_id as i64],
+            rusqlite::params![game_id.0 as i64],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .unwrap();
@@ -79,7 +80,7 @@ fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
         &crate::domain::model::settings::AppSettings::default(),
     )
     .unwrap();
-    assert!(game_id > 0);
+    assert!(game_id.0 > 0);
 
     let (narrator_mode, system_preset_id, quantifier_preset_id, impersonate_preset_id): (
         String,
@@ -92,7 +93,7 @@ fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
             "SELECT narrator_mode, \
              active_system_prompt_preset_id, active_quantifier_prompt_preset_id, \
              active_impersonate_prompt_preset_id FROM games WHERE id = ?1",
-            rusqlite::params![game_id as i64],
+            rusqlite::params![game_id.0 as i64],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .unwrap();
@@ -115,7 +116,7 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
             rusqlite::params![&older],
         )
         .unwrap();
-        conn.last_insert_rowid() as u64
+        GameId(conn.last_insert_rowid() as u64)
     };
 
     let game_b_id = {
@@ -125,14 +126,14 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
             rusqlite::params![&newer],
         )
         .unwrap();
-        conn.last_insert_rowid() as u64
+        GameId(conn.last_insert_rowid() as u64)
     };
 
     {
         let conn = db_pool.conn();
         conn.execute(
             "INSERT INTO messages (game_id, message_type, timestamp, active_swipe_index, is_deleted) VALUES (?1, 'Input', ?2, 0, 0)",
-            rusqlite::params![game_a_id as i64, &newer],
+            rusqlite::params![game_a_id.0 as i64, &newer],
         )
         .unwrap();
         let msg_id = conn.last_insert_rowid();
@@ -146,10 +147,10 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
     let result = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
     assert!(result.is_some());
     let (id, name) = result.unwrap();
-    assert_eq!(id, game_a_id);
+    assert_eq!(id, game_a_id.0);
     assert_eq!(name, "GameA");
 
-    assert_ne!(id, game_b_id);
+    assert_ne!(id, game_b_id.0);
 }
 
 #[test]
@@ -175,13 +176,13 @@ fn test_find_latest_game_for_world_fallback_to_updated_at() {
             rusqlite::params![&newer],
         )
         .unwrap();
-        conn.last_insert_rowid() as u64
+        GameId(conn.last_insert_rowid() as u64)
     };
 
     let result = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
     assert!(result.is_some());
     let (id, _name) = result.unwrap();
-    assert_eq!(id, game_b_id);
+    assert_eq!(id, game_b_id.0);
 }
 
 #[test]
@@ -203,10 +204,10 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
             [],
         )
         .unwrap();
-        conn.last_insert_rowid() as u64
+        GameId(conn.last_insert_rowid() as u64)
     };
 
-    let storage = Storage::new_sqlite(db_pool.clone(), game_id);
+    let storage = Storage::new_sqlite(db_pool.clone());
 
     let world_card = crate::domain::model::world::WorldCard {
         key: "test".to_string(),
@@ -252,28 +253,28 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
         );
-    let snapshot_id = storage.save_snapshot(&snapshot).unwrap();
+    let snapshot_id = storage.save_snapshot(game_id, &snapshot).unwrap();
     if let Some(msg) = state.narrative.history.last_mut() {
         msg.set_snapshot_id(Some(snapshot_id));
-        let id = storage.insert_message(&*msg).unwrap();
+        let id = storage.insert_message(game_id, &*msg).unwrap();
         msg.id = id;
     }
 
-    let initial_messages = storage.load_message_rows().unwrap();
+    let initial_messages = storage.load_message_rows(game_id).unwrap();
     assert_eq!(initial_messages.len(), 1);
 
     let found = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
     assert!(found.is_some());
     let (found_id, _) = found.unwrap();
-    assert_eq!(found_id, game_id);
+    assert_eq!(found_id, game_id.0);
 
-    let loaded = storage.load_latest_snapshot().unwrap();
+    let loaded = storage.load_latest_snapshot(game_id).unwrap();
     assert!(
         loaded.is_some(),
         "Existing snapshot should be found on restart"
     );
 
-    let msgs_after_restart = storage.load_message_rows().unwrap();
+    let msgs_after_restart = storage.load_message_rows(game_id).unwrap();
     assert_eq!(
         msgs_after_restart.len(),
         1,
@@ -365,7 +366,7 @@ fn test_list_game_names_for_world_error_handling() {
 fn test_ensure_presets_empty_data_dir() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let result = ensure_presets(&storage, temp_data.path());
     assert!(result.is_ok());
 }
@@ -373,7 +374,7 @@ fn test_ensure_presets_empty_data_dir() {
 fn test_ensure_presets_creates_system_preset() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     let preset_content = serde_json::json!({
@@ -402,7 +403,7 @@ fn test_ensure_presets_creates_system_preset() {
 fn test_ensure_presets_creates_quantifier_preset() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let quantifier_dir = temp_data.path().join("prompt_presets").join("quantifier");
     std::fs::create_dir_all(&quantifier_dir).unwrap();
     let preset_content = serde_json::json!({
@@ -425,7 +426,7 @@ fn test_ensure_presets_creates_quantifier_preset() {
 fn test_ensure_presets_skips_existing_preset_with_content() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     let preset_content = serde_json::json!({
@@ -460,7 +461,7 @@ fn test_ensure_presets_skips_existing_preset_with_content() {
 fn test_ensure_presets_updates_empty_preset() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     let preset_content = serde_json::json!({
@@ -495,7 +496,7 @@ fn test_ensure_presets_updates_empty_preset() {
 fn test_ensure_presets_ignores_non_json_files() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     std::fs::write(system_dir.join("readme.txt"), "This is not a preset").unwrap();
@@ -508,7 +509,7 @@ fn test_ensure_presets_ignores_non_json_files() {
 fn test_ensure_presets_handles_invalid_json() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     std::fs::write(system_dir.join("invalid.json"), "not valid json {").unwrap();
@@ -525,7 +526,7 @@ fn test_ensure_presets_handles_invalid_json() {
 fn test_ensure_presets_uses_default_id_for_missing_id() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     let preset_content = serde_json::json!({
@@ -550,7 +551,7 @@ fn test_ensure_presets_uses_default_id_for_missing_id() {
 fn test_ensure_presets_all_fields_mapped() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     let preset_content = serde_json::json!({
@@ -581,7 +582,7 @@ fn test_ensure_presets_all_fields_mapped() {
 fn test_ensure_presets_both_types() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     std::fs::write(
@@ -618,7 +619,7 @@ fn test_ensure_presets_both_types() {
 fn test_ensure_presets_idempotent() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = Storage::new_sqlite(db_pool.clone());
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     std::fs::write(
@@ -644,7 +645,7 @@ fn test_ensure_presets_applies_allowed_modes_at_insert() {
 
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool, 1);
+    let storage = Storage::new_sqlite(db_pool);
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
 
@@ -692,7 +693,7 @@ fn test_ensure_presets_invalid_allowed_modes_falls_back_to_all() {
 
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool, 1);
+    let storage = Storage::new_sqlite(db_pool);
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
 
@@ -725,7 +726,7 @@ fn test_ensure_presets_refresh_preserves_existing_flags() {
 
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let storage = Storage::new_sqlite(db_pool, 1);
+    let storage = Storage::new_sqlite(db_pool);
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
 
@@ -742,7 +743,6 @@ fn test_ensure_presets_refresh_preserves_existing_flags() {
     )
     .unwrap();
 
-    // Existing content-free row with user-owned novel-only flags.
     let existing = PromptPreset {
         id: "flagged_preset".to_string(),
         name: "Empty".to_string(),

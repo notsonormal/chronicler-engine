@@ -42,9 +42,27 @@ fn run_cases<Row>(
     }
 }
 
-/// The banned-name cases: a `static` item, a prefix in each name position, an
-/// unused name, and a dead path.
 pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
+    // Case for the rule-1 row; it carries the design rule rather than `FIXTURE_RULE`,
+    // because a landed row stays provable only by a case that mirrors it.
+    WalkerCase {
+        row: BannedNameRow {
+            rule: 1,
+            scope: "adapters/driven/storage/",
+            banned: &[BannedName::StaticItem, BannedName::NamePrefix("Atomic")],
+        },
+        files: &[
+            (
+                "adapters/driven/storage/core.rs",
+                "static GAME_ID: u64 = 0;\n",
+            ),
+            (
+                "adapters/driven/storage/core.rs",
+                "pub struct Storage {\n    id: AtomicU64,\n}\n",
+            ),
+        ],
+        expected: 2,
+    },
     WalkerCase {
         row: BannedNameRow {
             rule: FIXTURE_RULE,
@@ -119,14 +137,37 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
     },
 ];
 
-/// The call-site cases: an allowed file, an allowed folder, a disallowed file,
-/// both method-call shapes, a receiver of another name, a bare name, and a dead path.
 pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
+    // Case for the rule-2 row; it carries the design rule rather than `FIXTURE_RULE`,
+    // because a landed row stays provable only by a case that mirrors it.
+    WalkerCase {
+        row: CallSiteRow {
+            rule: 2,
+            scope: "",
+            callees: &["ActiveGame::get", "ActiveGame::set"],
+            allowed: &["application/games/catalogue.rs"],
+        },
+        files: &[
+            (
+                "application/games/catalogue.rs",
+                "fn move_it(&self, game: GameId) {\n    self.active_game.set(game);\n}\n",
+            ),
+            (
+                "application/pipeline/job.rs",
+                "fn read(&self) -> Option<GameId> {\n    self.active_game.get()\n}\n",
+            ),
+            (
+                "application/pipeline/job.rs",
+                "fn move_it(&self, game: GameId) {\n    self.active_game.set(game);\n}\n",
+            ),
+        ],
+        expected: 2,
+    },
     WalkerCase {
         row: CallSiteRow {
             rule: FIXTURE_RULE,
             scope: "application/",
-            callee: "ActiveGame::get",
+            callees: &["ActiveGame::get"],
             allowed: &["application/games/catalogue.rs"],
         },
         files: &[(
@@ -139,7 +180,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         row: CallSiteRow {
             rule: FIXTURE_RULE,
             scope: "application/",
-            callee: "ActiveGame::get",
+            callees: &["ActiveGame::get"],
             allowed: &["application/games/catalogue.rs"],
         },
         files: &[(
@@ -152,7 +193,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         row: CallSiteRow {
             rule: FIXTURE_RULE,
             scope: "application/",
-            callee: "ActiveGame::get",
+            callees: &["ActiveGame::get"],
             allowed: &["application/games/"],
         },
         files: &[(
@@ -165,7 +206,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         row: CallSiteRow {
             rule: FIXTURE_RULE,
             scope: "application/",
-            callee: "ActiveGame::get",
+            callees: &["ActiveGame::get"],
             allowed: &[],
         },
         files: &[(
@@ -178,7 +219,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         row: CallSiteRow {
             rule: FIXTURE_RULE,
             scope: "application/",
-            callee: "Narrator::narrate",
+            callees: &["Narrator::narrate"],
             allowed: &[],
         },
         files: &[(
@@ -191,7 +232,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         row: CallSiteRow {
             rule: FIXTURE_RULE,
             scope: "application/",
-            callee: "ActiveGame::get",
+            callees: &["ActiveGame::get"],
             allowed: &[],
         },
         files: &[(
@@ -204,7 +245,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         row: CallSiteRow {
             rule: FIXTURE_RULE,
             scope: "application/",
-            callee: "hold",
+            callees: &["hold"],
             allowed: &[],
         },
         files: &[(
@@ -217,7 +258,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         row: CallSiteRow {
             rule: FIXTURE_RULE,
             scope: "application/",
-            callee: "hold",
+            callees: &["hold"],
             allowed: &[],
         },
         files: &[("adapters/driving/http/action.rs", "pub fn run() {}\n")],
@@ -225,7 +266,6 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
     },
 ];
 
-/// The type-check cases: a field, a parameter, a position the row does not cover, and a dead path.
 pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
     WalkerCase {
         row: TypeCheckRow {
@@ -278,7 +318,6 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
     },
 ];
 
-/// The call-count cases: two calls, one call, a nested closure, and a dead path.
 pub const CALL_COUNT_CASES: &[WalkerCase<CallCountRow>] = &[
     WalkerCase {
         row: CallCountRow {

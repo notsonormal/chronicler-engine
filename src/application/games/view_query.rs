@@ -7,6 +7,7 @@ use crate::adapters::driven::storage::llm_messages::LLM_MESSAGE_RETENTION_LIMIT;
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
 use crate::domain::model::agent::Role;
+use crate::domain::model::game::GameId;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::application::message_service::MessageService;
 use crate::domain::model::state::message_types::MessageEntry;
@@ -35,11 +36,13 @@ impl GameViewQuery {
         }
     }
 
-    pub fn get_current_room_view(&self) -> Result<(String, Option<String>), ApplicationError> {
-        let game_state = self.message_service.load_or_fresh();
+    pub fn get_current_room_view(
+        &self,
+        game_id: GameId,
+    ) -> Result<(String, Option<String>), ApplicationError> {
+        let game_state = self.message_service.load_or_fresh(game_id);
         let storage = &self.storage;
-        let game_id = storage.current_game_id();
-        let game = storage.require_game(game_id)?;
+        let game = storage.require_game(game_id.0)?;
         let world_with_map = storage.require_world(&game.world_key)?;
         let world = world_with_map.world_card;
         let map = world_with_map.map;
@@ -67,12 +70,12 @@ impl GameViewQuery {
 
     pub fn get_npc_headshots(
         &self,
+        game_id: GameId,
         scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
-        let game_state = self.message_service.load_or_fresh();
+        let game_state = self.message_service.load_or_fresh(game_id);
         let storage = &self.storage;
-        let game_id = storage.current_game_id();
-        let game = storage.require_game(game_id)?;
+        let game = storage.require_game(game_id.0)?;
         let world_with_map = storage.require_world(&game.world_key)?;
         let npcs_list = storage.list_characters(world_with_map.world_id)?;
         let npcs: std::collections::HashMap<String, _> = {
@@ -107,8 +110,8 @@ impl GameViewQuery {
         Ok(npc_data)
     }
 
-    pub fn get_debug_state(&self) -> Result<DebugStateView, ApplicationError> {
-        let game_state = self.message_service.load_or_fresh();
+    pub fn get_debug_state(&self, game_id: GameId) -> Result<DebugStateView, ApplicationError> {
+        let game_state = self.message_service.load_or_fresh(game_id);
 
         let history_tail: Vec<MessageEntry> = game_state
             .narrative
@@ -155,24 +158,26 @@ impl GameViewQuery {
         })
     }
 
-    pub fn get_story_log_entries(&self) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-        let game_state = self.message_service.load_or_fresh();
+    pub fn get_story_log_entries(
+        &self,
+        game_id: GameId,
+    ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
+        let game_state = self.message_service.load_or_fresh(game_id);
         let entries: Vec<_> = game_state.narrative.history().to_vec();
         let has_last_trigger = game_state.narrative.last_trigger.is_some();
         Ok((entries, has_last_trigger))
     }
 
-    /// The offered option set for the input-surface dock. The set is current
-    /// game state — it survives a page reload and clears at every turn end
-    /// (the pipeline rewrites it, never the UI).
-    pub fn get_current_options(&self) -> Result<Vec<String>, ApplicationError> {
-        let game_state = self.message_service.load_or_fresh();
+    /// Current game state, not UI state: the set survives a reload, and the
+    /// pipeline rewrites it.
+    pub fn get_current_options(&self, game_id: GameId) -> Result<Vec<String>, ApplicationError> {
+        let game_state = self.message_service.load_or_fresh(game_id);
         Ok(game_state.narrative.current_options.clone())
     }
 
-    pub fn get_current_game_display_name(&self) -> Result<String, ApplicationError> {
+    pub fn game_display_name(&self, game_id: GameId) -> Result<String, ApplicationError> {
         let storage = &self.storage;
-        match storage.get_game(storage.current_game_id())? {
+        match storage.get_game(game_id.0)? {
             Some(g) => Ok(g.display_name),
             None => Ok("Unknown".to_string()),
         }
@@ -210,11 +215,11 @@ impl GameViewQuery {
         Ok(health)
     }
 
-    pub fn active_quantifier_prompt(&self) -> String {
+    pub fn active_quantifier_prompt(&self, game_id: GameId) -> String {
         let preset_id = self
             .storage
             .get_settings()
-            .map(|s| self.storage.active_quantifier_preset_id(&s))
+            .map(|s| self.storage.active_quantifier_preset_id(game_id, &s))
             .unwrap_or_default();
         match self.storage.get_preset(&preset_id) {
             Ok(Some(preset)) => preset.assemble_text(&[], None, None),

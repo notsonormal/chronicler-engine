@@ -8,6 +8,18 @@ use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::default_display_name;
 
+/// The id of a Game row: what the active-Game pointer, the request's
+/// `CurrentGame` and every game-scoped storage read and write carry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct GameId(pub u64);
+
+impl std::fmt::Display for GameId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Game {
     pub id: u64,

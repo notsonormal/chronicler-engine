@@ -136,6 +136,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `mod.rs` — Settings askama templates.
             - `settings.rs` — Settings templates
         - **utils/**
+          - `current_game.rs` — `CurrentGame` — the request's Game, read once per request.
           - `error.rs` — Error rendering helpers for HTTP fragments.
           - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
           - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
@@ -189,6 +190,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `dto.rs` — DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
       - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint.
     - **games/**
+      - `active.rs` — ActiveGame — the active-Game pointer of the server process.
       - `catalogue.rs` — GameCatalogue — game-lifecycle storage orchestration.
       - `mod.rs` — Game lifecycle orchestration and read-side queries.
       - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.

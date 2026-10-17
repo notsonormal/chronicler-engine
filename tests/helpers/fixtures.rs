@@ -7,5 +7,5 @@ use chronicler_engine::adapters::driven::storage::db::DbPool;
 pub fn create_test_storage(game_id: u64) -> Storage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
     chronicler_engine::test_support::seed_default_game_row(&pool, game_id).unwrap();
-    Storage::new_sqlite(pool, game_id)
+    Storage::new_sqlite(pool)
 }

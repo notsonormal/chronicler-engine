@@ -8,6 +8,7 @@ use axum::Router;
 use crate::application::errors::ProcessActionResult;
 use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
+use crate::domain::model::game::GameId;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -29,6 +30,7 @@ pub struct TestAppBuilder {
     pipeline: Option<ActionPipeline>,
     skip_seeding: bool,
     claim_generation_slot: bool,
+    active_game: Option<GameId>,
 }
 
 impl TestAppBuilder {
@@ -45,6 +47,7 @@ impl TestAppBuilder {
             pipeline: None,
             skip_seeding: false,
             claim_generation_slot: false,
+            active_game: None,
         }
     }
 
@@ -108,24 +111,29 @@ impl TestAppBuilder {
         self
     }
 
+    /// The Game the built app points at. Only needed with
+    /// `skip_seeding(true)`: the builder cannot see the Game a test seeds
+    /// itself.
+    pub fn active_game(mut self, game_id: GameId) -> Self {
+        self.active_game = Some(game_id);
+        self
+    }
+
     pub fn build(self) -> Router {
         let (app_state, _storage) = self.build_service_with_storage();
         build_router(app_state)
     }
 
-    /// Build returning `(Router, AppState)`.
     pub fn build_with_state(self) -> (Router, AppState) {
         let (app_state, _storage) = self.build_service_with_storage();
         (build_router(app_state.clone()), app_state)
     }
 
-    /// Build returning the `AppState`.
     pub fn build_service(self) -> AppState {
         let (app_state, _storage) = self.build_service_with_storage();
         app_state
     }
 
-    /// Build returning `(AppState, Arc<Storage>)`.
     /// The returned storage is the instance the wired pipeline holds.
     pub fn build_service_with_storage(mut self) -> (AppState, Arc<Storage>) {
         let test_data = self.test_data.expect(
@@ -139,9 +147,11 @@ impl TestAppBuilder {
 
         crate::test_support::seed_default_preset(&storage);
 
-        if !self.skip_seeding {
-            let _ = test_data.seed_into(&storage);
-        }
+        let seeded_game = if self.skip_seeding {
+            None
+        } else {
+            Some(test_data.seed_into(&storage))
+        };
 
         let starting_room = test_data
             .map
@@ -175,11 +185,11 @@ impl TestAppBuilder {
             state.add_message(text, log_type);
         }
 
-        if !self.skip_seeding {
+        if let Some(game_id) = seeded_game {
             let snapshot = GameStateSnapshot::from_game_state(&state);
-            let _ = storage.save_snapshot(&snapshot);
+            let _ = storage.save_snapshot(game_id, &snapshot);
             for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-                let _ = storage.insert_message(&msg);
+                let _ = storage.insert_message(game_id, &msg);
             }
         }
 
@@ -187,7 +197,10 @@ impl TestAppBuilder {
         let _ = storage.save_settings(&self.settings);
         let pipeline_override = self.pipeline.take();
 
-        let wired = build_app_graph_for_tests(Arc::clone(&storage), pipeline_override)
+        let game_id = self.active_game.or(seeded_game);
+        // Point the app before wiring, so the boot heal runs against the Game
+        // the test seeded.
+        let wired = build_app_graph_for_tests(Arc::clone(&storage), pipeline_override, game_id)
             .expect("build_app_graph_for_tests should succeed");
 
         if self.claim_generation_slot {
@@ -195,8 +208,8 @@ impl TestAppBuilder {
             // persisted `Generating`; a later `generation_status` overrides
             // that record, which is how a test scripts a busy slot against a
             // stale persisted status.
-            let game_id = wired.storage.current_game_id();
-            let mut claim_state = wired.message_service.load_or_fresh();
+            let game_id = game_id.expect("test setup: claim_generation_slot needs an active game");
+            let mut claim_state = wired.message_service.load_or_fresh(game_id);
             let claim =
                 wired
                     .generation_gate
@@ -207,11 +220,11 @@ impl TestAppBuilder {
             );
         }
 
-        if let Some((status, phase)) = self.generation.clone() {
-            let mut state = wired.message_service.load_or_fresh();
+        if let (Some(game_id), Some((status, phase))) = (game_id, self.generation.clone()) {
+            let mut state = wired.message_service.load_or_fresh(game_id);
             state.narrative.input_buffer.status = status;
             state.narrative.input_buffer.phase = phase;
-            let _ = wired.message_service.save_state(&state);
+            let _ = wired.message_service.save_state(game_id, &state);
         }
 
         (AppState::from_wired(wired), storage)

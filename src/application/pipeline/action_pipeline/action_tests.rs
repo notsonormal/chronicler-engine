@@ -3,9 +3,27 @@
 use std::sync::Arc;
 use std::sync::Barrier;
 
+/// The app plus a second, real Game, for the flippers in `retry_tests` and
+/// `retrigger_tests`. The app is left on the initial Game, so the work under
+/// test starts on that Game.
+pub(super) fn app_with_second_game(
+    app: &crate::adapters::driving::http::AppState,
+) -> (GameId, GameId) {
+    let initial_game_id = active_game_of(app);
+    let other_game_id = GameId(
+        app.game_catalogue
+            .create_game("test", "test_player")
+            .expect("create_game should succeed"),
+    );
+    app.game_catalogue
+        .switch_game(initial_game_id.0)
+        .expect("the initial Game row exists");
+    (initial_game_id, other_game_id)
+}
+
 pub(super) async fn wait_for_gate_idle(
     gate: &crate::application::generation::gate::GenerationGate,
-    game_id: u64,
+    game_id: GameId,
 ) {
     use std::time::{Duration, Instant};
     let started = Instant::now();
@@ -23,13 +41,14 @@ use crate::application::agents::Agent;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
 use crate::domain::model::action::Action;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::test_support::{
-    make_test_pipeline_app as make_test_app,
+    active_game_of, make_test_pipeline_app as make_test_app,
     make_test_pipeline_app_with_storage as make_test_app_with_storage,
     make_test_pipeline_with_backends, make_test_pipeline_with_mock_quantifier, make_test_recorder,
     TestAppBuilder, TestDataBuilder,
@@ -41,20 +60,25 @@ fn test_execute_action_clears_last_trigger() {
 
     let app = make_test_app();
 
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.narrative.last_trigger = Some(TestStoredTriggerContext::for_npc(
         "npc_1",
         "Old",
         "The old trigger fires.",
     ));
     app.message_service
-        .save_state(&state)
+        .save_state(active_game_of(&app), &state)
         .expect("save_state should succeed");
 
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared by execute_action"
@@ -84,17 +108,22 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
 
     let app_clone = app.clone();
     let message_service = Arc::clone(&app.message_service);
+    let game_id = active_game_of(&app);
     let handle = thread::spawn(move || {
-        app_clone
-            .pipeline
-            .execute_action_with_inputs("look around".to_string(), false, None, None);
+        app_clone.pipeline.execute_action_with_inputs(
+            game_id,
+            "look around".to_string(),
+            false,
+            None,
+            None,
+        );
     });
 
     let start = std::time::Instant::now();
     let mut narration_found = false;
     while start.elapsed() < Duration::from_millis(400) {
         if message_service
-            .load_messages()
+            .load_messages(game_id)
             .map(|msgs| {
                 msgs.iter()
                     .any(|m| m.message_type == MessageType::Narration)
@@ -113,13 +142,13 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
 
     handle.join().expect("Action thread should complete");
 
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Should complete after quantifier finishes"
     );
     let final_narration_count = message_service
-        .load_messages()
+        .load_messages(active_game_of(&app))
         .unwrap()
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -143,9 +172,14 @@ fn test_execute_action_completes_and_persists_state() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
-    let final_state = app.message_service.load_or_fresh();
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -175,9 +209,14 @@ fn test_execute_action_handles_narration_error() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
-    let final_state = app.message_service.load_or_fresh();
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -201,9 +240,14 @@ fn test_execute_action_handles_cancellation() {
         .pipeline(service)
         .build_service();
     app.shutdown_token.cancel();
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
-    let final_state = app.message_service.load_or_fresh();
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -224,9 +268,14 @@ fn test_execute_action_preserves_existing_input_log() {
         .log("examine room", MessageType::Input)
         .pipeline(service)
         .build_service();
-    app.pipeline
-        .execute_action_with_inputs("examine room".to_string(), false, None, None);
-    let final_state = app.message_service.load_or_fresh();
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "examine room".to_string(),
+        false,
+        None,
+        None,
+    );
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
@@ -298,13 +347,17 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     let app_for_thread = app.clone();
 
     let handle = thread::spawn(move || {
-        app_for_thread
-            .pipeline
-            .execute_action_with_inputs("look".to_string(), false, None, None);
+        app_for_thread.pipeline.execute_action_with_inputs(
+            active_game_of(&app_for_thread),
+            "look".to_string(),
+            false,
+            None,
+            None,
+        );
     });
 
     entered.wait();
-    let mid_state = app.message_service.load_or_fresh();
+    let mid_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,
@@ -313,7 +366,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
 
     release.wait();
     handle.join().expect("Action thread should complete");
-    let final_state = app.message_service.load_or_fresh();
+    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         final_state.narrative.input_buffer.phase,
         GenerationPhase::default(),
@@ -347,13 +400,20 @@ fn test_narration_saved_before_quantifying_phase() {
     let app_for_thread = app.clone();
 
     let handle = thread::spawn(move || {
-        app_for_thread
-            .pipeline
-            .execute_action_with_inputs("test".to_string(), false, None, None);
+        app_for_thread.pipeline.execute_action_with_inputs(
+            active_game_of(&app_for_thread),
+            "test".to_string(),
+            false,
+            None,
+            None,
+        );
     });
 
     entered.wait();
-    let messages = app.message_service.load_messages().unwrap();
+    let messages = app
+        .message_service
+        .load_messages(active_game_of(&app))
+        .unwrap();
     let narration_count = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -362,7 +422,7 @@ fn test_narration_saved_before_quantifying_phase() {
         narration_count >= 1,
         "Narration should be saved before quantifier completes"
     );
-    let mid_state = app.message_service.load_or_fresh();
+    let mid_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,
@@ -397,11 +457,15 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
         .pipeline(service)
         .build_service_with_storage();
 
-    let game1 = app.game_catalogue.current_game_id();
+    let game1 = active_game_of(&app);
 
     let result_a = app
         .pipeline
-        .process_action(&app.generation_gate, Action::FreeAction("look".to_string()))
+        .process_action(
+            &app.generation_gate,
+            active_game_of(&app),
+            Action::FreeAction("look".to_string()),
+        )
         .expect("gen A claim should not error");
     assert!(
         matches!(result_a, ProcessActionResult::Started),
@@ -422,10 +486,11 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
     );
 
     // Gen A cancels at its next phase-boundary check, which reads the new current game.
-    let game2 = app
-        .game_catalogue
-        .create_game("test", "test_player")
-        .expect("create_game should succeed");
+    let game2 = GameId(
+        app.game_catalogue
+            .create_game("test", "test_player")
+            .expect("create_game should succeed"),
+    );
     assert_ne!(game2, game1, "reset must produce a distinct game id");
 
     let gate = &app.generation_gate;
@@ -441,7 +506,7 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
         "gen A slot must release after cancellation on game reset"
     );
 
-    let state_after_a = app.message_service.load_or_fresh();
+    let state_after_a = app.message_service.load_or_fresh(active_game_of(&app));
     let a_leaked = state_after_a
         .narrative
         .history
@@ -456,6 +521,7 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
         .pipeline
         .process_action(
             &app.generation_gate,
+            active_game_of(&app),
             Action::FreeAction("go north".to_string()),
         )
         .expect("gen B claim should not error");
@@ -476,7 +542,7 @@ async fn test_process_action_cancels_prior_generation_on_game_reset() {
         "gen B must complete and release its slot"
     );
 
-    let state_after_b = app.message_service.load_or_fresh();
+    let state_after_b = app.message_service.load_or_fresh(active_game_of(&app));
     let b_present = state_after_b
         .narrative
         .history
@@ -500,18 +566,23 @@ fn test_process_action_heals_stale_status_before_validation_error() {
             "Bad Game",
         )
         .expect("create_game should succeed");
-    storage.set_game_id(bad_game_id);
+    app.game_catalogue
+        .switch_game(bad_game_id)
+        .expect("the bad Game row exists");
+    let bad_game_id = GameId(bad_game_id);
 
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(bad_game_id);
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
     storage
-        .save_snapshot(&GameStateSnapshot::from_game_state(&state))
+        .save_snapshot(bad_game_id, &GameStateSnapshot::from_game_state(&state))
         .expect("save stale snapshot should succeed");
 
-    let result = app
-        .pipeline
-        .process_action(&app.generation_gate, Action::FreeAction("look".to_string()));
+    let result = app.pipeline.process_action(
+        &app.generation_gate,
+        active_game_of(&app),
+        Action::FreeAction("look".to_string()),
+    );
 
     assert!(
         result.is_err(),
@@ -520,7 +591,7 @@ fn test_process_action_heals_stale_status_before_validation_error() {
 
     let persisted = app
         .message_service
-        .load_expecting_valid_state()
+        .load_expecting_valid_state(active_game_of(&app))
         .expect("the healed snapshot should load");
     assert_eq!(
         persisted.narrative.input_buffer.status,
@@ -544,12 +615,13 @@ async fn test_dispatcher_guide_stores_guide_on_swipe_stored_inputs() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    let game_id = app.game_catalogue.current_game_id();
+    let game_id = active_game_of(&app);
 
     let result = app
         .pipeline
         .process_action(
             &app.generation_gate,
+            active_game_of(&app),
             Action::Guide("make it ominous".to_string()),
         )
         .expect("guide claim should not error");
@@ -564,7 +636,7 @@ async fn test_dispatcher_guide_stores_guide_on_swipe_stored_inputs() {
         "guide generation should complete"
     );
 
-    let state = app.message_service.load_or_fresh();
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
     let narration = state
         .narrative
         .history
@@ -599,12 +671,13 @@ async fn test_dispatcher_impersonate_stores_direction() {
     let app = TestAppBuilder::with_data(data)
         .pipeline(service)
         .build_service();
-    let game_id = app.game_catalogue.current_game_id();
+    let game_id = active_game_of(&app);
 
     let result = app
         .pipeline
         .process_action(
             &app.generation_gate,
+            active_game_of(&app),
             Action::Impersonate(Some("act wary".to_string())),
         )
         .expect("impersonate claim should not error");
@@ -619,7 +692,7 @@ async fn test_dispatcher_impersonate_stores_direction() {
         "impersonate generation should complete"
     );
 
-    let state = app.message_service.load_or_fresh();
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
     let input_entry = state
         .narrative
         .history

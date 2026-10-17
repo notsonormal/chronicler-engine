@@ -18,6 +18,7 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use crate::support::app_wiring::app_with_narrator;
 use crate::support::http_requests::{fetch_body, post_action, wait_idle};
 use crate::TEST_PERSONA;
+use chronicler_engine::test_support::active_game_of;
 
 #[tokio::test]
 async fn test_basic_fragments_return_html() {
@@ -198,7 +199,7 @@ async fn test_edit_history_handler_success() {
     storage.seed_world(&world, &map).unwrap();
     let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
-    let game_id = storage
+    storage
         .create_game(
             &world.name,
             &world.key,
@@ -207,14 +208,18 @@ async fn test_edit_history_handler_success() {
             "Test Game",
         )
         .unwrap();
-    storage.set_game_id(game_id);
 
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .log("Original text", MessageType::Narration)
         .storage(Arc::clone(&storage))
-        .build();
+        .build_with_state();
 
-    let entry_id = storage.load_message_rows().unwrap().last().unwrap().id;
+    let entry_id = storage
+        .load_message_rows(active_game_of(&state))
+        .unwrap()
+        .last()
+        .unwrap()
+        .id;
 
     let req = Request::builder()
         .uri(format!("/history/{entry_id}"))
@@ -312,7 +317,7 @@ async fn test_action_confirm_empty_command() {
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(500);
     while start.elapsed() < timeout {
-        let state = state.message_service.load_or_fresh();
+        let state = state.message_service.load_or_fresh(active_game_of(&state));
         if !state.narrative.input_buffer.status.is_generating() {
             return;
         }
@@ -612,15 +617,20 @@ async fn test_create_game_with_invalid_world_key() {
 #[tokio::test]
 async fn test_switch_swipe_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build();
+        .build_with_state();
 
-    let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
+    let latest_snap = storage
+        .load_latest_snapshot(active_game_of(&state))
+        .unwrap()
+        .unwrap();
     let snap_id = latest_snap.db_id.unwrap();
 
     let msg = Message::new("original", MessageType::Narration, None, None);
-    let id = storage.insert_message(&msg).unwrap();
+    let id = storage
+        .insert_message(active_game_of(&state), &msg)
+        .unwrap();
 
     storage
         .insert_swipe(
@@ -686,15 +696,20 @@ async fn test_reset_handler_success() {
 #[tokio::test]
 async fn test_switch_swipe_handler_not_last() {
     let storage = Arc::new(Storage::new_in_memory());
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build();
+        .build_with_state();
 
-    let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
+    let latest_snap = storage
+        .load_latest_snapshot(active_game_of(&state))
+        .unwrap()
+        .unwrap();
     let snap_id = latest_snap.db_id.unwrap();
 
     let msg1 = Message::new("first", MessageType::Narration, None, None);
-    let id1 = storage.insert_message(&msg1).unwrap();
+    let id1 = storage
+        .insert_message(active_game_of(&state), &msg1)
+        .unwrap();
     storage
         .insert_swipe(
             id1,
@@ -712,7 +727,9 @@ async fn test_switch_swipe_handler_not_last() {
         .unwrap();
 
     let msg2 = Message::new("second", MessageType::Narration, None, None);
-    let _id2 = storage.insert_message(&msg2).unwrap();
+    let _id2 = storage
+        .insert_message(active_game_of(&state), &msg2)
+        .unwrap();
 
     let req = Request::builder()
         .uri(format!("/message/{id1}/swipe/0"))
@@ -731,16 +748,21 @@ async fn test_switch_swipe_handler_not_last() {
 #[tokio::test]
 async fn test_switch_swipe_handler_concurrent() {
     let storage = Arc::new(Storage::new_in_memory());
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .claim_generation_slot()
-        .build();
+        .build_with_state();
 
-    let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
+    let latest_snap = storage
+        .load_latest_snapshot(active_game_of(&state))
+        .unwrap()
+        .unwrap();
     let snap_id = latest_snap.db_id.unwrap();
 
     let msg = Message::new("original", MessageType::Narration, None, None);
-    let id = storage.insert_message(&msg).unwrap();
+    let id = storage
+        .insert_message(active_game_of(&state), &msg)
+        .unwrap();
     storage
         .insert_swipe(
             id,

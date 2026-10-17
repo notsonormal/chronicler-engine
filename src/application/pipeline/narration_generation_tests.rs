@@ -12,9 +12,11 @@ use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind, GenerationStatus,
 };
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{
-    make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder, TestDataBuilder,
+    active_game_of, make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder,
+    TestDataBuilder,
 };
 
 fn mock_quantifier() -> Arc<dyn LlmProvider> {
@@ -46,9 +48,9 @@ fn free_inputs(text: &str) -> GenerationInputs {
 #[test]
 fn test_run_free_action_adds_narration_message() {
     let (app, _storage) = make_app_with_narrations(vec!["The door creaks.".to_string()]);
-    let started_for = app.pipeline.storage.current_game_id();
+    let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look around"))
         .run(&mut state)
@@ -66,9 +68,9 @@ fn test_run_free_action_adds_narration_message() {
 #[test]
 fn test_run_guided_generation_consumes_guide() {
     let (app, _storage) = make_app_with_narrations(vec!["Ominous silence.".to_string()]);
-    let started_for = app.pipeline.storage.current_game_id();
+    let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
 
     let inputs = GenerationInputs {
         input: String::new(),
@@ -87,9 +89,9 @@ fn test_run_guided_generation_consumes_guide() {
 #[test]
 fn test_run_impersonate_adds_input_message() {
     let (app, _storage) = make_app_with_narrations(vec!["I act wary.".to_string()]);
-    let started_for = app.pipeline.storage.current_game_id();
+    let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
 
     let inputs = GenerationInputs {
         input: String::new(),
@@ -115,10 +117,11 @@ fn test_run_impersonate_adds_input_message() {
 #[test]
 fn test_run_bundle_load_failure_returns_fetch_failed() {
     let data = TestDataBuilder::default_test().build();
-    let (base_storage, handle) = {
+    let (base_storage, handle, game_id) = {
         let base = Storage::new_in_memory();
-        data.seed_into(&base);
-        base.with_test_failures()
+        let game_id = data.seed_into(&base);
+        let (storage, handle) = base.with_test_failures();
+        (storage, handle, game_id)
     };
     handle.set(
         "get_world",
@@ -133,12 +136,13 @@ fn test_run_bundle_load_failure_returns_fetch_failed() {
     let (app, _storage) = TestAppBuilder::with_data(data)
         .storage(Arc::new(base_storage))
         .skip_seeding(true)
+        .active_game(game_id)
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    let started_for = app.pipeline.storage.current_game_id();
+    let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(game_id);
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     match outcome {
@@ -156,9 +160,9 @@ fn test_run_bundle_load_failure_returns_fetch_failed() {
 #[test]
 fn test_run_room_not_found_sets_error_status() {
     let (app, _storage) = make_app_with_narrations(vec!["ignored".to_string()]);
-    let started_for = app.pipeline.storage.current_game_id();
+    let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.movement.current_room_id = "non_existent_room".to_string();
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
@@ -187,15 +191,17 @@ fn test_run_missing_preset_sets_error_status() {
             .storage
             .get_settings()
             .expect("settings read should succeed");
-        app.pipeline.storage.active_system_preset_id(&settings)
+        app.pipeline
+            .storage
+            .active_system_preset_id(active_game_of(&app), &settings)
     };
     storage
         .delete_preset(&active_preset_id)
         .expect("setup: delete active system preset");
 
-    let started_for = app.pipeline.storage.current_game_id();
+    let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     let expected_raw = format!("Prompt preset not found: {active_preset_id}");
@@ -226,9 +232,9 @@ fn test_run_narrator_error_sets_error_status() {
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    let started_for = app.pipeline.storage.current_game_id();
+    let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     match outcome {
@@ -248,14 +254,15 @@ fn test_run_game_changed_returns_cancelled() {
     let (app, _storage) = make_app_with_narrations(vec!["ignored".to_string()]);
     // A game switch before run construction: the phase-boundary check reads
     // the new current game and cancels.
-    let game1 = app.pipeline.storage.current_game_id();
-    let game2 = app
-        .game_catalogue
-        .create_game("test", "test_player")
-        .expect("create_game should succeed");
+    let game1 = active_game_of(&app);
+    let game2 = GameId(
+        app.game_catalogue
+            .create_game("test", "test_player")
+            .expect("create_game should succeed"),
+    );
     assert_ne!(game2, game1, "create_game must produce a distinct game id");
     let pipeline_run = PipelineRun::new(&app.pipeline, game1);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     let history_len_before = state.narrative.history.len();
 
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
@@ -273,10 +280,11 @@ fn test_run_game_changed_returns_cancelled() {
 #[test]
 fn test_run_save_failure_returns_persist_failed() {
     let data = TestDataBuilder::default_test().build();
-    let (base_storage, handle) = {
+    let (base_storage, handle, game_id) = {
         let base = Storage::new_in_memory();
-        data.seed_into(&base);
-        base.with_test_failures()
+        let game_id = data.seed_into(&base);
+        let (storage, handle) = base.with_test_failures();
+        (storage, handle, game_id)
     };
     let base_storage = Arc::new(base_storage);
     let narrator =
@@ -289,12 +297,13 @@ fn test_run_save_failure_returns_persist_failed() {
     let (app, _storage) = TestAppBuilder::with_data(data)
         .storage(Arc::clone(&base_storage))
         .skip_seeding(true)
+        .active_game(game_id)
         .pipeline(pipeline)
         .build_service_with_storage();
 
-    let started_for = app.pipeline.storage.current_game_id();
+    let started_for = active_game_of(&app);
     let pipeline_run = PipelineRun::new(&app.pipeline, started_for);
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
 
     handle.set(
         "insert_swipe",
@@ -315,7 +324,7 @@ fn test_run_save_failure_returns_persist_failed() {
         }
         other => panic!("expected PersistFailed, got {other:?}"),
     }
-    let reloaded = app.message_service.load_or_fresh();
+    let reloaded = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         matches!(
             reloaded.narrative.input_buffer.status,
@@ -347,9 +356,8 @@ fn test_resolve_posture_reads_the_game_not_the_world() {
         })
         .expect("game created");
 
-    // The shipped world keeps the novel defaults (third/past).
     let world = crate::test_support::TestWorld::minimal();
-    let pipeline_run = PipelineRun::new(&app.pipeline, game_id);
+    let pipeline_run = PipelineRun::new(&app.pipeline, GameId(game_id));
     let (perspective, tense) = pipeline_run.resolve_posture(&world);
 
     assert_eq!(
@@ -370,7 +378,7 @@ fn test_resolve_posture_falls_back_to_world_when_game_missing() {
     let mut world = crate::test_support::TestWorld::minimal();
     world.narrative_tense = crate::domain::model::settings::NarrativeTense::Present;
 
-    let pipeline_run = PipelineRun::new(&app.pipeline, u64::MAX);
+    let pipeline_run = PipelineRun::new(&app.pipeline, GameId(u64::MAX));
     let (perspective, tense) = pipeline_run.resolve_posture(&world);
 
     assert_eq!(

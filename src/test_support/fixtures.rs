@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
+use crate::domain::model::game::GameId;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::NarratorMode;
@@ -612,7 +613,7 @@ pub fn seed_default_game_row(
 pub fn sqlite_storage() -> Result<Storage, crate::error::EngineError> {
     let pool = DbPool::new(":memory:")?;
     seed_default_game_row(&pool, 1)?;
-    Ok(Storage::new_sqlite(pool, 1))
+    Ok(Storage::new_sqlite(pool))
 }
 
 pub fn dummy_message(text: &str) -> Message {
@@ -669,12 +670,23 @@ pub fn make_test_recorder_with_storage(
     Arc::new(LlmCallRecorder::new(provider, save_fn))
 }
 
+/// A fixture that seeds a Game always points its app at one, so a missing
+/// pointer is a broken fixture, not a runtime condition.
+pub fn active_game_of(state: &crate::adapters::driving::http::AppState) -> GameId {
+    state
+        .game_catalogue
+        .active_game_id()
+        // arch-lint: allow(no-unwrap-expect) reason="test fixture panics on a broken fixture"
+        .expect("test fixture: an active game")
+}
+
 /// Mirrors what production code writes, so a seeded row matches a generated one.
 pub fn insert_message_with_swipe(
     storage: &Storage,
+    game_id: GameId,
     msg: &Message,
 ) -> Result<(), crate::error::EngineError> {
-    let id = storage.insert_message(msg)?;
+    let id = storage.insert_message(game_id, msg)?;
     if let Some(swipe) = msg.swipes.first() {
         let mut swipe = swipe.clone();
         swipe.text = msg.text().to_string();
@@ -686,8 +698,11 @@ pub fn insert_message_with_swipe(
     Ok(())
 }
 
+// Every seeded row names its Game.
+#[allow(clippy::too_many_arguments)]
 pub fn seed_swipe_with_stored_inputs(
     storage: &Storage,
+    game_id: GameId,
     room_id: &str,
     text: &str,
     message_type: MessageType,
@@ -700,7 +715,7 @@ pub fn seed_swipe_with_stored_inputs(
     let mut state = TestGameState::in_room(room_id);
     state.add_message(text.to_string(), message_type);
     let snapshot = GameStateSnapshot::from_game_state(&state);
-    let snapshot_id = storage.save_snapshot(&snapshot)?;
+    let snapshot_id = storage.save_snapshot(game_id, &snapshot)?;
     let mut message = state
         .narrative
         .history
@@ -709,7 +724,7 @@ pub fn seed_swipe_with_stored_inputs(
         .clone();
     message.set_stored_inputs(impersonated, guide_text, impersonate_direction);
     message.set_snapshot_id(Some(snapshot_id));
-    insert_message_with_swipe(storage, &message)?;
+    insert_message_with_swipe(storage, game_id, &message)?;
     Ok(snapshot_id)
 }
 
@@ -724,30 +739,33 @@ pub fn seed_main_narration_flow(
     // Mirrors `phase_pre_main_snapshot`: the Input links to this snapshot, so it is
     // the turn's retry anchor.
     {
-        let mut gs = state.message_service.load_or_fresh();
+        let game_id = active_game_of(state);
+        let mut gs = state.message_service.load_or_fresh(game_id);
         gs.add_message("look".to_string(), MessageType::Input);
-        let id = storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+        let id = storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
         if let Some(last) = gs.narrative.history.last_mut() {
             last.set_snapshot_id(Some(id));
-            insert_message_with_swipe(storage, last)?;
+            insert_message_with_swipe(storage, game_id, last)?;
         }
     }
 
     // Saved before the engine commit, so this snapshot carries no movement or
     // trigger.
     {
-        let mut gs = state.message_service.load_or_fresh();
+        let game_id = active_game_of(state);
+        let mut gs = state.message_service.load_or_fresh(game_id);
         gs.add_message("Main narration".to_string(), MessageType::Narration);
-        let id = storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+        let id = storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
         if let Some(last) = gs.narrative.history.last_mut() {
             last.set_snapshot_id(Some(id));
-            insert_message_with_swipe(storage, last)?;
+            insert_message_with_swipe(storage, game_id, last)?;
         }
     }
 
-    let mut gs = state.message_service.load_or_fresh();
+    let game_id = active_game_of(state);
+    let mut gs = state.message_service.load_or_fresh(game_id);
     gs.movement.current_room_id = room_after.to_string();
-    storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+    storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
     Ok(())
 }
 
@@ -763,25 +781,28 @@ pub fn seed_event_flow(
     // The snapshot `phase_trigger_continuation_llm_call` writes before the trigger
     // call; no Message links to it.
     {
-        let mut gs = state.message_service.load_or_fresh();
+        let game_id = active_game_of(state);
+        let mut gs = state.message_service.load_or_fresh(game_id);
         gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
-        storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+        storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
     }
 
     {
-        let mut gs = state.message_service.load_or_fresh();
+        let game_id = active_game_of(state);
+        let mut gs = state.message_service.load_or_fresh(game_id);
         gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
         gs.npc_encounter_log.mark_trigger_fired("npc_1", 0);
         gs.narrative.pending_event = Some(TestStoredTriggerContext::standard().trigger_name);
         gs.add_message("Event narration".to_string(), MessageType::Narration);
-        let id = storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+        let id = storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
         if let Some(last) = gs.narrative.history.last_mut() {
             last.set_snapshot_id(Some(id));
-            insert_message_with_swipe(storage, last)?;
+            insert_message_with_swipe(storage, game_id, last)?;
         }
     }
 
-    let gs = state.message_service.load_or_fresh();
-    storage.save_snapshot(&GameStateSnapshot::from_game_state(&gs))?;
+    let game_id = active_game_of(state);
+    let gs = state.message_service.load_or_fresh(game_id);
+    storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
     Ok(())
 }

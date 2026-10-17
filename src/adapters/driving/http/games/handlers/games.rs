@@ -11,7 +11,7 @@ use axum::{
 
 use crate::adapters::driving::http::AppState;
 use crate::application::errors::ApplicationError;
-use crate::domain::model::game::{Game, PresetSelection};
+use crate::domain::model::game::{Game, GameId, PresetSelection};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::error::EngineError;
@@ -19,14 +19,23 @@ use crate::error::EngineError;
 use crate::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GamesPanelTemplate, PersonaRowView,
 };
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::render_error;
 use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
 use crate::adapters::driving::http::view_models::SafeHtml;
 
-pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let Ok((active_game, saved_games)) = current_and_saved_games(&state) else {
+pub async fn list_games_fragment(
+    State(state): State<AppState>,
+    current: Option<CurrentGame>,
+) -> Response<axum::body::Body> {
+    let Ok((active_game, saved_games)) = current_and_saved_games(&state, current) else {
         return internal_error("Failed to list games");
+    };
+
+    let posture_html = match &active_game {
+        Some(game) => posture_controls_html(&state, game),
+        None => String::new(),
     };
 
     let active_game = active_game.map(game_to_view);
@@ -55,11 +64,7 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
         saved_games,
         worlds,
         personas,
-        posture_html: match state.game_catalogue.current_game() {
-            Ok(Some(game)) => posture_controls_html(&state, &game),
-            Ok(None) => String::new(),
-            Err(e) => return internal_error(format!("Failed to load active game: {e}")),
-        },
+        posture_html,
         saved_games_empty: SafeHtml::new(GamesPanelTemplate::saved_games_empty_html()),
     };
 
@@ -68,14 +73,15 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
 
 fn current_and_saved_games(
     state: &AppState,
+    current: Option<CurrentGame>,
 ) -> Result<(Option<Game>, Vec<Game>), ApplicationError> {
     let games = state.game_catalogue.list_games()?;
-    let active_id = state.game_catalogue.current_game_id();
+    let active_id = current.map(|CurrentGame(game_id)| game_id);
     let mut active_game = None;
     let saved_games = games
         .into_iter()
         .filter_map(|game| {
-            if game.id == active_id {
+            if Some(GameId(game.id)) == active_id {
                 active_game = Some(game);
                 None
             } else {
@@ -108,7 +114,9 @@ pub async fn switch_game_handler(
 ) -> Result<Response, ApplicationError> {
     state.game_catalogue.switch_game(id)?;
     // The newly current game may carry a stale persisted `Generating` from a panicked turn.
-    state.pipeline.heal_stale_status(&state.generation_gate)?;
+    state
+        .pipeline
+        .heal_stale_status(&state.generation_gate, GameId(id))?;
     Ok(ok_refresh())
 }
 
@@ -128,16 +136,17 @@ pub async fn rename_game_handler(
 
 pub async fn delete_game_handler(
     State(state): State<AppState>,
+    current: Option<CurrentGame>,
     Path(id): Path<u64>,
 ) -> Result<Response, ApplicationError> {
     state.game_catalogue.delete_game(id)?;
-    Ok(ok(remaining_saved_games_empty_state(&state)))
+    Ok(ok(remaining_saved_games_empty_state(&state, current)))
 }
 
 /// The list's own empty state only renders with the whole panel, so a delete that
 /// empties the list answers with this instead.
-fn remaining_saved_games_empty_state(state: &AppState) -> String {
-    let Ok((_, saved_games)) = current_and_saved_games(state) else {
+fn remaining_saved_games_empty_state(state: &AppState, current: Option<CurrentGame>) -> String {
+    let Ok((_, saved_games)) = current_and_saved_games(state, current) else {
         return String::new();
     };
     if saved_games.is_empty() {
@@ -220,8 +229,8 @@ fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError
     }
 }
 
-/// A preset-library load failure degrades to an error fragment in the picker row; the
-/// posture controls still render so the auto-saves keep working.
+/// The posture controls still render on a preset-load failure, because the
+/// auto-saves depend on them.
 fn posture_controls_html(state: &AppState, game: &Game) -> String {
     let (libraries, preset_load_error) = match load_preset_libraries(state) {
         Ok(libraries) => (libraries, None),

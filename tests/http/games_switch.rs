@@ -2,15 +2,15 @@
 
 use std::sync::Arc;
 
+use chronicler_engine::domain::model::game::GameId;
+use chronicler_engine::test_support::active_game_of;
 use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
-
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use chronicler_engine::test_support::TestPersona;
 
 use crate::support::http_fixtures::seeded_storage_with_initial_game;
-
 // [docs/specs/games.md] SCENARIO: 18.1
 #[tokio::test]
 async fn test_switch_game_handler_success() {
@@ -29,7 +29,7 @@ async fn test_switch_game_handler_success() {
             "Test World_2026-01-01_1",
         )
         .unwrap();
-    assert_ne!(other_id, state.game_catalogue.current_game_id());
+    assert_ne!(other_id, active_game_of(&state).0);
 
     let req = Request::builder()
         .uri(format!("/games/{other_id}/switch"))
@@ -43,7 +43,7 @@ async fn test_switch_game_handler_success() {
         "true",
         "Should return HX-Refresh header"
     );
-    assert_eq!(state.game_catalogue.current_game_id(), other_id);
+    assert_eq!(active_game_of(&state).0, other_id);
 }
 
 // [docs/specs/games.md] SCENARIO: 18.2
@@ -77,7 +77,7 @@ async fn test_switch_game_heals_stale_generating_status() {
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
-    let initial_id = state.game_catalogue.current_game_id();
+    let initial_id = active_game_of(&state);
 
     let other_id = storage
         .create_game(
@@ -88,18 +88,15 @@ async fn test_switch_game_heals_stale_generating_status() {
             "Test World_2026-01-01_1",
         )
         .unwrap();
-    assert_ne!(other_id, initial_id);
+    assert_ne!(other_id, initial_id.0);
 
-    // Persisted `Generating` for the other game, with no live registry slot.
-    storage.set_game_id(other_id);
-    let mut stale = state.message_service.load_or_fresh();
+    let mut stale = state.message_service.load_or_fresh(GameId(other_id));
     stale.narrative.input_buffer.status = GenerationStatus::Generating;
     stale.narrative.input_buffer.phase = GenerationPhase::Narrating;
     state
         .message_service
-        .save_state(&stale)
+        .save_state(GameId(other_id), &stale)
         .expect("saving the stale snapshot should succeed");
-    storage.set_game_id(initial_id);
 
     let req = Request::builder()
         .uri(format!("/games/{other_id}/switch"))
@@ -109,13 +106,13 @@ async fn test_switch_game_heals_stale_generating_status() {
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers().get("HX-Refresh").unwrap(), "true");
-    assert_eq!(state.game_catalogue.current_game_id(), other_id);
+    assert_eq!(active_game_of(&state).0, other_id);
 
     // The registry poll reads `idle` for a game with no slot whether or not
     // the handler healed it, so assert the persisted channel.
     let persisted = state
         .message_service
-        .load_expecting_valid_state()
+        .load_expecting_valid_state(active_game_of(&state))
         .expect("reading the persisted status should succeed");
     assert_eq!(
         persisted.narrative.input_buffer.status,

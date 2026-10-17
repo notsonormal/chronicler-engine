@@ -10,8 +10,8 @@ use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, Tex
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::test_support::{
-    make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder, TestDataBuilder,
-    TestMap,
+    active_game_of, make_test_pipeline_with_mock_quantifier, make_test_recorder, TestAppBuilder,
+    TestDataBuilder, TestMap,
 };
 
 use crate::support::http_assertions::{assert_story_log_ends_with_message, status_error_message};
@@ -33,7 +33,10 @@ async fn test_action_succeeds_one_narration_idle_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action should complete");
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -65,7 +68,10 @@ async fn test_input_persisted_before_narration_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let input_idx = messages
         .iter()
         .position(|m| m.message_type == MessageType::Input)
@@ -138,7 +144,10 @@ async fn test_quantifier_npc_fires_trigger_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let has_event = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -188,7 +197,10 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action should complete");
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let narrations: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -259,7 +271,10 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         "second action should complete"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let trigger_narrations = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -287,7 +302,10 @@ async fn test_empty_command_continuation_no_input_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await);
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -351,7 +369,7 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
 
     let debug = state
         .game_view_query
-        .get_debug_state()
+        .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed");
     assert!(
         debug.npcs_in_area.contains(&"gabriella".to_string()),
@@ -376,9 +394,11 @@ async fn test_nonexistent_room_sets_error_status_http() {
     let (app, state) = app_with_narrator(narrator);
 
     {
-        let mut gs = state.message_service.load_or_fresh();
+        let mut gs = state.message_service.load_or_fresh(active_game_of(&state));
         gs.movement.current_room_id = "non_existent_room".to_string();
-        let _ = state.message_service.save_state(&gs);
+        let _ = state
+            .message_service
+            .save_state(active_game_of(&state), &gs);
     }
 
     let resp = post_action(&app, "look").await;
@@ -390,7 +410,10 @@ async fn test_nonexistent_room_sets_error_status_http() {
         status.contains("Room not found"),
         "expected 'Room not found' in the status, got: {status}"
     );
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     assert!(
         !messages
             .iter()
@@ -429,7 +452,10 @@ async fn test_empty_narrator_response_sets_error_no_narration_http() {
         status.contains("empty"),
         "error message should mention 'empty', got: {status}"
     );
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let has_new_narration_for_this_action = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -497,7 +523,10 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
         status.contains("Trigger narration failed"),
         "error should mention 'Trigger narration failed', got: {status}"
     );
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     assert!(
         messages.iter().any(|m| {
             m.message_type == MessageType::Narration
@@ -573,7 +602,7 @@ async fn assert_quantifier_failure_keeps_npcs(quantifier_provider: Arc<dyn LlmPr
 
     let npcs_before = state
         .game_view_query
-        .get_debug_state()
+        .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed")
         .npcs_in_area;
     assert!(
@@ -595,7 +624,7 @@ async fn assert_quantifier_failure_keeps_npcs(quantifier_provider: Arc<dyn LlmPr
     );
     let npcs_after = state
         .game_view_query
-        .get_debug_state()
+        .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed")
         .npcs_in_area;
     assert_eq!(
@@ -641,7 +670,10 @@ async fn test_three_actions_in_sequence_http() {
         );
     }
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -678,7 +710,10 @@ async fn test_sequential_execute_retry_execute_http() {
     let _ = post_action(&app, "look around").await;
     assert!(wait_idle(&state, 1000).await, "action B should complete");
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -710,7 +745,10 @@ async fn test_async_action_sequence_then_retry_http() {
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_idle(&state, 1000).await, "retry should complete");
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -731,7 +769,10 @@ async fn test_slash_impersonate_produces_input_http() {
         "impersonate action should complete"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -777,7 +818,10 @@ async fn test_slash_guide_does_not_persist_input_http() {
         "guide action should complete"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let narrations: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -898,7 +942,10 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         "the Action that moves the player should complete"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let narration = messages
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -924,7 +971,10 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         "the later, stationary Action should complete"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let later: Vec<_> = messages
         .iter()
         .filter(|m| m.is_input_or_narration())

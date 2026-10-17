@@ -11,10 +11,11 @@ use crate::application::agents::options::OptionsAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::action::Action;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{
-    make_test_pipeline_app_with_storage as make_test_app_with_storage,
+    active_game_of, make_test_pipeline_app_with_storage as make_test_app_with_storage,
     make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder,
 };
 
@@ -46,10 +47,9 @@ pub(super) fn make_app(
         .build_service_with_storage()
 }
 
-pub(super) fn set_always_on(storage: &Storage, on: bool) {
-    let game_id = storage.current_game_id();
+pub(super) fn set_always_on(storage: &Storage, game_id: GameId, on: bool) {
     let mut game = storage
-        .require_game(game_id)
+        .require_game(game_id.0)
         .expect("seeded game row must exist");
     game.options_always_on = on;
     storage
@@ -58,23 +58,23 @@ pub(super) fn set_always_on(storage: &Storage, on: bool) {
 }
 
 pub(super) fn set_prior_options(app: &crate::adapters::driving::http::AppState, options: &[&str]) {
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(app));
     state.narrative.current_options = options.iter().map(|s| s.to_string()).collect();
     app.message_service
-        .save_state(&state)
+        .save_state(active_game_of(app), &state)
         .expect("save_state should succeed");
 }
 
 pub(super) fn current_options(app: &crate::adapters::driving::http::AppState) -> Vec<String> {
     app.message_service
-        .load_or_fresh()
+        .load_or_fresh(active_game_of(app))
         .narrative
         .current_options
 }
 
 fn system_messages_contain(app: &crate::adapters::driving::http::AppState, needle: &str) -> bool {
     app.message_service
-        .load_or_fresh()
+        .load_or_fresh(active_game_of(app))
         .narrative
         .history()
         .iter()
@@ -86,10 +86,15 @@ fn system_messages_contain(app: &crate::adapters::driving::http::AppState, needl
 #[test]
 fn test_always_on_generates_options_after_narration_turn() {
     let (app, storage) = make_app(Some(tagged_options_provider()));
-    set_always_on(&storage, true);
+    set_always_on(&storage, active_game_of(&app), true);
 
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     let options = current_options(&app);
     assert_eq!(options.len(), 3, "always-on turn must install a fresh set");
@@ -99,11 +104,16 @@ fn test_always_on_generates_options_after_narration_turn() {
 #[test]
 fn test_always_on_no_agent_clears_set_and_surfaces_message() {
     let (app, storage) = make_app(None);
-    set_always_on(&storage, true);
+    set_always_on(&storage, active_game_of(&app), true);
     set_prior_options(&app, &["Stale option"]);
 
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         current_options(&app).is_empty(),
@@ -118,11 +128,11 @@ fn test_always_on_no_agent_clears_set_and_surfaces_message() {
 #[test]
 fn test_always_on_skipped_after_impersonate_turn() {
     let (app, storage) = make_app(Some(tagged_options_provider()));
-    set_always_on(&storage, true);
+    set_always_on(&storage, active_game_of(&app), true);
     set_prior_options(&app, &["Stale option"]);
 
     app.pipeline
-        .execute_action_with_inputs(String::new(), true, None, None);
+        .execute_action_with_inputs(active_game_of(&app), String::new(), true, None, None);
 
     assert_eq!(
         current_options(&app),
@@ -136,8 +146,13 @@ fn test_toggle_off_clears_set_after_turn() {
     let (app, _storage) = make_app(Some(tagged_options_provider()));
     set_prior_options(&app, &["Stale option"]);
 
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         current_options(&app).is_empty(),
@@ -159,8 +174,13 @@ fn test_world_toggle_does_not_enable_always_on_for_running_game() {
         .expect("world update should succeed");
     set_prior_options(&app, &["Stale option"]);
 
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(
         current_options(&app).is_empty(),
@@ -182,7 +202,7 @@ fn test_unreadable_game_row_falls_back_to_world_toggle() {
         .update_world(world.world_id, &card, &world.map)
         .expect("world update should succeed");
 
-    let game_id = storage.current_game_id();
+    let game_id = active_game_of(&app);
     let run = PipelineRun::new(&app.pipeline, game_id);
 
     assert!(
@@ -203,11 +223,16 @@ fn test_unreadable_game_row_falls_back_to_world_toggle() {
 #[test]
 fn test_always_on_failure_clears_set_and_surfaces_system_message() {
     let (app, storage) = make_app(Some(Arc::new(MockBackend::new().with_fail())));
-    set_always_on(&storage, true);
+    set_always_on(&storage, active_game_of(&app), true);
     set_prior_options(&app, &["Stale option"]);
 
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
 
     assert!(current_options(&app).is_empty());
     assert!(system_messages_contain(&app, "Options generation failed"));
@@ -216,14 +241,19 @@ fn test_always_on_failure_clears_set_and_surfaces_system_message() {
 #[tokio::test]
 async fn test_process_options_replaces_set() {
     let (app, _storage) = make_app(Some(tagged_options_provider()));
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
     set_prior_options(&app, &["Old option"]);
-    let game_id = app.pipeline.storage.current_game_id();
+    let game_id = active_game_of(&app);
 
     let result = app
         .pipeline
-        .process_action(&app.generation_gate, Action::Options)
+        .process_action(&app.generation_gate, active_game_of(&app), Action::Options)
         .expect("on-demand options claim should succeed");
     assert!(matches!(
         result,
@@ -241,15 +271,20 @@ async fn test_process_options_replaces_set() {
 async fn test_process_options_during_shutdown_returns_shutting_down() {
     // The mid-refresh Cancelled branch (game-id switch) has no deterministic seam, so the claim-time guard is the covered path.
     let (app, _storage) = make_app(Some(tagged_options_provider()));
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
     set_prior_options(&app, &["Old option"]);
 
     app.shutdown_token.cancel();
 
     let result = app
         .pipeline
-        .process_action(&app.generation_gate, Action::Options)
+        .process_action(&app.generation_gate, active_game_of(&app), Action::Options)
         .expect("process_action must not error on a cancelled token");
     assert!(
         matches!(
@@ -273,7 +308,7 @@ async fn test_process_options_during_shutdown_returns_shutting_down() {
 fn test_process_options_empty_history_rejected() {
     let (app, _storage) = make_app(Some(tagged_options_provider()));
 
-    let state = app.message_service.load_or_fresh();
+    let state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         state.narrative.history().is_empty(),
         "precondition: seeded app starts without scene history"
@@ -281,7 +316,7 @@ fn test_process_options_empty_history_rejected() {
 
     let result = app
         .pipeline
-        .process_action(&app.generation_gate, Action::Options)
+        .process_action(&app.generation_gate, active_game_of(&app), Action::Options)
         .expect_err("options without scene history must be rejected");
     assert!(
         result.to_string().contains("No scene"),
@@ -292,13 +327,18 @@ fn test_process_options_empty_history_rejected() {
 #[tokio::test]
 async fn test_process_options_failure_keeps_prior_set() {
     let (app, _storage) = make_app(Some(Arc::new(MockBackend::new().with_fail())));
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
     set_prior_options(&app, &["Old option"]);
-    let game_id = app.pipeline.storage.current_game_id();
+    let game_id = active_game_of(&app);
 
     app.pipeline
-        .process_action(&app.generation_gate, Action::Options)
+        .process_action(&app.generation_gate, active_game_of(&app), Action::Options)
         .expect("claim should succeed before generation fails");
 
     wait_for_gate_idle(&app.generation_gate, game_id).await;
@@ -314,13 +354,18 @@ async fn test_process_options_failure_keeps_prior_set() {
 #[tokio::test]
 async fn test_no_options_agent_surfaces_unavailable_message() {
     let (app, _storage) = make_app(None);
-    app.pipeline
-        .execute_action_with_inputs("look".to_string(), false, None, None);
+    app.pipeline.execute_action_with_inputs(
+        active_game_of(&app),
+        "look".to_string(),
+        false,
+        None,
+        None,
+    );
     set_prior_options(&app, &["Old option"]);
-    let game_id = app.pipeline.storage.current_game_id();
+    let game_id = active_game_of(&app);
 
     app.pipeline
-        .process_action(&app.generation_gate, Action::Options)
+        .process_action(&app.generation_gate, active_game_of(&app), Action::Options)
         .expect("claim should succeed");
 
     wait_for_gate_idle(&app.generation_gate, game_id).await;
@@ -336,18 +381,21 @@ async fn test_no_options_agent_surfaces_unavailable_message() {
 fn test_process_options_heals_stale_status_before_validation_error() {
     let (app, storage) = make_test_app_with_storage();
 
-    let mut state = app.message_service.load_or_fresh();
+    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
     storage
         .save_snapshot(
+            active_game_of(&app),
             &crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
                 &state,
             ),
         )
         .expect("save stale snapshot should succeed");
 
-    let result = app.pipeline.process_options(&app.generation_gate);
+    let result = app
+        .pipeline
+        .process_options(&app.generation_gate, active_game_of(&app));
 
     assert!(
         result.is_err(),
@@ -355,7 +403,7 @@ fn test_process_options_heals_stale_status_before_validation_error() {
     );
     let persisted = app
         .message_service
-        .load_expecting_valid_state()
+        .load_expecting_valid_state(active_game_of(&app))
         .expect("the healed snapshot should load");
     assert_eq!(
         persisted.narrative.input_buffer.status,

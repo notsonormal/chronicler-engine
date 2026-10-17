@@ -37,7 +37,7 @@ Phase failures route to finalization. Cancellation exits through the separate co
 
 `GenerationGate` owns the per-Game slot registry. Claiming a slot assigns a generation id, persists the initial `Generating` state, and then spawns the task. A claimed slot rejects a concurrent Action for the same Game.
 
-The in-phase **α-check** captures the active Game id when generation starts and compares it with the current active Game id at stage boundaries.
+The in-phase **α-check** keeps the Game id that the request was accepted for. At each stage boundary, the check compares that id with the active Game from `GameCatalogue::active_game_id`.
 
 A Game switch or reset invalidates stale work at the next boundary. Mismatch returns `PhaseError::Cancelled`.
 

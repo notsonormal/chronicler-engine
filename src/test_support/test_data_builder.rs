@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::game::GameId;
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::world::WorldCard;
 
@@ -151,9 +152,6 @@ impl TestDataBuilder {
     }
 }
 
-/// Immutable world-data bundle for an integration test. Pairs with
-/// [`TestAppBuilder`] for app-wiring. Use [`TestData::seed_into`] to persist
-/// into a storage instance.
 #[derive(Clone)]
 pub struct TestData {
     pub world: Arc<WorldCard>,
@@ -164,10 +162,10 @@ pub struct TestData {
 }
 
 impl TestData {
-    /// Persist world, map, persona, npcs, and a default game into `storage`.
-    /// Returns the seeded world id. Does not save snapshots or persist
-    /// messages — those remain the responsibility of `TestAppBuilder`.
-    pub fn seed_into(&self, storage: &Storage) -> i64 {
+    /// Returns the seeded Game's id. Snapshots and messages are not written —
+    /// `TestAppBuilder` owns those and points their app's active-Game pointer at
+    /// the Game.
+    pub fn seed_into(&self, storage: &Storage) -> GameId {
         let world_id = storage
             .seed_world(&self.world, &self.map)
             .expect("test setup: seed world");
@@ -179,17 +177,17 @@ impl TestData {
                 .seed_character(world_id, npc)
                 .expect("test setup: seed character");
         }
-        let game_id = storage
-            .create_game(
-                &self.world.name,
-                &self.world.key,
-                &self.persona.key,
-                &self.persona.sheet.name,
-                "Test Game",
-            )
-            .expect("test setup: create game");
-        storage.set_game_id(game_id);
-        world_id
+        GameId(
+            storage
+                .create_game(
+                    &self.world.name,
+                    &self.world.key,
+                    &self.persona.key,
+                    &self.persona.sheet.name,
+                    "Test Game",
+                )
+                .expect("test setup: create game"),
+        )
     }
 
     pub fn find_npc(&self, id: &str) -> Option<&NpcCard> {

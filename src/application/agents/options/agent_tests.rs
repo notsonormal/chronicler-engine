@@ -10,6 +10,7 @@ use crate::application::agents::options::agent::OptionsAgent;
 use crate::application::agents::Agent;
 use crate::domain::model::agent::{AgentConfig, AgentContext, BackendSelector, ExecutionPhase};
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::game::GameId;
 use crate::domain::model::prompt_preset::{PromptPreset, PresetType};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
@@ -29,6 +30,7 @@ fn make_ctx<'a>(
     npcs: &'a HashMap<String, NpcCard>,
 ) -> AgentContext<'a> {
     AgentContext {
+        game_id: GameId(1),
         state,
         main_response: None,
         player_input: "",
@@ -92,10 +94,6 @@ fn test_execute_parses_tagged_response() {
 
 #[test]
 fn test_execute_unparseable_response_errors_after_attempts() {
-    // A cycling unparseable response: "[Continuation: ...]" (the default
-    // mock branch) never increments call_index, so the retry pin needs the
-    // per-call response list. The agent must surface an error, not an empty
-    // set, after exactly the contract's two attempts.
     let backend = Arc::new(
         MockBackend::new()
             .with_prompt_responses(vec!["The model rambled about the weather.".to_string()]),
@@ -118,8 +116,6 @@ fn test_execute_unparseable_response_errors_after_attempts() {
 
 #[test]
 fn test_execute_recovers_when_second_attempt_parses() {
-    // Attempt 1 unparseable, attempt 2 parseable — the retry loop must
-    // recover instead of failing the turn.
     let backend = MockBackend::new().with_prompt_responses(vec![
         "The model rambled about the weather.".to_string(),
         "<suggestion>Search the desk</suggestion>".to_string(),
@@ -162,6 +158,7 @@ fn test_execute_missing_current_room_errors() {
     let persona = TestPersona::standard();
     let npcs: HashMap<String, NpcCard> = HashMap::new();
     let ctx = AgentContext {
+        game_id: GameId(1),
         state: &state,
         main_response: None,
         player_input: "",
@@ -176,8 +173,7 @@ fn test_execute_missing_current_room_errors() {
 
 #[test]
 fn test_execute_resolves_active_options_preset_and_records_prompts() {
-    // No game row exists, so the agent's preset lookup falls back to the
-    // settings id — the same fallback Storage::active_options_preset_id pins.
+    // No Game row forces the settings-id fallback.
     let storage = Arc::new(Storage::new_in_memory());
     storage
         .save_preset(&PromptPreset {
@@ -227,8 +223,6 @@ fn test_execute_resolves_active_options_preset_and_records_prompts() {
         other => panic!("expected Options result, got {other:?}"),
     }
 
-    // The recorded forensics must show the preset override rendered through
-    // the template vars — not the fallback prompt and not raw macros.
     let recorded = storage
         .list_latest_llm_messages(10)
         .expect("llm message listing should succeed");

@@ -2,15 +2,14 @@
 
 use std::sync::Arc;
 
+use chronicler_engine::test_support::active_game_of;
 use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
-
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::TestPersona;
 
 use crate::support::http_fixtures::seeded_storage_with_initial_game;
 use crate::support::http_requests::{fetch_body, response_body};
-
 // [docs/specs/games.md] SCENARIO: 19.1
 #[tokio::test]
 async fn test_delete_game_handler_success() {
@@ -29,7 +28,7 @@ async fn test_delete_game_handler_success() {
             "Test World_2026-01-01_1",
         )
         .unwrap();
-    assert_ne!(other_id, state.game_catalogue.current_game_id());
+    assert_ne!(other_id, active_game_of(&state).0);
 
     let req = Request::builder()
         .uri(format!("/games/{other_id}/delete"))
@@ -50,11 +49,11 @@ async fn test_delete_game_handler_success() {
 async fn test_delete_game_handler_active_game() {
     let (storage, _world_key, _persona_key, _game_id) = seeded_storage_with_initial_game();
 
-    let app = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .build();
+        .build_with_state();
 
-    let active_game_id = storage.current_game_id();
+    let active_game_id = active_game_of(&state);
 
     let req = Request::builder()
         .uri(format!("/games/{active_game_id}/delete"))
@@ -116,7 +115,7 @@ async fn test_delete_game_handler_last_saved_game_answers_with_the_empty_state()
         .storage(Arc::clone(&storage))
         .build_with_state();
 
-    let active_id = state.game_catalogue.current_game_id();
+    let active_id = active_game_of(&state);
     storage
         .create_game(
             "Test World",
@@ -133,7 +132,7 @@ async fn test_delete_game_handler_last_saved_game_answers_with_the_empty_state()
         .unwrap()
         .into_iter()
         .map(|g| g.id)
-        .filter(|id| *id != active_id)
+        .filter(|id| *id != active_id.0)
         .collect();
     assert_eq!(
         saved_ids.len(),

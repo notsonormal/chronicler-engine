@@ -26,6 +26,7 @@ use crate::application::settings_service::SettingsService;
 use crate::application::text_check_service::TextCheckService;
 use crate::application::world_catalogue::WorldCatalogue;
 use crate::bootstrap::wiring::WiredApp;
+use crate::domain::model::game::GameId;
 use crate::domain::model::settings::AppSettings;
 use crate::error::{EngineError, Result};
 
@@ -86,10 +87,10 @@ impl AppState {
         format!("Failed to render {name}: {e}")
     }
 
-    pub fn render_header(&self) -> Result<String> {
+    pub fn render_header(&self, game_id: GameId) -> Result<String> {
         let game_name = self
             .game_view_query
-            .get_current_game_display_name()
+            .game_display_name(game_id)
             .unwrap_or_else(|_| "Unknown".to_string());
         let roles = self
             .game_view_query
@@ -98,12 +99,12 @@ impl AppState {
         header_fragment_html(game_name, &roles)
     }
 
-    pub fn render_story_log(&self) -> Result<String> {
+    pub fn render_story_log(&self, game_id: GameId) -> Result<String> {
         const MAX_LOG_DISPLAY: usize = 50;
 
         let (entries, has_last_trigger) = self
             .game_view_query
-            .get_story_log_entries()
+            .get_story_log_entries(game_id)
             .map_err(|e| EngineError::Config(Self::render_error_context("story log", e)))?;
 
         let entries: Vec<_> = entries.into_iter().take(MAX_LOG_DISPLAY).collect();
@@ -113,15 +114,15 @@ impl AppState {
             .map_err(|e| EngineError::Template(Self::render_error_context("story log", e)))
     }
 
-    pub fn render_visual_sidebar(&self) -> Result<String> {
+    pub fn render_visual_sidebar(&self, game_id: GameId) -> Result<String> {
         let (room_name, image_path) = self
             .game_view_query
-            .get_current_room_view()
+            .get_current_room_view(game_id)
             .map_err(|e| EngineError::Config(Self::render_error_context("visual sidebar", e)))?;
 
         let npc_data = self
             .game_view_query
-            .get_npc_headshots(true)
+            .get_npc_headshots(game_id, true)
             .map_err(|e| EngineError::Config(Self::render_error_context("visual sidebar", e)))?;
 
         let npc_portraits: Vec<NpcPortraitView> = npc_data
@@ -136,16 +137,14 @@ impl AppState {
             .map_err(|e| EngineError::Template(Self::render_error_context("visual sidebar", e)))
     }
 
-    pub fn render_options_dock(&self) -> Result<String> {
+    pub fn render_options_dock(&self, game_id: GameId) -> Result<String> {
         let options = self
             .game_view_query
-            .get_current_options()
+            .get_current_options(game_id)
             .map_err(|e| EngineError::Config(Self::render_error_context("options dock", e)))?;
         // The generation registry, not the persisted status, answers "is
         // something generating?": the record can lag the live slot.
-        let is_busy = self
-            .generation_gate
-            .is_busy(self.game_catalogue.current_game_id());
+        let is_busy = self.generation_gate.is_busy(game_id);
 
         let vm = OptionsDockViewModel::new(options, is_busy);
         let template = OptionsDockTemplate::new(vm);
@@ -154,10 +153,13 @@ impl AppState {
             .map_err(|e| EngineError::Template(Self::render_error_context("options dock", e)))
     }
 
-    pub fn render_character_headshots(&self) -> Result<String> {
-        let npc_data = self.game_view_query.get_npc_headshots(false).map_err(|e| {
-            EngineError::Config(Self::render_error_context("character headshots", e))
-        })?;
+    pub fn render_character_headshots(&self, game_id: GameId) -> Result<String> {
+        let npc_data = self
+            .game_view_query
+            .get_npc_headshots(game_id, false)
+            .map_err(|e| {
+                EngineError::Config(Self::render_error_context("character headshots", e))
+            })?;
 
         let npc_portraits: Vec<NpcPortraitView> = npc_data
             .into_iter()

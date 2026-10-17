@@ -95,7 +95,7 @@ fn test_allowed_modes_round_trip_sqlite() {
     use crate::domain::model::settings::NarratorMode;
 
     let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1);
+    let storage = Storage::new_sqlite(pool);
     let mut preset = dummy_preset("m1", PresetType::System);
     preset.allowed_modes = vec![NarratorMode::Novel];
     storage.save_preset(&preset).unwrap();
@@ -110,7 +110,7 @@ fn test_corrupt_allowed_modes_in_db_errors_as_parse() {
     use crate::error::EngineError;
 
     let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool.clone(), 1);
+    let storage = Storage::new_sqlite(pool.clone());
     storage
         .save_preset(&dummy_preset("m2", PresetType::System))
         .unwrap();

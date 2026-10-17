@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::application::message_service::MessageService;
 use crate::application::world_catalogue::WorldCatalogue;
+use crate::domain::model::game::GameId;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -19,7 +20,7 @@ fn make_service() -> (MessageService, Arc<Storage>) {
     (service, storage)
 }
 
-fn make_service_with_game() -> (MessageService, Arc<Storage>, u64) {
+fn make_service_with_game() -> (MessageService, Arc<Storage>, GameId) {
     let (service, storage) = make_service();
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
@@ -29,10 +30,11 @@ fn make_service_with_game() -> (MessageService, Arc<Storage>, u64) {
     let persona = TestPersona::standard();
     storage.seed_persona(&persona.key, &persona).unwrap();
 
-    let game_id = storage
-        .create_game("Test World", "test", "hero", "Hero", "Test World 1")
-        .unwrap();
-    storage.set_game_id(game_id);
+    let game_id = GameId(
+        storage
+            .create_game("Test World", "test", "hero", "Hero", "Test World 1")
+            .unwrap(),
+    );
 
     (service, storage, game_id)
 }
@@ -40,13 +42,13 @@ fn make_service_with_game() -> (MessageService, Arc<Storage>, u64) {
 #[test]
 fn test_load_expecting_valid_state_errors_when_no_snapshot() {
     let (service, _) = make_service();
-    assert!(service.load_expecting_valid_state().is_err());
+    assert!(service.load_expecting_valid_state(GameId(0)).is_err());
 }
 
 #[test]
 fn test_load_or_fresh_returns_fresh_state_when_no_snapshot() {
     let (service, _) = make_service();
-    let state = service.load_or_fresh();
+    let state = service.load_or_fresh(GameId(0));
     assert!(state.narrative.history().is_empty());
 }
 
@@ -54,16 +56,16 @@ fn test_load_or_fresh_returns_fresh_state_when_no_snapshot() {
 fn test_save_state_and_load_roundtrip() {
     let (service, _) = make_service();
     let state = GameState::new("start");
-    service.save_state(&state).unwrap();
+    service.save_state(GameId(0), &state).unwrap();
 
-    let loaded = service.load_expecting_valid_state().unwrap();
+    let loaded = service.load_expecting_valid_state(GameId(0)).unwrap();
     assert_eq!(loaded.movement.current_room_id, "start");
 }
 
 #[test]
 fn test_build_fresh_initial_state_uses_starting_room() {
-    let (service, _, _game_id) = make_service_with_game();
-    let state = service.build_fresh_initial_state().unwrap();
+    let (service, _, game_id) = make_service_with_game();
+    let state = service.build_fresh_initial_state(game_id).unwrap();
     assert_eq!(state.movement.current_room_id, "start");
 }
 
@@ -181,8 +183,8 @@ fn test_find_retry_anchor_guide_only_turn_anchors_the_guided_narration() {
 
 #[test]
 fn test_switch_swipe_rejects_concurrent_generation() {
-    let (service, _, _game_id) = make_service_with_game();
-    let err = service.switch_swipe(true, 1, 0).unwrap_err();
+    let (service, _, game_id) = make_service_with_game();
+    let err = service.switch_swipe(game_id, true, 1, 0).unwrap_err();
     assert!(matches!(
         err,
         crate::application::errors::ApplicationError::ConcurrentGeneration
@@ -203,29 +205,27 @@ fn swipe_with_snapshot(text: &str, snapshot_id: u64) -> Swipe {
 
 #[test]
 fn test_switch_swipe_restores_a_settled_snapshot() {
-    let (service, storage, _game_id) = make_service_with_game();
+    let (service, storage, game_id) = make_service_with_game();
 
-    // The shape a narration turn leaves on its Swipe: still Generating, with the
-    // redo's stale option set.
     let mut generating = GameState::new("start");
     generating.narrative.input_buffer.status = GenerationStatus::Generating;
     generating.narrative.input_buffer.phase = GenerationPhase::Narrating;
     generating.narrative.current_options = vec!["a stale option".to_string()];
-    let snapshot_id = service.save_state(&generating).unwrap();
+    let snapshot_id = service.save_state(game_id, &generating).unwrap();
 
     let msg = Message::new("narration", MessageType::Narration, None, None);
-    let id = storage.insert_message(&msg).unwrap();
+    let id = storage.insert_message(game_id, &msg).unwrap();
     storage
         .insert_swipe(id, &swipe_with_snapshot("first", snapshot_id), 0)
         .unwrap();
     storage
         .insert_swipe(id, &swipe_with_snapshot("second", snapshot_id), 1)
         .unwrap();
-    storage.update_active_swipe(id, 1).unwrap();
+    storage.update_active_swipe(game_id, id, 1).unwrap();
 
-    service.switch_swipe(false, id, 0).unwrap();
+    service.switch_swipe(game_id, false, id, 0).unwrap();
 
-    let restored = storage.load_latest_snapshot().unwrap().unwrap();
+    let restored = storage.load_latest_snapshot(game_id).unwrap().unwrap();
     assert_eq!(
         restored.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -243,41 +243,47 @@ fn test_switch_swipe_restores_a_settled_snapshot() {
 
 #[test]
 fn test_delete_last_removes_message_and_snapshot() {
-    let (service, _storage, _game_id) = make_service_with_game();
+    let (service, _storage, game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
     state.add_message("hello".to_string(), MessageType::Narration);
-    service.save_message_and_snapshot(&mut state).unwrap();
+    service
+        .save_message_and_snapshot(game_id, &mut state)
+        .unwrap();
 
-    let before = service.load_messages().unwrap();
+    let before = service.load_messages(game_id).unwrap();
     assert_eq!(before.len(), 1);
 
-    service.delete_last().unwrap();
+    service.delete_last(game_id).unwrap();
 
-    let after = service.load_messages().unwrap();
+    let after = service.load_messages(game_id).unwrap();
     assert!(after.is_empty());
 }
 
 #[test]
 fn test_edit_history_updates_text_and_snapshot() {
-    let (service, _storage, _game_id) = make_service_with_game();
+    let (service, _storage, game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
     state.add_message("old".to_string(), MessageType::Narration);
-    service.save_message_and_snapshot(&mut state).unwrap();
+    service
+        .save_message_and_snapshot(game_id, &mut state)
+        .unwrap();
 
-    let messages = service.load_messages().unwrap();
+    let messages = service.load_messages(game_id).unwrap();
     let id = messages[0].id;
 
-    service.edit_history(id, "new".to_string()).unwrap();
+    service
+        .edit_history(game_id, id, "new".to_string())
+        .unwrap();
 
-    let after = service.load_messages().unwrap();
+    let after = service.load_messages(game_id).unwrap();
     assert_eq!(after[0].text(), "new");
 }
 
 #[test]
 fn test_save_message_and_snapshot_assigns_snapshot_id_to_message() {
-    let (service, _storage, _game_id) = make_service_with_game();
+    let (service, _storage, game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
     state.add_message("hello".to_string(), MessageType::Narration);
@@ -291,7 +297,9 @@ fn test_save_message_and_snapshot_assigns_snapshot_id_to_message() {
             .is_none()
     );
 
-    service.save_message_and_snapshot(&mut state).unwrap();
+    service
+        .save_message_and_snapshot(game_id, &mut state)
+        .unwrap();
 
     assert!(
         state
@@ -307,25 +315,29 @@ fn test_save_message_and_snapshot_assigns_snapshot_id_to_message() {
 
 #[test]
 fn test_save_message_and_snapshot_persists_a_snapshot() {
-    let (service, storage, _game_id) = make_service_with_game();
+    let (service, storage, game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
     state.add_message("hello".to_string(), MessageType::Narration);
-    service.save_message_and_snapshot(&mut state).unwrap();
+    service
+        .save_message_and_snapshot(game_id, &mut state)
+        .unwrap();
 
     assert!(
-        storage.load_latest_snapshot().unwrap().is_some(),
+        storage.load_latest_snapshot(game_id).unwrap().is_some(),
         "saving a message must persist the snapshot the restores read"
     );
 }
 
 #[test]
 fn test_save_message_and_snapshot_writes_the_arriving_room_onto_the_saved_swipe() {
-    let (service, _storage, _game_id) = make_service_with_game();
+    let (service, _storage, game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
     state.add_message("hello".to_string(), MessageType::Narration);
-    service.save_message_and_snapshot(&mut state).unwrap();
+    service
+        .save_message_and_snapshot(game_id, &mut state)
+        .unwrap();
 
     let narration = state.narrative.history.last().unwrap();
     state.narrative.arriving_location_write = Some(ArrivingLocationWrite {
@@ -333,9 +345,11 @@ fn test_save_message_and_snapshot_writes_the_arriving_room_onto_the_saved_swipe(
         swipe_index: narration.active_swipe_index,
         room_name: "Room start".to_string(),
     });
-    service.save_message_and_snapshot(&mut state).unwrap();
+    service
+        .save_message_and_snapshot(game_id, &mut state)
+        .unwrap();
 
-    let stored = service.load_messages().unwrap();
+    let stored = service.load_messages(game_id).unwrap();
     assert_eq!(
         stored[0].location_header(),
         Some("Room start"),
@@ -349,11 +363,13 @@ fn test_save_message_and_snapshot_writes_the_arriving_room_onto_the_saved_swipe(
 
 #[test]
 fn test_a_failed_arriving_room_write_stays_for_the_next_save() {
-    let (service, storage, _game_id) = make_service_with_game();
+    let (service, storage, game_id) = make_service_with_game();
 
     let mut state = GameState::new("start");
     state.add_message("hello".to_string(), MessageType::Narration);
-    service.save_message_and_snapshot(&mut state).unwrap();
+    service
+        .save_message_and_snapshot(game_id, &mut state)
+        .unwrap();
 
     let narration = state.narrative.history.last().unwrap();
     let arriving = ArrivingLocationWrite {
@@ -367,7 +383,11 @@ fn test_a_failed_arriving_room_write_stays_for_the_next_save() {
         crate::adapters::driven::storage::TestOverride::internal("write failed"),
     );
 
-    assert!(service.save_message_and_snapshot(&mut state).is_err());
+    assert!(
+        service
+            .save_message_and_snapshot(game_id, &mut state)
+            .is_err()
+    );
     assert_eq!(
         state.narrative.arriving_location_write,
         Some(arriving),

@@ -12,6 +12,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::text_check::HarperTextChecker;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::connection_test_service::ConnectionTestService;
+use crate::application::games::active::ActiveGame;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GenerationGate;
@@ -25,6 +26,7 @@ use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::settings_service::SettingsService;
 use crate::application::text_check_service::TextCheckService;
 use crate::application::world_catalogue::WorldCatalogue;
+use crate::domain::model::game::GameId;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
@@ -102,7 +104,11 @@ fn build_wired_app(
     recorder: Arc<LlmCallRecorder>,
     agent_registry: AgentRegistry,
     text_check_service: Arc<TextCheckService>,
+    initial_game: Option<GameId>,
 ) -> Result<WiredApp> {
+    // The pointer is built here and handed to the catalogue, which owns both
+    // its reading and its writing.
+    let active_game = Arc::new(ActiveGame::new(Arc::clone(&storage)));
     let shutdown_token = CancellationToken::new();
 
     let settings_service = SettingsService::new(Arc::clone(&storage));
@@ -113,7 +119,12 @@ fn build_wired_app(
     let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
     let persona_catalogue = PersonaCatalogue::new(Arc::clone(&storage));
     let generation_gate = GenerationGate::new();
-    let game_catalogue = GameCatalogue::new(Arc::clone(&storage), Arc::clone(&message_service));
+    let game_catalogue = GameCatalogue::new(
+        Arc::clone(&storage),
+        Arc::clone(&message_service),
+        Arc::clone(&active_game),
+        initial_game,
+    );
     let game_view_query = GameViewQuery::new(Arc::clone(&storage), Arc::clone(&message_service));
     let pipeline = ActionPipeline::with_storage(
         shutdown_token.clone(),
@@ -121,11 +132,14 @@ fn build_wired_app(
         agent_registry,
         Arc::clone(&message_service),
         Arc::clone(&storage),
+        Arc::new(game_catalogue.clone()),
     );
 
     // Boot heal: a crash/restart may have left the current game persisted as Generating.
-    if let Err(e) = pipeline.heal_stale_status(&generation_gate) {
-        tracing::warn!("boot heal: failed to persist healed status: {e}");
+    if let Some(game_id) = game_catalogue.active_game_id() {
+        if let Err(e) = pipeline.heal_stale_status(&generation_gate, game_id) {
+            tracing::warn!("boot heal: failed to persist healed status: {e}");
+        }
     }
 
     Ok(WiredApp {
@@ -145,7 +159,7 @@ fn build_wired_app(
     })
 }
 
-pub fn build_app_graph(storage: Arc<Storage>) -> Result<WiredApp> {
+pub fn build_app_graph(storage: Arc<Storage>, initial_game: Option<GameId>) -> Result<WiredApp> {
     let settings = storage.get_settings()?;
     // Fail fast on a dangling reference at boot: the resolvers would otherwise
     // defer the error to the first generation.
@@ -173,13 +187,20 @@ pub fn build_app_graph(storage: Arc<Storage>) -> Result<WiredApp> {
     let checker = Arc::new(HarperTextChecker::new());
     let text_check_service = Arc::new(TextCheckService::new(checker));
 
-    build_wired_app(storage, narration_recorder, registry, text_check_service)
+    build_wired_app(
+        storage,
+        narration_recorder,
+        registry,
+        text_check_service,
+        initial_game,
+    )
 }
 
 #[cfg(feature = "testing")]
 pub fn build_app_graph_for_tests(
     storage: Arc<Storage>,
     pipeline_override: Option<ActionPipeline>,
+    initial_game: Option<GameId>,
 ) -> Result<WiredApp> {
     let settings = storage.get_settings()?;
     let checker = Arc::new(HarperTextChecker::new());
@@ -204,13 +225,20 @@ pub fn build_app_graph_for_tests(
         .unwrap_or_default()
     };
 
-    let mut wired = build_wired_app(storage, recorder, registry, text_check_service)?;
+    let mut wired = build_wired_app(
+        storage,
+        recorder,
+        registry,
+        text_check_service,
+        initial_game,
+    )?;
 
+    // Override backends must use this graph's persistence.
     if let Some(pipeline) = pipeline_override {
-        // Override backends must use this graph's persistence.
         wired.pipeline = pipeline.rebind_for_test(
             Arc::clone(&wired.message_service),
             Arc::clone(&wired.storage),
+            Arc::new(wired.game_catalogue.clone()),
             wired.shutdown_token.clone(),
         );
     }

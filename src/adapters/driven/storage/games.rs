@@ -2,7 +2,7 @@
 //! Game storage operations
 
 use crate::error::EngineError;
-use crate::domain::model::game::{Game, NewGame};
+use crate::domain::model::game::{Game, GameId, NewGame};
 use crate::domain::model::settings::{
     AppSettings, ModePresetBundle, NarrativePerspective, NarrativeTense, NarratorMode,
 };
@@ -40,8 +40,6 @@ impl Storage {
         })
     }
 
-    /// A convenience for tests and fixtures: the legacy defaults a bare game
-    /// carries, written through the same path as a catalogue-created game.
     pub fn create_game(
         &self,
         world_name: &str,
@@ -100,8 +98,7 @@ impl Storage {
         })
     }
 
-    /// The stable `name` is never touched, so the uniqueness scan stays valid
-    /// across a rename.
+    /// The uniqueness scan keys on `name`, so a rename must not touch it.
     pub fn update_game_display_name(&self, id: u64, display_name: &str) -> Result<(), EngineError> {
         self.with_backend_mut("update_game_display_name", |backend| match backend {
             Backend::Sqlite { pool } => {
@@ -181,7 +178,6 @@ impl Storage {
             .ok_or_else(|| EngineError::GameNotFound(id))
     }
 
-    /// Persists the posture triple and active preset ids; narrative state is untouched.
     pub fn update_game_config(&self, game: &Game) -> Result<(), EngineError> {
         self.with_backend_mut("update_game_config", |backend| match backend {
             Backend::Sqlite { pool } => {
@@ -235,46 +231,48 @@ impl Storage {
         })
     }
 
-    pub fn active_system_preset_id(&self, settings: &AppSettings) -> String {
+    pub fn active_system_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
         self.resolve_active_preset_id(
+            game_id,
             settings,
             |g| g.active_system_prompt_preset_id.as_str(),
             |b| b.system_prompt_preset_id.as_str(),
         )
     }
 
-    pub fn active_quantifier_preset_id(&self, settings: &AppSettings) -> String {
+    pub fn active_quantifier_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
         self.resolve_active_preset_id(
+            game_id,
             settings,
             |g| g.active_quantifier_prompt_preset_id.as_str(),
             |b| b.quantifier_prompt_preset_id.as_str(),
         )
     }
 
-    pub fn active_impersonate_preset_id(&self, settings: &AppSettings) -> String {
+    pub fn active_impersonate_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
         self.resolve_active_preset_id(
+            game_id,
             settings,
             |g| g.active_impersonate_prompt_preset_id.as_str(),
             |b| b.impersonate_prompt_preset_id.as_str(),
         )
     }
 
-    /// Game-first options preset id. Options presets are mode-agnostic and
-    /// sit outside the per-mode registry, so the fallback is the settings
-    /// column rather than a mode bundle.
-    pub fn active_options_preset_id(&self, settings: &AppSettings) -> String {
-        match self.get_game(self.current_game_id()).ok().flatten() {
+    /// Options presets are mode-agnostic and sit outside the per-mode registry, so
+    /// the fallback is the settings column, not a mode bundle.
+    pub fn active_options_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
+        match self.get_game(game_id.0).ok().flatten() {
             Some(game) => game.active_options_prompt_preset_id.clone(),
             None => {
-                tracing::warn!("current game missing; falling back to settings options preset");
+                tracing::warn!("game {game_id} missing; falling back to settings options preset");
                 settings.active_options_prompt_preset_id.clone()
             }
         }
     }
 
-    // Falls back to the registry's Novel bundle when the current game is absent.
     fn resolve_active_preset_id<G, B>(
         &self,
+        game_id: GameId,
         settings: &AppSettings,
         game_slot: G,
         bundle_slot: B,
@@ -283,10 +281,10 @@ impl Storage {
         G: FnOnce(&Game) -> &str,
         B: FnOnce(&ModePresetBundle) -> &str,
     {
-        match self.get_game(self.current_game_id()).ok().flatten() {
+        match self.get_game(game_id.0).ok().flatten() {
             Some(game) => game_slot(&game).to_string(),
             None => {
-                tracing::warn!("current game missing; falling back to registry novel preset");
+                tracing::warn!("game {game_id} missing; falling back to registry novel preset");
                 let bundle = settings
                     .mode_preset_registry
                     .bundle_for(NarratorMode::Novel);

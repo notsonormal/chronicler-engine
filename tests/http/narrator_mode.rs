@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
@@ -14,7 +15,6 @@ use chronicler_engine::test_support::TestMap;
 use crate::support::app_wiring::app_with_narrator_and_registry;
 use crate::support::http_fixtures::if_world;
 use crate::support::http_requests::{post_action, post_form, wait_idle};
-
 /// App whose narrator recorder persists every assembled prompt into the
 /// shared storage, so tests can assert on what the narrator received.
 fn narrated_app() -> (axum::Router, AppState, Arc<Storage>) {
@@ -83,7 +83,10 @@ async fn test_if_world_game_inherits_posture_and_bundle_http() {
         "tense macro must resolve to the inherited present tense"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -101,8 +104,8 @@ async fn test_if_world_game_inherits_posture_and_bundle_http() {
 // [docs/specs/narrator_mode.md] SCENARIO: 23.2
 #[tokio::test]
 async fn test_mode_switch_retargets_system_preset_http() {
-    let (app, state, storage) = narrated_app();
-    let game_id = storage.current_game_id();
+    let (app, state, _storage) = narrated_app();
+    let game_id = active_game_of(&state);
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
@@ -143,8 +146,8 @@ async fn test_mode_switch_retargets_system_preset_http() {
 // [docs/specs/narrator_mode.md] SCENARIO: 23.3
 #[tokio::test]
 async fn test_mode_switch_renders_if_bundle_and_nudges_perspective_http() {
-    let (app, state, storage) = narrated_app();
-    let game_id = storage.current_game_id();
+    let (app, state, _storage) = narrated_app();
+    let game_id = active_game_of(&state);
 
     let resp = post_form(
         &app,
@@ -183,8 +186,8 @@ async fn test_mode_switch_renders_if_bundle_and_nudges_perspective_http() {
 // [docs/specs/narrator_mode.md] SCENARIO: 23.4
 #[tokio::test]
 async fn test_deliberate_perspective_survives_mode_switch_http() {
-    let (app, state, storage) = narrated_app();
-    let game_id = storage.current_game_id();
+    let (app, state, _storage) = narrated_app();
+    let game_id = active_game_of(&state);
 
     let resp = post_form(
         &app,
@@ -237,7 +240,10 @@ async fn test_impersonate_works_in_if_game_http() {
     assert!(resp.status().is_success(), "/impersonate should accept");
     assert!(wait_idle(&state, 1000).await, "impersonate should complete");
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)

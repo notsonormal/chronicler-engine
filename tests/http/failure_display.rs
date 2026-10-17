@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
+use chronicler_engine::test_support::active_game_of;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
-
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::domain::model::state::generation_status::{
@@ -15,7 +15,6 @@ use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::test_support::TestAppBuilder;
 
 use crate::support::http_requests::{fetch_body, post_form};
-
 // [docs/specs/failure_display.md] SCENARIO: 38.1
 #[tokio::test]
 async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
@@ -209,9 +208,11 @@ async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
 async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
     let state = TestAppBuilder::default_test().build_service();
     {
-        let mut game_state = state.message_service.load_or_fresh();
+        let mut game_state = state.message_service.load_or_fresh(active_game_of(&state));
         game_state.movement.current_room_id = "non_existent_room".to_string();
-        let _ = state.message_service.save_state(&game_state);
+        let _ = state
+            .message_service
+            .save_state(active_game_of(&state), &game_state);
     }
     let app = build_router(state);
 
@@ -345,10 +346,10 @@ async fn test_failed_user_action_is_not_a_failed_poll() {
         "update_game_config",
         TestOverride::internal("update_game_config failure"),
     ));
-    let (app, _state) = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
-    let id = storage.current_game_id();
+    let id = active_game_of(&state);
 
     let response = post_form(
         &app,

@@ -13,7 +13,7 @@ async fn test_rename_game_updates_display_name_in_header_and_fragment() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
     let active = state
         .game_catalogue
-        .current_game()
+        .active_game()
         .expect("the active game must load")
         .expect("the fixture seeds an active game");
     let stable_name = active.name.clone();
@@ -34,7 +34,7 @@ async fn test_rename_game_updates_display_name_in_header_and_fragment() {
 
     let renamed = state
         .game_catalogue
-        .current_game()
+        .active_game()
         .unwrap()
         .expect("the active game must still load");
     assert_eq!(renamed.display_name, "The Long Road");
@@ -66,7 +66,7 @@ async fn test_rename_game_blank_display_name_is_rejected() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
     let active = state
         .game_catalogue
-        .current_game()
+        .active_game()
         .expect("the active game must load")
         .expect("the fixture seeds an active game");
 
@@ -87,7 +87,7 @@ async fn test_rename_game_blank_display_name_is_rejected() {
 
     let unchanged = state
         .game_catalogue
-        .current_game()
+        .active_game()
         .unwrap()
         .expect("the active game must still load");
     assert_eq!(

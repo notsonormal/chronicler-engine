@@ -8,6 +8,7 @@ use axum::{
 };
 
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
 use crate::application::errors::{ApplicationError, ProcessActionResult};
 
@@ -26,17 +27,22 @@ pub async fn reset_handler(
 
 pub async fn retrigger_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
 ) -> Result<Response<Body>, ApplicationError> {
     map_process_action_result(
-        state.pipeline.retrigger(&state.generation_gate)?,
+        state.pipeline.retrigger(&state.generation_gate, game_id)?,
         "Retriggering...",
     )
 }
 
 pub async fn retry_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
 ) -> Result<Response<Body>, ApplicationError> {
-    map_process_action_result(state.pipeline.retry(&state.generation_gate)?, "Retrying...")
+    map_process_action_result(
+        state.pipeline.retry(&state.generation_gate, game_id)?,
+        "Retrying...",
+    )
 }
 
 fn map_process_action_result(
@@ -56,13 +62,13 @@ fn map_process_action_result(
 
 pub async fn switch_swipe_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
     Path((message_id, swipe_index)): Path<(u64, usize)>,
 ) -> Result<Response<Body>, ApplicationError> {
-    let current_game_id = state.game_catalogue.current_game_id();
-    let is_generating = state.generation_gate.is_busy(current_game_id);
+    let is_generating = state.generation_gate.is_busy(game_id);
     state
         .message_service
-        .switch_swipe(is_generating, message_id, swipe_index)?;
-    let html = state.render_story_log()?;
+        .switch_swipe(game_id, is_generating, message_id, swipe_index)?;
+    let html = state.render_story_log(game_id)?;
     Ok(ok(html))
 }

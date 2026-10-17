@@ -10,6 +10,7 @@ use crate::application::message_service::MessageService;
 use crate::application::prompting::{NpcContext, PromptContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::game::GameId;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationStatus};
@@ -20,6 +21,7 @@ use crate::error::EngineError;
 pub struct ArrivalTaskContext {
     pub(crate) message_service: Arc<MessageService>,
     pub(crate) storage: Arc<Storage>,
+    pub(crate) game_id: GameId,
     pub(crate) room_id: String,
     pub(crate) arrival_preset: Option<PromptPreset>,
     pub(crate) response_length: String,
@@ -35,6 +37,7 @@ impl ArrivalTaskContext {
     pub fn new(
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
+        game_id: GameId,
         room_id: String,
         arrival_preset: Option<PromptPreset>,
         response_length: String,
@@ -47,6 +50,7 @@ impl ArrivalTaskContext {
         Self {
             message_service,
             storage,
+            game_id,
             room_id,
             arrival_preset,
             response_length,
@@ -63,6 +67,7 @@ impl ArrivalTaskContext {
     pub fn new_for_test(
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
+        game_id: GameId,
         room_id: String,
         nearby_npcs: Vec<NpcCard>,
         all_npcs: Vec<NpcCard>,
@@ -75,6 +80,7 @@ impl ArrivalTaskContext {
         Self::new(
             message_service,
             storage,
+            game_id,
             room_id,
             arrival_preset,
             response_length,
@@ -86,7 +92,7 @@ impl ArrivalTaskContext {
         )
     }
 
-    /// Runs the arrival narration. Failures are logged, not propagated.
+    /// Failures are logged, not propagated.
     #[instrument(skip(self), fields(room_id = %self.room_id))]
     pub(crate) fn run(self) {
         if let Err(e) = self.run_inner() {
@@ -96,13 +102,16 @@ impl ArrivalTaskContext {
 
     fn run_inner(self) -> Result<(), EngineError> {
         let storage = &self.storage;
-        let mut state = match self.message_service.load_expecting_valid_state() {
+        let mut state = match self
+            .message_service
+            .load_expecting_valid_state(self.game_id)
+        {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!(
                     "load_expecting_valid_state failed in arrival task: {e}; falling back to fresh initial state"
                 );
-                match self.message_service.build_fresh_initial_state() {
+                match self.message_service.build_fresh_initial_state(self.game_id) {
                     Ok(s) => s,
                     Err(e2) => {
                         tracing::error!("build_fresh_initial_state also failed: {e2}");
@@ -112,8 +121,7 @@ impl ArrivalTaskContext {
             }
         };
 
-        let current_game_id = storage.current_game_id();
-        let game = storage.require_game(current_game_id)?;
+        let game = storage.require_game(self.game_id.0)?;
         let world_with_map = storage.require_world(&game.world_key)?;
         let persona: Arc<PersonaCard> = Arc::new(storage.require_persona(&game.persona_key)?);
         let world: Arc<WorldCard> = Arc::new(world_with_map.world_card);
@@ -181,7 +189,10 @@ impl ArrivalTaskContext {
             }
         }
 
-        if let Err(e) = self.message_service.save_message_and_snapshot(&mut state) {
+        if let Err(e) = self
+            .message_service
+            .save_message_and_snapshot(self.game_id, &mut state)
+        {
             tracing::error!("Failed to save arrival message and snapshot: {e}");
         }
 

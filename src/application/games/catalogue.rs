@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
+use crate::application::games::active::ActiveGame;
 use crate::application::message_service::MessageService;
-use crate::domain::model::game::{Game, PresetSelection};
+use crate::domain::model::game::{Game, GameId, PresetSelection};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::generate_game_name;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -15,13 +16,26 @@ use crate::adapters::driven::storage::Storage;
 pub struct GameCatalogue {
     storage: Arc<Storage>,
     message_service: Arc<MessageService>,
+    active_game: Arc<ActiveGame>,
 }
 
 impl GameCatalogue {
-    pub fn new(storage: Arc<Storage>, message_service: Arc<MessageService>) -> Self {
+    /// `initial_game` is the Game the boot resolved, or `None` when the app
+    /// starts with no active Game. Only the composition root and the test
+    /// builders pass one: a later move goes through `switch_game`.
+    pub fn new(
+        storage: Arc<Storage>,
+        message_service: Arc<MessageService>,
+        active_game: Arc<ActiveGame>,
+        initial_game: Option<GameId>,
+    ) -> Self {
+        if let Some(initial_game) = initial_game {
+            active_game.set(initial_game);
+        }
         Self {
             storage,
             message_service,
+            active_game,
         }
     }
 
@@ -66,16 +80,11 @@ impl GameCatalogue {
         };
 
         let new_id = storage.create_game_from_request(&request)?;
-        let old_id = storage.current_game_id();
-        self.storage.set_game_id(new_id);
-
-        match self.persist_initial_state_with_swipes() {
-            Ok(_) => {}
-            Err(e) => {
-                self.storage.set_game_id(old_id);
-                return Err(e);
-            }
-        }
+        // The pointer moves only once the fresh state is written, so a failed
+        // create leaves the previous Game active (the pointer has no "no Game"
+        // to restore in production).
+        self.persist_initial_state_with_swipes(GameId(new_id))?;
+        self.active_game.set(GameId(new_id));
 
         Ok(new_id)
     }
@@ -85,7 +94,7 @@ impl GameCatalogue {
             return Err(ApplicationError::validation("Game not found"));
         }
 
-        self.storage.set_game_id(id);
+        self.active_game.set(GameId(id));
         Ok(())
     }
 
@@ -102,7 +111,7 @@ impl GameCatalogue {
     }
 
     pub fn delete_game(&self, id: u64) -> Result<(), ApplicationError> {
-        if id == self.storage.current_game_id() {
+        if self.active_game.get() == Some(GameId(id)) {
             return Err(ApplicationError::validation(
                 "Cannot delete the active game",
             ));
@@ -115,18 +124,20 @@ impl GameCatalogue {
         self.storage.list_games().map_err(Into::into)
     }
 
-    pub fn current_game_id(&self) -> u64 {
-        self.storage.current_game_id()
+    pub fn active_game_id(&self) -> Option<GameId> {
+        self.active_game.get()
     }
 
-    pub fn current_game(&self) -> Result<Option<Game>, ApplicationError> {
-        let id = self.storage.current_game_id();
-        self.storage.get_game(id).map_err(Into::into)
+    /// The active Game row, or `None` when no Game is active.
+    pub fn active_game(&self) -> Result<Option<Game>, ApplicationError> {
+        let Some(id) = self.active_game.get() else {
+            return Ok(None);
+        };
+        self.storage.get_game(id.0).map_err(Into::into)
     }
 
-    /// Override a game's perspective and tense (per-game posture override).
-    /// Mode is deliberately absent — switching mode is `switch_mode`, which
-    /// also retargets presets and nudges perspective.
+    /// Only perspective and tense: a mode switch is `switch_mode`, which also
+    /// retargets presets and nudges perspective.
     pub fn set_posture(
         &self,
         id: u64,
@@ -140,10 +151,8 @@ impl GameCatalogue {
         Ok(game)
     }
 
-    /// Switch a game's narrator mode (the distinct mode-switch action):
-    /// retarget the game's three preset-ids to the new mode's registry
-    /// bundle, nudge perspective only when it still sits at the other mode's
-    /// default, and persist. A deliberately-set perspective is never clobbered.
+    /// A deliberately-set perspective survives the switch; only the other mode's
+    /// default is nudged.
     pub fn switch_mode(&self, id: u64, mode: NarratorMode) -> Result<Game, ApplicationError> {
         let mut game = self.require_game(id)?;
         if game.narrator_mode == mode {
@@ -172,10 +181,8 @@ impl GameCatalogue {
         Ok(game)
     }
 
-    /// Set the game's per-game preset selection (the picker). Each id must
-    /// exist in the library; a mode-tagged preset that disallows the game's
-    /// mode is accepted only when unchanged, so the stored selection is never
-    /// silently invalidated.
+    /// A mode-tagged preset that disallows the game's mode is accepted only when
+    /// unchanged, so a stored selection is never silently invalidated.
     pub fn set_preset_selection(
         &self,
         id: u64,
@@ -215,10 +222,13 @@ impl GameCatalogue {
 
     pub fn reset(&self) -> Result<(), ApplicationError> {
         let storage = &self.storage;
-        let current_id = storage.current_game_id();
+        let current_id = self
+            .active_game
+            .get()
+            .ok_or_else(|| ApplicationError::validation("No active game"))?;
         let game = storage
-            .get_game(current_id)?
-            .ok_or_else(|| ApplicationError::validation("Current game not found"))?;
+            .get_game(current_id.0)?
+            .ok_or_else(|| ApplicationError::validation("Game not found"))?;
         let world_key = game.world_key.clone();
         let persona_key = game.persona_key.clone();
 
@@ -231,7 +241,7 @@ impl GameCatalogue {
             .get_persona(&persona_key)?
             .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
 
-        storage.delete_game(current_id)?;
+        storage.delete_game(current_id.0)?;
 
         let existing_names: Vec<String> = storage
             .list_games()?
@@ -266,23 +276,25 @@ impl GameCatalogue {
             options_always_on: world_card.options_always_on,
         };
         let new_id = storage.create_game_from_request(&request)?;
-        self.storage.set_game_id(new_id);
+        // The pointer moves before the fresh state is written, so a failed reset
+        // leaves the new Game active.
+        self.active_game.set(GameId(new_id));
 
-        self.persist_initial_state_with_swipes()?;
+        self.persist_initial_state_with_swipes(GameId(new_id))?;
 
         Ok(())
     }
 
-    fn persist_initial_state_with_swipes(&self) -> Result<u64, ApplicationError> {
-        let mut initial_state = self.message_service.build_fresh_initial_state()?;
+    fn persist_initial_state_with_swipes(&self, game_id: GameId) -> Result<u64, ApplicationError> {
+        let mut initial_state = self.message_service.build_fresh_initial_state(game_id)?;
         let storage = &self.storage;
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
-        let snapshot_id = storage.save_snapshot(&snapshot)?;
+        let snapshot_id = storage.save_snapshot(game_id, &snapshot)?;
 
         if let Some(msg) = initial_state.narrative.history.last_mut() {
             if msg.is_unpersisted() {
                 msg.set_snapshot_id(Some(snapshot_id));
-                match storage.insert_message(&*msg) {
+                match storage.insert_message(game_id, &*msg) {
                     Ok(id) => {
                         msg.id = id;
                         storage.persist_swipes(id, &msg.swipes);
