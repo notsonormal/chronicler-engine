@@ -14,6 +14,7 @@ use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::adapters::driven::storage::Storage;
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::game::GameId;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
@@ -23,6 +24,7 @@ use crate::domain::model::state::generation_status::{
 };
 
 use crate::application::errors::ProcessActionResult;
+use crate::application::games::catalogue::GameCatalogue;
 use crate::application::generation::gate::GenerationGate;
 use crate::application::prompting::PromptAssembler;
 use crate::application::prompting::token_budget::MAX_CONTEXT_TOKENS;
@@ -41,6 +43,7 @@ pub struct ActionPipeline {
     pub(crate) agent_registry: Arc<AgentRegistry>,
     pub(crate) message_service: Arc<MessageService>,
     pub(crate) storage: Arc<Storage>,
+    pub(crate) game_catalogue: Arc<GameCatalogue>,
     pub(crate) shutdown_token: CancellationToken,
 }
 
@@ -51,6 +54,7 @@ impl ActionPipeline {
         agent_registry: AgentRegistry,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
+        game_catalogue: Arc<GameCatalogue>,
     ) -> Self {
         tracing::info!("ActionPipeline: provider={}", recorder.provider_label());
         Self::with_backends(
@@ -59,6 +63,7 @@ impl ActionPipeline {
             agent_registry,
             message_service,
             storage,
+            game_catalogue,
         )
     }
 
@@ -68,6 +73,7 @@ impl ActionPipeline {
         agent_registry: AgentRegistry,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
+        game_catalogue: Arc<GameCatalogue>,
     ) -> Self {
         Self {
             prompt_assembler: Arc::new(
@@ -77,6 +83,7 @@ impl ActionPipeline {
             agent_registry: Arc::new(agent_registry),
             message_service,
             storage,
+            game_catalogue,
             shutdown_token,
         }
     }
@@ -87,10 +94,18 @@ impl ActionPipeline {
         quantifier_provider: Arc<dyn LlmProvider>,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
+        game_catalogue: Arc<GameCatalogue>,
     ) -> Self {
         let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
         let registry = AgentRegistry::with_agent(Box::new(agent));
-        Self::with_backends(shutdown_token, recorder, registry, message_service, storage)
+        Self::with_backends(
+            shutdown_token,
+            recorder,
+            registry,
+            message_service,
+            storage,
+            game_catalogue,
+        )
     }
 
     pub fn backend_info(&self) -> (String, String) {
@@ -108,10 +123,12 @@ impl ActionPipeline {
         mut self,
         message_service: Arc<MessageService>,
         storage: Arc<Storage>,
+        game_catalogue: Arc<GameCatalogue>,
         shutdown_token: CancellationToken,
     ) -> Self {
         self.message_service = message_service;
         self.storage = storage;
+        self.game_catalogue = game_catalogue;
         self.shutdown_token = shutdown_token;
         self
     }
@@ -120,52 +137,55 @@ impl ActionPipeline {
         self.shutdown_token.is_cancelled()
     }
 
-    pub fn reset_persisted_status(&self) -> Result<(), EngineError> {
-        let mut game_state = self.message_service.load_or_fresh();
+    pub fn reset_persisted_status(&self, game_id: GameId) -> Result<(), EngineError> {
+        let mut game_state = self.message_service.load_or_fresh(game_id);
         game_state.narrative.input_buffer.status = GenerationStatus::Idle;
         game_state.narrative.input_buffer.phase = GenerationPhase::default();
-        self.message_service.save_state(&game_state)?;
+        self.message_service.save_state(game_id, &game_state)?;
         Ok(())
     }
 
     fn heal_stale_if_changed(
         &self,
         generation_gate: &GenerationGate,
-        game_id: u64,
+        game_id: GameId,
         game_state: &mut GameState,
     ) -> Result<(), EngineError> {
         let before = game_state.narrative.input_buffer.status.clone();
         generation_gate.heal_stale(game_id, game_state);
         if game_state.narrative.input_buffer.status != before {
-            self.message_service.save_state(game_state)?;
+            self.message_service.save_state(game_id, game_state)?;
         }
         Ok(())
     }
 
-    pub fn heal_stale_status(&self, generation_gate: &GenerationGate) -> Result<(), EngineError> {
-        let game_id = self.storage.current_game_id();
-        let mut game_state = self.message_service.load_or_fresh();
+    pub fn heal_stale_status(
+        &self,
+        generation_gate: &GenerationGate,
+        game_id: GameId,
+    ) -> Result<(), EngineError> {
+        let mut game_state = self.message_service.load_or_fresh(game_id);
         self.heal_stale_if_changed(generation_gate, game_id, &mut game_state)
     }
 
     pub(super) fn claim_and_spawn<E, BeforeClaim, PreSpawn, SpawnTask>(
         &self,
         generation_gate: &GenerationGate,
+        game_id: GameId,
         before_claim: BeforeClaim,
         pre_spawn: PreSpawn,
         spawn_task: SpawnTask,
     ) -> Result<ProcessActionResult, E>
     where
         E: From<EngineError>,
-        BeforeClaim: FnOnce(u64, &mut GameState) -> Result<(), E>,
+        BeforeClaim: FnOnce(GameId, &mut GameState) -> Result<(), E>,
         PreSpawn: FnOnce() -> Result<(), E>,
         SpawnTask: FnOnce(&ActionPipeline) + Send + 'static,
     {
         if self.is_shutting_down() {
             return Ok(ProcessActionResult::ShuttingDown);
         }
-        let mut game_state = self.message_service.load_or_fresh();
-        let game_id = self.storage.current_game_id();
+        let mut game_state = self.message_service.load_or_fresh(game_id);
 
         // Heal before validating or claiming, so a panicked turn cannot strand the page.
         self.heal_stale_if_changed(generation_gate, game_id, &mut game_state)?;
@@ -212,6 +232,7 @@ impl ActionPipeline {
     )]
     pub fn run_from_input(
         &self,
+        game_id: GameId,
         mut state: GameState,
         input: String,
         impersonated: bool,
@@ -219,8 +240,7 @@ impl ActionPipeline {
         impersonate_direction: Option<String>,
     ) -> Result<(), PhaseError> {
         tracing::debug!("run_from_input: called");
-        let started_for = self.storage.current_game_id();
-        let run = PipelineRun::new(self, started_for);
+        let run = PipelineRun::new(self, game_id);
 
         // A redo falls back to the retry target's stored inputs.
         let (impersonated, guide_text, impersonate_direction) =
@@ -362,6 +382,7 @@ impl ActionPipeline {
         if !impersonated {
             let options_enabled = run.resolve_options_always_on(&outcome.bundle.world);
             self.rewrite_options_after_turn(
+                game_id,
                 &mut post_commit_state,
                 &map,
                 &persona,
@@ -375,8 +396,11 @@ impl ActionPipeline {
         Ok(())
     }
 
-    pub(crate) fn load_world_bundle(&self, started_for: u64) -> Result<WorldBundle, EngineError> {
-        self.storage.world_bundle_for(started_for)
+    pub(crate) fn load_world_bundle(
+        &self,
+        started_for: GameId,
+    ) -> Result<WorldBundle, EngineError> {
+        self.storage.world_bundle_for(started_for.0)
     }
 
     pub(super) fn finalize_phase_error(
@@ -411,32 +435,36 @@ impl ActionPipeline {
                 if let Err(e) = run
                     .pipeline
                     .message_service
-                    .save_message_and_snapshot(state)
+                    .save_message_and_snapshot(run.started_for, state)
                 {
                     tracing::error!("Failed to persist error state: {e}");
                 }
             }
-            None => run.pipeline.persist_generation_error(failure),
+            None => run
+                .pipeline
+                .persist_generation_error(run.started_for, failure),
         }
     }
 
     pub(crate) fn phase_trigger_continuation(
         &self,
+        game_id: GameId,
         state: &mut GameState,
         trigger: &StoredTriggerContext,
         map: &Arc<MapDef>,
         npcs: &HashMap<String, NpcCard>,
     ) -> Result<String, PhaseError> {
-        let started_for = self.storage.current_game_id();
-        let run = PipelineRun::new(self, started_for);
+        let run = PipelineRun::new(self, game_id);
         match run.phase_trigger_continuation_llm_call(state, trigger, map, npcs) {
             Err(PhaseError::Cancelled) => Err(run.handle_cancellation()),
             other => other,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn run_post_generation_agents(
         &self,
+        game_id: GameId,
         state: &GameState,
         player_input: &str,
         main_response: &str,
@@ -455,6 +483,7 @@ impl ActionPipeline {
                     .get(&state.movement.current_room_id)
             });
         let agent_ctx = AgentContext {
+            game_id,
             state,
             main_response: Some(main_response),
             player_input,
@@ -495,11 +524,11 @@ impl ActionPipeline {
         result
     }
 
-    pub(crate) fn persist_generation_error(&self, failure: GenerationFailure) {
-        let mut state = self.message_service.load_or_fresh();
+    pub(crate) fn persist_generation_error(&self, game_id: GameId, failure: GenerationFailure) {
+        let mut state = self.message_service.load_or_fresh(game_id);
         state.narrative.input_buffer.status = GenerationStatus::Error(failure);
         state.narrative.input_buffer.phase = GenerationPhase::default();
-        if let Err(e) = self.message_service.save_state(&state) {
+        if let Err(e) = self.message_service.save_state(game_id, &state) {
             tracing::error!("Critical: failed to persist generation error state: {e}");
         }
     }
@@ -510,9 +539,12 @@ impl ActionPipeline {
         }
     }
 
-    pub(crate) fn retry_event_continuation(&self, state: &mut GameState) -> Result<(), PhaseError> {
-        let started_for = self.storage.current_game_id();
-        let run = PipelineRun::new(self, started_for);
+    pub(crate) fn retry_event_continuation(
+        &self,
+        game_id: GameId,
+        state: &mut GameState,
+    ) -> Result<(), PhaseError> {
+        let run = PipelineRun::new(self, game_id);
 
         let Some(trigger) = state.narrative.last_trigger.clone() else {
             Self::finalize_phase_error(&run, Some(state), PhaseError::TriggerMissing);
@@ -529,7 +561,7 @@ impl ActionPipeline {
             persona,
             npcs: npcs_map,
             ..
-        } = match self.load_world_bundle(started_for) {
+        } = match self.load_world_bundle(game_id) {
             Ok(b) => b,
             Err(e) => {
                 Self::finalize_phase_error(
@@ -541,7 +573,7 @@ impl ActionPipeline {
             }
         };
         let continuation_text =
-            match self.phase_trigger_continuation(state, &trigger, &map, &npcs_map) {
+            match self.phase_trigger_continuation(game_id, state, &trigger, &map, &npcs_map) {
                 Ok(t) => t,
                 Err(PhaseError::Cancelled) => return Err(PhaseError::Cancelled),
                 Err(e) => {
@@ -571,17 +603,18 @@ impl ActionPipeline {
         }
         // An event-only retry is never an impersonation, so it always rewrites the offered set.
         let options_enabled = run.resolve_options_always_on(&world);
-        self.rewrite_options_after_turn(state, &map, &persona, &npcs_map, options_enabled);
+        self.rewrite_options_after_turn(game_id, state, &map, &persona, &npcs_map, options_enabled);
         run.phase_finalize(state);
         Ok(())
     }
 
     pub(crate) fn retry_main_narration(
         &self,
+        game_id: GameId,
         state: GameState,
         input_text: String,
     ) -> Result<(), PhaseError> {
-        self.run_from_input(state, input_text, false, None, None)
+        self.run_from_input(game_id, state, input_text, false, None, None)
     }
 
     fn phase_engine_commit(

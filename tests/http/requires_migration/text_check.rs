@@ -95,7 +95,7 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     let tmp_dir = tempfile::TempDir::new().unwrap();
     let db_path = tmp_dir.path().join("test.db");
     let db_pool = DbPool::new(db_path.to_str().unwrap()).unwrap();
-    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    let storage = Arc::new(Storage::new_sqlite(db_pool));
 
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
@@ -103,7 +103,7 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     storage.seed_world(&world, &map).unwrap();
     let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
-    let game_id = storage
+    storage
         .create_game(
             &world.name,
             &world.key,
@@ -112,7 +112,6 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
             "Test Game",
         )
         .unwrap();
-    storage.set_game_id(game_id);
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 

@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! HTTP utility modules.
 
+pub mod current_game;
 pub mod error;
 pub mod fragment;
 pub mod handler_helpers;

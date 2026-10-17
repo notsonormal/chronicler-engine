@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! Game lifecycle orchestration and read-side queries.
 
+pub mod active;
 pub mod catalogue;
 pub mod view_query;
 

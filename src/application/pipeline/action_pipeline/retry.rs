@@ -8,6 +8,7 @@ use crate::application::generation::gate::GenerationGate;
 use crate::application::pipeline::PhaseError;
 use crate::application::pipeline::pipeline_run::PipelineRun;
 use super::core::ActionPipeline;
+use crate::domain::model::game::GameId;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -50,29 +51,31 @@ impl ActionPipeline {
     pub fn retry(
         &self,
         generation_gate: &GenerationGate,
+        game_id: GameId,
     ) -> Result<ProcessActionResult, ApplicationError> {
         self.claim_and_spawn(
             generation_gate,
+            game_id,
             |_game_id, game_state| {
                 if !game_state.narrative.history.last_turn_is_retryable() {
                     return Err(ApplicationError::validation("No input to retry"));
                 }
                 Ok(())
             },
-            || self.check_retry_anchor(),
-            |pipeline| {
-                pipeline.retry_last_response();
+            move || self.check_retry_anchor(game_id),
+            move |pipeline| {
+                pipeline.retry_last_response(game_id);
             },
         )
     }
 
     #[instrument(skip(self))]
-    pub fn retry_last_response(&self) {
-        let retry_game_id = self.storage.current_game_id();
-        let messages = match self.message_service.load_messages() {
+    pub fn retry_last_response(&self, retry_game_id: GameId) {
+        let messages = match self.message_service.load_messages(retry_game_id) {
             Ok(m) => m,
             Err(e) => {
                 self.persist_generation_error(
+                    retry_game_id,
                     GenerationFailure::from_engine_error(&e).with_context("Retry failed"),
                 );
                 return;
@@ -80,17 +83,21 @@ impl ActionPipeline {
         };
 
         let Some(target) = self.resolve_retry_target(&messages) else {
-            self.persist_generation_error(GenerationFailure::new(
-                GenerationFailureKind::Other,
-                "Retry failed: no anchor message",
-            ));
+            self.persist_generation_error(
+                retry_game_id,
+                GenerationFailure::new(
+                    GenerationFailureKind::Other,
+                    "Retry failed: no anchor message",
+                ),
+            );
             return;
         };
 
-        let state_at_click = match self.storage.load_latest_snapshot() {
+        let state_at_click = match self.storage.load_latest_snapshot(retry_game_id) {
             Ok(snapshot) => snapshot,
             Err(e) => {
                 self.persist_generation_error(
+                    retry_game_id,
                     GenerationFailure::from_engine_error(&e).with_context("Retry failed"),
                 );
                 return;
@@ -102,10 +109,13 @@ impl ActionPipeline {
         // post-movement room and the scene before the post-trigger reconciliation.
         let restore_snapshot_id = if target.is_event {
             let Some(snapshot_id) = target.old_target.as_ref().and_then(|m| m.snapshot_id()) else {
-                self.persist_generation_error(GenerationFailure::new(
-                    GenerationFailureKind::Other,
-                    "Retry failed: event message has no snapshot",
-                ));
+                self.persist_generation_error(
+                    retry_game_id,
+                    GenerationFailure::new(
+                        GenerationFailureKind::Other,
+                        "Retry failed: event message has no snapshot",
+                    ),
+                );
                 return;
             };
             snapshot_id
@@ -113,17 +123,24 @@ impl ActionPipeline {
             target.snapshot_id
         };
 
-        let snapshot = match self.storage.load_snapshot_by_id(restore_snapshot_id) {
+        let snapshot = match self
+            .storage
+            .load_snapshot_by_id(retry_game_id, restore_snapshot_id)
+        {
             Ok(Some(s)) => s,
             Ok(None) => {
-                self.persist_generation_error(GenerationFailure::new(
-                    GenerationFailureKind::Other,
-                    format!("Retry failed: no snapshot found for id {restore_snapshot_id}"),
-                ));
+                self.persist_generation_error(
+                    retry_game_id,
+                    GenerationFailure::new(
+                        GenerationFailureKind::Other,
+                        format!("Retry failed: no snapshot found for id {restore_snapshot_id}"),
+                    ),
+                );
                 return;
             }
             Err(e) => {
                 self.persist_generation_error(
+                    retry_game_id,
                     GenerationFailure::from_engine_error(&e).with_context("Retry failed"),
                 );
                 return;
@@ -143,28 +160,31 @@ impl ActionPipeline {
                     match state.narrative.history.last_input_text() {
                         Some(text) => text,
                         None => {
-                            self.persist_generation_error(GenerationFailure::new(
-                                GenerationFailureKind::Other,
-                                "Retry failed: no input to retry",
-                            ));
+                            self.persist_generation_error(
+                                retry_game_id,
+                                GenerationFailure::new(
+                                    GenerationFailureKind::Other,
+                                    "Retry failed: no input to retry",
+                                ),
+                            );
                             return;
                         }
                     }
                 };
                 if target.is_event {
-                    let outcome = self.retry_event_continuation(&mut state);
+                    let outcome = self.retry_event_continuation(retry_game_id, &mut state);
                     self.log_cancellation(outcome);
                 } else {
-                    let outcome = self.retry_main_narration(state, input_text);
+                    let outcome = self.retry_main_narration(retry_game_id, state, input_text);
                     self.log_cancellation(outcome);
                 }
             }
             RetryMode::ReImpersonate => {
-                let outcome = self.retry_main_narration(state, String::new());
+                let outcome = self.retry_main_narration(retry_game_id, state, String::new());
                 self.log_cancellation(outcome);
             }
             RetryMode::UserRegen => {
-                let outcome = self.retry_user_regen(state);
+                let outcome = self.retry_user_regen(retry_game_id, state);
                 self.log_cancellation(outcome);
             }
         }
@@ -177,18 +197,18 @@ impl ActionPipeline {
     /// those Messages stay.
     fn restore_click_time_state_after_failed_redo(
         &self,
-        retry_game_id: u64,
+        retry_game_id: GameId,
         state_at_click: Option<GameStateSnapshot>,
         target: &RetryTarget,
     ) {
         let Some(state_at_click) = state_at_click else {
             return;
         };
-        if self.storage.current_game_id() != retry_game_id {
+        if self.game_catalogue.active_game_id() != Some(retry_game_id) {
             tracing::warn!("Retry: the game changed while the redo ran; leaving it alone");
             return;
         }
-        let attempt = match self.storage.load_latest_snapshot() {
+        let attempt = match self.storage.load_latest_snapshot(retry_game_id) {
             Ok(Some(attempt)) => attempt,
             Ok(None) => return,
             Err(e) => {
@@ -199,14 +219,14 @@ impl ActionPipeline {
         let Some(failure) = attempt.narrative.input_buffer.status.failure() else {
             return;
         };
-        match self.durable_world_after_failed_redo(target) {
+        match self.durable_world_after_failed_redo(retry_game_id, target) {
             DurableWorldAfterFailedRedo::Attempt => return,
             DurableWorldAfterFailedRedo::ClickTime => {}
         }
         let mut state = GameState::from_snapshot(&state_at_click);
         state.narrative.input_buffer.status = GenerationStatus::Error(failure.clone());
         state.narrative.input_buffer.phase = attempt.narrative.input_buffer.phase;
-        if let Err(e) = self.message_service.save_state(&state) {
+        if let Err(e) = self.message_service.save_state(retry_game_id, &state) {
             tracing::error!("Failed to put the game state back after a failed retry: {e}");
         }
     }
@@ -216,11 +236,15 @@ impl ActionPipeline {
     ///
     /// Messages that cannot be read answer `Attempt` too: an unknown outcome is
     /// not a licence to overwrite a game.
-    fn durable_world_after_failed_redo(&self, target: &RetryTarget) -> DurableWorldAfterFailedRedo {
+    fn durable_world_after_failed_redo(
+        &self,
+        game_id: GameId,
+        target: &RetryTarget,
+    ) -> DurableWorldAfterFailedRedo {
         let Some(target) = target.old_target.as_ref() else {
             return DurableWorldAfterFailedRedo::Attempt;
         };
-        let messages = match self.message_service.load_messages() {
+        let messages = match self.message_service.load_messages(game_id) {
             Ok(messages) => messages,
             Err(e) => {
                 tracing::error!("Retry: cannot read the Messages a failed redo left: {e}");
@@ -297,37 +321,41 @@ impl ActionPipeline {
         state
     }
 
-    fn check_retry_anchor(&self) -> Result<(), ApplicationError> {
-        let messages = self.message_service.load_messages()?;
+    fn check_retry_anchor(&self, game_id: GameId) -> Result<(), ApplicationError> {
+        let messages = self.message_service.load_messages(game_id)?;
         let Some((_, anchor_msg)) = self.message_service.find_retry_anchor_msg(&messages) else {
-            self.persist_generation_error(GenerationFailure::new(
-                GenerationFailureKind::Other,
-                "Retry failed: no anchor message",
-            ));
+            self.persist_generation_error(
+                game_id,
+                GenerationFailure::new(
+                    GenerationFailureKind::Other,
+                    "Retry failed: no anchor message",
+                ),
+            );
             return Err(ApplicationError::internal(
                 "Retry failed: no anchor message",
             ));
         };
         let Some(snapshot_id) = anchor_msg.snapshot_id() else {
             let msg = "Retry failed: anchor message has no snapshot_id";
-            self.persist_generation_error(GenerationFailure::new(
-                GenerationFailureKind::Other,
-                msg,
-            ));
+            self.persist_generation_error(
+                game_id,
+                GenerationFailure::new(GenerationFailureKind::Other, msg),
+            );
             return Err(ApplicationError::internal(msg));
         };
-        match self.storage.load_snapshot_by_id(snapshot_id) {
+        match self.storage.load_snapshot_by_id(game_id, snapshot_id) {
             Ok(Some(_)) => Ok(()),
             Ok(None) => {
                 let msg = format!("Retry failed: no snapshot found for id {snapshot_id}");
-                self.persist_generation_error(GenerationFailure::new(
-                    GenerationFailureKind::Other,
-                    msg.clone(),
-                ));
+                self.persist_generation_error(
+                    game_id,
+                    GenerationFailure::new(GenerationFailureKind::Other, msg.clone()),
+                );
                 Err(ApplicationError::internal(msg))
             }
             Err(e) => {
                 self.persist_generation_error(
+                    game_id,
                     GenerationFailure::from_engine_error(&e).with_context("Retry failed"),
                 );
                 Err(ApplicationError::internal(format!("Retry failed: {e}")))
@@ -335,9 +363,12 @@ impl ActionPipeline {
         }
     }
 
-    pub(crate) fn retry_user_regen(&self, mut state: GameState) -> Result<(), PhaseError> {
-        let started_for = self.storage.current_game_id();
-        let run = PipelineRun::new(self, started_for);
+    pub(crate) fn retry_user_regen(
+        &self,
+        game_id: GameId,
+        mut state: GameState,
+    ) -> Result<(), PhaseError> {
+        let run = PipelineRun::new(self, game_id);
 
         let Some(target) = state.narrative.retry_target.as_ref() else {
             Self::finalize_phase_error(

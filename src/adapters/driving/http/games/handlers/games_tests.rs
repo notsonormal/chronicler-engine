@@ -1,18 +1,24 @@
 use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
 
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driving::http::games::handlers::{
     list_games_fragment, switch_game_handler, switch_game_mode_handler,
     update_game_posture_handler, update_game_presets_handler, GameModeForm, GamePostureForm,
     GamePresetsForm,
 };
+use crate::test_support::active_game_of;
 use crate::domain::model::settings::{NarratorMode, NarrativePerspective, NarrativeTense};
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
 async fn test_list_games_empty() {
     let state = TestAppBuilder::default_test().build_service();
-    let response = list_games_fragment(axum::extract::State(state)).await;
+    let response = list_games_fragment(
+        axum::extract::State(state.clone()),
+        Some(CurrentGame(active_game_of(&state))),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -39,11 +45,11 @@ async fn test_switch_game_mode_handler_retargets_and_nudges() {
         .game_catalogue
         .create_game("test", "test_player")
         .unwrap();
-    let game_id = state.game_catalogue.current_game_id();
+    let game_id = active_game_of(&state);
 
     let response = switch_game_mode_handler(
         axum::extract::State(state.clone()),
-        axum::extract::Path(game_id),
+        axum::extract::Path(game_id.0),
         axum::extract::Form(GameModeForm {
             narrator_mode: "interactive_fiction".into(),
         }),
@@ -58,7 +64,7 @@ async fn test_switch_game_mode_handler_retargets_and_nudges() {
         "mode switch must re-render the override fragment"
     );
 
-    let game = state.game_catalogue.current_game().unwrap().unwrap();
+    let game = state.game_catalogue.active_game().unwrap().unwrap();
     assert_eq!(game.narrator_mode, NarratorMode::InteractiveFiction);
     assert_eq!(game.narrative_perspective, NarrativePerspective::Second);
     assert_eq!(game.active_system_prompt_preset_id, "system_if_default");
@@ -71,11 +77,11 @@ async fn test_switch_game_mode_handler_invalid_mode_returns_error_span() {
         .game_catalogue
         .create_game("test", "test_player")
         .unwrap();
-    let game_id = state.game_catalogue.current_game_id();
+    let game_id = active_game_of(&state);
 
     let response = switch_game_mode_handler(
         axum::extract::State(state.clone()),
-        axum::extract::Path(game_id),
+        axum::extract::Path(game_id.0),
         axum::extract::Form(GameModeForm {
             narrator_mode: "bogus".into(),
         }),
@@ -85,7 +91,7 @@ async fn test_switch_game_mode_handler_invalid_mode_returns_error_span() {
     let body = String::from_utf8_lossy(&body);
     assert!(body.contains("Unknown narrator mode"));
 
-    let game = state.game_catalogue.current_game().unwrap().unwrap();
+    let game = state.game_catalogue.active_game().unwrap().unwrap();
     assert_eq!(game.narrator_mode, NarratorMode::Novel);
 }
 
@@ -96,11 +102,11 @@ async fn test_update_game_posture_handler_saves_perspective_and_tense() {
         .game_catalogue
         .create_game("test", "test_player")
         .unwrap();
-    let game_id = state.game_catalogue.current_game_id();
+    let game_id = active_game_of(&state);
 
     let response = update_game_posture_handler(
         axum::extract::State(state.clone()),
-        axum::extract::Path(game_id),
+        axum::extract::Path(game_id.0),
         axum::extract::Form(GamePostureForm {
             narrative_perspective: "second".into(),
             narrative_tense: "present".into(),
@@ -109,7 +115,7 @@ async fn test_update_game_posture_handler_saves_perspective_and_tense() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    let game = state.game_catalogue.current_game().unwrap().unwrap();
+    let game = state.game_catalogue.active_game().unwrap().unwrap();
     assert_eq!(game.narrative_perspective, NarrativePerspective::Second);
     assert_eq!(game.narrative_tense, NarrativeTense::Present);
     assert_eq!(game.narrator_mode, NarratorMode::Novel);
@@ -122,11 +128,11 @@ async fn test_update_game_posture_handler_invalid_value_returns_error_span() {
         .game_catalogue
         .create_game("test", "test_player")
         .unwrap();
-    let game_id = state.game_catalogue.current_game_id();
+    let game_id = active_game_of(&state);
 
     let response = update_game_posture_handler(
         axum::extract::State(state.clone()),
-        axum::extract::Path(game_id),
+        axum::extract::Path(game_id.0),
         axum::extract::Form(GamePostureForm {
             narrative_perspective: "bogus".into(),
             narrative_tense: "past".into(),
@@ -145,9 +151,8 @@ async fn test_update_game_presets_handler_saves_selection() {
         .game_catalogue
         .create_game("test", "test_player")
         .unwrap();
-    let game_id = state.game_catalogue.current_game_id();
+    let game_id = active_game_of(&state);
 
-    // An all-modes custom system preset the game can switch to.
     state
         .prompt_preset_service
         .save_preset(&crate::test_support::TestPromptPreset::system(
@@ -158,7 +163,7 @@ async fn test_update_game_presets_handler_saves_selection() {
 
     let response = update_game_presets_handler(
         axum::extract::State(state.clone()),
-        axum::extract::Path(game_id),
+        axum::extract::Path(game_id.0),
         axum::extract::Form(GamePresetsForm {
             system_preset_id: "custom_sys".into(),
             quantifier_preset_id: "quantifier_default".into(),
@@ -169,7 +174,7 @@ async fn test_update_game_presets_handler_saves_selection() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    let game = state.game_catalogue.current_game().unwrap().unwrap();
+    let game = state.game_catalogue.active_game().unwrap().unwrap();
     assert_eq!(game.active_system_prompt_preset_id, "custom_sys");
 }
 
@@ -180,11 +185,11 @@ async fn test_update_game_presets_handler_unknown_preset_returns_error_span() {
         .game_catalogue
         .create_game("test", "test_player")
         .unwrap();
-    let game_id = state.game_catalogue.current_game_id();
+    let game_id = active_game_of(&state);
 
     let response = update_game_presets_handler(
         axum::extract::State(state.clone()),
-        axum::extract::Path(game_id),
+        axum::extract::Path(game_id.0),
         axum::extract::Form(GamePresetsForm {
             system_preset_id: "no_such".into(),
             quantifier_preset_id: "quantifier_default".into(),
@@ -214,7 +219,11 @@ async fn test_posture_fragment_renders_preset_load_error_span() {
         TestOverride::internal("simulated preset library failure"),
     );
 
-    let response = list_games_fragment(axum::extract::State(state)).await;
+    let response = list_games_fragment(
+        axum::extract::State(state.clone()),
+        Some(CurrentGame(active_game_of(&state))),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8_lossy(&body);

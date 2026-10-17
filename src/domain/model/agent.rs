@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 
 /// A role the failure banner and the Settings role rows report on. A role's
@@ -27,7 +28,6 @@ impl Role {
         Role::Trigger,
     ];
 
-    /// The `agent_name` this role's LLM Messages rows carry.
     pub const fn agent_name(self) -> &'static str {
         match self {
             Role::Narrator => "narrator",
@@ -38,8 +38,6 @@ impl Role {
     }
 }
 
-/// The registry's dispatch axis — agents declare the pipeline position
-/// where they run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionPhase {
@@ -148,7 +146,6 @@ pub struct StatePatch {
     pub confidence: Confidence,
 }
 
-/// What an agent produced for one pipeline run.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AgentResult {
     /// A directive the agent wants folded into the next narration prompt;
@@ -165,6 +162,7 @@ pub enum AgentResult {
 }
 
 pub struct AgentContext<'a> {
+    pub game_id: GameId,
     pub state: &'a GameState,
     pub main_response: Option<&'a str>,
     pub player_input: &'a str,

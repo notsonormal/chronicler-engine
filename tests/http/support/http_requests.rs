@@ -1,5 +1,6 @@
 //! HTTP request plumbing for the http test binary: POST builders, body readers, generation-idle polling.
 
+use chronicler_engine::test_support::active_game_of;
 use axum::body::Body;
 use axum::http::{self, Method, Request};
 use tower::util::ServiceExt;
@@ -31,7 +32,6 @@ pub async fn fetch_generating_status(app: &axum::Router) -> String {
     fetch_body(app, "/status/generating").await
 }
 
-/// POST a pre-encoded form body to an arbitrary URI.
 pub async fn post_form(
     app: &axum::Router,
     uri: &str,
@@ -49,7 +49,6 @@ pub async fn post_form(
     app.clone().oneshot(req).await.unwrap()
 }
 
-/// POST a url-encoded `command=...` body to `/action`.
 pub async fn post_action(app: &axum::Router, command: &str) -> axum::response::Response<Body> {
     post_form(
         app,
@@ -59,7 +58,6 @@ pub async fn post_action(app: &axum::Router, command: &str) -> axum::response::R
     .await
 }
 
-/// POST a url-encoded `command=...` body to `/action/check`.
 pub async fn post_action_check(
     app: &axum::Router,
     command: &str,
@@ -72,7 +70,6 @@ pub async fn post_action_check(
     .await
 }
 
-/// POST to a no-body endpoint.
 pub async fn post_empty(app: &axum::Router, uri: &str) -> axum::response::Response<Body> {
     let req = Request::builder()
         .uri(uri)
@@ -82,8 +79,7 @@ pub async fn post_empty(app: &axum::Router, uri: &str) -> axum::response::Respon
     app.clone().oneshot(req).await.unwrap()
 }
 
-/// POST a url-encoded body carrying the `HX-Request` header, the way htmx
-/// sends every fragment swap.
+/// Carries `HX-Request`, the way htmx sends every fragment swap.
 pub async fn post_form_with_hx(
     app: &axum::Router,
     uri: &str,
@@ -102,20 +98,18 @@ pub async fn post_form_with_hx(
     app.clone().oneshot(req).await.unwrap()
 }
 
-/// Poll `AppState` until generation is idle (timeout `timeout_ms`, 15ms interval).
-///
-/// Also waits for the generation slot: the pipeline persists `Idle` before its
-/// guard releases the slot, so a status-only check can return while
-/// `try_claim` still rejects the next action as `ConcurrentGeneration`.
+/// Waits for the generation slot too: the pipeline persists `Idle` before its guard
+/// releases the slot, so a status-only check can return while `try_claim` still
+/// rejects the next action as `ConcurrentGeneration`.
 pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
-    let game_id = state.game_catalogue.current_game_id();
+    let game_id = active_game_of(state);
     wait_for_condition_async(
         std::time::Duration::from_millis(timeout_ms),
         std::time::Duration::from_millis(15),
         || async {
             !state
                 .message_service
-                .load_or_fresh()
+                .load_or_fresh(game_id)
                 .narrative
                 .input_buffer
                 .status

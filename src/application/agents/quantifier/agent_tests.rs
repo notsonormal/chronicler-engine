@@ -6,6 +6,7 @@ use crate::application::agents::Agent;
 use crate::application::agents::quantifier::agent::QuantifierAgent;
 use crate::domain::model::agent::{AgentContext, BackendSelector, ExecutionPhase};
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 use crate::test_support::fixtures::{TestMap, TestPersona};
 
@@ -73,6 +74,7 @@ fn test_execute_missing_main_response() {
     let npcs: HashMap<String, NpcCard> = HashMap::new();
 
     let ctx = AgentContext {
+        game_id: GameId(1),
         state: &state,
         main_response: None,
         player_input: "look",

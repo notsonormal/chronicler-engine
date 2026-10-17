@@ -11,10 +11,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::application::errors::ProcessActionResult;
 use crate::domain::model::action::Action;
+use crate::domain::model::game::GameId;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::headers::add_status_swap_headers;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::render_error;
 use crate::adapters::driving::http::utils::response::{internal_error, ok, service_unavailable};
 
@@ -28,10 +30,11 @@ pub struct ActionForm {
 pub const CONCURRENT_GENERATION_STATUS: &str =
     "<span class=\"status wait\">Still thinking...</span>";
 
-async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
-    let action_result = state
-        .pipeline
-        .process_action(&state.generation_gate, Action::parse(&command));
+async fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Response<Body> {
+    let action_result =
+        state
+            .pipeline
+            .process_action(&state.generation_gate, game_id, Action::parse(&command));
 
     match action_result {
         Ok(ProcessActionResult::Started) => {
@@ -47,47 +50,54 @@ async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
 
 pub async fn action_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-    dispatch_action(&state, command).await
+    dispatch_action(&state, game_id, command).await
 }
 
 #[allow(clippy::expect_used)]
 pub async fn action_confirm_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-    dispatch_with_status_headers(&state, command).await
+    dispatch_with_status_headers(&state, game_id, command).await
 }
 
-async fn dispatch_with_status_headers(state: &AppState, command: String) -> Response<Body> {
-    let mut response = dispatch_action(state, command).await;
+async fn dispatch_with_status_headers(
+    state: &AppState,
+    game_id: GameId,
+    command: String,
+) -> Response<Body> {
+    let mut response = dispatch_action(state, game_id, command).await;
     add_status_swap_headers(&mut response);
     response
 }
 
 pub async fn action_check_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
 
     if Action::parse(&command).is_engine_command() {
-        return dispatch_with_status_headers(&state, command).await;
+        return dispatch_with_status_headers(&state, game_id, command).await;
     }
 
     let settings = match state.settings() {
         Ok(s) => s,
         Err(e) => {
             tracing::error!("Failed to read settings for text check: {e}");
-            return dispatch_with_status_headers(&state, command).await;
+            return dispatch_with_status_headers(&state, game_id, command).await;
         }
     };
 
     if !settings.text_check.effective_enable_auto_check() {
-        return dispatch_with_status_headers(&state, command).await;
+        return dispatch_with_status_headers(&state, game_id, command).await;
     }
 
     let result = match state.text_check_service().check_player_input(
@@ -98,7 +108,7 @@ pub async fn action_check_handler(
         Ok(result) => result,
         Err(e) => {
             tracing::error!("Text check failed: {e}");
-            return dispatch_with_status_headers(&state, command).await;
+            return dispatch_with_status_headers(&state, game_id, command).await;
         }
     };
 
@@ -110,6 +120,6 @@ pub async fn action_check_handler(
                 Err(e) => internal_error(render_error(&format!("Template error: {e}"))),
             }
         }
-        None => dispatch_with_status_headers(&state, command).await,
+        None => dispatch_with_status_headers(&state, game_id, command).await,
     }
 }

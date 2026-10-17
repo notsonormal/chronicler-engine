@@ -10,13 +10,14 @@ use crate::application::generation::guard::GenerationGuard;
 use crate::application::message_service::MessageService;
 use crate::application::generation::slot::GenerationSlot;
 use crate::application::generation::slot::release_owned_slot;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::game_state::GameState;
 use crate::error::EngineError;
 
 #[derive(Clone)]
 pub struct GenerationGate {
-    registry: Arc<RwLock<HashMap<u64, GenerationSlot>>>,
+    registry: Arc<RwLock<HashMap<GameId, GenerationSlot>>>,
     next_generation_id: Arc<AtomicU64>,
 }
 
@@ -41,7 +42,7 @@ impl GenerationGate {
     }
 
     /// Mutates `state`; the caller persists the reset.
-    pub fn heal_stale(&self, game_id: u64, state: &mut GameState) {
+    pub fn heal_stale(&self, game_id: GameId, state: &mut GameState) {
         if !state.narrative.input_buffer.status.is_generating() {
             return;
         }
@@ -70,10 +71,10 @@ impl GenerationGate {
 
     pub fn try_claim(
         &self,
-        game_id: u64,
+        game_id: GameId,
         state: &mut GameState,
         message_service: &MessageService,
-    ) -> Result<(u64, u64, ProcessActionResult), EngineError> {
+    ) -> Result<(GameId, u64, ProcessActionResult), EngineError> {
         let generation_id = self.next_generation_id();
 
         {
@@ -96,7 +97,7 @@ impl GenerationGate {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
 
-        if let Err(e) = message_service.save_message_and_snapshot(state) {
+        if let Err(e) = message_service.save_message_and_snapshot(game_id, state) {
             tracing::debug!("try_claim: save failed; releasing slot");
             release_owned_slot(&self.registry, game_id, generation_id);
             return Err(e);
@@ -105,17 +106,16 @@ impl GenerationGate {
         Ok((game_id, generation_id, ProcessActionResult::Started))
     }
 
-    pub(crate) fn guard(&self, game_id: u64, generation_id: u64) -> GenerationGuard {
+    pub(crate) fn guard(&self, game_id: GameId, generation_id: u64) -> GenerationGuard {
         GenerationGuard::new(game_id, generation_id, Arc::clone(&self.registry))
     }
 
-    pub fn release_generation_slot(&self, game_id: u64, generation_id: u64) {
+    pub fn release_generation_slot(&self, game_id: GameId, generation_id: u64) {
         release_owned_slot(&self.registry, game_id, generation_id);
     }
 
-    /// The persisted status is reset separately by the pipeline, so the gate does
-    /// not own persistence.
-    pub fn release_generation_slot_for_game(&self, game_id: u64) -> Option<u64> {
+    /// Releases the slot only — the pipeline resets the persisted status.
+    pub fn release_generation_slot_for_game(&self, game_id: GameId) -> Option<u64> {
         let mut registry = self.registry.write().unwrap_or_else(|p| {
             tracing::warn!(
                 "Generation registry write lock poisoned during release for game; recovering"
@@ -132,7 +132,7 @@ impl GenerationGate {
         }
     }
 
-    pub fn is_busy(&self, game_id: u64) -> bool {
+    pub fn is_busy(&self, game_id: GameId) -> bool {
         let registry = self.registry.read().unwrap_or_else(|p| {
             tracing::warn!("Generation registry read lock poisoned during is_busy; recovering");
             p.into_inner()

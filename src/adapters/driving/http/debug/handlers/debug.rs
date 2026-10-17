@@ -5,6 +5,7 @@ use axum::{Json, extract::State, http::StatusCode};
 use serde::Serialize;
 
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 
 #[derive(Serialize)]
 pub struct DebugBackendResponse {
@@ -14,18 +15,21 @@ pub struct DebugBackendResponse {
 
 pub async fn debug_state_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
 ) -> Result<Json<crate::application::DebugStateView>, StatusCode> {
     state
         .game_view_query
-        .get_debug_state()
+        .get_debug_state(game_id)
         .map(Json)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-pub async fn debug_is_generating_handler(State(state): State<AppState>) -> String {
+pub async fn debug_is_generating_handler(
+    State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
+) -> String {
     // The generation registry is the live truth; the persisted status is a
     // record that can disagree with it.
-    let game_id = state.game_catalogue.current_game_id();
     state.generation_gate.is_busy(game_id).to_string()
 }
 

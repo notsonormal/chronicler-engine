@@ -10,7 +10,7 @@ use chronicler_engine::adapters::driving::http::bootstrap::run_server_with_confi
 use chronicler_engine::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 
 fn build_test_wired_app() -> WiredApp {
-    build_app_graph_for_tests(Arc::new(Storage::new_in_memory()), None)
+    build_app_graph_for_tests(Arc::new(Storage::new_in_memory()), None, None)
         .expect("build_app_graph_for_tests should succeed")
 }
 

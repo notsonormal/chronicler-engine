@@ -2,20 +2,24 @@
 //! Snapshot storage operations
 
 use crate::error::EngineError;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game_state_snapshot::DbGameStateSnapshot;
 
 impl Storage {
-    pub fn save_snapshot(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
-        let game_id = self.game_id();
+    pub fn save_snapshot(
+        &self,
+        game_id: GameId,
+        snapshot: &GameStateSnapshot,
+    ) -> Result<u64, EngineError> {
         self.with_backend_mut("save_snapshot", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let db_snap =
                     crate::adapters::driven::storage::mappers::state_snapshot::snapshot_to_db(
                         snapshot,
-                        game_id as i64,
+                        game_id.0 as i64,
                     )?;
 
                 conn.execute(
@@ -46,8 +50,10 @@ impl Storage {
         })
     }
 
-    pub fn load_latest_snapshot(&self) -> Result<Option<GameStateSnapshot>, EngineError> {
-        let game_id = self.game_id();
+    pub fn load_latest_snapshot(
+        &self,
+        game_id: GameId,
+    ) -> Result<Option<GameStateSnapshot>, EngineError> {
         self.with_backend_mut("load_latest_snapshot", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
@@ -61,7 +67,7 @@ impl Storage {
                     )
                     .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-                let db_result = stmt.query_row(rusqlite::params![game_id as i64], |row| {
+                let db_result = stmt.query_row(rusqlite::params![game_id.0 as i64], |row| {
                     DbGameStateSnapshot::from_row(row)
                 });
 
@@ -88,8 +94,11 @@ impl Storage {
         })
     }
 
-    pub fn load_snapshot_by_id(&self, id: u64) -> Result<Option<GameStateSnapshot>, EngineError> {
-        let game_id = self.game_id();
+    pub fn load_snapshot_by_id(
+        &self,
+        game_id: GameId,
+        id: u64,
+    ) -> Result<Option<GameStateSnapshot>, EngineError> {
         self.with_backend_mut("load_snapshot_by_id", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
@@ -101,7 +110,7 @@ impl Storage {
                     )
                     .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-                let db_result = stmt.query_row(rusqlite::params![id, game_id as i64], |row| {
+                let db_result = stmt.query_row(rusqlite::params![id, game_id.0 as i64], |row| {
                     DbGameStateSnapshot::from_row(row)
                 });
 

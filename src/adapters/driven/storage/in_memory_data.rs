@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::character::{NpcCard, PersonaCard};
-use crate::domain::model::game::Game;
+use crate::domain::model::game::{Game, GameId};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::PromptPreset;
@@ -14,11 +14,11 @@ use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 
 pub struct InMemoryData {
-    pub snapshots: HashMap<u64, Vec<GameStateSnapshot>>,
+    pub snapshots: HashMap<GameId, Vec<GameStateSnapshot>>,
     pub next_snapshot_id: u64,
     pub games: Vec<Game>,
     pub next_game_id: u64,
-    pub messages: HashMap<u64, Vec<Message>>,
+    pub messages: HashMap<GameId, Vec<Message>>,
     pub next_message_id: u64,
     pub swipes: HashMap<u64, Vec<Swipe>>,
     pub presets: Vec<PromptPreset>,
@@ -70,7 +70,7 @@ impl InMemoryData {
         }
     }
 
-    pub(crate) fn update_active_swipe(&mut self, game_id: u64, message_id: u64, index: usize) {
+    pub(crate) fn update_active_swipe(&mut self, game_id: GameId, message_id: u64, index: usize) {
         if let Some(msg) = self
             .messages
             .get_mut(&game_id)
@@ -80,7 +80,7 @@ impl InMemoryData {
         }
     }
 
-    pub(crate) fn soft_delete_message(&mut self, game_id: u64, id: u64) {
+    pub(crate) fn soft_delete_message(&mut self, game_id: GameId, id: u64) {
         if let Some(msg) = self
             .messages
             .get_mut(&game_id)
@@ -90,7 +90,7 @@ impl InMemoryData {
         }
     }
 
-    pub(crate) fn restore_soft_deleted(&mut self, game_id: u64, ids: &[u64]) {
+    pub(crate) fn restore_soft_deleted(&mut self, game_id: GameId, ids: &[u64]) {
         if let Some(vec) = self.messages.get_mut(&game_id) {
             for m in vec.iter_mut().filter(|m| ids.contains(&m.id)) {
                 m.is_deleted = false;

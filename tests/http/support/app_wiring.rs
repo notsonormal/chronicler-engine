@@ -15,15 +15,10 @@ use chronicler_engine::test_support::{
     make_test_pipeline_with_backends, make_test_recorder_with_storage, TestAppBuilder,
 };
 
-/// Build an app with a custom narrator backend (default quantifier).
 pub fn app_with_narrator(narrator: Arc<MockBackend>) -> (axum::Router, AppState) {
     app_with_narrator_and_settings(narrator, AppSettings::default())
 }
 
-/// Core narrator-wired test app: fresh in-memory storage, a storage-backed
-/// narrator recorder, the given agent registry and settings. Returns
-/// `(router, state, storage)` so tests can assert on recorded prompts and
-/// stored state.
 pub fn app_with_narrator_and_registry(
     narrator: Arc<MockBackend>,
     registry: AgentRegistry,
@@ -41,7 +36,6 @@ pub fn app_with_narrator_and_registry(
     (app, state, storage)
 }
 
-/// Build an app with a custom narrator backend and explicit settings (default quantifier).
 pub fn app_with_narrator_and_settings(
     narrator: Arc<MockBackend>,
     settings: AppSettings,
@@ -51,8 +45,6 @@ pub fn app_with_narrator_and_settings(
     (app, state)
 }
 
-/// Build an app on the **production** graph. Every seeded connection must be
-/// Mock — the graph builds whatever provider settings name.
 pub fn app_with_production_graph(settings: AppSettings) -> (axum::Router, AppState, Arc<Storage>) {
     assert!(
         settings
@@ -65,7 +57,7 @@ pub fn app_with_production_graph(settings: AppSettings) -> (axum::Router, AppSta
 
     let storage = Arc::new(Storage::new_in_memory());
     storage.save_settings(&settings).expect("seed settings");
-    let wired = build_app_graph(Arc::clone(&storage)).expect("production graph should build");
+    let wired = build_app_graph(Arc::clone(&storage), None).expect("production graph should build");
     let state = AppState::from_wired(wired);
     (build_router(state.clone()), state, storage)
 }

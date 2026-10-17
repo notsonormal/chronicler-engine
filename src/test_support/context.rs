@@ -9,11 +9,14 @@ use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::AppState;
 use crate::application::agents::registry::AgentRegistry;
+use crate::application::games::active::ActiveGame;
+use crate::application::games::catalogue::GameCatalogue;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::message_service::MessageService;
 use crate::application::pipeline::ActionPipeline;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::game::GameId;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::state::game_state::GameState;
@@ -91,12 +94,19 @@ pub fn make_test_pipeline_with_backends(
 ) -> ActionPipeline {
     seed_default_preset(&storage);
     let message_service = build_test_message_service(Arc::clone(&storage));
+    let game_catalogue = Arc::new(GameCatalogue::new(
+        Arc::clone(&storage),
+        Arc::clone(&message_service),
+        Arc::new(ActiveGame::new(Arc::clone(&storage))),
+        None,
+    ));
     ActionPipeline::with_backends(
         CancellationToken::new(),
         recorder,
         agent_registry,
         message_service,
         storage,
+        game_catalogue,
     )
 }
 
@@ -107,21 +117,32 @@ pub fn make_test_pipeline_with_mock_quantifier(
 ) -> ActionPipeline {
     seed_default_preset(&storage);
     let message_service = build_test_message_service(Arc::clone(&storage));
+    let game_catalogue = Arc::new(GameCatalogue::new(
+        Arc::clone(&storage),
+        Arc::clone(&message_service),
+        Arc::new(ActiveGame::new(Arc::clone(&storage))),
+        None,
+    ));
     ActionPipeline::with_mock_quantifier(
         CancellationToken::new(),
         recorder,
         quantifier_provider,
         message_service,
         storage,
+        game_catalogue,
     )
 }
 
-/// Build a full `WiredApp` for the supplied pipeline.
-pub fn build_test_wired_app(storage: Arc<Storage>, pipeline: ActionPipeline) -> Result<WiredApp> {
-    build_app_graph_for_tests(storage, Some(pipeline))
+pub fn build_test_wired_app(
+    storage: Arc<Storage>,
+    pipeline: ActionPipeline,
+    game_id: GameId,
+) -> Result<WiredApp> {
+    build_app_graph_for_tests(storage, Some(pipeline), Some(game_id))
 }
 
-pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
+/// Returns the id of the Game the seed created.
+pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) -> GameId {
     let data = TestData {
         world: Arc::new(crate::test_support::fixtures::TestWorld::minimal()),
         map: Arc::new(crate::test_support::fixtures::TestMap::single_room(
@@ -131,7 +152,7 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
         npcs: std::iter::empty::<NpcCard>().collect(),
         room_npcs: Vec::new(),
     };
-    let _ = data.seed_into(storage);
+    data.seed_into(storage)
 }
 
 pub fn make_test_pipeline_app() -> AppState {
@@ -162,22 +183,22 @@ pub fn make_test_pipeline_app_with_storage() -> (AppState, Arc<Storage>) {
         .build_service_with_storage()
 }
 
-fn build_test_app(storage: Arc<Storage>) -> Result<WiredApp> {
+fn build_test_app(storage: Arc<Storage>, game_id: GameId) -> Result<WiredApp> {
     seed_default_preset(&storage);
-    build_app_graph_for_tests(storage, None)
+    build_app_graph_for_tests(storage, None, Some(game_id))
 }
 
 pub fn make_test_app(state: GameState) -> Result<WiredApp> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(Storage::new_in_memory());
-    seed_test_world_into_storage(&storage, &state);
+    let game_id = seed_test_world_into_storage(&storage, &state);
     storage
-        .save_snapshot(&snapshot)
+        .save_snapshot(game_id, &snapshot)
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
         .expect("test setup: save_snapshot must succeed for make_test_app fixture");
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let id = storage
-            .insert_message(&msg)
+            .insert_message(game_id, &msg)
             // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
             .expect("test setup: insert_message must succeed to seed narrative history");
         for (idx, swipe) in msg.swipes.iter().enumerate() {
@@ -187,15 +208,15 @@ pub fn make_test_app(state: GameState) -> Result<WiredApp> {
                 .expect("test setup: insert_swipe must succeed to seed narrative swipes");
         }
     }
-    build_test_app(storage)
+    build_test_app(storage, game_id)
 }
 
 pub fn make_test_app_without_snapshot(state: GameState) -> Result<WiredApp> {
     let storage = Arc::new(Storage::new_in_memory());
-    seed_test_world_into_storage(&storage, &state);
+    let game_id = seed_test_world_into_storage(&storage, &state);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let id = storage
-            .insert_message(&msg)
+            .insert_message(game_id, &msg)
             // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
             .expect("test setup: insert_message must succeed to seed narrative history");
         for (idx, swipe) in msg.swipes.iter().enumerate() {
@@ -205,5 +226,5 @@ pub fn make_test_app_without_snapshot(state: GameState) -> Result<WiredApp> {
                 .expect("test setup: insert_swipe must succeed to seed narrative swipes");
         }
     }
-    build_test_app(storage)
+    build_test_app(storage, game_id)
 }

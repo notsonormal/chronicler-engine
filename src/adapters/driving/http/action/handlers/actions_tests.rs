@@ -3,13 +3,15 @@ use std::sync::Arc;
 
 use axum::{Form, http::StatusCode};
 
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driven::storage::Storage;
+use crate::domain::model::game::GameId;
 use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::action::handlers::actions::{
     action_check_handler, action_confirm_handler, action_handler,
 };
 use crate::adapters::driving::http::action::handlers::ActionForm;
-use crate::test_support::{TestAppBuilder, TestWorld, TestMap, TestPersona};
+use crate::test_support::{active_game_of, TestAppBuilder, TestWorld, TestMap, TestPersona};
 
 #[test]
 fn test_action_form_deserialization() {
@@ -59,7 +61,12 @@ async fn test_action_handler_empty_command() {
         command: String::new(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::OK,
@@ -82,7 +89,12 @@ async fn test_action_handler_whitespace_command() {
         command: "   ".to_string(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -98,7 +110,12 @@ async fn test_action_handler_started() {
         command: "look".to_string(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
 }
@@ -110,7 +127,12 @@ async fn test_action_handler_guide_command_dispatches() {
         command: "/guide make it tense".to_string(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -129,7 +151,12 @@ async fn test_action_handler_narrator_command_dispatches() {
         command: "/narrator The lights flicker".to_string(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -148,7 +175,12 @@ async fn test_action_handler_impersonate_command_dispatches() {
         command: "/impersonate act confident".to_string(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -167,7 +199,12 @@ async fn test_action_confirm_handler_empty_command() {
         command: String::new(),
     };
 
-    let response = action_confirm_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_confirm_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::OK,
@@ -182,7 +219,12 @@ async fn test_action_confirm_handler_started() {
         command: "look".to_string(),
     };
 
-    let response = action_confirm_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_confirm_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -193,7 +235,12 @@ async fn test_action_check_handler_empty_command() {
         command: String::new(),
     };
 
-    let response = action_check_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_check_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -216,7 +263,12 @@ async fn test_action_check_handler_disabled_mode() {
         command: "test".to_string(),
     };
 
-    let response = action_check_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_check_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -234,7 +286,12 @@ async fn test_action_check_handler_auto_check_disabled() {
         command: "test".to_string(),
     };
 
-    let response = action_check_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_check_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -245,12 +302,15 @@ async fn test_action_check_handler_check_result_none() {
         command: "go north".to_string(),
     };
 
-    let response = action_check_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_check_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-// dispatch_action Err arm: process_action errors at require_persona before
-// try_claim/spawn. Missing-persona storage → 500.
 #[tokio::test]
 async fn test_action_handler_returns_500_on_pipeline_error() {
     let storage = Arc::new(Storage::new_in_memory());
@@ -258,7 +318,6 @@ async fn test_action_handler_returns_500_on_pipeline_error() {
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPersona::standard();
-    // Persona intentionally NOT seeded → require_persona errors.
     let game_id = storage
         .create_game(
             &world.name,
@@ -268,17 +327,22 @@ async fn test_action_handler_returns_500_on_pipeline_error() {
             "Test Game",
         )
         .unwrap();
-    storage.set_game_id(game_id);
 
     let state = TestAppBuilder::default_test()
         .storage(storage)
         .skip_seeding(true)
+        .active_game(GameId(game_id))
         .build_service();
     let form = ActionForm {
         command: "look".to_string(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -286,15 +350,12 @@ async fn test_action_handler_returns_500_on_pipeline_error() {
     );
 }
 
-// dispatch_action Ok(ConcurrentGeneration) arm: pre-claim the generation slot
-// so process_action's try_claim sees it busy → 200 "Still thinking...".
 #[tokio::test]
 async fn test_action_handler_returns_200_still_thinking_on_concurrent_generation() {
     let state = TestAppBuilder::default_test().build_service();
 
-    // Pre-claim the slot so the handler's process_action sees it busy.
-    let game_id = state.game_catalogue.current_game_id();
-    let mut gs = state.message_service.load_or_fresh();
+    let game_id = active_game_of(&state);
+    let mut gs = state.message_service.load_or_fresh(game_id);
     let (_gid, _gen_id, claim) = state
         .generation_gate
         .try_claim(game_id, &mut gs, &state.message_service)
@@ -308,7 +369,12 @@ async fn test_action_handler_returns_200_still_thinking_on_concurrent_generation
         command: "look".to_string(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::OK,
@@ -324,8 +390,6 @@ async fn test_action_handler_returns_200_still_thinking_on_concurrent_generation
     );
 }
 
-// dispatch_action Ok(ShuttingDown) arm: cancelled shutdown_token → 503.
-// Relies on process_action's top-of-fn is_shutting_down() check.
 #[tokio::test]
 async fn test_action_handler_returns_503_on_shutdown() {
     let state = TestAppBuilder::default_test().build_service();
@@ -335,7 +399,12 @@ async fn test_action_handler_returns_503_on_shutdown() {
         command: "look".to_string(),
     };
 
-    let response = action_handler(axum::extract::State(state), Form(form)).await;
+    let response = action_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+        Form(form),
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::SERVICE_UNAVAILABLE,

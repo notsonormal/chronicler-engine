@@ -1,8 +1,10 @@
 use axum::{http::StatusCode, response::IntoResponse, Form};
 
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::history::handlers::{
     delete_history_handler, edit_history_handler, EditHistoryForm,
 };
+use crate::test_support::active_game_of;
 use crate::test_support::TestAppBuilder;
 
 #[test]
@@ -41,7 +43,8 @@ async fn test_edit_history_handler_ok() {
         text: "modified text".to_string(),
     };
     let result = edit_history_handler(
-        axum::extract::State(state),
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
         axum::extract::Path(999u64),
         Form(form),
     )
@@ -58,7 +61,11 @@ async fn test_edit_history_handler_ok() {
 async fn test_delete_history_handler_ok() {
     let state = TestAppBuilder::default_test().build_service();
 
-    let result = delete_history_handler(axum::extract::State(state)).await;
+    let result = delete_history_handler(
+        axum::extract::State(state.clone()),
+        CurrentGame(active_game_of(&state)),
+    )
+    .await;
     let status = match result {
         Ok(resp) => resp.status(),
         Err(e) => e.into_response().status(),

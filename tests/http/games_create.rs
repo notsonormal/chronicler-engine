@@ -7,8 +7,9 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::{TestMap, TestPersona, TestWorld};
+use chronicler_engine::test_support::{active_game_of, TestMap, TestPersona, TestWorld};
 
 // [docs/specs/games.md] SCENARIO: 17.1
 #[tokio::test]
@@ -43,13 +44,13 @@ async fn test_create_game_handler() {
             "Initial Game",
         )
         .unwrap();
-    storage.set_game_id(initial_game_id);
 
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
+        .active_game(GameId(initial_game_id))
         .build_with_state();
 
-    let old_id = storage.current_game_id();
+    let old_id = active_game_of(&state);
 
     let req = Request::builder()
         .uri("/games")
@@ -69,12 +70,15 @@ async fn test_create_game_handler() {
     );
 
     assert_ne!(
-        state.game_catalogue.current_game_id(),
+        active_game_of(&state),
         old_id,
         "Should have switched to the new game"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     assert!(
         !messages.is_empty(),
         "New game should have at least one message (scenario introduction)"

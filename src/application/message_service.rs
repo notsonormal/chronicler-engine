@@ -8,6 +8,7 @@ use chrono::Utc;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::application::errors::ApplicationError;
+use crate::domain::model::game::GameId;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -25,14 +26,14 @@ impl MessageService {
         Self { storage }
     }
 
-    pub fn load_or_fresh(&self) -> GameState {
-        match self.load_expecting_valid_state() {
+    pub fn load_or_fresh(&self, game_id: GameId) -> GameState {
+        match self.load_expecting_valid_state(game_id) {
             Ok(state) => state,
             Err(e) => {
                 tracing::error!(
                     "Failed to load game state ({e}), building fresh initial state. This may indicate data corruption."
                 );
-                match self.build_fresh_initial_state() {
+                match self.build_fresh_initial_state(game_id) {
                     Ok(state) => state,
                     Err(e2) => {
                         tracing::error!(
@@ -45,23 +46,27 @@ impl MessageService {
         }
     }
 
-    pub fn load_expecting_valid_state(&self) -> Result<GameState, EngineError> {
-        let snapshot = self.storage.load_latest_snapshot()?;
+    pub fn load_expecting_valid_state(&self, game_id: GameId) -> Result<GameState, EngineError> {
+        let snapshot = self.storage.load_latest_snapshot(game_id)?;
         let snap_data = snapshot.ok_or_else(|| {
-            EngineError::Config("no game state snapshot found for current game".to_string())
+            EngineError::Config(format!("no game state snapshot found for game {game_id}"))
         })?;
         let mut state = GameState::from_snapshot(&snap_data);
-        self.load_messages_into_state(&mut state);
+        self.load_messages_into_state(game_id, &mut state);
         Ok(state)
     }
 
-    pub fn save_state(&self, state: &GameState) -> Result<u64, EngineError> {
-        self.write_snapshot(state)
+    pub fn save_state(&self, game_id: GameId, state: &GameState) -> Result<u64, EngineError> {
+        self.write_snapshot(game_id, state)
     }
 
-    pub fn save_message_and_snapshot(&self, state: &mut GameState) -> Result<u64, EngineError> {
+    pub fn save_message_and_snapshot(
+        &self,
+        game_id: GameId,
+        state: &mut GameState,
+    ) -> Result<u64, EngineError> {
         self.save_arriving_location(state)?;
-        let snapshot_id = self.write_snapshot(state)?;
+        let snapshot_id = self.write_snapshot(game_id, state)?;
 
         if let Some(ref mut target) = state.narrative.retry_target {
             let idx = target.swipes.len().saturating_sub(1);
@@ -69,7 +74,7 @@ impl MessageService {
                 if last_swipe.snapshot_id.is_none() {
                     last_swipe.snapshot_id = Some(snapshot_id);
                     self.storage.insert_swipe(target.id, last_swipe, idx)?;
-                    self.storage.update_active_swipe(target.id, idx)?;
+                    self.storage.update_active_swipe(game_id, target.id, idx)?;
                 }
             }
         }
@@ -80,7 +85,7 @@ impl MessageService {
                 if let Some(swipe) = msg.swipes.first_mut() {
                     swipe.snapshot_id = Some(snapshot_id);
                 }
-                let id = self.storage.insert_message(&*msg)?;
+                let id = self.storage.insert_message(game_id, &*msg)?;
                 for (idx, swipe) in msg.swipes.iter().enumerate() {
                     self.storage.insert_swipe(id, swipe, idx)?;
                 }
@@ -90,9 +95,9 @@ impl MessageService {
         Ok(snapshot_id)
     }
 
-    fn write_snapshot(&self, state: &GameState) -> Result<u64, EngineError> {
+    fn write_snapshot(&self, game_id: GameId, state: &GameState) -> Result<u64, EngineError> {
         let snapshot = GameStateSnapshot::from_game_state(state);
-        self.storage.save_snapshot(&snapshot)
+        self.storage.save_snapshot(game_id, &snapshot)
     }
 
     fn save_arriving_location(&self, state: &mut GameState) -> Result<(), EngineError> {
@@ -108,25 +113,23 @@ impl MessageService {
         Ok(())
     }
 
-    pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
-        self.storage.load_messages_with_swipes()
+    pub fn load_messages(&self, game_id: GameId) -> Result<Vec<Message>, EngineError> {
+        self.storage.load_messages_with_swipes(game_id)
     }
 
-    fn load_messages_into_state(&self, state: &mut GameState) {
-        if let Ok(msgs) = self.load_messages() {
+    fn load_messages_into_state(&self, game_id: GameId, state: &mut GameState) {
+        if let Ok(msgs) = self.load_messages(game_id) {
             state.narrative.history.replace(msgs);
         }
     }
 
-    pub fn build_fresh_initial_state(&self) -> Result<GameState, EngineError> {
+    pub fn build_fresh_initial_state(&self, game_id: GameId) -> Result<GameState, EngineError> {
         let WorldBundle {
             world,
             map,
             persona,
             npcs: npcs_map,
-        } = self
-            .storage
-            .world_bundle_for(self.storage.current_game_id())?;
+        } = self.storage.world_bundle_for(game_id.0)?;
         let starting_room_id = world.starting_room_id();
         let mut initial_state = GameState::new(starting_room_id.clone());
 
@@ -149,13 +152,14 @@ impl MessageService {
         Ok(initial_state)
     }
 
-    fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
-        let index = self.storage.require_active_swipe_index(id)?;
+    fn update_message_text(&self, game_id: GameId, id: u64, text: &str) -> Result<(), EngineError> {
+        let index = self.storage.require_active_swipe_index(game_id, id)?;
         self.storage.update_swipe_text(id, index, text)
     }
 
     pub fn switch_swipe(
         &self,
+        game_id: GameId,
         is_generating: bool,
         message_id: u64,
         swipe_index: usize,
@@ -164,7 +168,7 @@ impl MessageService {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        let messages = self.load_messages()?;
+        let messages = self.load_messages(game_id)?;
         let is_last = messages.last().map(|m| m.id == message_id).unwrap_or(false);
         if !is_last {
             return Err(ApplicationError::validation(
@@ -172,7 +176,8 @@ impl MessageService {
             ));
         }
 
-        self.storage.update_active_swipe(message_id, swipe_index)?;
+        self.storage
+            .update_active_swipe(game_id, message_id, swipe_index)?;
 
         let target_msg = messages
             .iter()
@@ -190,7 +195,7 @@ impl MessageService {
 
         let mut snapshot = self
             .storage
-            .load_snapshot_by_id(snapshot_id)?
+            .load_snapshot_by_id(game_id, snapshot_id)?
             .ok_or_else(|| ApplicationError::internal("Snapshot not found"))?;
 
         // A Swipe's snapshot is taken while its narration still generates, and the
@@ -200,27 +205,32 @@ impl MessageService {
         snapshot.narrative.current_options.clear();
 
         snapshot.created_at = Utc::now();
-        self.storage.save_snapshot(&snapshot)?;
+        self.storage.save_snapshot(game_id, &snapshot)?;
 
         Ok(())
     }
 
-    pub fn edit_history(&self, id: u64, text: String) -> Result<(), ApplicationError> {
-        let latest = self.storage.load_latest_snapshot()?;
-        let mut guard = self.load_or_fresh();
+    pub fn edit_history(
+        &self,
+        game_id: GameId,
+        id: u64,
+        text: String,
+    ) -> Result<(), ApplicationError> {
+        let latest = self.storage.load_latest_snapshot(game_id)?;
+        let mut guard = self.load_or_fresh(game_id);
         guard.narrative.history.edit(id, text.clone())?;
 
         if latest.is_some() {
             let snapshot = GameStateSnapshot::from_game_state(&guard);
-            self.storage.save_snapshot(&snapshot)?;
-            self.update_message_text(id, &text)?;
+            self.storage.save_snapshot(game_id, &snapshot)?;
+            self.update_message_text(game_id, id, &text)?;
         }
 
         Ok(())
     }
 
-    pub fn delete_last(&self) -> Result<(), ApplicationError> {
-        let mut guard = self.load_or_fresh();
+    pub fn delete_last(&self, game_id: GameId) -> Result<(), ApplicationError> {
+        let mut guard = self.load_or_fresh(game_id);
         let last_id = guard
             .narrative
             .history
@@ -230,8 +240,8 @@ impl MessageService {
 
         guard.narrative.history.delete_last()?;
         let snapshot = GameStateSnapshot::from_game_state(&guard);
-        self.storage.save_snapshot(&snapshot)?;
-        self.storage.delete_message(last_id)?;
+        self.storage.save_snapshot(game_id, &snapshot)?;
+        self.storage.delete_message(game_id, last_id)?;
 
         Ok(())
     }

@@ -15,7 +15,13 @@ title: Storage
 
 ## Game Scoping
 
-A `Storage` instance holds the active game id. Game-scoped operations on the `games`, `game_state_snapshots`, `messages`, and `message_swipes` tables use it.
+Every game-scoped read and write takes its Game as the first argument, typed
+`GameId` (`domain/model/game.rs`). The storage adapter unwraps the newtype where
+it meets a row, an SQL parameter or the in-memory maps, so no caller converts.
+`Storage` holds no active-Game pointer. The one active Game of the server
+process lives in `ActiveGame` (`application/games/active.rs`).
+`GameCatalogue` is the only reader and the only writer of `ActiveGame`.
+`CurrentGame` reads the active Game through `GameCatalogue` once per request.
 
 ## Settings Persistence
 

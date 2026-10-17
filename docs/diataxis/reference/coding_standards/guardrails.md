@@ -60,7 +60,8 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 <!-- AUTO-GUARDRAILS: syn START -->
 | Rule | Kind | Reason | Source |
 |------|------|--------|--------|
-| — | — | No row exists yet. | — |
+| 1 | banned name | Rule 1: every read and write names its Game. The active-Game pointer lives in `ActiveGame`, so a `static` item or an `Atomic*` type in the storage adapter would be a second hidden Game id. | `tests/infrastructure/guardrails/walker_rows.rs:13` |
+| 2 | call site | Rule 2: the active-Game pointer has one reader and one writer. `GameCatalogue` is both — `CurrentGame` reads through it once per request — and `ActiveGame::set` is `pub(super)`, so the compiler holds the write side too. | `tests/infrastructure/guardrails/walker_rows.rs:25` |
 
 | Rule | Description | Source |
 |------|-------------|--------|
@@ -90,10 +91,10 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:245` |
 | single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:260` |
 | unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:185` |
-| banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:162` |
-| call site rows | Runs the call-site table: only what a row allows may call its callee. | `tests/infrastructure/guardrails/walkers.rs:378` |
-| type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:408` |
-| call count rows | Runs the call-count table: no function calls a row's callee more than the row allows. | `tests/infrastructure/guardrails/walkers.rs:493` |
+| banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:163` |
+| call site rows | Runs the call-site table: only what a row allows may call its callees. | `tests/infrastructure/guardrails/walkers.rs:379` |
+| type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:411` |
+| call count rows | Runs the call-count table: no function calls a row's callee more than the row allows. | `tests/infrastructure/guardrails/walkers.rs:496` |
 <!-- AUTO-GUARDRAILS: syn END -->
 
 ## 4. Coverage Exclusion Policy

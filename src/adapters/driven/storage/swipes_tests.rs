@@ -1,3 +1,4 @@
+use crate::domain::model::game::GameId;
 use crate::domain::model::message::Swipe;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::{dummy_message, dummy_swipe, sqlite_storage};
@@ -5,8 +6,9 @@ use crate::test_support::{dummy_message, dummy_swipe, sqlite_storage};
 #[test]
 fn test_insert_swipe_initial_index_zero() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = dummy_swipe("alt");
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
@@ -19,8 +21,9 @@ fn test_insert_swipe_initial_index_zero() {
 #[test]
 fn test_insert_swipe_sqlite() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = dummy_swipe("alt");
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
@@ -32,8 +35,9 @@ fn test_insert_swipe_sqlite() {
 #[test]
 fn test_insert_swipe_in_memory() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = dummy_swipe("alt");
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
@@ -45,8 +49,9 @@ fn test_insert_swipe_in_memory() {
 #[test]
 fn test_insert_swipe_increments_index() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage.insert_swipe(msg_id, &dummy_swipe("s0"), 0).unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s1"), 1).unwrap();
@@ -59,45 +64,58 @@ fn test_insert_swipe_increments_index() {
 #[test]
 fn test_get_active_swipe_index_default() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
-    assert_eq!(storage.get_active_swipe_index(msg_id).unwrap(), Some(0));
+    assert_eq!(
+        storage.get_active_swipe_index(GameId(1), msg_id).unwrap(),
+        Some(0)
+    );
 }
 
 #[test]
 fn test_get_active_swipe_index_after_update() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage
         .insert_swipe(msg_id, &dummy_swipe("alt"), 1)
         .unwrap();
-    storage.update_active_swipe(msg_id, 1).unwrap();
+    storage.update_active_swipe(GameId(1), msg_id, 1).unwrap();
 
-    assert_eq!(storage.get_active_swipe_index(msg_id).unwrap(), Some(1));
+    assert_eq!(
+        storage.get_active_swipe_index(GameId(1), msg_id).unwrap(),
+        Some(1)
+    );
 }
 
 #[test]
 fn test_update_active_swipe_sqlite() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage
         .insert_swipe(msg_id, &dummy_swipe("alt"), 1)
         .unwrap();
-    storage.update_active_swipe(msg_id, 1).unwrap();
+    storage.update_active_swipe(GameId(1), msg_id, 1).unwrap();
 
-    assert_eq!(storage.get_active_swipe_index(msg_id).unwrap(), Some(1));
+    assert_eq!(
+        storage.get_active_swipe_index(GameId(1), msg_id).unwrap(),
+        Some(1)
+    );
 }
 
 #[test]
 fn test_update_active_swipe_in_memory() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage
         .insert_swipe(msg_id, &dummy_swipe("alt1"), 1)
@@ -105,23 +123,29 @@ fn test_update_active_swipe_in_memory() {
     storage
         .insert_swipe(msg_id, &dummy_swipe("alt2"), 2)
         .unwrap();
-    storage.update_active_swipe(msg_id, 2).unwrap();
+    storage.update_active_swipe(GameId(1), msg_id, 2).unwrap();
 
-    assert_eq!(storage.get_active_swipe_index(msg_id).unwrap(), Some(2));
+    assert_eq!(
+        storage.get_active_swipe_index(GameId(1), msg_id).unwrap(),
+        Some(2)
+    );
 }
 
 #[test]
 fn require_active_swipe_index_returns_index_when_message_present() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
     storage
         .insert_swipe(msg_id, &dummy_swipe("alt"), 2)
         .unwrap();
-    storage.update_active_swipe(msg_id, 2).unwrap();
+    storage.update_active_swipe(GameId(1), msg_id, 2).unwrap();
 
-    let via_get = storage.get_active_swipe_index(msg_id).unwrap();
-    let via_require = storage.require_active_swipe_index(msg_id).unwrap();
+    let via_get = storage.get_active_swipe_index(GameId(1), msg_id).unwrap();
+    let via_require = storage
+        .require_active_swipe_index(GameId(1), msg_id)
+        .unwrap();
     assert_eq!(via_require, 2);
     assert_eq!(via_get, Some(via_require));
 }
@@ -129,8 +153,7 @@ fn require_active_swipe_index_returns_index_when_message_present() {
 #[test]
 fn require_active_swipe_index_returns_canonical_not_found_when_absent() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let result = storage.require_active_swipe_index(999);
+    let result = storage.require_active_swipe_index(GameId(1), 999);
     match result {
         Err(crate::error::EngineError::MessageNotFound(id)) => assert_eq!(id, 999),
         other => panic!("Expected EngineError::MessageNotFound(999), got: {other:?}"),
@@ -140,8 +163,9 @@ fn require_active_swipe_index_returns_canonical_not_found_when_absent() {
 #[test]
 fn test_update_swipe_text_single() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("orig")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("orig"))
+        .unwrap();
 
     storage
         .insert_swipe(msg_id, &dummy_swipe("initial"), 0)
@@ -155,8 +179,9 @@ fn test_update_swipe_text_single() {
 #[test]
 fn test_update_swipe_text_sqlite() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("orig")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("orig"))
+        .unwrap();
 
     storage
         .insert_swipe(msg_id, &dummy_swipe("initial"), 0)
@@ -170,7 +195,6 @@ fn test_update_swipe_text_sqlite() {
 #[test]
 fn test_load_swipes_for_messages_empty() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
     let swipes = storage.load_swipes_for_messages(&[]).unwrap();
     assert!(swipes.is_empty());
 }
@@ -178,8 +202,9 @@ fn test_load_swipes_for_messages_empty() {
 #[test]
 fn test_load_swipes_for_messages_single() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s1"), 0).unwrap();
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
@@ -189,9 +214,12 @@ fn test_load_swipes_for_messages_single() {
 #[test]
 fn test_load_swipes_for_messages_multiple() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id1 = storage.insert_message(&dummy_message("m1")).unwrap();
-    let msg_id2 = storage.insert_message(&dummy_message("m2")).unwrap();
+    let msg_id1 = storage
+        .insert_message(GameId(1), &dummy_message("m1"))
+        .unwrap();
+    let msg_id2 = storage
+        .insert_message(GameId(1), &dummy_message("m2"))
+        .unwrap();
 
     storage
         .insert_swipe(msg_id1, &dummy_swipe("s1"), 0)
@@ -210,8 +238,9 @@ fn test_load_swipes_for_messages_multiple() {
 #[test]
 fn test_load_swipes_groups_by_message_id() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage.insert_swipe(msg_id, &dummy_swipe("s0"), 0).unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s1"), 1).unwrap();
@@ -224,8 +253,9 @@ fn test_load_swipes_groups_by_message_id() {
 #[test]
 fn test_load_swipes_orders_by_index() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage
         .insert_swipe(msg_id, &dummy_swipe("second"), 1)
@@ -242,8 +272,9 @@ fn test_load_swipes_orders_by_index() {
 #[test]
 fn test_shift_swipe_indices_positive_offset() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage.insert_swipe(msg_id, &dummy_swipe("s1"), 1).unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s2"), 2).unwrap();
@@ -257,8 +288,9 @@ fn test_shift_swipe_indices_positive_offset() {
 #[test]
 fn test_shift_swipe_indices_zero_offset() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage.insert_swipe(msg_id, &dummy_swipe("s1"), 1).unwrap();
     storage.shift_swipe_indices(msg_id, 0).unwrap();
@@ -270,8 +302,9 @@ fn test_shift_swipe_indices_zero_offset() {
 #[test]
 fn test_shift_swipe_indices_sqlite() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage.insert_swipe(msg_id, &dummy_swipe("s1"), 1).unwrap();
     storage.shift_swipe_indices(msg_id, 5).unwrap();
@@ -283,8 +316,9 @@ fn test_shift_swipe_indices_sqlite() {
 #[test]
 fn test_swipe_with_text_only() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = Swipe {
         text: "text only".to_string(),
@@ -305,8 +339,9 @@ fn test_swipe_with_text_only() {
 #[test]
 fn test_swipe_with_snapshot_id() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = Swipe {
         text: "with snapshot".to_string(),
@@ -326,8 +361,9 @@ fn test_swipe_with_snapshot_id() {
 #[test]
 fn test_swipe_with_location_header() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = Swipe {
         text: "with location".to_string(),
@@ -350,8 +386,9 @@ fn test_swipe_with_location_header() {
 #[test]
 fn test_update_swipe_location_header_writes_the_row() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s"), 0).unwrap();
 
     storage
@@ -368,8 +405,9 @@ fn test_update_swipe_location_header_writes_the_row() {
 #[test]
 fn test_swipe_with_event_header() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = Swipe {
         text: "with event".to_string(),
@@ -392,8 +430,9 @@ fn test_swipe_with_event_header() {
 #[test]
 fn test_insert_swipe_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    storage.set_game_id(1);
-    storage.insert_message(&dummy_message("m")).unwrap();
+    storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     handle.set("insert_swipe", TestOverride::config("insert failed"));
 
@@ -404,8 +443,9 @@ fn test_insert_swipe_failure() {
 #[test]
 fn test_update_swipe_text_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s"), 0).unwrap();
 
     handle.set("update_swipe_text", TestOverride::internal("update failed"));
@@ -417,8 +457,9 @@ fn test_update_swipe_text_failure() {
 #[test]
 fn test_update_swipe_location_header_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s"), 0).unwrap();
 
     handle.set(
@@ -433,8 +474,9 @@ fn test_update_swipe_location_header_failure() {
 #[test]
 fn test_shift_swipe_indices_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s"), 0).unwrap();
 
     handle.set("shift_swipe_indices", TestOverride::config("shift failed"));
@@ -446,7 +488,6 @@ fn test_shift_swipe_indices_failure() {
 #[test]
 fn test_load_swipes_for_messages_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    storage.set_game_id(1);
 
     handle.set(
         "load_swipes_for_messages",
@@ -460,15 +501,16 @@ fn test_load_swipes_for_messages_failure() {
 #[test]
 fn test_update_active_swipe_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    storage.set_game_id(1);
-    storage.insert_message(&dummy_message("m")).unwrap();
+    storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     handle.set(
         "update_active_swipe",
         TestOverride::internal("update failed"),
     );
 
-    let result = storage.update_active_swipe(1, 5);
+    let result = storage.update_active_swipe(GameId(1), 1, 5);
     assert!(result.is_err());
 }
 
@@ -483,8 +525,9 @@ fn sample_impersonate_direction() -> Option<String> {
 #[test]
 fn test_swipe_inputs_roundtrip_in_memory() {
     let storage = Storage::new_in_memory();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = Swipe {
         text: "guided".to_string(),
@@ -506,8 +549,9 @@ fn test_swipe_inputs_roundtrip_in_memory() {
 #[test]
 fn test_swipe_inputs_roundtrip_sqlite() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = Swipe {
         text: "guided".to_string(),
@@ -529,8 +573,9 @@ fn test_swipe_inputs_roundtrip_sqlite() {
 #[test]
 fn test_swipe_inputs_impersonated_roundtrip_sqlite() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     let swipe = Swipe {
         text: "impersonated".to_string(),
@@ -555,8 +600,9 @@ fn test_swipe_inputs_impersonated_roundtrip_sqlite() {
 #[test]
 fn test_swipe_inputs_none_roundtrip_sqlite() {
     let storage = sqlite_storage().unwrap();
-    storage.set_game_id(1);
-    let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
+    let msg_id = storage
+        .insert_message(GameId(1), &dummy_message("m"))
+        .unwrap();
 
     storage
         .insert_swipe(msg_id, &dummy_swipe("plain"), 0)

@@ -2,19 +2,18 @@
 //! Storage backend and core abstractions
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 #[cfg(feature = "testing")]
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::in_memory_data::InMemoryData;
+use crate::domain::model::game::GameId;
 use crate::error::EngineError;
 #[cfg(feature = "testing")]
 use super::test_support::{TestFailureHandle, TestOverride};
 
 pub struct Storage {
-    game_id: AtomicU64,
     backend: Mutex<BackendKind>,
 }
 
@@ -25,27 +24,26 @@ pub enum Backend {
 }
 
 /// [TRIVIAL_ENUM]
-// `Test.base: Box<Backend>` (not `Box<BackendKind>`) pins the replace-not-nest invariant.
 pub enum BackendKind {
     Direct(Backend),
     #[cfg(feature = "testing")]
     Test {
+        // `Box<Backend>`, not `Box<BackendKind>`: pins the replace-not-nest
+        // invariant, so at most one `Test` layer wraps one `Direct` backend.
         base: Box<Backend>,
         overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
     },
 }
 
 impl Storage {
-    pub fn new_sqlite(pool: DbPool, game_id: u64) -> Self {
+    pub fn new_sqlite(pool: DbPool) -> Self {
         Self {
-            game_id: AtomicU64::new(game_id),
             backend: Mutex::new(BackendKind::Direct(Backend::Sqlite { pool })),
         }
     }
 
     pub fn new_in_memory() -> Self {
         Self {
-            game_id: AtomicU64::new(0), // No default game - calling code should create one explicitly
             backend: Mutex::new(BackendKind::Direct(Backend::InMemory(Box::new(
                 InMemoryData::empty(),
             )))),
@@ -113,13 +111,8 @@ impl Storage {
             }
         };
         Self {
-            game_id: self.game_id,
             backend: Mutex::new(BackendKind::Test { base, overrides }),
         }
-    }
-
-    pub(crate) fn game_id(&self) -> u64 {
-        self.game_id.load(Ordering::SeqCst)
     }
 
     #[allow(unused_variables)]
@@ -153,41 +146,27 @@ impl Storage {
 }
 
 impl Storage {
-    pub fn set_game_id(&self, game_id: u64) {
-        let current = self.game_id();
-        if current != game_id {
-            let backend = match self.backend.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            let target = match &*backend {
-                BackendKind::Direct(b) => b,
-                #[cfg(feature = "testing")]
-                BackendKind::Test { base, .. } => base.as_ref(),
-            };
-            if let Backend::Sqlite { pool } = target {
+    /// The newest Game of a World is picked by `updated_at`, which
+    /// `ActiveGame::set` relies on.
+    pub fn touch_game_updated_at(&self, game_id: GameId) -> Result<(), EngineError> {
+        self.with_backend_mut("touch_game_updated_at", |backend| match backend {
+            Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
-                if let Err(e) = conn.execute(
+                conn.execute(
                     "UPDATE games SET updated_at = ?1 WHERE id = ?2",
-                    rusqlite::params![&now, game_id as i64],
-                ) {
-                    tracing::error!("Failed to update games.updated_at for game {game_id}: {e}");
-                }
+                    rusqlite::params![&now, game_id.0 as i64],
+                )
+                .map_err(|e| EngineError::Config(format!("Failed to touch game {game_id}: {e}")))?;
+                Ok(())
             }
-            drop(backend);
-            self.game_id.store(game_id, Ordering::SeqCst);
-        }
-    }
-
-    pub fn current_game_id(&self) -> u64 {
-        self.game_id()
+            Backend::InMemory(_) => Ok(()),
+        })
     }
 }
 
 #[cfg(test)]
 impl Storage {
-    // Pins the replace-not-nest invariant: at most one `Test` layer with a `Direct` base.
     pub(crate) fn backend_layer_info(&self) -> (&'static str, &'static str) {
         let backend = self.backend.lock().unwrap_or_else(|e| e.into_inner());
         match &*backend {

@@ -75,7 +75,7 @@ impl Agent for QuantifierAgent {
         let quantifier_prompt_override = {
             self.storage.as_ref().and_then(|s| {
                 let settings = s.get_settings().ok()?;
-                let preset_id = s.active_quantifier_preset_id(&settings);
+                let preset_id = s.active_quantifier_preset_id(ctx.game_id, &settings);
                 s.get_preset(&preset_id)
                     .ok()
                     .flatten()

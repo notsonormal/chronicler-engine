@@ -1,5 +1,6 @@
 //! HTTP E2E tests for the reset endpoint (POST /reset).
 
+use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::TestAppBuilder;
 
@@ -12,7 +13,10 @@ async fn test_reset_clears_history_http() {
 
     let _ = post_action(&app, "examine room").await;
     assert!(wait_idle(&state, 1000).await);
-    let before = state.message_service.load_messages().unwrap();
+    let before = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     assert!(
         before.iter().any(|m| m.message_type == MessageType::Input),
         "history should have an Input before reset"
@@ -21,7 +25,10 @@ async fn test_reset_clears_history_http() {
     let resp = post_empty(&app, "/reset").await;
     assert!(resp.status().is_success());
 
-    let after = state.message_service.load_messages().unwrap();
+    let after = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = after
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -58,7 +65,10 @@ async fn test_reset_then_execute_works_http() {
         "action after reset should complete"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)

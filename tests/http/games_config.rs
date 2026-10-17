@@ -5,7 +5,7 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
-use chronicler_engine::test_support::{TestAppBuilder, TestPromptPreset};
+use chronicler_engine::test_support::{active_game_of, TestAppBuilder, TestPromptPreset};
 
 use crate::support::http_assertions::assert_option_selected;
 use crate::support::http_requests::post_form;
@@ -21,10 +21,10 @@ fn failing_storage() -> Arc<Storage> {
 #[tokio::test]
 async fn test_posture_save_failure_surfaces_500_error_span_http() {
     let storage = failing_storage();
-    let (app, _state) = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
-    let id = storage.current_game_id();
+    let id = active_game_of(&state).0;
 
     let resp = post_form(
         &app,
@@ -45,10 +45,10 @@ async fn test_posture_save_failure_surfaces_500_error_span_http() {
 #[tokio::test]
 async fn test_presets_save_failure_surfaces_500_error_span_http() {
     let storage = failing_storage();
-    let (app, _state) = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
-    let id = storage.current_game_id();
+    let id = active_game_of(&state).0;
 
     let resp = post_form(
         &app,
@@ -69,10 +69,10 @@ async fn test_presets_save_failure_surfaces_500_error_span_http() {
 #[tokio::test]
 async fn test_mode_switch_failure_surfaces_500_error_span_http() {
     let storage = failing_storage();
-    let (app, _state) = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
-    let id = storage.current_game_id();
+    let id = active_game_of(&state).0;
 
     let resp = post_form(
         &app,
@@ -97,7 +97,7 @@ async fn test_mode_switch_failure_surfaces_500_error_span_http() {
 #[tokio::test]
 async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
-    let id = state.game_catalogue.current_game_id();
+    let id = active_game_of(&state);
 
     let resp = post_form(
         &app,
@@ -128,8 +128,8 @@ async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
 
     let game = state
         .game_catalogue
-        .current_game()
-        .expect("current_game should succeed")
+        .active_game()
+        .expect("active_game should succeed")
         .expect("the active game must still exist");
     assert_eq!(game.narrative_tense.as_str(), "present");
     assert_eq!(game.narrative_perspective.as_str(), "third");
@@ -139,7 +139,7 @@ async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
 #[tokio::test]
 async fn test_options_preset_selection_persists_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
-    let id = state.game_catalogue.current_game_id();
+    let id = active_game_of(&state);
 
     state
         .prompt_preset_service
@@ -151,8 +151,8 @@ async fn test_options_preset_selection_persists_http() {
 
     let current = state
         .game_catalogue
-        .current_game()
-        .expect("current_game should succeed")
+        .active_game()
+        .expect("active_game should succeed")
         .expect("the active game must exist");
     let body = format!(
         "system_preset_id={}&quantifier_preset_id={}&impersonate_preset_id={}&options_preset_id=options_custom",
@@ -180,8 +180,8 @@ async fn test_options_preset_selection_persists_http() {
 
     let game = state
         .game_catalogue
-        .current_game()
-        .expect("current_game should succeed")
+        .active_game()
+        .expect("active_game should succeed")
         .expect("the active game must still exist");
     assert_eq!(game.active_options_prompt_preset_id, "options_custom");
 }

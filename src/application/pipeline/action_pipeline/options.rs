@@ -14,6 +14,7 @@ use crate::application::pipeline::pipeline_run::PipelineRun;
 use super::core::ActionPipeline;
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::game::GameId;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -22,15 +23,16 @@ use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase};
 use crate::error::EngineError;
 
 impl ActionPipeline {
-    /// On-demand options generation (`/options`): claim the generation slot
-    /// and refresh the offered set against the current scene, without
+    /// On-demand `/options`: claims the slot and refreshes the offered set without
     /// narrating. Requires scene history — options need a scene to ground in.
     pub fn process_options(
         &self,
         generation_gate: &GenerationGate,
+        game_id: GameId,
     ) -> Result<ProcessActionResult, EngineError> {
         self.claim_and_spawn(
             generation_gate,
+            game_id,
             |_game_id, game_state| {
                 if game_state.narrative.history().is_empty() {
                     return Err(EngineError::Validation(
@@ -40,20 +42,18 @@ impl ActionPipeline {
                 Ok(())
             },
             || Ok(()),
-            |pipeline| {
-                pipeline.execute_options_refresh();
+            move |pipeline| {
+                pipeline.execute_options_refresh(game_id);
             },
         )
     }
 
-    /// Run the registered OptionsGeneration agents against the current scene
-    /// and return the parsed option set.
-    ///
-    /// `Ok(empty)` means no options agent is registered (an `[agents]`
-    /// settings section without an `options` entry); callers surface that as
-    /// an unavailable-agent failure.
+    /// `Ok(empty)` means no options agent is registered (an `[agents]` settings
+    /// section without an `options` entry); callers surface that as an
+    /// unavailable-agent failure.
     pub(crate) fn run_options_generation(
         &self,
+        game_id: GameId,
         state: &GameState,
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
@@ -68,6 +68,7 @@ impl ActionPipeline {
                     .get(&state.movement.current_room_id)
             });
         let agent_ctx = AgentContext {
+            game_id,
             state,
             main_response: None,
             player_input: "",
@@ -97,15 +98,12 @@ impl ActionPipeline {
         }
     }
 
-    /// On-demand options refresh (`/options`): runs the options agent against
-    /// the current scene and replaces the offered set in place. Failures
-    /// surface a system message and KEEP the prior set — the scene did not
-    /// change, so the old options stay usable.
+    /// Replaces the offered set in place. A failure surfaces a system message and
+    /// keeps the prior set — the scene did not change.
     #[instrument(skip(self))]
-    pub(crate) fn execute_options_refresh(&self) {
-        let started_for = self.storage.current_game_id();
-        let run = PipelineRun::new(self, started_for);
-        let mut state = self.message_service.load_or_fresh();
+    pub(crate) fn execute_options_refresh(&self, game_id: GameId) {
+        let run = PipelineRun::new(self, game_id);
+        let mut state = self.message_service.load_or_fresh(game_id);
 
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Options;
@@ -114,7 +112,7 @@ impl ActionPipeline {
             return;
         }
 
-        match run.check_game_unchanged(started_for) {
+        match run.check_game_unchanged(game_id) {
             Ok(()) => {}
             Err(PhaseError::Cancelled) => {
                 let _ = run.handle_cancellation();
@@ -128,7 +126,7 @@ impl ActionPipeline {
 
         let WorldBundle {
             map, persona, npcs, ..
-        } = match self.load_world_bundle(started_for) {
+        } = match self.load_world_bundle(game_id) {
             Ok(bundle) => bundle,
             Err(e) => {
                 self.finalize_options_failure(
@@ -140,10 +138,13 @@ impl ActionPipeline {
             }
         };
 
-        match self.run_options_generation(&state, &map, &persona, &npcs) {
+        match self.run_options_generation(game_id, &state, &map, &persona, &npcs) {
             Ok(options) if !options.is_empty() => {
                 state.narrative.current_options = options;
-                if let Err(e) = self.message_service.save_message_and_snapshot(&mut state) {
+                if let Err(e) = self
+                    .message_service
+                    .save_message_and_snapshot(game_id, &mut state)
+                {
                     tracing::error!("Failed to save options set: {e}");
                 }
             }
@@ -168,8 +169,6 @@ impl ActionPipeline {
         run.phase_finalize(&mut state);
     }
 
-    /// Surface an options failure as a system message, keep the prior offered
-    /// set, and finish the run as a normal (non-error) turn.
     fn finalize_options_failure(
         &self,
         state: &mut GameState,
@@ -178,18 +177,20 @@ impl ActionPipeline {
     ) {
         tracing::warn!("Options generation failed: {message}");
         state.add_message(message, MessageType::System);
-        if let Err(e) = self.message_service.save_message_and_snapshot(state) {
+        if let Err(e) = self
+            .message_service
+            .save_message_and_snapshot(run.started_for, state)
+        {
             tracing::error!("Failed to persist options failure message: {e}");
         }
         run.phase_finalize(state);
     }
 
-    /// Turn-end rewrite of the offered option set (always-on trigger):
-    /// the prior set clears, then regenerates when `options_enabled`. A
-    /// failed regeneration leaves the set empty plus a system message — the
-    /// set must always describe the current scene, never a stale one.
+    /// Always-on turn-end rewrite. A failed regeneration leaves the set empty plus a
+    /// system message rather than stale — the set must always describe the current scene.
     pub(crate) fn rewrite_options_after_turn(
         &self,
+        game_id: GameId,
         state: &mut GameState,
         map: &Arc<MapDef>,
         persona: &Arc<PersonaCard>,
@@ -198,7 +199,7 @@ impl ActionPipeline {
     ) {
         state.narrative.current_options.clear();
         if options_enabled {
-            match self.run_options_generation(state, map, persona, npcs) {
+            match self.run_options_generation(game_id, state, map, persona, npcs) {
                 Ok(options) if !options.is_empty() => {
                     state.narrative.current_options = options;
                 }
@@ -216,7 +217,10 @@ impl ActionPipeline {
                 }
             }
         }
-        if let Err(e) = self.message_service.save_message_and_snapshot(state) {
+        if let Err(e) = self
+            .message_service
+            .save_message_and_snapshot(game_id, state)
+        {
             tracing::warn!("Failed to save post-turn options rewrite: {e}");
         }
     }

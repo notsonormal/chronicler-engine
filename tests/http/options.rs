@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
@@ -17,14 +18,12 @@ use crate::support::app_wiring::app_with_narrator_and_registry;
 use crate::support::http_assertions::{defined_icons, referenced_icons};
 use crate::support::http_fixtures::{if_world, seed_offered_set};
 use crate::support::http_requests::{fetch_body, post_action, post_action_check, post_form, wait_idle};
-
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
 const SET_B: &str = "<suggestion>Open the gate</suggestion>\
 <suggestion>Feed the horse</suggestion><suggestion>Climb the tower</suggestion>";
 const NUMBERED: &str = "1. Search the desk\n2. Question the guard\n3. Leave the hall";
 
-/// The narrator gets a default mock; everything else is the default test data.
 fn options_app(options: Arc<MockBackend>) -> (axum::Router, AppState, Arc<Storage>) {
     let mut registry = AgentRegistry::default();
     registry.add_agent(Box::new(OptionsAgent::with_provider(
@@ -77,18 +76,22 @@ async fn create_game(app: &axum::Router, world_key: &str) {
 fn current_options(state: &AppState) -> Vec<String> {
     state
         .game_view_query
-        .get_current_options()
+        .get_current_options(active_game_of(state))
         .expect("get_current_options should succeed")
 }
 
 fn message_count(state: &AppState) -> usize {
-    state.message_service.load_messages().unwrap().len()
+    state
+        .message_service
+        .load_messages(active_game_of(state))
+        .unwrap()
+        .len()
 }
 
 fn system_messages(state: &AppState) -> Vec<String> {
     state
         .message_service
-        .load_messages()
+        .load_messages(active_game_of(state))
         .unwrap()
         .into_iter()
         .filter(|m| m.message_type == MessageType::System)
@@ -492,13 +495,13 @@ async fn test_options_work_in_if_mode_http() {
 // [docs/specs/options.md] SCENARIO: 24.19
 #[tokio::test]
 async fn test_mode_switch_keeps_offered_set_http() {
-    let (app, state, storage) =
+    let (app, state, _storage) =
         options_app(tagged_provider(vec![SET_A.to_string(), SET_B.to_string()]));
-    let game_id = storage.current_game_id();
+    let game_id = active_game_of(&state);
     let starting_mode = state
         .game_catalogue
-        .current_game()
-        .expect("current_game should succeed")
+        .active_game()
+        .expect("active_game should succeed")
         .expect("a current game must exist")
         .narrator_mode;
     assert_eq!(
@@ -529,8 +532,8 @@ async fn test_mode_switch_keeps_offered_set_http() {
     assert!(resp.status().is_success(), "mode switch should succeed");
     let switched = state
         .game_catalogue
-        .current_game()
-        .expect("current_game should succeed")
+        .active_game()
+        .expect("active_game should succeed")
         .expect("a current game must exist");
     assert_eq!(
         switched.narrator_mode,
@@ -572,7 +575,7 @@ async fn test_using_offered_option_submits_as_input_http() {
 
     let inputs_before = state
         .message_service
-        .load_messages()
+        .load_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -588,7 +591,10 @@ async fn test_using_offered_option_submits_as_input_http() {
         "the submitted option should complete"
     );
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)

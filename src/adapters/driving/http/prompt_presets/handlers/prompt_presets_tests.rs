@@ -25,8 +25,9 @@ fn make_test_app_state_with_storage(
 ) -> crate::adapters::driving::http::AppState {
     let _ = storage.save_preset(&preset);
 
-    let wired = crate::bootstrap::wiring::build_app_graph_for_tests(Arc::clone(&storage), None)
-        .expect("build_app_graph_for_tests should succeed");
+    let wired =
+        crate::bootstrap::wiring::build_app_graph_for_tests(Arc::clone(&storage), None, None)
+            .expect("build_app_graph_for_tests should succeed");
     crate::adapters::driving::http::AppState::from_wired(wired)
 }
 
@@ -213,8 +214,6 @@ async fn test_save_preset_invalid_type_returns_error() {
     assert!(body.contains("Invalid preset type"));
 }
 
-/// A preset's type is fixed at creation: update takes it from the stored row
-/// and ignores the form's hidden `preset_type` input, whatever it carries.
 #[tokio::test]
 async fn test_update_preset_ignores_form_preset_type() {
     let preset = crate::test_support::TestPromptPreset::system("custom", "Custom");
@@ -307,8 +306,10 @@ fn make_test_app_state_with_failing_storage(
     let _ = storage.save_preset(&preset);
     fail_after_setup(&handle);
 
-    let wired = crate::bootstrap::wiring::build_app_graph_for_tests(Arc::new(storage), None)
-        .expect("build_app_graph_for_tests should succeed");
+    let storage = Arc::new(storage);
+    let wired =
+        crate::bootstrap::wiring::build_app_graph_for_tests(Arc::clone(&storage), None, None)
+            .expect("build_app_graph_for_tests should succeed");
     crate::adapters::driving::http::AppState::from_wired(wired)
 }
 
@@ -470,7 +471,7 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
     let preset = preset_with_modes("if-only", vec![NarratorMode::InteractiveFiction]);
     let app_state = make_test_app_state_with_preset(preset);
 
-    // No mode param resolves to Novel, which the preset does not allow.
+    // No mode param resolves to Novel.
     let response = activate_preset_handler(
         axum::extract::State(app_state.clone()),
         axum::extract::Path("if-only".to_string()),
@@ -546,9 +547,8 @@ async fn test_card_badges_active_quantifier_default_for_novel() {
         "activation should succeed: {body}"
     );
 
-    // Refetch the card through the fragment endpoint: the Novel bundle's
-    // quantifier slot holds this preset, so the card must badge it and
-    // suppress the Set Active (Novel) action.
+    // The Novel bundle's quantifier slot holds this preset, so the card must badge
+    // it and suppress the Set Active (Novel) action.
     let card = preset_card_handler(
         axum::extract::State(app_state),
         axum::extract::Path("q-active".to_string()),
@@ -612,7 +612,6 @@ async fn test_delete_refuses_preset_referenced_as_any_mode_default() {
         "Custom Ref",
     ));
 
-    // Reference the custom preset as the IF bundle's system default.
     {
         app_state
             .settings_service
@@ -741,10 +740,8 @@ async fn test_save_preset_defaults_to_both_modes_when_form_omits_flags() {
     );
 }
 
-// The urlencoded checkbox grammar, pinned at the parse layer: a checked box
-// posts `allowed_mode_<mode>=true`, an unchecked box posts nothing and
-// serde-defaults to false. A `Vec<String>` checkbox group here surfaced as a
-// browser-only 422.
+// A `Vec<String>` checkbox group here surfaced as a browser-only 422, so the
+// grammar is pinned at the parse layer.
 #[test]
 fn test_preset_form_urlencoded_parses_checked_flags() {
     let form: PresetForm = serde_urlencoded::from_str(

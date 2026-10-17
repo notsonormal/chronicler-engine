@@ -33,17 +33,21 @@ Configure narration per call with
 `MockBackend::default().with_narrations(vec![...])`; quantifier responses with
 `.with_prompt_responses(vec![...])` (Cross-cutting 7).
 
-**Observing state.** `app.message_service.load_or_fresh()` is the persisted
-state. The injected pipeline is rebound to the builder's storage, so pass the
-same `Arc<Storage>` via `.storage(...)` when the test mutates storage the
-pipeline should read.
+**Observing state.** `app.message_service.load_or_fresh(game_id)` is the
+persisted state. Take the Game from the app the test built, through the shared
+`test_support::active_game_of(&state)` (it panics when no Game is active, which
+names a broken fixture). The injected pipeline is rebound to the
+builder's storage, so pass the same `Arc<Storage>` via `.storage(...)` when the
+test mutates storage the pipeline should read. A test that seeds its own storage
+and skips the builder's seeding also names the Game the app should point at:
+`.skip_seeding(true).active_game(game_id)`.
 
 **Exemplars.** `tests/http/retrigger.rs` (mock quantifier + `build_with_state`),
 `tests/http/games_create.rs` (custom storage + `build`).
 
 **Service-direct variant.** Use it for collaborator methods no request flows
 through: lifecycle ops on `GameCatalogue` (`create_game`, `switch_game`,
-`delete_game`, `list_games`, `current_game_id`), status/cancellation on
+`delete_game`, `list_games`, `active_game_id`), status/cancellation on
 `GenerationGate`, read-side queries on `GameViewQuery`. Do not use it for
 `process_action` — drive that through the builder + injected pipeline form above.
 Direct-storage tests with no service are Pattern 3.

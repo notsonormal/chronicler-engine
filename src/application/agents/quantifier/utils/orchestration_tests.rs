@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::game::GameId;
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageEntry;
@@ -212,7 +213,6 @@ fn map_with_room(room: &Room) -> MapDef {
     }
 }
 
-// `npc_pool_ids` seeds the world lookup map; `scene_npcs` seeds `state.scene.npcs_in_area` (the low-conf fallback source). Both must carry asserted IDs in low-conf tests.
 fn determine_npcs_with_room(
     state: &mut GameState,
     current_room: &Room,
@@ -227,6 +227,7 @@ fn determine_npcs_with_room(
     let npcs = npc_map_from_ids(npc_pool_ids);
     state.scene.npcs_in_area = scene_npcs.to_vec();
     let ctx = AgentContext {
+        game_id: GameId(1),
         state: &*state,
         main_response: Some(player_action),
         player_input: player_action,
@@ -494,7 +495,6 @@ fn test_static_npc_result_fallback_to_scene_npcs() {
 
 #[test]
 fn test_quantifier_routes_through_recorder_for_forensics() {
-    // Regression guard: bypassing the recorder (e.g. `recorder.provider().clone()`) leaves storage.list_latest_llm_messages(...) empty.
     use crate::adapters::driven::storage::Storage;
     use crate::test_support::make_test_recorder_with_storage;
 

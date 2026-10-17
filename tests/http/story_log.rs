@@ -1,5 +1,6 @@
 //! HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
 
+use chronicler_engine::test_support::active_game_of;
 use axum::http::StatusCode;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -21,7 +22,7 @@ async fn test_delete_last_between_actions_http() {
     assert!(wait_idle(&state, 1000).await, "action A should complete");
     let narration_a = state
         .message_service
-        .load_messages()
+        .load_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -36,7 +37,10 @@ async fn test_delete_last_between_actions_http() {
     assert!(resp.status().is_success());
     assert!(wait_idle(&state, 1000).await, "action B should complete");
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -67,7 +71,7 @@ async fn test_delete_mid_sequence_http() {
     assert!(wait_idle(&state, 1000).await);
     let narration_b = state
         .message_service
-        .load_messages()
+        .load_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -81,7 +85,10 @@ async fn test_delete_mid_sequence_http() {
     let _ = post_action(&app, "check door").await;
     assert!(wait_idle(&state, 1000).await);
 
-    let messages = state.message_service.load_messages().unwrap();
+    let messages = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .unwrap();
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)

@@ -9,6 +9,7 @@ use axum::{
 use crate::application::errors::ApplicationError;
 use crate::adapters::driving::http::AppState;
 
+use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::response::ok;
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -18,16 +19,18 @@ pub struct EditHistoryForm {
 
 pub async fn edit_history_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
     Path(id): Path<u64>,
     Form(form): Form<EditHistoryForm>,
 ) -> Result<Response, ApplicationError> {
-    state.message_service.edit_history(id, form.text)?;
+    state.message_service.edit_history(game_id, id, form.text)?;
     Ok(ok("<span class=\"status ready\">Edited</span>"))
 }
 
 pub async fn delete_history_handler(
     State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
 ) -> Result<Response, ApplicationError> {
-    state.message_service.delete_last()?;
+    state.message_service.delete_last(game_id)?;
     Ok(ok(""))
 }

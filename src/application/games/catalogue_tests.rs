@@ -3,6 +3,8 @@
 use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
+use crate::application::games::active::ActiveGame;
+use crate::domain::model::game::GameId;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::message_service::MessageService;
 use crate::adapters::driven::storage::{Storage, TestOverride};
@@ -13,19 +15,24 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::utils::settings_defaults;
 use crate::test_support::TestDataBuilder;
 
+fn new_catalogue(storage: &Arc<Storage>, initial_game: Option<GameId>) -> GameCatalogue {
+    let message_service = Arc::new(MessageService::new(Arc::clone(storage)));
+    GameCatalogue::new(
+        Arc::clone(storage),
+        message_service,
+        Arc::new(ActiveGame::new(Arc::clone(storage))),
+        initial_game,
+    )
+}
+
 fn seeded_catalogue() -> (GameCatalogue, Arc<Storage>, String, String) {
     let data = TestDataBuilder::default_test().build();
     let storage = Arc::new(Storage::new_in_memory());
-    data.seed_into(&storage);
-    let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
+    let game_id = data.seed_into(&storage);
     let world_key = data.world_key();
     let persona_key = data.persona.key.clone();
-    (
-        GameCatalogue::new(Arc::clone(&storage), message_service),
-        storage,
-        world_key,
-        persona_key,
-    )
+    let catalogue = new_catalogue(&storage, Some(game_id));
+    (catalogue, storage, world_key, persona_key)
 }
 
 #[test]
@@ -44,8 +51,8 @@ fn test_create_game_returns_positive_id() {
     assert_eq!(game.world_key, world_key);
     assert_eq!(game.persona_key, persona_key);
     assert_eq!(
-        storage.current_game_id(),
-        id,
+        catalogue.active_game_id(),
+        Some(GameId(id)),
         "new game should become current"
     );
 }
@@ -70,7 +77,8 @@ fn test_create_game_inherits_world_posture_and_mode_matched_bundle() {
     let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
     let world_key = data.world_key();
     let persona_key = data.persona.key.clone();
-    let catalogue = GameCatalogue::new(Arc::clone(&storage), message_service);
+    let _ = message_service;
+    let catalogue = new_catalogue(&storage, None);
 
     let id = catalogue
         .create_game(&world_key, &persona_key)
@@ -228,9 +236,8 @@ fn test_create_game_restores_current_game_on_persist_failure() {
         TestOverride::internal("simulated initial snapshot failure"),
     );
     let storage = Arc::new(storage);
-    let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
-    let catalogue = GameCatalogue::new(Arc::clone(&storage), message_service);
-    let original_current = storage.current_game_id();
+    let catalogue = new_catalogue(&storage, None);
+    let original_current = catalogue.active_game_id();
 
     let result = catalogue.create_game(&data.world_key(), &data.persona.key);
 
@@ -239,9 +246,9 @@ fn test_create_game_restores_current_game_on_persist_failure() {
         "create_game should fail when initial state cannot be persisted"
     );
     assert_eq!(
-        storage.current_game_id(),
+        catalogue.active_game_id(),
         original_current,
-        "current game should be restored after rollback"
+        "the pointer must not move when the create unit fails"
     );
 }
 
@@ -254,12 +261,12 @@ fn test_switch_game_changes_current_game() {
     catalogue
         .switch_game(id1)
         .expect("switch to first game should succeed");
-    assert_eq!(catalogue.current_game_id(), id1);
+    assert_eq!(catalogue.active_game_id(), Some(GameId(id1)));
 
     catalogue
         .switch_game(id2)
         .expect("switch to second game should succeed");
-    assert_eq!(catalogue.current_game_id(), id2);
+    assert_eq!(catalogue.active_game_id(), Some(GameId(id2)));
 }
 
 #[test]
@@ -321,13 +328,17 @@ fn test_list_games_returns_all_games() {
 fn test_reset_replaces_current_game() {
     let (catalogue, storage, world_key, persona_key) = seeded_catalogue();
     catalogue.create_game(&world_key, &persona_key).unwrap();
-    let pre_reset_current = catalogue.current_game_id();
+    let pre_reset_current = catalogue
+        .active_game_id()
+        .expect("create_game should leave an active game")
+        .0;
 
     catalogue.reset().expect("reset should succeed");
 
-    let post_reset_current = catalogue.current_game_id();
+    let post_reset_current = catalogue.active_game_id();
     assert_ne!(
-        post_reset_current, pre_reset_current,
+        post_reset_current,
+        Some(GameId(pre_reset_current)),
         "reset should create a new current game"
     );
     assert!(
@@ -343,8 +354,7 @@ fn test_reset_propagates_persist_failure() {
     data.seed_into(&raw_storage);
     let (storage, handle) = raw_storage.with_test_failures();
     let storage = Arc::new(storage);
-    let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
-    let catalogue = GameCatalogue::new(Arc::clone(&storage), message_service);
+    let catalogue = new_catalogue(&storage, None);
 
     catalogue
         .create_game(&data.world_key(), &data.persona.key)
@@ -364,12 +374,6 @@ fn test_reset_propagates_persist_failure() {
 }
 
 #[test]
-fn test_current_game_id_matches_storage() {
-    let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    assert_eq!(catalogue.current_game_id(), storage.current_game_id());
-}
-
-#[test]
 fn test_create_game_persists_scenario_message_and_swipe() {
     let (catalogue, storage, world_key, persona_key) = seeded_catalogue();
 
@@ -378,7 +382,9 @@ fn test_create_game_persists_scenario_message_and_swipe() {
         .expect("create_game should succeed");
 
     assert!(id > 0, "Game ID should be positive");
-    let messages = storage.load_message_rows().unwrap();
+    let messages = storage
+        .load_message_rows(catalogue.active_game_id().expect("an active game"))
+        .unwrap();
     let narrations: Vec<_> = messages
         .into_iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -458,14 +464,14 @@ fn seed_library(storage: &Storage) {
 fn test_current_game_returns_the_seeded_game() {
     let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
 
-    let current = catalogue.current_game().expect("current_game should load");
+    let current = catalogue.active_game().expect("current_game should load");
     assert!(current.is_some(), "seeded catalogue has an active game");
 }
 
 #[test]
 fn test_set_posture_updates_perspective_and_tense() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
 
     let game = catalogue
         .set_posture(id, NarrativePerspective::Second, NarrativeTense::Present)
@@ -476,7 +482,6 @@ fn test_set_posture_updates_perspective_and_tense() {
     let stored = storage.get_game(id).unwrap().expect("game persisted");
     assert_eq!(stored.narrative_perspective, NarrativePerspective::Second);
     assert_eq!(stored.narrative_tense, NarrativeTense::Present);
-    // Mode is untouched by the posture save.
     assert_eq!(stored.narrator_mode, NarratorMode::Novel);
 }
 
@@ -494,7 +499,7 @@ fn test_set_posture_errors_on_missing_game() {
 #[test]
 fn test_switch_mode_retargets_presets_and_nudges_perspective() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
 
     let game = catalogue
         .switch_mode(id, NarratorMode::InteractiveFiction)
@@ -511,9 +516,8 @@ fn test_switch_mode_retargets_presets_and_nudges_perspective() {
 #[test]
 fn test_switch_mode_keeps_a_deliberate_perspective() {
     let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
 
-    // An IF game deliberately held in third person.
     catalogue
         .switch_mode(id, NarratorMode::InteractiveFiction)
         .unwrap();
@@ -535,11 +539,9 @@ fn test_switch_mode_keeps_a_deliberate_perspective() {
 #[test]
 fn test_switch_mode_same_mode_is_a_noop() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
     seed_library(storage.as_ref());
 
-    // Move to IF (retargets to the IF bundle), then customize the selection
-    // away from the bundle default.
     catalogue
         .switch_mode(id, NarratorMode::InteractiveFiction)
         .unwrap();
@@ -567,11 +569,11 @@ fn test_switch_mode_same_mode_is_a_noop() {
 #[test]
 fn test_set_preset_selection_updates_ids() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
     seed_library(storage.as_ref());
 
-    // IF mode first: system_if_default is IF-only, and selecting it must be
-    // a change from the Novel bundle default.
+    // IF mode first, so selecting the IF-only system_if_default is a real change
+    // from the Novel default, not the unchanged no-op slot.
     catalogue
         .switch_mode(id, NarratorMode::InteractiveFiction)
         .unwrap();
@@ -596,7 +598,7 @@ fn test_set_preset_selection_updates_ids() {
 #[test]
 fn test_set_preset_selection_rejects_unknown_preset() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
     seed_library(storage.as_ref());
 
     let result = catalogue.set_preset_selection(
@@ -617,7 +619,7 @@ fn test_set_preset_selection_rejects_unknown_preset() {
 #[test]
 fn test_set_preset_selection_rejects_mode_disallowed_preset() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
     seed_library(storage.as_ref());
 
     // system_if_default is IF-only; the game is in Novel mode.
@@ -635,7 +637,6 @@ fn test_set_preset_selection_rejects_mode_disallowed_preset() {
         "Expected mode-allow validation error, got {result:?}"
     );
 
-    // And the stored selection must be untouched by the refusal.
     let stored = storage.get_game(id).unwrap().expect("game persisted");
     assert_eq!(stored.active_system_prompt_preset_id, "system_default");
 }
@@ -643,7 +644,7 @@ fn test_set_preset_selection_rejects_mode_disallowed_preset() {
 #[test]
 fn test_set_preset_selection_rejects_unknown_options_preset() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
     seed_library(storage.as_ref());
 
     let result = catalogue.set_preset_selection(
@@ -667,7 +668,7 @@ fn test_set_preset_selection_rejects_unknown_options_preset() {
 #[test]
 fn test_set_preset_selection_ignores_an_options_presets_allowed_modes() {
     let (catalogue, storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
     seed_library(storage.as_ref());
     storage
         .save_preset(&PromptPreset {
@@ -705,7 +706,7 @@ fn test_set_preset_selection_ignores_an_options_presets_allowed_modes() {
 #[test]
 fn test_set_preset_selection_accepts_unchanged_stored_ids() {
     let (catalogue, _storage, _world_key, _persona_key) = seeded_catalogue();
-    let id = catalogue.current_game_id();
+    let id = catalogue.active_game_id().expect("an active game").0;
 
     // No library seeds: the game's default bundle ids are not stored presets.
     // Saving the form unchanged must still succeed (no-op slots).

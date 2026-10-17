@@ -27,7 +27,7 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 ## Storage Direct Access
 
-`Storage` is a concrete adapter with a `Backend` enum (SQLite / InMemory / Test). Application code may call `Storage` directly when the call is part of the persistence boundary; a `StateRepository` port would be a single-impl trait with no real substitution seam, so the boundary is concrete-by-design. Architectural review owns the discipline for which files sit on the boundary.
+`Storage` is a concrete adapter with a `Backend` enum (SQLite / InMemory), wrapped by `BackendKind` (Direct / Test). Every game-scoped method takes the Game as its first argument. The active-Game pointer is not storage state. Application code may call `Storage` directly when the call is part of the persistence boundary; a `StateRepository` port would be a single-impl trait with no real substitution seam, so the boundary is concrete-by-design. Architectural review owns the discipline for which files sit on the boundary.
 
 ## Settings
 
@@ -39,7 +39,7 @@ The settings row is the read source for the whole engine. Every consumer resolve
 
 - `pipeline: Arc<ActionPipeline>` — action execution and phase orchestration.
 - `message_service: Arc<MessageService>` — snapshot/message persistence and multi-table writes.
-- `game_catalogue: GameCatalogue` — game lifecycle (create/switch/delete/list/reset/current id).
+- `game_catalogue: GameCatalogue` — game lifecycle (create/switch/delete/list/reset/active id). It is the only reader and the only writer of `ActiveGame`.
 - `game_view_query: GameViewQuery` — read-side fragments for the UI and debug state.
 - `generation_gate: GenerationGate` — per-game generation-slot gating and reset.
 - `world_catalogue: WorldCatalogue` — world CRUD.

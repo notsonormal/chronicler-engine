@@ -114,7 +114,7 @@ fn test_list_presets_keeps_the_insertion_order() {
 #[test]
 fn test_sqlite_list_presets_ordered_by_updated_at_desc() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    let storage = Storage::new_sqlite(pool.clone(), 1);
+    let storage = Storage::new_sqlite(pool.clone());
 
     // Explicit timestamps in the stored format (RFC 3339), inserted oldest
     // last, so only the query's `ORDER BY updated_at DESC` can order them.
@@ -617,7 +617,7 @@ fn test_sqlite_save_preset_refuses_duplicate_name_in_same_category() {
 #[test]
 fn test_sqlite_opens_database_holding_preexisting_duplicate_names() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    let storage = Storage::new_sqlite(pool.clone(), 1);
+    let storage = Storage::new_sqlite(pool.clone());
 
     {
         let conn = pool.conn();

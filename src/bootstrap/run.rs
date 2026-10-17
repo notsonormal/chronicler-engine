@@ -12,15 +12,15 @@ use crate::bootstrap::load::{seed_game_data, seed_settings};
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
 use crate::utils::settings::load_settings;
 use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::game::GameId;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
-const BOOTSTRAP_GAME_ID: u64 = 1;
-
 struct PreparedData {
     db_pool: DbPool,
     storage: Arc<Storage>,
+    active_game_id: GameId,
     world_card: WorldCard,
     map: Arc<MapDef>,
     player: PersonaCard,
@@ -56,7 +56,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
     let db_pool = DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
-    let storage = Arc::new(Storage::new_sqlite(db_pool.clone(), BOOTSTRAP_GAME_ID));
+    let storage = Arc::new(Storage::new_sqlite(db_pool.clone()));
 
     if let Err(e) = ensure_presets(&storage, &data_dir) {
         tracing::warn!("Failed to seed prompt presets: {e}");
@@ -104,11 +104,10 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         &player.sheet.name,
         &settings,
     )?;
-    storage.set_game_id(active_game_id);
-
     Ok(PreparedData {
         db_pool,
         storage,
+        active_game_id,
         world_card: world_with_map.world_card,
         map: map_arc,
         player,
@@ -125,6 +124,7 @@ fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
 
     let state = super::init_game::load_game_state(
         &data.storage,
+        data.active_game_id,
         &world_arc,
         &data.map,
         &player_arc,
@@ -135,13 +135,14 @@ fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
     let all_npcs: Vec<NpcCard> = data.npcs_map.values().cloned().collect();
     let room_id = state.movement.current_room_id.clone();
 
-    let wired = build_app_graph(Arc::clone(&data.storage))?;
+    let wired = build_app_graph(Arc::clone(&data.storage), Some(data.active_game_id))?;
 
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,
         Arc::clone(&wired.message_service),
         Arc::new(wired.pipeline.clone()),
         &data.storage,
+        data.active_game_id,
         &data.db_pool,
         super::init_game::ArrivalSpawnRequest {
             world: world_arc,
@@ -301,7 +302,6 @@ fn process_preset_file(
                 || existing.writing_style.is_some()
                 || existing.output_format.is_some();
             if !has_content {
-                // Refresh content only; keep the existing row's flags.
                 let mut preset = preset;
                 preset.allowed_modes = existing.allowed_modes;
                 storage.save_preset(&preset)?;

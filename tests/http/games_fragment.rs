@@ -1,5 +1,6 @@
 //! HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.
 
+use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::test_support::TestAppBuilder;
 
@@ -13,7 +14,7 @@ use crate::test_utils::panel_section_html_slice;
 #[tokio::test]
 async fn test_games_fragment_renders_posture_controls_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
-    let game_id = state.game_catalogue.current_game_id();
+    let game_id = active_game_of(&state);
 
     let html = fetch_body(&app, "/fragment/games").await;
 
@@ -22,8 +23,6 @@ async fn test_games_fragment_renders_posture_controls_http() {
         "the fragment must render the posture controls: {html}"
     );
 
-    // The selected option proves the fragment rendered the game's *stored*
-    // posture, not just the select shells.
     assert_option_selected(
         &html,
         "novel",
@@ -40,8 +39,6 @@ async fn test_games_fragment_renders_posture_controls_http() {
         "the active game's Past tense must render selected",
     );
 
-    // Every select carries the auto-save route for *this* game, so the
-    // fragment's wiring is pinned to the active game's id.
     for name in [
         "narrator_mode",
         "narrative_perspective",
@@ -69,25 +66,21 @@ async fn test_games_fragment_renders_posture_controls_http() {
         "the preset pickers must auto-save to this game: {html}"
     );
 
-    // A preset-library load failure degrades the picker row to an error fragment
-    // instead of removing the posture controls (asserted in
-    // `games::handlers::games_tests`); this is the healthy path.
+    // The failure path is asserted in `games::handlers::games_tests`; this is
+    // the healthy one.
     assert!(
         !html.contains("Presets unavailable"),
         "the preset pickers must render without a load error: {html}"
     );
 }
 
-// The Saved Games list holds only non-active games, and the active game's card
-// already sits under the "Active Game" heading, so it must not repeat that
-// status as a badge.
 // [docs/specs/games.md] SCENARIO: 20.9
 #[tokio::test]
 async fn test_games_fragment_lists_only_other_saved_games_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
     let active_name = state
         .game_catalogue
-        .current_game()
+        .active_game()
         .expect("the active game must load")
         .expect("the fixture seeds an active game")
         .name;
@@ -110,15 +103,13 @@ async fn test_games_fragment_lists_only_other_saved_games_http() {
     );
 }
 
-// A second saved game must appear under Saved Games, and the active game must
-// not appear there (it already sits under "Active Game").
 // [docs/specs/games.md] SCENARIO: 20.10
 #[tokio::test]
 async fn test_games_fragment_lists_other_saved_games_http() {
     let (state, storage) = TestAppBuilder::default_test().build_service_with_storage();
     let active = state
         .game_catalogue
-        .current_game()
+        .active_game()
         .expect("the active game must load")
         .expect("the fixture seeds an active game");
     // The storage-level create does not switch the active game, so the new

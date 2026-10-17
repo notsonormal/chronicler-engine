@@ -7,12 +7,10 @@ use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::map::MapDef;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
-use chronicler_engine::test_support::{TestMap, TestPersona, TestWorld};
+use chronicler_engine::test_support::{active_game_of, TestMap, TestPersona, TestWorld};
 
-/// Seed an in-memory storage with a world, map, and persona, then create an
-/// initial game and set it current. Returns `(storage, world_key, persona_key,
-/// initial_game_id)`. Shared by the `games_create` / `games_switch` /
-/// `games_delete` HTTP E2E tests to dedupe their setup shape.
+/// Returns `(storage, world_key, persona_key, initial_game_id)` for a world, map,
+/// persona, and one game row.
 pub fn seeded_storage_with_initial_game() -> (Arc<Storage>, String, String, i64) {
     let storage = Arc::new(Storage::new_in_memory());
 
@@ -31,7 +29,6 @@ pub fn seeded_storage_with_initial_game() -> (Arc<Storage>, String, String, i64)
             "Initial Game",
         )
         .unwrap();
-    storage.set_game_id(initial_game_id);
 
     (
         storage,
@@ -41,7 +38,6 @@ pub fn seeded_storage_with_initial_game() -> (Arc<Storage>, String, String, i64)
     )
 }
 
-/// An Interactive Fiction world with second-person present-tense posture.
 pub fn if_world() -> WorldCard {
     WorldCard {
         key: "if_world".to_string(),
@@ -54,7 +50,6 @@ pub fn if_world() -> WorldCard {
     }
 }
 
-/// Build a urlencoded `WorldForm` body for the worlds update endpoint.
 /// Posture fields and the options toggle are appended by callers, so each
 /// test controls exactly which fields the form carries.
 pub fn world_form_body(world: &WorldCard, map: &MapDef) -> String {
@@ -71,12 +66,11 @@ pub fn world_form_body(world: &WorldCard, map: &MapDef) -> String {
     serde_urlencoded::to_string(pairs).expect("world form body serializes")
 }
 
-/// Persist `options` as the current game's offered set.
 pub fn seed_offered_set(state: &AppState, options: &[&str]) {
-    let mut game_state = state.message_service.load_or_fresh();
+    let mut game_state = state.message_service.load_or_fresh(active_game_of(state));
     game_state.narrative.current_options = options.iter().map(|o| o.to_string()).collect();
     state
         .message_service
-        .save_state(&game_state)
+        .save_state(active_game_of(state), &game_state)
         .expect("the offered set should persist");
 }
