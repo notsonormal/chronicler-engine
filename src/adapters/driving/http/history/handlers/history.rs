@@ -3,10 +3,9 @@
 
 use axum::{
     extract::{Form, Path, State},
-    response::Response,
+    response::{IntoResponse, Response},
 };
 
-use crate::application::errors::ApplicationError;
 use crate::adapters::driving::http::AppState;
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
@@ -22,15 +21,19 @@ pub async fn edit_history_handler(
     CurrentGame(game_id): CurrentGame,
     Path(id): Path<u64>,
     Form(form): Form<EditHistoryForm>,
-) -> Result<Response, ApplicationError> {
-    state.message_service.edit_history(game_id, id, form.text)?;
-    Ok(ok("<span class=\"status ready\">Edited</span>"))
+) -> Response {
+    match state.game_writer.edit(game_id, id, &form.text) {
+        Ok(()) => ok("<span class=\"status ready\">Edited</span>"),
+        Err(refusal) => refusal.into_response(),
+    }
 }
 
 pub async fn delete_history_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
-) -> Result<Response, ApplicationError> {
-    state.message_service.delete_last(game_id)?;
-    Ok(ok(""))
+) -> Response {
+    match state.game_writer.delete_last(game_id) {
+        Ok(()) => ok(""),
+        Err(refusal) => refusal.into_response(),
+    }
 }

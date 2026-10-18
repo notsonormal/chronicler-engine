@@ -284,7 +284,10 @@ async fn test_edit_history_handler_not_found() {
 
 #[tokio::test]
 async fn test_delete_history_handler_success() {
+    // The story keeps its first Message, so the fixture holds one before the one
+    // the delete removes.
     let app = TestAppBuilder::default_test()
+        .log("Prior message", MessageType::Narration)
         .log("Test message", MessageType::Narration)
         .build();
 

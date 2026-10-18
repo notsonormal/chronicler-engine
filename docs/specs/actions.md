@@ -163,8 +163,9 @@ And a quantifier backend that returns {"npcs_in_room": ["npc_1"]}
 And a narrator backend that succeeds for the main prompt but fails for the trigger prompt
 When the client POST /action with command="examine the npc"
 And the pipeline returns to idle
-Then the generation status is an error whose text mentions "Trigger narration failed"
-And the message history gained no entry for the failure and still ends in the main Narration
+Then the generation status is an error whose text is "The event narration failed."
+And the status error's disclosure holds the failure line of the narrator call
+And the story log gained no entry for the failure and still ends in the main Narration
 And the story-log fragment still offers the `.retrigger-btn` control on that Narration
 ```
 

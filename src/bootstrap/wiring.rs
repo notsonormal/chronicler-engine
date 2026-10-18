@@ -15,7 +15,7 @@ use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::active::ActiveGame;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
-use crate::application::generation::gate::GenerationGate;
+use crate::application::generation::gate::{GameWriter, GenerationGate};
 use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::application::llm_recorder::{LlmCallRecorder, ProviderResolver};
 use crate::application::message_service::MessageService;
@@ -42,8 +42,7 @@ fn provider_from_config(config: &LlmProviderConfig) -> Arc<dyn LlmProvider> {
 }
 
 /// Resolves the provider per call, so a dashboard change takes effect without a
-/// restart. A `pick` failure (a dangling connection id) or a missing API key
-/// surfaces as a call error.
+/// restart.
 fn recorder_with_storage(
     storage: Arc<Storage>,
     role: &'static str,
@@ -73,9 +72,8 @@ fn recorder_with_storage(
     Arc::new(LlmCallRecorder::with_resolver(resolve, save_fn))
 }
 
-/// Named-backend seam: a connection whose id is "options" routes options
-/// generation to it (Roadway's cheap-model pattern); absent, the narration
-/// connection serves.
+/// The connection whose id is `options` serves options generation; without one,
+/// the narration connection serves.
 fn options_recorder(storage: Arc<Storage>) -> Arc<LlmCallRecorder> {
     recorder_with_storage(storage, "options", |s| match s.find_connection("options") {
         Some(c) => Ok(c.clone()),
@@ -89,6 +87,7 @@ pub struct WiredApp {
     pub storage: Arc<Storage>,
     pub message_service: Arc<MessageService>,
     pub generation_gate: GenerationGate,
+    pub game_writer: GameWriter,
     pub game_catalogue: GameCatalogue,
     pub game_view_query: GameViewQuery,
     pub world_catalogue: WorldCatalogue,
@@ -117,13 +116,14 @@ fn build_wired_app(
     let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
     let persona_catalogue = PersonaCatalogue::new(Arc::clone(&storage));
     let generation_gate = GenerationGate::new();
+    let game_writer = GameWriter::new(Arc::clone(&storage));
     let game_catalogue = GameCatalogue::new(
         Arc::clone(&storage),
-        Arc::clone(&message_service),
+        game_writer.clone(),
         Arc::clone(&active_game),
         initial_game,
     );
-    let game_view_query = GameViewQuery::new(Arc::clone(&storage), Arc::clone(&message_service));
+    let game_view_query = GameViewQuery::new(Arc::clone(&storage), game_writer.clone());
     let pipeline = ActionPipeline::with_storage(
         shutdown_token.clone(),
         recorder,
@@ -132,20 +132,13 @@ fn build_wired_app(
         Arc::clone(&storage),
         Arc::new(game_catalogue.clone()),
     );
-
-    // Boot heal: a crash/restart may have left the current game persisted as Generating.
-    if let Some(game_id) = game_catalogue.active_game_id() {
-        if let Err(e) = pipeline.heal_stale_status(&generation_gate, game_id) {
-            tracing::warn!("boot heal: failed to persist healed status: {e}");
-        }
-    }
-
     Ok(WiredApp {
         settings_service,
         prompt_preset_service,
         storage,
         message_service,
         generation_gate,
+        game_writer,
         game_catalogue,
         game_view_query,
         world_catalogue,

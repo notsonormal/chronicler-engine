@@ -13,9 +13,11 @@ use crate::test_support::scripted_model::ScriptedModel;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::game::GameId;
 use crate::domain::model::settings::AppSettings;
+use crate::domain::model::message::SwipeAt;
 use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::message::Message;
+use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::generation_status::{GenerationStatus, Step};
-use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driving::http::builders::router::build_router;
@@ -139,6 +141,58 @@ impl TestAppBuilder {
         (build_router(app_state.clone()), app_state)
     }
 
+    /// Writes the seeded story as the records the app reads: each Message with one
+    /// Swipe, holding the app's starting state.
+    fn seed_story_records(
+        storage: &Arc<Storage>,
+        game_id: GameId,
+        state: &GameState,
+    ) -> crate::error::Result<()> {
+        storage.transaction(game_id, crate::test_support::tx_token(), |tx| {
+            if state.narrative.history().is_empty() {
+                // The design's Game always holds an opening Narration, and the app's
+                // reads are the story reads, so a seeded Game gets one.
+                let mut message = Message::new(String::new(), MessageType::Narration, None, None);
+                message.kind = Some(MessageKind::Narration);
+                let message_id = tx.insert_message(&message)?;
+                let mut swipe = crate::test_support::dummy_swipe("");
+                swipe.maker = Some(crate::domain::model::message::Maker::WorldOpening);
+                swipe.state = Some(state.swipe.clone());
+                tx.insert_swipe(
+                    SwipeAt {
+                        message: message_id,
+                        swipe: 0,
+                    },
+                    &swipe,
+                )?;
+            }
+            for entry in state.narrative.history() {
+                let mut message = Message::new(
+                    entry.text.clone(),
+                    entry.message_type.clone(),
+                    entry.room_report.clone(),
+                    entry.event_header.clone(),
+                );
+                message.kind = Some(match entry.message_type {
+                    MessageType::Input => MessageKind::TypedInput,
+                    _ => MessageKind::Narration,
+                });
+                let message_id = tx.insert_message(&message)?;
+                let mut swipe = crate::test_support::dummy_swipe(&entry.text);
+                swipe.state = Some(state.swipe.clone());
+                swipe.room_report = entry.room_report.clone();
+                tx.insert_swipe(
+                    SwipeAt {
+                        message: message_id,
+                        swipe: 0,
+                    },
+                    &swipe,
+                )?;
+            }
+            Ok(())
+        })
+    }
+
     pub fn build_service(self) -> AppState {
         let (app_state, _storage) = self.build_service_with_storage();
         app_state
@@ -198,9 +252,10 @@ impl TestAppBuilder {
         if let Some(game_id) = seeded_game {
             let snapshot = GameStateSnapshot::from_game_state(&state);
             let _ = storage.save_snapshot(game_id, &snapshot);
-            for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-                let _ = storage.insert_message(game_id, &msg);
-            }
+            // The seeded story lands as the design's records only: writing it twice
+            // (once through the old write path, once through the new) would double
+            // every entry the story reads return.
+            let _ = Self::seed_story_records(&storage, game_id, &state);
         }
 
         let _ = storage.save_settings(&self.settings);

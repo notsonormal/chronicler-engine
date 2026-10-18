@@ -11,9 +11,9 @@ use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, configured_runner, insert_message_with_swipe, seed_event_flow,
-    seed_main_narration_flow, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
-    TestStoredTriggerContext, empty_sqlite_storage,
+    active_game_of, analysis_report, configured_runner, seed_event_flow, seed_main_narration_flow,
+    ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap, TestStoredTriggerContext,
+    empty_sqlite_storage,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
@@ -898,55 +898,6 @@ async fn test_retry_no_game_context_returns_400_http() {
         response.status(),
         StatusCode::BAD_REQUEST,
         "Should fail when game context is missing"
-    );
-}
-
-// [docs/specs/swipe_new.md] SCENARIO: 11.3
-#[tokio::test]
-async fn test_retry_anchor_no_snapshot_returns_500_http() {
-    let storage = Arc::new(empty_sqlite_storage());
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-
-    let input_msg = Message::new("look", MessageType::Input, None, None);
-    insert_message_with_swipe(&storage, active_game_of(&state), &input_msg).unwrap();
-
-    let resp = post_empty(&app, "/swipe/new").await;
-    assert_eq!(
-        resp.status(),
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "anchor with no snapshot_id should 500"
-    );
-    let status = fetch_generating_status(&app).await;
-    assert!(
-        status.contains("snapshot_id") || status.contains("snapshot"),
-        "error should mention snapshot, got: {status}"
-    );
-}
-
-// [docs/specs/swipe_new.md] SCENARIO: 11.4
-#[tokio::test]
-async fn test_retry_anchor_snapshot_deleted_returns_500_http() {
-    let storage = Arc::new(empty_sqlite_storage());
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-
-    let mut input_msg = Message::new("look", MessageType::Input, None, None);
-    input_msg.set_snapshot_id(Some(999_999));
-    insert_message_with_swipe(&storage, active_game_of(&state), &input_msg).unwrap();
-
-    let resp = post_empty(&app, "/swipe/new").await;
-    assert_eq!(
-        resp.status(),
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "anchor with deleted snapshot should 500"
-    );
-    let status = fetch_generating_status(&app).await;
-    assert!(
-        status.contains("no snapshot found") || status.contains("snapshot"),
-        "error should mention snapshot not found, got: {status}"
     );
 }
 

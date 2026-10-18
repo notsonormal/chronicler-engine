@@ -226,3 +226,203 @@ Recorded for later.
 Validation. `python scripts/validate_seam_cases.py` → 5 contracts, 89 cases (the new `narrator-role`). Full gate `python build.py` green at `logs/build_20261018_173334.log` (tree `fcbe318f7f+572fe030`, 191.9 s): fmt, data, clippy, test structure, spec-coverage, seam-cases, Python, freshness, docs, guardrails 191 passed, integration 1691 passed + 7 skipped (1698), browser 29 passed. Focused runs: clippy `logs/build_20261018_172904.log`, guardrails `logs/build_20261018_172932.log` (191), lib `logs/build_20261018_173012.log` (1280), http `logs/build_20261018_173045.log` (277 passed + 5 skipped), storage `logs/build_20261018_173104.log` (130), browser `logs/build_20261018_173116.log` (29). `AGENTS.md`, `tests/AGENTS.md` and `guardrails.md` regenerated (not staged).
 
 **2026-10-18, lead (C3 commit).** Accepted: C3 moved the failure-line table of target design §4.7 into the domain (`GenerationFailureKind::line`), so three lines a player sees today already use the design's words (prompt too long, save failed, internal error). No spec states the old words. Four specs (actions.md, retrigger.md, swipe_new.md ×2) still say "Trigger narration failed"; their tests pass today, and the failure-line scenarios of plan §9.2 rewrite them in C4 or C5.
+
+**2026-10-18, implementer (C4, INCOMPLETE, uncommitted).** Branch `wf/rebuild-core`, base `959ca7d6` (core C3). The switch is largely built, but the reduced gate of §2 is **not green**: `--test-target lib` has 25 red tests, so this assignment does not meet C4's "Done" and must not be committed as it stands. No commit was made.
+
+What is in the tree.
+
+| Item | Result |
+|---|---|
+| The handlers | `actions.rs` maps the four `Action` kinds onto `JobRequest` and starts the Job; `chat_window.rs`'s retry and retrigger start a Job and its swipe switch calls `GameWriter::switch_swipe`; `history.rs`'s edit and delete call `GameWriter::edit` and `delete_last`; `endpoints.rs`'s status uses the status rule and its stop calls `GameWriter::stop`; `debug.rs` reads `GameViewQuery::is_busy`; the games switch no longer heals. Each handler answers the refusal where it happens. |
+| The `Refusal` mapping | `impl IntoResponse for Refusal` in `http/error.rs`: `StillThinking` is `200` with the wait status, `BadRequest` is `400`, `MissingData` is `500`. `ConcurrentGeneration` is no longer returned by any route. |
+| `GameViewQuery` | `story_log` (the story reads + `Tail::retrigger_allowed`), `dock` (the dock record), `status` (busy, then the failure line, then idle), `busy_step`, `is_busy`; `get_current_room_view`, `get_npc_headshots`, `get_debug_state`, `get_story_log_entries` and `get_current_options` now read the new records, the tail and the dock. Its `message_service` field went (the old reads are gone). |
+| Create and reset | One create unit through `GameWriter::create` and `GameWriter::replace`, called from `GameCatalogue`; the switch keeps `games.get` + `ActiveGame::set` with no heal; the old `persist_initial_state_with_swipes` and the boot heal went. |
+| The dock | `OptionsDockViewModel` carries the one notice and `OptionsDockTemplate` renders it, so a failed or missing Options run shows the dock notice instead of a `System` Message. The `System` producers were the old pipeline, which no route calls now. |
+| The harness | `test_support::TestAppBuilder` writes its seeded story as the new records (a Message with one Swipe holding the app's starting state); `tests/http/support/http_requests.rs::wait_idle` reads the new busy state; the two dead walkers are re-pointed at `adapters/driving/http/` (`handler return type`, and `server layer boundaries` now bans `SwipeState`), with their unit cases updated; the cookbook TODO above `check_handler_return_type` is retired. |
+| Specs (§9.2) | `actions.md`, `retrigger.md`, `swipe_new.md`: the four "Trigger narration failed" lines are "The event narration failed."; 12.1 and 15.1 read "(no Job is accepted)". `options.md`: the four System-message lines are the dock notice. `games.md` 17.1 asserts the new Game's opening Narration. `reset.md` 7.1 reads the World's opening text. `failure_display.md` and `dashboard.md` were checked and needed no edit (the §4.7 lines are not asserted there). |
+| The empty-text line | `GenerationFailureKind::EmptyText` with §4.7's line; `Narrator::narrate` reports an empty answer as that kind; its seam case asserts the kind; the browser stub lists it. |
+| The reduced gate | clippy green (`logs/build_20261018_175721.log`); guardrails 191 passed (`logs/build_20261018_174740.log`); storage 130 passed (`logs/build_20261018_175153.log`); **lib 1253 passed, 25 failed** (`logs/build_20261018_175737.log`). |
+
+The 25 red lib tests, and why.
+
+| Test | Why it is red |
+|---|---|
+| `actions_tests`: 14 tests (`test_action_handler_*`, `test_action_confirm_handler_*`, `test_action_check_handler_*`) | They arrange a turn with the old pipeline and assert `200`; the handler now starts a Job, which answers `500` on this app. The Job's accept reads the story the app seeded, and the seeded story and the Job's `JobDeps` need one more harness pass (the accept's missing data names it). **Not fixed**: it needs the same arrange rework C5 gives tier 1. |
+| `actions_tests::test_action_handler_returns_503_on_shutdown`, `..._200_still_thinking_on_concurrent_generation` | Their subject went: no route answers `503` for shutdown, and a busy Game is arranged by a real Job. **Delete with C5** (I1 covers the busy answer at tier 1). |
+| `debug_tests` (2) | The DTO's arrange seeds the old snapshot; its `current_room` now comes from the tail. |
+| `endpoints_tests::test_generating_status_answers_from_live_registry` | Its subject changed: the status no longer reads the old slot registry. **Delete with C5** (the dashboard scenarios cover the status). |
+| `games_tests::test_posture_fragment_renders_preset_load_error_span` (1) | Reads the story log, which now renders the new entries. |
+| `catalogue_tests::test_reset_propagates_persist_failure` | The injected failure names a storage method the new reset unit no longer calls. |
+| `view_query_tests` (4) | They seed the old snapshot and assert the old reads. |
+| `gate_tests::test_boot_heal_resets_stale_generating_status` | The boot heal went with the design (D-05: memory is lost, so no Game is busy after a restart). **Delete with C6.** |
+| `retry_tests::test_retry_empty_narration_sets_error` | The Narrator's empty answer is now `EmptyText`, so the old assertion on the line fails. |
+
+Red at tier 1 and in the browser tier (§2's red window).
+
+- `--test-target http`: 164 passed, 113 failed, 5 skipped (`logs/build_20261018_175206.log`).
+- `--test-target browser`: 25 passed, 4 failed (`logs/build_20261018_175822.log`): `dashboard::test_status_updates_during_generation`, `dashboard::test_confirm_preview_leaves_form_ready_and_usable`, `options::test_options_use_click_submits_rendered_option_text`, `options::test_options_dock_survives_reload` — the old pipeline's status/dock behaviour against the new handlers.
+- The ignored target tests (`cargo nextest run --no-fail-fast --test http --run-ignored all -E 'test(races::)'`): 10 run, **0 passed, 10 failed**. Four stop rows report "the Job should reach the held call", one test's Actions answer non-2xx, and the rest assert the design's records against the pre-C5 arrange. C5's rework is what turns them green.
+
+What is missing before C4 can be committed.
+
+1. The lib leg: the harness arrange (the seeded story, the scripted model reaching the Job) and the deletion of the tests whose subject the switch removed.
+2. `--test-target lib` green; the http and browser lists above are the commit message's red list.
+3. The remaining §9.2 spec edits I could not reach: `dashboard.md`'s status order (checked, no literal asserts it), `actions.md` 2.4's other line, and the `swipe_switch.md` 36.3 wording (already P5's).
+4. The verification of the create/reset/stop paths against target design §3.2, §5 in a live run.
+
+**2026-10-18, implementer (C4, verification pass, uncommitted).** Branch `wf/rebuild-core`, base `959ca7d6` (core C3). The previous C4 pass left the switch built and the reduced gate red (lib 1253 passed, 25 failed). This pass takes the reduced gate green and checks the switch live. No commit was made. The tree holds 46 changed/added files.
+
+What each step did.
+
+| Step | Result |
+|---|---|
+| 1. The harness after the revert | `src/test_support/test_data_builder.rs` is byte-identical to HEAD again (`seed_into` as it was; the only difference was one blank line, restored). `TestAppBuilder::seed_story_records` stays as the previous pass left it. clippy green. |
+| 2. Five tests deleted | Each subject is gone (table below). |
+| 3. Group 2, the seeded opening | 12 of the 14 red pipeline tests are a count or an index that the opening Narration shifts by one (`+1` Message, `+1` Swipe, the last Narration instead of the first). Two were not a count and are split out below. Each updated assertion says which entry it now names. |
+| 4. Group 3 triaged | 2 arrange gaps fixed in place (`view_query_tests` ×4 in two fixtures, `games_tests`, `catalogue_tests`), 2 re-arranged on an empty-story fixture, 0 deleted for it, **1 product defect found and fixed** (below). |
+| 5. §9.2 prose | `dashboard.md` 39.1 states the status order (the step of a running Job, then the failure line, then idle) and 39.3 speaks of busy instead of a persisted status and a slot; `actions.md` 2.4 names the disclosure that carries the narrator failure line and says story log. |
+| 6. Live check | The dev server, not a tier-1 path: the create, reset and stop paths, an Action end to end, `/options`, and two stops held mid-Job (below). |
+| 7. The gate | clippy, guardrails, lib and storage green; http, browser and the ignored `races::` run recorded for the commit message (below). |
+
+The six deleted tests, each with its reason.
+
+| Test | Reason |
+|---|---|
+| `actions_tests::test_action_handler_returns_200_still_thinking_on_concurrent_generation` | The busy answer is now arranged by a real Job, and the test arranges it with `GenerationGate::try_claim`. §9.4 says this test goes and I1 covers the busy answer at tier 1. |
+| `actions_tests::test_action_handler_returns_503_on_shutdown` | The `503` goes with `ConcurrentGeneration` (§9.3's HTTP row); no route answers `503` for a shutdown, and the shutdown token is not read in the accept path. |
+| `chat_window_tests::test_retry_handler_returns_400_when_no_input` | A design-valid Game always holds its opening Narration, and a retry reads the story (R-44), so "nothing to retry" cannot happen. |
+| `endpoints_tests::test_generating_status_answers_from_live_registry` | The status is the §2.3 rule; it reads no persisted status and no slot registry. The dashboard scenarios cover the rule. |
+| `gate_tests::test_boot_heal_resets_stale_generating_status` | The boot heal goes (D-05, D-24): memory is lost, so a restart leaves no busy mark to heal. |
+| `retry_tests::test_retry_returns_internal_error_when_no_anchor_message` | The design's opening Narration is always the story's first Message, so `find_retry_anchor_msg`'s event path always finds a preceding non-event Message: the shape cannot exist in a design-valid Game. The same line is covered by `test_retry_no_snapshot` beside it, and `retry_tests.rs` sits at the 2000-non-blank-line guardrail, so a deleted subject is not kept at the price of the limit. |
+
+**The product defect, found by the live check (step 6).** The boot wrote the opening twice and broke the room view.
+
+- `bootstrap/run.rs::prepare_state` still called `init_game::load_game_state`, whose write "is the point". For a Game the boot itself creates, `resolve_boot_game` writes the design's opening through the create unit and `load_game_state` then found no Snapshot and wrote a **second** opening Narration (today's scenario Message, `kind` NULL, no Swipe state) plus a Snapshot.
+- Measured on the dev server before the fix: the Game's story log held two openings, and `GET /fragment/visual-sidebar` answered "Room not found: the current state is missing" (`Tail::current_state` reads the last Message's active Swipe state, which the legacy Message has none of). A Retry on that Game would also have fallen into the legacy path.
+- The fix: `prepare_state` no longer calls `load_game_state`, and `load_game_state` and `try_persist_initial_message` go with their last caller (the plan's C6 Deletions row names `init_game` down to `resolve_game_id`; the defect pulls that one deletion forward). `PreparedData` drops the four fields that only fed that call, and the boot's own persona check stays. Measured after the fix: one Game, one Message (`kind` Narration), one Swipe (`WorldOpening`, the starting room report, a Swipe state), no Snapshot, and the sidebar renders the room.
+- The browser tier confirms it: it was 25 passed / 4 failed, and all 29 pass now (`logs/build_20261018_184222.log`).
+
+Live evidence, on the dev server (`python build.py run -- --port 3113 --world test --persona test_player`, the `data/` world "test" with the OpenRouter connections).
+
+| Check | What the client saw |
+|---|---|
+| The boot, with no Game for the World | `POST`-free boot creates Game 1: `games` 1 row with no failure line, `game_docks` the one empty record, `messages` 1 row (`kind` "Narration"), `message_swipes` 1 row (`maker` "WorldOpening", `room_report` "Test Tavern", the starting state), no `game_state_snapshots` row. The story log renders one entry, the sidebar renders the room, `GET /status/generating` answers `idle`. |
+| A stop while idle | `POST /status/reset-generating` → `200`, body `reset`, the status stays `idle`. |
+| `POST /games` (create) | `200` + `HX-Refresh: true`; a new Game with the design's opening (Message kind Narration, Swipe maker WorldOpening, the starting room report, the starting state) and the empty dock record. |
+| `POST /reset` | `200` + `HX-Refresh: true`; the active Game and all its records (messages, swipes, dock) are gone, and a new Game with the design's opening stands. |
+| An Action, end to end | `200` with the wait status; the story then holds the Input (`kind` TypedInput, maker Player, no room report, the current state), the Narration (maker Narrator), and the event Narration (a `MessageKind::EventNarration` record with the Trigger's name and the direction the World holds). No failure line, status `idle`. |
+| `/options` | `200` with the wait status; the dock record holds the offered set and no notice, and no story Message is added. |
+| A stop 1.1 s into the narrator call | `reset` at once; the answer that arrives ~30 s later writes **no** Narration, no failure line and no notice: the job-id check refuses the late save (D-08, D-11, §4.4). |
+| A stop 0.65 s after the text save (during the analysis) | `reset`; the Narration stays with its **pre-analysis** state (no trigger context, no room report), the state update is refused, and no Options run follows (D-10, §4.4, R-31). |
+
+Group 3, each item's result.
+
+| Test | Result |
+|---|---|
+| `view_query_tests` ×4 | **Arrange gap.** `minimal_app` and `minimal_app_no_game` were in-memory fixtures of the old snapshot path; the reads are the story reads now. `minimal_app` builds its Game through `TestAppBuilder` with `TestWorld::minimal()` + `TestMap::single_room("start")` (so the assertions keep their room), and `minimal_app_no_game` is `TestAppBuilder` + `skip_seeding(true)` + `active_game(NO_GAME)`. `get_debug_state` needs a current state, so its case moved to `minimal_app` and asserts the opening as the story's one entry. |
+| `games_tests::test_posture_fragment_renders_preset_load_error_span` | **Arrange gap.** The fixture's in-memory storage cannot carry the new records the create unit writes; the storage is `empty_sqlite_storage()` now. The injected failure stays the preset-library read. |
+| `catalogue_tests::test_reset_propagates_persist_failure` | **Arrange gap, kept.** Measured on SQLite, with the failure injected into `TxWrite::InsertMessage` — a record write the reset's create unit makes — so the test still asserts that a failed reset write surfaces. It was not deleted. |
+| `options_tests::test_process_options_empty_history_rejected` | **Arrange gap.** The old pipeline's guard reads the story, and a Game seeded through `TestAppBuilder` always holds its opening, so the shape is arranged on a fixture whose Game holds no Message (`make_test_app(GameState::new(..))`). |
+| `options_tests::test_process_options_heals_stale_status_before_validation_error` | **Arrange gap**, the same empty-story fixture, with the stale status in the fixture's own snapshot. |
+| `retry_tests::test_retry_target_and_anchor_agree_when_a_system_notice_trails_an_event_narration` | **Mechanical** (`anchor_idx` 1 → 2, and the redo's truncated history now names the opening first). |
+| `retry_tests::test_retry_empty_narration_sets_error` | **The design's kind, not a count**: `Narrator::narrate` reports an empty answer as `GenerationFailureKind::EmptyText` (§4.7), so the case asserts that kind. |
+
+The reduced gate, on the **final** tree (after `python build.py fmt`). All four green.
+
+| Step | Log | Result |
+|---|---|---|
+| `python build.py clippy` | `logs/build_20261018_184935.log` | green |
+| `python build.py guardrails` | `logs/build_20261018_185112.log` | 191 passed |
+| `python build.py test-pattern "" --test-target lib` | `logs/build_20261018_185250.log` | 1272 passed, 0 failed |
+| `python build.py test-pattern "" --test-target storage` | `logs/build_20261018_185317.log` | 130 passed |
+
+Also green on the final tree: `fmt`, `validate-docs`, `spec-coverage`, `seam-cases` (5 contracts, 89 cases), `test-structure`, `validate-data`.
+
+The red window of C4, grouped by cause — the commit message's list. Every group is C5's rework of a tier-1 arrange or expectation; no group is a missing behaviour.
+
+1. **The seeded opening Narration is now in every story** (a count or an index off by one, or the last Narration is no longer the first): `actions::{test_action_succeeds_one_narration_idle_http, test_empty_command_continuation_no_input_http, test_input_persisted_before_narration_http, test_slash_guide_does_not_persist_input_http, test_trigger_continuation_reruns_quantifier_detects_new_npc_http}`, `story_log::{test_delete_last_between_actions_http, test_story_log_icon_buttons_have_accessible_names}`, `swipe_new::{test_retry_replaces_narration_with_new_swipe_http, test_retry_swipe_without_movement_reports_no_room_http, test_event_retry_after_retrigger_adds_a_swipe_http, test_event_retry_replaces_event_narration_with_new_swipe_http}`, `retrigger::{test_retrigger_creates_new_event_narration_no_rollback_http, test_retrigger_does_not_move_the_player_http, test_retrigger_trigger_narration_failure_sets_error_http}`, `races::{test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text, test_action_while_job_runs_is_refused_http, test_the_event_narration_call_uses_the_preset_active_when_it_runs, test_a_stop_at_each_model_call_keeps_the_records_of_that_step}`.
+2. **The tier-1 arrange reaches the new Job but scripts or seeds the old path** (the ScriptedModel's call sequence, `try_claim`, `seed_*`, `snapshot`): `actions::{test_nonexistent_room_sets_error_status_http, test_moving_narration_reports_the_room_it_arrives_in_http}`, `settings::test_connection_context_window_applies_from_the_next_narration`, `story_log::test_delete_last_between_actions_http`, `swipe_new::{test_retry_no_input_returns_400_http, test_retry_concurrent_generation_returns_still_thinking_http, test_retry_anchor_no_snapshot_returns_500_http, test_retry_anchor_snapshot_deleted_returns_500_http, test_retry_llm_failure_sets_error_http, test_retry_empty_narration_sets_error_http, test_retry_room_not_found_sets_error_http, test_retry_that_wrote_its_narration_keeps_that_world_http, test_retry_reruns_quantifier_moves_player_http, test_failed_retry_does_not_roll_the_movement_back_http, test_retry_re_impersonate_generates_input_swipe_http, test_retry_re_impersonate_preserves_record_http, test_retry_re_impersonate_uses_current_preset_content_http, test_event_retry_does_not_move_the_player_http, test_event_retry_keeps_the_room_name_off_the_event_swipe_http, test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http, test_event_retry_trigger_narration_failure_sets_error_http}`, `requires_migration::fragment::{test_delete_history_handler_empty, test_edit_history_handler_not_found}`.
+3. **The status is the §2.3 rule now** (no persisted status, no slot, no heal): `dashboard::{test_generating_status_answers_from_live_registry, test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry}`, `games_switch::test_switch_game_heals_stale_generating_status`, `requires_migration::{debug::test_debug_is_generating_reflects_state, fragment::test_switch_swipe_handler_concurrent}`.
+4. **The dock notice replaces the `System` Message**: `options::{test_always_on_without_an_agent_empties_set_and_reports_http, test_failed_regeneration_keeps_prior_set_http, test_failed_always_on_regeneration_clears_set_and_reports_http, test_on_demand_options_without_an_agent_reports_unavailable_http, test_options_without_scene_history_errors_http}`.
+5. **The failure line comes from the Game record now, and one line changed**: `failure_display::{test_failed_poll_answers_non_2xx_and_reswap_none, test_generation_error_clamps_with_raw_text_in_disclosure, test_missing_preset_failure_clamps_with_the_preset_line, test_spent_token_budget_clamps_with_its_own_line}`, `actions::test_trigger_narration_failure_preserves_main_sets_error_http` (the line is "The event narration failed.").
+
+Counts of this pass, on the final tree: `--test-target http` 223 passed, 54 failed, 5 skipped (`logs/build_20261018_185340.log`); `--test-target browser` **29 passed, 0 failed** (`logs/build_20261018_185356.log`); the ignored target tests `cargo nextest run --no-fail-fast --test http --run-ignored all -E 'test(races::)'` → 10 run, **6 passed, 4 failed**, every failure in group 1 above (`tmp/races_run_final.log`).
+
+Open, with the reason.
+
+- **§9.2's "a swipe switch gives back the state of that Swipe" has no scenario yet.** `swipe_switch.md` 36.1 asserts only the status. The behaviour is built (§2.3's current state is the active Swipe's Swipe state), but a new scenario needs its test, and the tier-1 rework is C5's; adding the scenario alone would fail `spec-coverage`. C5 adds 36.4 with its test.
+- **The event Narration's `maker` is `Narrator`.** The call record carries the Trigger role (`Kind::role`), but the Swipe's maker does not name the event. No spec states a value; C6 can decide.
+- **The boot builds its own `GameWriter`** for `resolve_boot_game`'s create unit, while the app wires another one; `resolve_boot_game` creates a Game and runs no Job, so no second registry serves a request. C6 can hand the boot the app's writer.
+- **`load_game_state`'s deletion moved from C6 to C4** (the defect above). The plan's C6 row still lists it; the file is already down to `resolve_game_id`.
+- The five `#[ignore]`d `races::` cases and the http list above are C5's rework; the browser tier needed the boot fix and nothing else.
+
+Not done, with the reason. The commit gate (`/simple-after-plan`) and the owner's approval are the commit step, which this assignment excludes.
+
+**2026-10-18, implementer (C4, fix pass on the review, uncommitted).** Branch `wf/rebuild-core`, base `959ca7d6`. The two code reviews' items are applied. No commit was made. The tree holds 55 changed files (the comment pass edited 22 of them first; they were re-read before every edit).
+
+Each number, to its result.
+
+| # | Result |
+|---|---|
+| 1 | `TestAppBuilder::build_service_with_storage` no longer writes the seeded story through the old write path; `seed_story_records` is the one writer, so no entry is doubled and no blank entry (a Message with no Swipe) reaches the story reads. Every lib count the earlier pass changed is still the opening plus one, or the opening alone: lib 1272 passed. One tier-1 test was arranged on the doubled write — `requires_migration::fragment::test_delete_history_handler_success` (its story held two copies of "Test message", so the delete was allowed) — and its fixture gained a prior Message, a one-line arrange change forced by this fix rather than a rework of its expectation. The three lib `.log(...)` users (`action_tests`, `retrigger_tests`, `endpoints_tests`) pass unchanged. |
+| 2 | `OptionsDockTemplate`: the strip renders in the notice's `else` branch, so the dock shows the notice in place of the offered set (D-06, §6). `options.md` 24.5 says the offered set stays and the dock shows the notice and renders no strip. Verified live (below). |
+| 3 | See the decision below. |
+| 4 | `history_tests`' delete case is `test_delete_history_handler_refuses_the_only_message` and asserts `400 Bad Request` (a Game holding only its opening refuses the delete, R-76). |
+| 5 | `options.md` 24.2 now reads as the client's experience: a Game whose story holds no text answers `400 Bad Request` with the body naming "No scene to generate options for yet", and the dock renders no strip and no notice. `swipe_new.md` 22.1 says a re-impersonate runs the analysis: a quantifier that moves the player into "room2" leaves the player in "room2" (the old "the player has not moved" line contradicted §4.5's table, S-2 and R-60, and a client sees the room change). |
+| 6 | `games.md` 18.3 (the switch heal), `swipe_new.md` 11.3 and 11.4 (the anchor Snapshot `500`s) are deleted with their tier-1 tests (`games_switch::test_switch_game_heals_stale_generating_status`, `swipe_new::test_retry_anchor_no_snapshot_returns_500_http`, `swipe_new::test_retry_anchor_snapshot_deleted_returns_500_http`). `spec-coverage` is green. |
+| 7 | `assets/styles.css` styles `.options-notice`, `.options-notice-line`, `.options-notice-details summary` and `.options-notice-details pre` in the surrounding style: the red tint and border of `.error-message`, the muted small text of `.options-label`, and a `pre` like `.error-detail-raw`. |
+| 8 | The two re-pointed guards get the dead-path assertion: `check_src_files_in_scope` fails a path-limited guardrail whose `HTTP_ADAPTER_SCOPE` matches no file, with `dead_scope_violation` naming the rule and the scope (`tests/infrastructure/guardrails/mod.rs`), and `a_dead_scope_names_the_guardrail_and_the_scope` pins its words. `check_server_layer_boundaries` bans `SwipeState` and `GameState` (`WHOLE_STATE_TYPES`), since the wrapper still exists; its unit case for `GameState` is new. Guardrails 193 passed; with the scope set to `nowhere/`, both guards fail with "the scope `nowhere/` matches no file under `src/`, so this path-limited guardrail guards nothing" (`logs/build_20261018_194852.log`). |
+| 9 | `GameCatalogue::new` and `GameViewQuery::new` lost the `message_service` parameter and the `let _ =` at every caller (`wiring.rs`, `run.rs`, `test_support/context.rs` twice, `catalogue_tests.rs`, `view_query_tests.rs`). `WiredApp::job_deps` is gone (`AppState::from_wired` builds the one the app uses), and `JobDeps::tasks` is an `Arc<JobTasks>`. |
+| 10 | `http/error.rs`'s `Refusal::StillThinking` answers `BUSY_STATUS` (renamed from `CONCURRENT_GENERATION_STATUS`, which named a refusal that no route returns; the stub server uses the new name), and the const carries the restored comment that `dashboard-action-area.js` keys the wait state on `.status.wait`. One `STORY_LIMIT` lives in `storage/stories.rs` and both readers import it. `GameViewQuery::current_state` reports `EngineError::Internal` ("stories_tail: the current state is missing"), because a design-valid Message always holds one — it is a broken record, not a room. The stub server's `/reset` comment is restored, naming scenario 16.34. `PreparedData::player_key` is `persona_key`. |
+| 11 | `/debug/state` fills `backend_name` and `model_name` from `state.pipeline.backend_info()`, the provider `/debug/backend` already reports (the Game's record holds no call since D-05). Verified live: `OpenRouter` / `deepseek/deepseek-v4-flash`. |
+
+The reset decision (item 3), recorded as asked.
+
+- **What §3.2 fixes, and what it does not.** §3.2's row says "A reset first removes the active Game with all its records." C1 split the reset into two units (a unit's `Tx` serves one Game and only the create unit writes a Game row), so the row cannot order the two units. Read as the write order of one unit, removal-first would break the invariant the review names: a create unit that refuses after a successful removal leaves `ActiveGame` naming a deleted Game, and `ActiveGame` has no way to name none.
+- **The order built:** the create unit first, the removal unit second, both inside the one hold. A refused create leaves the old Game, its job entry and the pointer exactly as they were; a refused removal leaves the old Game standing (a unit lands whole), so the pointer still names a live Game. Measured: `races::test_reset_while_job_runs_keeps_only_the_new_game_opening` passes, and `catalogue_tests::test_reset_propagates_persist_failure` now also asserts that the Game the pointer names still exists.
+- **The one window left.** `ActiveGame::set` runs just after the hold, so between the hold's end and the
+  pointer's move the old Game is gone while the pointer still names it; a request that captured that
+  id in that window answers a refusal. Closing it means handing `replace` the `ActiveGame`, which the
+  review did not ask for; recorded here as an open, non-failure window for C6.
+- **The name.** `GameWriter::replace` cannot generate the name (it takes a `NewGame`), and the name is picked while the old Game still stands, so `GameCatalogue::reset` filters the Game being replaced out of `list_games()` — the same names today's main code saw after its removal. Measured live: a reset of "Test Realm — 18 Oct 2026 (2)" leaves the fresh Game with the display name "(2)", not "(3)". `catalogue_tests::test_reset_replaces_current_game` pins it.
+
+Live checks of the fix pass, on the dev server (`python build.py run -- --port 3114 --world test --persona test_player`).
+
+| Check | What the client saw |
+|---|---|
+| Boot and create | One Game, one opening Message (`kind` "Narration"), one Swipe (`maker` "WorldOpening", the starting room report, a Swipe state), one empty dock record, no Snapshot; the story log renders one entry and the sidebar renders the room. |
+| Reset | `200` + `HX-Refresh: true`; the replaced Game and all its records are gone, and the fresh Game takes its display name and holds its opening only. |
+| The dock notice in place of the set (item 2) | With the dock record holding a notice **and** an offered set of two options, `GET /fragment/options-dock` answers the notice markup once and `options-strip` not at all. |
+| `/debug/state` (item 11) | `backend_name` `OpenRouter`, `model_name` `deepseek/deepseek-v4-flash`, matching `GET /debug/backend`. |
+
+The reduced gate, on the final tree. Green.
+
+| Step | Log | Result |
+|---|---|---|
+| `python build.py clippy` | `logs/build_20261018_193928.log` | green |
+| `python build.py guardrails` | `logs/build_20261018_195036.log` | 193 passed |
+| `python build.py test-pattern "" --test-target lib` | `logs/build_20261018_194008.log` | 1272 passed, 0 failed |
+| `python build.py test-pattern "" --test-target storage` | `logs/build_20261018_194032.log` | 130 passed |
+| `python build.py validate-docs`, `spec-coverage`, `seam-cases`, `test-structure`, `guardrails-doc-check` | `logs/build_20261018_1939*.log` | green (`guardrails.md` regenerated) |
+
+The red window after this pass: `--test-target http` 274 tests, 223 passed, **51 failed**, 5 skipped (`logs/build_20261018_194036.log`); `--test-target browser` **29 passed, 0 failed** (`logs/build_20261018_194100.log`); the ignored `races::` run 10 run, **6 passed, 4 failed** (`tmp/races_final2.log`). The commit message groups the 51 by cause: the seeded opening (counts and indexes); the tier-1 arrange reaching the new Job while seeding or scripting the old path; the status rule (no persisted status, no slot, no heal); the dock notice instead of the `System` Message; the failure line coming from the Game record.
+
+Recorded for later, as asked.
+
+- The new failure-kind scenarios (empty text, invalid room, contradiction, missing data) and `swipe_switch.md` 36.4 ("a swipe switch gives back the state of that Swipe") come in C5, each with the tier-1 test that covers it. 36.4 has none yet, so the scenario is not written: a scenario without a covering test fails `spec-coverage`.
+- `ApplicationError::ConcurrentGeneration` (`503`) is still produced by the old paths only (`settings_service`, `world_catalogue`, `persona_catalogue`, `prompt_preset_service` and the old pipeline), and it goes with the core step's deletions in C6.
+- `WIREDAPP_SCOPE_ALLOWLIST_PREFIXES` (open follow-up): move `app_state.rs` into `adapters/driving/http/bootstrap` and shrink the allowlist to `bootstrap/` and `test_support/`.
+
+**2026-10-18 ~19:55, lead: paused before the C4 commit (owner request: subagent plugin swap).**
+- State: C1 `622d5a5e`, C2 `fcbe318f`, C3 `959ca7d6` committed on `wf/rebuild-core`. C4 (the switch) plus its review fix pass is uncommitted in the working tree (56 files). The untracked `.pi/extensions/delegate/` is the owner's, not C4's: do not stage it with C4.
+- C4 review: both axes (c4-standards, c4-spec) handled; the fix pass (core4 result #2) did all 12 items. The lead has not yet re-read the fix-pass diff.
+- C4 reduced gate on the final tree is green: clippy `logs/build_20261018_194629.log`, guardrails 193 `logs/build_20261018_195036.log`, lib 1272 `logs/build_20261018_194008.log`, storage 130 `logs/build_20261018_194032.log`. Red window: http 51 failed of 274 (`logs/build_20261018_194036.log`), browser 29/29 green, ignored races 6/10 pass. The grouped red list for the commit message is in core4's report above (5 groups).
+- Also in the tree: `.agents/skills/simple-after-plan/SKILL.md` step 5 now says "Run the full gate once, here" (owner-approved); name it in the C4 commit message or split it out.
+- Next: lead reads the fix-pass diff, commits C4 with the red list (reduced gate, plan §2), then C5 with a fresh implementer per commit. Implementer briefs ask for focused checks only; the commit gate runs the full gate once.
+
+**2026-10-18 ~20:35, lead: C4 doc review (c4-docrev) and the C4 commit gate.**
+- Lead read the fix-pass diff and restored four WHY comments the comment pass deleted (`job.rs` apply_rules opening room report and user_message per kind; `catalogue.rs` set_posture vs switch_mode, unchanged preset slot skips validation).
+- Accepted edge of `GameWriter::replace`: the create unit lands first; if the removal then fails (storage failure only), two Games with the same name stand and the pointer stays on the old Game.
+- c4-docrev spec-text fixes applied in C4: dashboard.md 39.1 title "else … else", case 1 "narrator call of a Narration", case 3 deleted (W1 option A: busy plus a failure line is not reachable by a client, because the accept unit clears the line and the Job writes its line after its Options run), case 4 duplicate line removed; 39.3 Givens name an offered set; 39.4 Options row status "options"; options.md 24.5 and 24.18 show set A again after POST /status/reset-generating; swipe_new.md 12.1 and retrigger.md 15.1 Given "a Game whose Job is running" and a client-visible Then; swipe_new.md 11.10 and I.9 "the state that its analysis saved"; swipe_new.md and retrigger.md I.7 restated as the missing-data 500; reset.md 7.1 restated in domain words; actions.md 2.4 disclosure wording.
+- **C5 test items from c4-docrev** (tests assert the opposite of their changed scenario): swipe_new.rs 22.1 (two-room map, analysis moves to room2, assert room2); options.rs 24.5, 24.17, 24.18, 24.20 assert the dock notice in GET /fragment/options-dock, not a System Message (delete `system_messages`/`unavailable_agent_reports` helpers), and 24.5/24.18 assert set A after the stop; options.rs 24.2 asserts 400 and no notice with an empty opening text; actions.rs 2.4, retrigger.rs 14.5, swipe_new.rs 11.8/11.10 assert "The event narration failed." (2.4 also the disclosure); dashboard.rs 39.1 rewritten on the busy state and the failure line; 12.1/15.1 assert no Swipe / no event Narration added; reset.rs 7.1 per its new text; a test for the I.7 missing-data line comes with the C5 failure-kind scenarios.
+- **C7 list additions from c4-docrev:** one pass replacing "the pipeline returns to idle" (deprecated Action Pipeline) in docs/specs; swipe_new.md 10.5 title and 11.9 Given name Snapshot; reset.md 7.2 names message_service/narrative.history; retrigger.md I.3, I.8, I.9 name narrative.history, process_action, last_trigger; retrigger.md 14.5 and swipe_new.md 11.8 mix "message history" and "story log"; one phrase for the opening ("its opening Narration"); CONTEXT.md gains "notice" and "failure line", and "step" (generation step) vs the avoided "step" for Hook; docs/diataxis/explanation/architecture.md:69,79 (heal to Idle, slot on persisted GenerationStatus); docs/diataxis/reference/narrative/options.md:10 ("persisted with the turn's snapshot").

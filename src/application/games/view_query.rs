@@ -4,16 +4,19 @@
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::llm_messages::LLM_MESSAGE_RETENTION_LIMIT;
+use crate::adapters::driven::storage::stories::STORY_LIMIT;
 use crate::adapters::driven::storage::Storage;
+use crate::application::debug::DebugStateView;
 use crate::application::errors::ApplicationError;
+use crate::application::generation::gate::GameWriter;
 use crate::domain::model::agent::Role;
+use crate::domain::model::dock::DockRecord;
 use crate::domain::model::game::GameId;
 use crate::domain::model::llm_message::LlmMessage;
-use crate::application::message_service::MessageService;
+use crate::domain::model::state::generation_status::{GenerationFailure, GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::state::swipe_state::SwipeState;
 use crate::error::EngineError;
-
-use crate::application::debug::DebugStateView;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoleHealth {
@@ -22,44 +25,42 @@ pub struct RoleHealth {
     pub last_error: Option<String>,
 }
 
+/// The status rule: busy first, then the Game's failure line, then idle.
+pub enum Status {
+    /// A Job runs: the status shows its step.
+    Busy(Step),
+    /// The Game holds a failure line.
+    Failed(GenerationFailure),
+    /// Nothing runs and no line stands.
+    Idle,
+}
+
 #[derive(Clone)]
 pub struct GameViewQuery {
     storage: Arc<Storage>,
-    message_service: Arc<MessageService>,
+    writer: GameWriter,
 }
 
 impl GameViewQuery {
-    pub fn new(storage: Arc<Storage>, message_service: Arc<MessageService>) -> Self {
-        Self {
-            storage,
-            message_service,
-        }
+    pub fn new(storage: Arc<Storage>, writer: GameWriter) -> Self {
+        Self { storage, writer }
     }
 
     pub fn get_current_room_view(
         &self,
         game_id: GameId,
     ) -> Result<(String, Option<String>), ApplicationError> {
-        let game_state = self.message_service.load_or_fresh(game_id);
         let storage = &self.storage;
         let game = storage.require_game(game_id.0)?;
         let world_with_map = storage.require_world(&game.world_key)?;
-        let world = world_with_map.world_card;
-        let map = world_with_map.map;
+        let world = &world_with_map.world_card;
+        let map = &world_with_map.map;
+        let state = self.current_state(game_id)?;
+        let room_id = &state.movement.current_room_id;
         let room = map
-            .get_room_by_id(&game_state.swipe.movement.current_room_id)
-            .or_else(|| {
-                game_state
-                    .swipe
-                    .movement
-                    .dynamic_rooms
-                    .get(&game_state.swipe.movement.current_room_id)
-            })
-            .ok_or_else(|| {
-                ApplicationError::from(EngineError::RoomNotFound(
-                    "current room not found".to_string(),
-                ))
-            })?;
+            .get_room_by_id(room_id)
+            .or_else(|| state.movement.dynamic_rooms.get(room_id))
+            .ok_or_else(|| ApplicationError::from(EngineError::RoomNotFound(room_id.clone())))?;
 
         let image_path = room
             .image_path
@@ -69,40 +70,45 @@ impl GameViewQuery {
         Ok((room.name.clone(), image_path))
     }
 
+    /// The state of the active Swipe of the last Message. Every Message of a
+    /// design-valid Game holds one, so its absence is a broken record, not a room.
+    fn current_state(&self, game_id: GameId) -> Result<SwipeState, ApplicationError> {
+        self.storage
+            .stories()
+            .tail(game_id)?
+            .and_then(|tail| tail.current_state().cloned())
+            .ok_or_else(|| {
+                ApplicationError::from(EngineError::Internal(crate::error::InternalError::new(
+                    "stories_tail: the current state is missing",
+                )))
+            })
+    }
+
     pub fn get_npc_headshots(
         &self,
         game_id: GameId,
         scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
-        let game_state = self.message_service.load_or_fresh(game_id);
         let storage = &self.storage;
         let game = storage.require_game(game_id.0)?;
         let world_with_map = storage.require_world(&game.world_key)?;
         let npcs_list = storage.list_characters(world_with_map.world_id)?;
-        let npcs: std::collections::HashMap<String, _> = {
-            let mut m = std::collections::HashMap::new();
-            for n in npcs_list {
-                m.insert(n.id.clone(), n);
-            }
-            m
-        };
 
         let npc_ids: Vec<String> = if scene_only {
-            game_state
-                .swipe
+            self.current_state(game_id)?
                 .scene
                 .npcs_in_area
                 .iter()
                 .map(|npc| npc.id.clone())
                 .collect()
         } else {
-            npcs.keys().cloned().collect()
+            npcs_list.iter().map(|npc| npc.id.clone()).collect()
         };
 
         let npc_data: Vec<(String, String)> = npc_ids
             .iter()
             .filter_map(|id| {
-                let npc = npcs.get(id)?;
+                let npc = npcs_list.iter().find(|npc| &npc.id == id)?;
                 let image_path = npc.sheet.preferred_image()?.to_string();
                 let name = npc.sheet.name.clone();
                 Some((image_path, name))
@@ -113,56 +119,47 @@ impl GameViewQuery {
     }
 
     pub fn get_debug_state(&self, game_id: GameId) -> Result<DebugStateView, ApplicationError> {
-        let game_state = self.message_service.load_or_fresh(game_id);
-
-        let history_tail: Vec<MessageEntry> = game_state
-            .narrative
-            .history()
+        let state = self.current_state(game_id)?;
+        let tail = self.storage.stories().tail(game_id)?;
+        let count = tail.as_ref().map(|tail| tail.count).unwrap_or(0);
+        let history_tail: Vec<MessageEntry> = self
+            .storage
+            .stories()
+            .entries(game_id, None, 5)?
             .iter()
-            .rev()
-            .take(5)
-            .rev()
-            .cloned()
+            .map(MessageEntry::from)
             .collect();
-
-        let npc_ids: Vec<String> = game_state
-            .swipe
-            .scene
-            .npcs_in_area
-            .iter()
-            .map(|npc| npc.id.clone())
-            .collect();
-
-        let dynamic_rooms: Vec<String> = game_state
-            .swipe
-            .movement
-            .dynamic_rooms
-            .keys()
-            .cloned()
-            .collect();
-
-        let last_error = game_state
-            .narrative
-            .input_buffer
-            .status
-            .failure()
-            .map(|failure| failure.raw.clone());
+        let status = self.status(game_id)?;
+        let (generation_status, step, last_error) = match status {
+            Status::Busy(step) => (GenerationStatus::Generating, step, None),
+            Status::Failed(failure) => (
+                GenerationStatus::Error(failure.clone()),
+                Step::default(),
+                Some(failure.raw),
+            ),
+            Status::Idle => (GenerationStatus::Idle, Step::default(), None),
+        };
 
         Ok(DebugStateView {
-            current_room_id: game_state.swipe.movement.current_room_id.clone(),
-            npcs_in_area: npc_ids,
-            generation_status: game_state.narrative.input_buffer.status.clone(),
-            step: game_state.narrative.input_buffer.step.clone(),
-            npc_encounter_log: game_state.swipe.npc_encounter_log.npcs.clone(),
+            current_room_id: state.movement.current_room_id.clone(),
+            npcs_in_area: state
+                .scene
+                .npcs_in_area
+                .iter()
+                .map(|npc| npc.id.clone())
+                .collect(),
+            generation_status,
+            step,
+            npc_encounter_log: state.npc_encounter_log.npcs.clone(),
             narration_history_tail: history_tail,
-            narration_history_length: game_state.narrative.history().len(),
-            dynamic_rooms,
-            dynamic_room_count: game_state.swipe.movement.dynamic_rooms.len(),
+            narration_history_length: count,
+            dynamic_rooms: state.movement.dynamic_rooms.keys().cloned().collect(),
+            dynamic_room_count: state.movement.dynamic_rooms.len(),
             last_error,
-            quantifier_confidence: game_state.swipe.scene.quantifier_confidence.clone(),
-            backend_name: game_state.narrative.last_backend_name.clone(),
-            model_name: game_state.narrative.last_model_name.clone(),
-            current_options: game_state.narrative.current_options.clone(),
+            quantifier_confidence: state.scene.quantifier_confidence.clone(),
+            backend_name: None,
+            model_name: None,
+            current_options: self.dock(game_id)?.offered,
         })
     }
 
@@ -170,16 +167,51 @@ impl GameViewQuery {
         &self,
         game_id: GameId,
     ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-        let game_state = self.message_service.load_or_fresh(game_id);
-        let entries: Vec<_> = game_state.narrative.history().to_vec();
-        let has_last_trigger = game_state.narrative.last_trigger.is_some();
-        Ok((entries, has_last_trigger))
+        let entries: Vec<MessageEntry> = self
+            .storage
+            .stories()
+            .entries(game_id, None, STORY_LIMIT)?
+            .iter()
+            .map(MessageEntry::from)
+            .collect();
+        let can_retrigger = self
+            .storage
+            .stories()
+            .tail(game_id)?
+            .is_some_and(|tail| tail.retrigger_allowed());
+        Ok((entries, can_retrigger))
     }
 
-    /// The persisted set the pipeline rewrites at turn end.
     pub fn get_current_options(&self, game_id: GameId) -> Result<Vec<String>, ApplicationError> {
-        let game_state = self.message_service.load_or_fresh(game_id);
-        Ok(game_state.narrative.current_options.clone())
+        Ok(self.dock(game_id)?.offered)
+    }
+
+    pub fn dock(&self, game_id: GameId) -> Result<DockRecord, ApplicationError> {
+        Ok(self.storage.docks().get(game_id)?.unwrap_or_default())
+    }
+
+    pub fn status(&self, game_id: GameId) -> Result<Status, ApplicationError> {
+        if let Some(step) = self.busy_step(game_id) {
+            return Ok(Status::Busy(step));
+        }
+        Ok(
+            match self
+                .storage
+                .get_game(game_id.0)?
+                .and_then(|game| game.failure)
+            {
+                Some(failure) => Status::Failed(failure),
+                None => Status::Idle,
+            },
+        )
+    }
+
+    pub fn busy_step(&self, game_id: GameId) -> Option<Step> {
+        self.writer.busy_step(game_id)
+    }
+
+    pub fn is_busy(&self, game_id: GameId) -> bool {
+        self.busy_step(game_id).is_some()
     }
 
     pub fn game_display_name(&self, game_id: GameId) -> Result<String, ApplicationError> {

@@ -118,14 +118,17 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     let start = std::time::Instant::now();
     let mut narration_found = false;
     while start.elapsed() < Duration::from_millis(400) {
-        if message_service
+        // The seeded Game holds its opening Narration, so this turn's Narration is
+        // the second one.
+        let narration_count = message_service
             .load_messages(game_id)
             .map(|msgs| {
                 msgs.iter()
-                    .any(|m| m.message_type == MessageType::Narration)
+                    .filter(|m| m.message_type == MessageType::Narration)
+                    .count()
             })
-            .unwrap_or(false)
-        {
+            .unwrap_or(0);
+        if narration_count >= 2 {
             narration_found = true;
             break;
         }
@@ -150,8 +153,8 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         .filter(|m| m.message_type == MessageType::Narration)
         .count();
     assert_eq!(
-        final_narration_count, 1,
-        "Should have exactly 1 narration (no duplicates), found {final_narration_count}"
+        final_narration_count, 2,
+        "Should have exactly 2 narrations (the opening and this turn's, no duplicates), found {final_narration_count}"
     );
 }
 
@@ -629,10 +632,12 @@ async fn test_dispatcher_guide_stores_guide_on_swipe_stored_inputs() {
     );
 
     let state = app.message_service.load_or_fresh(active_game_of(&app));
+    // The story's first Narration is the Game's opening; the guide's own is the last.
     let narration = state
         .narrative
         .history
         .iter()
+        .rev()
         .find(|e| e.message_type == MessageType::Narration)
         .expect("guide should produce a Narration message");
     assert_eq!(

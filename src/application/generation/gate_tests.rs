@@ -9,7 +9,6 @@ use crate::application::message_service::MessageService;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::test_support::fixtures::{TestMap, TestWorld};
 use crate::test_support::{active_game_of, make_test_pipeline_with_backends, make_test_recorder};
@@ -82,10 +81,6 @@ fn test_heal_stale_is_noop_when_status_is_idle() {
     );
 }
 
-fn minimal_state() -> GameState {
-    GameState::new("start")
-}
-
 #[test]
 fn test_reset_generating_status_sets_idle() {
     let world_arc = Arc::new(TestWorld::minimal());
@@ -117,38 +112,4 @@ fn test_reset_generating_status_sets_idle() {
         persisted.narrative.input_buffer.status,
         GenerationStatus::Idle
     );
-}
-
-#[test]
-fn test_boot_heal_resets_stale_generating_status() {
-    let world_arc = Arc::new(TestWorld::minimal());
-    let map_arc = Arc::new(TestMap::single_room("start"));
-    let storage = Arc::new(Storage::new_in_memory());
-    storage.seed_world(&world_arc, &map_arc).unwrap();
-
-    let mut state = minimal_state();
-    state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.step = Step::Narrating;
-    let _ = storage.save_snapshot(NO_GAME, &GameStateSnapshot::from_game_state(&state));
-
-    let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
-    let narrator_recorder = make_test_recorder(Arc::clone(&mock));
-    let pipeline = make_test_pipeline_with_backends(
-        Arc::clone(&storage),
-        narrator_recorder,
-        AgentRunner::default(),
-    );
-    let wired = crate::test_support::build_test_wired_app(storage, pipeline, NO_GAME)
-        .expect("build_test_wired_app should succeed");
-    let app = AppState::from_wired(wired);
-
-    let persisted = app
-        .message_service
-        .load_expecting_valid_state(NO_GAME)
-        .expect("the healed snapshot should load");
-    assert_eq!(
-        persisted.narrative.input_buffer.status,
-        GenerationStatus::Idle
-    );
-    assert_eq!(persisted.narrative.input_buffer.step, Step::default());
 }

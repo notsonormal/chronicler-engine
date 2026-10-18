@@ -6,8 +6,7 @@ use crate::application::errors::ApplicationError;
 use crate::application::games::active::ActiveGame;
 use crate::domain::model::game::GameId;
 use crate::application::games::catalogue::GameCatalogue;
-use crate::application::message_service::MessageService;
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride, TxWrite};
 use crate::domain::model::game::PresetSelection;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarratorMode, NarrativePerspective, NarrativeTense};
@@ -16,10 +15,9 @@ use crate::domain::model::utils::settings_defaults;
 use crate::test_support::TestDataBuilder;
 
 fn new_catalogue(storage: &Arc<Storage>, initial_game: Option<GameId>) -> GameCatalogue {
-    let message_service = Arc::new(MessageService::new(Arc::clone(storage)));
     GameCatalogue::new(
         Arc::clone(storage),
-        message_service,
+        crate::application::generation::gate::GameWriter::new(Arc::clone(storage)),
         Arc::new(ActiveGame::new(Arc::clone(storage))),
         initial_game,
     )
@@ -27,7 +25,7 @@ fn new_catalogue(storage: &Arc<Storage>, initial_game: Option<GameId>) -> GameCa
 
 fn seeded_catalogue() -> (GameCatalogue, Arc<Storage>, String, String) {
     let data = TestDataBuilder::default_test().build();
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(crate::test_support::empty_sqlite_storage());
     let game_id = data.seed_into(&storage);
     let world_key = data.world_key();
     let persona_key = data.persona.key.clone();
@@ -72,12 +70,10 @@ fn test_create_game_inherits_world_posture_and_mode_matched_bundle() {
     let data = TestDataBuilder::default_test()
         .world(if_world.clone())
         .build();
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(crate::test_support::empty_sqlite_storage());
     data.seed_into(&storage);
-    let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
     let world_key = data.world_key();
     let persona_key = data.persona.key.clone();
-    let _ = message_service;
     let catalogue = new_catalogue(&storage, None);
 
     let id = catalogue
@@ -332,12 +328,19 @@ fn test_reset_replaces_current_game() {
         .active_game_id()
         .expect("create_game should leave an active game")
         .0;
+    let pre_reset_name = storage
+        .get_game(pre_reset_current)
+        .unwrap()
+        .expect("the created game should be persisted")
+        .name;
 
     catalogue.reset().expect("reset should succeed");
 
-    let post_reset_current = catalogue.active_game_id();
+    let post_reset_current = catalogue
+        .active_game_id()
+        .expect("reset should leave an active game");
     assert_ne!(
-        post_reset_current,
+        Some(post_reset_current),
         Some(GameId(pre_reset_current)),
         "reset should create a new current game"
     );
@@ -345,12 +348,22 @@ fn test_reset_replaces_current_game() {
         storage.get_game(pre_reset_current).unwrap().is_none(),
         "pre-reset game should be deleted"
     );
+    let post_reset_name = storage
+        .get_game(post_reset_current.0)
+        .unwrap()
+        .expect("the fresh game should be persisted")
+        .name;
+    assert_eq!(
+        post_reset_name, pre_reset_name,
+        "the fresh Game takes the name of the Game it replaced: the replaced Game \
+         is not counted as taken"
+    );
 }
 
 #[test]
 fn test_reset_propagates_persist_failure() {
     let data = TestDataBuilder::default_test().build();
-    let raw_storage = Storage::new_in_memory();
+    let raw_storage = crate::test_support::empty_sqlite_storage();
     data.seed_into(&raw_storage);
     let (storage, handle) = raw_storage.with_test_failures();
     let storage = Arc::new(storage);
@@ -360,9 +373,10 @@ fn test_reset_propagates_persist_failure() {
         .create_game(&data.world_key(), &data.persona.key)
         .expect("test setup: create_game should succeed");
 
-    handle.set(
-        "save_snapshot",
-        TestOverride::internal("simulated initial snapshot failure"),
+    // The reset's create unit fails on the opening Message it writes.
+    handle.set_write(
+        TxWrite::InsertMessage,
+        TestOverride::internal("simulated opening message failure"),
     );
 
     let result = catalogue.reset();
@@ -370,6 +384,15 @@ fn test_reset_propagates_persist_failure() {
     assert!(
         result.is_err(),
         "reset should surface a failure to persist the fresh game's initial state"
+    );
+    // The create unit runs first, so a failed reset leaves the old Game and the
+    // pointer as they were: the pointer never names a deleted Game.
+    let still_active = catalogue
+        .active_game_id()
+        .expect("a failed reset should leave the old Game active");
+    assert!(
+        storage.get_game(still_active.0).unwrap().is_some(),
+        "the Game the pointer names must still exist after a failed reset"
     );
 }
 
@@ -622,7 +645,6 @@ fn test_set_preset_selection_rejects_mode_disallowed_preset() {
     let id = catalogue.active_game_id().expect("an active game").0;
     seed_library(storage.as_ref());
 
-    // system_if_default is IF-only; the game is in Novel mode.
     let result = catalogue.set_preset_selection(
         id,
         PresetSelection::new(

@@ -18,8 +18,6 @@ pub struct Narrated {
     pub model_name: String,
 }
 
-/// Holds no storage and no Game: the caller resolves the preset, the posture
-/// and the budget and hands them in.
 pub struct Narrator {
     assembler: PromptAssembler,
     recorder: Arc<LlmCallRecorder>,
@@ -88,8 +86,8 @@ impl Narrator {
         let text = narration_result.text;
         if text.trim().is_empty() {
             return Err(GenerationFailure::new(
-                GenerationFailureKind::UnreadableAnswer,
-                "LLM Error: empty response",
+                GenerationFailureKind::EmptyText,
+                "the answer was empty",
             ));
         }
 

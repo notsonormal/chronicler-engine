@@ -1,7 +1,7 @@
 use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::TestOverride;
 use crate::adapters::driving::http::games::handlers::{
     list_games_fragment, switch_game_handler, switch_game_mode_handler,
     update_game_posture_handler, update_game_presets_handler, GameModeForm, GamePostureForm,
@@ -205,7 +205,9 @@ async fn test_update_game_presets_handler_unknown_preset_returns_error_span() {
 
 #[tokio::test]
 async fn test_posture_fragment_renders_preset_load_error_span() {
-    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    // The Game is created through the design's create path, which writes the new
+    // records: only SQLite carries them.
+    let (storage, handle) = crate::test_support::empty_sqlite_storage().with_test_failures();
     let state = TestAppBuilder::default_test()
         .storage(std::sync::Arc::new(storage))
         .build_service();

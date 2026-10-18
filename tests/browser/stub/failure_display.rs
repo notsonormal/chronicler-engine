@@ -885,7 +885,7 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     );
 }
 
-const FAILURE_KINDS: [GenerationFailureKind; 11] = [
+const FAILURE_KINDS: [GenerationFailureKind; 12] = [
     GenerationFailureKind::Unreachable,
     GenerationFailureKind::PromptTooLong,
     GenerationFailureKind::UnreadableAnswer,
@@ -894,6 +894,7 @@ const FAILURE_KINDS: [GenerationFailureKind; 11] = [
     GenerationFailureKind::SceneMissing,
     GenerationFailureKind::PresetMissing,
     GenerationFailureKind::MissingData,
+    GenerationFailureKind::EmptyText,
     GenerationFailureKind::Contradiction,
     GenerationFailureKind::EventNarrationFailed,
     GenerationFailureKind::Other,
@@ -911,6 +912,7 @@ fn assert_kind_is_listed(kind: GenerationFailureKind) {
         | GenerationFailureKind::SceneMissing
         | GenerationFailureKind::PresetMissing
         | GenerationFailureKind::MissingData
+        | GenerationFailureKind::EmptyText
         | GenerationFailureKind::Contradiction
         | GenerationFailureKind::EventNarrationFailed
         | GenerationFailureKind::Other => {}
@@ -1165,8 +1167,6 @@ async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _
             rows_before,
             "a failed row action must leave the row in place"
         );
-        // A failed row action swaps nothing, so the control that asked for it
-        // keeps focus.
         assert!(
             active_element_is(&page, control).await,
             "a failed {tab} action must leave focus on the control that asked for it"

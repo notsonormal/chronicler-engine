@@ -16,7 +16,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use chrono::{TimeZone, Utc};
 
-use chronicler_engine::adapters::driving::http::action::handlers::CONCURRENT_GENERATION_STATUS;
+use chronicler_engine::adapters::driving::http::action::handlers::BUSY_STATUS;
 use chronicler_engine::adapters::driving::http::builders::headers::{
     add_status_swap_headers, header_fragment_html,
 };
@@ -162,7 +162,7 @@ fn options_dock_html(alternate: bool) -> String {
     } else {
         CANNED_OPTIONS.iter().map(|o| o.to_string()).collect()
     };
-    let vm = OptionsDockViewModel::new(options, false);
+    let vm = OptionsDockViewModel::new(options, false, None);
     OptionsDockTemplate::new(vm)
         .render()
         .expect("render options dock")
@@ -630,7 +630,8 @@ fn stub_router(state: Arc<StubState>) -> Router {
             post(|| async { (StatusCode::OK, "").into_response() }),
         )
         .route("/history/:id", post(save_message))
-        // A 500 here drives a row's own error slot rather than the panel's.
+        // Scenario 16.34 drives /reset from the games row: a 500 here fills that
+        // row's own error slot rather than the panel's.
         .route(
             "/reset",
             post(|| async { client_failure("Stub reset failure") }),
@@ -854,7 +855,7 @@ async fn action_check(
             let mut response = (
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                CONCURRENT_GENERATION_STATUS,
+                BUSY_STATUS,
             )
                 .into_response();
             add_status_swap_headers(&mut response);

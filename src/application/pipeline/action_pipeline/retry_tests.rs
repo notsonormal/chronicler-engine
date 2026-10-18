@@ -513,7 +513,7 @@ fn test_retry_target_and_anchor_agree_when_a_system_notice_trails_an_event_narra
         .expect("retry target for the trailing-System shape");
     assert!(target.is_event, "the event Narration is the retry target");
     assert_eq!(
-        target.anchor_idx, 1,
+        target.anchor_idx, 2,
         "the anchor must be the main Narration, not the Input"
     );
     assert_eq!(
@@ -542,8 +542,12 @@ fn test_retry_target_and_anchor_agree_when_a_system_notice_trails_an_event_narra
         .collect();
     assert_eq!(
         history,
-        vec!["test input".to_string(), "Main narration".to_string()],
-        "the redo must keep the main Narration it re-narrates from"
+        vec![
+            String::new(),
+            "test input".to_string(),
+            "Main narration".to_string()
+        ],
+        "the redo must keep the Game's opening Narration and the main Narration it re-narrates from"
     );
 }
 
@@ -954,8 +958,8 @@ async fn test_retry_recovers_after_llm_failure() {
         .filter(|m| m.message_type == MessageType::Narration)
         .count();
     assert_eq!(
-        narration_count, 1,
-        "Retry should produce exactly one narration, got {narration_count}"
+        narration_count, 2,
+        "Retry should leave the opening and produce exactly one more narration, got {narration_count}"
     );
 }
 
@@ -1056,8 +1060,8 @@ async fn test_retry_empty_narration_sets_error() {
         matches!(state.narrative.input_buffer.status,
             GenerationStatus::Error(ref failure)
                 if failure.raw.contains("empty")
-                    && failure.kind == GenerationFailureKind::UnreadableAnswer),
-        "Expected an unreadable-answer failure, got {:?}",
+                    && failure.kind == GenerationFailureKind::EmptyText),
+        "Expected an empty-text failure, got {:?}",
         state.narrative.input_buffer.status
     );
 }
@@ -1211,8 +1215,10 @@ async fn test_retry_appends_swipe_to_same_message() {
         .message_service
         .load_messages(active_game_of(&app))
         .unwrap();
+    // The story's first Narration is the Game's opening; the retry serves the last.
     let narration_msg = msgs
         .iter()
+        .rev()
         .find(|m| m.message_type == MessageType::Narration)
         .unwrap();
     let original_id = narration_msg.id;
@@ -1239,6 +1245,7 @@ async fn test_retry_appends_swipe_to_same_message() {
         .unwrap();
     let narration = msgs
         .iter()
+        .rev()
         .find(|m| m.message_type == MessageType::Narration)
         .expect("Should have a narration after retry");
     assert_eq!(
@@ -2118,36 +2125,6 @@ async fn test_retry_renarrate_with_no_input_persists_error() {
     app.pipeline.retry_last_response(active_game_of(&app));
 
     assert_error_status(&app, "no input to retry");
-}
-
-#[tokio::test]
-async fn test_retry_returns_internal_error_when_no_anchor_message() {
-    // An event-flagged Input passes the Input check but leaves find_retry_anchor_msg's event path with no match — the reachable no-anchor shape.
-    let (app, storage) = make_test_app_with_storage();
-
-    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
-    state.add_message("test input".to_string(), MessageType::Input);
-    state
-        .narrative
-        .history
-        .last_mut()
-        .unwrap()
-        .set_event_header(Some("Event".to_string()));
-    let last = state.narrative.history.last().unwrap();
-    insert_message_with_swipe(&app, &storage, last);
-
-    let result = app
-        .pipeline
-        .retry(&app.generation_gate, active_game_of(&app));
-
-    assert!(
-        matches!(
-            result,
-            Err(ApplicationError::Engine(EngineError::Internal(_)))
-        ),
-        "retry() should return ApplicationError::internal when no anchor message exists, got {result:?}"
-    );
-    assert_error_status(&app, "no anchor message");
 }
 
 #[tokio::test]

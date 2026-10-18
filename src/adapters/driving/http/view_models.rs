@@ -3,6 +3,7 @@
 
 use std::fmt;
 
+use crate::domain::model::dock::Notice;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::NarratorMode;
@@ -59,9 +60,9 @@ impl SelectOptionView {
         .collect()
     }
 
-    /// Picker options for one preset slot: presets allowing the game's mode,
-    /// plus the stored selection (even when disallowed or absent from the
-    /// library) so the browser never silently substitutes another preset.
+    /// Picker options for one preset slot. A stored selection comes back even when
+    /// its preset is disallowed or gone, so the browser never silently substitutes
+    /// another preset.
     pub fn presets(presets: &[PromptPreset], mode: NarratorMode, selected_id: &str) -> Vec<Self> {
         Self::from_presets(
             presets
@@ -218,11 +219,25 @@ impl From<&LlmMessage> for LlmMessageView {
 pub struct OptionsDockViewModel {
     pub options: Vec<String>,
     pub is_busy: bool,
+    pub notice: Option<DockNoticeView>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DockNoticeView {
+    pub reason: String,
+    pub raw: String,
 }
 
 impl OptionsDockViewModel {
-    pub fn new(options: Vec<String>, is_busy: bool) -> Self {
-        Self { options, is_busy }
+    pub fn new(options: Vec<String>, is_busy: bool, notice: Option<Notice>) -> Self {
+        Self {
+            options,
+            is_busy,
+            notice: notice.map(|notice| DockNoticeView {
+                reason: notice.reason,
+                raw: notice.raw,
+            }),
+        }
     }
 }
 

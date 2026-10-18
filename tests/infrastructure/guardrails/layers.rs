@@ -2,10 +2,6 @@
 
 use crate::Violation;
 
-// TODO: We shouldn't be blank allowing the `adapters/driving/http/`
-//  just so that we can use it the create the AppState. We
-//  can just move app_state.rs into `src/adapters/driving/http/bootstrap`
-//  instead, since that counts counts as bootstrap folder too
 const WIREDAPP_SCOPE_ALLOWLIST_PREFIXES: &[&str] =
     &["bootstrap/", "adapters/driving/http/", "test_support/"];
 
@@ -82,16 +78,23 @@ pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<V
     violations
 }
 
+/// The scope of the two path-limited guards below, relative to `src/`. Their tests
+/// assert it matches a file, so a stale scope cannot pass by checking nothing.
+pub const HTTP_ADAPTER_SCOPE: &str = "adapters/driving/http/";
+
+/// The whole-state types the HTTP layer must not name: `SwipeState` is the design's
+/// state, and `GameState` is today's wrapper around it, which goes in the core
+/// step's deletions.
+const WHOLE_STATE_TYPES: [&str; 2] = ["SwipeState", "GameState"];
+
 /// Requires server handlers to return `Response<Body>` instead of `(StatusCode, String)`.
 pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
     let normalized_path = file_path.replace('\\', "/");
 
-    // TODO: Are these exceptions really valid? Or this a new with
-    //  more exceptions to the rule then actual rules? Or can we
-    //  get all of these to follow the rule?
-    if !normalized_path.starts_with("src/server/")
+    // Paths are relative to `src/`, so the HTTP adapter's own folder is the scope.
+    if !normalized_path.starts_with(HTTP_ADAPTER_SCOPE)
         || normalized_path.ends_with("mod.rs")
         || normalized_path.ends_with("debug.rs")
         || normalized_path.ends_with("renderers.rs")
@@ -192,7 +195,7 @@ pub fn check_form_fields_urlencoded_safe(file_path: &str, content: &str) -> Vec<
     violations
 }
 
-/// Prevents server-layer files from referencing `GameState` directly.
+/// Prevents HTTP-layer files from referencing the whole-state types directly.
 pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -200,7 +203,7 @@ pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Viol
         return violations;
     }
 
-    if !file_path.starts_with("server/") {
+    if !file_path.starts_with(HTTP_ADAPTER_SCOPE) {
         return violations;
     }
 
@@ -212,12 +215,17 @@ pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Viol
             continue;
         }
 
-        if trimmed.contains("GameState") && !trimmed.contains("GameStateSnapshot") {
-            violations.push(Violation::error(
-                file_path,
-                line_num,
-                "Server layer file references `GameState`",
-            ));
+        for state_type in WHOLE_STATE_TYPES {
+            if trimmed.contains(state_type) {
+                violations.push(Violation::error(
+                    file_path,
+                    line_num,
+                    format!(
+                        "HTTP layer file references `{state_type}` — read the state through \
+                         `GameViewQuery`"
+                    ),
+                ));
+            }
         }
     }
 
@@ -265,7 +273,7 @@ mod tests {
     #[test]
     fn test_check_handler_return_type_catches_violation() {
         let violations = check_handler_return_type(
-            "src/server/test_handler.rs",
+            "adapters/driving/http/test_handler.rs",
             "pub async fn bad_handler() -> (StatusCode, String) { }",
         );
         assert_eq!(violations.len(), 1);
@@ -275,7 +283,7 @@ mod tests {
     #[test]
     fn test_check_handler_return_type_allows_correct() {
         let violations = check_handler_return_type(
-            "src/server/test_handler.rs",
+            "adapters/driving/http/test_handler.rs",
             "pub async fn good_handler() -> Response<Body> { }",
         );
         assert_eq!(violations.len(), 0);
@@ -284,7 +292,7 @@ mod tests {
     #[test]
     fn test_check_handler_return_type_skips_comments() {
         let violations = check_handler_return_type(
-            "server/test_handler.rs",
+            "adapters/driving/http/test_handler.rs",
             "// pub async fn bad_handler() -> (StatusCode, String) { }",
         );
         assert_eq!(violations.len(), 0);
@@ -293,7 +301,7 @@ mod tests {
     #[test]
     fn test_check_handler_return_type_skips_debug_rs() {
         let violations = check_handler_return_type(
-            "server/debug.rs",
+            "adapters/driving/http/debug.rs",
             "pub async fn bad_handler() -> (StatusCode, String) { }",
         );
         assert_eq!(violations.len(), 0);
@@ -505,9 +513,19 @@ mod tests {
     }
 
     #[test]
+    fn test_check_server_layer_boundaries_catches_swipe_state() {
+        let violations = check_server_layer_boundaries(
+            "adapters/driving/http/renderers.rs",
+            "fn render(state: &SwipeState) {}\n",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("SwipeState"));
+    }
+
+    #[test]
     fn test_check_server_layer_boundaries_catches_game_state() {
         let violations = check_server_layer_boundaries(
-            "server/renderers.rs",
+            "adapters/driving/http/renderers.rs",
             "fn render(state: &GameState) {}\n",
         );
         assert_eq!(violations.len(), 1);
@@ -515,10 +533,10 @@ mod tests {
     }
 
     #[test]
-    fn test_check_server_layer_boundaries_allows_game_state_snapshot() {
+    fn test_check_server_layer_boundaries_allows_a_plain_field() {
         let violations = check_server_layer_boundaries(
-            "server/renderers.rs",
-            "fn render(snapshot: &GameStateSnapshot) {}\n",
+            "adapters/driving/http/renderers.rs",
+            "fn render(room: &str) {}\n",
         );
         assert_eq!(violations.len(), 0);
     }

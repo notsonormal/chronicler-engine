@@ -514,15 +514,18 @@ impl GameWriter {
     }
 
     /// Both units run in one hold, and the old Game's Job ends under the same guard,
-    /// so its next save unit is refused and its model call stops.
+    /// so its next save unit is refused and its model call stops. The create unit
+    /// runs first: a failure there leaves the old Game and its Job entry as they
+    /// were, so the active-Game pointer never names a deleted Game.
     pub fn replace(&self, old: GameId, new: &NewGame) -> Result<GameId, EngineError> {
         let opening = self.opening_message(new)?;
         self.hold(|entries, units| {
+            let new_id = self.create_unit(new, &opening, units)?;
             if let Some(entry) = entries.remove(&old) {
                 entry.cancel.cancel();
             }
             units.open(old, |tx| tx.delete_game())?;
-            self.create_unit(new, &opening, units)
+            Ok(new_id)
         })
     }
 

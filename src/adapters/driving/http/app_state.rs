@@ -17,9 +17,10 @@ use crate::adapters::driving::http::view_models::{
 use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
-use crate::application::generation::gate::GenerationGate;
+use crate::application::generation::gate::{GameWriter, GenerationGate};
 use crate::application::message_service::MessageService;
 use crate::application::persona_catalogue::PersonaCatalogue;
+use crate::application::pipeline::job::JobDeps;
 use crate::application::pipeline::ActionPipeline;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::settings_service::SettingsService;
@@ -42,12 +43,22 @@ pub struct AppState {
     pub shutdown_token: CancellationToken,
     pub pipeline: Arc<ActionPipeline>,
     pub generation_gate: GenerationGate,
+    pub game_writer: GameWriter,
+    pub job_deps: JobDeps,
     pub game_catalogue: GameCatalogue,
     pub game_view_query: GameViewQuery,
 }
 
 impl AppState {
     pub fn from_wired(wired: WiredApp) -> Self {
+        // The Job runs on the pipeline the app holds, so a test override's narrator
+        // and Agents are the Job's too.
+        let job_deps = JobDeps {
+            narrator: Arc::clone(&wired.pipeline.narrator),
+            agents: Arc::clone(&wired.pipeline.agent_runner),
+            storage: Arc::clone(&wired.pipeline.storage),
+            tasks: wired.generation_gate.job_tasks(),
+        };
         AppState {
             settings_service: wired.settings_service,
             prompt_preset_service: wired.prompt_preset_service,
@@ -59,6 +70,8 @@ impl AppState {
             shutdown_token: wired.shutdown_token,
             pipeline: Arc::new(wired.pipeline),
             generation_gate: wired.generation_gate,
+            game_writer: wired.game_writer,
+            job_deps,
             game_catalogue: wired.game_catalogue,
             game_view_query: wired.game_view_query,
         }
@@ -138,15 +151,14 @@ impl AppState {
     }
 
     pub fn render_options_dock(&self, game_id: GameId) -> Result<String> {
-        let options = self
+        let dock = self
             .game_view_query
-            .get_current_options(game_id)
+            .dock(game_id)
             .map_err(|e| EngineError::Config(Self::render_error_context("options dock", e)))?;
-        // The generation registry, not the persisted status, answers "is
-        // something generating?": the record can lag the live slot.
-        let is_busy = self.generation_gate.is_busy(game_id);
+        // The one registry, not a saved record, answers "is something generating?".
+        let is_busy = self.game_view_query.is_busy(game_id);
 
-        let vm = OptionsDockViewModel::new(options, is_busy);
+        let vm = OptionsDockViewModel::new(dock.offered, is_busy, dock.notice);
         let template = OptionsDockTemplate::new(vm);
         template
             .render()

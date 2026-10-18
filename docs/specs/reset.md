@@ -7,14 +7,10 @@ Endpoint: `POST /reset`
 #### Scenario 7.1: Reset clears the previous game's story-log history
 
 ```gherkin
-Given a fresh game state with narrative.history empty
-And a narrator backend that returns a non-empty narration for any prompt
-When the client POST /action with command="examine room"
-And the pipeline returns to idle
-And message_service.load_messages() contains at least one Input entry
-When the client POST /reset (deletes the current game and creates a fresh one)
-Then message_service.load_messages() contains zero Input entries (the previous game's input is gone)
-And message_service.load_messages() contains exactly 1 Narration entry (the fresh game's scenario opening)
+Given a Game whose story log holds an Input and its Narration
+When the client POST /reset
+Then the active Game's story log holds no Input
+And it holds only its opening Narration
 ```
 
 #### Scenario 7.2: Action after reset produces a fresh input

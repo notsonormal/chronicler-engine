@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, response::IntoResponse, Form};
+use axum::{http::StatusCode, Form};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::history::handlers::{
@@ -42,34 +42,34 @@ async fn test_edit_history_handler_ok() {
     let form = EditHistoryForm {
         text: "modified text".to_string(),
     };
-    let result = edit_history_handler(
+    let response = edit_history_handler(
         axum::extract::State(state.clone()),
         CurrentGame(active_game_of(&state)),
         axum::extract::Path(999u64),
         Form(form),
     )
     .await;
-    let status = match result {
-        Ok(resp) => resp.status(),
-        Err(e) => e.into_response().status(),
-    };
 
-    assert!(status == StatusCode::INTERNAL_SERVER_ERROR || status == StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "an edit of a Message the story does not hold is refused as a bad request"
+    );
 }
 
 #[tokio::test]
-async fn test_delete_history_handler_ok() {
+async fn test_delete_history_handler_refuses_the_only_message() {
     let state = TestAppBuilder::default_test().build_service();
 
-    let result = delete_history_handler(
+    let response = delete_history_handler(
         axum::extract::State(state.clone()),
         CurrentGame(active_game_of(&state)),
     )
     .await;
-    let status = match result {
-        Ok(resp) => resp.status(),
-        Err(e) => e.into_response().status(),
-    };
 
-    assert!(status == StatusCode::INTERNAL_SERVER_ERROR || status == StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "a Game holding only its opening Message refuses the delete"
+    );
 }

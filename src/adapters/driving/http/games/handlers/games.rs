@@ -113,10 +113,6 @@ pub async fn switch_game_handler(
     Path(id): Path<u64>,
 ) -> Result<Response, ApplicationError> {
     state.game_catalogue.switch_game(id)?;
-    // The newly current game may carry a stale persisted `Generating` from a panicked turn.
-    state
-        .pipeline
-        .heal_stale_status(&state.generation_gate, GameId(id))?;
     Ok(ok_refresh())
 }
 

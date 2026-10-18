@@ -92,8 +92,7 @@ pub fn configured_runner(recorder: Arc<LlmCallRecorder>) -> AgentRunner {
     runner_from_configs(&AgentConfig::defaults(), recorder)
 }
 
-/// The same wiring without the Agents of `agent_type`, as an `[agents]` section
-/// with no entry for that type leaves them.
+/// Mirrors an `[agents]` section with no entry for that type.
 pub fn configured_runner_without(recorder: Arc<LlmCallRecorder>, agent_type: &str) -> AgentRunner {
     let configs: Vec<AgentConfig> = AgentConfig::defaults()
         .into_iter()
@@ -117,7 +116,7 @@ pub fn make_test_pipeline_with_backends(
     let message_service = build_test_message_service(Arc::clone(&storage));
     let game_catalogue = Arc::new(GameCatalogue::new(
         Arc::clone(&storage),
-        Arc::clone(&message_service),
+        crate::application::generation::gate::GameWriter::new(Arc::clone(&storage)),
         Arc::new(ActiveGame::new(Arc::clone(&storage))),
         None,
     ));
@@ -140,7 +139,7 @@ pub fn make_test_pipeline_with_mock_quantifier(
     let message_service = build_test_message_service(Arc::clone(&storage));
     let game_catalogue = Arc::new(GameCatalogue::new(
         Arc::clone(&storage),
-        Arc::clone(&message_service),
+        crate::application::generation::gate::GameWriter::new(Arc::clone(&storage)),
         Arc::new(ActiveGame::new(Arc::clone(&storage))),
         None,
     ));

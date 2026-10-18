@@ -4,9 +4,11 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
+use super::action::handlers::BUSY_STATUS;
 use super::utils::error::render_error;
 
 use crate::application::errors::ApplicationError;
+use crate::application::generation::gate::Refusal;
 
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
@@ -30,5 +32,19 @@ impl IntoResponse for ApplicationError {
         };
 
         (status, render_error(&message)).into_response()
+    }
+}
+
+impl IntoResponse for Refusal {
+    fn into_response(self) -> Response {
+        match self {
+            Refusal::StillThinking => (StatusCode::OK, BUSY_STATUS.to_string()).into_response(),
+            Refusal::BadRequest(message) => {
+                (StatusCode::BAD_REQUEST, render_error(&message)).into_response()
+            }
+            Refusal::MissingData(message) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, render_error(&message)).into_response()
+            }
+        }
     }
 }

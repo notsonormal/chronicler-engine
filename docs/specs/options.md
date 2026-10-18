@@ -18,13 +18,14 @@ And the pipeline returns to idle
 Then GET /fragment/options-dock renders the options strip with one button per generated option
 ```
 
-#### Scenario 24.2: /options with no scene history surfaces an error and an empty dock
+#### Scenario 24.2: /options on a Game with no story text is refused
 
 ```gherkin
-Given a fresh game with an empty story log
+Given a Game whose story holds no text (its opening Narration has none)
 When the client POST /action with command="/options"
-Then the response is a 500 whose body names the validation failure ("No scene to generate options for yet")
-And GET /fragment/options-dock renders no options strip
+Then the response is 400 Bad Request
+And the response body names the missing scene ("No scene to generate options for yet")
+And GET /fragment/options-dock renders no options strip and no notice
 ```
 
 #### Scenario 24.18: /options with no options agent reports the agent is unavailable and keeps the set
@@ -33,8 +34,10 @@ And GET /fragment/options-dock renders no options strip
 Given a game with scene history, an offered set of set A, and no options agent
 When the client POST /action with command="/options"
 And the pipeline returns to idle
-Then the offered set still holds set A
-And the story log gained a System message saying the options agent is not available
+Then the dock shows the notice saying the options agent is not available
+And the dock renders no options strip
+When the client POST /status/reset-generating
+Then the dock renders set A
 ```
 
 ### Using the offered set
@@ -48,15 +51,17 @@ Then the dock renders set B after the second call and no longer renders set A
 And the story-log message count is unchanged by the two /options calls
 ```
 
-#### Scenario 24.5: A failed regeneration keeps the previous set
+#### Scenario 24.5: A failed regeneration keeps the previous set and shows the notice in its place
 
 ```gherkin
 Given the dock shows set A
 And the options agent's next responses fail to parse
 When the client POST /action with command="/options"
 And the pipeline returns to idle
-Then the dock still renders set A
-And a System message naming the options-generation failure was added to the story log
+Then the dock shows the notice naming the options-generation failure
+And the dock renders no options strip
+When the client POST /status/reset-generating
+Then the dock renders set A
 ```
 
 #### Scenario 24.13: Using an offered option submits it as the player's input and narrates
@@ -118,7 +123,7 @@ When the client POST /action with command="look" again
 And the pipeline returns to idle
 Then the offered set is empty
 And the dock renders no options strip
-And the story log gained a System message naming the options generation failure
+And the dock shows the notice naming the options generation failure
 ```
 
 #### Scenario 24.20: With no options agent, an always-on narration message empties the offered set and reports the agent unavailable
@@ -129,7 +134,7 @@ When the client POST /action with command="look"
 And the pipeline returns to idle
 Then the offered set is empty
 And the dock renders no options strip
-And the story log gained a System message saying the options agent is not available
+And the dock shows the notice saying the options agent is not available
 ```
 
 ### Response shapes

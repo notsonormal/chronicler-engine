@@ -12,11 +12,12 @@ use crate::application::agents::AgentRunner;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::action::Action;
 use crate::domain::model::game::GameId;
+use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{
-    active_game_of, make_test_pipeline_app_with_storage as make_test_app_with_storage,
-    make_test_pipeline_with_backends, make_test_recorder, TestAppBuilder,
+    active_game_of, make_test_app, make_test_pipeline_with_backends, make_test_recorder,
+    TestAppBuilder,
 };
 
 const TAGGED_RESPONSE: &str = "<suggestion>Search the desk</suggestion>\
@@ -303,14 +304,21 @@ async fn test_process_options_during_shutdown_returns_shutting_down() {
     );
 }
 
+/// An app whose Game holds no Message at all: `TestAppBuilder` always seeds the
+/// opening Narration, so the empty-scene shapes are arranged on this fixture.
+fn empty_story_app(state: GameState) -> crate::adapters::driving::http::AppState {
+    let wired = make_test_app(state).expect("the empty-story fixture should build");
+    crate::adapters::driving::http::AppState::from_wired(wired)
+}
+
 #[test]
 fn test_process_options_empty_history_rejected() {
-    let (app, _storage) = make_app(Some(tagged_options_provider()));
+    let app = empty_story_app(GameState::new("start".to_string()));
 
     let state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         state.narrative.history().is_empty(),
-        "precondition: seeded app starts without scene history"
+        "precondition: the fixture's app starts without scene history"
     );
 
     let result = app
@@ -378,19 +386,10 @@ async fn test_no_options_agent_surfaces_unavailable_message() {
 
 #[test]
 fn test_process_options_heals_stale_status_before_validation_error() {
-    let (app, storage) = make_test_app_with_storage();
-
-    let mut state = app.message_service.load_or_fresh(active_game_of(&app));
+    let mut state = GameState::new("start".to_string());
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.step = Step::Narrating;
-    storage
-        .save_snapshot(
-            active_game_of(&app),
-            &crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-                &state,
-            ),
-        )
-        .expect("save stale snapshot should succeed");
+    let app = empty_story_app(state);
 
     let result = app
         .pipeline

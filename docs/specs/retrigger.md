@@ -76,7 +76,7 @@ And the last message is a non-event Narration
 And a narrator backend that fails for the trigger continuation prompt
 When the client sends POST /retrigger
 And the pipeline returns to idle
-Then the generation status is an error whose text mentions "Trigger narration failed"
+Then the generation status is an error whose text is "The event narration failed."
 And the message history gained no new event Narration entry (the failed continuation is not persisted)
 And the message history still ends in the non-event Narration the failure was reported on
 And the story-log fragment still offers the `.retrigger-btn` control on that Narration
@@ -95,10 +95,10 @@ Then the response is 400 Bad Request
 #### Scenario 15.1: Retrigger while a generation is already in flight returns "Still thinking..."
 
 ```gherkin
-Given a game state where a generation is already in flight (the generation gate is busy)
+Given a Game whose Job is running
 When the client sends POST /retrigger
 Then the response is 200 with a "Still thinking..." status string
-And no retrigger is started (the gate is not claimed)
+And no event Narration is added
 ```
 
 ---
@@ -110,10 +110,9 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
 
 - **I.3** Retrigger (`POST /retrigger`) adds exactly one new message to
   `narrative.history` (the event narration). It does not append a swipe.
-- **I.7** If a message exists in history, it must have a `snapshot_id`
-  pointing to a restorable snapshot. A message without a snapshot (or with
-  a dangling snapshot id) is a data-integrity violation (500), not a user
-  error (400).
+- **I.7** A request whose start state is missing is a data-integrity
+  violation: 500 and the failure line "The data for this request is
+  missing: …", not a user error (400).
 - **I.8** Retrigger rejects concurrent generation the same way
   `process_action` does: 200 with a `"Still thinking..."` status, no
   generation started.

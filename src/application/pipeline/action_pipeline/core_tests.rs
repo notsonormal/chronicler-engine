@@ -565,12 +565,12 @@ fn test_pipeline_saves_narration_before_quantifier() {
 
     assert_eq!(
         narration_msgs.len(),
-        1,
-        "Should have exactly 1 narration message, found {}",
+        2,
+        "Should have exactly 2 narration messages (the opening and this turn's), found {}",
         narration_msgs.len()
     );
 
-    let narration = narration_msgs.first().unwrap();
+    let narration = narration_msgs.last().unwrap();
     assert!(
         narration.snapshot_id().is_some() || narration.id != 0,
         "Narration should be persisted"
@@ -611,12 +611,13 @@ fn test_pipeline_no_duplicate_narration() {
         .count();
 
     assert_eq!(
-        narration_count, 1,
-        "Should have exactly 1 narration entry (no duplicates), found {narration_count}"
+        narration_count, 2,
+        "Should have exactly 2 narration entries (the opening and this turn's, no duplicates), found {narration_count}"
     );
 
     let narration_entry = history
         .iter()
+        .rev()
         .find(|e| e.message_type == MessageType::Narration)
         .unwrap();
     assert_eq!(narration_entry.text, "You look around.");
@@ -734,11 +735,11 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
 
     assert_eq!(
         narration_msgs.len(),
-        1,
-        "Should have 1 narration despite quantifier changes"
+        2,
+        "Should have 2 narrations (the opening and this turn's) despite quantifier changes"
     );
 
-    assert_eq!(narration_msgs[0].text(), "You look around.");
+    assert_eq!(narration_msgs.last().unwrap().text(), "You look around.");
 }
 
 #[test]
@@ -863,9 +864,10 @@ fn test_pipeline_persists_input_before_narration() {
     let input_idx = messages
         .iter()
         .position(|m| m.message_type == MessageType::Input && m.text() == "look");
+    // The seeded opening is the first Narration, so the turn's own Narration is the last.
     let narration_idx = messages
         .iter()
-        .position(|m| m.message_type == MessageType::Narration);
+        .rposition(|m| m.message_type == MessageType::Narration);
 
     assert!(input_idx.is_some(), "Input message should be persisted");
     assert!(narration_idx.is_some(), "Narration should be produced");
@@ -1159,14 +1161,15 @@ fn test_pipeline_empty_narration_sets_error_message_and_no_narration() {
         msg.contains("empty"),
         "error message should mention 'empty', got: {msg}"
     );
-    let has_narration = final_state
+    let narration_count = final_state
         .narrative
         .history()
         .iter()
-        .any(|e| e.message_type == MessageType::Narration);
-    assert!(
-        !has_narration,
-        "no narration should be persisted on empty response"
+        .filter(|e| e.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narration_count, 1,
+        "the seeded opening is the only Narration: an empty answer persists none"
     );
 }
 

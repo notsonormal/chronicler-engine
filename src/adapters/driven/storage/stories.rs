@@ -14,6 +14,10 @@ use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
 use crate::error::EngineError;
 
+/// The biggest story read there is: the callers that take the whole story pass it,
+/// and the assembler drops the oldest Messages to fit the connection's budget.
+pub const STORY_LIMIT: usize = i32::MAX as usize;
+
 pub struct StoryReads<'a> {
     storage: &'a Storage,
 }

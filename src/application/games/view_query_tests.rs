@@ -1,47 +1,38 @@
 use std::sync::Arc;
 
-use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driving::http::AppState;
 use crate::application::errors::ApplicationError;
 use crate::application::games::view_query::GameViewQuery;
-use crate::application::message_service::MessageService;
-use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::agent::Role;
 use crate::domain::model::game::GameId;
-use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::error::EngineError;
-use crate::test_support::fixtures::{active_game_of, llm_message, TestMap, TestWorld};
-use crate::test_support::{make_test_pipeline_with_backends, make_test_recorder};
+use crate::test_support::fixtures::{active_game_of, llm_message, TestMap, TestPersona, TestWorld};
+use crate::test_support::{TestAppBuilder, TestData};
 
 const NO_GAME: GameId = GameId(0);
 
-fn minimal_state() -> GameState {
-    GameState::new("start")
+/// The app's Game holds its opening Narration: `TestAppBuilder` seeds through the
+/// design's create path.
+fn minimal_data() -> TestData {
+    TestData {
+        world: Arc::new(TestWorld::minimal()),
+        map: Arc::new(TestMap::single_room("start")),
+        persona: Arc::new(TestPersona::standard()),
+        npcs: Vec::new(),
+        room_npcs: Vec::new(),
+    }
 }
 
 fn minimal_app() -> AppState {
-    AppState::from_wired(
-        crate::test_support::make_test_app(minimal_state()).expect("minimal_app should build"),
-    )
+    TestAppBuilder::with_data(minimal_data()).build_service()
 }
 
 fn minimal_app_no_game() -> AppState {
-    let state = minimal_state();
-    let world_arc = Arc::new(TestWorld::minimal());
-    let map_arc = Arc::new(TestMap::single_room("start"));
-    let storage = Arc::new(Storage::new_in_memory());
-    storage.seed_world(&world_arc, &map_arc).unwrap();
-    let _ = storage.save_snapshot(NO_GAME, &GameStateSnapshot::from_game_state(&state));
-    let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
-    let narrator_recorder = make_test_recorder(Arc::clone(&mock));
-    let registry = crate::application::agents::AgentRunner::default();
-    let pipeline =
-        make_test_pipeline_with_backends(Arc::clone(&storage), narrator_recorder, registry);
-    let wired = crate::test_support::build_test_wired_app(Arc::clone(&storage), pipeline, NO_GAME)
-        .expect("build_test_wired_app: build_app_graph_for_tests should succeed");
-    AppState::from_wired(wired)
+    TestAppBuilder::with_data(minimal_data())
+        .skip_seeding(true)
+        .active_game(NO_GAME)
+        .build_service()
 }
 
 #[test]
@@ -137,12 +128,12 @@ fn test_get_npc_headshots_all_empty() {
 
 #[test]
 fn test_get_debug_state_populates_fields() {
-    let app = minimal_app_no_game();
+    let app = minimal_app();
     let debug = app
         .game_view_query
         .get_debug_state(active_game_of(&app))
         .unwrap();
-    assert_eq!(debug.narration_history_length, 0);
+    assert_eq!(debug.narration_history_length, 1);
     assert!(debug.dynamic_rooms.is_empty());
     assert_eq!(debug.dynamic_room_count, 0);
     assert!(debug.last_error.is_none());
@@ -172,7 +163,7 @@ fn test_role_health_reads_each_roles_true_newest_attempt() {
 
     let query = GameViewQuery::new(
         Arc::clone(&storage),
-        Arc::new(MessageService::new(Arc::clone(&storage))),
+        crate::application::generation::gate::GameWriter::new(Arc::clone(&storage)),
     );
     let health = query.role_health().unwrap();
 

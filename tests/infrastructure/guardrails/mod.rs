@@ -159,6 +159,41 @@ fn check_src_files(rule_name: &str, mut check: impl FnMut(&str, &str) -> Vec<Vio
     assert_violations(&errors, rule_name);
 }
 
+/// The violation a path-limited guardrail reports when its scope matches no file:
+/// a stale scope would otherwise pass by checking nothing.
+fn dead_scope_violation(rule_name: &str, scope: &str) -> Violation {
+    Violation::error(
+        "src/",
+        0,
+        format!(
+            "{rule_name}: the scope `{scope}` matches no file under `src/`, so this \
+             path-limited guardrail guards nothing"
+        ),
+    )
+}
+
+/// Runs a path-limited guardrail over `src/`, and fails it when its scope matches no
+/// file.
+fn check_src_files_in_scope(
+    rule_name: &str,
+    scope: &str,
+    mut check: impl FnMut(&str, &str) -> Vec<Violation>,
+) {
+    let files = src_snapshot();
+    let matched = files
+        .iter()
+        .filter(|file| file.path.starts_with(scope))
+        .count();
+    let mut errors = Vec::new();
+    for file in &files {
+        errors.extend(check(&file.path, &file.content));
+    }
+    if matched == 0 {
+        errors.push(dead_scope_violation(rule_name, scope));
+    }
+    assert_violations(&errors, rule_name);
+}
+
 fn check_tests_files(rule_name: &str, mut check: impl FnMut(&str, &str) -> Vec<Violation>) {
     let mut errors = Vec::new();
     for file in tests_snapshot() {
@@ -253,7 +288,21 @@ fn guardrails_file_length_tests() {
 
 #[test]
 fn guardrails_server_layer_boundaries() {
-    check_src_files("server layer boundary", check_server_layer_boundaries);
+    check_src_files_in_scope(
+        "server layer boundary",
+        HTTP_ADAPTER_SCOPE,
+        check_server_layer_boundaries,
+    );
+}
+
+#[test]
+fn a_dead_scope_names_the_guardrail_and_the_scope() {
+    let violation = dead_scope_violation("handler return type", "nowhere/");
+    assert!(
+        violation.message.contains("handler return type") && violation.message.contains("nowhere/"),
+        "{:?}",
+        violation.message
+    );
 }
 
 #[test]
@@ -293,7 +342,11 @@ fn guardrails_http_storage_leak() {
 
 #[test]
 fn guardrails_handler_return_type() {
-    check_src_files("handler return type", check_handler_return_type);
+    check_src_files_in_scope(
+        "handler return type",
+        HTTP_ADAPTER_SCOPE,
+        check_handler_return_type,
+    );
 }
 
 #[test]

@@ -29,11 +29,9 @@ impl GenerationStatus {
     }
 }
 
-/// Coarse enough for the status display to name it in one line.
 impl GenerationFailureKind {
-    /// The one-line sentence the status shows for a failure of this kind. `raw` is
-    /// the failure's own text, which a line that names something reads (a room, a
-    /// piece of data). The words are the design's failure table.
+    /// The words are the design's failure table; only a line that names something
+    /// reads `raw`.
     pub fn line(self, raw: &str) -> String {
         let raw = raw.trim_end_matches('.');
         match self {
@@ -43,6 +41,7 @@ impl GenerationFailureKind {
             Self::TokenBudgetSpent => {
                 "The model used its budget on reasoning. Try another model.".to_string()
             }
+            Self::EmptyText => "The language model gave an empty answer.".to_string(),
             Self::SaveFailed => "The new text could not be saved.".to_string(),
             Self::SceneMissing => format!("The room {raw} is not on the map."),
             Self::PresetMissing => "The active prompt preset is missing.".to_string(),
@@ -77,6 +76,8 @@ pub enum GenerationFailureKind {
     PresetMissing,
     /// A Retry or a Retrigger asked for data the engine cannot read.
     MissingData,
+    /// The model answered, and the answer was empty or only whitespace.
+    EmptyText,
     /// The text was saved, and the game rules could not update the state.
     Contradiction,
     /// The event Narration of a Trigger failed; the raw text holds the failure
@@ -86,8 +87,6 @@ pub enum GenerationFailureKind {
     Other,
 }
 
-/// `kind` drives the one-line status sentence; `raw` fills the details
-/// disclosure.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerationFailure {
     pub kind: GenerationFailureKind,

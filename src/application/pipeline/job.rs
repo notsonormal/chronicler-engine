@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::adapters::driven::storage::worlds::WorldBundle;
+use crate::adapters::driven::storage::stories::STORY_LIMIT;
 use crate::adapters::driven::storage::Storage;
 use crate::application::agents::runner::AgentRunner;
 use crate::application::generation::gate::{
@@ -32,38 +33,25 @@ use crate::domain::model::tail::Tail;
 use crate::domain::model::utils::game_rules::{apply_game_rules, GameRuleRequest};
 use crate::error::EngineError;
 
-/// The biggest story read of one narration: the assembler drops the oldest
-/// Messages to fit the connection's budget, so the read takes the story.
-const STORY_LIMIT: usize = i32::MAX as usize;
-
-/// The collaborators a Job runs with: what the caller wires once. The writer comes
-/// from the accept, and the watch is `None` when the caller runs no tests.
+#[derive(Clone)]
 pub struct JobDeps {
     pub narrator: Arc<Narrator>,
     pub agents: Arc<AgentRunner>,
     pub storage: Arc<Storage>,
-    pub tasks: Option<Arc<JobTasks>>,
+    pub tasks: Arc<JobTasks>,
 }
 
-/// What one generation left the runner: the Swipe it wrote, whether it saved a
-/// Narration, and the Trigger the game rules found.
 struct Generated {
-    /// A Narration of some kind was saved, so the Options run may follow it.
     narration: bool,
     at: SwipeAt,
     fired: Option<EventRecord>,
 }
 
-/// What one application of the game rules left the caller: the Trigger that fired
-/// and the room report the state update carries. The state itself travels in the
-/// caller's own value.
 struct RuleOutcome {
     fired: Option<EventRecord>,
     room_report: Option<String>,
 }
 
-/// Why a step ended the Job: the entry moved on, a save failed, or the generation
-/// failed and its line is the Job's to write.
 #[derive(Debug)]
 enum Failure {
     /// A save unit refused: the Job ends with no further write.
@@ -73,7 +61,6 @@ enum Failure {
 }
 
 impl Failure {
-    /// A step's data is missing or unreadable: the missing-data line names it.
     fn missing(what: &str) -> Self {
         Self::Line(GenerationFailure::new(
             GenerationFailureKind::MissingData,
@@ -106,8 +93,7 @@ impl From<EngineError> for Failure {
     }
 }
 
-/// What ended a generation, and whether a Narration was saved before it: that
-/// Narration still gets its Options run.
+/// A Narration saved before the failure still gets its Options run.
 #[derive(Debug)]
 struct Ended {
     failure: Failure,
@@ -115,7 +101,6 @@ struct Ended {
 }
 
 impl From<Failure> for Ended {
-    /// A failure before the text save leaves no Narration behind.
     fn from(failure: Failure) -> Self {
         Self {
             failure,
@@ -125,8 +110,6 @@ impl From<Failure> for Ended {
 }
 
 impl Ended {
-    /// A failure after the text save: a Narration that landed still gets its
-    /// Options run.
     fn after_text_save(failure: Failure, kind: Kind) -> Self {
         Self {
             failure,
@@ -134,7 +117,6 @@ impl Ended {
         }
     }
 
-    /// The same failure, reported as the event generation's.
     fn into_event_failure(self) -> Self {
         Self {
             failure: self.failure.event_narration_failed(),
@@ -143,8 +125,7 @@ impl Ended {
     }
 }
 
-/// One Job: the plan of one accepted request, run for its own Game. It holds no
-/// record: the records between steps are local variables of the step functions.
+/// Holds no record: the records between steps are locals of the step functions.
 pub struct Job {
     writer: JobWriter,
     narrator: Arc<Narrator>,
@@ -153,9 +134,6 @@ pub struct Job {
 }
 
 impl Job {
-    /// Accepts the request and runs its plan on the blocking pool; the caller
-    /// answers `200` at once. The span carries the game, the job id and the first
-    /// kind and step, and the spawned work runs inside it.
     #[instrument(
         skip(writer, deps, request),
         fields(
@@ -196,15 +174,11 @@ impl Job {
             let _entered = span.enter();
             job.run(plan);
         });
-        if let Some(tasks) = tasks {
-            tasks.watch(handle);
-        }
+        tasks.watch(handle);
         Ok(())
     }
 
-    /// The order of one request: the first generation, then the Trigger's event
-    /// generation, then the Options run. A step that fails ends the Job, and every
-    /// save unit that landed before it stays.
+    /// A step that fails ends the Job, and every save unit that landed before it stays.
     fn run(&self, plan: JobPlan) {
         let JobPlan {
             input,
@@ -233,9 +207,8 @@ impl Job {
         }
     }
 
-    /// A failed step ends the Job. A stop ends it with no Options run and no second
-    /// log; a Narration that was saved before another failure still gets its
-    /// Options run, and then the failure line lands.
+    /// A stop skips the Options run and the second log; another failure runs the
+    /// Options first, then lands the line.
     fn failed(&self, ended: Ended, options: OptionsRun) {
         let stopped = matches!(ended.failure, Failure::Stopped(_));
         if ended.narration_saved && !stopped && options == OptionsRun::AfterNarration {
@@ -249,8 +222,8 @@ impl Job {
         self.end(ended.failure);
     }
 
-    /// One generation: the six steps of the design's step table. The request's
-    /// Input save runs between steps 1 and 2, so an invalid room saves no Input.
+    /// The request's Input save runs after the room check, so an invalid room saves
+    /// no Input.
     fn generate(&self, order: &GenerationOrder, input: Option<&str>) -> Result<Generated, Ended> {
         let kind = order.kind;
         let step = kind.step();
@@ -332,8 +305,6 @@ impl Job {
         })
     }
 
-    /// The event generation a fired Trigger starts: a new Message at the end of the
-    /// story, from the Swipe the state update just saved.
     fn event_order(record: EventRecord, start: SwipeAt) -> GenerationOrder {
         GenerationOrder {
             kind: Kind::Event,
@@ -344,8 +315,7 @@ impl Job {
         }
     }
 
-    /// Sets the status name, then runs the step. Every step goes through here, so a
-    /// step that forgets its name is not a silent stuck status.
+    /// Every step goes through here, so a step cannot forget its status name.
     #[instrument(
         skip(self, run),
         fields(game = %self.writer.game(), job = self.writer.job_id(), kind = ?kind, step = ?step)
@@ -361,8 +331,7 @@ impl Job {
         run()
     }
 
-    /// Whether this Job still runs. A stop or a reset cancels its entry, and the
-    /// Job then starts no further step.
+    /// A stop or a reset cancels the entry, so the Job starts no further step.
     fn require_alive(&self) -> Result<(), Failure> {
         match self.writer.cancelled() {
             Some(token) if !token.is_cancelled() => Ok(()),
@@ -370,14 +339,12 @@ impl Job {
         }
     }
 
-    /// Step 1: the room of the start state lies on the Game's map, with the rooms
-    /// the game rules added. The check writes nothing.
+    /// The room must lie on the Game's map, dynamic rooms included; the check writes
+    /// nothing.
     fn room_check(&self, bundle: &WorldBundle, start: &SwipeState) -> Result<(), Failure> {
         self.resolve_room(bundle, start).map(|_| ())
     }
 
-    /// The room of a start state, or the failure that names it: the check of step
-    /// 1 and the room every prompt reads.
     fn resolve_room<'s>(
         &self,
         bundle: &'s WorldBundle,
@@ -391,7 +358,6 @@ impl Job {
         })
     }
 
-    /// Step 2: the narrator call, with the inputs the design gives it.
     fn narrate_step(
         &self,
         order: &GenerationOrder,
@@ -446,7 +412,6 @@ impl Job {
         }
     }
 
-    /// Step 4: the analysis hook, over the window of the story before the new text.
     fn analyse_step(
         &self,
         order: &GenerationOrder,
@@ -476,10 +441,9 @@ impl Job {
         Ok(self.agents.analysis(&input, &self.analysis_settings()))
     }
 
-    /// Steps 5 and 6: the game rules on the start state, and the values the state
-    /// update writes. An event generation applies the Characters only, so it moves
-    /// nobody, fires no Trigger and clears the trigger context; the room report of
-    /// the opening keeps the room the text save wrote.
+    /// An event generation applies the Characters only: it moves nobody, fires no
+    /// Trigger and clears the trigger context. The room report of the opening keeps
+    /// the room the text save wrote.
     fn apply_rules(
         &self,
         order: &GenerationOrder,
@@ -549,7 +513,6 @@ impl Job {
         Ok(RuleOutcome { fired, room_report })
     }
 
-    /// The Options run: one step per Job, after the last generation.
     fn options_step(&self, run: OptionsRun, after_narration: bool) -> Result<(), Failure> {
         // The toggle decides the run that follows a Narration; `/options` asks for
         // the run itself.
@@ -604,7 +567,6 @@ impl Job {
         })
     }
 
-    /// The scene whose Options the run reads: the kind of the last Message.
     fn scene_kind(tail: &Tail) -> Kind {
         match tail.last.kind {
             Some(MessageKind::EventNarration(_)) => Kind::Event,
@@ -612,9 +574,9 @@ impl Job {
         }
     }
 
-    /// The user message of a narration: the Player's direction for an Impersonate
-    /// turn, the Input's own text for a user regen, the Trigger's continuation
-    /// prompt for an event, and otherwise the Input the new text follows.
+    /// The Player's direction for an Impersonate, the Input's own text for a user
+    /// regen, the Trigger's continuation prompt for an event, and otherwise the Input
+    /// the new text follows.
     fn user_message(
         &self,
         order: &GenerationOrder,
@@ -644,8 +606,6 @@ impl Job {
         })
     }
 
-    /// The event narration's prompt input, built at call time from the Trigger's
-    /// direction and the narration it continues.
     fn continuation_user_message(history: &[MessageEntry], direction: &str) -> String {
         let previous = history
             .last()
@@ -658,8 +618,6 @@ impl Job {
         )
     }
 
-    /// The player's text that led to the new text: what the request typed, else the
-    /// Message the new text follows.
     fn player_text(input: Option<&str>, history: &[MessageEntry]) -> String {
         match input {
             Some(text) if !text.is_empty() => text.to_string(),
@@ -670,7 +628,6 @@ impl Job {
         }
     }
 
-    /// The Input the new text follows, when the story holds one.
     fn previous_input(history: &[MessageEntry]) -> Option<&str> {
         history
             .last()
@@ -678,8 +635,8 @@ impl Job {
             .map(|entry| entry.text.as_str())
     }
 
-    /// The Message the story of a generation ends before: a new Message of an event
-    /// or an Action follows the whole story, and a Retry replaces the last Message.
+    /// A new Message follows the whole story; a Retry replaces the last Message, so
+    /// its window ends before it.
     fn place_before(&self, order: &GenerationOrder) -> Result<Option<u64>, Failure> {
         Ok(match order.place {
             Place::NewMessage => None,
@@ -687,7 +644,6 @@ impl Job {
         })
     }
 
-    /// The newest `limit` Messages before one Message, oldest first.
     fn window_before(&self, before: Option<u64>, limit: usize) -> Result<Vec<StoryRow>, Failure> {
         self.storage
             .stories()
@@ -695,8 +651,6 @@ impl Job {
             .map_err(Failure::from)
     }
 
-    /// Whether the new text lands as a Swipe of the opening: the story holds one
-    /// Message, and the generation writes a new Swipe on it.
     fn is_the_opening(&self, order: &GenerationOrder) -> Result<bool, Failure> {
         if order.place != Place::NewSwipeOnLast {
             return Ok(false);
@@ -704,8 +658,6 @@ impl Job {
         Ok(self.tail()?.count == 1)
     }
 
-    /// A failed step ends the Job: the line lands where the design asks for one,
-    /// and a refused write is logged.
     fn end(&self, failure: Failure) {
         match failure {
             Failure::Line(failure) => {
@@ -750,7 +702,6 @@ impl Job {
         ))
     }
 
-    /// The room of a state: on the map, or one the game rules added.
     fn room_of<'s>(state: &'s SwipeState, map: &'s MapDef) -> Option<&'s Room> {
         map.get_room_by_id(&state.movement.current_room_id)
             .or_else(|| {

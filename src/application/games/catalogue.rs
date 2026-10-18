@@ -5,25 +5,23 @@ use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
 use crate::application::games::active::ActiveGame;
-use crate::application::message_service::MessageService;
 use crate::domain::model::game::{Game, GameId, PresetSelection};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::generate_game_name;
-use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driven::storage::Storage;
+use crate::application::generation::gate::GameWriter;
 
 #[derive(Clone)]
 pub struct GameCatalogue {
     storage: Arc<Storage>,
-    message_service: Arc<MessageService>,
+    game_writer: GameWriter,
     active_game: Arc<ActiveGame>,
 }
 
 impl GameCatalogue {
-    /// The Game the boot resolved; a later move goes through `switch_game`.
     pub fn new(
         storage: Arc<Storage>,
-        message_service: Arc<MessageService>,
+        game_writer: GameWriter,
         active_game: Arc<ActiveGame>,
         initial_game: Option<GameId>,
     ) -> Self {
@@ -32,7 +30,7 @@ impl GameCatalogue {
         }
         Self {
             storage,
-            message_service,
+            game_writer,
             active_game,
         }
     }
@@ -77,14 +75,13 @@ impl GameCatalogue {
             options_always_on: world_card.options_always_on,
         };
 
-        let new_id = storage.create_game_from_request(&request)?;
-        // The pointer moves only once the fresh state is written, so a failed
-        // create leaves the previous Game active (the pointer has no "no Game"
-        // to restore in production).
-        self.persist_initial_state_with_swipes(GameId(new_id))?;
-        self.active_game.set(GameId(new_id));
+        // One create unit: the Game, its empty dock record and the opening Narration.
+        let new_id = self.game_writer.create(&request)?;
+        // The pointer moves only once the unit landed, so a failed create leaves the
+        // previous Game active.
+        self.active_game.set(new_id);
 
-        Ok(new_id)
+        Ok(new_id.0)
     }
 
     pub fn switch_game(&self, id: u64) -> Result<(), ApplicationError> {
@@ -196,8 +193,8 @@ impl GameCatalogue {
     ) -> Result<Game, ApplicationError> {
         let mut game = self.require_game(id)?;
         for (preset_type, new_id) in selection.slots() {
-            // An unchanged stored id is a no-op slot: it skips validation so
-            // saving the form never fails on a stale or deleted selection.
+            // An unchanged stored id skips validation, so saving the form never
+            // fails on a stale or deleted selection.
             if new_id == game.active_preset_id(preset_type) {
                 continue;
             }
@@ -247,12 +244,13 @@ impl GameCatalogue {
             .get_persona(&persona_key)?
             .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
 
-        storage.delete_game(current_id.0)?;
-
+        // The Game being replaced is not yet gone when the name is picked, and the
+        // fresh Game takes its place: its name is no more taken than a removed
+        // Game's is.
         let existing_names: Vec<String> = storage
             .list_games()?
             .into_iter()
-            .filter(|g| g.world_key == world_key)
+            .filter(|g| g.world_key == world_key && g.id != current_id.0)
             .map(|g| g.name)
             .collect();
 
@@ -281,37 +279,11 @@ impl GameCatalogue {
             options_prompt_preset_id: options_preset_id,
             options_always_on: world_card.options_always_on,
         };
-        let new_id = storage.create_game_from_request(&request)?;
-        // The pointer moves before the fresh state is written, so a failed reset
-        // leaves the new Game active.
-        self.active_game.set(GameId(new_id));
-
-        self.persist_initial_state_with_swipes(GameId(new_id))?;
-
+        // The reset creates the fresh Game first and then removes the old one, in
+        // one hold of the writer's guard, so a refused create leaves the old Game
+        // and the pointer as they were.
+        let new_id = self.game_writer.replace(current_id, &request)?;
+        self.active_game.set(new_id);
         Ok(())
-    }
-
-    fn persist_initial_state_with_swipes(&self, game_id: GameId) -> Result<u64, ApplicationError> {
-        let mut initial_state = self.message_service.build_fresh_initial_state(game_id)?;
-        let storage = &self.storage;
-        let snapshot = GameStateSnapshot::from_game_state(&initial_state);
-        let snapshot_id = storage.save_snapshot(game_id, &snapshot)?;
-
-        if let Some(msg) = initial_state.narrative.history.last_mut() {
-            if msg.is_unpersisted() {
-                msg.set_snapshot_id(Some(snapshot_id));
-                match storage.insert_message(game_id, &*msg) {
-                    Ok(id) => {
-                        msg.id = id;
-                        storage.persist_swipes(id, &msg.swipes);
-                    }
-                    Err(e) => {
-                        tracing::error!("persist_initial_state: message insert failed: {e}");
-                    }
-                }
-            }
-        }
-
-        Ok(snapshot_id)
     }
 }

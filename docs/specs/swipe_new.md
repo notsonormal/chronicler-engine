@@ -201,26 +201,6 @@ When the client sends POST /swipe/new
 Then the response is 400 Bad Request
 ```
 
-#### Scenario 11.3: Retry when the anchor message has no snapshot returns 500
-
-```gherkin
-Given a game state where the last Input message exists
-And that message has no Snapshot (none was saved alongside it)
-When the client sends POST /swipe/new
-Then the response is 500 Internal Server Error
-And the generation status is Error, with a failure that names the missing Snapshot
-```
-
-#### Scenario 11.4: Retry when the anchor snapshot was deleted returns 500
-
-```gherkin
-Given a game state where the last Input message has a Snapshot
-And that snapshot row has been removed from the database
-When the client sends POST /swipe/new
-Then the response is 500 Internal Server Error
-And the generation status is Error, with a failure that names the missing Snapshot
-```
-
 #### Scenario 11.5: Retry LLM failure sets Error
 
 ```gherkin
@@ -262,7 +242,7 @@ And the Action that fired the event moved the player into "room2" and marked the
 And a narrator backend that fails only for the trigger continuation prompt (main narration succeeds)
 When the client sends POST /swipe/new
 And the pipeline returns to idle
-Then the generation status is an error whose text mentions "Trigger narration failed"
+Then the generation status is an error whose text is "The event narration failed."
 And the message history still contains the main Narration entry (preserved, not removed)
 And the message history gained no entry for the failure
 And the player is still in "room2"
@@ -281,7 +261,7 @@ Then the generation status is an error
 And the player is still in "room2"
 ```
 
-#### Scenario 11.10: A failed retry that wrote its narration keeps the world it wrote
+#### Scenario 11.10: A failed retry that wrote its narration keeps the state its analysis saved
 
 ```gherkin
 Given a game state whose last Action left the player in "room_1"
@@ -290,8 +270,8 @@ And a quantifier backend that moves the player into "room2" on the retry
 And a narrator backend that fails only for the trigger continuation prompt (the narration succeeds)
 When the client sends POST /swipe/new
 And the pipeline returns to idle
-Then the generation status is an error whose text mentions "Trigger narration failed"
-And the player is in "room2" (the world the retry's narration was written from)
+Then the generation status is an error whose text is "The event narration failed."
+And the player is in "room2" (the state that the retry's analysis saved)
 ```
 
 ### Concurrency
@@ -299,26 +279,27 @@ And the player is in "room2" (the world the retry's narration was written from)
 #### Scenario 12.1: Retry while a generation is already in flight returns "Still thinking..."
 
 ```gherkin
-Given a game state where a generation is already in flight (the generation gate is busy)
+Given a Game whose Job is running
 When the client sends POST /swipe/new
 Then the response is 200 with a "Still thinking..." status string
-And no retry is started (the gate is not claimed)
+And no Swipe is added
 ```
 
 ### Three-way retry
 
-#### Scenario 22.1: Re-impersonate retry generates a new Input swipe
+#### Scenario 22.1: Re-impersonate retry runs the analysis over a new Input swipe
 
 ```gherkin
 Given a game state whose last message is an Input whose active swipe is an impersonation with the impersonate direction "I look around."
 And a narrator backend that returns "I look around cautiously." for the impersonation prompt
+And a quantifier backend that moves the player into "room2" on the redo's analysis
 When the client sends POST /swipe/new
 And the pipeline returns to idle
 Then the message history contains exactly one Input entry (the original message ID unchanged)
 And that Input entry has 2 swipes (one appended by retry)
 And the active swipe's text is "I look around cautiously."
 And the generation status is Idle
-And the player has not moved
+And the player is in "room2" (a re-impersonate runs the analysis)
 ```
 
 #### Scenario 22.2: User-regen retry generates a new Input swipe
@@ -397,12 +378,11 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   movement their generation reports. An event retry applies no movement, so
   the player stays in the room that event narration reported. A user-regen
   retry narrates the replacement message only.
-- **I.7** If a message exists in history, it must have a Snapshot
-  that can be restored. A message without a snapshot (or with
-  a dangling snapshot id) is a data-integrity violation (500), not a user
-  error (400).
+- **I.7** A request whose start state is missing is a data-integrity
+  violation: 500 and the failure line "The data for this request is
+  missing: …", not a user error (400).
 - **I.8** Retry rejects concurrent generation the same way `POST /action`
   does: 200 with a `"Still thinking..."` status, no generation started.
 - **I.9** A failed retry that appended no Swipe leaves the room, the
   encounters and the fired triggers as the click found them. A failed retry
-  that appended a Swipe keeps the game state that Swipe was written from.
+  that appended a Swipe keeps the state that its analysis saved.

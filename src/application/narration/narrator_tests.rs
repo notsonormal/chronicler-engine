@@ -130,7 +130,6 @@ impl Fixture {
         self
     }
 
-    /// `count` narration entries, each long enough to spend tokens.
     fn history_of(&self, count: usize) -> Vec<MessageEntry> {
         (0..count)
             .map(|index| MessageEntry {
@@ -963,9 +962,10 @@ fn test_an_empty_or_whitespace_only_answer_fails() {
         let model = Arc::new(ScriptedModel::new().narration(answer));
         let result = narrate_with(&model, &context, &preset(), TokenBudget::fallback());
         match result {
-            Err(failure) => assert!(
-                failure.raw.contains("empty"),
-                "the failure names the empty answer: {failure:?}"
+            Err(failure) => assert_eq!(
+                failure.kind,
+                crate::domain::model::state::generation_status::GenerationFailureKind::EmptyText,
+                "an empty answer is its own kind, so its own line shows"
             ),
             Ok(narrated) => panic!("an answer of {answer:?} is no narration: {narrated:?}"),
         }
