@@ -192,13 +192,10 @@ the override for its idle life (20 min), so clear it before the next default-siz
 
 ## Delegated screenshot sweeps
 
-The `visual-tester` agent that used to drive `scripts/cdp.mjs` shipped with
-`pi-herdr-subagents` and is gone; pi-herdsman does not replace it. Its five
-bundled definitions (`generalist`, `implementer`, `researcher`, `reviewer`,
-`scout`) all declare `noSkills: true`, and none carries browser extension tools,
-so a sweep needs the method written into the task:
+No role carries the browser extension tools, so a sweep needs the method
+written into the task:
 
-- Use `generalist`: it has `bash` + `read`, and its model
+- Use `implementer`: it has `bash` + `read`, and its model
   (`opencode-go/deepseek-v4.1-flash`) accepts image input, so it can run
   `node scripts/cdp.mjs list` / `shot` / `eval` and then look at the PNGs it
   captured. Verified by having one read `tmp/visual-tester-smoke/01-initial.png`
@@ -207,9 +204,8 @@ so a sweep needs the method written into the task:
   default — then 768, then 375) and the priority scale. The old agent's P0–P3
   went with it, so name the dashboard review's P1–P3
   (`.scratch/dashboard-ui-review/review-2026-09-29.md`).
-- For a standing sweep definition instead of writing the method into a prompt
-  each time, add a new project definition under `<cwd>/.pi/agents/`, which is
-  empty today; a new name is standalone rather than an overlay.
+- For a standing sweep role instead of writing the method into a prompt each
+  time, add a role file under `.pi/agents/`.
 
 ## If the browser stops responding
 

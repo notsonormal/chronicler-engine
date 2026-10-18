@@ -84,7 +84,7 @@ When the browser tools are unavailable, or the check should ship as coverage: re
 
 ## Delegated sweeps
 
-For a broad sweep, delegate to a `generalist` managed agent with the exact `node scripts/cdp.mjs` commands in the task — viewports, method and the review's P1–P3 scale live in ENVIRONMENT.md's *Delegated screenshot sweeps*. Its report does not discharge the look-at-the-shot rule.
+For a broad sweep, delegate to an `implementer` subagent with the exact `node scripts/cdp.mjs` commands in the task — viewports, method and the review's P1–P3 scale live in ENVIRONMENT.md's *Delegated screenshot sweeps*. Its report does not discharge the look-at-the-shot rule.
 
 ## Driving gameplay
 

@@ -33,7 +33,7 @@ Scan for:
 Findings must point to skills or tools invoked in this transcript. Speculative routings to skills the parent never opened do not count. To check whether a skill was used, scan the transcript for:
 
 - `read` tool calls against any `SKILL.md` file (workspace `.agents/skills/`, user-level `~/.pi/agent/skills/`)
-- `agent_delegate` tasks that name a skill path
+- delegation tasks that name a skill path
 - Tool calls (`bash`, `grep`, etc.) that match a skill's documented commands
 
 Two valid finding shapes:

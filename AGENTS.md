@@ -412,13 +412,12 @@ Don't commit without explict approval, even if commiting is allowed in the permi
 
 ## Subagents and delegation extra rules
 
-Prefer to give each subagent a substantial piece of work, because each new subagent pays again to load the context. A skill that runs several subagents, such as code review or parallel wayfinder tickets, keeps its own split.
+Delegate a task only when it is substantial, and do a short task yourself: each new subagent pays again to load the context. A skill that runs several subagents, such as code review or parallel wayfinder tickets, keeps its own split.
 
-Only create `scout` subagents if the current model is Anthropic (e.g. Opus or Sonnet). With a non-Anthropic model, read all the information you need in the current session. This rule is specific to `scout` subagents only.
+`implementer` is the default for implementation work whose brief names the design, the files and the checks. Choose `strong-implementer` when a wrong judgement is expensive:
 
-The latest pi-note gives the current model. For example:
+- the agent must decide questions that the design leaves open;
+- the change must keep many parts consistent across layers;
+- an `implementer` run on the same work came back wrong on points its brief had already decided.
 
-```
-<pi-note> Model: anthropic/claude-opus-5-5 </pi-note>
-<pi-note> Model: opencode-go/deepseek-v4.1-flash </pi-note>
-```
+Give a substantial investigation to a `scout`: work whose result is a finding, such as how a flow works, every place a change must touch, or whether a claim holds, and whose raw reads you will not need again. Name that finding in the brief.

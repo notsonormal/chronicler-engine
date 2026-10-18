@@ -20,23 +20,23 @@ The parent uses its own session file before fanning out. The active session is t
 
 If no path resolves, write a tight digest of the session and pass that instead.
 
-A run that delegated work holds more than one transcript. Pass the session file of every agent the run spawned too, at `~/.pi/agent/sessions/<cwd-slug>/<timestamp>_<session-uuid>.jsonl`, because `agent_transcript` cannot reach those files once the agent exits. Tell the reviewers to grep the large ones rather than read them whole, since those seats have read, ls, find and grep only.
+A run that delegated work holds more than one transcript. Pass the session file of every agent the run spawned too, at `~/.pi/agent/sessions/<cwd-slug>/<timestamp>_<session-uuid>.jsonl`, because the reviewers do not inherit this conversation. Tell the reviewers to grep the large ones rather than read them whole.
 
 ### 2. Spawn three reviewers in parallel
 
-Three `agent_delegate` calls, one seat each, read-only. Pass the session file path or digest in the task; the agents do not inherit this conversation.
+Delegate the three reviews at the same time, one seat each, read-only. Pass the session file path or digest in the task; the agents do not inherit this conversation.
 
 | Lens | Definition | Prompt template |
 |---|---|---|
 | Judgment | `judge-glm` | `references/judgment-reviewer.md` |
 | Tooling | `reviewer` | `references/tooling-reviewer.md` |
-| Divergent | `judge-kimi` | `references/divergent-reviewer.md` |
+| Divergent | `judge-qwen` | `references/divergent-reviewer.md` |
 
 Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return findings in their reply.
 
 ### 3. Synthesize
 
-One `agent_delegate` call on `generalist`. Use `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. The synthesizer returns a structured Accepted / Rejected / Backlog list.
+Delegate the synthesis to `strong-implementer`. Use `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. The synthesizer returns a structured Accepted / Rejected / Backlog list.
 
 ### 4. Structural enforcement check
 
