@@ -7,7 +7,8 @@ use crate::walkers::{
 use crate::SourceFile;
 
 /// The rule number of a fixture row. A fixture proves the walker's reach, never a
-/// design rule, so it carries a number outside the design rule set.
+/// design rule, so it carries a number outside the design rule set; a case that
+/// mirrors a landed row keeps that row's number instead.
 const FIXTURE_RULE: u8 = 99;
 
 pub struct WalkerCase<Row> {
@@ -43,8 +44,6 @@ fn run_cases<Row>(
 }
 
 pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
-    // Case for the rule-1 row; it carries the design rule rather than `FIXTURE_RULE`,
-    // because a landed row stays provable only by a case that mirrors it.
     WalkerCase {
         row: BannedNameRow {
             rule: 1,
@@ -135,11 +134,71 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
         )],
         expected: 0,
     },
+    // The case mirrors the rule-6 row: the writer file names no narrator and no
+    // Agent, not even behind a trait object.
+    WalkerCase {
+        row: BannedNameRow {
+            rule: 6,
+            scope: "application/generation/gate.rs",
+            banned: &[
+                BannedName::NamePrefix("Narrator"),
+                BannedName::NameContains("Agent"),
+            ],
+        },
+        files: &[
+            (
+                "application/generation/gate.rs",
+                "fn run(narrator: &Narrator) {\n    narrator.narrate(&request);\n}\n",
+            ),
+            (
+                "application/generation/gate.rs",
+                "use crate::application::agents::runner::AgentRunner;\n",
+            ),
+            (
+                "application/generation/gate.rs",
+                "fn analyse(hook: Box<dyn AnalysisAgent>) {\n    hook.run();\n}\n",
+            ),
+            (
+                "application/generation/gate.rs",
+                "fn offer(hook: &OptionsAgent) {\n    hook.run();\n}\n",
+            ),
+            (
+                "application/generation/gate.rs",
+                "fn write(&self, text: String) {\n    let kind = MessageKind::Narration;\n}\n",
+            ),
+        ],
+        expected: 4,
+    },
+    // The `NameContains` kind catches a family of names that share one word, and
+    // leaves other names alone.
+    WalkerCase {
+        row: BannedNameRow {
+            rule: FIXTURE_RULE,
+            scope: "application/generation/",
+            banned: &[BannedName::NameContains("Agent")],
+        },
+        files: &[(
+            "application/generation/gate.rs",
+            "fn draft(&self) -> Draft {\n    let draft = Draft::new();\n    draft\n}\n",
+        )],
+        expected: 0,
+    },
+    // The trait-bound walk reaches a bound's own path, which is not a type path.
+    WalkerCase {
+        row: BannedNameRow {
+            rule: FIXTURE_RULE,
+            scope: "application/generation/",
+            banned: &[BannedName::NamePrefix("AnalysisAgent")],
+        },
+        files: &[(
+            "application/generation/gate.rs",
+            "fn analyse(hook: Box<dyn AnalysisAgent>) {\n    hook.run();\n}\n",
+        )],
+        expected: 1,
+    },
 ];
 
 pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
-    // Case for the rule-2 row; it carries the design rule rather than `FIXTURE_RULE`,
-    // because a landed row stays provable only by a case that mirrors it.
     WalkerCase {
         row: CallSiteRow {
             rule: 2,
@@ -264,6 +323,29 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         files: &[("adapters/driving/http/action.rs", "pub fn run() {}\n")],
         expected: 1,
     },
+    WalkerCase {
+        row: CallSiteRow {
+            rule: 3,
+            scope: "",
+            callees: &["TxToken::new"],
+            allowed: &["application/generation/gate.rs", "test_support/"],
+        },
+        files: &[
+            (
+                "application/generation/gate.rs",
+                "fn save(&self) {\n    let token = TxToken::new();\n}\n",
+            ),
+            (
+                "src/adapters/driven/storage/transaction.rs",
+                "fn open(&self) {\n    let token = TxToken::new();\n}\n",
+            ),
+            (
+                "test_support/fixtures.rs",
+                "pub fn tx_token() -> TxToken {\n    TxToken::new()\n}\n",
+            ),
+        ],
+        expected: 1,
+    },
 ];
 
 pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
@@ -319,6 +401,26 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
 ];
 
 pub const CALL_COUNT_CASES: &[WalkerCase<CallCountRow>] = &[
+    WalkerCase {
+        row: CallCountRow {
+            rule: 18,
+            scope: "application/generation/gate.rs",
+            file: None,
+            callee: "hold",
+            max_calls: 1,
+        },
+        files: &[
+            (
+                "application/generation/gate.rs",
+                "fn save(&self) {\n    self.hold(|entries| write(entries));\n}\n",
+            ),
+            (
+                "application/generation/gate.rs",
+                "fn save(&self) {\n    self.hold(|entries| check(entries));\n    self.hold(|entries| write(entries));\n}\n",
+            ),
+        ],
+        expected: 1,
+    },
     WalkerCase {
         row: CallCountRow {
             rule: FIXTURE_RULE,

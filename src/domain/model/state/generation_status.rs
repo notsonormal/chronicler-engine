@@ -47,6 +47,8 @@ pub enum GenerationFailureKind {
     SceneMissing,
     /// The game's active preset is not in the library it names.
     PresetMissing,
+    /// A Retry or a Retrigger asked for data the engine cannot read.
+    MissingData,
     /// Anything the other kinds do not name.
     Other,
 }

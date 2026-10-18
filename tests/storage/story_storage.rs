@@ -15,6 +15,7 @@ use chronicler_engine::domain::model::state::swipe_state::SwipeState;
 use chronicler_engine::domain::model::state::trigger_context::{EventRecord, TriggerRef};
 use chronicler_engine::domain::model::trigger::NpcEncounterLog;
 use chronicler_engine::error::EngineError;
+use chronicler_engine::test_support::tx_token;
 
 const WORLD_KEY: &str = "record_world";
 
@@ -48,7 +49,6 @@ fn state_in(room: &str) -> SwipeState {
     }
 }
 
-/// A Swipe with no state and no maker: a case sets what it pins.
 fn swipe(text: &str) -> Swipe {
     Swipe {
         text: text.to_string(),
@@ -63,7 +63,6 @@ fn swipe(text: &str) -> Swipe {
     }
 }
 
-/// A Narration Swipe of `text`, holding `state` and written by the narrator.
 fn narration_swipe(text: &str, state: SwipeState) -> Swipe {
     Swipe {
         state: Some(state),
@@ -85,12 +84,10 @@ fn event_record() -> EventRecord {
     }
 }
 
-/// One Message of one Swipe, appended to an existing Game. The text and the state
-/// name the Message, so a case can tell it apart.
 fn add_message(storage: &Storage, game: GameId, text: &str, room: &str) -> u64 {
     let mut message_id = 0;
     storage
-        .transaction(game, |tx| {
+        .transaction(game, tx_token(), |tx| {
             let message = Message::new(text, MessageType::Narration, None, None);
             message_id = tx.insert_message(&message)?;
             tx.insert_swipe(
@@ -108,12 +105,11 @@ fn add_message(storage: &Storage, game: GameId, text: &str, room: &str) -> u64 {
     message_id
 }
 
-/// A Game written whole by one create unit: the Game row, one Message and its Swipe.
 fn game_with_message(storage: &Storage, name: &str, text: &str, room: &str) -> (GameId, u64) {
     let mut message_id = 0;
     let mut game_id = GameId(0);
     storage
-        .transaction_new_game(&new_game(name), |new_game_id, tx| {
+        .transaction_new_game(&new_game(name), tx_token(), |new_game_id, tx| {
             game_id = new_game_id;
             let message = Message::new(text, MessageType::Narration, None, None);
             message_id = tx.insert_message(&message)?;
@@ -134,7 +130,7 @@ fn game_with_message(storage: &Storage, name: &str, text: &str, room: &str) -> (
 
 fn game_without_messages(storage: &Storage, name: &str) -> GameId {
     storage
-        .transaction_new_game(&new_game(name), |game_id, _tx| Ok(game_id))
+        .transaction_new_game(&new_game(name), tx_token(), |game_id, _tx| Ok(game_id))
         .expect("the create unit should succeed")
 }
 
@@ -213,7 +209,7 @@ fn the_state_a_unit_wrote_reads_back() {
     };
 
     storage
-        .transaction(game_id, |tx| {
+        .transaction(game_id, tx_token(), |tx| {
             tx.set_swipe_state(at, &state_in("room2"), None)
         })
         .expect("the state update should succeed");
@@ -237,7 +233,7 @@ fn the_state_update_writes_the_room_report_with_the_state() {
     };
 
     storage
-        .transaction(game_id, |tx| {
+        .transaction(game_id, tx_token(), |tx| {
             tx.set_swipe_state(at, &state_in("room2"), Some("Room Two"))
         })
         .expect("the state update should succeed");
@@ -264,7 +260,9 @@ fn a_swipe_whose_state_never_landed_answers_none() {
         swipe: 1,
     };
     storage
-        .transaction(game_id, |tx| tx.insert_swipe(other, &swipe("no state")))
+        .transaction(game_id, tx_token(), |tx| {
+            tx.insert_swipe(other, &swipe("no state"))
+        })
         .expect("the insert should succeed");
 
     let state = storage
@@ -299,6 +297,34 @@ fn a_state_read_of_another_game_is_refused() {
     );
 }
 
+// CASE story-has-text: a story whose Message holds text answers that it has some
+#[test]
+fn a_story_with_text_answers_that_it_has_some() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, _message_id) = game_with_message(&storage, "Story", "text", "room1");
+
+    let has_text = storage
+        .stories()
+        .has_text(game_id)
+        .expect("the story text read should succeed");
+
+    assert!(has_text, "the Message holds text");
+}
+
+// CASE story-has-text-none: a story whose Messages hold no text answers that it has none
+#[test]
+fn a_story_of_empty_text_answers_that_it_has_none() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, _message_id) = game_with_message(&storage, "Story", "", "room1");
+
+    let has_text = storage
+        .stories()
+        .has_text(game_id)
+        .expect("the story text read should succeed");
+
+    assert!(!has_text, "no Message of the story holds text");
+}
+
 // CASE story-write-other-game-message [failure]: a write to another Game's Message is refused
 #[test]
 fn a_write_to_another_game_message_is_refused() {
@@ -306,7 +332,7 @@ fn a_write_to_another_game_message_is_refused() {
     let (_game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
     let other_game = game_without_messages(&storage, "Other");
 
-    let result = storage.transaction(other_game, |tx| {
+    let result = storage.transaction(other_game, tx_token(), |tx| {
         tx.set_active_swipe(SwipeAt {
             message: message_id,
             swipe: 0,
@@ -342,7 +368,7 @@ fn an_entry_carries_the_active_swipe_and_its_headers() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
     let (game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
     storage
-        .transaction(game_id, |tx| {
+        .transaction(game_id, tx_token(), |tx| {
             tx.insert_swipe(
                 SwipeAt {
                     message: message_id,
@@ -395,7 +421,7 @@ fn an_inserted_message_kind_reads_back_through_the_entries_read() {
     let mut message = Message::new("event text", MessageType::Narration, None, None);
     message.kind = Some(MessageKind::EventNarration(event_record()));
     storage
-        .transaction(game_id, |tx| {
+        .transaction(game_id, tx_token(), |tx| {
             let id = tx.insert_message(&message)?;
             tx.insert_swipe(
                 SwipeAt {
@@ -430,7 +456,7 @@ fn a_deleted_message_leaves_the_story() {
     add_message(&storage, game_id, "second text", "room2");
 
     storage
-        .transaction(game_id, |tx| tx.delete_message(first_id))
+        .transaction(game_id, tx_token(), |tx| tx.delete_message(first_id))
         .expect("the delete unit should succeed");
 
     let tail = storage
@@ -453,7 +479,9 @@ fn an_edited_text_lands_and_leaves_the_room_report_alone() {
     };
 
     storage
-        .transaction(game_id, |tx| tx.set_swipe_text(at, "edited text"))
+        .transaction(game_id, tx_token(), |tx| {
+            tx.set_swipe_text(at, "edited text")
+        })
         .expect("the edit unit should succeed");
 
     let entries = storage
@@ -483,7 +511,7 @@ fn the_failed_state_update_rolls_the_whole_unit_back() {
         TestOverride::internal("the state update fails"),
     );
 
-    let result = storage.transaction(game_id, |tx| {
+    let result = storage.transaction(game_id, tx_token(), |tx| {
         let message = Message::new("rolled back", MessageType::Narration, None, None);
         let id = tx.insert_message(&message)?;
         tx.insert_swipe(
@@ -530,7 +558,9 @@ fn the_failure_line_lands_on_the_game_and_reads_back() {
     );
 
     storage
-        .transaction(game_id, |tx| tx.set_game_failure(Some(&failure)))
+        .transaction(game_id, tx_token(), |tx| {
+            tx.set_game_failure(Some(&failure))
+        })
         .expect("the failure unit should succeed");
 
     let stored = storage
@@ -550,11 +580,13 @@ fn a_cleared_failure_line_reads_back_as_none() {
         "the model wrote nothing",
     );
     storage
-        .transaction(game_id, |tx| tx.set_game_failure(Some(&failure)))
+        .transaction(game_id, tx_token(), |tx| {
+            tx.set_game_failure(Some(&failure))
+        })
         .expect("the failure unit should succeed");
 
     storage
-        .transaction(game_id, |tx| tx.set_game_failure(None))
+        .transaction(game_id, tx_token(), |tx| tx.set_game_failure(None))
         .expect("the clearing unit should succeed");
 
     let cleared = storage
@@ -575,7 +607,7 @@ fn the_dock_record_lands_whole_and_reads_back() {
     };
 
     storage
-        .transaction(game_id, |tx| tx.put_dock(&record))
+        .transaction(game_id, tx_token(), |tx| tx.put_dock(&record))
         .expect("the dock unit should succeed");
 
     let stored = storage
@@ -600,7 +632,7 @@ fn the_dock_record_carries_its_notice() {
     };
 
     storage
-        .transaction(game_id, |tx| tx.put_dock(&record))
+        .transaction(game_id, tx_token(), |tx| tx.put_dock(&record))
         .expect("the dock unit should succeed");
 
     let stored = storage
@@ -617,7 +649,7 @@ fn a_cleared_dock_record_keeps_its_row() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
     let game_id = game_without_messages(&storage, "Docked");
     storage
-        .transaction(game_id, |tx| {
+        .transaction(game_id, tx_token(), |tx| {
             tx.put_dock(&DockRecord {
                 offered: vec!["look around".to_string()],
                 notice: Some(Notice {
@@ -629,7 +661,7 @@ fn a_cleared_dock_record_keeps_its_row() {
         .expect("the dock unit should succeed");
 
     storage
-        .transaction(game_id, |tx| tx.clear_dock())
+        .transaction(game_id, tx_token(), |tx| tx.clear_dock())
         .expect("the clearing unit should succeed");
 
     let stored = storage

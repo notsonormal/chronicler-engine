@@ -198,7 +198,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Game lifecycle orchestration and read-side queries.
       - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
     - **generation/**
-      - `gate.rs` — GenerationGate — per-game slot orchestration. The registry is the live "is generating" truth; the persisted `GenerationStatus` carries the durable phase.
+      - `gate.rs` — GenerationGate, GameWriter and JobWriter — today's per-game slot registry, and the writer rule and the guard of the rebuild beside it.
       - `guard.rs` — Generation guard logic
       - `mod.rs` — Generation gating and per-game slot orchestration.
       - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
@@ -276,6 +276,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **utils/**
         - `game_name.rs` — Game name generation with date-based disambiguation.
         - `game_rules.rs` — The game rules: movement, the Characters present and the Triggers, as a pure function of the Swipe state
+        - `generation_record.rs` — What a generation writes as a record: its Message kind, its message type and its maker
         - `mod.rs` — Domain model utility modules.
         - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings/preset services and preset storage.
         - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.

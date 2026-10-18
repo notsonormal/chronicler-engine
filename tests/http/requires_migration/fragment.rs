@@ -8,6 +8,9 @@ use axum::{
 };
 use tower::util::ServiceExt;
 
+use chronicler_engine::test_support::{
+    active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel,
+};
 use chronicler_engine::TestAppBuilder;
 
 use chronicler_engine::domain::model::message::{Message, Swipe};
@@ -18,9 +21,6 @@ use chronicler_engine::adapters::driving::http::AppState;
 use crate::support::app_wiring::app_with_model;
 use crate::support::http_requests::{fetch_body, post_action, wait_settled};
 use crate::TEST_PERSONA;
-use chronicler_engine::test_support::{
-    active_game_of, analysis_report, ScriptedModel, empty_sqlite_storage,
-};
 
 fn one_turn_app() -> (axum::Router, AppState) {
     TestAppBuilder::default_test()

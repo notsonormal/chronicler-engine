@@ -10,7 +10,6 @@ use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType, StoryRow};
 use crate::domain::model::state::trigger_context::EventRecord;
 
-/// A role's health is its newest LLM attempt across every game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     /// Writes the turn's narration.
@@ -41,7 +40,6 @@ impl Role {
     }
 }
 
-/// A point in a generation where the Job runs the Agents registered for that hook.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Hook {
@@ -52,9 +50,6 @@ pub enum Hook {
     Options,
 }
 
-/// The kind of one generation: how it was asked for, which decides how the
-/// Narrator writes it and what may follow it. A typed Input is no generation,
-/// so it has no kind here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// A player Action or a Retry of one.
@@ -67,7 +62,6 @@ pub enum Kind {
     Event,
 }
 
-/// One Message the Agents read: the kind of text it holds and its text.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoryEntry {
     pub message_type: MessageType,
@@ -103,7 +97,7 @@ pub struct WorldView<'a> {
     pub present: &'a [NpcCard],
 }
 
-/// An Agent writes no game record: the hook step owns every read and write.
+/// The hook step owns every read and write an Agent needs.
 pub struct HookInput<'a> {
     pub kind: Kind,
     /// The text the Job saved, for a hook that runs after the narrator call.

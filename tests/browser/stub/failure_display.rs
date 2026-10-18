@@ -885,7 +885,7 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     );
 }
 
-const FAILURE_KINDS: [GenerationFailureKind; 8] = [
+const FAILURE_KINDS: [GenerationFailureKind; 9] = [
     GenerationFailureKind::Unreachable,
     GenerationFailureKind::PromptTooLong,
     GenerationFailureKind::UnreadableAnswer,
@@ -893,6 +893,7 @@ const FAILURE_KINDS: [GenerationFailureKind; 8] = [
     GenerationFailureKind::SaveFailed,
     GenerationFailureKind::SceneMissing,
     GenerationFailureKind::PresetMissing,
+    GenerationFailureKind::MissingData,
     GenerationFailureKind::Other,
 ];
 
@@ -907,6 +908,7 @@ fn assert_kind_is_listed(kind: GenerationFailureKind) {
         | GenerationFailureKind::SaveFailed
         | GenerationFailureKind::SceneMissing
         | GenerationFailureKind::PresetMissing
+        | GenerationFailureKind::MissingData
         | GenerationFailureKind::Other => {}
     }
 }
@@ -995,11 +997,14 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
         let (baseline_input, baseline_area) = measure_action_area(&page).await;
         for kind in FAILURE_KINDS {
             assert_kind_is_listed(kind);
-            let sentence = generation_failure_summary(kind);
-            status.set(StubStatus::Error(
-                kind,
-                format!("stub raw failure for {kind:?}"),
-            ));
+            // The missing-data line carries what is missing, so this check uses a
+            // name a real failure carries; the other kinds ignore the raw text.
+            let raw = match kind {
+                GenerationFailureKind::MissingData => "the story".to_string(),
+                _ => format!("stub raw failure for {kind:?}"),
+            };
+            let sentence = generation_failure_summary(kind, &raw);
+            status.set(StubStatus::Error(kind, raw));
             poll_now(&page, "#status-display").await;
             assert!(
                 wait_for_condition_async(

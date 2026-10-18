@@ -5,11 +5,10 @@ use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrit
 use chronicler_engine::domain::model::game::{GameId, NewGame};
 use chronicler_engine::domain::model::message::SwipeAt;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
+use chronicler_engine::test_support::tx_token;
 
 const WORLD_KEY: &str = "seam_world";
-/// A Message time the wall clock cannot reach while these cases run.
 const FUTURE_MESSAGE_TIME: &str = "2099-01-01T00:00:00+00:00";
-/// A Message time older than every `updated_at` these cases write.
 const PAST_MESSAGE_TIME: &str = "2020-01-01T00:00:00+00:00";
 
 fn backends() -> Vec<(&'static str, Storage)> {
@@ -47,8 +46,6 @@ fn create_game(storage: &Storage, name: &str) -> GameId {
     GameId(id)
 }
 
-/// The newest Message of `game_id` carries the fixed `stamp`, so its key is
-/// known without reading the wall clock.
 fn insert_message_at(storage: &Storage, game_id: GameId, stamp: &str) {
     let mut message = chronicler_engine::test_support::dummy_message("hello");
     message.timestamp = DateTime::parse_from_rfc3339(stamp)
@@ -68,7 +65,7 @@ fn tx_rollback_leaves_no_row_when_the_second_write_fails() {
         TestOverride::internal("the second write fails"),
     );
 
-    let result = storage.transaction(game_id, |tx| {
+    let result = storage.transaction(game_id, tx_token(), |tx| {
         let message = chronicler_engine::test_support::dummy_message("hello");
         let message_id = tx.insert_message(&message)?;
         tx.insert_swipe(
@@ -93,7 +90,9 @@ fn transaction_new_game_writes_the_game_row() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
 
     let game_id = storage
-        .transaction_new_game(&new_game("First", WORLD_KEY), |game_id, _tx| Ok(game_id))
+        .transaction_new_game(&new_game("First", WORLD_KEY), tx_token(), |game_id, _tx| {
+            Ok(game_id)
+        })
         .expect("the create unit should succeed");
 
     let stored = storage
@@ -114,11 +113,14 @@ fn transaction_new_game_rolls_back_when_a_later_write_fails() {
         TestOverride::internal("the later write fails"),
     );
 
-    let result =
-        storage.transaction_new_game(&new_game("Rolled back", WORLD_KEY), |game_id, tx| {
+    let result = storage.transaction_new_game(
+        &new_game("Rolled back", WORLD_KEY),
+        tx_token(),
+        |game_id, tx| {
             tx.delete_game()?;
             Ok(game_id)
-        });
+        },
+    );
 
     assert!(result.is_err(), "the injected failure fails the unit");
     assert!(
@@ -132,7 +134,7 @@ fn transaction_new_game_rolls_back_when_a_later_write_fails() {
 fn transaction_refuses_the_in_memory_backend() {
     let storage = Storage::new_in_memory();
 
-    let result = storage.transaction(GameId(1), |_tx| Ok(()));
+    let result = storage.transaction(GameId(1), tx_token(), |_tx| Ok(()));
 
     assert!(
         result.is_err(),
@@ -145,8 +147,6 @@ fn transaction_refuses_the_in_memory_backend() {
 fn newest_game_of_world_uses_the_newest_message() {
     for (label, storage) in backends() {
         let with_message = create_game(&storage, "With message");
-        // A second Game with a newer `updated_at`: the Message of the first
-        // still answers.
         create_game(&storage, "Without message");
         insert_message_at(&storage, with_message, FUTURE_MESSAGE_TIME);
 
@@ -164,7 +164,6 @@ fn newest_game_of_world_falls_back_to_updated_at() {
     for (label, storage) in backends() {
         let with_old_message = create_game(&storage, "With old message");
         insert_message_at(&storage, with_old_message, PAST_MESSAGE_TIME);
-        // A Game with no Message is keyed by its `updated_at`, which is now.
         let without_message = create_game(&storage, "Without message");
 
         assert_eq!(

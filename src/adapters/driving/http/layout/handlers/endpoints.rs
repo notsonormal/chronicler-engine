@@ -105,7 +105,7 @@ pub async fn generating_status_handler(
     if let Some(failure) = status.failure() {
         Html(error_disclosure(
             "status-error-popover",
-            generation_failure_summary(failure.kind),
+            &generation_failure_summary(failure.kind, &failure.raw),
             &raw_error_detail(&failure.raw),
         ))
     } else if is_gen {

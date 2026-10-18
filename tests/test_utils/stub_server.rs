@@ -884,7 +884,7 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
         StubStatus::Phase(phase) => phase,
         StubStatus::Error(kind, raw) => error_disclosure(
             "status-error-popover",
-            generation_failure_summary(kind),
+            &generation_failure_summary(kind, &raw),
             &raw_error_detail(&raw),
         ),
     };

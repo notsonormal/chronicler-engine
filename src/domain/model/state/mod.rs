@@ -17,3 +17,5 @@ mod game_state_snapshot_tests;
 mod game_state_tests;
 #[cfg(test)]
 mod generation_status_tests;
+#[cfg(test)]
+mod swipe_state_tests;

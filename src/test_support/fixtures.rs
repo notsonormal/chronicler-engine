@@ -15,6 +15,7 @@ use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::adapters::driven::storage::TxToken;
 use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::world::{WorldCard, WorldManifest};
@@ -616,12 +617,17 @@ pub fn sqlite_storage() -> Result<Storage, crate::error::EngineError> {
     Ok(Storage::new_sqlite(pool))
 }
 
-/// SQLite in memory with no Game row, unlike `sqlite_storage`.
 pub fn empty_sqlite_storage() -> Storage {
     let pool = DbPool::new(":memory:")
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on a storage failure"
         .expect("test setup: in-memory SQLite must open");
     Storage::new_sqlite(pool)
+}
+
+/// The token a storage test's unit needs: `TxToken`'s constructor is crate-only,
+/// and the storage seam contract is a test crate.
+pub fn tx_token() -> TxToken {
+    TxToken::new()
 }
 
 pub fn dummy_message(text: &str) -> Message {

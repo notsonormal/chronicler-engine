@@ -9,9 +9,16 @@ use crate::Violation;
 pub fn check_import_ordering(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let mut last_group = 0u8;
+    // A `use …::{` statement spans lines; its continuation lines are part of the
+    // statement, so the walk resumes after its `;`.
+    let mut in_use = false;
 
     for (line_num, line) in content.lines().enumerate() {
         let trimmed = line.trim_start();
+        if in_use {
+            in_use = !trimmed.ends_with(';');
+            continue;
+        }
         if !trimmed.starts_with("use ") {
             // Blank lines and comments are allowed between use statements
             if trimmed.is_empty() || trimmed.starts_with("//") {
@@ -24,6 +31,7 @@ pub fn check_import_ordering(path: &str, content: &str) -> Vec<Violation> {
             }
             continue;
         }
+        in_use = !trimmed.ends_with(';');
 
         let group = if trimmed.starts_with("use std::")
             || trimmed.starts_with("use core::")

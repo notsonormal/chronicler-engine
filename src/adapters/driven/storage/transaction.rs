@@ -28,8 +28,19 @@ pub enum TxWrite {
     ClearDock,
 }
 
-/// Held open by `Storage::transaction`; it lands whole or rolls back. Every
-/// write goes to the Game the `Tx` holds, so no write can reach another Game:
+/// The capability a unit of record writes needs. Its constructor is crate-only, so a
+/// unit opens in `gate.rs` and nowhere else; a test gets its token from
+/// `test_support`. A hold hands a clone to each unit it opens.
+#[derive(Clone)]
+pub struct TxToken(());
+
+impl TxToken {
+    pub(crate) fn new() -> Self {
+        Self(())
+    }
+}
+
+/// Every write goes to the Game the `Tx` holds, so no write can reach another Game:
 /// one unit serves one Game, and the create unit holds the Game it just wrote.
 ///
 /// The closure makes no `Storage` call, which would wait on the backend mutex
@@ -49,8 +60,8 @@ impl<'a> Tx<'a> {
         Self { conn, writes, game }
     }
 
-    /// The Game row of the create unit. It lands before the `Tx` exists, so the
-    /// unit's writes already know the Game they write.
+    /// The row lands before the `Tx` exists, so the unit's writes already know the
+    /// Game they write.
     pub(crate) fn write_game_row(
         conn: &rusqlite::Connection,
         request: &NewGame,
@@ -82,8 +93,8 @@ impl<'a> Tx<'a> {
         Ok(GameId(conn.last_insert_rowid() as u64))
     }
 
-    /// The unit's Game row, and the records the schema cascades from it. A reset
-    /// removes the active Game in this unit and creates the new one in its own.
+    /// The Game row, with the records the schema cascades from it. A reset removes
+    /// the active Game in this unit and creates the new one in its own.
     pub fn delete_game(&mut self) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::DeleteGame)?;
         self.conn
@@ -95,7 +106,6 @@ impl<'a> Tx<'a> {
         Ok(())
     }
 
-    /// The new row's id comes back, so the Swipes of the same unit can name it.
     pub fn insert_message(&mut self, message: &Message) -> Result<u64, EngineError> {
         self.writes.fail_if_injected(TxWrite::InsertMessage)?;
         let message_type_json = serde_json::to_string(&message.message_type)
@@ -129,7 +139,7 @@ impl<'a> Tx<'a> {
         Ok(())
     }
 
-    /// One Message of the unit's Game, with the rows the schema cascades from it.
+    /// Deleting the Message takes the rows the schema cascades from it.
     pub fn delete_message(&mut self, message: u64) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::DeleteMessage)?;
         require_message_of_game(&self.conn, message, self.game)?;
@@ -179,8 +189,6 @@ impl<'a> Tx<'a> {
         Ok(())
     }
 
-    /// The state and the room report of one Swipe, written together: the state
-    /// update of a generation.
     pub fn set_swipe_state(
         &mut self,
         at: SwipeAt,
@@ -203,7 +211,6 @@ impl<'a> Tx<'a> {
         Ok(())
     }
 
-    /// The failure line of the unit's Game: none, or a kind with its raw text.
     pub fn set_game_failure(
         &mut self,
         failure: Option<&GenerationFailure>,
@@ -218,14 +225,13 @@ impl<'a> Tx<'a> {
         Ok(())
     }
 
-    /// The dock record of the unit's Game, written whole: one record per Game.
     pub fn put_dock(&mut self, record: &DockRecord) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::PutDock)?;
         self.write_dock(record)
     }
 
-    /// The dock record of the unit's Game stays, with no offered set and no
-    /// notice: a Game holds one dock record.
+    /// The row stays, with no offered set and no notice: a Game holds one dock
+    /// record.
     pub fn clear_dock(&mut self) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::ClearDock)?;
         self.write_dock(&DockRecord::default())
@@ -259,7 +265,7 @@ impl Storage {
     /// Holds the backend mutex for the closure's whole run; an `Err` or a panic
     /// from `f` rolls the unit back. The unit serves `game`, and it cannot write
     /// another Game's rows.
-    pub fn transaction<F, T>(&self, game: GameId, f: F) -> Result<T, EngineError>
+    pub fn transaction<F, T>(&self, game: GameId, _token: TxToken, f: F) -> Result<T, EngineError>
     where
         F: FnOnce(&mut Tx<'_>) -> Result<T, EngineError>,
     {
@@ -280,7 +286,12 @@ impl Storage {
 
     /// The create unit: the Game row goes first, so its id reaches the writes
     /// that follow it in the same unit.
-    pub fn transaction_new_game<F, T>(&self, request: &NewGame, f: F) -> Result<T, EngineError>
+    pub fn transaction_new_game<F, T>(
+        &self,
+        request: &NewGame,
+        _token: TxToken,
+        f: F,
+    ) -> Result<T, EngineError>
     where
         F: FnOnce(GameId, &mut Tx<'_>) -> Result<T, EngineError>,
     {

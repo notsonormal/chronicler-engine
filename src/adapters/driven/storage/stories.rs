@@ -79,6 +79,30 @@ impl StoryReads<'_> {
             })
     }
 
+    /// Whether any Message of the story holds text: `/options` needs something to
+    /// work from. One `EXISTS` query, and no Swipe state.
+    pub fn has_text(&self, game: GameId) -> Result<bool, EngineError> {
+        self.storage
+            .with_backend_mut("stories_has_text", |backend| match backend {
+                Backend::Sqlite { pool } => {
+                    let conn = pool.conn();
+                    let found: i64 = conn
+                        .query_row(
+                            "SELECT EXISTS(SELECT 1 FROM messages m \
+                             JOIN message_swipes s ON s.message_id = m.id AND s.swipe_index = m.active_swipe_index \
+                             WHERE m.game_id = ?1 AND m.is_deleted = 0 AND TRIM(COALESCE(s.text, '')) <> '')",
+                            rusqlite::params![game.0 as i64],
+                            |row| row.get(0),
+                        )
+                        .map_err(|e| {
+                            EngineError::Config(format!("Failed to read the story text: {e}"))
+                        })?;
+                    Ok(found != 0)
+                }
+                Backend::InMemory(_) => Err(no_in_memory("stories_has_text")),
+            })
+    }
+
     /// One entry per Message, of the `limit` newest Messages before `before`
     /// (exclusive), oldest first. An entry holds the text, the kind, the room
     /// report, the event header and the Swipe count of one Message, and no Swipe

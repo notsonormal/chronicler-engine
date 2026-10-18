@@ -23,7 +23,7 @@ pub mod worlds;
 
 pub use core::*;
 pub use in_memory_data::*;
-pub use transaction::{Tx, TxWrite};
+pub use transaction::{Tx, TxToken, TxWrite};
 
 #[cfg(feature = "testing")]
 pub use test_support::{TestFailureHandle, TestOverride};
