@@ -411,7 +411,7 @@ Don't commit without explict approval, even if commiting is allowed in the permi
 
 ## Subagents and delegation extra rules
 
-Prefer single long running subagents over multiple smaller subagents because it's more expensive to load up twice the context. This is a preference, some workflows/skills specificially use multiple subagents, such as some code review workflows or when implementing multiple wayfinder tickets at once.
+Prefer to give each subagent a substantial piece of work, because each new subagent pays again to load the context. A skill that runs several subagents, such as code review or parallel wayfinder tickets, keeps its own split.
 
 Only create `scout` subagents if the current model is Anthropic (e.g. Opus or Sonnet). With a non-Anthropic model, read all the information you need in the current session. This rule is specific to `scout` subagents only.
 

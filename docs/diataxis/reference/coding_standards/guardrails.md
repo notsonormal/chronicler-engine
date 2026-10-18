@@ -74,12 +74,12 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | enum variant docs | Requires every enum variant to have a `///` doc unless the enum is marked `/// [TRIVIAL_ENUM]`. | `tests/infrastructure/guardrails/enums.rs:69` |
 | free fn location | Restricts top-level free functions to allowlisted category folders or exempt paths. | `tests/infrastructure/guardrails/free_fn.rs:31` |
 | inherent impl locality | Checks all files in `src/` for inherent impls that violate the module-per-type rule. | `tests/infrastructure/guardrails/inherent_impl.rs:15` |
-| wiredapp scope | Restricts `WiredApp` imports to composition-root, HTTP, test-support, and test scopes. | `tests/infrastructure/guardrails/layers.rs:13` |
-| messages swipes separation | Ensures `storage/messages.rs` never references the `message_swipes` table. | `tests/infrastructure/guardrails/layers.rs:54` |
-| handler return type | Requires server handlers to return `Response<Body>` instead of `(StatusCode, String)`. | `tests/infrastructure/guardrails/layers.rs:86` |
-| form fields urlencoded safe | Flags collection-typed fields on HTTP form structs. | `tests/infrastructure/guardrails/layers.rs:130` |
-| server layer boundaries | Prevents server-layer files from referencing `GameState` directly. | `tests/infrastructure/guardrails/layers.rs:196` |
-| http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:228` |
+| wiredapp scope | Restricts `WiredApp` imports to composition-root, HTTP, test-support, and test scopes. | `tests/infrastructure/guardrails/layers.rs:9` |
+| messages swipes separation | Ensures `storage/messages.rs` never references the `message_swipes` table. | `tests/infrastructure/guardrails/layers.rs:50` |
+| handler return type | Requires server handlers to return `Response<Body>` instead of `(StatusCode, String)`. | `tests/infrastructure/guardrails/layers.rs:91` |
+| form fields urlencoded safe | Flags collection-typed fields on HTTP form structs. | `tests/infrastructure/guardrails/layers.rs:133` |
+| server layer boundaries | Prevents HTTP-layer files from referencing the whole-state types directly. | `tests/infrastructure/guardrails/layers.rs:199` |
+| http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:236` |
 | test file naming | Rejects unit-test files with the singular `_test.rs` suffix in favor of `_tests.rs`. | `tests/infrastructure/guardrails/location.rs:7` |
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |
