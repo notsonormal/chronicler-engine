@@ -13,7 +13,6 @@ use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
-use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::body_text;
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::test_support::ScriptedModel;
@@ -22,6 +21,7 @@ use chronicler_engine::test_support::empty_sqlite_storage;
 
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::{app_with_model_and_storage, app_with_production_graph};
+use crate::support::http_fixtures::append_narrations;
 use crate::support::http_requests::{post_action, wait_settled};
 use crate::test_utils::card_html_slice;
 
@@ -812,7 +812,7 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
         quantifier_connection_id: "narration-conn".into(),
         ..AppSettings::default()
     };
-    let (app, state, _storage) = app_with_model_and_storage(
+    let (app, state, storage) = app_with_model_and_storage(
         Arc::new(empty_sqlite_storage()),
         model,
         settings,
@@ -821,22 +821,12 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
     let game_id = chronicler_engine::test_support::active_game_of(&state);
 
     // A story log long enough that the window's size shows in the prompt.
-    {
-        let mut seeded = state.message_service.load_or_fresh(game_id);
-        for index in 0..150 {
-            seeded.add_message(
-                format!(
-                    "Story entry {index}: the long tale of the inn, told again at length \
-                     for everyone who came to listen that evening."
-                ),
-                MessageType::Narration,
-            );
-        }
-        state
-            .message_service
-            .save_message_and_snapshot(game_id, &mut seeded)
-            .expect("the seeded story log saves");
-    }
+    append_narrations(&storage, game_id, 150, |index| {
+        format!(
+            "Story entry {index}: the long tale of the inn, told again at length \
+             for everyone who came to listen that evening."
+        )
+    });
 
     assert!(post_action(&app, "first look").await.status().is_success());
     assert!(

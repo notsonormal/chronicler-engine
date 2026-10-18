@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use axum::Router;
 
-use crate::application::errors::ProcessActionResult;
 use crate::application::pipeline::ActionPipeline;
 use crate::test_support::context::{configured_runner, make_test_pipeline_with_backends};
 use crate::test_support::fixtures::make_test_recorder_with_storage;
@@ -17,7 +16,7 @@ use crate::domain::model::message::SwipeAt;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
-use crate::domain::model::state::generation_status::{GenerationStatus, Step};
+use crate::domain::model::state::generation_status::GenerationFailure;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driving::http::builders::router::build_router;
@@ -29,13 +28,12 @@ pub struct TestAppBuilder {
     test_data: Option<TestData>,
     logs: Vec<(String, MessageType)>,
     last_trigger: Option<StoredTriggerContext>,
-    generation: Option<(GenerationStatus, Step)>,
+    failure: Option<GenerationFailure>,
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
     pipeline: Option<ActionPipeline>,
     model: Option<Arc<ScriptedModel>>,
     skip_seeding: bool,
-    claim_generation_slot: bool,
     active_game: Option<GameId>,
 }
 
@@ -47,13 +45,12 @@ impl TestAppBuilder {
             ),
             logs: vec![],
             last_trigger: None,
-            generation: None,
+            failure: None,
             settings: AppSettings::default(),
             storage: None,
             pipeline: None,
             model: None,
             skip_seeding: false,
-            claim_generation_slot: false,
             active_game: None,
         }
     }
@@ -84,8 +81,9 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn generation_status(mut self, status: GenerationStatus, phase: Step) -> Self {
-        self.generation = Some((status, phase));
+    /// The record the status reads when no Job runs.
+    pub fn failure(mut self, failure: GenerationFailure) -> Self {
+        self.failure = Some(failure);
         self
     }
 
@@ -94,15 +92,15 @@ impl TestAppBuilder {
         self
     }
 
-    /// Injected pipelines (`.pipeline(...)`) are rebound to this storage instance.
+    /// Injected pipelines are rebound to this storage instance.
     pub fn storage(mut self, storage: Arc<Storage>) -> Self {
         self.storage = Some(storage);
         self
     }
 
-    /// The pipeline is rebound to this builder's storage, so any storage
-    /// instance used to construct it is discarded. Pass the same `Arc` via
-    /// `.storage(...)` when the test mutates storage the pipeline should read.
+    /// The pipeline is rebound to this builder's storage: pass the same `Arc`
+    /// via `.storage(...)` when the test mutates storage the pipeline should
+    /// read.
     pub fn pipeline(mut self, pipeline: ActionPipeline) -> Self {
         self.pipeline = Some(pipeline);
         self
@@ -113,19 +111,13 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn claim_generation_slot(mut self) -> Self {
-        self.claim_generation_slot = true;
-        self
-    }
-
     pub fn skip_seeding(mut self, value: bool) -> Self {
         self.skip_seeding = value;
         self
     }
 
-    /// The Game the built app points at. Only needed with
-    /// `skip_seeding(true)`: the builder cannot see the Game a test seeds
-    /// itself.
+    /// Only needed with `skip_seeding(true)`: the builder cannot see the Game a
+    /// test seeds itself.
     pub fn active_game(mut self, game_id: GameId) -> Self {
         self.active_game = Some(game_id);
         self
@@ -141,29 +133,30 @@ impl TestAppBuilder {
         (build_router(app_state.clone()), app_state)
     }
 
-    /// Writes the seeded story as the records the app reads: each Message with one
-    /// Swipe, holding the app's starting state.
     fn seed_story_records(
         storage: &Arc<Storage>,
         game_id: GameId,
+        data: &TestData,
         state: &GameState,
     ) -> crate::error::Result<()> {
         storage.transaction(game_id, crate::test_support::tx_token(), |tx| {
             if state.narrative.history().is_empty() {
                 // The design's Game always holds an opening Narration, and the app's
-                // reads are the story reads, so a seeded Game gets one.
-                let mut message = Message::new(String::new(), MessageType::Narration, None, None);
-                message.kind = Some(MessageKind::Narration);
-                let message_id = tx.insert_message(&message)?;
-                let mut swipe = crate::test_support::dummy_swipe("");
-                swipe.maker = Some(crate::domain::model::message::Maker::WorldOpening);
-                swipe.state = Some(state.swipe.clone());
+                // reads are the story reads, so a seeded Game gets one. It is the
+                // create unit's own build, with the state this fixture seeds.
+                let mut opening = crate::domain::model::utils::opening::opening_message(
+                    &data.world,
+                    &data.map,
+                    &data.persona.sheet.name,
+                );
+                opening.swipes[0].state = Some(state.swipe.clone());
+                let message_id = tx.insert_message(&opening)?;
                 tx.insert_swipe(
                     SwipeAt {
                         message: message_id,
                         swipe: 0,
                     },
-                    &swipe,
+                    &opening.swipes[0],
                 )?;
             }
             for entry in state.narrative.history() {
@@ -240,11 +233,6 @@ impl TestAppBuilder {
             state.narrative.last_trigger = Some(trigger);
         }
 
-        if let Some((status, phase)) = self.generation.clone() {
-            state.narrative.input_buffer.status = status;
-            state.narrative.input_buffer.step = phase;
-        }
-
         for (text, log_type) in self.logs {
             state.add_message(text, log_type);
         }
@@ -252,10 +240,9 @@ impl TestAppBuilder {
         if let Some(game_id) = seeded_game {
             let snapshot = GameStateSnapshot::from_game_state(&state);
             let _ = storage.save_snapshot(game_id, &snapshot);
-            // The seeded story lands as the design's records only: writing it twice
-            // (once through the old write path, once through the new) would double
-            // every entry the story reads return.
-            let _ = Self::seed_story_records(&storage, game_id, &state);
+            // The story lands once: writing it twice would double every entry
+            // the story reads return.
+            let _ = Self::seed_story_records(&storage, game_id, &test_data, &state);
         }
 
         let _ = storage.save_settings(&self.settings);
@@ -273,33 +260,15 @@ impl TestAppBuilder {
         }
 
         let game_id = self.active_game.or(seeded_game);
-        // Point the app before wiring, so the boot heal runs against the Game
-        // the test seeded.
+        // Point the app before wiring, so the wired graph names the Game the test
+        // seeded.
         let wired = build_app_graph_for_tests(Arc::clone(&storage), pipeline_override, game_id)
             .expect("build_app_graph_for_tests should succeed");
 
-        if self.claim_generation_slot {
-            // `try_claim` is the production claim path and also writes a
-            // persisted `Generating`; a later `generation_status` overrides
-            // that record, which is how a test scripts a busy slot against a
-            // stale persisted status.
-            let game_id = game_id.expect("test setup: claim_generation_slot needs an active game");
-            let mut claim_state = wired.message_service.load_or_fresh(game_id);
-            let claim =
-                wired
-                    .generation_gate
-                    .try_claim(game_id, &mut claim_state, &wired.message_service);
-            assert!(
-                matches!(&claim, Ok((_, _, ProcessActionResult::Started))),
-                "test fixture failed to claim the generation slot: {claim:?}"
-            );
-        }
-
-        if let (Some(game_id), Some((status, phase))) = (game_id, self.generation.clone()) {
-            let mut state = wired.message_service.load_or_fresh(game_id);
-            state.narrative.input_buffer.status = status;
-            state.narrative.input_buffer.step = phase;
-            let _ = wired.message_service.save_state(game_id, &state);
+        if let (Some(game_id), Some(failure)) = (game_id, self.failure.take()) {
+            let _ = storage.transaction(game_id, crate::test_support::tx_token(), |tx| {
+                tx.set_game_failure(Some(&failure))
+            });
         }
 
         (AppState::from_wired(wired), storage)

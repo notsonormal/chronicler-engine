@@ -18,7 +18,6 @@ use crate::error::EngineError;
 struct PreparedData {
     storage: Arc<Storage>,
     active_game_id: GameId,
-    persona_key: String,
 }
 
 struct StateResources {
@@ -82,12 +81,14 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         }
     };
 
+    // The persona is checked before the Game is resolved, so an unknown persona
+    // stops the boot with its own error on both the create and the resume path.
+    storage.require_persona(&args.persona)?;
     let active_game_id =
         resolve_boot_game(&storage, &world_with_map.world_card.key, &args.persona)?;
     Ok(PreparedData {
         storage,
         active_game_id,
-        persona_key: args.persona.clone(),
     })
 }
 
@@ -137,10 +138,7 @@ fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
         .map_err(|e| EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime")))?;
 
     // The Game's opening Narration and its Swipe state come from the create unit,
-    // so the boot reads no state and writes nothing. `resolve_boot_game` checks the
-    // persona only on the create path, so the check stands here for both paths.
-    let _persona = data.storage.require_persona(&data.persona_key)?;
-
+    // so the boot reads no state and writes nothing.
     let wired = build_app_graph(Arc::clone(&data.storage), Some(data.active_game_id))?;
 
     Ok(StateResources { runtime, wired })

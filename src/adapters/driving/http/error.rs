@@ -42,9 +42,11 @@ impl IntoResponse for Refusal {
             Refusal::BadRequest(message) => {
                 (StatusCode::BAD_REQUEST, render_error(&message)).into_response()
             }
-            Refusal::MissingData(message) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, render_error(&message)).into_response()
-            }
+            Refusal::Failed(failure) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                render_error(&failure.line()),
+            )
+                .into_response(),
         }
     }
 }

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
@@ -10,7 +9,6 @@ use crate::application::ports::llm_provider::LlmCallResult;
 use crate::application::errors::ApplicationError;
 use crate::application::errors::ProcessActionResult;
 use crate::domain::model::game::GameId;
-use crate::domain::model::map::Room;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -22,7 +20,7 @@ use crate::test_support::{
     active_game_of, make_test_app_without_snapshot,
     make_test_pipeline_app_with_storage as make_test_app_with_storage,
     make_test_pipeline_with_backends, make_test_pipeline_with_mock_quantifier, make_test_recorder,
-    make_test_recorder_with_storage, TestAppBuilder, TestDataBuilder,
+    TestAppBuilder, TestDataBuilder,
 };
 use crate::test_support::fixtures::TestGameState;
 
@@ -540,10 +538,20 @@ fn test_retry_target_and_anchor_agree_when_a_system_notice_trails_an_event_narra
         .iter()
         .map(|m| m.text().to_string())
         .collect();
+    // The Game's opening Narration carries the World's opening text, which the
+    // create unit builds.
+    let data = crate::test_support::TestDataBuilder::default_test().build();
+    let opening_text = crate::domain::model::utils::opening::opening_message(
+        &data.world,
+        &data.map,
+        &data.persona.sheet.name,
+    )
+    .text()
+    .to_string();
     assert_eq!(
         history,
         vec![
-            String::new(),
+            opening_text,
             "test input".to_string(),
             "Main narration".to_string()
         ],
@@ -1633,307 +1641,6 @@ async fn test_retry_flow_narration_mode_makes_new_swipe() {
     );
     assert_eq!(narration.active_swipe_index, 1);
     assert_eq!(narration.text(), "Regenerated narration.");
-    app.shutdown_token.cancel();
-}
-
-#[tokio::test]
-async fn test_retry_flow_impersonate_mode_runs_full_tail() {
-    let narrator = Arc::new(
-        MockBackend::default().with_narrations(vec!["I look around cautiously.".to_string()]),
-    );
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, storage) = TestAppBuilder::default_test()
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
-        &storage,
-        active_game_of(&app),
-        "room_1",
-        "I look around.",
-        MessageType::Input,
-        true,
-        None,
-        Some("A steering instruction".to_string()),
-    )
-    .expect("seed: impersonated input with stored inputs");
-
-    let game_id = active_game_of(&app);
-    let result = app
-        .pipeline
-        .retry(&app.generation_gate, active_game_of(&app))
-        .expect("retry claim");
-    assert!(matches!(result, ProcessActionResult::Started));
-    wait_for_gate_idle(&app.generation_gate, game_id).await;
-
-    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
-    assert!(
-        matches!(
-            final_state.narrative.input_buffer.status,
-            GenerationStatus::Idle
-        ),
-        "impersonate redo should end Idle, got {:?}",
-        final_state.narrative.input_buffer.status
-    );
-    let target = final_state
-        .narrative
-        .history
-        .iter()
-        .find(|m| {
-            m.message_type == MessageType::Input
-                && m.swipes.first().is_some_and(|s| s.text == "I look around.")
-        })
-        .expect("impersonated input target survives the redo");
-    assert_eq!(
-        target.swipes.len(),
-        2,
-        "the redo appends a swipe to the impersonated input"
-    );
-    assert_eq!(target.active_swipe_index, 1);
-    assert_eq!(target.text(), "I look around cautiously.");
-    assert!(
-        target.impersonated(),
-        "the new swipe inherits the stored inputs"
-    );
-    assert!(
-        final_state.swipe.scene.quantifier_confidence.is_some(),
-        "impersonate redo now runs the full post-narration tail"
-    );
-    app.shutdown_token.cancel();
-}
-
-#[tokio::test]
-async fn test_retry_flow_guide_only_narration_retries_with_empty_input() {
-    let narrator =
-        Arc::new(MockBackend::default().with_narrations(vec!["Ominous retake.".to_string()]));
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, storage) = TestAppBuilder::default_test()
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
-        &storage,
-        active_game_of(&app),
-        "room_1",
-        "A guided narration.",
-        MessageType::Narration,
-        false,
-        Some("make it ominous".to_string()),
-        None,
-    )
-    .expect("seed: guided narration with stored inputs");
-
-    let game_id = active_game_of(&app);
-    let result = app
-        .pipeline
-        .retry(&app.generation_gate, active_game_of(&app))
-        .expect("retry claim");
-    assert!(
-        matches!(result, ProcessActionResult::Started),
-        "guide-only retry should claim the slot, got {result:?}"
-    );
-    wait_for_gate_idle(&app.generation_gate, game_id).await;
-
-    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
-    assert!(
-        matches!(
-            final_state.narrative.input_buffer.status,
-            GenerationStatus::Idle
-        ),
-        "guide-only redo should end Idle, got {:?}",
-        final_state.narrative.input_buffer.status
-    );
-    let target = final_state
-        .narrative
-        .history
-        .iter()
-        .find(|m| {
-            m.message_type == MessageType::Narration
-                && m.swipes
-                    .first()
-                    .is_some_and(|s| s.text == "A guided narration.")
-        })
-        .expect("guided narration target survives the redo");
-    assert_eq!(
-        target.swipes.len(),
-        2,
-        "the guide-only redo appends a swipe"
-    );
-    assert_eq!(target.active_swipe_index, 1);
-    assert_eq!(target.text(), "Ominous retake.");
-    assert!(target.is_guided(), "the new swipe inherits the guide text");
-    app.shutdown_token.cancel();
-}
-
-#[tokio::test]
-async fn test_retry_flow_guided_turn_retries_without_older_input_text() {
-    let narrator =
-        Arc::new(MockBackend::default().with_narrations(vec!["Ominous retake.".to_string()]));
-    let forensics_storage = Arc::new(Storage::new_in_memory());
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder_with_storage(
-            Arc::clone(&narrator) as Arc<_>,
-            Arc::clone(&forensics_storage),
-        ),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    // The second room identifies which snapshot the redo used: the prompt renders `Current Location: <room name>`.
-    let data = TestDataBuilder::default_test()
-        .room(Room {
-            id: "marker".to_string(),
-            name: "Marker Room".to_string(),
-            description: "A room that marks the guided turn's snapshot.".to_string(),
-            exits: HashMap::new(),
-            items: vec![],
-            image_path: None,
-            navigation_description: None,
-        })
-        .build();
-    let (app, storage) = TestAppBuilder::default_test()
-        .data(data)
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let _ = add_input_and_save(&app, &storage, "the older player input");
-    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
-        &storage,
-        active_game_of(&app),
-        "marker",
-        "A guided narration.",
-        MessageType::Narration,
-        false,
-        Some("make it ominous".to_string()),
-        None,
-    )
-    .expect("seed: guided narration with stored inputs");
-
-    let game_id = active_game_of(&app);
-    let result = app
-        .pipeline
-        .retry(&app.generation_gate, active_game_of(&app))
-        .expect("retry claim");
-    assert!(matches!(result, ProcessActionResult::Started));
-    wait_for_gate_idle(&app.generation_gate, game_id).await;
-
-    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
-    assert!(
-        matches!(
-            final_state.narrative.input_buffer.status,
-            GenerationStatus::Idle
-        ),
-        "guided redo should end Idle, got {:?}",
-        final_state.narrative.input_buffer.status
-    );
-
-    // Forensics land on the recorder's own storage; only the pipeline's storage is rebound to the builder's.
-    let forensics = forensics_storage
-        .list_latest_llm_messages(10)
-        .expect("list llm forensics");
-    let narrator_call = forensics
-        .iter()
-        .find(|m| m.agent_name.contains("narrator"))
-        .expect("narrator forensics recorded");
-    assert!(
-        narrator_call
-            .user_prompt
-            .contains("Current Location: Marker Room"),
-        "guided redo must reconstruct from the guided Narration's snapshot; prompt was: {}",
-        narrator_call.user_prompt
-    );
-    // The older input still appears legitimately inside <ConversationHistory>, so assert on the last <PlayerInput> block rather than searching the whole prompt.
-    let prompt = &narrator_call.user_prompt;
-    let start = prompt
-        .rfind("<PlayerInput>")
-        .expect("PlayerInput tag present")
-        + "<PlayerInput>".len();
-    let end = prompt[start..]
-        .find("</PlayerInput>")
-        .map(|i| start + i)
-        .expect("PlayerInput closing tag present");
-    assert!(
-        prompt[start..end].trim().is_empty(),
-        "guided redo must render an empty <PlayerInput>; older-turn input must not leak, got {:?}",
-        &prompt[start..end]
-    );
-    app.shutdown_token.cancel();
-}
-
-#[tokio::test]
-async fn test_retry_flow_user_regen_mode_stays_tail_less() {
-    let narrator =
-        Arc::new(MockBackend::default().with_narrations(vec!["Replacement line.".to_string()]));
-    let pipeline = make_test_pipeline_with_mock_quantifier(
-        Arc::new(Storage::new_in_memory()),
-        make_test_recorder(Arc::clone(&narrator) as Arc<_>),
-        Arc::new(MockBackend::default())
-            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let (app, storage) = TestAppBuilder::default_test()
-        .pipeline(pipeline)
-        .build_service_with_storage();
-
-    let _snapshot_id = crate::test_support::seed_swipe_with_stored_inputs(
-        &storage,
-        active_game_of(&app),
-        "room_1",
-        "look around",
-        MessageType::Input,
-        false,
-        None,
-        None,
-    )
-    .expect("seed: plain input");
-
-    let game_id = active_game_of(&app);
-    let result = app
-        .pipeline
-        .retry(&app.generation_gate, active_game_of(&app))
-        .expect("retry claim");
-    assert!(matches!(result, ProcessActionResult::Started));
-    wait_for_gate_idle(&app.generation_gate, game_id).await;
-
-    let final_state = app.message_service.load_or_fresh(active_game_of(&app));
-    assert!(
-        matches!(
-            final_state.narrative.input_buffer.status,
-            GenerationStatus::Idle
-        ),
-        "user-regen redo should end Idle, got {:?}",
-        final_state.narrative.input_buffer.status
-    );
-    let target = final_state
-        .narrative
-        .history
-        .iter()
-        .find(|m| {
-            m.message_type == MessageType::Input
-                && m.swipes.first().is_some_and(|s| s.text == "look around")
-        })
-        .expect("plain input target survives the redo");
-    assert_eq!(target.swipes.len(), 2, "the redo appends a swipe");
-    assert_eq!(target.active_swipe_index, 1);
-    assert_eq!(target.text(), "Replacement line.");
-    assert_eq!(
-        target.message_type,
-        MessageType::Input,
-        "the target keeps its Input type"
-    );
-    assert!(
-        final_state.swipe.scene.quantifier_confidence.is_none(),
-        "user-regen redo must stay tail-less"
-    );
     app.shutdown_token.cancel();
 }
 

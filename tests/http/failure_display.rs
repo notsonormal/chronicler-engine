@@ -9,13 +9,18 @@ use tower::util::ServiceExt;
 use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::domain::model::state::generation_status::{
-    GenerationFailure, GenerationFailureKind, GenerationStatus, Step,
+    GenerationFailure, GenerationFailureKind,
 };
+use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::fixtures::llm_message;
+use chronicler_engine::test_support::{ModelRole, ScriptedModel};
 use chronicler_engine::test_support::TestAppBuilder;
 use chronicler_engine::test_support::empty_sqlite_storage;
 
-use crate::support::http_requests::{fetch_body, post_form};
+use crate::support::app_wiring::app_with_model;
+use crate::support::http_assertions::status_error_message;
+use crate::support::http_fixtures::{break_start_room, corrupt_start_state};
+use crate::support::http_requests::{fetch_body, post_action, post_form, wait_for_jobs, wait_settled};
 // [docs/specs/failure_display.md] SCENARIO: 38.1
 #[tokio::test]
 async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
@@ -207,14 +212,11 @@ async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
 // [docs/specs/failure_display.md] SCENARIO: 38.2
 #[tokio::test]
 async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
-    let state = TestAppBuilder::default_test().build_service();
-    {
-        let mut game_state = state.message_service.load_or_fresh(active_game_of(&state));
-        game_state.swipe.movement.current_room_id = "non_existent_room".to_string();
-        let _ = state
-            .message_service
-            .save_state(active_game_of(&state), &game_state);
-    }
+    let storage = Arc::new(empty_sqlite_storage());
+    let state = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_service();
+    break_start_room(&storage, active_game_of(&state), "non_existent_room");
     let app = build_router(state);
 
     let request = Request::builder()
@@ -241,13 +243,10 @@ async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
 #[tokio::test]
 async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
     let state = TestAppBuilder::default_test()
-        .generation_status(
-            GenerationStatus::Error(GenerationFailure {
-                kind: GenerationFailureKind::Unreachable,
-                raw: "LLM Error: connection refused".to_string(),
-            }),
-            Step::Narrating,
-        )
+        .failure(GenerationFailure::new(
+            GenerationFailureKind::Unreachable,
+            "LLM Error: connection refused",
+        ))
         .build_service();
     let app = build_router(state);
 
@@ -270,13 +269,10 @@ async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
 #[tokio::test]
 async fn test_missing_preset_failure_clamps_with_the_preset_line() {
     let state = TestAppBuilder::default_test()
-        .generation_status(
-            GenerationStatus::Error(GenerationFailure {
-                kind: GenerationFailureKind::PresetMissing,
-                raw: "Prompt preset not found: system_default".to_string(),
-            }),
-            Step::Narrating,
-        )
+        .failure(GenerationFailure::new(
+            GenerationFailureKind::PresetMissing,
+            "Prompt preset not found: system_default",
+        ))
         .build_service();
     let app = build_router(state);
 
@@ -302,13 +298,10 @@ async fn test_missing_preset_failure_clamps_with_the_preset_line() {
 async fn test_spent_token_budget_clamps_with_its_own_line() {
     let raw = "LLM returned no answer after spending its whole token budget (2048 completion tokens, 2041 of them reasoning)";
     let state = TestAppBuilder::default_test()
-        .generation_status(
-            GenerationStatus::Error(GenerationFailure {
-                kind: GenerationFailureKind::TokenBudgetSpent,
-                raw: raw.to_string(),
-            }),
-            Step::Narrating,
-        )
+        .failure(GenerationFailure::new(
+            GenerationFailureKind::TokenBudgetSpent,
+            raw,
+        ))
         .build_service();
     let app = build_router(state);
 
@@ -374,5 +367,107 @@ async fn test_failed_user_action_is_not_a_failed_poll() {
     assert!(
         body_str.contains("update_game_config failure"),
         "the failure text must reach the client: {body_str}"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.9
+#[tokio::test]
+async fn test_empty_answer_keeps_its_own_line_clamps() {
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().empty(ModelRole::Narration)));
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 1000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The language model gave an empty answer."),
+        "an empty answer keeps its own line: {body}"
+    );
+    assert!(
+        !body.contains("answer could not be read"),
+        "an empty answer is not an unreadable answer: {body}"
+    );
+    let narrations = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .expect("the story log reads back")
+        .into_iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 1,
+        "the empty answer saves no Narration, so the opening is the only one"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.10
+#[tokio::test]
+async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
+    // The start state's encounter log names a Character the World does not hold,
+    // so the game rules refuse to apply the analysis. The narration itself answers
+    // and is saved first.
+    let storage = Arc::new(empty_sqlite_storage());
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("The room waits.")
+                .analysis("{\"npcs_in_room\": [], \"movement\": null}"),
+        ))
+        .build_with_state();
+    corrupt_start_state(&storage, active_game_of(&state), |broken| {
+        broken
+            .npc_encounter_log
+            .set_currently_meeting("a_ghost_the_world_lacks", true);
+    });
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 1000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The text was saved, but the game state could not be updated."),
+        "a contradiction keeps its own line: {body}"
+    );
+    let raw = "npc_encounter_log references unknown NPC";
+    assert!(
+        status_error_message(&body).contains(raw),
+        "the disclosure holds the raw internal message: {body}"
+    );
+    assert_eq!(
+        body.matches(raw).count(),
+        1,
+        "the raw internal message appears once, inside the disclosure: {body}"
+    );
+    let narrations: Vec<_> = state
+        .message_service
+        .load_messages(active_game_of(&state))
+        .expect("the story log reads back")
+        .into_iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .collect();
+    assert_eq!(
+        narrations.len(),
+        2,
+        "the opening Narration and the Action's"
+    );
+    assert_eq!(
+        narrations.last().map(|message| message.text().to_string()),
+        Some("The room waits.".to_string()),
+        "the text the Job saved stays when the state update is refused"
     );
 }

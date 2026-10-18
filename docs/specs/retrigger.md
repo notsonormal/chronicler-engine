@@ -9,26 +9,26 @@ Endpoint: `POST /retrigger`
 #### Scenario 13.1: Retrigger creates a new event narration message and does not roll back state
 
 ```gherkin
-Given a game state where narrative.last_trigger is set (a trigger context exists)
-And the last message is a non-event Narration (the main narration)
-And narrative.history contains N messages
+Given a Game whose current state holds a trigger context
+And the last Message is a non-event Narration (the main narration)
+And the story log holds N Messages
 And a narrator backend that returns a non-empty continuation for the trigger prompt
 When the client sends POST /retrigger
 And the pipeline returns to idle
-Then message_service.load_messages() contains N+1 messages (the original history is preserved; the new event narration is appended, not a replacement)
-And the new message is a Narration entry whose event_header is Some(...)
-And message_service.load_or_fresh().narrative.input_buffer.status is Idle
+Then the story log holds N+1 Messages (the original history is preserved; the new event narration is appended, not a replacement)
+And the new Message is an event Narration (it carries an event header)
+And the generation status is Idle
 ```
 
 #### Scenario 13.2: Retrigger does not move the player
 
 ```gherkin
-Given a game state where narrative.last_trigger is set
-And the last message is a non-event Narration
-And movement.current_room_id == "room2"
+Given a Game whose current state holds a trigger context
+And the last Message is a non-event Narration
+And the player stands in "room2"
 When the client sends POST /retrigger
 And the pipeline returns to idle
-Then message_service.load_or_fresh().movement.current_room_id is still "room2" (a retrigger applies no movement)
+Then the player still stands in "room2" (a retrigger applies no movement)
 ```
 
 ### Retrigger error cases
@@ -36,25 +36,16 @@ Then message_service.load_or_fresh().movement.current_room_id is still "room2" (
 #### Scenario 14.1: Retrigger with no trigger context returns 400
 
 ```gherkin
-Given a game state where narrative.last_trigger is None
+Given a Game whose current state holds no trigger context
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 And no generation is started
 ```
 
-#### Scenario 14.2: Retrigger with no messages returns 400
-
-```gherkin
-Given a game state with no messages in history
-When the client sends POST /retrigger
-Then the response is 400 Bad Request
-```
-
 #### Scenario 14.3: Retrigger when the last message is not a narration returns 400
 
 ```gherkin
-Given a game state where narrative.last_trigger is set
-And the last message is an Input message (not a Narration)
+Given a Game whose last Message is an Input message (not a Narration)
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 ```
@@ -62,8 +53,7 @@ Then the response is 400 Bad Request
 #### Scenario 14.4: Retrigger when the last message is an event continuation returns 400
 
 ```gherkin
-Given a game state where narrative.last_trigger is set
-And the last message is an event Narration (has event_header)
+Given a Game whose last Message is an event Narration that a Trigger appended
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 ```
@@ -71,8 +61,8 @@ Then the response is 400 Bad Request
 #### Scenario 14.5: Retrigger trigger narration failure sets Error
 
 ```gherkin
-Given a game state with a stored trigger context
-And the last message is a non-event Narration
+Given a Game whose current state holds a trigger context
+And the last Message is a non-event Narration
 And a narrator backend that fails for the trigger continuation prompt
 When the client sends POST /retrigger
 And the pipeline returns to idle

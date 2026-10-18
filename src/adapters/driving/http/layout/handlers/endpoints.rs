@@ -5,9 +5,7 @@ use axum::body::Body;
 use axum::{extract::State, response::Html, response::Response};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::{
-    error_disclosure, generation_failure_summary, raw_error_detail,
-};
+use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
 use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::AppState;
 
@@ -80,7 +78,7 @@ pub async fn generating_status_handler(
         Ok(crate::application::games::view_query::Status::Failed(failure)) => {
             Html(error_disclosure(
                 "status-error-popover",
-                &generation_failure_summary(failure.kind, &failure.raw),
+                &failure.line(),
                 &raw_error_detail(&failure.raw),
             ))
         }

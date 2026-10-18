@@ -23,7 +23,7 @@ use crate::domain::model::generation::{GenerationOrder, Place};
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::message::{StoredInputs, SwipeAt};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::quantifier::{NpcEventList, QuantifierResult};
+use crate::domain::model::quantifier::{MovementParseResult, QuantifierResult};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
 use crate::domain::model::state::message_types::{MessageEntry, MessageKind, MessageType, StoryRow};
@@ -62,10 +62,7 @@ enum Failure {
 
 impl Failure {
     fn missing(what: &str) -> Self {
-        Self::Line(GenerationFailure::new(
-            GenerationFailureKind::MissingData,
-            what,
-        ))
+        Self::Line(GenerationFailure::missing_record(what, None))
     }
 
     /// A failed event generation reports the event line, with the line of the
@@ -74,7 +71,7 @@ impl Failure {
         match self {
             Self::Line(failure) => Self::Line(GenerationFailure::new(
                 GenerationFailureKind::EventNarrationFailed,
-                failure.kind.line(&failure.raw),
+                failure.line(),
             )),
             Self::Stopped(stopped) => Self::Stopped(stopped),
         }
@@ -125,7 +122,6 @@ impl Ended {
     }
 }
 
-/// Holds no record: the records between steps are locals of the step functions.
 pub struct Job {
     writer: JobWriter,
     narrator: Arc<Narrator>,
@@ -189,6 +185,12 @@ impl Job {
         if let Some(order) = first {
             let generated = match self.generate(&order, input.as_deref()) {
                 Ok(generated) => generated,
+                // A failed event generation names the event wherever it runs: the
+                // second generation of a Narration's Job, or the redo of an event
+                // Narration.
+                Err(ended) if order.kind == Kind::Event => {
+                    return self.failed(ended.into_event_failure(), options);
+                }
                 Err(ended) => return self.failed(ended, options),
             };
             saved_a_narration = generated.narration;
@@ -207,8 +209,6 @@ impl Job {
         }
     }
 
-    /// A stop skips the Options run and the second log; another failure runs the
-    /// Options first, then lands the line.
     fn failed(&self, ended: Ended, options: OptionsRun) {
         let stopped = matches!(ended.failure, Failure::Stopped(_));
         if ended.narration_saved && !stopped && options == OptionsRun::AfterNarration {
@@ -257,7 +257,6 @@ impl Job {
         })?;
         let at = saved.at();
 
-        // A user regen ends at the text save: no analysis, no state update.
         if kind == Kind::UserRegen {
             return Ok(Generated {
                 narration: false,
@@ -266,8 +265,8 @@ impl Job {
             });
         }
 
-        // The analysis reads the four Messages before the new text, so the window
-        // ends at the Message the text save made.
+        // The analysis must not see the new text, so the window ends at the Message
+        // the text save made.
         let history: Vec<MessageEntry> = self
             .window_before(Some(at.message), STORY_WINDOW)?
             .iter()
@@ -339,8 +338,6 @@ impl Job {
         }
     }
 
-    /// The room must lie on the Game's map, dynamic rooms included; the check writes
-    /// nothing.
     fn room_check(&self, bundle: &WorldBundle, start: &SwipeState) -> Result<(), Failure> {
         self.resolve_room(bundle, start).map(|_| ())
     }
@@ -351,9 +348,11 @@ impl Job {
         start: &'s SwipeState,
     ) -> Result<&'s Room, Failure> {
         Self::room_of(start, &bundle.map).ok_or_else(|| {
-            Failure::Line(GenerationFailure::new(
-                GenerationFailureKind::SceneMissing,
+            // The engine has no error behind this one: the room it stands in is
+            // simply not on the map.
+            Failure::Line(GenerationFailure::missing_room(
                 Self::room_name(bundle, &start.movement.current_room_id),
+                None,
             ))
         })
     }
@@ -441,9 +440,8 @@ impl Job {
         Ok(self.agents.analysis(&input, &self.analysis_settings()))
     }
 
-    /// An event generation applies the Characters only: it moves nobody, fires no
-    /// Trigger and clears the trigger context. The room report of the opening keeps
-    /// the room the text save wrote.
+    /// An event generation writes no room report, so the opening's room stays the one
+    /// the text save wrote.
     fn apply_rules(
         &self,
         order: &GenerationOrder,
@@ -457,16 +455,18 @@ impl Job {
                 .event
                 .as_ref()
                 .ok_or_else(|| Failure::missing("the event record"))?;
-            let previous: Vec<String> = state
-                .scene
-                .npcs_in_area
-                .iter()
-                .map(|npc| npc.id.clone())
-                .collect();
-            let events = NpcEventList::from_diff(&previous, &analysis.npcs.npc_ids).events;
+            // An event generation moves nobody and fires no Trigger: the movement
+            // is taken out, and the Trigger the rules report is ignored.
+            let still = QuantifierResult {
+                movement: MovementParseResult::default(),
+                ..analysis.clone()
+            };
             apply_game_rules(
                 state,
-                GameRuleRequest::NpcEvents(&events),
+                GameRuleRequest::Analysis {
+                    quantifier_result: &still,
+                    persona_name: &bundle.persona.sheet.name,
+                },
                 &bundle.map,
                 &bundle.npcs,
             )
@@ -482,7 +482,6 @@ impl Job {
             )
             .map_err(Self::contradiction)?;
             state.trigger_context = None;
-            // An event Narration shows no room.
             return Ok(RuleOutcome {
                 fired: None,
                 room_report: None,

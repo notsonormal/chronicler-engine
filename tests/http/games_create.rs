@@ -94,9 +94,9 @@ async fn test_create_game_handler() {
         !scenario_msg.swipes.is_empty(),
         "the scenario message must carry its first swipe"
     );
-    // The initial GameStateSnapshot is written by the same
-    // `save_message_and_snapshot` call as the message; snapshots are not a
-    // tier-1 read surface, so `message_service_tests` asserts it through the seam.
+    // The create unit writes the opening Message and the Swipe that carries the
+    // state the Game starts from; the Swipe's own state is not a tier-1 read
+    // surface, so this test reads the records the story reads return.
 }
 
 // [docs/specs/games.md] SCENARIO: 17.2

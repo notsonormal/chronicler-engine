@@ -62,13 +62,9 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
         };
 
         let Some(room) = Self::resolve_room(state, &bundle.map) else {
-            // The line names the room, so its raw text is the room id.
             return Err(self.run.set_error(
                 state,
-                GenerationFailure::new(
-                    GenerationFailureKind::SceneMissing,
-                    state.swipe.movement.current_room_id.clone(),
-                ),
+                GenerationFailure::missing_room(state.swipe.movement.current_room_id.clone(), None),
             ));
         };
 

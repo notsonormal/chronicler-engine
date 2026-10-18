@@ -11,8 +11,7 @@ Endpoints:
 #### Scenario 1.1: Successful action produces exactly one narration and returns to Idle
 
 ```gherkin
-Given a fresh game state with the default test world loaded
-And the message history is empty
+Given a Game whose story log holds only its opening Narration
 And an LLM backend that returns "You see a small wooden room." for any narration prompt
 When the client POST /action with command="look"
 And the pipeline returns to idle (status not generating)
@@ -25,7 +24,7 @@ And the generation status is Idle
 #### Scenario 1.2: User input is persisted in history before the narration message
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And an LLM backend that returns "It is a small wooden room." for the narration prompt
 When the client POST /action with command="examine the room"
 And the pipeline returns to idle
@@ -53,7 +52,7 @@ And the generation status is Idle
 #### Scenario 1.5: Empty input produces a continuation narration without adding a player-input message
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns "The scene continues." for the continuation prompt
 When the client POST /action with command="" (empty)
 And the pipeline returns to idle
@@ -113,7 +112,7 @@ And a quantifier backend that moves the player to "room2" for the first Action a
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="walk north"
 And the pipeline returns to idle
-Then the Narration message reports the room "Room room2"
+Then the Action's Narration message reports the room "Room room2"
 And the player-input message reports no room
 When the client POST /action with command="look"
 And the pipeline returns to idle
@@ -127,7 +126,7 @@ And that Action's player-input message reports no room
 
 ```gherkin
 Given a game state where the player stands in a room that does not exist
-And the message history is empty
+And the story log holds only its opening Narration
 When the client POST /action with command="look"
 And the pipeline returns to idle
 Then the generation status is an error whose text indicates the room is invalid
@@ -137,22 +136,11 @@ And the message history gained no Narration message
 #### Scenario 2.2: LLM transport failure reports an error
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And an LLM backend configured to fail (returns an error for the narration request)
 When the client POST /action with command="look"
 And the pipeline returns to idle
 Then the generation status is an error whose text is non-empty
-```
-
-#### Scenario 2.3: Empty LLM response reports an error without persisting an empty narration
-
-```gherkin
-Given a fresh game state with an empty message history
-And an LLM backend that returns an empty string for the narration prompt
-When the client POST /action with command="examine the room"
-And the pipeline returns to idle
-Then the generation status is an error whose text contains "empty"
-And the message history gained no Narration message (no empty narration persisted)
 ```
 
 #### Scenario 2.4: Trigger narration failure preserves the main narration and reports an error
@@ -179,6 +167,19 @@ When the client POST /action with command="look"
 And the pipeline returns to idle
 Then the generation status is Idle
 And the scene's NPCs still include "npc_1"
+```
+
+#### Scenario 2.6: An Action whose needed data is missing answers 500 with the missing-data line
+
+```gherkin
+Given a Game whose Persona record cannot be read
+When the client POST /action with command="look"
+Then the response is 500 Internal Server Error
+And the response carries the line "The data for this request is missing: the persona."
+And the story log gains no Message
+When the client GET /status/generating
+Then the status response carries the same line
+And the raw error text is reachable only inside that response's disclosure
 ```
 
 ### Concurrency
@@ -209,8 +210,8 @@ And the message history gained no Narration message for "listen"
 Given a Game that is idle
 When two clients POST /action with command="look" at the same moment
 Then one Action is accepted and the other is refused with the "Still thinking..." status
-And the message history holds exactly one player-input message for "look"
-And the message history holds exactly one Narration message
+And the story log holds exactly one player-input message for "look"
+And the story log holds the opening Narration and exactly one Narration of that Action
 ```
 
 ### Sequencing
@@ -218,7 +219,7 @@ And the message history holds exactly one Narration message
 #### Scenario 6.1: Three actions in sequence produce three player-input and three Narration messages
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
 And the pipeline returns to idle
@@ -234,7 +235,7 @@ And each player-input message's text matches its submitted command, in order
 #### Scenario 6.2: Execute → retry → execute produces two inputs and at least two narrations
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
 And the pipeline returns to idle
@@ -249,7 +250,7 @@ And the message history holds at least 2 Narration messages
 #### Scenario 6.3: Async action sequence then retry completes with two inputs persisted
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="hello"
 And the pipeline returns to idle
@@ -276,7 +277,7 @@ And the LLM call record of the Narration shows the system prompt of the preset t
 #### Scenario 1.9: `/impersonate` dispatches as impersonate and produces a player-input message
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="/impersonate hello"
 And the pipeline returns to idle
@@ -288,7 +289,7 @@ And the generation status is Idle
 #### Scenario 1.10: `/guide` dispatches as guided generation and does not persist a player-input message
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="/guide look around"
 And the pipeline returns to idle
@@ -300,7 +301,7 @@ And the generation status is Idle
 #### Scenario 1.12: Recognized engine commands bypass the player-input text check
 
 ```gherkin
-Given a fresh game state with an empty message history
+Given a Game whose story log holds only its opening Narration
 And text check mode is Spell with auto-check enabled
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action/check with command="/guide look at the casle" (a deliberate misspelling the spell check would flag)

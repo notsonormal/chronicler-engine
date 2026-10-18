@@ -1,13 +1,12 @@
-//! HTTP E2E tests for dashboard chrome: the shell's icon sprite and the registry-backed generating-status surfaces. Tagged against `docs/specs/dashboard.md`.
+//! HTTP E2E tests for dashboard chrome: the shell's icon sprite and the generating-status surfaces. Tagged against `docs/specs/dashboard.md`.
 
-use chronicler_engine::domain::model::state::generation_status::{GenerationStatus, Step};
-use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::TestStoredTriggerContext;
-use chronicler_engine::TestAppBuilder;
+use std::sync::Arc;
+
+use chronicler_engine::test_support::{analysis_report, ModelRole, ScriptedModel, TestAppBuilder};
 
 use crate::support::http_assertions::{defined_icons, referenced_icons};
 use crate::support::http_fixtures::seed_offered_set;
-use crate::support::http_requests::{fetch_body, fetch_generating_status};
+use crate::support::http_requests::{fetch_body, fetch_generating_status, post_action, wait_settled};
 
 // [docs/specs/dashboard.md] SCENARIO: 39.1
 #[tokio::test]
@@ -15,33 +14,68 @@ async fn test_generating_status_answers_from_live_registry() {
     assert_eq!(
         fetch_generating_status(&TestAppBuilder::default_app()).await,
         "idle",
-        "default status should be idle"
+        "a Game with no Job and no failure line answers idle"
     );
 
-    for phase in [Step::Narrating, Step::Quantifying] {
-        let body = fetch_generating_status(
-            &TestAppBuilder::default_test()
-                .generation_status(GenerationStatus::Generating, phase)
-                .build(),
-        )
-        .await;
-        assert_eq!(body, "idle", "stale Generating should answer idle");
-    }
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(ModelRole::Narration);
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::clone(&model))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narrator call should reach the model"
+    );
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "narrating",
+        "a Job at its narrator call answers its step name"
+    );
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the released Job should complete"
+    );
 
-    for phase in [Step::Narrating, Step::Quantifying] {
-        let expected = phase.as_endpoint_str();
-        let body = fetch_generating_status(
-            &TestAppBuilder::default_test()
-                .generation_status(GenerationStatus::Generating, phase)
-                .claim_generation_slot()
-                .build(),
-        )
-        .await;
-        assert_eq!(
-            body, expected,
-            "live slot should report the persisted phase"
-        );
-    }
+    let model = Arc::new(
+        ScriptedModel::new()
+            .narration("You look around.")
+            .analysis(analysis_report(&[], None)),
+    );
+    let hold = model.hold(ModelRole::Analysis);
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::clone(&model))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held analysis call should reach the model"
+    );
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "quantifying",
+        "a Job at its analysis answers its step name"
+    );
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the released Job should complete"
+    );
+
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().failed(ModelRole::Narration)))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failing Job should end"
+    );
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("answer could not be read"),
+        "a Game with no Job and a failure line answers that line, got: {status}"
+    );
 }
 
 // A `<use>` that names a missing symbol draws nothing and raises no error, so
@@ -49,11 +83,15 @@ async fn test_generating_status_answers_from_live_registry() {
 // [docs/specs/dashboard.md] SCENARIO: 39.2
 #[tokio::test]
 async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
-    let app = TestAppBuilder::default_test()
-        .last_trigger(TestStoredTriggerContext::standard())
-        .log("look around", MessageType::Input)
-        .log("You look around.", MessageType::Narration)
-        .build();
+    // A real turn gives the shell a story of more than its opening Narration.
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().turn("You look around.")))
+        .build_with_state();
+    assert!(post_action(&app, "look around").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the Action should complete"
+    );
 
     let shell = fetch_body(&app, "/").await;
     let defined = defined_icons(&shell);
@@ -96,36 +134,47 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
 // [docs/specs/dashboard.md] SCENARIO: 39.3
 #[tokio::test]
 async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
+    // A held Job is the busy state: the Game holds a Job entry.
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(ModelRole::Narration);
     let (app, state) = TestAppBuilder::default_test()
-        .claim_generation_slot()
-        .generation_status(GenerationStatus::Idle, Step::default())
+        .model(Arc::clone(&model))
         .build_with_state();
     seed_offered_set(&state, &["Ask the bartender"]);
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narrator call should reach the model"
+    );
 
     assert_eq!(
         fetch_body(&app, "/debug/is_generating").await,
         "true",
-        "a busy slot must report true even when the persisted status is Idle"
+        "a Game with a Job reports true"
     );
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         dock.contains("disabled"),
-        "a busy slot must disable the dock controls: {dock}"
+        "a Game with a Job disables the dock controls: {dock}"
     );
 
-    let (app, state) = TestAppBuilder::default_test()
-        .generation_status(GenerationStatus::Generating, Step::Narrating)
-        .build_with_state();
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the released Job should complete"
+    );
+
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
     seed_offered_set(&state, &["Ask the bartender"]);
 
     assert_eq!(
         fetch_body(&app, "/debug/is_generating").await,
         "false",
-        "a stale Generating record with no live slot must report false"
+        "a Game with no Job reports false"
     );
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         !dock.contains("disabled"),
-        "a free slot must leave the dock controls enabled: {dock}"
+        "a Game with no Job leaves the dock controls enabled: {dock}"
     );
 }

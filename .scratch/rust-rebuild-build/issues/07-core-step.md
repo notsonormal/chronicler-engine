@@ -425,4 +425,159 @@ Recorded for later, as asked.
 - Accepted edge of `GameWriter::replace`: the create unit lands first; if the removal then fails (storage failure only), two Games with the same name stand and the pointer stays on the old Game.
 - c4-docrev spec-text fixes applied in C4: dashboard.md 39.1 title "else … else", case 1 "narrator call of a Narration", case 3 deleted (W1 option A: busy plus a failure line is not reachable by a client, because the accept unit clears the line and the Job writes its line after its Options run), case 4 duplicate line removed; 39.3 Givens name an offered set; 39.4 Options row status "options"; options.md 24.5 and 24.18 show set A again after POST /status/reset-generating; swipe_new.md 12.1 and retrigger.md 15.1 Given "a Game whose Job is running" and a client-visible Then; swipe_new.md 11.10 and I.9 "the state that its analysis saved"; swipe_new.md and retrigger.md I.7 restated as the missing-data 500; reset.md 7.1 restated in domain words; actions.md 2.4 disclosure wording.
 - **C5 test items from c4-docrev** (tests assert the opposite of their changed scenario): swipe_new.rs 22.1 (two-room map, analysis moves to room2, assert room2); options.rs 24.5, 24.17, 24.18, 24.20 assert the dock notice in GET /fragment/options-dock, not a System Message (delete `system_messages`/`unavailable_agent_reports` helpers), and 24.5/24.18 assert set A after the stop; options.rs 24.2 asserts 400 and no notice with an empty opening text; actions.rs 2.4, retrigger.rs 14.5, swipe_new.rs 11.8/11.10 assert "The event narration failed." (2.4 also the disclosure); dashboard.rs 39.1 rewritten on the busy state and the failure line; 12.1/15.1 assert no Swipe / no event Narration added; reset.rs 7.1 per its new text; a test for the I.7 missing-data line comes with the C5 failure-kind scenarios.
-- **C7 list additions from c4-docrev:** one pass replacing "the pipeline returns to idle" (deprecated Action Pipeline) in docs/specs; swipe_new.md 10.5 title and 11.9 Given name Snapshot; reset.md 7.2 names message_service/narrative.history; retrigger.md I.3, I.8, I.9 name narrative.history, process_action, last_trigger; retrigger.md 14.5 and swipe_new.md 11.8 mix "message history" and "story log"; one phrase for the opening ("its opening Narration"); CONTEXT.md gains "notice" and "failure line", and "step" (generation step) vs the avoided "step" for Hook; docs/diataxis/explanation/architecture.md:69,79 (heal to Idle, slot on persisted GenerationStatus); docs/diataxis/reference/narrative/options.md:10 ("persisted with the turn's snapshot").
+- **C7 list additions from c4-docrev:** one pass replacing "the pipeline returns to idle" (deprecated Action Pipeline) in docs/specs; swipe_new.md 10.5 title and 11.9 Given name Snapshot; reset.md 7.2 names message_service/narrative.history; retrigger.md I.3, I.8, I.9 name narrative.history, process_action, last_trigger; retrigger.md 14.5 and swipe_new.md 11.8 mix "message history" and "story log"; one phrase for the opening ("its opening Narration"); CONTEXT.md gains "notice" and "failure line", and "step" (generation step) vs the avoided "step" for Hook; docs/diataxis/explanation/architecture.md:69,79 (heal to Idle, slot on persisted GenerationStatus); docs/diataxis/reference/narrative/options.md:10 ("persisted with the turn's snapshot"). Added by c5-docrev: docs/diataxis/reference/frontend/dashboard.md and docs/diataxis/reference/storage.md still say a swipe switch restores a Snapshot.
+**2026-10-18, implementer (C5, uncommitted).** Branch `wf/rebuild-core`, base `51efaafc` (core C4). Area: the tier-1 rework. Tier 1 is green again with no `#[ignore]` left. No commit was made.
+
+The tree holds 24 changed files. The red window of C4 (51 failing http tests, 4 of the 10 ignored `races::` tests) is closed.
+
+What changed, per area.
+
+| Area | Result |
+|---|---|
+| `tests/http/swipe_new.rs` | 20 red tests. The opening Narration shifts every count and index by one: a test that picked "the Narration" now picks the last one (`rfind`). The hand-seeded arranges (`seed_main_narration_flow`, `seed_event_flow`, `save_message_and_snapshot`, `save_snapshot`) are gone: a turn is arranged by `POST /action`, a user-regen by an Action then `POST /history/delete`, an Impersonate Input by `POST /action` with `/impersonate`. 11.1 arranges the empty story that R-44's `400` exists for; 11.7 breaks the start state's room through `corrupt_start_state`. 22.1 now arranges a two-room map and asserts the move into `room2`. 11.8 and 11.10 assert "The event narration failed.". |
+| `tests/http/actions.rs` | 8 red tests: the first-Narration index and the story-log counts, the invalid-room arrange (now `break_start_room`), the 2.4 failure line and its disclosure (`The event narration failed.` plus the narrator line). New 2.6 (the whole missing-data line), and 2.3 is deleted (38.9 covers it). |
+| `tests/http/retrigger.rs` | 3 red tests. `.last_trigger`/`.log` seeded state that no read sees, so every test now arranges a real turn: the Trigger fires and its continuation fails, which leaves the trigger context that makes Retrigger available. 14.3 arranges an Input-last story; 14.4 arranges a real event Narration. |
+| `tests/http/options.rs` | 5 red tests. The dock notice replaces the `System` Message: the new `dock_notice` helper reads `GET /fragment/options-dock`, so `system_messages` and `unavailable_agent_reports` are gone. 24.5 and 24.18 assert that a stop gives the prior set back. 24.2 arranges a World with no starting scenario (an opening with no text) and asserts `400`. |
+| `tests/http/dashboard.rs` | 2 red tests. 39.1 is the §2.3 rule: a held Job answers its step name, a Game with no Job and a failure line answers that line, and a plain Game answers idle. 39.3 arranges busy with a real held Job. |
+| `tests/http/failure_display.rs` | 4 red tests. `TestAppBuilder::failure` writes the Game's failure line, so 38.3/38.5/38.7 read the design's record; 38.2 breaks the start state's room. New 38.9 (the empty-answer line) and 38.10 (the contradiction line). |
+| `tests/http/story_log.rs` | 2 red tests: the first-Narration index, and the `retrigger-btn` fixture (a failed event continuation). New 8.8 (the log shows the text while the analysis holds the Job), moved here from `dashboard.rs` because this spec owns `/fragment/story-log`. |
+| `tests/http/settings.rs` | 1 red test: the 150-Message story is seeded through `append_narrations` (the design's own record writes) instead of `save_message_and_snapshot`. |
+| `tests/http/races.rs` | 2 red tests. The five §9.1 tests lose their `#[ignore]`. |
+| `tests/http/requires_migration/` | `test_switch_swipe_handler_concurrent` arranges busy with a held Job and asserts `200` "Still thinking..."; the edit and delete refusals are `400`; `test_debug_is_generating_reflects_state` is deleted. |
+| `tests/http/support/http_fixtures.rs` | The hand-seeded story writers are replaced by `corrupt_start_state`, `break_start_room` and `append_narrations`, and `seed_offered_set` writes the dock record through `Tx::put_dock` instead of the old snapshot path. |
+| `src/test_support/test_app_builder.rs` | `generation_status` becomes `failure` (it writes the Game's failure line), and `claim_generation_slot` goes with the slot registry. The seeded opening now follows the create unit: the World's opening text and the starting room as its room report. |
+| `src/test_support/fixtures.rs` | `seed_main_narration_flow`, `seed_event_flow`, `seed_swipe_with_stored_inputs` and `insert_message_with_swipe` are deleted: the hand-seeded story writers the plan names as fixtures that go. |
+| `src/application/pipeline/action_pipeline/retry_tests.rs` | One legacy test changes in place (mechanical), and the four `test_retry_flow_*` tests go with the fixture they arranged through. |
+| `src/application/pipeline/job.rs` | Two defects, below. |
+| `src/application/generation/gate.rs` | Three refusal helpers replace `missing_data_with_line`: `missing(name)`, `unreadable(name, error)` and `save_failed(error)`, each writing the Game's failure line and answering `Refusal::Failed(failure)`. Every call site names its record or its failed write, so no site can put raw text in a line. |
+| `src/domain/model/state/generation_status.rs` | `GenerationFailure` holds `named` (the line's own part: the room, or the record the request needs) and `raw` (the raw text the disclosure holds), with `new`, `missing_room`, `missing_record` and `line()`. The `MissingData` doc names a request, not only a Retry. |
+| `src/domain/model/utils/opening.rs` | New: `opening_message(world, map, persona_name)`, the one build of a Game's opening Narration. |
+| `src/adapters/driving/http/error.rs`, `layout/handlers/endpoints.rs` | The `500` body carries the failure's line (`Refusal::Failed`), and the status popover shows `failure.line()` with `raw`. |
+| `scripts/validate_feature_spec.py` | The quarantine pin is 74 (one test deleted). |
+
+Production defects found by the rework, each with the scenario that shows it.
+
+1. **An event generation updated the encounter log only.** `Job::apply_rules` applied `GameRuleRequest::NpcEvents` for `Kind::Event`, so `scene.npcs_in_area` never changed and the event's analysis could never bring a Character present. Design §4.3 says the event generation applies the analysis with its movement taken out and the Trigger it reports ignored, so the Characters present are part of its state. The rework now applies `Analysis` with `movement: MovementParseResult::default()` and ignores `outcome.trigger_match`. Shown by `actions::test_trigger_continuation_reruns_quantifier_detects_new_npc_http` (actions.md 1.6: "the scene's NPCs include 'gabriella'") and by `swipe_new.md` 10.1/10.2.
+2. **A failed event generation of a Retry showed the narrator's own line.** `run` wrapped only the second generation of a Job in `Ended::into_event_failure`, so the redo of an event Narration (whose first generation *is* the event) reported "The language model's answer could not be read." where §4.7 gives "The event narration failed." with that line in the disclosure. `run` now wraps a failed first generation when its kind is `Event`. Shown by `swipe_new::test_event_retry_trigger_narration_failure_sets_error_http` (swipe_new.md 11.8) and retrigger.md 14.5.
+
+Deleted tests, each with its reason.
+
+| Test | Reason |
+|---|---|
+| `requires_migration::debug::test_debug_is_generating_reflects_state` | Its subject was the persisted status plus `claim_generation_slot`; `/debug/is_generating` reads the Job entry now, and dashboard.md 39.3 covers that answer at tier 1. The quarantine pin is 74. |
+| `TestAppBuilder::generation_status`, `TestAppBuilder::claim_generation_slot` | Not tests: the two builder methods. The first is replaced by `failure`, the second has no subject. |
+| `seed_main_narration_flow`, `seed_event_flow`, `seed_swipe_with_stored_inputs`, `insert_message_with_swipe` | The hand-seeded fixtures: the plan names them as fixtures that go, and every tier-1 test arranges through the public write path now. The first two had no caller left; the last two went with their four legacy callers (the row above). |
+| `swipe_new::test_retry_no_input_returns_400_http` (swipe_new.md 11.1), `retrigger::test_retrigger_no_messages_returns_400_http` (retrigger.md 14.2) | No client can make a Game whose story holds no Message: the create unit always writes the opening. The refusal stays in the code, and the same reason deleted 11.3 and 11.4 in C4. The requires_migration pin is unchanged (both tests were tier-1). |
+| `retry_tests::test_retry_flow_impersonate_mode_runs_full_tail`, `::test_retry_flow_guide_only_narration_retries_with_empty_input`, `::test_retry_flow_guided_turn_retries_without_older_input_text`, `::test_retry_flow_user_regen_mode_stays_tail_less` | Their arrange was `seed_swipe_with_stored_inputs`, which goes with the other hand-seeded fixtures, and their subject is the legacy `ActionPipeline::retry` that C6 deletes. Tier 1 covers the same three modes over HTTP: `swipe_new.md` 22.1-22.5 (re-impersonate, user regen, stored inputs, the impersonate preset, the guided room report). Keeping them needed a local copy of the fixture, which put the legacy file at 2011 non-blank lines against the 2000-line guardrail; the allowlist guardrail's shrink-only rule rules out a new legacy test module. |
+| `actions::test_empty_narrator_response_sets_error_no_narration_http` (actions.md 2.3) | 2.3 asserted the same behaviour at the same tier as `failure_display.md` 38.9 — the empty answer keeps its own line and saves no text — and 38.9 asserts it more: the exact line, that it is not the unreadable-answer line, and that the story log holds no Narration of the Action. |
+
+New scenarios, each with its covering test.
+
+| Scenario | Test |
+|---|---|
+| `swipe_switch.md` 36.4 (a swipe switch gives back the state of that Swipe) | `swipe_switch::test_switch_swipe_gives_back_the_state_of_that_swipe_http` |
+| `failure_display.md` 38.9 (the empty-answer line) | `failure_display::test_empty_answer_keeps_its_own_line_clamps` |
+| `failure_display.md` 38.10 (the contradiction line, and the text stays) | `failure_display::test_contradiction_clamps_with_its_own_line_and_keeps_the_text` |
+| `actions.md` 2.6 (the missing-data `500`) | `actions::test_missing_persona_answers_500_with_the_missing_data_line_http` |
+| `story_log.md` 8.8 (the story log shows the text while the analysis holds the Job) | `story_log::test_story_log_shows_the_text_while_the_analysis_holds_the_job` |
+
+The invalid-room kind of §4.7 already has its scenarios (`actions.md` 2.1, `swipe_new.md` 11.7), so none was added; the other three kinds of §4.7 that no scenario had (empty text, contradiction, missing data) are the three above. The I.7 line of `swipe_new.md` and `retrigger.md` is the same accept check as `actions.md` 2.6 — `require_job_data` runs for every request kind — so 2.6 covers the missing-data **line** and the two Properties are not restated as scenarios. 2.6 does not cover I.7's **condition**: its Persona record is unreadable, while the Property is about a missing start state. That branch (`Ok(None)` for the start state) still has no scenario and no test, because no client request makes it and a broken record would have to drop the swipe state of the Message the Job starts from, which the `Tx` writes this slice added cannot do. Recorded as a gap, not as coverage.
+
+The upload of §9.1: the flip check of each un-ignored test. Each expectation was changed once, watched fail, and changed back, while the test was still ignored.
+
+| Test (case) | Flip | Result |
+|---|---|---|
+| `races::test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text` (I3) | the expected narration is `STOPPED_NARRATION`, not `NEXT_NARRATION` | fails at that assertion ("the stopped Job's late answer adds no Narration…") |
+| `races::test_edit_and_delete_while_job_runs_are_refused` (I6) | the delete is expected to answer `400` | fails at the status assertion |
+| `races::test_swipe_switch_while_job_runs_is_refused` (I6) | `assert_eq!` becomes `assert_ne!` on the active Swipe | fails at "a refused swipe switch must not change the active Swipe" |
+| `races::test_a_job_goes_on_for_its_own_game_while_another_game_is_active` (I5) | Game A's log is expected to hold Game B's Narration | fails at "Game A's story log holds no Narration of Game B" |
+| `races::test_a_stop_at_each_model_call_keeps_the_records_of_that_step` (I2) | the Impersonate arm expects a Narration | fails at "an Impersonate Job saves no Narration" |
+| `races::test_a_stop_at_each_model_call_keeps_the_records_of_that_step` (I2, code review) | the Impersonate arm expects `MOVED_ROOM` where the refused state update leaves the player | fails at `left: "room_1" / right: "room2"`, so the read observes the current state and not the Snapshot the redo starts from |
+| `races::test_a_stop_at_each_model_call_keeps_the_records_of_that_step` (I2, code review) | the Impersonate arm expects `[WORLD_OPENING_TEXT]` where the story holds the Input too | fails at `left: ["The World begins.", "The Job's narration."] / right: ["The World begins."]` |
+
+The §9.4 items. The status test that checks each step name **already exists**: `dashboard.md` 39.4's generated table names the status while each model call is held (`narrating`, `quantifying`, `options`, `generating-event`), and the reworked 39.1 covers the three states a client can read without a call (a step name, the failure line, idle). No duplicate was added. The held-analysis test of R-11a is new: `story_log.md` 8.8 (`dashboard.md` 39.6 before the fix pass moved it).
+
+Spec text fixed beyond the c4-docrev list. C4 introduced the opening Narration on create and reset, and several scenarios still counted a story as if it held no opening. The fix pass moved a scenario that belonged to another spec and deleted one that another spec covers. This table is exactly the diff of `git diff HEAD -- docs/specs/`.
+
+| Spec | Change |
+|---|---|
+| `actions.md` 1.1, 1.2, 1.5, 1.9, 1.10, 1.12, 2.1, 2.2, 6.1, 6.2, 6.3 | The Given is "a Game whose story log holds only its opening Narration"; 2.1 says "And the story log holds only its opening Narration". |
+| `actions.md` 3.5 | The Thens say the story log, and the Narration count names the opening: "the story log holds the opening Narration and exactly one Narration of that Action". Its test asserts the one Input and the one narrator call, so the count was a claim with no assertion behind it. |
+| `actions.md` 1.14 | "Then the Action's Narration message reports the room …". |
+| `actions.md` 2.3 | Deleted: `failure_display.md` 38.9 covers each of its lines at the same tier. |
+| `actions.md` 2.6 | New, moved out of the Properties list into Error recovery after 2.5. It carries the whole line, the same line from the status, the raw text only in the disclosure, and no Message gained. |
+| `swipe_new.md` 9.1, 10.1 | The Given is "a Game whose story log holds only its opening Narration", and the Thens count the opening: 2 Narration entries after one Action, 3 after a Trigger's event Narration. 9.1 names the Action's Narration and the ID it keeps. |
+| `swipe_new.md` 9.8 | The two switch steps go; a sentence points at `swipe_switch.md` 36.4. |
+| `swipe_new.md` 11.1 | Title and Given: a story with no Message. |
+| `swipe_new.md` 11.7 | The Given names the state before the last Narration, which is what the Retry's room check reads. |
+| `swipe_switch.md` 36.4 | New: a switch gives back the state of that Swipe, and "a Retry of that Action's Narration" names the Narration it means. |
+| `failure_display.md` endpoints | `POST /action` joins the list. |
+| `failure_display.md` 38.9, 38.10 | New. 38.9's Given is empty text. Both end the Job before any step reads the status, and 38.10's last Then counts the raw text once, inside the disclosure. |
+| `retrigger.md` 13.1, 13.2, 14.1, 14.5 | One phrase for the context ("a Game whose current state holds a trigger context"), and the reads are domain words: "the story log holds N+1 Messages", "an event Narration (it carries an event header)", "the generation status is Idle", "the player still stands in \"room2\"". |
+| `retrigger.md` 14.2 | The Given is a story with no Message. |
+| `retrigger.md` 14.3 | The Given names the last Message's kind. |
+| `retrigger.md` 14.4 | The trigger-context Given goes: an event generation clears the context, so the Given names the event Narration a Trigger appended. |
+| `story_log.md` 8.8 | New, moved from `dashboard.md` 39.6 because this spec owns `/fragment/story-log`. `dashboard.md` returns to its HEAD text. |
+
+Deviations from the plan.
+
+1. **Two production defects are fixed, not worked around** (above). Both are small and both are decided by design §4.3 and §4.7.
+2. **`TestAppBuilder` gains a `failure` knob and loses `claim_generation_slot`.** `generation_status` "changed" rather than went, because 38.3, 38.5 and 38.7 assert the clamping of one failure kind with its exact raw text, and no client path produces a spent token budget or a transport error.
+3. **`TestAppBuilder::last_trigger` and `::log` stay.** `last_trigger` writes a field no read uses, and its last user is the legacy lib test `retrigger_tests::test_retrigger_returns_concurrent_generation_when_gate_busy`, which names the old gate and goes with the old pipeline in C6; `log` writes real Messages through the fixture's writer and has three users in the quarantine plus two legacy lib tests. C6 deletes both with their last callers.
+4. **`log` left `dashboard.rs` 39.2 and `story_log.rs` 8.5**: both now use a real turn or the seeded opening.
+5. **Two new fixture writers** (`corrupt_start_state`, `append_narrations`) write broken or long records through the design's own `Tx` writes, because no client request can make them: a room off the map, an encounter log that names a Character the World lacks, and a 150-Message story.
+6. **`ReQUIRES_MIGRATION_TEST_COUNT` 75 → 74**, for the one deleted quarantined test.
+7. **A missing-data failure carries two texts.** `GenerationFailure` gains `detail` (with `#[serde(default)]`, so a stored failure line from before the field still reads). The line names the record and the disclosure holds the unreadable error, which is design §4.7's split; `raw` keeps its meaning for every other kind (it is what the line names, as `SceneMissing`'s room id is). The three `require_job_data` paths use it. The other twelve `missing_data_with_line` call sites still pass the storage error text as the line's subject, because the review that asked for the split named those three and each of the rest needs its own name-and-kind judgement (several are save failures classified as missing data). Recorded as a follow-up, not as done.
+8. **Load-bearing test setting.** The 38.10 contradiction comes from `assert_state_consistency` in `game_rules`, which the `diagnostics` feature gates. The default feature set turns `diagnostics` on (`Cargo.toml`: `default = ["testing"]`, `testing = ["diagnostics"]`), so the assertion runs in the gate as it runs in this suite. With `--no-default-features` the rules step would accept the broken state instead.
+9. **`Named` and `raw` are the failure's two parts.** `GenerationFailure` holds the line's own part in `named` and the disclosure's text in `raw`. The review asked for one meaning and an honest name, and for the raw text to live where `detail` was. I merged `detail` into `raw` rather than keeping the name `detail`: `raw` is what this codebase calls the disclosure's text (`raw_error_detail`, and design §4.7's "the raw text goes in the disclosure"), so the thirty existing `.raw` readers keep their meaning and every one of them now reads only the raw text. A wholesale rename of those readers to `detail` is mechanical if the lead prefers the other name.
+10. **No client request makes 38.10's state.** The Quantifier drops a Character id the World does not hold, so the state the test breaks is a corrupted or legacy record: the fixture writes it through `Tx::set_swipe_state`. A World data change between two boots makes the same state honestly — a Character removed from the World while a Game's encounter log still names it.
+
+Open questions.
+
+- **The event Narration's `maker` is `Narrator`** (C4's open item, unchanged): the call record carries the Trigger role, but the Swipe's maker does not name the event. No spec states a value.
+- **A stop cannot cancel a call that is already running** (C3's item): the job id check refuses the late save, and 39.4/39.5 pin that, so nothing in this slice depends on a cancel.
+- **`Refusal::BadRequest("No input to retry")`** is reachable only for a story with no Message; the design says such a Game is never created (R-76).
+- **The start-state branch of I.7** has no test (above).
+- **`break_start_room` stays.** The reviewed item asked whether the invalid-room arrange is still needed. It is: it breaks the state the Retry starts from, which no client request writes, and a World data change between two boots puts a room off the map the same way (the same reason 38.10 needs `corrupt_start_state`). The refusal that answers it is the design's own invalid-room line.
+- **`seed_offered_set` reaches `state.job_deps.storage`** because `AppState` carries no `storage` field: `job_deps` is the app's own `JobDeps` and its `storage` is the same `Arc<Storage>` the Job writes through, so the fixture writes the app's storage and not a second one. A fixture that took `&Storage` would need every caller to hold the handle, and none of the four callers builds its app that way.
+
+Validation on the final tree.
+
+| Check | Log | Result |
+|---|---|---|
+| `python build.py clippy` | `logs/build_20261018_225232.log` | green |
+| `python build.py guardrails` | `logs/build_20261018_224957.log` | 193 passed |
+| `python build.py test-pattern "" --test-target http` | `logs/build_20261018_225136.log` | 280 passed, 0 failed, 0 skipped |
+| `python build.py test-pattern "" --test-target lib` | `logs/build_20261018_225207.log` | 1269 passed |
+| `python build.py test-pattern "" --test-target storage` | `logs/build_20261018_225156.log` | 130 passed |
+| `python build.py spec-coverage` | `logs/build_20261018_225628.log` | green |
+| `python build.py validate-docs` | `logs/build_20261018_225629.log` | green |
+| `python build.py browser` | `logs/build_20261018_225421.log` | 29 passed |
+| `python build.py seam-cases`, `test-structure`, `fmt` | `logs/build_20261018_2115*.log`, `224211` | 5 contracts, 89 cases; green |
+| `cargo nextest run --no-fail-fast --test http --run-ignored all -E 'test(races::)'` | the flip runs above | 10 run, 10 passed, before the `#[ignore]`s came off |
+
+Counts moved with the deletions: http 283 → 280 (2.3, swipe_new 11.1, retrigger 14.2) and lib 1272 → 1269 (the four `test_retry_flow_*` legacy tests). The requires_migration pin stays 74.
+
+Not done, with the reason. The commit gate (`/simple-after-plan`) and the owner's approval are the commit step, which this assignment excludes.
+
+### C5 fix pass 2 (the two-axis code review)
+
+Per item, what changed.
+
+| Item | Change |
+|---|---|
+| 1. The failure lines of `GameWriter` | `missing_data_with_line` is replaced by three helpers — `missing(name)` for a record the engine has no row for, `unreadable(name, error)` for one it cannot read, and `save_failed(error)` for a write that fails — plus `refuse(failure)`, which writes the Game's failure line and returns `Refusal::Failed(failure)`. All seventeen call sites are classified: the reads name their record ("the message", "the story", "the game", "the persona", "the start state", "the impersonate direction", "the trigger context", "the World", "the trigger") and the writes (the edit save, the delete, the swipe switch, the accept, the Job's four save units) take §4.7's save line. `Refusal::MissingData(String)` becomes `Refusal::Failed(GenerationFailure)`, so the `500` body and the Game's line come from one failure and no call site can put raw text in a line. |
+| 2. `GenerationFailure.raw` | The failure now holds `named` (the line's own part) and `raw` (the disclosure's text), one meaning each, with `new`, `missing_room`, `missing_record` and `line()`. `from_engine_error` classifies as before and keeps the error as the raw text; a missing room names the room *and* keeps its error. Every user is updated: `endpoints.rs` shows `failure.line()` and `raw`, `job.rs` wraps an event failure with `failure.line()`, `view_query` and the legacy tests keep reading `.raw` (now only ever the raw text). The domain's seam tests assert both parts, including the two lines. |
+| 3. `Refusal::MissingData` doc | The variant is gone; `Refusal::Failed` carries the whole failure and its doc says the payload's line is what the answer carries and the raw text stays in the disclosure. |
+| 4. One opening build | New `domain/model/utils/opening.rs::opening_message(world, map, persona_name)` builds the opening Narration — the World's default scenario rendered for the Persona, the starting room as its room report, `Maker::WorldOpening`, kind `Narration` — and returns it with a state-less Swipe, because the state is the caller's. The create unit attaches `SwipeState::starting`, the test builder attaches its seeded state, and `retry_tests` computes its expected opening text from the same call. It lives in `domain/model/utils/` because it is World and Persona data rendered through the domain's `TemplateVars`, and because `gate.rs` and `test_support` may both call domain code. |
+| 5. `swipe_new.md` 11.1 and `retrigger.md` 14.2 | Deleted with their tests. No client makes a Game with no Message, and the refusal stays in the code. The quarantine pin is unchanged. |
+| 6. The I2 Impersonate arm | The arm now reads the room through `game_view_query.get_debug_state` and asserts the whole story list against `WORLD_OPENING_TEXT`, like the other arms. Its row arranges on the always-on World (via `active_game_on_an_always_on_world`), so that opening text is the row's own. Both halves are flip-checked (the flip table). |
+| 7. `seed_swipe_with_stored_inputs`, `insert_message_with_swipe` | Deleted from `src/test_support/fixtures.rs` with their four legacy callers, which were the only callers left (the deletion row above carries the reason and the tier-1 coverage). |
+| 8. `requires_migration/fragment.rs` | `test_switch_swipe_handler_success` and `test_switch_swipe_handler_not_last` are rebuilt on the design's writes and reads: an Action and a Retry (or an Action alone) arrange the story, and `game_view_query.get_story_log_entries` asserts the Swipe count, the active Swipe and the refusal. No test in that file names `load_latest_snapshot` or a `snapshot_id`. The stale comments in `games_create.rs` (the create unit's own records) and `swipe_switch.rs` 36.2 (the switch writes the empty dock record) are reworded. |
+| 9. The disclosure check | `actions.rs` 2.6 and `failure_display.rs` 38.10 use `http_assertions::status_error_message`: the disclosure's text is read from the `<pre>` itself and the raw text is asserted to occur once, so nothing slices the fragment by hand. |
+| 10. `append_narrations` doc | Reworded: it pads the story with Narration Messages that carry no Input, no maker and no room report, so a test that needs a long story reads padding and not a turned scene. |
+| 11. `failure_display.rs` literals | The three seeded failures use `GenerationFailure::new(kind, raw)`; no test builds the struct by hand. |
+| 12. `seed_offered_set` | Left as it is, with the reason in the open questions: `AppState` has no `storage` field, and `job_deps.storage` is the app's own handle. |
+
+
+**2026-10-18 ~23:05, lead (C5 commit gate).** The first full gate on the C5 tree failed 2 tests of the `bootstrap` binary (`run_branches::test_run_persona_not_found_*`: `Validation("Persona not found")`, not `PersonaNotFound`). Cause: a C4 regression. C4 moved the persona check behind `resolve_boot_game`, so on an empty database boot created the Game first and failed inside `GameCatalogue::create_game`. Neither C4's reduced gate (clippy, guardrails, lib, storage) nor C5's focused checks (http, lib, storage) run the `bootstrap` binary. Fix: `prepare_data` checks the persona before it resolves the Game, and `PreparedData.persona_key` is removed. Full gate green on the final tree (`logs/build_20261018_230213.log`: guardrails 193, integration 1683 + 2 skipped, browser 29). Lesson for C6: a focused check list must name every test binary the change can reach; `python build.py integration` covers them all in ~35 s.

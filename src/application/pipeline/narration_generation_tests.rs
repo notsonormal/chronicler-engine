@@ -169,15 +169,16 @@ fn test_run_room_not_found_sets_error_status() {
     match outcome {
         Err(PhaseError::NarratorFailed(failure)) => {
             assert_eq!(failure.raw, "non_existent_room");
+            assert_eq!(
+                failure.line(),
+                "The room non_existent_room is not on the map."
+            );
         }
         other => panic!("expected NarratorFailed, got {other:?}"),
     }
     assert_eq!(
         state.narrative.input_buffer.status,
-        GenerationStatus::Error(GenerationFailure::new(
-            GenerationFailureKind::SceneMissing,
-            "non_existent_room"
-        )),
+        GenerationStatus::Error(GenerationFailure::missing_room("non_existent_room", None)),
         "set_error must record the failure on the in-flight state"
     );
 }

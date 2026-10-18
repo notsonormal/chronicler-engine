@@ -281,6 +281,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `generation_record.rs` — What a generation writes as a record: its Message kind, its message type and its maker
         - `mod.rs` — Domain model utility modules.
         - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings/preset services and preset storage.
+        - `opening.rs` — The opening Narration of a new Game and the parts only it has.
         - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.
         - `settings_defaults.rs` — Serde default-fn-pointers for `AppSettings` fields. Cannot become methods — `#[serde(default = "...")]` requires a fn path.
         - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.

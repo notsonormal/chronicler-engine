@@ -5,6 +5,7 @@ pub mod game_name;
 pub mod game_rules;
 pub mod generation_record;
 pub(crate) mod name_uniqueness;
+pub mod opening;
 pub mod scenario_defaults;
 pub mod settings_defaults;
 pub mod world_defaults;

@@ -1,6 +1,7 @@
 # Feature Spec: Failure Display
 
 Endpoints:
+- `POST /action`
 - `GET /fragment/header`
 - `GET /fragment/visual-sidebar`
 - `GET /status/generating`
@@ -98,4 +99,28 @@ When the client GET /status/generating
 Then the response carries the spent-token-budget line, not the unreadable-answer line or the line for an unnamed failure
 And that line names the model's reasoning and only an action the dashboard offers
 And the raw text naming the completion and reasoning token counts is reachable only inside the response's disclosure
+```
+
+#### Scenario 38.9: An empty answer keeps its own line and saves no text
+
+```gherkin
+Given a Game whose narrator call answers with empty text
+When the client POST /action with command="look"
+And the Job ends
+And the client GET /status/generating
+Then the status response carries the empty-answer line, not the unreadable-answer line
+And the story log holds no Narration of that Action
+```
+
+#### Scenario 38.10: A contradiction after the text keeps the text and names its own line
+
+```gherkin
+Given a Game whose current state names a Character that the World does not hold
+And a narrator backend that answers the narration prompt
+When the client POST /action with command="look"
+And the Job ends
+And the client GET /status/generating
+Then the status response carries the contradiction line
+And the story log holds that Action's Narration text
+And the raw internal message appears once, inside that response's disclosure
 ```

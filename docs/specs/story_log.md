@@ -96,3 +96,12 @@ Then each response is 200 carrying the "Still thinking..." status
 And the Message the client tried to edit keeps the text it had
 And the story log still holds every Message of the Job
 ```
+
+#### Scenario 8.8: The story log shows the text while the analysis holds the Job
+
+```gherkin
+Given a Game whose Job is held at the analysis call of a Narration
+When the client GET /fragment/story-log
+Then the rendered log holds the Narration's text
+And the client GET /status/generating answers "quantifying"
+```

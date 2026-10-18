@@ -31,9 +31,9 @@ impl GenerationStatus {
 
 impl GenerationFailureKind {
     /// The words are the design's failure table; only a line that names something
-    /// reads `raw`.
-    pub fn line(self, raw: &str) -> String {
-        let raw = raw.trim_end_matches('.');
+    /// reads `named`.
+    pub fn line(self, named: &str) -> String {
+        let named = named.trim_end_matches('.');
         match self {
             Self::Unreachable => "The language model could not be reached.".to_string(),
             Self::PromptTooLong => "The story was too long for the language model.".to_string(),
@@ -43,10 +43,10 @@ impl GenerationFailureKind {
             }
             Self::EmptyText => "The language model gave an empty answer.".to_string(),
             Self::SaveFailed => "The new text could not be saved.".to_string(),
-            Self::SceneMissing => format!("The room {raw} is not on the map."),
+            Self::SceneMissing => format!("The room {named} is not on the map."),
             Self::PresetMissing => "The active prompt preset is missing.".to_string(),
             Self::MissingData => {
-                format!("The data for this request is missing: {raw}.")
+                format!("The data for this request is missing: {named}.")
             }
             Self::Contradiction => {
                 "The text was saved, but the game state could not be updated.".to_string()
@@ -74,7 +74,7 @@ pub enum GenerationFailureKind {
     SceneMissing,
     /// The game's active preset is not in the library it names.
     PresetMissing,
-    /// A Retry or a Retrigger asked for data the engine cannot read.
+    /// A request needed a record the engine cannot read.
     MissingData,
     /// The model answered, and the answer was empty or only whitespace.
     EmptyText,
@@ -90,17 +90,51 @@ pub enum GenerationFailureKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerationFailure {
     pub kind: GenerationFailureKind,
+    /// What the line names, when the kind's line names something: the room the
+    /// failure happened in, or the record the request needs. A kind whose line is
+    /// fixed words leaves it empty.
+    #[serde(default)]
+    pub named: String,
+    /// The raw text the failure's disclosure holds.
     pub raw: String,
 }
 
 impl GenerationFailure {
-    /// A failure the call site names itself, for a condition with no typed
-    /// `EngineError` behind it.
+    /// A failure whose line is the kind's own words, with the raw text behind it.
     pub fn new(kind: GenerationFailureKind, raw: impl Into<String>) -> Self {
         Self {
             kind,
+            named: String::new(),
             raw: raw.into(),
         }
+    }
+
+    /// A room the map does not hold: the line names it, and the disclosure holds
+    /// the error behind it when the engine has one to show.
+    pub fn missing_room(room: impl Into<String>, raw: Option<String>) -> Self {
+        let room = room.into();
+        Self {
+            kind: GenerationFailureKind::SceneMissing,
+            raw: raw.unwrap_or_else(|| room.clone()),
+            named: room,
+        }
+    }
+
+    /// A record the request needs: the line names it, and the disclosure holds the
+    /// error behind it when the engine has one to show.
+    pub fn missing_record(name: impl Into<String>, raw: Option<String>) -> Self {
+        let name = name.into();
+        Self {
+            kind: GenerationFailureKind::MissingData,
+            raw: raw.unwrap_or_else(|| name.clone()),
+            named: name,
+        }
+    }
+
+    /// The short line the status column shows: the kind's words, with the part the
+    /// kind names.
+    pub fn line(&self) -> String {
+        self.kind.line(&self.named)
     }
 
     /// Classifies a typed engine error so no call site matches on message text.
@@ -121,21 +155,15 @@ impl GenerationFailure {
                 GenerationFailureKind::TokenBudgetSpent
             }
             EngineError::Database(_) | EngineError::Io(_) => GenerationFailureKind::SaveFailed,
-            // The line the kind renders names the room, so the raw text is the room
-            // id the error carries and not the error's sentence.
+            // The line the kind renders names the room, so the room and the error
+            // behind it are the failure's two parts.
             EngineError::RoomNotFound(room) => {
-                return Self {
-                    kind: GenerationFailureKind::SceneMissing,
-                    raw: room.clone(),
-                };
+                return Self::missing_room(room.clone(), Some(error.to_string()));
             }
             EngineError::PresetNotFound(_) => GenerationFailureKind::PresetMissing,
             _ => GenerationFailureKind::Other,
         };
-        Self {
-            kind,
-            raw: error.to_string(),
-        }
+        Self::new(kind, error.to_string())
     }
 
     /// Keeps the failing step in the disclosure, which the classified error alone

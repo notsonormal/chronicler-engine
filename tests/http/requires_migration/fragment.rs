@@ -9,17 +9,16 @@ use axum::{
 use tower::util::ServiceExt;
 
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel,
+    active_game_of, analysis_report, empty_sqlite_storage, ModelRole, ScriptedModel,
 };
 use chronicler_engine::TestAppBuilder;
 
-use chronicler_engine::domain::model::message::{Message, Swipe};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::support::app_wiring::app_with_model;
-use crate::support::http_requests::{fetch_body, post_action, wait_settled};
+use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_settled};
 use crate::TEST_PERSONA;
 
 fn one_turn_app() -> (axum::Router, AppState) {
@@ -279,7 +278,11 @@ async fn test_edit_history_handler_not_found() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "a Message the story does not hold is a refused edit"
+    );
 }
 
 #[tokio::test]
@@ -309,6 +312,7 @@ async fn test_delete_history_handler_success() {
 
 #[tokio::test]
 async fn test_delete_history_handler_empty() {
+    // A Game holds its opening Narration, and the delete keeps the last Message.
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -318,7 +322,11 @@ async fn test_delete_history_handler_empty() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "a story that holds only its opening Narration refuses the delete"
+    );
 }
 
 #[tokio::test]
@@ -639,65 +647,50 @@ async fn test_create_game_with_invalid_world_key() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler_success() {
-    let storage = Arc::new(empty_sqlite_storage());
+    // An Action and a Retry give the last Narration two Swipes to switch between.
     let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
+        .model(Arc::new(
+            ScriptedModel::new()
+                .turn("First.")
+                .narration("Second.")
+                .analysis(analysis_report(&[], None)),
+        ))
         .build_with_state();
 
-    let latest_snap = storage
-        .load_latest_snapshot(active_game_of(&state))
-        .unwrap()
-        .unwrap();
-    let snap_id = latest_snap.db_id.unwrap();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the Action should complete"
+    );
+    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the Retry should complete"
+    );
 
-    let msg = Message::new("original", MessageType::Narration, None, None);
-    let id = storage
-        .insert_message(active_game_of(&state), &msg)
-        .unwrap();
+    let game = active_game_of(&state);
+    let (entries, _) = state
+        .game_view_query
+        .get_story_log_entries(game)
+        .expect("the story reads back");
+    let last = entries.last().expect("the Retry's Narration is the last");
+    assert_eq!(last.swipe_count, 2, "the Retry appended a Swipe");
 
-    storage
-        .insert_swipe(
-            id,
-            &Swipe {
-                text: "first swipe".to_string(),
-                snapshot_id: Some(snap_id),
-                room_report: None,
-                event_header: None,
-                impersonated: false,
-                guide_text: None,
-                impersonate_direction: None,
-                state: None,
-                maker: None,
-            },
-            0,
-        )
-        .unwrap();
-    storage
-        .insert_swipe(
-            id,
-            &Swipe {
-                text: "second swipe".to_string(),
-                snapshot_id: Some(snap_id),
-                room_report: None,
-                event_header: None,
-                impersonated: false,
-                guide_text: None,
-                impersonate_direction: None,
-                state: None,
-                maker: None,
-            },
-            1,
-        )
-        .unwrap();
-
-    let req = Request::builder()
-        .uri(format!("/message/{id}/swipe/1"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
+    let response = post_empty(&app, &format!("/message/{}/swipe/0", last.id)).await;
     assert_eq!(response.status(), StatusCode::OK);
+
+    let (entries, _) = state
+        .game_view_query
+        .get_story_log_entries(game)
+        .expect("the story reads back");
+    assert_eq!(
+        entries
+            .last()
+            .expect("the Narration stays last")
+            .active_swipe_index,
+        0,
+        "the switch makes the first Swipe the active one"
+    );
 }
 
 #[tokio::test]
@@ -722,51 +715,32 @@ async fn test_reset_handler_success() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler_not_last() {
-    let storage = Arc::new(empty_sqlite_storage());
+    // The Action's own Narration is the last Message, and its Input is not.
     let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
+        .model(Arc::new(ScriptedModel::new().turn("You look around.")))
         .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the Action should complete"
+    );
 
-    let latest_snap = storage
-        .load_latest_snapshot(active_game_of(&state))
-        .unwrap()
-        .unwrap();
-    let snap_id = latest_snap.db_id.unwrap();
+    let game = active_game_of(&state);
+    let (entries, _) = state
+        .game_view_query
+        .get_story_log_entries(game)
+        .expect("the story reads back");
+    let input = entries
+        .iter()
+        .rev()
+        .find(|entry| entry.message_type == MessageType::Input)
+        .expect("the Action saved its Input");
+    assert!(
+        entries.last().is_some_and(|last| last.id != input.id),
+        "the Input is not the last Message"
+    );
 
-    let msg1 = Message::new("first", MessageType::Narration, None, None);
-    let id1 = storage
-        .insert_message(active_game_of(&state), &msg1)
-        .unwrap();
-    storage
-        .insert_swipe(
-            id1,
-            &Swipe {
-                text: "swipe".to_string(),
-                snapshot_id: Some(snap_id),
-                room_report: None,
-                event_header: None,
-                impersonated: false,
-                guide_text: None,
-                impersonate_direction: None,
-                state: None,
-                maker: None,
-            },
-            0,
-        )
-        .unwrap();
-
-    let msg2 = Message::new("second", MessageType::Narration, None, None);
-    let _id2 = storage
-        .insert_message(active_game_of(&state), &msg2)
-        .unwrap();
-
-    let req = Request::builder()
-        .uri(format!("/message/{id1}/swipe/0"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
+    let response = post_empty(&app, &format!("/message/{}/swipe/0", input.id)).await;
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
@@ -776,39 +750,19 @@ async fn test_switch_swipe_handler_not_last() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler_concurrent() {
-    let storage = Arc::new(empty_sqlite_storage());
+    // The held narrator call is the busy state a swipe switch meets.
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(ModelRole::Narration);
     let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .claim_generation_slot()
+        .model(Arc::clone(&model))
         .build_with_state();
 
-    let latest_snap = storage
-        .load_latest_snapshot(active_game_of(&state))
-        .unwrap()
-        .unwrap();
-    let snap_id = latest_snap.db_id.unwrap();
-
-    let msg = Message::new("original", MessageType::Narration, None, None);
-    let id = storage
-        .insert_message(active_game_of(&state), &msg)
-        .unwrap();
-    storage
-        .insert_swipe(
-            id,
-            &Swipe {
-                text: "swipe".to_string(),
-                snapshot_id: Some(snap_id),
-                room_report: None,
-                event_header: None,
-                impersonated: false,
-                guide_text: None,
-                impersonate_direction: None,
-                state: None,
-                maker: None,
-            },
-            0,
-        )
-        .unwrap();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narrator call should reach the model"
+    );
+    let id = active_game_of(&state).0;
 
     let req = Request::builder()
         .uri(format!("/message/{id}/swipe/0"))
@@ -819,8 +773,21 @@ async fn test_switch_swipe_handler_concurrent() {
 
     assert_eq!(
         response.status(),
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Switching swipe during generation should fail"
+        StatusCode::OK,
+        "a swipe switch while the Game is busy is a wait answer, not a failure"
+    );
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&body).contains("Still thinking..."),
+        "the answer carries the wait status"
+    );
+
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the released Job should complete"
     );
 }
 

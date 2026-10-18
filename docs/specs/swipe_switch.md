@@ -33,3 +33,17 @@ When the client POST /message/:id/swipe/:index for the other Swipe of that Messa
 Then the response is 200 carrying the "Still thinking..." status
 And the active Swipe of that Message does not change
 ```
+
+#### Scenario 36.4: Switching to another swipe gives back the state of that Swipe
+
+```gherkin
+Given a Game whose Action moved the player into "room2"
+And a Retry of that Action's Narration that stayed in "room_1"
+And the Action's Narration has two Swipes
+When the client switches to the first Swipe
+Then the player stands in "room2"
+And that Narration reports the room "Room room2"
+When the client switches to the second Swipe
+Then the player stands in "room_1"
+And that Narration reports no room
+```

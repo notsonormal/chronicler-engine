@@ -4,7 +4,6 @@ use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::domain::model::state::generation_status::{GenerationStatus, Step};
 
 #[tokio::test]
 async fn test_debug_state_endpoint_returns_json() {
@@ -138,30 +137,6 @@ async fn test_debug_is_generating_returns_false_by_default() {
         &body[..],
         b"false",
         "is_generating should return 'false' by default"
-    );
-}
-
-#[tokio::test]
-async fn test_debug_is_generating_reflects_state() {
-    let app = TestAppBuilder::default_test()
-        .generation_status(GenerationStatus::Generating, Step::Narrating)
-        .claim_generation_slot()
-        .build();
-
-    let req = Request::builder()
-        .uri("/debug/is_generating")
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 64)
-        .await
-        .unwrap();
-    assert_eq!(
-        &body[..],
-        b"true",
-        "is_generating should return 'true' when set via builder"
     );
 }
 

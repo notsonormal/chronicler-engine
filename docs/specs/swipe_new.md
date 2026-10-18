@@ -9,14 +9,14 @@ Endpoint: `POST /swipe/new`
 #### Scenario 9.1: Main retry replaces the narration with a new swipe
 
 ```gherkin
-Given a fresh game state with one non-event Narration in history
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns "First." then "Second." for successive narration prompts
 When the client sends POST /action with command="look"
 And the pipeline returns to idle
 And the client sends POST /swipe/new
 And the pipeline returns to idle
-Then the message history contains exactly one Narration entry (the original message ID unchanged)
-And that Narration entry has 2 swipes (one appended by retry)
+Then the story log holds 2 Narration entries (the opening and the Action's)
+And the Action's Narration entry keeps its message ID and has 2 swipes (one appended by the retry)
 And the active swipe's text is "Second."
 And the generation status is Idle
 ```
@@ -90,11 +90,9 @@ And the pipeline returns to idle
 Then the Narration entry has 2 swipes
 And its active swipe reports no room (the redo must not keep its sibling's room)
 And its first swipe still reports the room "Room room2"
-When the client re-selects that Narration's first swipe
-Then its active swipe reports the room "Room room2"
-When the client re-selects the second swipe
-Then its active swipe reports no room
 ```
+
+A switch to another Swipe gives back the state of that Swipe; `swipe_switch.md` 36.4 covers it.
 
 ### Event retry
 
@@ -105,7 +103,7 @@ Given a game state where the last message is an event Narration (it carries an e
 And a narrator backend that returns a different continuation text for the retry prompt
 When the client sends POST /swipe/new
 And the pipeline returns to idle
-Then the message history contains exactly 2 Narration entries (the main narration and the event narration)
+Then the story log holds 3 Narration entries (the opening, the main narration and the event narration)
 And the event narration message has its new swipe as the active swipe
 And the generation status is Idle
 ```
@@ -184,15 +182,6 @@ And neither the new active swipe nor the first swipe reports a room
 
 ### Retry error cases
 
-#### Scenario 11.1: Retry with no input to retry returns 400
-
-```gherkin
-Given a fresh game state with no Input message in history
-When the client sends POST /swipe/new
-Then the response is 400 Bad Request
-And no generation is started
-```
-
 #### Scenario 11.2: Retry with no game context returns 400
 
 ```gherkin
@@ -226,8 +215,8 @@ And the original narration's swipes are unchanged (no new swipe appended)
 #### Scenario 11.7: Retry room not found sets Error
 
 ```gherkin
-Given a game state whose player's current room is not on the map
-And the last message is a non-event Narration
+Given a Game whose state before its last Narration names a room that is not on the map
+And the last Message is a non-event Narration
 When the client sends POST /swipe/new
 And the pipeline returns to idle
 Then the generation status is Error, with a failure that names the invalid room

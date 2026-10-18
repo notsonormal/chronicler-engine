@@ -27,7 +27,6 @@ use crate::domain::model::state::generation_status::{
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
-use crate::domain::model::template::TemplateVars;
 use crate::domain::model::state::trigger_context::{EventRecord, TriggerRef};
 use crate::domain::model::utils::generation_record;
 use crate::error::EngineError;
@@ -183,9 +182,10 @@ pub enum Refusal {
     StillThinking,
     /// The request itself is wrong: `400`, with the reason line.
     BadRequest(String),
-    /// The data the request needs is missing or cannot be read: `500`, carrying what
-    /// is missing. The accept wrote the Game's failure line from the same words.
-    MissingData(String),
+    /// The request could not run: `500`, carrying the failure's own line. The
+    /// accept wrote the Game's failure line from the same failure, so the answer
+    /// and the status name the same thing. The raw text stays in the disclosure.
+    Failed(GenerationFailure),
 }
 
 #[derive(Debug)]
@@ -460,7 +460,7 @@ impl GameWriter {
                     tx.put_dock(&DockRecord::default())?;
                     tx.set_game_failure(None)
                 })
-                .map_err(|error| self.missing_data_with_line(game, &error.to_string(), units))
+                .map_err(|error| self.save_failed(game, &error, units))
         })
     }
 
@@ -473,7 +473,7 @@ impl GameWriter {
                     return Err(Refusal::BadRequest("Message not found".to_string()));
                 }
                 Err(error) => {
-                    return Err(self.missing_data_with_line(game, &error.to_string(), units));
+                    return Err(self.unreadable(game, "the message", &error, units));
                 }
             };
             let at = SwipeAt {
@@ -482,7 +482,7 @@ impl GameWriter {
             };
             units
                 .open(game, |tx| tx.set_swipe_text(at, text))
-                .map_err(|error| self.missing_data_with_line(game, &error.to_string(), units))
+                .map_err(|error| self.save_failed(game, &error, units))
         })
     }
 
@@ -503,7 +503,7 @@ impl GameWriter {
                     tx.put_dock(&DockRecord::default())?;
                     tx.set_game_failure(None)
                 })
-                .map_err(|error| self.missing_data_with_line(game, &error.to_string(), units))
+                .map_err(|error| self.save_failed(game, &error, units))
         })
     }
 
@@ -557,18 +557,42 @@ impl GameWriter {
         self.storage
             .stories()
             .tail(game)
-            .map_err(|error| self.missing_data_with_line(game, &error.to_string(), units))
+            .map_err(|error| self.unreadable(game, "the story", &error, units))
     }
 
-    /// The `500` of a missing or unreadable record: the Game's failure line names
-    /// it, and the answer carries the same words.
-    fn missing_data_with_line(&self, game: GameId, what: &str, units: &Units) -> Refusal {
-        let what = what.trim_end_matches('.');
-        let failure = GenerationFailure::new(GenerationFailureKind::MissingData, what.to_string());
+    /// A record the request needs that the engine has no row for: the failure line
+    /// names it.
+    fn missing(&self, game: GameId, name: &str, units: &Units) -> Refusal {
+        self.refuse(game, GenerationFailure::missing_record(name, None), units)
+    }
+
+    /// A record the request needs that the engine cannot read: the line names it,
+    /// and the disclosure holds the error behind it.
+    fn unreadable(&self, game: GameId, name: &str, error: &EngineError, units: &Units) -> Refusal {
+        self.refuse(
+            game,
+            GenerationFailure::missing_record(name, Some(error.to_string())),
+            units,
+        )
+    }
+
+    /// The write the request asked for failed: the line is the design's save line,
+    /// and the disclosure holds the error behind it.
+    fn save_failed(&self, game: GameId, error: &EngineError, units: &Units) -> Refusal {
+        self.refuse(
+            game,
+            GenerationFailure::new(GenerationFailureKind::SaveFailed, error.to_string()),
+            units,
+        )
+    }
+
+    /// The one refusal path of a request that cannot run: the Game's failure line
+    /// and the answer come from the same failure.
+    fn refuse(&self, game: GameId, failure: GenerationFailure, units: &Units) -> Refusal {
         if let Err(error) = units.open(game, |tx| tx.set_game_failure(Some(&failure))) {
-            tracing::error!("accept: writing the missing-data line failed: {error}");
+            tracing::error!("accept: writing the failure line failed: {error}");
         }
-        Refusal::MissingData(what.to_string())
+        Refusal::Failed(failure)
     }
 
     fn plan_for(
@@ -663,7 +687,7 @@ impl GameWriter {
         units: &Units,
     ) -> Result<SwipeAt, Refusal> {
         tail.map(Tail::current_at)
-            .ok_or_else(|| self.missing_data_with_line(game, "the story", units))
+            .ok_or_else(|| self.missing(game, "the story", units))
     }
 
     fn require_job_data(
@@ -675,11 +699,11 @@ impl GameWriter {
     ) -> Result<(), Refusal> {
         let row = match self.storage.get_game(game.0) {
             Ok(Some(row)) => row,
-            Ok(None) => return Err(self.missing_data_with_line(game, "the game", units)),
-            Err(error) => return Err(self.missing_data_with_line(game, &error.to_string(), units)),
+            Ok(None) => return Err(self.missing(game, "the game", units)),
+            Err(error) => return Err(self.unreadable(game, "the game", &error, units)),
         };
         if let Err(error) = self.storage.require_persona(&row.persona_key) {
-            return Err(self.missing_data_with_line(game, &error.to_string(), units));
+            return Err(self.unreadable(game, "the persona", &error, units));
         }
 
         let Some(order) = &mut plan.first else {
@@ -687,11 +711,11 @@ impl GameWriter {
         };
         match self.storage.stories().swipe_state(game, order.start) {
             Ok(Some(_)) => {}
-            Ok(None) => return Err(self.missing_data_with_line(game, "the start state", units)),
-            Err(error) => return Err(self.missing_data_with_line(game, &error.to_string(), units)),
+            Ok(None) => return Err(self.missing(game, "the start state", units)),
+            Err(error) => return Err(self.unreadable(game, "the start state", &error, units)),
         }
         if order.kind == Kind::Impersonate && order.inputs.impersonate_direction.is_none() {
-            return Err(self.missing_data_with_line(game, "the impersonate direction", units));
+            return Err(self.missing(game, "the impersonate direction", units));
         }
         if order.kind == Kind::Event && order.event.is_none() {
             order.event = Some(self.event_record(game, tail, units)?);
@@ -708,7 +732,7 @@ impl GameWriter {
         let trigger = tail
             .and_then(Tail::current_state)
             .and_then(|state| state.trigger_context.clone())
-            .ok_or_else(|| self.missing_data_with_line(game, "the trigger context", units))?;
+            .ok_or_else(|| self.missing(game, "the trigger context", units))?;
         let direction = self.trigger_direction(game, &trigger, units)?;
         Ok(EventRecord {
             header_name: trigger.trigger_name.clone(),
@@ -726,19 +750,19 @@ impl GameWriter {
         let bundle = self
             .storage
             .world_bundle_for(game.0)
-            .map_err(|error| self.missing_data_with_line(game, &error.to_string(), units))?;
+            .map_err(|error| self.unreadable(game, "the World", &error, units))?;
         bundle
             .npcs
             .get(&trigger.npc_id)
             .and_then(|npc| npc.triggers.get(trigger.trigger_idx))
             .map(|trigger| trigger.narration.narration_prompt.clone())
-            .ok_or_else(|| self.missing_data_with_line(game, "the trigger", units))
+            .ok_or_else(|| self.missing(game, "the trigger", units))
     }
 
     fn accept_unit(&self, game: GameId, units: &Units) -> Result<(), Refusal> {
         units
             .open(game, |tx| tx.set_game_failure(None))
-            .map_err(|error| self.missing_data_with_line(game, &error.to_string(), units))
+            .map_err(|error| self.save_failed(game, &error, units))
     }
 
     /// `/options` needs a story with text to work from, which is a question about
@@ -747,7 +771,7 @@ impl GameWriter {
         self.storage
             .stories()
             .has_text(game)
-            .map_err(|error| self.missing_data_with_line(game, &error.to_string(), units))
+            .map_err(|error| self.unreadable(game, "the story", &error, units))
     }
 
     /// The World and the Persona are read before the unit opens, because the unit
@@ -762,38 +786,17 @@ impl GameWriter {
             .map(|card| (card.id.clone(), card))
             .collect();
         let world = &world_with_map.world_card;
-        let starting_room = world.starting_room_id();
-        let room_name = world_with_map
-            .map
-            .get_room_by_id(&starting_room)
-            .map(|room| room.name.clone())
-            .unwrap_or_else(|| starting_room.clone());
-        let scenario = world.default_scenario();
-        let text = match scenario {
-            Some(scenario) => TemplateVars::new(&persona.sheet.name).render(&scenario.text),
-            None => String::new(),
-        };
-
-        let swipe = Swipe {
-            text: text.clone(),
-            snapshot_id: None,
-            room_report: Some(room_name),
-            event_header: None,
-            impersonated: false,
-            guide_text: None,
-            impersonate_direction: None,
-            state: Some(SwipeState::starting(scenario, &characters, &starting_room)),
-            maker: Some(Maker::WorldOpening),
-        };
-        let mut message = Message::new(
-            text,
-            generation_record::message_type(Kind::Narration),
-            None,
-            None,
+        let mut opening = crate::domain::model::utils::opening::opening_message(
+            world,
+            &world_with_map.map,
+            &persona.sheet.name,
         );
-        message.kind = Some(MessageKind::Narration);
-        message.swipes = vec![swipe];
-        Ok(message)
+        opening.swipes[0].state = Some(SwipeState::starting(
+            world.default_scenario(),
+            &characters,
+            &world.starting_room_id(),
+        ));
+        Ok(opening)
     }
 }
 
