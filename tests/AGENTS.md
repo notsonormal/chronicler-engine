@@ -91,7 +91,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `narrator_mode.rs` — HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
     - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on turn-end hook, and response-shape parsing.
     - `prompt_presets.rs` — HTTP E2E tests for the prompt-presets endpoints.
-    - `races.rs` — HTTP E2E tests for the write-path races: a second request while a Job holds the slot. Cases: an Action while a Job runs (actions.md 3.4), two clicks at one moment (actions.md 3.5), /options while a Job runs (options.md 24.21).
+    - `races.rs` — HTTP E2E tests for the write path while a Job runs: the races (actions.md 3.4, 3.5; options.md 24.21), the stop at each model call (dashboard.md 39.4, 39.5), the reset (reset.md 7.3), the Job of another Game (games.md 18.4), the edit, delete and swipe switch (story_log.md 8.7; swipe_switch.md 36.3), and the preset an event Narration uses (actions.md 6.4).
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).
     - `retrigger.rs` — HTTP E2E tests for the retrigger endpoint (POST /retrigger).
     - `settings.rs` — HTTP E2E tests for the settings endpoints: sub-tabs, role rows, and the text-check auto-save.
@@ -149,6 +149,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `mod.rs` — Driven-adapter storage seam tests: repositories exercised against a real SQLite-backed `Storage`.
     - `preset_storage.rs` — Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset
     - `snapshot_storage.rs` — Integration tests for game-state snapshot persistence: save/load, missing-snapshot errors, and message/swipe round-tripping against a real SQLite-backed `Storage`.
+    - `transaction_storage.rs` — The storage transaction seam: one unit of record writes that lands whole, and the newest Game of a World, on both backends.
     - `world_storage.rs` — Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 - **test_utils/**
     - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.

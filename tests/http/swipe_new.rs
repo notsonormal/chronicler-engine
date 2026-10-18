@@ -5,7 +5,6 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::settings::AppSettings;
@@ -14,7 +13,7 @@ use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnaps
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, configured_runner, insert_message_with_swipe, seed_event_flow,
     seed_main_narration_flow, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
-    TestStoredTriggerContext,
+    TestStoredTriggerContext, empty_sqlite_storage,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
@@ -34,7 +33,7 @@ async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u6
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
     use chronicler_engine::test_support::TestNpc;
 
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .npcs(vec![TestNpc::with_room_scoped_trigger(
@@ -217,7 +216,7 @@ async fn test_retry_preserves_input_message_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 9.4
 #[tokio::test]
 async fn test_retry_uses_edited_input_text_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let model = ScriptedModel::new()
         .turn("You walk around.")
         .turn("You sprint forward.");
@@ -440,7 +439,7 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 10.1
 #[tokio::test]
 async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
@@ -499,7 +498,7 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 10.2
 #[tokio::test]
 async fn test_event_retry_does_not_move_the_player_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
@@ -543,7 +542,7 @@ async fn test_event_retry_does_not_move_the_player_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 10.4
 #[tokio::test]
 async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
@@ -674,7 +673,7 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
     use chronicler_engine::test_support::TestNpc;
 
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         // The seeded event's own trigger context belongs to `npc_1`, so the
@@ -884,7 +883,7 @@ async fn test_retry_no_game_context_returns_400_http() {
     // No Game in storage and no active-Game pointer: the `CurrentGame`
     // extractor answers the 400 before the handler runs.
     let app = TestAppBuilder::default_test()
-        .storage(Arc::new(Storage::new_in_memory()))
+        .storage(Arc::new(empty_sqlite_storage()))
         .skip_seeding(true)
         .build();
 
@@ -905,7 +904,7 @@ async fn test_retry_no_game_context_returns_400_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 11.3
 #[tokio::test]
 async fn test_retry_anchor_no_snapshot_returns_500_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
@@ -929,7 +928,7 @@ async fn test_retry_anchor_no_snapshot_returns_500_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 11.4
 #[tokio::test]
 async fn test_retry_anchor_snapshot_deleted_returns_500_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
@@ -1052,7 +1051,7 @@ async fn test_retry_empty_narration_sets_error_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 11.7
 #[tokio::test]
 async fn test_retry_room_not_found_sets_error_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     // The room resolves before the model call, so this retry makes none.
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -1124,7 +1123,7 @@ async fn test_retry_room_not_found_sets_error_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 11.8
 #[tokio::test]
 async fn test_event_retry_trigger_narration_failure_sets_error_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
@@ -1195,7 +1194,7 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 11.9
 #[tokio::test]
 async fn test_failed_retry_does_not_roll_the_movement_back_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let model = ScriptedModel::new().failed(ModelRole::Narration);
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
@@ -1238,7 +1237,7 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
     use chronicler_engine::test_support::TestNpc;
 
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     // The narration lands, then the trigger it fires fails: the redo wrote a
     // narration and moved the player, so that world is the one to keep.
     let model = ScriptedModel::new()
@@ -1509,7 +1508,7 @@ async fn test_retry_re_impersonate_preserves_record_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 22.4
 #[tokio::test]
 async fn test_retry_re_impersonate_uses_current_preset_content_http() {
-    let app_storage = Arc::new(Storage::new_in_memory());
+    let app_storage = Arc::new(empty_sqlite_storage());
     // The recorder persists every call into the storage the app reads its
     // forensics from; .storage() hands the builder that same instance, so the
     // preset update below hits the wired storage, not an orphan.

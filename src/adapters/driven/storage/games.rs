@@ -8,6 +8,7 @@ use crate::domain::model::settings::{
 };
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
+use crate::adapters::driven::storage::transaction::Tx;
 
 impl Storage {
     pub fn list_games(&self) -> Result<Vec<Game>, EngineError> {
@@ -67,7 +68,10 @@ impl Storage {
 
     pub fn create_game_from_request(&self, request: &NewGame) -> Result<u64, EngineError> {
         self.with_backend_mut("create_game", |backend| match backend {
-            Backend::Sqlite { pool } => pool.insert_game_from_request(request),
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                Ok(Tx::write_game_row(&conn, request)?.0)
+            }
             Backend::InMemory(data) => {
                 let id = data.next_game_id;
                 data.next_game_id += 1;
@@ -176,6 +180,58 @@ impl Storage {
     pub fn require_game(&self, id: u64) -> Result<Game, EngineError> {
         self.get_game(id)?
             .ok_or_else(|| EngineError::GameNotFound(id))
+    }
+
+    /// The newest Game of a World: the one boot picks up. The order is the
+    /// newest Message of the Game, else the Game's `updated_at`, which
+    /// `ActiveGame::set` touches. The higher Game id breaks a tie in either
+    /// key, so both backends answer the same Game.
+    pub fn newest_game_of_world(&self, world_key: &str) -> Result<Option<GameId>, EngineError> {
+        self.with_backend_mut("newest_game_of_world", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT g.id
+                         FROM games g
+                         LEFT JOIN (
+                             SELECT game_id, MAX(timestamp) AS last_message
+                             FROM messages
+                             GROUP BY game_id
+                         ) m ON g.id = m.game_id
+                         WHERE g.world_key = ?1
+                         ORDER BY COALESCE(m.last_message, g.updated_at) DESC, g.id DESC
+                         LIMIT 1",
+                    )
+                    .map_err(|e| {
+                        EngineError::Config(format!("Failed to prepare newest game: {e}"))
+                    })?;
+                let result = stmt.query_row(rusqlite::params![world_key], |row| {
+                    Ok(GameId(row.get::<_, i64>(0)? as u64))
+                });
+                match result {
+                    Ok(game_id) => Ok(Some(game_id)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(e) => Err(EngineError::Config(format!(
+                        "Failed to read the newest game of {world_key}: {e}"
+                    ))),
+                }
+            }
+            Backend::InMemory(data) => {
+                let key = |game: &Game| {
+                    data.messages
+                        .get(&GameId(game.id))
+                        .and_then(|messages| messages.iter().map(|m| m.timestamp).max())
+                        .unwrap_or(game.updated_at)
+                };
+                let newest = data
+                    .games
+                    .iter()
+                    .filter(|game| game.world_key == world_key)
+                    .max_by(|a, b| key(a).cmp(&key(b)).then(a.id.cmp(&b.id)));
+                Ok(newest.map(|game| GameId(game.id)))
+            }
+        })
     }
 
     pub fn update_game_config(&self, game: &Game) -> Result<(), EngineError> {

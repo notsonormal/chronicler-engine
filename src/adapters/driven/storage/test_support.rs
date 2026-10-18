@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::adapters::driven::storage::transaction::TxWrite;
 use crate::error::{EngineError, InternalError};
 
 pub struct TestOverride {
@@ -20,6 +21,7 @@ pub(crate) enum ErrorKind {
 
 pub struct TestFailureHandle {
     pub(crate) overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
+    pub(crate) writes: Arc<Mutex<HashMap<TxWrite, TestOverride>>>,
 }
 
 impl TestFailureHandle {
@@ -30,6 +32,13 @@ impl TestFailureHandle {
             .insert(method, override_);
     }
 
+    pub fn set_write(&self, write: TxWrite, override_: TestOverride) {
+        self.writes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(write, override_);
+    }
+
     pub fn clear(&self, method: &'static str) {
         self.overrides
             .lock()
@@ -37,29 +46,59 @@ impl TestFailureHandle {
             .remove(method);
     }
 
+    pub fn clear_write(&self, write: TxWrite) {
+        self.writes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&write);
+    }
+
     pub fn clear_all(&self) {
         self.overrides
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
+        self.writes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+
+    /// The keys still standing in the call and record-write override maps.
+    fn unconsumed_overrides(&self) -> (Vec<&'static str>, Vec<TxWrite>) {
+        let calls = self
+            .overrides
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .keys()
+            .cloned()
+            .collect();
+        let writes = self
+            .writes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .keys()
+            .cloned()
+            .collect();
+        (calls, writes)
     }
 
     #[allow(clippy::panic)]
     pub fn assert_no_unconsumed(&self) {
-        let map = self.overrides.lock().unwrap_or_else(|e| e.into_inner());
-        if !map.is_empty() {
-            let keys: Vec<_> = map.keys().cloned().collect();
-            panic!("Unconsumed overrides remain: {keys:?}");
+        let (calls, writes) = self.unconsumed_overrides();
+        if !calls.is_empty() || !writes.is_empty() {
+            panic!("Unconsumed overrides remain: calls={calls:?}, writes={writes:?}");
         }
     }
 }
 
 impl Drop for TestFailureHandle {
     fn drop(&mut self) {
-        let map = self.overrides.lock().unwrap_or_else(|e| e.into_inner());
-        if !map.is_empty() {
-            let keys: Vec<_> = map.keys().cloned().collect();
-            tracing::warn!("TestFailureHandle dropped with unconsumed overrides: {keys:?}");
+        let (calls, writes) = self.unconsumed_overrides();
+        if !calls.is_empty() || !writes.is_empty() {
+            tracing::warn!(
+                "TestFailureHandle dropped with unconsumed overrides: calls={calls:?}, writes={writes:?}"
+            );
         }
     }
 }

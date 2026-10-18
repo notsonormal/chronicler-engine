@@ -30,3 +30,13 @@ And the pipeline returns to idle
 Then message_service.load_messages() contains exactly 1 Input entry
 And the Input entry's text is "look around"
 ```
+
+#### Scenario 7.3: A reset while a Job runs leaves the new Game with its opening only
+
+```gherkin
+Given a Game whose Job is held at its narrator call
+When the client POST /reset
+And that Job's model answer arrives after the reset
+Then the new Game's story log holds its opening Narration
+And the new Game's story log holds no Input and no Narration of the Job the reset ended
+```

@@ -12,13 +12,15 @@ use chronicler_engine::TestAppBuilder;
 
 use chronicler_engine::domain::model::message::{Message, Swipe};
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
+use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::support::app_wiring::app_with_model;
 use crate::support::http_requests::{fetch_body, post_action, wait_settled};
 use crate::TEST_PERSONA;
-use chronicler_engine::test_support::{active_game_of, analysis_report, ScriptedModel};
+use chronicler_engine::test_support::{
+    active_game_of, analysis_report, ScriptedModel, empty_sqlite_storage,
+};
 
 fn one_turn_app() -> (axum::Router, AppState) {
     TestAppBuilder::default_test()
@@ -210,7 +212,7 @@ async fn test_reset_generating_handler() {
 
 #[tokio::test]
 async fn test_edit_history_handler_success() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
 
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
     let world = TestWorld::minimal();
@@ -412,7 +414,7 @@ async fn test_list_games_fragment_populated() {
 
 #[tokio::test]
 async fn test_list_games_fragment_escapes_html() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
 
     let _ = storage
         .create_game(
@@ -452,7 +454,7 @@ async fn test_list_games_fragment_escapes_html() {
 #[tokio::test]
 async fn test_list_games_fragment_storage_error() {
     let storage = Arc::new(
-        Storage::new_in_memory()
+        empty_sqlite_storage()
             .with_failure("list_games", TestOverride::config("list_games failed")),
     );
 
@@ -469,7 +471,7 @@ async fn test_list_games_fragment_storage_error() {
 
 #[tokio::test]
 async fn test_list_games_fragment_shows_world_badge() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
@@ -533,7 +535,7 @@ async fn test_list_games_fragment_shows_world_badge() {
 
 #[tokio::test]
 async fn test_list_games_fragment_shows_new_game_form() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
@@ -563,7 +565,7 @@ async fn test_list_games_fragment_shows_new_game_form() {
 
 #[tokio::test]
 async fn test_create_game_with_world_key() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
@@ -605,7 +607,7 @@ async fn test_create_game_with_world_key() {
 
 #[tokio::test]
 async fn test_create_game_with_invalid_world_key() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
@@ -634,7 +636,7 @@ async fn test_create_game_with_invalid_world_key() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler_success() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
@@ -713,7 +715,7 @@ async fn test_reset_handler_success() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler_not_last() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
@@ -765,7 +767,7 @@ async fn test_switch_swipe_handler_not_last() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler_concurrent() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .claim_generation_slot()

@@ -1,6 +1,8 @@
 # Feature Spec: Actions
 
-Endpoint: `POST /action`
+Endpoints:
+- `POST /action`
+- `GET /fragment/llm-messages` (the LLM call records)
 
 ## Scenarios
 
@@ -255,6 +257,17 @@ And the pipeline returns to idle
 And the client POST /swipe/new (retry)
 And the pipeline returns to idle
 Then the message history gained exactly 2 player-input messages
+```
+
+#### Scenario 6.4: The event Narration's call uses the preset that is active when it runs
+
+```gherkin
+Given a Game whose analysis fires a Trigger, so the Job narrates an event after its Narration
+And the Job's narrator call is held
+When the client sets the Game's system preset to a second preset
+And the Job's model answer arrives
+Then the LLM call record of the event Narration shows the system prompt of the second preset
+And the LLM call record of the Narration shows the system prompt of the preset that was active when the Job started
 ```
 
 ### Slash commands

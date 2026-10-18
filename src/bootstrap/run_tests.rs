@@ -1,12 +1,23 @@
-use crate::bootstrap::init_game::resolve_game_id;
-use crate::bootstrap::run::{ensure_presets, find_latest_game_for_world, list_game_names_for_world};
+use crate::bootstrap::run::{ensure_presets, resolve_boot_game};
 use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::adapters::driven::storage::Storage;
+
+fn boot_map() -> crate::domain::model::map::MapDef {
+    crate::domain::model::map::MapDef {
+        overworld: crate::domain::model::map::Overworld {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            regions: vec![],
+        },
+    }
+}
+
 #[test]
 fn resolve_game_id_auto_creates_with_persona() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
+    let storage = std::sync::Arc::new(Storage::new_sqlite(db_pool.clone()));
 
     let world = crate::domain::model::world::WorldCard {
         key: "redmist_estate".to_string(),
@@ -15,15 +26,11 @@ fn resolve_game_id_auto_creates_with_persona() {
         scenarios: vec![],
         ..Default::default()
     };
+    storage.seed_world(&world, &boot_map()).unwrap();
+    let persona = crate::test_support::TestPersona::named("Julian");
+    storage.seed_persona(&persona.key, &persona).unwrap();
 
-    let game_id = resolve_game_id(
-        &db_pool,
-        &world,
-        "julian",
-        "Julian",
-        &crate::domain::model::settings::AppSettings::default(),
-    )
-    .unwrap();
+    let game_id = resolve_boot_game(&storage, &world.key, &persona.key).unwrap();
     assert!(game_id.0 > 0);
 
     let (world_key, persona_key, persona_name): (String, String, String) = db_pool
@@ -38,14 +45,7 @@ fn resolve_game_id_auto_creates_with_persona() {
     assert_eq!(persona_key, "julian");
     assert_eq!(persona_name, "Julian");
 
-    let again = resolve_game_id(
-        &db_pool,
-        &world,
-        "julian",
-        "Julian",
-        &crate::domain::model::settings::AppSettings::default(),
-    )
-    .unwrap();
+    let again = resolve_boot_game(&storage, &world.key, &persona.key).unwrap();
     assert_eq!(again, game_id);
 
     let count: i64 = db_pool
@@ -60,6 +60,7 @@ fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
     use crate::domain::model::settings::{NarratorMode, NarrativePerspective, NarrativeTense};
 
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
+    let storage = std::sync::Arc::new(Storage::new_sqlite(db_pool.clone()));
 
     let world = crate::domain::model::world::WorldCard {
         key: "redmist_if".to_string(),
@@ -71,15 +72,11 @@ fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
         narrative_tense: NarrativeTense::Present,
         ..Default::default()
     };
+    storage.seed_world(&world, &boot_map()).unwrap();
+    let persona = crate::test_support::TestPersona::named("Julian");
+    storage.seed_persona(&persona.key, &persona).unwrap();
 
-    let game_id = resolve_game_id(
-        &db_pool,
-        &world,
-        "julian",
-        "Julian",
-        &crate::domain::model::settings::AppSettings::default(),
-    )
-    .unwrap();
+    let game_id = resolve_boot_game(&storage, &world.key, &persona.key).unwrap();
     assert!(game_id.0 > 0);
 
     let (narrator_mode, system_preset_id, quantifier_preset_id, impersonate_preset_id): (
@@ -102,97 +99,6 @@ fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
     assert_eq!(quantifier_preset_id, "quantifier_default");
     assert_eq!(impersonate_preset_id, "impersonate_default");
 }
-#[test]
-fn test_find_latest_game_for_world_uses_message_timestamp() {
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-
-    let older = "2026-05-20T10:00:00+00:00";
-    let newer = "2026-05-21T10:00:00+00:00";
-
-    let game_a_id = {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'GameA', ?1, ?1)",
-            rusqlite::params![&older],
-        )
-        .unwrap();
-        GameId(conn.last_insert_rowid() as u64)
-    };
-
-    let game_b_id = {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'GameB', ?1, ?1)",
-            rusqlite::params![&newer],
-        )
-        .unwrap();
-        GameId(conn.last_insert_rowid() as u64)
-    };
-
-    {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO messages (game_id, message_type, timestamp, active_swipe_index, is_deleted) VALUES (?1, 'Input', ?2, 0, 0)",
-            rusqlite::params![game_a_id.0 as i64, &newer],
-        )
-        .unwrap();
-        let msg_id = conn.last_insert_rowid();
-        conn.execute(
-            "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header) VALUES (?1, 0, 'hello', 0, NULL, NULL)",
-            rusqlite::params![msg_id],
-        )
-        .unwrap();
-    }
-
-    let result = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
-    assert!(result.is_some());
-    let (id, name) = result.unwrap();
-    assert_eq!(id, game_a_id.0);
-    assert_eq!(name, "GameA");
-
-    assert_ne!(id, game_b_id.0);
-}
-
-#[test]
-fn test_find_latest_game_for_world_fallback_to_updated_at() {
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-
-    let older = "2026-05-20T10:00:00+00:00";
-    let newer = "2026-05-21T10:00:00+00:00";
-
-    {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'GameA', ?1, ?1)",
-            rusqlite::params![&older],
-        )
-        .unwrap();
-    }
-
-    let game_b_id = {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'GameB', ?1, ?1)",
-            rusqlite::params![&newer],
-        )
-        .unwrap();
-        GameId(conn.last_insert_rowid() as u64)
-    };
-
-    let result = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
-    assert!(result.is_some());
-    let (id, _name) = result.unwrap();
-    assert_eq!(id, game_b_id.0);
-}
-
-#[test]
-fn test_find_latest_game_for_world_no_games() {
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-
-    let result = find_latest_game_for_world(&db_pool, "NonExistent").unwrap();
-    assert!(result.is_none());
-}
-
 #[test]
 fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
@@ -263,10 +169,8 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     let initial_messages = storage.load_message_rows(game_id).unwrap();
     assert_eq!(initial_messages.len(), 1);
 
-    let found = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
-    assert!(found.is_some());
-    let (found_id, _) = found.unwrap();
-    assert_eq!(found_id, game_id.0);
+    let found = storage.newest_game_of_world("TestWorld").unwrap();
+    assert_eq!(found, Some(game_id));
 
     let loaded = storage.load_latest_snapshot(game_id).unwrap();
     assert!(
@@ -280,87 +184,6 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         1,
         "Restart should not duplicate the scenario message"
     );
-}
-#[test]
-fn test_list_game_names_for_world_empty() {
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-    let result = list_game_names_for_world(&db_pool, "NonExistent").unwrap();
-    assert!(result.is_empty());
-}
-#[test]
-fn test_list_game_names_for_world_single_game() {
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-    {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'Only Game', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
-            [],
-        )
-        .unwrap();
-    }
-    let result = list_game_names_for_world(&db_pool, "TestWorld").unwrap();
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0], "Only Game");
-}
-#[test]
-fn test_list_game_names_for_world_multiple_games() {
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-    {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'Game Alpha', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'Game Beta', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'Game Gamma', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
-            [],
-        )
-        .unwrap();
-    }
-    let result = list_game_names_for_world(&db_pool, "TestWorld").unwrap();
-    assert_eq!(result.len(), 3);
-    assert!(result.contains(&"Game Alpha".to_string()));
-    assert!(result.contains(&"Game Beta".to_string()));
-    assert!(result.contains(&"Game Gamma".to_string()));
-}
-#[test]
-fn test_list_game_names_for_world_filters_by_world() {
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-    {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('WorldA', 'WorldA', 'A Game 1', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('WorldA', 'WorldA', 'A Game 2', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('WorldB', 'WorldB', 'B Game 1', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
-            [],
-        )
-        .unwrap();
-    }
-    let result_a = list_game_names_for_world(&db_pool, "WorldA").unwrap();
-    let result_b = list_game_names_for_world(&db_pool, "WorldB").unwrap();
-    assert_eq!(result_a.len(), 2);
-    assert_eq!(result_b.len(), 1);
-    assert_eq!(result_b[0], "B Game 1");
-}
-#[test]
-fn test_list_game_names_for_world_error_handling() {
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-    let result = list_game_names_for_world(&db_pool, "TestWorld");
-    assert!(result.is_err() || result.unwrap().is_empty());
 }
 #[test]
 fn test_ensure_presets_empty_data_dir() {

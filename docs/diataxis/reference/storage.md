@@ -23,6 +23,29 @@ process lives in `ActiveGame` (`application/games/active.rs`).
 `GameCatalogue` is the only reader and the only writer of `ActiveGame`.
 `CurrentGame` reads the active Game through `GameCatalogue` once per request.
 
+## Transactions
+
+`Storage::transaction` runs one **unit** of record writes. The unit holds the
+backend mutex for its whole run, so the closure of a unit makes no `Storage`
+call: such a call waits on the mutex the unit already holds.
+
+- **`Tx`** holds the record writes of one unit. It exists on SQLite only, the
+  backend tier 1 runs on.
+- **`TxWrite`** is the typed key of one record write. A write checks its key
+  before it writes, so a test can fail one write in the middle of a unit.
+- **`Storage::transaction_new_game`** opens a unit that creates a Game: it writes the Game
+  row first, so the writes that follow it in the same unit know the new Game.
+
+A unit lands **whole, or not at all**. A closure that fails and a closure that
+panics both roll the unit back.
+
+## The Newest Game of a World
+
+`Storage::newest_game_of_world` answers the Game a boot picks up for a World.
+This read takes no `GameId`, because it finds a Game. The newest Message of the
+Game decides the answer, and `games.updated_at` answers it when the Game has no
+Message.
+
 ## Settings Persistence
 
 Settings occupy a singleton row in the `settings` table — the engine's only settings read source.

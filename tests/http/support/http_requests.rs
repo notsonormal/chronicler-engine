@@ -174,3 +174,13 @@ pub fn story_log_holds_uncertain_npc_notice(state: &AppState) -> bool {
         })
         .unwrap_or(false)
 }
+
+/// Waits until every Job this app spawned has ended, or `timeout_ms` passes.
+///
+/// A stop and a reset end a Game's slot at once, while the Job's thread lives
+/// on until its refusals return. A test that asserts what a Job's late answer
+/// wrote waits here before it reads, so it observes the Job's end and not a
+/// moment before it.
+pub async fn wait_for_jobs(state: &AppState, timeout_ms: u64) -> bool {
+    state.generation_gate.wait_for_jobs(timeout_ms).await
+}

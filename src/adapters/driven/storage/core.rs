@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::in_memory_data::InMemoryData;
+use crate::adapters::driven::storage::transaction::TxWrite;
 use crate::domain::model::game::GameId;
 use crate::error::EngineError;
 #[cfg(feature = "testing")]
@@ -32,7 +33,35 @@ pub enum BackendKind {
         // invariant, so at most one `Test` layer wraps one `Direct` backend.
         base: Box<Backend>,
         overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
+        // Checked inside the unit, unlike `overrides`, which keys on storage
+        // method names.
+        writes: Arc<Mutex<HashMap<TxWrite, TestOverride>>>,
     },
+}
+
+pub(crate) enum WriteOverrides {
+    /// No records fail: a `Direct` backend, or a build without the test layer.
+    Direct,
+    /// The `Test` layer's map of record-write failures.
+    #[cfg(feature = "testing")]
+    Test(Arc<Mutex<HashMap<TxWrite, TestOverride>>>),
+}
+
+impl WriteOverrides {
+    /// Refuse `write` when the test layer planted a failure on it.
+    #[cfg_attr(not(feature = "testing"), allow(unused_variables))]
+    pub(crate) fn fail_if_injected(&self, write: TxWrite) -> Result<(), EngineError> {
+        match self {
+            Self::Direct => Ok(()),
+            #[cfg(feature = "testing")]
+            Self::Test(writes) => {
+                match writes.lock().unwrap_or_else(|e| e.into_inner()).get(&write) {
+                    Some(override_) => Err(override_.to_error()),
+                    None => Ok(()),
+                }
+            }
+        }
+    }
 }
 
 impl Storage {
@@ -59,8 +88,9 @@ impl Storage {
     #[cfg(feature = "testing")]
     pub fn with_test_failures(self) -> (Self, TestFailureHandle) {
         let overrides = Arc::new(Mutex::new(HashMap::new()));
-        let storage = self.with_overrides(Arc::clone(&overrides));
-        (storage, TestFailureHandle { overrides })
+        let writes = Arc::new(Mutex::new(HashMap::new()));
+        let storage = self.with_overrides(Arc::clone(&overrides), Arc::clone(&writes));
+        (storage, TestFailureHandle { overrides, writes })
     }
 
     #[cfg(feature = "testing")]
@@ -75,12 +105,20 @@ impl Storage {
             BackendKind::Direct(Backend::InMemory(Box::new(InMemoryData::empty()))),
         );
         let next = match current {
-            BackendKind::Test { base, overrides } => {
+            BackendKind::Test {
+                base,
+                overrides,
+                writes,
+            } => {
                 overrides
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(method, override_);
-                BackendKind::Test { base, overrides }
+                BackendKind::Test {
+                    base,
+                    overrides,
+                    writes,
+                }
             }
             BackendKind::Direct(other) => {
                 let mut overrides = HashMap::new();
@@ -88,6 +126,7 @@ impl Storage {
                 BackendKind::Test {
                     base: Box::new(other),
                     overrides: Arc::new(Mutex::new(overrides)),
+                    writes: Arc::new(Mutex::new(HashMap::new())),
                 }
             }
         };
@@ -95,7 +134,11 @@ impl Storage {
     }
 
     #[cfg(feature = "testing")]
-    fn with_overrides(self, overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>) -> Self {
+    fn with_overrides(
+        self,
+        overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
+        writes: Arc<Mutex<HashMap<TxWrite, TestOverride>>>,
+    ) -> Self {
         let backend = match self.backend.into_inner() {
             Ok(b) => b,
             Err(poisoned) => poisoned.into_inner(),
@@ -111,11 +154,14 @@ impl Storage {
             }
         };
         Self {
-            backend: Mutex::new(BackendKind::Test { base, overrides }),
+            backend: Mutex::new(BackendKind::Test {
+                base,
+                overrides,
+                writes,
+            }),
         }
     }
 
-    #[allow(unused_variables)]
     pub(crate) fn with_backend_mut<F, T>(
         &self,
         method: &'static str,
@@ -124,14 +170,30 @@ impl Storage {
     where
         F: FnOnce(&mut Backend) -> Result<T, EngineError>,
     {
+        self.with_backend_writes(method, |backend, _writes| f(backend))
+    }
+
+    #[allow(unused_variables)]
+    pub(crate) fn with_backend_writes<F, T>(
+        &self,
+        method: &'static str,
+        f: F,
+    ) -> Result<T, EngineError>
+    where
+        F: FnOnce(&mut Backend, WriteOverrides) -> Result<T, EngineError>,
+    {
         let mut backend = match self.backend.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
         match &mut *backend {
-            BackendKind::Direct(inner) => f(inner),
+            BackendKind::Direct(inner) => f(inner, WriteOverrides::Direct),
             #[cfg(feature = "testing")]
-            BackendKind::Test { overrides, base } => {
+            BackendKind::Test {
+                overrides,
+                base,
+                writes,
+            } => {
                 if let Some(override_) = overrides
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
@@ -139,7 +201,7 @@ impl Storage {
                 {
                     return Err(override_.to_error());
                 }
-                f(base.as_mut())
+                f(base.as_mut(), WriteOverrides::Test(Arc::clone(writes)))
             }
         }
     }

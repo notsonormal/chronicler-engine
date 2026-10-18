@@ -8,9 +8,12 @@ use crate::utils::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driving::http::ServerConfig;
+use crate::application::errors::ApplicationError;
+use crate::application::games::active::ActiveGame;
+use crate::application::games::catalogue::GameCatalogue;
+use crate::application::message_service::MessageService;
 use crate::bootstrap::load::{seed_game_data, seed_settings};
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
-use crate::utils::settings::load_settings;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::game::GameId;
 use crate::domain::model::map::MapDef;
@@ -55,7 +58,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
     let db_pool = DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
-    let storage = Arc::new(Storage::new_sqlite(db_pool.clone()));
+    let storage = Arc::new(Storage::new_sqlite(db_pool));
 
     if let Err(e) = ensure_presets(&storage, &data_dir) {
         tracing::warn!("Failed to seed prompt presets: {e}");
@@ -65,8 +68,8 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         tracing::warn!("Failed to seed game data: {e}");
     }
 
-    // Fatal on a malformed seed file. Runs before `load_settings`, which reads
-    // the row this writes.
+    // Fatal on a malformed seed file. Runs before any reader of the settings
+    // row, so the boot reads the seeded values.
     seed_settings(&storage, &data_dir)?;
 
     let world_with_map = match storage.get_world(&args.world)? {
@@ -94,15 +97,7 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
 
     let player = storage.require_persona(&args.persona)?;
 
-    let settings = load_settings(&storage);
-
-    let active_game_id = super::init_game::resolve_game_id(
-        &db_pool,
-        &world_arc,
-        &args.persona,
-        &player.sheet.name,
-        &settings,
-    )?;
+    let active_game_id = resolve_boot_game(&storage, &world_arc.key, &args.persona)?;
     Ok(PreparedData {
         storage,
         active_game_id,
@@ -113,6 +108,48 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     })
 }
 
+/// Boot resolves its Game before the wired graph exists, so this builds its own
+/// catalogue; the Game is the newest of the World, or a fresh one through
+/// `GameCatalogue::create_game`.
+pub(super) fn resolve_boot_game(
+    storage: &Arc<Storage>,
+    world_key: &str,
+    persona_key: &str,
+) -> crate::error::Result<GameId> {
+    let catalogue = GameCatalogue::new(
+        Arc::clone(storage),
+        Arc::new(MessageService::new(Arc::clone(storage))),
+        Arc::new(ActiveGame::new(Arc::clone(storage))),
+        None,
+    );
+    let game_id = super::init_game::resolve_game_id(&catalogue, world_key, persona_key)
+        .map_err(boot_error)?;
+    match storage.get_game(game_id.0) {
+        Ok(Some(game)) => tracing::info!(
+            "Starting on game '{}' (id={game_id}) with persona '{persona_key}'",
+            game.name
+        ),
+        Ok(None) => tracing::warn!("Starting on game {game_id}, which has no row"),
+        Err(e) => tracing::warn!("Failed to read the Game {game_id} at boot: {e}"),
+    }
+    Ok(game_id)
+}
+
+/// A refusal at boot keeps its kind, so the caller sees the same error a Games
+/// page request would.
+fn boot_error(error: ApplicationError) -> EngineError {
+    match error {
+        ApplicationError::Validation(message) => EngineError::Validation(message),
+        ApplicationError::Engine(error) => error,
+        ApplicationError::ShuttingDown => {
+            EngineError::Config("Server is shutting down".to_string())
+        }
+        ApplicationError::ConcurrentGeneration => {
+            EngineError::Config("Generation in progress".to_string())
+        }
+    }
+}
+
 fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime")))?;
@@ -120,8 +157,8 @@ fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
     let world_arc = Arc::new(data.world_card.clone());
     let player_arc = Arc::new(data.player.clone());
 
-    // Called for its write of the initial Snapshot and the scenario Message
-    // when a game has none; the loaded state itself is not kept.
+    // Its write is the point: a game with no Snapshot gets the initial one and
+    // the scenario Message.
     super::init_game::load_game_state(
         &data.storage,
         data.active_game_id,
@@ -145,52 +182,6 @@ fn start_server(state: StateResources, config: ServerConfig) -> crate::error::Re
         .block_on(server)
         .map_err(|e| EngineError::Config(format!("Server stopped: {e}")))??;
     Ok(())
-}
-
-pub(crate) fn find_latest_game_for_world(
-    db_pool: &crate::adapters::driven::storage::db::DbPool,
-    world_key: &str,
-) -> Result<Option<(u64, String)>, crate::error::EngineError> {
-    let conn = db_pool.conn();
-    let mut stmt = conn
-        .prepare(
-            "SELECT g.id, g.name
-             FROM games g
-             LEFT JOIN (
-                 SELECT game_id, MAX(timestamp) AS last_message
-                 FROM messages
-                 GROUP BY game_id
-             ) m ON g.id = m.game_id
-             WHERE g.world_key = ?1
-             ORDER BY COALESCE(m.last_message, g.updated_at) DESC
-             LIMIT 1",
-        )
-        .map_err(|e| crate::error::EngineError::Config(format!("Failed to prepare query: {e}")))?;
-    let result = stmt.query_row(rusqlite::params![world_key], |row| {
-        Ok((row.get::<_, i64>(0)? as u64, row.get::<_, String>(1)?))
-    });
-    match result {
-        Ok(pair) => Ok(Some(pair)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(crate::error::EngineError::Config(format!(
-            "Failed to query games: {e}"
-        ))),
-    }
-}
-
-pub(crate) fn list_game_names_for_world(
-    db_pool: &crate::adapters::driven::storage::db::DbPool,
-    world_key: &str,
-) -> Result<Vec<String>, crate::error::EngineError> {
-    let conn = db_pool.conn();
-    let mut stmt = conn
-        .prepare("SELECT name FROM games WHERE world_key = ?1")
-        .map_err(|e| crate::error::EngineError::Config(format!("Failed to prepare query: {e}")))?;
-    let rows = stmt
-        .query_map(rusqlite::params![world_key], |row| row.get::<_, String>(0))
-        .map_err(|e| crate::error::EngineError::Config(format!("Failed to query games: {e}")))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| crate::error::EngineError::Config(format!("Failed to read game names: {e}")))
 }
 
 pub(crate) fn ensure_presets(
@@ -245,8 +236,8 @@ fn process_preset_file(
         crate::error::EngineError::Parse(format!("Invalid preset seed {}: {e}", path.display()))
     })?;
 
-    // Flags come from the seed at insert only; existing rows are never
-    // touched at boot — allowed_modes are user-owned from birth.
+    // `allowed_modes` are user-owned from the first write, so a seed only sets
+    // them at insert.
     let allowed_modes = match seed.get("allowed_modes") {
         None | Some(serde_json::Value::Null) => settings_defaults::default_allowed_modes(),
         Some(value) => {

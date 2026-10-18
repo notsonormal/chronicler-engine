@@ -172,7 +172,9 @@ impl ScriptedModel {
         ModelHold { state }
     }
 
-    fn block_if_held(&self, role: ModelRole) {
+    /// Blocks a held call, and answers the hold it fired so the caller can
+    /// report that the call took its answer.
+    fn block_if_held(&self, role: ModelRole) -> Option<Arc<HoldState>> {
         let state = {
             // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
             let mut hold = self.hold.lock().expect("scripted model hold lock");
@@ -182,7 +184,7 @@ impl ScriptedModel {
                     *hold = None;
                     state
                 }
-                _ => return,
+                _ => return None,
             }
         };
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
@@ -193,6 +195,8 @@ impl ScriptedModel {
             // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
             sync = state.cv.wait(sync).expect("scripted model hold wait");
         }
+        drop(sync);
+        Some(state)
     }
 
     fn next_reply(&self, call: &ModelCall) -> Result<Reply, EngineError> {
@@ -246,8 +250,12 @@ impl LlmProvider for ScriptedModel {
             user_prompt: user_prompt.to_string(),
             max_tokens,
         };
-        self.block_if_held(role);
-        match self.next_reply(&call)? {
+        let fired = self.block_if_held(role);
+        let reply = self.next_reply(&call);
+        if let Some(state) = fired {
+            state.mark_taken();
+        }
+        match reply? {
             Reply::Text(text) => Ok(LlmCallResult {
                 text: text.clone(),
                 raw_request_json: String::new(),
@@ -279,6 +287,9 @@ impl Drop for ScriptedModel {
 struct HoldSync {
     started: bool,
     released: bool,
+    /// Whether the released call has taken its scripted answer, so a test can
+    /// order two held calls: the call released first takes the first answer.
+    taken: bool,
 }
 
 struct HoldState {
@@ -321,11 +332,35 @@ impl ModelHold {
         sync.started
     }
 
+    /// Waits until the released call has taken its scripted answer. Blocks the
+    /// calling thread, like `wait_started`, and answers `false` on timeout.
+    pub fn wait_taken(&self, timeout_ms: u64) -> bool {
+        // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
+        let sync = self.state.sync.lock().expect("scripted model hold lock");
+        let (sync, _) = self
+            .state
+            .cv
+            .wait_timeout_while(sync, Duration::from_millis(timeout_ms), |sync| !sync.taken)
+            // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
+            .expect("scripted model hold wait");
+        sync.taken
+    }
+
     pub fn release(&self) {
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
         let mut sync = self.state.sync.lock().expect("scripted model hold lock");
         sync.released = true;
         self.state.cv.notify_all();
+    }
+}
+
+impl HoldState {
+    /// Records that the released call has taken its scripted answer.
+    fn mark_taken(&self) {
+        // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
+        let mut sync = self.sync.lock().expect("scripted model hold lock");
+        sync.taken = true;
+        self.cv.notify_all();
     }
 }
 

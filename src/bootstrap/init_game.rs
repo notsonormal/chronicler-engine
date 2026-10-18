@@ -5,56 +5,30 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
+use crate::application::errors::ApplicationError;
+use crate::application::games::catalogue::GameCatalogue;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::game::GameId;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::Message;
-use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
-use super::run::{find_latest_game_for_world, list_game_names_for_world};
-
 pub(crate) fn resolve_game_id(
-    db_pool: &crate::adapters::driven::storage::db::DbPool,
-    world: &WorldCard,
+    catalogue: &GameCatalogue,
+    world_key: &str,
     persona_key: &str,
-    persona_name: &str,
-    settings: &AppSettings,
-) -> crate::error::Result<GameId> {
-    match find_latest_game_for_world(db_pool, &world.key)? {
-        Some((id, name)) => {
-            tracing::info!("Loaded existing game '{name}' (id={id})");
-            Ok(GameId(id))
+) -> Result<GameId, ApplicationError> {
+    match catalogue.newest_game_of_world(world_key)? {
+        Some(game_id) => {
+            tracing::info!("Loaded existing game (id={game_id})");
+            Ok(game_id)
         }
         None => {
-            let existing_names = list_game_names_for_world(db_pool, &world.key)?;
-            let name = crate::domain::model::utils::game_name::generate_game_name(
-                &world.name,
-                &existing_names,
-            );
-            let bundle = settings
-                .mode_preset_registry
-                .bundle_for(world.narrator_mode);
-            let request = crate::domain::model::game::NewGame {
-                world_name: world.name.clone(),
-                world_key: world.key.clone(),
-                persona_key: persona_key.to_string(),
-                persona_name: persona_name.to_string(),
-                name: name.clone(),
-                narrator_mode: world.narrator_mode,
-                narrative_perspective: world.narrative_perspective,
-                narrative_tense: world.narrative_tense,
-                system_prompt_preset_id: bundle.system_prompt_preset_id.clone(),
-                quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id.clone(),
-                impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id.clone(),
-                options_prompt_preset_id: settings.active_options_prompt_preset_id.clone(),
-                options_always_on: world.options_always_on,
-            };
-            let id = db_pool.insert_game_from_request(&request)?;
-            tracing::info!("Created new game '{name}' (id={id}) with persona '{persona_key}'");
+            let id = catalogue.create_game(world_key, persona_key)?;
+            tracing::info!("Created new game (id={id}) with persona '{persona_key}'");
             Ok(GameId(id))
         }
     }

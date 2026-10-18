@@ -152,7 +152,7 @@ impl TestAppBuilder {
 
         let storage = match self.storage.take() {
             Some(s) => s,
-            None => Arc::new(Storage::new_in_memory()),
+            None => Arc::new(crate::test_support::empty_sqlite_storage()),
         };
 
         crate::test_support::seed_default_preset(&storage);

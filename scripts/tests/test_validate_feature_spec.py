@@ -41,7 +41,6 @@ async fn run_story_log_checks() {
 
 
 def scan_text(text: str, name: str) -> tuple[Path, vfs.TestFileScan]:
-    """Write `text` to a temp file named `name` and scan it."""
     directory = Path(tempfile.mkdtemp(prefix="feature_spec_scan_"))
     path = directory / name
     path.write_text(text, encoding="utf-8")
@@ -54,8 +53,6 @@ def untagged(text: str, rel: Path) -> list[tuple[Path, int, str]]:
 
 
 class CheckTagAnchorTests(unittest.TestCase):
-    """A stub check carries the scenario tag on the function itself."""
-
     def test_tag_anchors_on_the_check_function(self) -> None:
         _path, scan = scan_text(CHECK_TEXT, STUB_REL.name)
         self.assertEqual(
@@ -85,8 +82,6 @@ class CheckTagAnchorTests(unittest.TestCase):
 
 
 class RunnerExemptionTests(unittest.TestCase):
-    """The `run_*` runner observes no scenario of its own."""
-
     def test_untagged_runner_is_exempt(self) -> None:
         text = CHECK_TEXT.replace(
             "// [docs/specs/browser_story_log.md] SCENARIO: 30.11\n", ""
@@ -125,8 +120,6 @@ def unwired(text: str, rel: Path) -> list[tuple[Path, int, str]]:
 
 
 class CheckWiringTests(unittest.TestCase):
-    """A tagged check counts as coverage only if a runner drives it."""
-
     def test_check_a_runner_drives_is_wired(self) -> None:
         self.assertEqual(unwired(CHECK_TEXT, STUB_REL), [])
 
@@ -155,8 +148,6 @@ class CheckWiringTests(unittest.TestCase):
 
 
 class TestAttributeAnchorTests(unittest.TestCase):
-    """The pre-existing anchor: a tag above a test attribute."""
-
     def test_tag_anchors_on_the_test_attribute(self) -> None:
         text = """// [docs/specs/story_log.md] SCENARIO: 8.1
 #[tokio::test]
@@ -169,6 +160,22 @@ async fn test_delete_last_between_actions_http() {
             scan.annotations, [(1, 2, "docs/specs/story_log.md", "8.1")]
         )
         self.assertEqual(scan.checks, [])
+        self.assertEqual(untagged(text, HTTP_REL), [])
+
+
+class IgnoredTestAnchorTests(unittest.TestCase):
+    def test_tag_above_an_ignored_test_still_covers_its_scenario(self) -> None:
+        text = """// [docs/specs/dashboard.md] SCENARIO: 39.4
+#[ignore = "red until the core step: a stop at each model call"]
+#[tokio::test]
+async fn test_a_stop_at_each_model_call_keeps_the_records_of_that_step() {
+    let _ = 1;
+}
+"""
+        _path, scan = scan_text(text, HTTP_REL.name)
+        self.assertEqual(
+            scan.annotations, [(1, 3, "docs/specs/dashboard.md", "39.4")]
+        )
         self.assertEqual(untagged(text, HTTP_REL), [])
 
 

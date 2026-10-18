@@ -6,17 +6,18 @@ use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::{active_game_of, TestMap, TestPersona, TestWorld};
+use chronicler_engine::test_support::{
+    active_game_of, TestMap, TestPersona, TestWorld, empty_sqlite_storage,
+};
 
 // [docs/specs/games.md] SCENARIO: 17.1
 #[tokio::test]
 async fn test_create_game_handler() {
     // games_create needs a world with a scenario; the shared helper seeds a
     // minimal world without one, so build storage directly here.
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
 
     let mut world = TestWorld::minimal();
     world.scenarios = vec![

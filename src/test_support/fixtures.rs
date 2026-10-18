@@ -616,6 +616,14 @@ pub fn sqlite_storage() -> Result<Storage, crate::error::EngineError> {
     Ok(Storage::new_sqlite(pool))
 }
 
+/// SQLite in memory with no Game row, unlike `sqlite_storage`.
+pub fn empty_sqlite_storage() -> Storage {
+    let pool = DbPool::new(":memory:")
+        // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on a storage failure"
+        .expect("test setup: in-memory SQLite must open");
+    Storage::new_sqlite(pool)
+}
+
 pub fn dummy_message(text: &str) -> Message {
     Message::new(text, MessageType::Input, None, None)
 }
@@ -670,8 +678,8 @@ pub fn make_test_recorder_with_storage(
     Arc::new(LlmCallRecorder::new(provider, save_fn))
 }
 
-/// A fixture that seeds a Game always points its app at one, so a missing
-/// pointer is a broken fixture, not a runtime condition.
+/// Seeding a Game always points the app at it, so a missing pointer is a broken
+/// fixture.
 pub fn active_game_of(state: &crate::adapters::driving::http::AppState) -> GameId {
     state
         .game_catalogue

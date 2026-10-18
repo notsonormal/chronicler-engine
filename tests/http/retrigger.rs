@@ -5,13 +5,12 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, ModelRole, ScriptedModel, TestAppBuilder,
-    TestStoredTriggerContext,
+    TestStoredTriggerContext, empty_sqlite_storage,
 };
 
 use crate::support::http_assertions::assert_story_log_ends_with_message;
@@ -20,7 +19,6 @@ use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_empty, wait_settled,
 };
 
-/// Whether the story log holds an event Narration.
 fn story_log_holds_event_narration(state: &AppState) -> bool {
     state
         .message_service
@@ -180,7 +178,7 @@ async fn test_retrigger_last_message_not_narration_returns_400_http() {
 // [docs/specs/retrigger.md] SCENARIO: 14.4
 #[tokio::test]
 async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .last_trigger(TestStoredTriggerContext::standard())
         .log("Main narration", MessageType::Narration)
@@ -282,7 +280,7 @@ async fn test_retrigger_no_game_context_returns_400_http() {
     // No Game in storage and no active-Game pointer: the `CurrentGame`
     // extractor answers the 400 before the handler runs.
     let app = TestAppBuilder::default_test()
-        .storage(Arc::new(Storage::new_in_memory()))
+        .storage(Arc::new(empty_sqlite_storage()))
         .skip_seeding(true)
         .build();
 
