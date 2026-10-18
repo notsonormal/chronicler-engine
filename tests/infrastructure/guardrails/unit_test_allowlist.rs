@@ -104,11 +104,11 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
     "domain/model/world_tests.rs",
     "error_tests.rs",
     "utils/cli_tests.rs",
-    "utils/settings_tests.rs",
 ];
 
 // The seam-contract files. A box adds its contract file here; the checker below
-// fails a file that carries `CASE` tags without being listed.
+// fails a `_tests.rs` file that carries `CASE` tags without being listed. Each
+// Agent is a box behind the LLM port, so its test file declares its cases.
 pub const SEAM_CONTRACT_FILES: &[&str] = &[
     // Each Agent is a box behind the LLM port, so its test file declares its cases.
     "application/agents/options/agent_tests.rs",

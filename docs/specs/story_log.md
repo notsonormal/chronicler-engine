@@ -2,6 +2,7 @@
 
 Endpoints:
 - `POST /history/delete`
+- `POST /history/:id`
 - `GET /fragment/story-log`
 
 ## Scenarios
@@ -83,4 +84,15 @@ Then the response shows the Edit, Delete, Retrigger and Swipe controls
 And every button that shows no text has an accessible name
 And a button that has a tooltip is named by the same words
 And every icon in the response is hidden from assistive technology
+```
+
+#### Scenario 8.7: An edit and a delete while a Job runs are refused
+
+```gherkin
+Given a Game whose Job is held at its narrator call
+When the client POST /history/:id with a new text
+And the client POST /history/delete
+Then each response is 200 carrying the "Still thinking..." status
+And the Message the client tried to edit keeps the text it had
+And the story log still holds every Message of the Job
 ```

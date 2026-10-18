@@ -67,6 +67,17 @@ And the response has an "HX-Refresh: true" header
 And the active game's persisted status is "idle"
 ```
 
+#### Scenario 18.4: A Job goes on for its own Game while another Game is active
+
+```gherkin
+Given a Game A whose Job is held at its narrator call
+And a Game B created from Game A's World, whose Job is held at its narrator call
+When both Jobs' model answers arrive
+And the client switches back to Game A
+Then Game A's story log holds its own Narration and no Narration of Game B
+And Game B's story log holds its own Narration and no Narration of Game A
+```
+
 ### Delete
 
 #### Scenario 19.1: Deleting a non-active game returns success

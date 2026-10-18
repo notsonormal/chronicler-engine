@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use crate::application::errors::{ProcessActionResult};
 use crate::application::generation::guard::GenerationGuard;
@@ -15,10 +15,61 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::game_state::GameState;
 use crate::error::EngineError;
 
+/// The Job tasks a gate handed to the blocking pool, so a test can wait for a
+/// Job to end.
+///
+/// A stop and a reset end the *slot* of a Game at once, while the Job's thread
+/// lives on until its refusals return. A test that asserts what a Job's late
+/// answer wrote therefore waits here, and not for the slot.
+#[cfg(feature = "testing")]
+#[derive(Default)]
+pub struct JobTasks {
+    handles: Mutex<Vec<tokio::task::JoinHandle<()>>>,
+}
+
+#[cfg(feature = "testing")]
+impl JobTasks {
+    /// Keep one Job's task handle, and forget the tasks that have ended.
+    pub fn watch(&self, handle: tokio::task::JoinHandle<()>) {
+        let mut handles = self.handles.lock().unwrap_or_else(|e| e.into_inner());
+        handles.retain(|handle| !handle.is_finished());
+        handles.push(handle);
+    }
+
+    /// Wait until every watched Job task has ended, or `timeout` passes.
+    pub async fn wait(&self, timeout: std::time::Duration) -> bool {
+        tokio::time::timeout(timeout, self.wait_for_each())
+            .await
+            .is_ok()
+    }
+
+    async fn wait_for_each(&self) {
+        loop {
+            let pending: Vec<tokio::task::JoinHandle<()>> = {
+                let mut handles = self.handles.lock().unwrap_or_else(|e| e.into_inner());
+                handles.drain(..).collect()
+            };
+            if pending.is_empty() {
+                return;
+            }
+            for handle in pending {
+                // A Job that panicked failed its own test already (the fake
+                // drops with its stray calls on record); this only orders the
+                // test after the task.
+                if let Err(join_error) = handle.await {
+                    tracing::debug!("a Job task ended without a result: {join_error}");
+                }
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct GenerationGate {
     registry: Arc<RwLock<HashMap<GameId, GenerationSlot>>>,
     next_generation_id: Arc<AtomicU64>,
+    #[cfg(feature = "testing")]
+    jobs: Arc<JobTasks>,
 }
 
 impl Default for GenerationGate {
@@ -32,7 +83,23 @@ impl GenerationGate {
         Self {
             registry: Arc::new(RwLock::new(HashMap::new())),
             next_generation_id: Arc::new(AtomicU64::new(0)),
+            #[cfg(feature = "testing")]
+            jobs: Arc::new(JobTasks::default()),
         }
+    }
+
+    /// Watch one Job's task, so a test can wait for it to end.
+    #[cfg(feature = "testing")]
+    pub fn watch_job(&self, handle: tokio::task::JoinHandle<()>) {
+        self.jobs.watch(handle);
+    }
+
+    /// Wait until every Job this gate watched has ended, or `timeout_ms` passes.
+    #[cfg(feature = "testing")]
+    pub async fn wait_for_jobs(&self, timeout_ms: u64) -> bool {
+        self.jobs
+            .wait(std::time::Duration::from_millis(timeout_ms))
+            .await
     }
 
     fn next_generation_id(&self) -> u64 {

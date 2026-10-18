@@ -287,7 +287,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `test_data_builder.rs` — Test data bundle builder for integration tests.
   - **utils/**
     - `cli.rs` — Command-line interface definitions
-    - `settings.rs` — Application settings and configuration
 - `build.py` — Full build, validate, and test for Chronicler Engine.
 - **scripts/**
   - `build_slot.py` — Machine-wide build slot: one cargo compile or test step at a time across all checkouts.

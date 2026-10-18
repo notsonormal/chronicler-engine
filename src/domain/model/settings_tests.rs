@@ -2,9 +2,10 @@
 
 use std::str::FromStr;
 
+use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{
-    AppSettings, ModePresetRegistry, NarrativePerspective, NarrativeTense, NarratorMode,
-    TextCheckMode, TextCheckSettings,
+    AppSettings, LlmProviderConfig, ModePresetRegistry, NarrativePerspective, NarrativeTense,
+    NarratorMode, TextCheckMode, TextCheckSettings,
 };
 
 #[test]
@@ -94,7 +95,6 @@ fn mode_preset_registry_default_points_each_mode_at_its_system_preset() {
     assert_eq!(if_mode.mode, NarratorMode::InteractiveFiction);
     assert_eq!(novel.system_prompt_preset_id, "system_default");
     assert_eq!(if_mode.system_prompt_preset_id, "system_if_default");
-    // Quantifier/impersonate are shared across modes by default.
     assert_eq!(
         novel.quantifier_prompt_preset_id,
         if_mode.quantifier_prompt_preset_id
@@ -121,14 +121,12 @@ fn mode_preset_registry_list_serde_round_trips() {
 
 #[test]
 fn bundle_for_falls_back_to_constructed_defaults() {
-    // Empty registry: every mode gets the constructed default bundle.
     let empty = crate::domain::model::settings::ModePresetRegistry::default();
     let registry = crate::domain::model::settings::ModePresetRegistry(Vec::new());
     for mode in [NarratorMode::Novel, NarratorMode::InteractiveFiction] {
         assert_eq!(registry.bundle_for(mode), empty.bundle_for(mode));
     }
 
-    // Partial registry: the missing entry falls back, the present one wins.
     let mut registry = crate::domain::model::settings::ModePresetRegistry(Vec::new());
     let mut novel = registry.bundle_for(NarratorMode::Novel);
     novel.system_prompt_preset_id = "custom_novel".to_string();
@@ -432,4 +430,166 @@ fn set_active_preset_adds_a_bundle_for_an_absent_mode() {
         "system_if_default",
         "the other mode still falls back to its own default"
     );
+}
+
+#[test]
+fn connection_resolve_api_key() {
+    let conn = LlmProviderConfig {
+        id: "test".into(),
+        name: "Test".into(),
+        provider: LlmBackendType::OpenRouter,
+        model: "model".into(),
+        api_key: Some("direct-key".into()),
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    };
+    assert_eq!(
+        conn.resolve_api_key_with(|_| None),
+        Some("direct-key".into())
+    );
+
+    let conn_no_key = LlmProviderConfig {
+        api_key: None,
+        ..conn
+    };
+    let env = |name: &str| (name == "OPENROUTER_API_KEY").then(|| "env-key".to_string());
+    assert_eq!(
+        conn_no_key.resolve_api_key_with(env),
+        Some("env-key".into()),
+        "the provider's environment fallback answers when the connection holds no key"
+    );
+    assert_eq!(conn_no_key.resolve_api_key_with(|_| None), None);
+}
+
+#[test]
+fn resolve_api_key_blank_counts_as_absent() {
+    let base = LlmProviderConfig {
+        id: "blank".into(),
+        name: "Blank".into(),
+        provider: LlmBackendType::OpenRouter,
+        model: "model".into(),
+        api_key: Some(String::new()),
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    };
+    let env = |_: &str| Some("env-key".to_string());
+    for blank in ["", "   ", "\t"] {
+        let conn = LlmProviderConfig {
+            api_key: Some(blank.to_string()),
+            ..base.clone()
+        };
+        assert_eq!(
+            conn.resolve_api_key_with(env),
+            Some("env-key".into()),
+            "blank stored key {blank:?} must not shadow the environment fallback"
+        );
+    }
+    let conn = LlmProviderConfig {
+        api_key: None,
+        ..base.clone()
+    };
+    assert_eq!(
+        conn.resolve_api_key_with(|_| Some("   ".to_string())),
+        None,
+        "a blank environment value is not a key"
+    );
+    assert_eq!(conn.resolve_api_key_with(|_| None), None);
+}
+
+#[test]
+fn check_api_key_available() {
+    let keyless = LlmProviderConfig::new("or-1", "Narrator", LlmBackendType::OpenRouter);
+
+    let error = keyless
+        .check_api_key_available_with(|_| None)
+        .expect_err("a keyless OpenRouter connection cannot call");
+    let message = error.to_string();
+    assert!(
+        message.contains("Narrator"),
+        "the error must name the connection, got: {message}"
+    );
+    assert!(
+        message.contains("OPENROUTER_API_KEY"),
+        "the error must name the environment fallback, got: {message}"
+    );
+
+    let keyed = LlmProviderConfig {
+        api_key: Some("sk-or-test".into()),
+        ..keyless.clone()
+    };
+    assert!(keyed.check_api_key_available_with(|_| None).is_ok());
+    assert!(
+        keyless
+            .check_api_key_available_with(|_| Some("env-key".to_string()))
+            .is_ok(),
+        "the environment fallback satisfies the check"
+    );
+
+    for provider in [
+        LlmBackendType::Ollama,
+        LlmBackendType::Mock,
+        LlmBackendType::DeepSeek,
+    ] {
+        let conn = LlmProviderConfig::new("keyless", "Keyless", provider);
+        assert!(
+            conn.check_api_key_available_with(|_| None).is_ok(),
+            "{provider:?} needs no API key"
+        );
+    }
+}
+
+#[test]
+fn connection_resolve_base_url() {
+    let conn = LlmProviderConfig {
+        id: "test".into(),
+        name: "Test".into(),
+        provider: LlmBackendType::Ollama,
+        model: "model".into(),
+        api_key: None,
+        base_url: Some("http://custom:11434".into()),
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    };
+    assert_eq!(conn.resolve_base_url(), "http://custom:11434");
+
+    let conn_default = LlmProviderConfig {
+        base_url: None,
+        ..conn
+    };
+    assert_eq!(conn_default.resolve_base_url(), "http://localhost:11434/v1");
+}
+
+#[test]
+fn connection_resolve_max_context_tokens_defaults() {
+    assert_eq!(
+        LlmProviderConfig::new("t", "T", LlmBackendType::Ollama).resolve_max_context_tokens(),
+        8192
+    );
+    assert_eq!(
+        LlmProviderConfig::new("t", "T", LlmBackendType::OpenRouter).resolve_max_context_tokens(),
+        32768
+    );
+    assert_eq!(
+        LlmProviderConfig::new("t", "T", LlmBackendType::DeepSeek).resolve_max_context_tokens(),
+        32768
+    );
+    assert_eq!(
+        LlmProviderConfig::new("t", "T", LlmBackendType::Mock).resolve_max_context_tokens(),
+        4096
+    );
+}
+
+#[test]
+fn connection_resolve_max_context_tokens_override() {
+    let mut conn = LlmProviderConfig::new("t", "T", LlmBackendType::Ollama);
+    conn.max_context_tokens = Some(16384);
+    assert_eq!(conn.resolve_max_context_tokens(), 16384);
+
+    conn.max_context_tokens = Some(2048);
+    assert_eq!(conn.resolve_max_context_tokens(), 2048);
 }

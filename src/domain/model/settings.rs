@@ -315,16 +315,30 @@ impl LlmProviderConfig {
     /// environment fallback. A blank value on either side counts as absent, so a
     /// stray empty string cannot shadow the fallback.
     pub fn resolve_api_key(&self) -> Option<String> {
+        self.resolve_api_key_with(|name| std::env::var(name).ok())
+    }
+
+    /// `resolve_api_key` with the environment read given as a function, so the
+    /// rule it follows is a pure function of the two values.
+    pub fn resolve_api_key_with(&self, lookup: impl Fn(&str) -> Option<String>) -> Option<String> {
         let non_blank = |key: String| (!key.trim().is_empty()).then_some(key);
         self.api_key.clone().and_then(non_blank).or_else(|| {
             self.provider
                 .api_key_env_var()
-                .and_then(|name| std::env::var(name).ok())
+                .and_then(lookup)
                 .and_then(non_blank)
         })
     }
 
     pub fn check_api_key_available(&self) -> Result<(), EngineError> {
+        self.check_api_key_available_with(|name| std::env::var(name).ok())
+    }
+
+    /// `check_api_key_available` with the environment read given as a function.
+    pub fn check_api_key_available_with(
+        &self,
+        lookup: impl Fn(&str) -> Option<String>,
+    ) -> Result<(), EngineError> {
         // Delete this guard once the DeepSeek backend lands: its stub currently
         // reports a more truthful not-implemented error than a missing key would.
         if self.provider == LlmBackendType::DeepSeek {
@@ -333,7 +347,7 @@ impl LlmProviderConfig {
         let Some(env_var) = self.provider.api_key_env_var() else {
             return Ok(());
         };
-        if self.resolve_api_key().is_some() {
+        if self.resolve_api_key_with(lookup).is_some() {
             return Ok(());
         }
         let label = if self.name.trim().is_empty() {

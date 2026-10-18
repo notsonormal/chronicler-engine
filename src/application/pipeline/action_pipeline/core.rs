@@ -212,7 +212,7 @@ impl ActionPipeline {
 
         let gate = generation_gate.clone();
         let pipeline_arc = Arc::new(self.clone());
-        tokio::task::spawn_blocking(move || {
+        let job = tokio::task::spawn_blocking(move || {
             tracing::debug!("spawn_blocking: task started");
             let _guard = gate.guard(started_game_id, started_generation_id);
             if pipeline_arc.is_shutting_down() {
@@ -222,6 +222,10 @@ impl ActionPipeline {
             spawn_task(&pipeline_arc);
             tracing::debug!("spawn_blocking: task completed");
         });
+        #[cfg(feature = "testing")]
+        generation_gate.watch_job(job);
+        #[cfg(not(feature = "testing"))]
+        let _ = job;
         Ok(ProcessActionResult::Started)
     }
 

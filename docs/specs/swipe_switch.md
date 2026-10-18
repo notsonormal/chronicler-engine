@@ -23,3 +23,13 @@ And the last Message has two Swipes
 When the client switches to the other Swipe
 Then the dock renders no options strip
 ```
+
+#### Scenario 36.3: A swipe switch while a Job runs is refused
+
+```gherkin
+Given a Game whose Message has two Swipes
+And a Job of that Game held at its narrator call
+When the client POST /message/:id/swipe/:index for the other Swipe of that Message
+Then the response is 200 carrying the "Still thinking..." status
+And the active Swipe of that Message does not change
+```
