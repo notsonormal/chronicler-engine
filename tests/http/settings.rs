@@ -6,7 +6,7 @@ use axum::body::Body;
 use axum::http::{self, Request, StatusCode};
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
+use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
@@ -18,6 +18,7 @@ use chronicler_engine::test_support::body_text;
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::test_support::ScriptedModel;
 use chronicler_engine::TestAppBuilder;
+use chronicler_engine::test_support::empty_sqlite_storage;
 
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::{app_with_model_and_storage, app_with_production_graph};
@@ -191,7 +192,7 @@ async fn test_text_check_disabled_clears_check_before_sending() {
 #[tokio::test]
 async fn test_failed_text_check_save_answers_non_2xx_and_swaps_no_card() {
     let _guard = SettingsTestGuard::new();
-    let storage = Arc::new(Storage::new_in_memory().with_failure(
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
         "update_settings",
         TestOverride::internal("text check save failure"),
     ));
@@ -221,7 +222,7 @@ async fn test_failed_text_check_save_answers_non_2xx_and_swaps_no_card() {
 #[tokio::test]
 async fn test_failed_settings_panel_load_reports_inside_the_panel() {
     let _guard = SettingsTestGuard::new();
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build();
@@ -812,7 +813,7 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
         ..AppSettings::default()
     };
     let (app, state, _storage) = app_with_model_and_storage(
-        Arc::new(Storage::new_in_memory()),
+        Arc::new(empty_sqlite_storage()),
         model,
         settings,
         chronicler_engine::test_support::configured_runner,

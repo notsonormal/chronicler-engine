@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use axum::http;
 
-use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
+use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
-use chronicler_engine::test_support::{TestAppBuilder, TestMap};
+use chronicler_engine::test_support::{TestAppBuilder, TestMap, empty_sqlite_storage};
 
 use crate::support::http_fixtures::world_form_body;
 use crate::support::http_requests::{fetch_body, post_form, post_form_with_hx, response_body};
@@ -26,15 +26,11 @@ fn posture_world() -> WorldCard {
 }
 
 /// A default app with `posture_world` seeded and one room.
-///
-/// Every posture-contract test starts from this state, so the storage handle is
-/// dropped by the caller unless a test needs it (the storage-failure test
-/// builds its own).
 fn posture_world_app() -> (
     axum::Router,
     chronicler_engine::adapters::driving::http::AppState,
 ) {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
@@ -176,7 +172,7 @@ async fn test_world_posture_invalid_value_returns_error_span_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.5
 #[tokio::test]
 async fn test_world_posture_unknown_world_returns_bad_request_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let (app, _state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
@@ -197,7 +193,7 @@ async fn test_world_posture_unknown_world_returns_bad_request_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.5
 #[tokio::test]
 async fn test_world_posture_storage_failure_returns_500_http() {
-    let storage = Arc::new(Storage::new_in_memory().with_failure(
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
         "update_world",
         TestOverride::internal("update_world posture failure"),
     ));
@@ -286,7 +282,6 @@ async fn test_world_edit_form_renders_posture_selects_http() {
         );
     }
 
-    // The selected options prove the form rendered the world's stored posture.
     assert_option_selected(
         &html,
         "interactive_fiction",
@@ -299,7 +294,6 @@ async fn test_world_edit_form_renders_posture_selects_http() {
     );
     assert_option_selected(&html, "past", "the stored Past tense must render selected");
 
-    // The auto-save target the posture select swaps into.
     assert!(
         html.contains(r#"id="world-posture-status""#),
         "the posture status target must be rendered: {html}"
@@ -335,7 +329,6 @@ async fn test_worlds_fragment_pluralises_game_count_http() {
         "the count must not pluralise a single game: {html}"
     );
 
-    // A second game in the same World switches the count to the plural arm.
     state
         .game_catalogue
         .create_game("test", "test_player")
@@ -399,7 +392,7 @@ async fn test_world_create_existing_key_is_refused_http() {
 // [docs/specs/worlds.md] SCENARIO: 25.9
 #[tokio::test]
 async fn test_world_create_storage_failure_renders_error_fragment_http() {
-    let storage = Arc::new(Storage::new_in_memory().with_failure(
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
         "create_world",
         TestOverride::internal("create_world failure"),
     ));

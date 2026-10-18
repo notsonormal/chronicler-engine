@@ -10,13 +10,14 @@ read the exemplar for the current API shape rather than copying a snippet,
 because the signatures it uses are the single source of truth. Only the rules an
 exemplar cannot state are inlined here.
 
-## Pattern 1 — In-memory app + builder handoff
+## Pattern 1 — SQLite `:memory:` app + builder handoff
 
 **Purpose.** Test an application collaborator through the production wiring.
-`TestAppBuilder` defaults to `Storage::new_in_memory()` (the `InMemory` backend);
-pass a SQLite `Arc<Storage>` via `.storage(...)` when the test needs the sqlite
-backend. State persists through snapshots and messages the way it does in
-production, so a test can assert on the state a service left behind.
+`TestAppBuilder` defaults to `empty_sqlite_storage()`: the production SQLite backend
+over `DbPool::new(":memory:")`. Pass an `Arc<Storage>` via `.storage(...)` when
+the test wires its own instance. State persists through snapshots and
+messages the way it does in production, so a test can assert on the state a
+service left behind.
 
 **The builder.** `TestAppBuilder` (`src/test_support/test_app_builder.rs`).
 `default_test()` (or `with_data(data)`) seeds test data; `.storage(Arc<Storage>)`
@@ -80,7 +81,9 @@ backend, with no `ActionPipeline` and no application collaborators.
 
 **The standard.** `create_test_storage(game_id)` in `tests/helpers/fixtures.rs`
 opens `:memory:` SQLite and pre-seeds the games row so FK-bearing tables accept
-inserts. Use `Storage::new_in_memory()` when the test needs no SQLite startup.
+inserts. A case that needs no seeded row builds
+`test_support::empty_sqlite_storage()` instead. A case that pins the same clause
+on the in-memory fake as well builds `Storage::new_in_memory()` next to it.
 
 **Exemplar.** `tests/storage/*.rs`.
 
@@ -212,10 +215,10 @@ The decision rule:
 
 - Service method that mutates state the test then reads, or asserts through the
   snapshot/generation path? → the wired `TestAppBuilder` app.
-- Service method on a pre-seeded state (read or write)? → `TestAppBuilder`
-  (faster; no SQLite startup).
-- `Storage` method under test (no service at all)? → `create_test_storage(...)`
-  or `Storage::new_in_memory()` (Pattern 3).
+- Service method on a pre-seeded state (read or write)? → `TestAppBuilder`.
+- `Storage` method under test (no service at all)? → `create_test_storage(...)`,
+  `empty_sqlite_storage()` when the case needs no seeded row, or
+  `Storage::new_in_memory()` for a clause the fake pins too (Pattern 3).
 - Router-only HTTP assertion? → `default_app()` / `.build()` (Pattern 4).
 
 ### Cross-cutting 7 — The scripted model and the Agents a tier-1 app runs

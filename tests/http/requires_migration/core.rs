@@ -9,11 +9,12 @@ use axum::{
 use tower::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
+use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::test_support::empty_sqlite_storage;
 
 #[tokio::test]
 async fn test_reset_handler_failure_returns_internal_server_error() {
-    let storage = Arc::new(Storage::new_in_memory().with_failure(
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
         "get_game",
         TestOverride::internal("simulated reset failure"),
     ));

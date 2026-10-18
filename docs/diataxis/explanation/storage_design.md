@@ -15,7 +15,7 @@ The backend shape is two enums layered by decorator. The inner enum names the re
 
 The dispatch seam sits on every method. The wrapper method acquires the mutex, unwraps any decorator wrapper, hands the underlying real backend to the method body, and routes through the real backend's implementation. Whether a failure-injection override is active or not, the production code path is the one that runs; the override short-circuits only the specific methods named by the test handle. Tests get deterministic failure injection without per-trait mock structs.
 
-A `Storage` instance carries its game id at construction time rather than per call. Game-scoped operations read or write exactly one row of one game-scoped table (`games`, `game_state_snapshots`, `messages`, `message_swipes`); the game id is part of every key. Tests construct a per-test `Storage` against an in-memory database; production constructs a single `Storage` per session against the SQLite file.
+A `Storage` holds no Game, so each caller names the Game it reads or writes, and a Job cannot write to a Game that a switch made active. Tier-1 tests construct a per-test `Storage` against a SQLite `:memory:` database; production constructs a single `Storage` per session against the SQLite file.
 
 ## The database as the sole source of truth at runtime
 

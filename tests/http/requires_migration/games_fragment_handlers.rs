@@ -6,7 +6,7 @@ use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::test_support::empty_sqlite_storage;
 
 use crate::support::http_requests::fetch_body;
 
@@ -42,7 +42,7 @@ async fn test_list_games_fragment_shows_active_game() {
 
 #[tokio::test]
 async fn test_list_games_fragment_empty_list() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let app = TestAppBuilder::default_test().storage(storage).build();
 
     let req = Request::builder()

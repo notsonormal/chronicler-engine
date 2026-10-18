@@ -12,7 +12,7 @@ use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::test_support::{
     configured_runner, make_test_pipeline_with_backends, make_test_recorder_with_storage,
-    ScriptedModel, TestAppBuilder,
+    ScriptedModel, TestAppBuilder, empty_sqlite_storage,
 };
 
 pub fn app_with_model(model: Arc<ScriptedModel>) -> (axum::Router, AppState) {
@@ -33,15 +33,15 @@ pub fn app_with_script(
     app_with_script_and_agents(model, AppSettings::default(), configured_runner)
 }
 
-/// The same app whose Agents `agents` builds from the model's recorder, for the
-/// tests that leave an Agent out or replace it.
+/// Builds the Agent runner from `agents`, so a test can leave one out or replace
+/// it.
 pub fn app_with_script_and_agents(
     model: impl Into<Arc<ScriptedModel>>,
     settings: AppSettings,
     agents: impl FnOnce(Arc<LlmCallRecorder>) -> AgentRunner,
 ) -> (axum::Router, AppState, Arc<Storage>) {
     app_with_model_and_storage(
-        Arc::new(Storage::new_in_memory()),
+        Arc::new(empty_sqlite_storage()),
         model.into(),
         settings,
         agents,
@@ -77,7 +77,7 @@ pub fn app_with_production_graph(settings: AppSettings) -> (axum::Router, AppSta
          builds the provider the settings name"
     );
 
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     storage.save_settings(&settings).expect("seed settings");
     let wired = build_app_graph(Arc::clone(&storage), None).expect("production graph should build");
     let state = AppState::from_wired(wired);

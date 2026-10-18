@@ -4,13 +4,13 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::ServerConfig;
 use chronicler_engine::adapters::driving::http::bootstrap::run_server_with_config;
 use chronicler_engine::bootstrap::wiring::{WiredApp, build_app_graph_for_tests};
+use chronicler_engine::test_support::empty_sqlite_storage;
 
 fn build_test_wired_app() -> WiredApp {
-    build_app_graph_for_tests(Arc::new(Storage::new_in_memory()), None, None)
+    build_app_graph_for_tests(Arc::new(empty_sqlite_storage()), None, None)
         .expect("build_app_graph_for_tests should succeed")
 }
 

@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 
 use crate::adapters::driven::storage::utils::run_migrations;
-use crate::domain::model::game::NewGame;
 
 #[derive(Clone)]
 pub struct DbPool {
@@ -32,37 +31,5 @@ impl DbPool {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         }
-    }
-
-    pub fn insert_game_from_request(
-        &self,
-        request: &NewGame,
-    ) -> Result<u64, crate::error::EngineError> {
-        let conn = self.conn();
-        let now = chrono::Utc::now().to_rfc3339();
-        let display_name = request.display_name();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, display_name, created_at, updated_at, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
-            rusqlite::params![
-                request.world_name,
-                request.world_key,
-                request.persona_key,
-                request.persona_name,
-                request.name,
-                display_name,
-                &now,
-                request.narrator_mode.as_str(),
-                request.narrative_perspective.as_str(),
-                request.narrative_tense.as_str(),
-                request.system_prompt_preset_id,
-                request.quantifier_prompt_preset_id,
-                request.impersonate_prompt_preset_id,
-                request.options_prompt_preset_id,
-                request.options_always_on as i64,
-            ],
-        )
-        .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
-        Ok(conn.last_insert_rowid() as u64)
     }
 }

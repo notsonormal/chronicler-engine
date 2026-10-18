@@ -6,13 +6,14 @@ use chronicler_engine::test_support::active_game_of;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
-use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
+use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
 };
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::test_support::TestAppBuilder;
+use chronicler_engine::test_support::empty_sqlite_storage;
 
 use crate::support::http_requests::{fetch_body, post_form};
 // [docs/specs/failure_display.md] SCENARIO: 38.1
@@ -342,7 +343,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 // [docs/specs/failure_display.md] SCENARIO: 38.4
 #[tokio::test]
 async fn test_failed_user_action_is_not_a_failed_poll() {
-    let storage = Arc::new(Storage::new_in_memory().with_failure(
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
         "update_game_config",
         TestOverride::internal("update_game_config failure"),
     ));

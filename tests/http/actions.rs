@@ -4,12 +4,11 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 
-use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder,
-    TestMap,
+    TestMap, empty_sqlite_storage,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_model_and_settings};
@@ -904,7 +903,7 @@ async fn test_slash_command_bypasses_text_check_http() {
 // [docs/specs/actions.md] SCENARIO: 1.14
 #[tokio::test]
 async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
-    let storage = Arc::new(Storage::new_in_memory());
+    let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();

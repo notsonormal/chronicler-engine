@@ -15,11 +15,13 @@ pub mod presets;
 pub mod settings;
 pub mod snapshots;
 pub mod swipes;
+pub mod transaction;
 pub mod utils;
 pub mod worlds;
 
 pub use core::*;
 pub use in_memory_data::*;
+pub use transaction::{Tx, TxWrite};
 
 #[cfg(feature = "testing")]
 pub use test_support::{TestFailureHandle, TestOverride};

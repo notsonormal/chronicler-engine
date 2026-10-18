@@ -40,6 +40,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `snapshots.rs` — Snapshot storage operations
         - `swipes.rs` — Swipe data storage
         - `test_support.rs` — Test infrastructure types for storage failure injection
+        - `transaction.rs` — The transaction: one unit of record writes that lands whole
         - `worlds.rs` — World storage backend operations
         - **mappers/**
           - `llm_message.rs` — LLM message mapper

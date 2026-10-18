@@ -20,9 +20,7 @@ pub struct GameCatalogue {
 }
 
 impl GameCatalogue {
-    /// `initial_game` is the Game the boot resolved, or `None` when the app
-    /// starts with no active Game. Only the composition root and the test
-    /// builders pass one: a later move goes through `switch_game`.
+    /// The Game the boot resolved; a later move goes through `switch_game`.
     pub fn new(
         storage: Arc<Storage>,
         message_service: Arc<MessageService>,
@@ -98,7 +96,7 @@ impl GameCatalogue {
         Ok(())
     }
 
-    /// The stable generated `name` is untouched; display names may collide.
+    /// Display names may collide; the generated `name` stays the unique key.
     pub fn rename_game(&self, id: u64, display_name: &str) -> Result<Game, ApplicationError> {
         let display_name = display_name.trim();
         if display_name.is_empty() {
@@ -124,11 +122,19 @@ impl GameCatalogue {
         self.storage.list_games().map_err(Into::into)
     }
 
+    pub fn newest_game_of_world(
+        &self,
+        world_key: &str,
+    ) -> Result<Option<GameId>, ApplicationError> {
+        self.storage
+            .newest_game_of_world(world_key)
+            .map_err(Into::into)
+    }
+
     pub fn active_game_id(&self) -> Option<GameId> {
         self.active_game.get()
     }
 
-    /// The active Game row, or `None` when no Game is active.
     pub fn active_game(&self) -> Result<Option<Game>, ApplicationError> {
         let Some(id) = self.active_game.get() else {
             return Ok(None);
