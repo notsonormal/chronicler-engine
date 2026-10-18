@@ -10,7 +10,7 @@ pub enum GenerationStatus {
     /// No generation running; input buffer is empty or consumed.
     #[default]
     Idle,
-    /// Generation in progress; `phase` tracks sub-stage.
+    /// Generation in progress; the input buffer's `Step` names the sub-stage.
     Generating,
     /// Generation failed; the payload classifies the failure.
     Error(GenerationFailure),
@@ -30,6 +30,34 @@ impl GenerationStatus {
 }
 
 /// Coarse enough for the status display to name it in one line.
+impl GenerationFailureKind {
+    /// The one-line sentence the status shows for a failure of this kind. `raw` is
+    /// the failure's own text, which a line that names something reads (a room, a
+    /// piece of data). The words are the design's failure table.
+    pub fn line(self, raw: &str) -> String {
+        let raw = raw.trim_end_matches('.');
+        match self {
+            Self::Unreachable => "The language model could not be reached.".to_string(),
+            Self::PromptTooLong => "The story was too long for the language model.".to_string(),
+            Self::UnreadableAnswer => "The language model's answer could not be read.".to_string(),
+            Self::TokenBudgetSpent => {
+                "The model used its budget on reasoning. Try another model.".to_string()
+            }
+            Self::SaveFailed => "The new text could not be saved.".to_string(),
+            Self::SceneMissing => format!("The room {raw} is not on the map."),
+            Self::PresetMissing => "The active prompt preset is missing.".to_string(),
+            Self::MissingData => {
+                format!("The data for this request is missing: {raw}.")
+            }
+            Self::Contradiction => {
+                "The text was saved, but the game state could not be updated.".to_string()
+            }
+            Self::EventNarrationFailed => "The event narration failed.".to_string(),
+            Self::Other => "The engine failed with an internal error.".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GenerationFailureKind {
     /// No answer arrived: a timeout, a transport failure, or a non-2xx response.
@@ -49,6 +77,11 @@ pub enum GenerationFailureKind {
     PresetMissing,
     /// A Retry or a Retrigger asked for data the engine cannot read.
     MissingData,
+    /// The text was saved, and the game rules could not update the state.
+    Contradiction,
+    /// The event Narration of a Trigger failed; the raw text holds the failure
+    /// under it.
+    EventNarrationFailed,
     /// Anything the other kinds do not name.
     Other,
 }
@@ -89,7 +122,14 @@ impl GenerationFailure {
                 GenerationFailureKind::TokenBudgetSpent
             }
             EngineError::Database(_) | EngineError::Io(_) => GenerationFailureKind::SaveFailed,
-            EngineError::RoomNotFound(_) => GenerationFailureKind::SceneMissing,
+            // The line the kind renders names the room, so the raw text is the room
+            // id the error carries and not the error's sentence.
+            EngineError::RoomNotFound(room) => {
+                return Self {
+                    kind: GenerationFailureKind::SceneMissing,
+                    raw: room.clone(),
+                };
+            }
             EngineError::PresetNotFound(_) => GenerationFailureKind::PresetMissing,
             _ => GenerationFailureKind::Other,
         };

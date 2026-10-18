@@ -4,9 +4,9 @@
 use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::application::prompting::token_budget::TokenBudget;
 use crate::application::prompting::{AssembledPrompt, PromptAssembler, PromptContext};
+use crate::domain::model::agent::Role;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind};
 use crate::error::EngineError;
@@ -59,8 +59,11 @@ impl Narrator {
         )
     }
 
+    /// `role` is the role whose health the call feeds: the narrator's own for a
+    /// turn, and the Trigger's for an event Narration.
     pub fn narrate(
         &self,
+        role: Role,
         context: &PromptContext,
         preset: &PromptPreset,
         response_length: &str,
@@ -70,11 +73,11 @@ impl Narrator {
             .assemble(context, preset, response_length, budget)
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
 
-        tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
+        tracing::info!("Narration LLM call (agent={})", role.agent_name());
         let narration_result = self
             .recorder
             .complete(
-                AGENT_NARRATOR,
+                role.agent_name(),
                 &assembled.system_prompt,
                 &assembled.user_prompt,
                 Some(assembled.max_tokens),

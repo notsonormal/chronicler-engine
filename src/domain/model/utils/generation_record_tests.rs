@@ -15,7 +15,7 @@ fn event_record() -> EventRecord {
             trigger_name: "The gate opens".to_string(),
             trigger_repeat: false,
         },
-        name: "The gate opens".to_string(),
+        header_name: "The gate opens".to_string(),
         direction: "the gate swings open".to_string(),
     }
 }

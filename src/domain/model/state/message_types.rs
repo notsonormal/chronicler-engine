@@ -26,19 +26,35 @@ pub enum MessageKind {
     EventNarration(EventRecord),
 }
 
-/// One Message of a story read: the entry the narrator's window, the analysis
-/// window, the Options window and the story log read. It carries no Swipe state.
+/// The story reads take no Swipe state: every field here is a Message's own text
+/// or a header it shows.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StoryRow {
     pub id: u64,
     /// The kind of the Message. `None` for a row today's code wrote.
     pub kind: Option<MessageKind>,
     pub message_type: MessageType,
-    /// The text of the active Swipe.
+    pub timestamp: DateTime<Utc>,
     pub text: String,
     pub room_report: Option<String>,
     pub event_header: Option<String>,
     pub swipe_count: usize,
+    pub active_swipe_index: usize,
+}
+
+impl From<&StoryRow> for MessageEntry {
+    fn from(row: &StoryRow) -> Self {
+        Self {
+            id: row.id,
+            text: row.text.clone(),
+            message_type: row.message_type.clone(),
+            timestamp: row.timestamp,
+            room_report: row.room_report.clone(),
+            event_header: row.event_header.clone(),
+            swipe_count: row.swipe_count,
+            active_swipe_index: row.active_swipe_index,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

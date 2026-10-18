@@ -885,7 +885,7 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     );
 }
 
-const FAILURE_KINDS: [GenerationFailureKind; 9] = [
+const FAILURE_KINDS: [GenerationFailureKind; 11] = [
     GenerationFailureKind::Unreachable,
     GenerationFailureKind::PromptTooLong,
     GenerationFailureKind::UnreadableAnswer,
@@ -894,6 +894,8 @@ const FAILURE_KINDS: [GenerationFailureKind; 9] = [
     GenerationFailureKind::SceneMissing,
     GenerationFailureKind::PresetMissing,
     GenerationFailureKind::MissingData,
+    GenerationFailureKind::Contradiction,
+    GenerationFailureKind::EventNarrationFailed,
     GenerationFailureKind::Other,
 ];
 
@@ -909,12 +911,13 @@ fn assert_kind_is_listed(kind: GenerationFailureKind) {
         | GenerationFailureKind::SceneMissing
         | GenerationFailureKind::PresetMissing
         | GenerationFailureKind::MissingData
+        | GenerationFailureKind::Contradiction
+        | GenerationFailureKind::EventNarrationFailed
         | GenerationFailureKind::Other => {}
     }
 }
 
-/// `box_height` is the box the clamp draws, `needed_height` the height the
-/// sentence needs once the clamp is lifted off it.
+/// `needed_height` is the height the sentence needs once the clamp is lifted off it.
 #[derive(serde::Deserialize)]
 struct ClampedLine {
     text: String,

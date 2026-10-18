@@ -398,6 +398,34 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
         files: &[("application/games/catalogue.rs", "pub struct Job {}\n")],
         expected: 1,
     },
+    // The case mirrors the rule-7 row: a Job field of a record type is caught, a
+    // field of an id or a text is not.
+    WalkerCase {
+        row: TypeCheckRow {
+            rule: 7,
+            scope: "application/pipeline/job.rs",
+            banned_types: &[
+                "Game",
+                "Message",
+                "SwipeState",
+                "Tail",
+                "DockRecord",
+                "WorldBundle",
+            ],
+            position: TypeCheckPosition::Fields,
+        },
+        files: &[
+            (
+                "application/pipeline/job.rs",
+                "pub struct Job {\n    writer: JobWriter,\n    state: SwipeState,\n}\n",
+            ),
+            (
+                "application/pipeline/job.rs",
+                "pub struct Job {\n    writer: JobWriter,\n    game: GameId,\n    tail: Tail,\n}\n",
+            ),
+        ],
+        expected: 2,
+    },
 ];
 
 pub const CALL_COUNT_CASES: &[WalkerCase<CallCountRow>] = &[

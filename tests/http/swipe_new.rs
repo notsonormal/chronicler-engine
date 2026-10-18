@@ -1100,8 +1100,8 @@ async fn test_retry_room_not_found_sets_error_http() {
 
     let status = fetch_generating_status(&app).await;
     assert!(
-        status.contains("Room not found"),
-        "error should mention room invalid, got: {status}"
+        status.contains("The room non_existent_room is not on the map."),
+        "the failure names the invalid room, got: {status}"
     );
 
     let messages = state

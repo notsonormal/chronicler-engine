@@ -996,8 +996,8 @@ async fn test_retry_room_not_found_sets_error() {
     let state = app.message_service.load_or_fresh(active_game_of(&app));
     assert!(
         matches!(state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref failure) if failure.raw.contains("Room not found")),
-        "Expected 'Room not found' error, got {:?}",
+            GenerationStatus::Error(ref failure) if failure.raw.contains("non_existent_room")),
+        "the failure's raw text names the room, got {:?}",
         state.narrative.input_buffer.status
     );
 }

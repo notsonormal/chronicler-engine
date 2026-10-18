@@ -38,33 +38,7 @@ pub fn raw_error_detail(raw: &str) -> String {
 /// The 240px status column clamps this sentence to two lines, so any remedy it
 /// names has to be one the dashboard can carry out.
 pub fn generation_failure_summary(kind: GenerationFailureKind, raw: &str) -> String {
-    match kind {
-        GenerationFailureKind::Unreachable => {
-            "The language model could not be reached.".to_string()
-        }
-        GenerationFailureKind::PromptTooLong => {
-            "The last turn was too long for the language model.".to_string()
-        }
-        GenerationFailureKind::UnreadableAnswer => {
-            "The language model's answer could not be read.".to_string()
-        }
-        // The dashboard offers no Max Tokens control, so the one remedy a player
-        // can act on is a different model on the role's connection.
-        GenerationFailureKind::TokenBudgetSpent => {
-            "The model used its budget on reasoning. Try another model.".to_string()
-        }
-        GenerationFailureKind::SaveFailed => "The last turn could not be saved.".to_string(),
-        GenerationFailureKind::SceneMissing => "The current scene could not be found.".to_string(),
-        GenerationFailureKind::PresetMissing => "The active prompt preset is missing.".to_string(),
-        // The missing data is what the failure carries, so the line names it.
-        GenerationFailureKind::MissingData => {
-            format!(
-                "The data for this request is missing: {}.",
-                raw.trim_end_matches('.')
-            )
-        }
-        GenerationFailureKind::Other => "The last turn failed to generate.".to_string(),
-    }
+    kind.line(raw)
 }
 
 pub(crate) fn error_fragment_response(message: impl std::fmt::Display) -> Response<Body> {

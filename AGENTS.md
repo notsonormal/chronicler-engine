@@ -200,12 +200,14 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **generation/**
       - `gate.rs` — GenerationGate, GameWriter and JobWriter — today's per-game slot registry, and the writer rule and the guard of the rebuild beside it.
       - `guard.rs` — Generation guard logic
+      - `job_tasks.rs` — The watch on the tasks a Job spawns, so a tier-1 test waits for a Job to end
       - `mod.rs` — Generation gating and per-game slot orchestration.
       - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
     - **narration/**
       - `mod.rs` — Narration: the generation a Job's narration call makes
       - `narrator.rs` — The narrator: the assembly and the model call a Job's narration needs
     - **pipeline/**
+      - `job.rs` — The Job: the plan of one request, its generations, and the steps of a generation
       - `mod.rs` — Action pipeline for processing game actions
       - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.
       - `phase_error.rs` — Canonical phase-level error type for the action pipeline.

@@ -286,7 +286,7 @@ async fn test_missing_preset_failure_clamps_with_the_preset_line() {
         "a missing preset must keep its own line, not the general one: {body}"
     );
     assert!(
-        !body.contains("The last turn failed to generate."),
+        !body.contains("The engine failed with an internal error."),
         "the general line belongs to failures no kind names: {body}"
     );
     assert!(
@@ -322,7 +322,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
         "the line must name only an action the dashboard offers: {body}"
     );
     assert!(
-        !body.contains("The last turn failed to generate."),
+        !body.contains("The engine failed with an internal error."),
         "the general line belongs to failures no kind names: {body}"
     );
     assert!(

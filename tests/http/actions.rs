@@ -375,8 +375,8 @@ async fn test_nonexistent_room_sets_error_status_http() {
 
     let status = fetch_generating_status(&app).await;
     assert!(
-        status.contains("Room not found"),
-        "expected 'Room not found' in the status, got: {status}"
+        status.contains("The room non_existent_room is not on the map."),
+        "the failure names the invalid room, got: {status}"
     );
     let messages = state
         .message_service

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use proptest::prelude::*;
 
+use crate::domain::model::state::trigger_context::TriggerRef;
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::quantifier::{
@@ -113,7 +114,10 @@ fn trigger_step(
 ) -> GameRulesOutcome {
     apply_game_rules(
         swipe,
-        GameRuleRequest::TriggerNarration { trigger, text },
+        GameRuleRequest::TriggerNarration {
+            trigger: &TriggerRef::from(trigger),
+            text,
+        },
         &deps.map,
         &deps.npcs,
     )
@@ -198,7 +202,6 @@ fn trigger_shapes() -> impl Strategy<Value = (Trigger, bool)> {
         })
 }
 
-/// A cast of one Character with one Trigger, and the state the Character starts in.
 struct TriggerCase {
     deps: RulesDeps,
     swipe: SwipeState,

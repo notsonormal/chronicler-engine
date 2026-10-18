@@ -3,6 +3,7 @@
 
 pub mod gate;
 pub mod guard;
+pub mod job_tasks;
 pub mod slot;
 
 #[cfg(test)]

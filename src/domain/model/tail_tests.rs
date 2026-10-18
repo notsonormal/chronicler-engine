@@ -49,7 +49,7 @@ fn trigger() -> TriggerRef {
 fn event_record() -> EventRecord {
     EventRecord {
         trigger: trigger(),
-        name: "The gate opens".to_string(),
+        header_name: "The gate opens".to_string(),
         direction: "the gate swings open".to_string(),
     }
 }

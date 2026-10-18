@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::application::prompting::{NpcContext, PromptContext};
+use crate::domain::model::agent::Role;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::prompt_preset::PromptPreset;
@@ -61,9 +62,13 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
         };
 
         let Some(room) = Self::resolve_room(state, &bundle.map) else {
+            // The line names the room, so its raw text is the room id.
             return Err(self.run.set_error(
                 state,
-                GenerationFailure::new(GenerationFailureKind::SceneMissing, "Room not found"),
+                GenerationFailure::new(
+                    GenerationFailureKind::SceneMissing,
+                    state.swipe.movement.current_room_id.clone(),
+                ),
             ));
         };
 
@@ -105,16 +110,16 @@ impl<'p, 'a> NarrationGeneration<'p, 'a> {
             Ok(budget) => budget,
             Err(failure) => return Err(self.run.set_error(state, failure)),
         };
-        let narrated =
-            match self
-                .run
-                .pipeline
-                .narrator
-                .narrate(&context, &preset, &response_length, budget)
-            {
-                Ok(narrated) => narrated,
-                Err(failure) => return Err(self.run.set_error(state, failure)),
-            };
+        let narrated = match self.run.pipeline.narrator.narrate(
+            Role::Narrator,
+            &context,
+            &preset,
+            &response_length,
+            budget,
+        ) {
+            Ok(narrated) => narrated,
+            Err(failure) => return Err(self.run.set_error(state, failure)),
+        };
         let narration_text = narrated.text;
 
         self.run.check_game_unchanged(started_for)?;

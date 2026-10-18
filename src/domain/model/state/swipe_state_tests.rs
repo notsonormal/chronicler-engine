@@ -57,3 +57,50 @@ fn starting_state_without_a_scenario_holds_no_character() {
     assert!(state.scene.npcs_in_area.is_empty());
     assert_eq!(state.npc_encounter_log.get_times_met("npc_1"), 0);
 }
+
+fn event_record(repeat: bool) -> crate::domain::model::state::trigger_context::EventRecord {
+    crate::domain::model::state::trigger_context::EventRecord {
+        trigger: crate::domain::model::state::trigger_context::TriggerRef {
+            npc_id: "npc_1".to_string(),
+            trigger_idx: 0,
+            trigger_name: "The gate opens".to_string(),
+            trigger_repeat: repeat,
+        },
+        header_name: "The gate opens".to_string(),
+        direction: "the gate swings open".to_string(),
+    }
+}
+
+#[test]
+fn pre_analysis_clears_the_trigger_context() {
+    let mut state = SwipeState::starting(Some(&scenario_with(&[])), &characters(&[]), "room1");
+    state.trigger_context = Some(crate::domain::model::state::trigger_context::TriggerRef {
+        npc_id: "npc_1".to_string(),
+        trigger_idx: 0,
+        trigger_name: "The gate opens".to_string(),
+        trigger_repeat: false,
+    });
+
+    let pre = state.pre_analysis(None);
+
+    assert!(pre.trigger_context.is_none());
+    assert_eq!(pre.movement.current_room_id, "room1");
+}
+
+#[test]
+fn pre_analysis_of_an_event_marks_a_one_shot_trigger_fired() {
+    let state = SwipeState::starting(Some(&scenario_with(&[])), &characters(&[]), "room1");
+
+    let pre = state.pre_analysis(Some(&event_record(false)));
+
+    assert!(pre.npc_encounter_log.is_trigger_fired("npc_1", 0));
+}
+
+#[test]
+fn pre_analysis_of_a_repeatable_trigger_marks_nothing() {
+    let state = SwipeState::starting(Some(&scenario_with(&[])), &characters(&[]), "room1");
+
+    let pre = state.pre_analysis(Some(&event_record(true)));
+
+    assert!(!pre.npc_encounter_log.is_trigger_fired("npc_1", 0));
+}

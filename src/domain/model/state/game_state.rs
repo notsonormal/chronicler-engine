@@ -10,7 +10,7 @@ use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::quantifier::{NpcEvent, QuantifierResult};
 use crate::domain::model::state::movement::MovementState;
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state::trigger_context::{StoredTriggerContext, TriggerRef};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::trigger::NpcEncounterLog;
 use crate::domain::model::utils::game_rules::{
@@ -230,7 +230,7 @@ impl GameState {
         let outcome = apply_game_rules(
             &mut self.swipe,
             GameRuleRequest::TriggerNarration {
-                trigger,
+                trigger: &TriggerRef::from(trigger),
                 text: continuation_text,
             },
             map,

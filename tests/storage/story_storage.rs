@@ -79,7 +79,7 @@ fn event_record() -> EventRecord {
             trigger_name: "The gate opens".to_string(),
             trigger_repeat: false,
         },
-        name: "The gate opens".to_string(),
+        header_name: "The gate opens".to_string(),
         direction: "the gate swings open".to_string(),
     }
 }
@@ -429,7 +429,7 @@ fn an_inserted_message_kind_reads_back_through_the_entries_read() {
                     swipe: 0,
                 },
                 &Swipe {
-                    event_header: Some(event_record().name),
+                    event_header: Some(event_record().header_name),
                     ..narration_swipe("event text", state_in("room2"))
                 },
             )

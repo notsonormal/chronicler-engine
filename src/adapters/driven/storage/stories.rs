@@ -3,7 +3,9 @@
 
 use crate::adapters::driven::storage::models::message::DbMessage;
 use crate::adapters::driven::storage::models::swipe::DbSwipe;
-use crate::adapters::driven::storage::utils::{from_json, no_in_memory, require_message_of_game};
+use crate::adapters::driven::storage::utils::{
+    from_json, no_in_memory, parse_datetime, require_message_of_game,
+};
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::domain::model::game::GameId;
 use crate::domain::model::message::{Message, SwipeAt};
@@ -12,7 +14,6 @@ use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
 use crate::error::EngineError;
 
-/// The story reads of one Game. Every read names its Game.
 pub struct StoryReads<'a> {
     storage: &'a Storage,
 }
@@ -24,9 +25,7 @@ impl Storage {
 }
 
 impl StoryReads<'_> {
-    /// The end of the story: the last Message with all its Swipes, the active
-    /// Swipe of the Message before it, and the Message count. No other Message
-    /// and no other Swipe state is read.
+    /// No other Message and no other Swipe state is read than the two it names.
     pub fn tail(&self, game: GameId) -> Result<Option<Tail>, EngineError> {
         self.storage
             .with_backend_mut("stories_tail", |backend| match backend {
@@ -103,10 +102,8 @@ impl StoryReads<'_> {
             })
     }
 
-    /// One entry per Message, of the `limit` newest Messages before `before`
-    /// (exclusive), oldest first. An entry holds the text, the kind, the room
-    /// report, the event header and the Swipe count of one Message, and no Swipe
-    /// state.
+    /// The `limit` newest Messages before `before` (exclusive), oldest first, and no
+    /// Swipe state.
     pub fn entries(
         &self,
         game: GameId,
@@ -120,8 +117,8 @@ impl StoryReads<'_> {
                     let before = before.map(|id| id as i64).unwrap_or(i64::MAX);
                     let mut stmt = conn
                         .prepare(
-                            "SELECT m.id, m.message_type, m.kind, COALESCE(s.text, ''), s.room_report, s.event_header, \
-                                    (SELECT COUNT(*) FROM message_swipes WHERE message_id = m.id)
+                            "SELECT m.id, m.message_type, m.kind, m.timestamp, COALESCE(s.text, ''), s.room_report, s.event_header, \
+                                    (SELECT COUNT(*) FROM message_swipes WHERE message_id = m.id), m.active_swipe_index
                              FROM messages m
                              LEFT JOIN message_swipes s ON s.message_id = m.id AND s.swipe_index = m.active_swipe_index
                              WHERE m.game_id = ?1 AND m.is_deleted = 0 AND m.id < ?2
@@ -139,10 +136,22 @@ impl StoryReads<'_> {
                                     id: row.get::<_, i64>(0)? as u64,
                                     message_type: row.get(1)?,
                                     kind: row.get(2)?,
-                                    text: row.get(3)?,
-                                    room_report: row.get(4)?,
-                                    event_header: row.get(5)?,
-                                    swipe_count: row.get::<_, i64>(6)? as usize,
+                                    timestamp: parse_datetime(
+                                        &row.get::<_, String>(3)?,
+                                        "message timestamp",
+                                    )
+                                    .map_err(|e| {
+                                        rusqlite::Error::FromSqlConversionFailure(
+                                            3,
+                                            rusqlite::types::Type::Text,
+                                            Box::new(e),
+                                        )
+                                    })?,
+                                    text: row.get(4)?,
+                                    room_report: row.get(5)?,
+                                    event_header: row.get(6)?,
+                                    swipe_count: row.get::<_, i64>(7)? as usize,
+                                    active_swipe_index: row.get::<_, i64>(8)? as usize,
                                 })
                             },
                         )

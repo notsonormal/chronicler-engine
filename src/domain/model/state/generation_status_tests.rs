@@ -144,7 +144,11 @@ fn test_unlisted_error_is_other() {
 #[test]
 fn test_raw_text_is_the_classified_error_message() {
     let failure = GenerationFailure::from_engine_error(&EngineError::RoomNotFound("cellar".into()));
-    assert_eq!(failure.raw, "Room not found: cellar");
+    assert_eq!(
+        failure.raw, "cellar",
+        "the room line names the room, so the raw text is the room itself"
+    );
+    assert_eq!(failure.kind, GenerationFailureKind::SceneMissing);
 }
 
 #[test]

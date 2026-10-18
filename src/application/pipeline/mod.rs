@@ -2,6 +2,7 @@
 //! Action pipeline for processing game actions
 
 pub mod action_pipeline;
+pub mod job;
 pub mod narration_generation;
 pub mod phase_error;
 pub mod pipeline_run;

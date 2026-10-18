@@ -1073,8 +1073,8 @@ fn test_pipeline_room_not_found_sets_error_status() {
         other => panic!("expected Error status, got {other:?}"),
     };
     assert!(
-        failure.raw.contains("Room not found"),
-        "expected 'Room not found' in error message, got: {}",
+        failure.raw.contains("non_existent_room"),
+        "the failure's raw text names the room, got: {}",
         failure.raw
     );
     assert_eq!(

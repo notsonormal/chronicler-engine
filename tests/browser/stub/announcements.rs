@@ -119,7 +119,7 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
     );
     let (_, error_text) = read_live_region(&page, "status-error-announcer").await;
     assert_eq!(
-        error_text, "The last turn failed to generate.",
+        error_text, "The engine failed with an internal error.",
         "the error announcer must carry the short user-facing line, not the raw text"
     );
 

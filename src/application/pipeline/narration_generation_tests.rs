@@ -168,7 +168,7 @@ fn test_run_room_not_found_sets_error_status() {
     let outcome = NarrationGeneration::new(&pipeline_run, free_inputs("look")).run(&mut state);
     match outcome {
         Err(PhaseError::NarratorFailed(failure)) => {
-            assert_eq!(failure.raw, "Room not found");
+            assert_eq!(failure.raw, "non_existent_room");
         }
         other => panic!("expected NarratorFailed, got {other:?}"),
     }
@@ -176,7 +176,7 @@ fn test_run_room_not_found_sets_error_status() {
         state.narrative.input_buffer.status,
         GenerationStatus::Error(GenerationFailure::new(
             GenerationFailureKind::SceneMissing,
-            "Room not found"
+            "non_existent_room"
         )),
         "set_error must record the failure on the in-flight state"
     );

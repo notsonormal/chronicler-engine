@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
+use crate::domain::model::state::generation_status::Step;
 use crate::domain::model::state::message_types::{MessageEntry, MessageType, StoryRow};
 use crate::domain::model::state::trigger_context::EventRecord;
 
@@ -60,6 +61,30 @@ pub enum Kind {
     UserRegen,
     /// A Trigger's continuation narration.
     Event,
+}
+
+impl Kind {
+    /// The step whose name the status shows while this generation runs.
+    pub fn step(self) -> Step {
+        match self {
+            Self::Event => Step::GeneratingEvent,
+            _ => Step::Narrating,
+        }
+    }
+
+    /// The role whose health a generation's model call feeds.
+    pub fn role(self) -> Role {
+        match self {
+            Self::Event => Role::Trigger,
+            _ => Role::Narrator,
+        }
+    }
+
+    /// Whether a generation of this kind saves a Narration: the text save empties
+    /// the dock and the Options run may follow it. An Input save does neither.
+    pub fn saves_a_narration(self) -> bool {
+        matches!(self, Self::Narration | Self::Event)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -1,7 +1,7 @@
 //! The four design-rule walker row tables: one table per kind, and each row's reason on the comments above it.
 
 use crate::walkers::BannedName::{NameContains, NamePrefix, StaticItem};
-use crate::walkers::{BannedNameRow, CallCountRow, CallSiteRow, TypeCheckRow};
+use crate::walkers::{BannedNameRow, CallCountRow, CallSiteRow, TypeCheckPosition, TypeCheckRow};
 
 // Row form, parsed by `scripts/generate_guardrails_doc.py` and documented in
 // `docs/diataxis/reference/coding_standards/guardrails.md`: one struct literal
@@ -49,7 +49,27 @@ pub const CALL_SITE_ROWS: &[CallSiteRow] = &[
     },
 ];
 
-pub const TYPE_CHECK_ROWS: &[TypeCheckRow] = &[];
+// The records rule 7 bans from a Job field: the six names fit no single row field
+// line, so the list is one named const the row points at.
+pub const JOB_RECORD_TYPES: &[&str] = &[
+    "Game",
+    "Message",
+    "SwipeState",
+    "Tail",
+    "DockRecord",
+    "WorldBundle",
+];
+
+pub const TYPE_CHECK_ROWS: &[TypeCheckRow] = &[
+    // Rule 7: between steps, pass ids. A Job holds no record field, so a record a
+    // step loads cannot go stale in another step's hands.
+    TypeCheckRow {
+        rule: 7,
+        scope: "application/pipeline/job.rs",
+        banned_types: JOB_RECORD_TYPES,
+        position: TypeCheckPosition::Fields,
+    },
+];
 
 pub const CALL_COUNT_ROWS: &[CallCountRow] = &[
     // Rule 18: each writer takes the guard once, so a check and its writes are one
